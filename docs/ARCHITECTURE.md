@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: 2026 Vladislav Tomilov -->
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+
 # KINETICKK architecture
 
 KINETICKK keeps gameplay, rendering, content, progression, and most audio decisions in shared Kotlin code. Thin platform source sets provide the desktop window, browser host, persistent storage, and tone output.

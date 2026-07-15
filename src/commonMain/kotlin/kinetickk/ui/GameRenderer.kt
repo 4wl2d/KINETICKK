@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Vladislav Tomilov
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package kinetickk.ui
 
 import androidx.compose.ui.geometry.Offset
@@ -1052,6 +1055,33 @@ private fun DrawScope.drawMenu(engine: GameEngine, textMeasurer: TextMeasurer, r
     drawLabel(textMeasurer, "KINETIC MATTER ${formatCompact(engine.totalMatter)} // REBIRTH ${engine.rebirthLevel}", d(20f), d(20f), 9f, Acid)
     drawLabel(textMeasurer, "DISCOVERED ${engine.discoveredItemCount}/400  //  WEAPONS ${engine.unlockedWeapons.size}/${WeaponCatalog.all.size}", d(20f), d(39f), 7f, Muted)
     drawLabel(textMeasurer, "DIRECTIVE ${engine.rebirthProfile.directive.displayName.uppercase()}", d(20f), d(56f), 7f, Orange)
+    drawLabel(
+        textMeasurer,
+        "KINETICKK 0.1.0 // COPYRIGHT (C) 2026 VLADISLAV TOMILOV // GNU GPL V3+",
+        size.width * 0.5f,
+        size.height - d(24f),
+        if (narrow) 5f else 6f,
+        Muted,
+        centered = true,
+    )
+    drawLabel(
+        textMeasurer,
+        "YOU MAY REDISTRIBUTE UNDER GPL V3+ // NO WARRANTY",
+        size.width * 0.5f,
+        size.height - d(14f),
+        if (narrow) 4f else 5f,
+        Muted,
+        centered = true,
+    )
+    drawLabel(
+        textMeasurer,
+        "SOURCE + LICENSE: GITHUB.COM/4WL2D/KINETICKK",
+        size.width * 0.5f,
+        size.height - d(6f),
+        if (narrow) 4f else 5f,
+        Muted,
+        centered = true,
+    )
 }
 
 private fun DrawScope.drawChoice(engine: GameEngine, textMeasurer: TextMeasurer, renderTime: Float) {
