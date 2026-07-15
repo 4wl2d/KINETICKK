@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "kinetic-void"
+rootProject.name = "KINETICKK"

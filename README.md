@@ -1,4 +1,4 @@
-<h1 align="center">Kinetic Void</h1>
+<h1 align="center">KINETICKK</h1>
 
 <p align="center">
   <strong>Your movement is the weapon. Your cursor is the threat.</strong>
@@ -22,15 +22,15 @@
   <a href="docs/ARCHITECTURE.md">Architecture</a>
 </p>
 
-![Kinetic Void start screen](docs/assets/kinetic-void.jpg)
+![KINETICKK start screen](docs/assets/kinetickk.png)
 
-The cursor or touch point is both a magnetic target and a lethal singularity. Pull it away from the Core to build speed, turn that momentum into impact damage, and never let the Core touch the void.
+The cursor or touch point is both a magnetic target and a lethal singularity. Pull it away from the Core to build speed, turn that momentum into impact damage, and never let the Core touch the singularity.
 
 The same shared engine, renderer, content catalog, progression system, and tests run across desktop (macOS, Windows, and Linux) and modern browsers through WebAssembly.
 
 ## At a glance
 
-| 400 items | 12 weapons | 40 Void Relics | 9 enemy archetypes | 92 desktop tests |
+| 400 items | 12 weapons | 40 Relics | 9 enemy archetypes | 92 desktop tests |
 |:---:|:---:|:---:|:---:|:---:|
 | Deterministic catalog | Movement-reactive | Six aspects | Architect included | Seeded simulation |
 
@@ -41,7 +41,7 @@ Magnetic Polarity saturates when the target stays far away in one direction. A s
 | Input | Action |
 |---|---|
 | Mouse / touch drag | Move the singularity and attract the Core |
-| `Space` / **Dash** | Void Dash and phase through bullets |
+| `Space` / **Dash** | Kinetic Dash and phase through bullets |
 | `Shift` / right mouse / **Brake** | Gravity Brake |
 | `P` / `Esc` | Pause or return |
 | `1`–`4` | Select an item, weapon, or Relic option |
@@ -90,9 +90,9 @@ The optimized bundle is written to `build/dist/wasmJs/productionExecutable`.
 ## Systems
 
 - **Kinetic combat:** fixed-step simulation at 120 Hz, uncapped magnetic acceleration, swept high-speed collisions, mass-based impact damage, recoil, Gravity Brake, and Polarity saturation.
-- **Buildcraft:** twelve movement-reactive weapons, forty rankable Void Relics, four Sovereign Relics, four bound Relic slots, and 400 deterministic items across twenty modifier families.
+- **Buildcraft:** twelve movement-reactive weapons, forty rankable Relics, four Sovereign Relics, four bound Relic slots, and 400 deterministic items across twenty modifier families.
 - **Run progression:** Data leveling, stat evolutions, Elite Keys, two-stage Totems, weapon mastery, combo rewards, velocity tiers, Kinetic Overdrive, and a twenty-minute Architect finale.
-- **Persistent progression:** spendable Void Matter, eight Lab upgrades, twelve Armory unlocks, three Core shapes, Codex discovery, and replayable Rebirth threat tiers.
+- **Persistent progression:** spendable Kinetic Matter, eight Lab upgrades, twelve Armory unlocks, three Core shapes, Codex discovery, and replayable Rebirth threat tiers.
 - **Presentation:** infinite procedural grid, camera tracking, trails, particles, screen shake, configurable damage numbers, and procedural synth audio on desktop and web.
 - **Opposition:** Drifter, Shooter, Charger, Interceptor, Weaver, Warden, Splitter, Elite, and Architect behaviors with projectiles and escalating wave mixes.
 
@@ -109,7 +109,7 @@ See [Architecture](docs/ARCHITECTURE.md) for the runtime flow, platform boundari
 
 ## Status
 
-Kinetic Void is a playable `0.1.0` prototype. APIs, balance, content, and saved-progress formats may change while the game is in active development.
+KINETICKK is a playable `0.1.0` prototype. APIs, balance, content, and saved-progress formats may change while the game is in active development.
 
 ## License
 

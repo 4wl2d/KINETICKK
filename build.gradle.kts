@@ -6,7 +6,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose") version "2.3.20"
 }
 
-group = "void.kinetic"
+group = "kinetickk"
 version = "0.1.0"
 
 kotlin {
@@ -14,10 +14,10 @@ kotlin {
 
     @OptIn(ExperimentalWasmDsl::class)
     wasmJs {
-        outputModuleName = "kinetic-void"
+        outputModuleName = "kinetickk"
         browser {
             commonWebpackConfig {
-                outputFileName = "kinetic-void.js"
+                outputFileName = "kinetickk.js"
             }
         }
         binaries.executable()
@@ -44,9 +44,9 @@ kotlin {
 
 compose.desktop {
     application {
-        mainClass = "void.kinetic.DesktopMainKt"
+        mainClass = "kinetickk.DesktopMainKt"
         nativeDistributions {
-            packageName = "KineticVoid"
+            packageName = "KINETICKK"
             packageVersion = "0.1.0"
         }
     }

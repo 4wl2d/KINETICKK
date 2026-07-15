@@ -1,12 +1,12 @@
-# Kinetic Void architecture
+# KINETICKK architecture
 
-Kinetic Void keeps gameplay, rendering, content, progression, and most audio decisions in shared Kotlin code. Thin platform source sets provide the desktop window, browser host, persistent storage, and tone output.
+KINETICKK keeps gameplay, rendering, content, progression, and most audio decisions in shared Kotlin code. Thin platform source sets provide the desktop window, browser host, persistent storage, and tone output.
 
 ## Runtime flow
 
 ```mermaid
 flowchart LR
-    Input["Pointer, touch, and keyboard"] --> App["KineticVoidApp"]
+    Input["Pointer, touch, and keyboard"] --> App["KinetickkApp"]
     App --> Engine["GameEngine<br/>fixed 120 Hz simulation"]
     Engine --> Renderer["Compose Canvas renderer"]
     Engine --> Cues["Prioritized sound cues"]
@@ -15,7 +15,7 @@ flowchart LR
     Codec --> Storage["JVM Preferences / browser localStorage"]
 ```
 
-`KineticVoidApp` owns one remembered `GameEngine`, translates keyboard and pointer events into engine commands, advances the engine once per display frame, drains sound cues, and asks the shared Canvas renderer to draw the latest state.
+`KinetickkApp` owns one remembered `GameEngine`, translates keyboard and pointer events into engine commands, advances the engine once per display frame, drains sound cues, and asks the shared Canvas renderer to draw the latest state.
 
 ## Source-set boundaries
 
@@ -43,16 +43,16 @@ Gameplay and visual randomness use separate seeded generators. This keeps gamepl
 
 ## Rendering and input
 
-The UI is a single responsive Compose `Canvas`. `drawKineticVoid` renders the procedural background, world, HUD, menus, choices, and overlays directly from `GameEngine` state.
+The UI is a single responsive Compose `Canvas`. `drawKinetickk` renders the procedural background, world, HUD, menus, choices, and overlays directly from `GameEngine` state.
 
-Desktop and browser entry points both call the same `KineticVoidApp`. Mouse, touch, right-click, keyboard, and on-screen controls converge on the same engine commands, so platform behavior does not fork at the gameplay layer.
+Desktop and browser entry points both call the same `KinetickkApp`. Mouse, touch, right-click, keyboard, and on-screen controls converge on the same engine commands, so platform behavior does not fork at the gameplay layer.
 
 ## Persistence and audio
 
 `ProgressCodec` serializes permanent progression and settings into one shared text representation.
 
-- Desktop stores it under the JVM user `Preferences` node `void/kinetic/progression`.
-- WebAssembly stores it in browser `localStorage` under `kinetic_void_progress_v2`.
+- Desktop stores it under the JVM user `Preferences` node `kinetickk/progression`.
+- WebAssembly stores it in browser `localStorage` under `kinetickk_progress_v2`.
 
 The engine emits semantic `SoundCue` values. Shared audio logic prioritizes and limits cues per frame, then the platform player synthesizes tones with native JVM or browser audio APIs.
 
