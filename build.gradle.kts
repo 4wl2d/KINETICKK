@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Vladislav Tomilov
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 
 plugins {
@@ -48,6 +51,33 @@ compose.desktop {
         nativeDistributions {
             packageName = "KINETICKK"
             packageVersion = "0.1.0"
+            description = "KINETICKK physics-action roguelite"
+            vendor = "Vladislav Tomilov"
+            copyright = "Copyright (c) 2026 Vladislav Tomilov. Licensed under GPL-3.0-or-later."
+        }
+    }
+}
+
+val packagedLegalDocuments = listOf(
+    "LICENSE",
+    "NOTICE",
+    "AUTHORS.md",
+    "CONTRIBUTING.md",
+    "CONTRIBUTOR_LICENSE_AGREEMENT.md",
+    "GOVERNANCE.md",
+    "SOURCE.md",
+    "TRADEMARKS.md",
+    "THIRD_PARTY_NOTICES.md",
+    "ASSET_PROVENANCE.md",
+    "PRIVACY.md",
+    "docs/LEGAL.md",
+)
+
+tasks.withType<Copy>().configureEach {
+    if (name.endsWith("ProcessResources")) {
+        from(rootProject.projectDir) {
+            include(packagedLegalDocuments)
+            into("META-INF")
         }
     }
 }

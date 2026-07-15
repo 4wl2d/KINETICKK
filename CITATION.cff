@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: 2026 Vladislav Tomilov
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+cff-version: 1.2.0
+message: "If KINETICKK helps your project, please cite it using this metadata."
+title: KINETICKK
+type: software
+authors:
+  - family-names: Tomilov
+    given-names: Vladislav
+    alias: 4wl2d
+repository-code: "https://github.com/4wl2d/KINETICKK"
+url: "https://github.com/4wl2d/KINETICKK"
+license: GPL-3.0-or-later
+version: 0.1.0

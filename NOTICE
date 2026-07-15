@@ -1,0 +1,40 @@
+SPDX-FileCopyrightText: 2026 Vladislav Tomilov
+SPDX-License-Identifier: GPL-3.0-or-later
+
+KINETICKK COPYRIGHT AND OPEN-SOURCE NOTICE
+
+Copyright (C) 2026 Vladislav Tomilov
+
+KINETICKK is free and open-source software. The original project material is
+licensed under the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. The full license text is in LICENSE.
+
+As of 15 July 2026, the Git history records one author identity, "4wl2d".
+Vladislav Tomilov states that this is his GitHub account. He is the initial
+author and copyright holder of the original code, tests, build configuration,
+documentation, text, procedural audio definitions, visual design, game content,
+and project-created images, except where another notice says otherwise.
+
+Vladislav Tomilov also offers under GPL-3.0-or-later all copyrightable KINETICKK
+material authored by him in the reachable Git history through revision
+`3abbfea`, despite the proprietary notices that accompanied earlier revisions.
+This additional grant does not cover third-party material or work owned by
+another person.
+
+The project formerly used the title "Kinetic Void." No affiliation with
+Badland Studio or its game of that name is claimed, and no trademark rights in
+that former title are asserted.
+
+Contributors retain copyright in their contributions unless a separate signed
+agreement transfers it. Accepted contributions must be available under
+GPL-3.0-or-later and are also governed by the contribution terms recorded for
+the project. See AUTHORS.md, CONTRIBUTING.md, and
+CONTRIBUTOR_LICENSE_AGREEMENT.md.
+
+The GPL licenses copyrightable project material. It does not grant trademark
+rights in the KINETICKK name, logo, or branding. See TRADEMARKS.md.
+
+The Gradle Wrapper and all other third-party material remain under their own
+licenses. See THIRD_PARTY_NOTICES.md and the notices embedded in those files and
+artifacts.
