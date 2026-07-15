@@ -1,0 +1,59 @@
+# Gradle and Kotlin
+.gradle/
+.kotlin/
+build/
+out/
+kotlin-js-store/
+node_modules/
+
+# IDEs and editors
+.idea/
+.fleet/
+.vscode/
+*.iml
+
+# Local configuration and secrets
+local.properties
+secrets.properties
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+
+# Local AI tooling and instructions
+AGENTS.md
+CLAUDE.md
+CLAUDE.local.md
+CODEX.md
+GEMINI.md
+SKILL.md
+*.agent.md
+*.instructions.md
+*.prompt.md
+.agent/
+.agents/
+.aider*
+.claude/
+.codex/
+.continue/
+.cursor/
+.cursorrules
+.junie/
+.roo/
+.windsurf/
+.windsurfrules
+.github/agents/
+.github/instructions/
+.github/prompts/
+.github/copilot-instructions.md
+
+# Logs, diagnostics, and operating-system files
+*.log
+*.hprof
+.DS_Store
+Thumbs.db
