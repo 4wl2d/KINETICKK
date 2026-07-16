@@ -27,6 +27,7 @@ secrets.properties
 
 # Local AI tooling and instructions
 AGENTS.md
+!/AGENTS.md
 CLAUDE.md
 CLAUDE.local.md
 CODEX.md
