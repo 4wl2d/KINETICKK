@@ -14,6 +14,10 @@ import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 import kinetickk.features.game.nucleus.protocol.SoundCue
 import kinetickk.features.game.nucleus.protocol.BoundedVisualFxCueAccumulator
+import kinetickk.features.game.nucleus.protocol.GameCommand
+import kinetickk.features.game.nucleus.protocol.GameProfileReplica
+import kinetickk.features.game.nucleus.protocol.ProfileChange
+import kinetickk.features.game.nucleus.protocol.SettingsChange
 import kinetickk.features.game.nucleus.projection.EnemyProjection
 import kinetickk.features.game.nucleus.projection.GameProjection
 import kinetickk.features.game.nucleus.projection.PickupProjection
@@ -178,7 +182,8 @@ internal class MutableGameState(
     seed: Int = 731_991,
     initialMatter: Int? = null,
     initialRebirthLevel: Int = 0,
-    bootstrapProgress: StoredProgress? = null,
+    bootstrapProgress: GameBootstrapSnapshot? = null,
+    private val externalAuthorities: Boolean = false,
 ) {
     companion object {
         const val RUN_DURATION_SECONDS = 20f * 60f
@@ -219,8 +224,8 @@ internal class MutableGameState(
     private val itemStacks = IntArray(ItemCatalog.ITEM_COUNT)
     private val familyStacks = IntArray(20)
     private val soundCues = mutableListOf<SoundCue>()
+    private val authorityCommands = mutableListOf<GameCommand>()
     private var visualFxCues = BoundedVisualFxCueAccumulator()
-    private var persistenceRequested = false
 
     private var nextEntityId = 1
     private var spawnClock = 0f
@@ -751,11 +756,16 @@ internal class MutableGameState(
             emitSound(SoundCue.UI_CLICK)
             return false
         }
+        if (externalAuthorities) {
+            authorityCommands += GameCommand.BeginRebirth(expectedLevel = rebirthLevel)
+            rebirthConfirmationArmed = false
+            emitSound(SoundCue.PURCHASE)
+            return true
+        }
         rebirthLevel++
         activeRebirthProfile = RebirthProgression.profile(rebirthLevel)
         upcomingRebirthProfile = RebirthProgression.profile(rebirthLevel + 1)
         rebirthConfirmationArmed = false
-        persist()
         startRun()
         message = "REBIRTH $rebirthLevel // ${rebirthProfile.directive.displayName.uppercase()}"
         messageTime = 2.8f
@@ -770,9 +780,13 @@ internal class MutableGameState(
     }
 
     fun setCoreShape(shape: CoreShape) {
+        if (externalAuthorities) {
+            authorityCommands += GameCommand.ChangeProfile(ProfileChange.SelectCoreShape(shape))
+            emitSound(SoundCue.UI_CLICK)
+            return
+        }
         if (!isCoreShapeUnlocked(shape)) return
         coreShape = shape
-        persist()
         emitSound(SoundCue.UI_CLICK)
     }
 
@@ -859,9 +873,13 @@ internal class MutableGameState(
     }
 
     fun toggleMute() {
+        if (externalAuthorities) {
+            authorityCommands += GameCommand.ChangeSettings(SettingsChange.ToggleMute)
+            emitSound(SoundCue.UI_CLICK)
+            return
+        }
         val enable = !settings.soundEnabled && !settings.musicEnabled
         settings = settings.copy(soundEnabled = enable, musicEnabled = enable)
-        persist()
         emitSound(SoundCue.UI_CLICK)
     }
 
@@ -2464,9 +2482,10 @@ internal class MutableGameState(
             phase = GamePhase.VICTORY
             message = "ARCHITECT DISMANTLED"
             messageTime = 10f
-            highestClearedRebirth = max(highestClearedRebirth, rebirthLevel)
+            if (!externalAuthorities) {
+                highestClearedRebirth = max(highestClearedRebirth, rebirthLevel)
+            }
             bankRunMatter()
-            persist()
             emitSound(SoundCue.VICTORY)
         }
     }
@@ -2890,7 +2909,13 @@ internal class MutableGameState(
             message = item.name.uppercase() + " ACQUIRED"
         }
         messageTime = 1.7f
-        if (discoveredItemIds.add(itemId)) persist()
+        if (itemId !in discoveredItemIds) {
+            if (externalAuthorities) {
+                authorityCommands += GameCommand.ChangeProfile(ProfileChange.RecordItemDiscovery(itemId))
+            } else {
+                discoveredItemIds.add(itemId)
+            }
+        }
     }
 
     private fun applyItemModifier(modifier: ItemModifier) {
@@ -2930,6 +2955,11 @@ internal class MutableGameState(
     fun isWeaponUnlocked(id: WeaponId): Boolean = id in unlockedWeaponSet
 
     fun buyMetaUpgrade(id: MetaUpgradeId): Boolean {
+        if (externalAuthorities) {
+            authorityCommands += GameCommand.ChangeProfile(ProfileChange.PurchaseMetaUpgrade(id))
+            emitSound(SoundCue.PURCHASE)
+            return true
+        }
         val definition = MetaUpgradeCatalog.byId(id)
         val level = metaLevel(id)
         if (level >= definition.maxRanks) return false
@@ -2937,12 +2967,16 @@ internal class MutableGameState(
         if (totalMatter < cost) return false
         totalMatter -= cost
         metaRanks[id.ordinal]++
-        persist()
         emitSound(SoundCue.PURCHASE)
         return true
     }
 
     fun buyOrEquipWeapon(id: WeaponId): Boolean {
+        if (externalAuthorities) {
+            authorityCommands += GameCommand.ChangeProfile(ProfileChange.PurchaseOrSelectWeapon(id))
+            emitSound(SoundCue.PURCHASE)
+            return true
+        }
         if (id !in unlockedWeaponSet) {
             val cost = WeaponCatalog.byId(id).permanentUnlockCost.toLong()
             if (totalMatter < cost) return false
@@ -2952,7 +2986,6 @@ internal class MutableGameState(
         }
         startingWeapon = id
         if (phase == GamePhase.MENU) weapon = id
-        persist()
         emitSound(SoundCue.PURCHASE)
         return true
     }
@@ -2991,34 +3024,22 @@ internal class MutableGameState(
     }
 
     private fun bankRunMatter() {
-        if (bankedThisRun || runMatter <= 0L) return
+        if (bankedThisRun) return
+        if (externalAuthorities) {
+            if (runMatter <= 0L && phase != GamePhase.VICTORY) return
+            bankedThisRun = true
+            authorityCommands += GameCommand.ChangeProfile(
+                ProfileChange.ApplyRunOutcome(
+                    matterEarned = runMatter.coerceAtLeast(0L),
+                    clearedRebirthLevel = if (phase == GamePhase.VICTORY) rebirthLevel else null,
+                ),
+            )
+            return
+        }
+        if (runMatter <= 0L) return
         bankedThisRun = true
         totalMatter = saturatedAdd(totalMatter, runMatter)
         lifetimeMatter = saturatedAdd(lifetimeMatter, runMatter)
-        persist()
-    }
-
-    private fun persist() {
-        persistenceRequested = true
-    }
-
-    internal fun progressSnapshot(): StoredProgress = StoredProgress(
-            matter = totalMatter,
-            lifetimeMatter = lifetimeMatter,
-            coreShapeIndex = coreShape.ordinal,
-            selectedWeaponIndex = startingWeapon.ordinal,
-            unlockedWeaponIndices = unlockedWeaponSet.mapTo(mutableSetOf()) { it.ordinal },
-            metaLevels = metaRanks.toList(),
-            discoveredItemIds = discoveredItemIds.toSet(),
-            settings = settings,
-            rebirthLevel = rebirthLevel,
-            highestClearedRebirth = highestClearedRebirth,
-        )
-
-    internal fun takePersistenceRequest(): StoredProgress? {
-        if (!persistenceRequested) return null
-        persistenceRequested = false
-        return progressSnapshot()
     }
 
     internal fun takeSoundCues(): List<SoundCue> {
@@ -3026,6 +3047,41 @@ internal class MutableGameState(
         val result = soundCues.toList()
         soundCues.clear()
         return result
+    }
+
+    internal fun takeAuthorityCommands(): List<GameCommand> {
+        if (authorityCommands.isEmpty()) return emptyList()
+        return authorityCommands.toList().also { authorityCommands.clear() }
+    }
+
+    /** Replaces only captured replicas; authority remains in Settings and Profile. */
+    internal fun observeDependencies(
+        observedSettings: GameSettings,
+        profile: GameProfileReplica,
+    ) {
+        settings = observedSettings.normalized()
+        totalMatter = profile.matter.coerceAtLeast(0L)
+        lifetimeMatter = profile.lifetimeMatter.coerceAtLeast(totalMatter)
+        coreShape = profile.coreShape
+        startingWeapon = profile.selectedWeapon
+        if (phase == GamePhase.MENU) weapon = profile.selectedWeapon
+        unlockedWeaponSet.clear()
+        unlockedWeaponSet.addAll(profile.unlockedWeapons)
+        unlockedWeaponSet += WeaponId.FLUX_WAKE
+        unlockedWeaponView = unlockedWeaponSet.toSet()
+        profile.metaRanks.forEachIndexed { index, rank ->
+            if (index in metaRanks.indices) {
+                metaRanks[index] = rank.coerceIn(0, MetaUpgradeCatalog.all[index].maxRanks)
+            }
+        }
+        discoveredItemIds.clear()
+        discoveredItemIds.addAll(
+            profile.discoveredItemIds.filter { it in 0 until ItemCatalog.ITEM_COUNT },
+        )
+        rebirthLevel = profile.rebirthLevel.coerceIn(0, RebirthProgression.MAX_LEVEL)
+        highestClearedRebirth = profile.highestClearedRebirth.coerceIn(-1, rebirthLevel)
+        activeRebirthProfile = profile.activeRebirthProfile
+        upcomingRebirthProfile = profile.nextRebirthProfile
     }
 
     internal fun takeVisualFxCues(): List<VisualFxCue> = visualFxCues.drain()
@@ -3405,6 +3461,25 @@ internal class MutableGameState(
     }
 
     private fun adjustSetting(row: SettingsRow, direction: Int) {
+        if (externalAuthorities) {
+            val change = when (row) {
+                SettingsRow.SFX -> SettingsChange.ToggleSound
+                SettingsRow.MUSIC -> SettingsChange.ToggleMusic
+                SettingsRow.MASTER_VOLUME -> SettingsChange.AdjustMasterVolume(direction)
+                SettingsRow.SIMULATION_SPEED -> SettingsChange.AdjustSimulationSpeed(direction)
+                SettingsRow.TEXT_SIZE -> SettingsChange.AdjustTextScale(direction)
+                SettingsRow.SCREEN_SHAKE -> SettingsChange.ToggleScreenShake
+                SettingsRow.PARTICLES -> SettingsChange.AdjustParticleDensity(direction)
+                SettingsRow.DAMAGE_NUMBERS -> SettingsChange.ToggleDamageNumbers
+                SettingsRow.DAMAGE_NUMBER_SIZE -> SettingsChange.AdjustDamageNumberSize(direction)
+                SettingsRow.DAMAGE_NUMBER_FORMAT -> SettingsChange.AdjustDamageNumberFormat(direction)
+                SettingsRow.DAMAGE_COLOR_THRESHOLDS ->
+                    SettingsChange.AdjustDamageNumberTierThreshold(direction)
+            }
+            authorityCommands += GameCommand.ChangeSettings(change)
+            emitSound(SoundCue.UI_CLICK)
+            return
+        }
         settings = when (row) {
             SettingsRow.SFX -> settings.copy(soundEnabled = !settings.soundEnabled)
             SettingsRow.MUSIC -> settings.copy(musicEnabled = !settings.musicEnabled)
@@ -3440,7 +3515,6 @@ internal class MutableGameState(
                 settings.copy(damageNumberTierThreshold = DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS[next])
             }
         }.normalized()
-        persist()
         emitSound(SoundCue.UI_CLICK)
     }
 
@@ -3577,6 +3651,8 @@ internal class MutableGameState(
         settings = settings,
         rebirthLevel = rebirthLevel,
         highestClearedRebirth = highestClearedRebirth,
+        rebirthProfile = activeRebirthProfile,
+        nextRebirthProfile = upcomingRebirthProfile,
         rebirthConfirmationArmed = rebirthConfirmationArmed,
         screenWidth = screenWidth,
         screenHeight = screenHeight,
@@ -3777,6 +3853,7 @@ internal class MutableGameState(
             seed = 0,
             initialMatter = 0,
             initialRebirthLevel = rebirthLevel,
+            externalAuthorities = externalAuthorities,
         )
 
         target.gameplayRandom = gameplayRandom.copy()
@@ -3792,8 +3869,9 @@ internal class MutableGameState(
         familyStacks.copyInto(target.familyStacks)
         target.soundCues.clear()
         target.soundCues.addAll(soundCues)
+        target.authorityCommands.clear()
+        target.authorityCommands.addAll(authorityCommands)
         target.visualFxCues = visualFxCues.copy()
-        target.persistenceRequested = persistenceRequested
 
         target.nextEntityId = nextEntityId
         target.spawnClock = spawnClock

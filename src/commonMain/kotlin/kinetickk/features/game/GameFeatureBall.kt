@@ -3,8 +3,8 @@
 
 package kinetickk.features.game
 
-import kinetickk.application.runtime.AdmissionFailure
 import kinetickk.application.runtime.AdditionalLimitMeasurement
+import kinetickk.application.runtime.AdmissionFailure
 import kinetickk.application.runtime.BoundedPreflightPolicy
 import kinetickk.application.runtime.BusinessRejection
 import kinetickk.application.runtime.DecisionLimits
@@ -13,23 +13,29 @@ import kinetickk.application.runtime.OutputDispatcher
 import kinetickk.application.runtime.PreflightCandidate
 import kinetickk.application.runtime.PreflightEstimators
 import kinetickk.application.runtime.SubmissionResult
-import kinetickk.features.game.nucleus.StoredProgress
+import kinetickk.features.game.nucleus.GameSettings
+import kinetickk.features.game.nucleus.GameBootstrapSnapshot
 import kinetickk.features.game.nucleus.projection.GameProjection
-import kinetickk.features.game.nucleus.protocol.EffectRequest
+import kinetickk.features.game.nucleus.protocol.CommandRequest
+import kinetickk.features.game.nucleus.protocol.GameCommand
 import kinetickk.features.game.nucleus.protocol.GameDecisionContext
-import kinetickk.features.game.nucleus.protocol.GameEffect
+import kinetickk.features.game.nucleus.protocol.GameDependencyContract
 import kinetickk.features.game.nucleus.protocol.GameFact
 import kinetickk.features.game.nucleus.protocol.GameIntent
 import kinetickk.features.game.nucleus.protocol.GameOutputKind
+import kinetickk.features.game.nucleus.protocol.GameProfileReplica
 import kinetickk.features.game.nucleus.protocol.GameProjectionPayload
 import kinetickk.features.game.nucleus.protocol.GamePulse
 import kinetickk.features.game.nucleus.protocol.GameQuery
 import kinetickk.features.game.nucleus.protocol.GameQueryResult
+import kinetickk.features.game.nucleus.protocol.GameRejection
+import kinetickk.features.game.nucleus.protocol.GameRunStartContract
+import kinetickk.features.game.nucleus.protocol.GameRunStartCommandSource
+import kinetickk.features.game.nucleus.protocol.GameRunStartModuleCommand
+import kinetickk.features.game.nucleus.protocol.GameRunStartModuleResult
+import kinetickk.features.game.nucleus.protocol.GameRunStartRejectionReason
 import kinetickk.features.game.nucleus.protocol.OperationId
-import kinetickk.features.game.nucleus.protocol.ProgressPersistenceUnknownReason
-import kinetickk.features.game.nucleus.protocol.ProgressProvider
 import kinetickk.features.game.nucleus.protocol.ProjectionOutput
-import kinetickk.features.game.nucleus.protocol.SemanticHandle
 import kinetickk.features.game.nucleus.protocol.SemanticOutput
 import kinetickk.features.game.nucleus.protocol.VisualFxCue
 import kinetickk.features.game.nucleus.read.CommittedStateSnapshot
@@ -39,70 +45,50 @@ import kinetickk.features.game.nucleus.read.ReadResult
 import kinetickk.features.game.nucleus.transition.GameBallState
 import kinetickk.features.game.nucleus.transition.GameNucleus
 import kinetickk.features.game.nucleus.transition.initialGameBallState
-import kinetickk.features.game.resources.audio.AudioResource
-import kinetickk.features.game.resources.progress.ProgressPersistResult
-import kinetickk.features.game.resources.progress.ProgressProviderId
-import kinetickk.features.game.resources.progress.ProgressResourceFailure
-import kinetickk.features.game.resources.progress.ProgressStore
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.toImmutableList
 
 sealed interface GameDispatchResult {
     data class Committed(
-        /** Commit created directly by the submitted root Intent. */
+        /** Commit created directly by the submitted root pulse. */
         val sourceCommitRevision: ULong,
-        /** Read from the final committed snapshot after the bounded synchronous causal loop. */
+        /** Stamped Game projection before Assembly applies cross-Ball follow-on commands. */
         val projectionRead: ReadResult<GameProjection>,
-        /** Drop-eligible presentation consequences from the accepted root frame. */
+        /** Drop-eligible presentation consequences from this accepted frame. */
         val visualFxCues: ImmutableList<VisualFxCue>,
-        val continuationStatus: GameContinuationStatus,
+        /** Typed cross-Ball commands routed only by the static Assembly. */
+        val commands: ImmutableList<CommandRequest>,
     ) : GameDispatchResult
 
     data class DecisionRejected(val reason: BusinessRejection) : GameDispatchResult
     data class AdmissionRejected(val reason: AdmissionFailure) : GameDispatchResult
 }
 
-sealed interface GameCompletionAttemptFailure {
-    data class DecisionRejected(val reason: BusinessRejection) : GameCompletionAttemptFailure
-    data class AdmissionRejected(val reason: AdmissionFailure) : GameCompletionAttemptFailure
-}
-
-/** Mechanical status of the one fixed synchronous-completion slot owned by this Inline Ball. */
-sealed interface GameContinuationStatus {
-    data object Idle : GameContinuationStatus
-
-    data class Retained(
-        val handle: SemanticHandle,
-        val causalBudgetScope: OperationId,
-        val lastFailure: GameCompletionAttemptFailure?,
-    ) : GameContinuationStatus
-}
+data class GameRunStartExecution(
+    val moduleResult: GameRunStartModuleResult,
+    val committed: GameDispatchResult.Committed?,
+)
 
 /**
- * The single behavior-authoritative LocalGame Feature Ball.
+ * Singleton active-run Game Feature Ball.
  *
- * The Ball owns one Inline runtime and exposes only closed Pulses and canonically stamped query
- * results. Resource capabilities are private bindings and run strictly after the complete
- * accepted frame has been published. One pre-reserved slot retains the sole synchronous progress
- * completion; a Fact is cleared only after its own Decision commits.
+ * Game owns simulation order and run-local state. It has no Resource bindings and cannot mutate
+ * Settings or permanent Profile authority. Cross-Ball work leaves as typed Commands for Assembly;
+ * dependency updates return as trusted, captured replica Facts.
  */
 class GameFeatureBall internal constructor(
     initialState: GameBallState,
-    private val progressStore: ProgressStore,
-    private val audioResource: AudioResource,
 ) {
-    private data class RetainedCompletion(
-        val fact: GameFact,
-        val context: GameDecisionContext,
-        val lastFailure: GameCompletionAttemptFailure? = null,
-    )
-
     private data class ProjectionCache(
         val revision: ULong,
         val projection: GameProjection,
     )
 
-    private var pendingCompletion: RetainedCompletion? = null
+    private data class RunStartDedupRecord(
+        val command: GameRunStartModuleCommand,
+        val result: GameRunStartModuleResult,
+    )
+
     private val runtime = InlineAcceptedFrameRuntime(
         initialState = initialState,
         decider = GameNucleus(),
@@ -110,10 +96,14 @@ class GameFeatureBall internal constructor(
             limits = LIMITS,
             estimators = PreflightEstimators(
                 inputBytes = ::estimateInputBytes,
-                stateBytes = ::estimateStateBytes,
+                stateBytes = { state ->
+                    state.model.estimatedStateBytes() + GAME_BALL_STATE_FIXED_BYTES +
+                        (state.settingsSource?.ballInstanceId?.length ?: 0) * 4L +
+                        (state.profileSource?.ballInstanceId?.length ?: 0) * 4L
+                },
                 collectionItemCounts = ::collectionItemCounts,
-                isEffect = { output -> output is EffectRequest },
-                isCommand = { false },
+                isEffect = { false },
+                isCommand = { output -> output is CommandRequest },
                 causalDepth = { _, context -> context.causalDepth },
                 retries = { _, context -> context.retryCount },
                 transitionSteps = { candidate -> candidate.decision.nextState.transitionSteps },
@@ -128,68 +118,145 @@ class GameFeatureBall internal constructor(
                 },
                 sourceOrdinal = SemanticOutput::sourceOrdinal,
                 hasMatchingOutputKind = ::hasMatchingOutputKind,
-                synchronousCompletionCount = { candidate ->
-                    candidate.decision.outputs.count { output ->
-                        output is EffectRequest && output.payload is GameEffect.PersistProgress
-                    }
+                causalBudgetScope = { _, context ->
+                    "${context.causalBudgetScopeOwnerBallInstanceId}:" +
+                        context.causalBudgetScope.value
                 },
-                availableSynchronousCompletionSlots = {
-                    if (pendingCompletion == null) COMPLETION_CAPACITY else 0
-                },
-                causalBudgetScope = { _, context -> context.causalBudgetScope.value.toString() },
             ),
         ),
-        outputDispatcher = OutputDispatcher(::dispatchAcceptedOutput),
+        outputDispatcher = OutputDispatcher { output ->
+            if (output is ProjectionOutput) projectionCache = null
+        },
     )
     private var projectionCache: ProjectionCache? = null
+    private var lastRunStart: RunStartDedupRecord? = null
     private var nextRootOperationId: ULong = 1uL
 
-    fun dispatch(intent: GameIntent): GameDispatchResult {
-        resumeRetainedCompletion()
-        pendingCompletion?.let { retained ->
-            return GameDispatchResult.AdmissionRejected(
-                AdmissionFailure.CausalBudgetExceeded(
-                    scope = retained.context.causalBudgetScope.value.toString(),
-                    limit = LIMITS.maxCausalDepth,
-                ),
-            )
+    fun dispatch(intent: GameIntent): GameDispatchResult = submit(intent)
+
+    /** Executes the target-owned run-start operation and returns its provenance-bound result. */
+    fun execute(command: GameRunStartModuleCommand): GameRunStartExecution {
+        val correlatable = command.hasCorrelatableRunStartEnvelope()
+        lastRunStart?.let { retained ->
+            resolveRunStartRedelivery(
+                received = command,
+                retained = retained,
+                receivedCorrelatable = correlatable,
+            )?.let { return it }
         }
 
-        val operationId = reserveRootOperationId()
-            ?: return GameDispatchResult.AdmissionRejected(AdmissionFailure.OperationIdentityExhausted)
-        val rootResult = runtime.submit(
-            pulse = intent,
-            context = GameDecisionContext(
-                operationId = operationId,
-                causalBudgetScope = operationId,
-            ),
+        val dispatch = submit(
+            pulse = command,
+            causalBudgetScope = OperationId(command.causalBudgetScope.operationId),
+            causalBudgetScopeOwnerBallInstanceId =
+            command.causalBudgetScope.ownerBallInstanceId,
+            causalDepth = GameRunStartContract.COMMAND_CAUSAL_DEPTH,
         )
-        if (rootResult is SubmissionResult.Committed) {
-            resumeRetainedCompletion()
-        }
-        return when (rootResult) {
-            is SubmissionResult.Committed -> GameDispatchResult.Committed(
-                sourceCommitRevision = rootResult.frame.revision.value,
-                projectionRead = projectionRead(),
-                visualFxCues = rootResult.frame.outputs
-                    .filterIsInstance<ProjectionOutput>()
-                    .flatMap { output ->
-                        when (val payload = output.payload) {
-                            is GameProjectionPayload.GameProjectionChanged ->
-                                payload.visualFxCues
-                        }
-                    }
-                    .toImmutableList(),
-                continuationStatus = completionStatus(),
+        val moduleResult = when (dispatch) {
+            is GameDispatchResult.Committed -> GameRunStartModuleResult.Started(
+                commandSource = command.commandSource,
+                causalBudgetScope = command.causalBudgetScope,
+                causalDepth = GameRunStartContract.RESULT_CAUSAL_DEPTH,
+                provenance = GameRunStartContract.RESULT_PROVENANCE,
+                gameCommitRevision = dispatch.sourceCommitRevision,
             )
-            is SubmissionResult.DecisionRejected ->
-                GameDispatchResult.DecisionRejected(rootResult.rejection)
-            is SubmissionResult.AdmissionRejected ->
-                GameDispatchResult.AdmissionRejected(rootResult.failure)
+            is GameDispatchResult.DecisionRejected -> GameRunStartModuleResult.Rejected(
+                commandSource = command.commandSource,
+                causalBudgetScope = command.causalBudgetScope,
+                causalDepth = GameRunStartContract.RESULT_CAUSAL_DEPTH,
+                provenance = GameRunStartContract.RESULT_PROVENANCE,
+                reason = dispatch.reason.toRunStartRejectionReason(),
+            )
+            is GameDispatchResult.AdmissionRejected -> GameRunStartModuleResult.Rejected(
+                commandSource = command.commandSource,
+                causalBudgetScope = command.causalBudgetScope,
+                causalDepth = GameRunStartContract.RESULT_CAUSAL_DEPTH,
+                provenance = GameRunStartContract.RESULT_PROVENANCE,
+                reason = GameRunStartRejectionReason.TARGET_ADMISSION_REJECTED,
+            )
         }
+        if (correlatable && dispatch !is GameDispatchResult.AdmissionRejected) {
+            lastRunStart = RunStartDedupRecord(command = command, result = moduleResult)
+        }
+        return GameRunStartExecution(
+            moduleResult = moduleResult,
+            committed = dispatch as? GameDispatchResult.Committed,
+        )
     }
 
-    /** Canonical Query -> ReadResult mapping for Game protocol 1.0.0. */
+    private fun resolveRunStartRedelivery(
+        received: GameRunStartModuleCommand,
+        retained: RunStartDedupRecord,
+        receivedCorrelatable: Boolean,
+    ): GameRunStartExecution? {
+        val receivedSource = received.commandSource
+        val retainedSource = retained.command.commandSource
+        if (receivedSource == retainedSource) {
+            return if (received == retained.command) {
+                GameRunStartExecution(moduleResult = retained.result, committed = null)
+            } else {
+                rejectedRunStartExecution(
+                    received,
+                    GameRunStartRejectionReason.COMMAND_SOURCE_CONFLICT,
+                )
+            }
+        }
+        if (receivedSource.sameDeliverySlot(retainedSource)) {
+            return rejectedRunStartExecution(
+                received,
+                GameRunStartRejectionReason.COMMAND_SOURCE_CONFLICT,
+            )
+        }
+        if (
+            receivedCorrelatable &&
+            receivedSource.sourceBallInstanceId == retainedSource.sourceBallInstanceId &&
+            receivedSource.precedes(retainedSource)
+        ) {
+            return rejectedRunStartExecution(
+                received,
+                GameRunStartRejectionReason.STALE_COMMAND_SOURCE,
+            )
+        }
+        return null
+    }
+
+    private fun rejectedRunStartExecution(
+        command: GameRunStartModuleCommand,
+        reason: GameRunStartRejectionReason,
+    ): GameRunStartExecution = GameRunStartExecution(
+        moduleResult = GameRunStartModuleResult.Rejected(
+            commandSource = command.commandSource,
+            causalBudgetScope = command.causalBudgetScope,
+            causalDepth = GameRunStartContract.RESULT_CAUSAL_DEPTH,
+            provenance = GameRunStartContract.RESULT_PROVENANCE,
+            reason = reason,
+        ),
+        committed = null,
+    )
+
+    internal fun observeDependencies(
+        settings: GameSettings,
+        profile: GameProfileReplica,
+        settingsSource: ConsistencyStamp = ConsistencyStamp(
+            ballInstanceId = GameDependencyContract.SETTINGS_BALL_INSTANCE_ID,
+            commitRevision = 0uL,
+            stateSchemaVersion = GameDependencyContract.SETTINGS_STATE_SCHEMA_VERSION,
+        ),
+        profileSource: ConsistencyStamp = ConsistencyStamp(
+            ballInstanceId = GameDependencyContract.PROFILE_BALL_INSTANCE_ID,
+            commitRevision = 0uL,
+            stateSchemaVersion = GameDependencyContract.PROFILE_STATE_SCHEMA_VERSION,
+        ),
+    ): GameDispatchResult = submit(
+        GameFact.DependenciesObserved(
+            settings = settings,
+            profile = profile,
+            settingsSource = settingsSource,
+            profileSource = profileSource,
+        ),
+    )
+
+    /** Canonical Query -> ReadResult mapping for Game protocol 2.0.0. */
     fun query(query: GameQuery): GameQueryResult = read(
         query = query,
         context = ReadContext(
@@ -206,42 +273,6 @@ class GameFeatureBall internal constructor(
             stateSchemaVersion = GameProjection.STATE_SCHEMA_VERSION,
             state = frame.state,
         )
-        return readSnapshot(snapshot, query, context)
-    }
-
-    /** Reports whether the one fixed synchronous-completion slot is occupied. */
-    fun completionStatus(): GameContinuationStatus = pendingCompletion?.let { retained ->
-        GameContinuationStatus.Retained(
-            handle = retained.fact.handle,
-            causalBudgetScope = retained.context.causalBudgetScope,
-            lastFailure = retained.lastFailure,
-        )
-    } ?: GameContinuationStatus.Idle
-
-    /** Resumes the same retained causal scope; it never creates a replacement root operation. */
-    fun resumeRetainedCompletion(): GameContinuationStatus {
-        val retained = pendingCompletion ?: return GameContinuationStatus.Idle
-        when (val result = runtime.submit(retained.fact, retained.context)) {
-            is SubmissionResult.Committed -> pendingCompletion = null
-            is SubmissionResult.DecisionRejected -> pendingCompletion = retained.copy(
-                lastFailure = GameCompletionAttemptFailure.DecisionRejected(result.rejection),
-            )
-            is SubmissionResult.AdmissionRejected -> pendingCompletion = retained.copy(
-                lastFailure = GameCompletionAttemptFailure.AdmissionRejected(result.failure),
-            )
-        }
-        return completionStatus()
-    }
-
-    fun close() {
-        runCatching(audioResource::close)
-    }
-
-    private fun readSnapshot(
-        snapshot: CommittedStateSnapshot<GameBallState>,
-        query: GameQuery,
-        context: ReadContext,
-    ): GameQueryResult {
         require(context.protocolVersion == GameProjection.PROTOCOL_VERSION) {
             "Unsupported Game read protocol version"
         }
@@ -257,12 +288,47 @@ class GameFeatureBall internal constructor(
                     consistencyStamp = stamp,
                 ),
             )
-            GameQuery.GetPersistenceStatus -> GameQueryResult.Persistence(
-                ReadResult(
-                    payload = snapshot.state.persistenceStatus,
-                    consistencyStamp = stamp,
+        }
+    }
+
+    private fun submit(
+        pulse: GamePulse,
+        causalBudgetScope: OperationId? = null,
+        causalBudgetScopeOwnerBallInstanceId: String = GameProjection.BALL_INSTANCE_ID,
+        causalDepth: Int = 1,
+    ): GameDispatchResult {
+        val operationId = reserveRootOperationId()
+            ?: return GameDispatchResult.AdmissionRejected(AdmissionFailure.OperationIdentityExhausted)
+        val effectiveCausalBudgetScope = causalBudgetScope ?: operationId
+        return when (
+            val result = runtime.submit(
+                pulse = pulse,
+                context = GameDecisionContext(
+                    operationId = operationId,
+                    causalBudgetScope = effectiveCausalBudgetScope,
+                    causalBudgetScopeOwnerBallInstanceId =
+                    causalBudgetScopeOwnerBallInstanceId,
+                    causalDepth = causalDepth,
                 ),
             )
+        ) {
+            is SubmissionResult.Committed -> GameDispatchResult.Committed(
+                sourceCommitRevision = result.frame.revision.value,
+                projectionRead = projectionRead(),
+                visualFxCues = result.frame.outputs
+                    .filterIsInstance<ProjectionOutput>()
+                    .flatMap { output ->
+                        when (val payload = output.payload) {
+                            is GameProjectionPayload.GameProjectionChanged -> payload.visualFxCues
+                        }
+                    }
+                    .toImmutableList(),
+                commands = result.frame.outputs.filterIsInstance<CommandRequest>().toImmutableList(),
+            )
+            is SubmissionResult.DecisionRejected ->
+                GameDispatchResult.DecisionRejected(result.rejection)
+            is SubmissionResult.AdmissionRejected ->
+                GameDispatchResult.AdmissionRejected(result.failure)
         }
     }
 
@@ -277,81 +343,6 @@ class GameFeatureBall internal constructor(
         }
     }
 
-    private fun dispatchAcceptedOutput(output: SemanticOutput) {
-        when (output) {
-            is ProjectionOutput -> when (output.payload) {
-                is GameProjectionPayload.GameProjectionChanged -> {
-                    // Live projection delivery is returned to the Interaction caller from the
-                    // retained accepted root frame. It never mutates the stamped Game snapshot.
-                    projectionCache = null
-                }
-            }
-            is EffectRequest -> dispatchEffect(output)
-        }
-    }
-
-    private fun dispatchEffect(request: EffectRequest) {
-        when (val effect = request.payload) {
-            is GameEffect.AdvanceAudio -> runCatching {
-                audioResource.advance(
-                    settings = effect.settings,
-                    realDelta = effect.realDeltaSeconds,
-                    cues = effect.cues,
-                )
-            }
-            GameEffect.EnsureAudioUnlocked -> runCatching(audioResource::ensureUnlocked)
-            is GameEffect.PersistProgress -> {
-                // Assembly owns the route identity; the provider's declared identity is still
-                // quarantined before execution and cannot leak an exception into the runtime.
-                val providerAccepted = runCatching {
-                    progressStore.providerId == ProgressProviderId.PLATFORM_LOCAL
-                }.getOrDefault(false)
-                val provider = ProgressProvider.PLATFORM_LOCAL
-                val persistenceResult = if (providerAccepted) {
-                    runCatching { progressStore.persist(effect.snapshot) }
-                        .getOrElse {
-                            ProgressPersistResult.OutcomeUnknown(
-                                ProgressResourceFailure.PROVIDER_WRITE_MAY_HAVE_EXECUTED,
-                            )
-                        }
-                } else {
-                    ProgressPersistResult.OutcomeUnknown(
-                        ProgressResourceFailure.PROVIDER_READ_FAILED,
-                    )
-                }
-                val fact = when (val result = persistenceResult) {
-                    ProgressPersistResult.Persisted -> GameFact.ProgressPersisted(
-                        handle = request.semanticHandle,
-                        provider = provider,
-                    )
-                    is ProgressPersistResult.OutcomeUnknown ->
-                        GameFact.ProgressPersistenceOutcomeUnknown(
-                            handle = request.semanticHandle,
-                            provider = provider,
-                            reason = result.reason.toProtocolReason(),
-                        )
-                }
-                retainCompletion(
-                    RetainedCompletion(
-                        fact = fact,
-                        context = GameDecisionContext(
-                            operationId = request.semanticHandle.operationId,
-                            causalBudgetScope = request.semanticHandle.operationId,
-                            causalDepth = 2,
-                        ),
-                    ),
-                )
-            }
-        }
-    }
-
-    private fun retainCompletion(completion: RetainedCompletion) {
-        check(pendingCompletion == null) {
-            "Synchronous completion slot was not reserved before acceptance"
-        }
-        pendingCompletion = completion
-    }
-
     private fun reserveRootOperationId(): OperationId? {
         val value = nextRootOperationId
         if (value == 0uL) return null
@@ -360,12 +351,8 @@ class GameFeatureBall internal constructor(
     }
 
     companion object {
-        private const val COMPLETION_CAPACITY = 1
-
         fun create(
-            progressStore: ProgressStore,
-            audioResource: AudioResource,
-            bootstrapProgress: StoredProgress?,
+            bootstrapProgress: GameBootstrapSnapshot?,
             seed: Int = 731_991,
             initialMatter: Int? = null,
             initialRebirthLevel: Int = 0,
@@ -376,18 +363,16 @@ class GameFeatureBall internal constructor(
                 initialMatter = initialMatter,
                 initialRebirthLevel = initialRebirthLevel,
             ),
-            progressStore = progressStore,
-            audioResource = audioResource,
         )
 
         val LIMITS = DecisionLimits(
-            maxInputBytes = 4_096L,
+            maxInputBytes = 65_536L,
             maxStateBytes = 16_777_216L,
             maxCollectionItems = 2_048,
-            maxOutputsPerDecision = 3,
-            maxEffectsPerDecision = 2,
-            maxCommandsPerDecision = 0,
-            maxCausalDepth = 2,
+            maxOutputsPerDecision = 8,
+            maxEffectsPerDecision = 0,
+            maxCommandsPerDecision = 7,
+            maxCausalDepth = GameRunStartContract.COMMAND_CAUSAL_DEPTH,
             maxRetriesPerOperation = 0,
             maxTransitionSteps = 48,
         )
@@ -400,16 +385,19 @@ class GameFeatureBall internal constructor(
                 is GameIntent.PointerPressed -> 20L
                 is GameIntent.ChoiceSelected -> 12L
                 is GameIntent -> 8L
-                is GameFact.ProgressPersisted -> 80L +
-                    pulse.handle.localOrdinalOrName.length * 4L
-                is GameFact.ProgressPersistenceOutcomeUnknown -> 88L +
-                    pulse.handle.localOrdinalOrName.length * 4L
+                is GameRunStartModuleCommand -> 128L +
+                    pulse.commandSource.sourceBallInstanceId.length * 4L +
+                    pulse.commandSource.sourceOutputKind.length * 4L +
+                    pulse.commandSource.sourceLocalOrdinalOrName.length * 4L +
+                    pulse.causalBudgetScope.ownerBallInstanceId.length * 4L +
+                    pulse.runConfigurationReference.profileBallInstanceId.length * 4L
+                is GameFact.DependenciesObserved -> 512L +
+                    pulse.profile.unlockedWeapons.size * 8L +
+                    pulse.profile.metaRanks.size * 4L +
+                    pulse.profile.discoveredItemIds.size * 4L +
+                    pulse.settingsSource.ballInstanceId.length * 4L +
+                    pulse.profileSource.ballInstanceId.length * 4L
             } + context.transitionArtifact.length * 4L
-
-        /** Includes the model plus every retained GameBallState correlation/status field. */
-        private fun estimateStateBytes(state: GameBallState): Long =
-            state.model.estimatedStateBytes() + GAME_BALL_STATE_FIXED_BYTES +
-                (state.outstandingPersistence?.localOrdinalOrName?.length ?: 0) * 4L
 
         private fun collectionItemCounts(
             candidate: PreflightCandidate<
@@ -421,20 +409,23 @@ class GameFeatureBall internal constructor(
         ): Iterable<Int> = buildList {
             addAll(candidate.decision.nextState.model.boundedCollectionSizes())
             add(candidate.decision.outputs.size)
+            if (candidate.pulse is GameFact.DependenciesObserved) {
+                add(candidate.pulse.profile.unlockedWeapons.size)
+                add(candidate.pulse.profile.metaRanks.size)
+                add(candidate.pulse.profile.discoveredItemIds.size)
+            }
             candidate.decision.outputs.forEach { output ->
                 when (output) {
                     is ProjectionOutput -> when (val payload = output.payload) {
-                        is GameProjectionPayload.GameProjectionChanged ->
-                            add(payload.visualFxCues.size)
+                        is GameProjectionPayload.GameProjectionChanged -> add(payload.visualFxCues.size)
                     }
-                    is EffectRequest -> when (val effect = output.payload) {
-                        is GameEffect.AdvanceAudio -> add(effect.cues.size)
-                        is GameEffect.PersistProgress -> {
-                            add(effect.snapshot.unlockedWeaponIndices.size)
-                            add(effect.snapshot.metaLevels.size)
-                            add(effect.snapshot.discoveredItemIds.size)
-                        }
-                        GameEffect.EnsureAudioUnlocked -> Unit
+                    is CommandRequest -> when (val command = output.payload) {
+                        is GameCommand.AdvanceAudio -> add(command.cues.size)
+                        is GameCommand.ChangeProfile,
+                        is GameCommand.ChangeSettings,
+                        is GameCommand.BeginRebirth,
+                        GameCommand.EnsureAudioUnlocked,
+                        -> Unit
                     }
                 }
             }
@@ -444,25 +435,55 @@ class GameFeatureBall internal constructor(
             is ProjectionOutput ->
                 output.semanticHandle.outputKind == GameOutputKind.GAME_PROJECTION_CHANGED &&
                     output.payload is GameProjectionPayload.GameProjectionChanged
-            is EffectRequest -> output.semanticHandle.outputKind == when (output.payload) {
-                is GameEffect.AdvanceAudio -> GameOutputKind.ADVANCE_AUDIO
-                GameEffect.EnsureAudioUnlocked -> GameOutputKind.ENSURE_AUDIO_UNLOCKED
-                is GameEffect.PersistProgress -> GameOutputKind.PERSIST_PROGRESS
+            is CommandRequest -> output.semanticHandle.outputKind == when (output.payload) {
+                is GameCommand.AdvanceAudio -> GameOutputKind.ADVANCE_AUDIO
+                GameCommand.EnsureAudioUnlocked -> GameOutputKind.ENSURE_AUDIO_UNLOCKED
+                is GameCommand.ChangeSettings -> GameOutputKind.CHANGE_SETTINGS
+                is GameCommand.ChangeProfile -> GameOutputKind.CHANGE_PROFILE
+                is GameCommand.BeginRebirth -> GameOutputKind.BEGIN_REBIRTH
             }
         }
 
-        private fun ProgressResourceFailure.toProtocolReason(): ProgressPersistenceUnknownReason =
-            when (this) {
-                ProgressResourceFailure.PROVIDER_READ_FAILED ->
-                    ProgressPersistenceUnknownReason.PROVIDER_READ_FAILED
-                ProgressResourceFailure.ENCODING_FAILED ->
-                    ProgressPersistenceUnknownReason.ENCODING_FAILED
-                ProgressResourceFailure.PAYLOAD_LIMIT_EXCEEDED ->
-                    ProgressPersistenceUnknownReason.PAYLOAD_LIMIT_EXCEEDED
-                ProgressResourceFailure.PROVIDER_WRITE_MAY_HAVE_EXECUTED ->
-                    ProgressPersistenceUnknownReason.PROVIDER_WRITE_MAY_HAVE_EXECUTED
-            }
-
-        private const val GAME_BALL_STATE_FIXED_BYTES = 512L
+        private const val GAME_BALL_STATE_FIXED_BYTES = 256L
     }
 }
+
+private fun GameRunStartModuleCommand.hasCorrelatableRunStartEnvelope(): Boolean {
+    val source = commandSource
+    return source.sourceBallInstanceId == GameRunStartContract.SOURCE_BALL_INSTANCE_ID &&
+        source.sourceCommitRevision != 0uL &&
+        source.sourceOrdinal == 0u &&
+        source.sourceOperationId != 0uL &&
+        source.sourceOutputKind == GameRunStartContract.SOURCE_OUTPUT_KIND &&
+        source.sourceLocalOrdinalOrName == GameRunStartContract.SOURCE_LOCAL_ORDINAL_OR_NAME &&
+        causalBudgetScope.ownerBallInstanceId ==
+        GameRunStartContract.CAUSAL_SCOPE_OWNER_BALL_INSTANCE_ID &&
+        causalBudgetScope.operationId == source.sourceOperationId &&
+        causalDepth == GameRunStartContract.COMMAND_CAUSAL_DEPTH
+}
+
+private fun GameRunStartCommandSource.sameDeliverySlot(
+    other: GameRunStartCommandSource,
+): Boolean = sourceBallInstanceId == other.sourceBallInstanceId &&
+    sourceCommitRevision == other.sourceCommitRevision &&
+    sourceOrdinal == other.sourceOrdinal
+
+private fun GameRunStartCommandSource.precedes(
+    other: GameRunStartCommandSource,
+): Boolean = sourceCommitRevision < other.sourceCommitRevision ||
+    (sourceCommitRevision == other.sourceCommitRevision && sourceOrdinal < other.sourceOrdinal)
+
+private fun BusinessRejection.toRunStartRejectionReason(): GameRunStartRejectionReason =
+    when (this) {
+        is GameRejection.InvalidRunStartCommandSource ->
+            GameRunStartRejectionReason.INVALID_COMMAND_SOURCE
+        is GameRejection.InvalidRunStartCausalContext ->
+            GameRunStartRejectionReason.INVALID_CAUSAL_CONTEXT
+        is GameRejection.InvalidRunConfigurationReference ->
+            GameRunStartRejectionReason.INVALID_RUN_CONFIGURATION_REFERENCE
+        is GameRejection.ProfileReferenceNotCurrent ->
+            GameRunStartRejectionReason.PROFILE_REFERENCE_NOT_CURRENT
+        is GameRejection.RunStartRebirthLevelMismatch ->
+            GameRunStartRejectionReason.REBIRTH_LEVEL_MISMATCH
+        else -> GameRunStartRejectionReason.TARGET_DECISION_REJECTED
+    }

@@ -35,8 +35,6 @@ import kinetickk.application.assembly.GameAssembly
 import kinetickk.features.game.GameDispatchResult
 import kinetickk.features.game.nucleus.protocol.BrakeSource
 import kinetickk.features.game.nucleus.protocol.GameIntent
-import kinetickk.features.game.nucleus.protocol.GameQuery
-import kinetickk.features.game.nucleus.protocol.GameQueryResult
 import kinetickk.features.game.nucleus.GamePhase
 import kinetickk.features.game.nucleus.UiScreen
 import kinetickk.features.game.interaction.validation.GameInteractionValidator
@@ -57,7 +55,7 @@ fun KinetickkApp() {
     var renderTimeSecondsValue by remember { mutableFloatStateOf(0f) }
 
     fun dispatch(intent: GameIntent) {
-        when (val result = assembly.game.dispatch(intent)) {
+        when (val result = assembly.dispatch(intent)) {
             is GameDispatchResult.Committed -> {
                 assembly.applyVisualFx(result.visualFxCues)
                 projectionValue = result.projectionRead.payload
@@ -252,7 +250,4 @@ private fun reportInvalidInteractionInput(failure: ValidationFailure) {
 }
 
 private fun GameAssembly.readGameProjection() =
-    when (val result = game.query(GameQuery.GetGameProjection)) {
-        is GameQueryResult.Projection -> result.value.payload
-        is GameQueryResult.Persistence -> error("GetGameProjection returned Persistence")
-    }
+    readCurrentGameProjection()

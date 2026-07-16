@@ -112,6 +112,13 @@ sealed interface AdmissionFailure {
         val limit: Int,
     ) : AdmissionFailure
 
+    /** A bounded delivery slot is occupied, so accepting more source work would drop an output. */
+    data class DeliveryBackpressure(
+        val scope: String,
+        val pending: Int,
+        val capacity: Int,
+    ) : AdmissionFailure
+
     data class AdditionalLimitExceeded(
         val name: String,
         val actual: Long,

@@ -155,6 +155,8 @@ class GameProjection internal constructor(
     val settings: GameSettings,
     val rebirthLevel: Int,
     val highestClearedRebirth: Int,
+    val rebirthProfile: RebirthProfile,
+    val nextRebirthProfile: RebirthProfile,
     val rebirthConfirmationArmed: Boolean,
     val screenWidth: Float,
     val screenHeight: Float,
@@ -252,8 +254,6 @@ class GameProjection internal constructor(
     private val relicRanks: ImmutableList<Int>,
 ) {
     val speed: Float get() = length(velocityX, velocityY)
-    val rebirthProfile: RebirthProfile get() = RebirthProgression.profile(rebirthLevel)
-    val nextRebirthProfile: RebirthProfile get() = RebirthProgression.profile(rebirthLevel + 1)
     val canRebirth: Boolean
         get() = rebirthLevel < RebirthProgression.MAX_LEVEL &&
             highestClearedRebirth >= rebirthLevel &&
@@ -333,8 +333,8 @@ class GameProjection internal constructor(
 
     companion object {
         const val BALL_INSTANCE_ID = "kinetickk.local/Game/local-player"
-        const val PROTOCOL_VERSION = "1.0.0"
-        const val STATE_SCHEMA_VERSION = 1
+        const val PROTOCOL_VERSION = "2.0.0"
+        const val STATE_SCHEMA_VERSION = 2
         const val RUN_DURATION_SECONDS = 20f * 60f
         const val MAX_HEAT = 100f
         const val CORE_RADIUS = 16f

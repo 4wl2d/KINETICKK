@@ -4,27 +4,123 @@
 package kinetickk.features.game.nucleus.protocol
 
 import kinetickk.application.runtime.BusinessRejection
+import kinetickk.application.runtime.ConsistencyStamp
 import kinetickk.features.game.nucleus.CoreShape
 import kinetickk.features.game.nucleus.GameSettings
 import kinetickk.features.game.nucleus.MetaUpgradeId
-import kinetickk.features.game.nucleus.StoredProgress
+import kinetickk.features.game.nucleus.RebirthProfile
 import kinetickk.features.game.nucleus.UiScreen
 import kinetickk.features.game.nucleus.WeaponId
 import kinetickk.features.game.nucleus.projection.GameProjection
 import kinetickk.features.game.nucleus.read.ReadResult
 import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.ImmutableSet
 import kotlin.jvm.JvmInline
 
 sealed interface GamePulse
 
+/**
+ * Target-owned public contract for the Rebirth Flow's request to start one Game run.
+ *
+ * The source tuple is intentionally scalar instead of importing a Flow-owned envelope type. It
+ * still carries the complete committed source identity required to correlate the returned result.
+ */
+data class GameRunStartCommandSource(
+    val sourceBallInstanceId: String,
+    val sourceCommitRevision: ULong,
+    val sourceOrdinal: UInt,
+    val sourceOperationId: ULong,
+    val sourceOutputKind: String,
+    val sourceLocalOrdinalOrName: String,
+)
+
+data class GameRunStartCausalScope(
+    val ownerBallInstanceId: String,
+    val operationId: ULong,
+)
+
+data class GameRunConfigurationReference(
+    val profileBallInstanceId: String,
+    val profileCommitRevision: ULong,
+    val profileStateSchemaVersion: Int,
+    val rebirthLevel: Int,
+)
+
+data class GameRunStartModuleCommand(
+    val commandSource: GameRunStartCommandSource,
+    val causalBudgetScope: GameRunStartCausalScope,
+    val causalDepth: Int,
+    val runConfigurationReference: GameRunConfigurationReference,
+) : GamePulse
+
+enum class GameRunStartAuthority {
+    LOCAL_GAME,
+}
+
+enum class GameRunStartProtocolVersion {
+    V1_0_0,
+}
+
+data class GameRunStartResultProvenance(
+    val authority: GameRunStartAuthority,
+    val protocolVersion: GameRunStartProtocolVersion,
+)
+
+enum class GameRunStartRejectionReason {
+    INVALID_COMMAND_SOURCE,
+    COMMAND_SOURCE_CONFLICT,
+    STALE_COMMAND_SOURCE,
+    INVALID_CAUSAL_CONTEXT,
+    INVALID_RUN_CONFIGURATION_REFERENCE,
+    PROFILE_REFERENCE_NOT_CURRENT,
+    REBIRTH_LEVEL_MISMATCH,
+    TARGET_DECISION_REJECTED,
+    TARGET_ADMISSION_REJECTED,
+}
+
+sealed interface GameRunStartModuleResult {
+    val commandSource: GameRunStartCommandSource
+    val causalBudgetScope: GameRunStartCausalScope
+    val causalDepth: Int
+    val provenance: GameRunStartResultProvenance
+
+    data class Started(
+        override val commandSource: GameRunStartCommandSource,
+        override val causalBudgetScope: GameRunStartCausalScope,
+        override val causalDepth: Int,
+        override val provenance: GameRunStartResultProvenance,
+        val gameCommitRevision: ULong,
+    ) : GameRunStartModuleResult
+
+    data class Rejected(
+        override val commandSource: GameRunStartCommandSource,
+        override val causalBudgetScope: GameRunStartCausalScope,
+        override val causalDepth: Int,
+        override val provenance: GameRunStartResultProvenance,
+        val reason: GameRunStartRejectionReason,
+    ) : GameRunStartModuleResult
+}
+
+object GameRunStartContract {
+    const val SOURCE_BALL_INSTANCE_ID = "kinetickk.local/RebirthFlow/local-player"
+    const val CAUSAL_SCOPE_OWNER_BALL_INSTANCE_ID = "kinetickk.local/Game/local-player"
+    const val SOURCE_OUTPUT_KIND = "GAME_START_RUN"
+    const val SOURCE_LOCAL_ORDINAL_OR_NAME = "game-start-run"
+    const val COMMAND_CAUSAL_DEPTH = 5
+    const val RESULT_CAUSAL_DEPTH = 6
+
+    val RESULT_PROVENANCE = GameRunStartResultProvenance(
+        authority = GameRunStartAuthority.LOCAL_GAME,
+        protocolVersion = GameRunStartProtocolVersion.V1_0_0,
+    )
+}
+
 sealed interface GameQuery {
     data object GetGameProjection : GameQuery
-    data object GetPersistenceStatus : GameQuery
 }
 
 sealed interface GameQueryResult {
     data class Projection(val value: ReadResult<GameProjection>) : GameQueryResult
-    data class Persistence(val value: ReadResult<PersistenceStatus>) : GameQueryResult
 }
 
 sealed interface GameIntent : GamePulse {
@@ -72,34 +168,63 @@ enum class SoundCue {
     VICTORY,
 }
 
-sealed interface GameFact : GamePulse {
-    val handle: SemanticHandle
-    val provider: ProgressProvider
+/** Trusted, field-minimized replicas observed from the owning Settings and Profile Balls. */
+data class GameProfileReplica(
+    val matter: Long,
+    val lifetimeMatter: Long,
+    val coreShape: CoreShape,
+    val selectedWeapon: WeaponId,
+    val unlockedWeapons: ImmutableSet<WeaponId>,
+    val metaRanks: ImmutableList<Int>,
+    val discoveredItemIds: ImmutableSet<Int>,
+    val rebirthLevel: Int,
+    val highestClearedRebirth: Int,
+    val activeRebirthProfile: RebirthProfile,
+    val nextRebirthProfile: RebirthProfile,
+)
 
-    data class ProgressPersisted(
-        override val handle: SemanticHandle,
-        override val provider: ProgressProvider,
-    ) : GameFact
-
-    data class ProgressPersistenceOutcomeUnknown(
-        override val handle: SemanticHandle,
-        override val provider: ProgressProvider,
-        val reason: ProgressPersistenceUnknownReason,
-    ) : GameFact
+/** Closed identities of the two authority snapshots captured by Game. */
+enum class GameDependencySource {
+    SETTINGS,
+    PROFILE,
 }
 
-enum class ProgressProvider { PLATFORM_LOCAL }
+object GameDependencyContract {
+    const val SETTINGS_BALL_INSTANCE_ID = "kinetickk.local/Settings/local-player"
+    const val SETTINGS_STATE_SCHEMA_VERSION = 1
+    const val PROFILE_BALL_INSTANCE_ID = "kinetickk.local/Profile/local-player"
+    const val PROFILE_STATE_SCHEMA_VERSION = 1
+}
+
+sealed interface GameFact : GamePulse {
+    data class DependenciesObserved(
+        val settings: GameSettings,
+        val profile: GameProfileReplica,
+        val settingsSource: ConsistencyStamp = ConsistencyStamp(
+            ballInstanceId = GameDependencyContract.SETTINGS_BALL_INSTANCE_ID,
+            commitRevision = 0uL,
+            stateSchemaVersion = GameDependencyContract.SETTINGS_STATE_SCHEMA_VERSION,
+        ),
+        val profileSource: ConsistencyStamp = ConsistencyStamp(
+            ballInstanceId = GameDependencyContract.PROFILE_BALL_INSTANCE_ID,
+            commitRevision = 0uL,
+            stateSchemaVersion = GameDependencyContract.PROFILE_STATE_SCHEMA_VERSION,
+        ),
+    ) : GameFact
+}
 
 /** A trusted semantic operation identity reserved before the Nucleus evaluates a Pulse. */
 @JvmInline
 value class OperationId(val value: ULong)
 
-/** The closed output-kind names owned by Game protocol 1.0.0. */
+/** The closed output-kind names owned by Game protocol 2.0.0. */
 enum class GameOutputKind {
     GAME_PROJECTION_CHANGED,
     ADVANCE_AUDIO,
     ENSURE_AUDIO_UNLOCKED,
-    PERSIST_PROGRESS,
+    CHANGE_SETTINGS,
+    CHANGE_PROFILE,
+    BEGIN_REBIRTH,
 }
 
 data class SemanticHandle(
@@ -120,10 +245,10 @@ data class ProjectionOutput(
     val payload: GameProjectionPayload,
 ) : SemanticOutput
 
-data class EffectRequest(
+data class CommandRequest(
     override val semanticHandle: SemanticHandle,
     override val sourceOrdinal: UInt,
-    val payload: GameEffect,
+    val payload: GameCommand,
 ) : SemanticOutput
 
 sealed interface GameProjectionPayload {
@@ -132,51 +257,94 @@ sealed interface GameProjectionPayload {
     ) : GameProjectionPayload
 }
 
-sealed interface GameEffect {
+sealed interface GameCommand {
     data class AdvanceAudio(
-        val settings: GameSettings,
         val realDeltaSeconds: Float,
         val cues: ImmutableList<SoundCue>,
-    ) : GameEffect
+    ) : GameCommand
 
-    data object EnsureAudioUnlocked : GameEffect
+    data object EnsureAudioUnlocked : GameCommand
 
-    data class PersistProgress(
-        val snapshot: StoredProgress,
-    ) : GameEffect
+    data class ChangeSettings(val change: SettingsChange) : GameCommand
+    data class ChangeProfile(val change: ProfileChange) : GameCommand
+    data class BeginRebirth(val expectedLevel: Int) : GameCommand
+}
+
+/** Source-owned request vocabulary; Assembly maps it explicitly to Settings protocol Intents. */
+sealed interface SettingsChange {
+    data object ToggleMute : SettingsChange
+    data object ToggleSound : SettingsChange
+    data object ToggleMusic : SettingsChange
+    data class AdjustMasterVolume(val direction: Int) : SettingsChange
+    data class AdjustSimulationSpeed(val direction: Int) : SettingsChange
+    data class AdjustTextScale(val direction: Int) : SettingsChange
+    data object ToggleScreenShake : SettingsChange
+    data class AdjustParticleDensity(val direction: Int) : SettingsChange
+    data object ToggleDamageNumbers : SettingsChange
+    data class AdjustDamageNumberSize(val direction: Int) : SettingsChange
+    data class AdjustDamageNumberFormat(val direction: Int) : SettingsChange
+    data class AdjustDamageNumberTierThreshold(val direction: Int) : SettingsChange
+}
+
+/** Source-owned request vocabulary; Assembly maps it explicitly to Profile protocol Intents. */
+sealed interface ProfileChange {
+    data class PurchaseMetaUpgrade(val upgrade: MetaUpgradeId) : ProfileChange
+    data class PurchaseOrSelectWeapon(val weapon: WeaponId) : ProfileChange
+    data class SelectCoreShape(val shape: CoreShape) : ProfileChange
+    data class RecordItemDiscovery(val itemId: Int) : ProfileChange
+    data class ApplyRunOutcome(
+        val matterEarned: Long,
+        val clearedRebirthLevel: Int?,
+    ) : ProfileChange
 }
 
 data class GameDecisionContext(
     val operationId: OperationId,
     val causalBudgetScope: OperationId = operationId,
-    val transitionArtifact: String = "game-v1",
+    val causalBudgetScopeOwnerBallInstanceId: String = GameProjection.BALL_INSTANCE_ID,
+    val transitionArtifact: String = "game-v2",
     val causalDepth: Int = 1,
     val retryCount: Int = 0,
 )
 
 sealed interface GameRejection : BusinessRejection {
     data class InvalidInput(val field: String, val reason: String) : GameRejection
-    data class StaleFact(val received: SemanticHandle, val expected: SemanticHandle?) : GameRejection
-    data class InvalidFactProvider(
-        val received: ProgressProvider,
-        val expected: ProgressProvider,
+
+    data class InvalidDependencySource(
+        val dependency: GameDependencySource,
+        val received: ConsistencyStamp,
+        val expectedBallInstanceId: String,
+        val expectedStateSchemaVersion: Int,
     ) : GameRejection
-    data class GenerationExhausted(val lastGeneration: Long) : GameRejection
-}
 
-enum class ProgressPersistenceUnknownReason {
-    PROVIDER_READ_FAILED,
-    ENCODING_FAILED,
-    PAYLOAD_LIMIT_EXCEEDED,
-    PROVIDER_WRITE_MAY_HAVE_EXECUTED,
-}
+    data class StaleDependencySource(
+        val dependency: GameDependencySource,
+        val receivedCommitRevision: ULong,
+        val lastAcceptedCommitRevision: ULong,
+    ) : GameRejection
 
-sealed interface PersistenceStatus {
-    data object NeverRequested : PersistenceStatus
-    data class Pending(val handle: SemanticHandle) : PersistenceStatus
-    data class Persisted(val handle: SemanticHandle) : PersistenceStatus
-    data class OutcomeUnknown(
-        val handle: SemanticHandle,
-        val reason: ProgressPersistenceUnknownReason,
-    ) : PersistenceStatus
+    data class InvalidRunStartCommandSource(
+        val field: String,
+        val reason: String,
+    ) : GameRejection
+
+    data class InvalidRunStartCausalContext(
+        val field: String,
+        val reason: String,
+    ) : GameRejection
+
+    data class InvalidRunConfigurationReference(
+        val field: String,
+        val reason: String,
+    ) : GameRejection
+
+    data class ProfileReferenceNotCurrent(
+        val received: GameRunConfigurationReference,
+        val expected: ConsistencyStamp?,
+    ) : GameRejection
+
+    data class RunStartRebirthLevelMismatch(
+        val received: Int,
+        val expected: Int,
+    ) : GameRejection
 }
