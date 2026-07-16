@@ -29,12 +29,13 @@ that former title are asserted.
 Contributors retain copyright in their contributions unless a separate signed
 agreement transfers it. Accepted contributions must be available under
 GPL-3.0-or-later and are also governed by the contribution terms recorded for
-the project. See AUTHORS.md, CONTRIBUTING.md, and
-CONTRIBUTOR_LICENSE_AGREEMENT.md.
+the project. See docs/project/AUTHORS.md, docs/project/CONTRIBUTING.md, and
+docs/project/CONTRIBUTOR_LICENSE_AGREEMENT.md.
 
 The GPL licenses copyrightable project material. It does not grant trademark
-rights in the KINETICKK name, logo, or branding. See TRADEMARKS.md.
+rights in the KINETICKK name, logo, or branding. See
+docs/project/TRADEMARKS.md.
 
 The Gradle Wrapper and all other third-party material remain under their own
-licenses. See THIRD_PARTY_NOTICES.md and the notices embedded in those files and
-artifacts.
+licenses. See docs/project/THIRD_PARTY_NOTICES.md and the notices embedded in
+those files and artifacts.

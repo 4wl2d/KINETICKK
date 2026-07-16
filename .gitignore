@@ -27,7 +27,6 @@ secrets.properties
 
 # Local AI tooling and instructions
 AGENTS.md
-!/AGENTS.md
 CLAUDE.md
 CLAUDE.local.md
 CODEX.md
@@ -52,6 +51,13 @@ SKILL.md
 .github/instructions/
 .github/prompts/
 .github/copilot-instructions.md
+
+# Local development and architecture records
+/architecture/
+/docs/ARCHITECTURE.md
+/docs/agents/
+/docs/pokeball-*.md
+/spec/pokeball-architecture-core.md
 
 # Logs, diagnostics, and operating-system files
 *.log

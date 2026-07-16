@@ -23,8 +23,7 @@
   <a href="#how-to-play">How to play</a> ·
   <a href="#systems">Systems</a> ·
   <a href="#contributing">Contributing</a> ·
-  <a href="docs/ARCHITECTURE.md">Architecture</a> ·
-  <a href="docs/LEGAL.md">Legal</a>
+  <a href="docs/project/LEGAL.md">Legal</a>
 </p>
 
 ![KINETICKK start screen](docs/assets/kinetickk.png)
@@ -35,7 +34,7 @@
 > redistribute it. A distributed fork must keep the copyright and license
 > notices, identify its changes, provide the complete corresponding source, and
 > remain under the GPL. The KINETICKK name and branding are separate; see the
-> [trademark policy](TRADEMARKS.md).
+> [trademark policy](docs/project/TRADEMARKS.md).
 
 The cursor or touch point is both a magnetic target and a lethal singularity. Pull it away from the Core to build speed, turn that momentum into impact damage, and never let the Core touch the singularity.
 
@@ -122,16 +121,14 @@ The optimized bundle is written to `build/dist/wasmJs/productionExecutable`.
 | `src/wasmJsMain` | Browser entry point, WebAssembly host page, `localStorage`, and web audio |
 | `src/commonTest` | Deterministic engine, catalog, progression, Relic, audio, and math tests |
 
-See [Architecture](docs/ARCHITECTURE.md) for the runtime flow, platform boundaries, and testing model.
-
 ## Contributing
 
 Bug reports, ideas, tests, documentation, and pull requests are welcome. Read
-[CONTRIBUTING.md](CONTRIBUTING.md) before submitting code.
+[the contribution guide](docs/project/CONTRIBUTING.md) before submitting code.
 
 Every commit in a pull request must include a Developer Certificate of Origin
 sign-off. Before a copyrightable contribution is merged, its author must also
-sign the [KINETICKK Contributor License Agreement](CONTRIBUTOR_LICENSE_AGREEMENT.md).
+sign the [KINETICKK Contributor License Agreement](docs/project/CONTRIBUTOR_LICENSE_AGREEMENT.md).
 The CLA keeps the public contribution under GPL and lets the project owner
 prepare store builds without taking away the contributor's right to use their
 own work.
@@ -154,14 +151,14 @@ The GPL does not grant rights to present a fork as the official KINETICKK game
 or to imply endorsement by Vladislav Tomilov.
 
 - [GNU GPL version 3 or later](LICENSE)
-- [Legal overview](docs/LEGAL.md)
+- [Legal overview](docs/project/LEGAL.md)
 - [Copyright and open-source notice](NOTICE)
-- [Authorship record](AUTHORS.md)
-- [Trademark and brand policy](TRADEMARKS.md)
-- [Third-party notices](THIRD_PARTY_NOTICES.md)
-- [Contribution policy](CONTRIBUTING.md)
-- [Contributor License Agreement](CONTRIBUTOR_LICENSE_AGREEMENT.md)
-- [Project governance](GOVERNANCE.md)
-- [Corresponding source plan](SOURCE.md)
-- [Asset provenance](ASSET_PROVENANCE.md)
-- [Privacy note for prototype 0.1.0](PRIVACY.md)
+- [Authorship record](docs/project/AUTHORS.md)
+- [Trademark and brand policy](docs/project/TRADEMARKS.md)
+- [Third-party notices](docs/project/THIRD_PARTY_NOTICES.md)
+- [Contribution policy](docs/project/CONTRIBUTING.md)
+- [Contributor License Agreement](docs/project/CONTRIBUTOR_LICENSE_AGREEMENT.md)
+- [Project governance](docs/project/GOVERNANCE.md)
+- [Corresponding source plan](docs/project/SOURCE.md)
+- [Asset provenance](docs/project/ASSET_PROVENANCE.md)
+- [Privacy note for prototype 0.1.0](docs/project/PRIVACY.md)

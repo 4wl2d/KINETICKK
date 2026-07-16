@@ -45,7 +45,7 @@ With JDK 17 or newer:
 ```
 
 The desktop and web build details are documented in
-[README.md](README.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+[README.md](../../README.md); the implementation is organized under `src/`.
 
 ## Forks and other distributors
 
