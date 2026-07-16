@@ -61,16 +61,16 @@ compose.desktop {
 val packagedLegalDocuments = listOf(
     "LICENSE",
     "NOTICE",
-    "AUTHORS.md",
-    "CONTRIBUTING.md",
-    "CONTRIBUTOR_LICENSE_AGREEMENT.md",
-    "GOVERNANCE.md",
-    "SOURCE.md",
-    "TRADEMARKS.md",
-    "THIRD_PARTY_NOTICES.md",
-    "ASSET_PROVENANCE.md",
-    "PRIVACY.md",
-    "docs/LEGAL.md",
+    "docs/project/AUTHORS.md",
+    "docs/project/CONTRIBUTING.md",
+    "docs/project/CONTRIBUTOR_LICENSE_AGREEMENT.md",
+    "docs/project/GOVERNANCE.md",
+    "docs/project/SOURCE.md",
+    "docs/project/TRADEMARKS.md",
+    "docs/project/THIRD_PARTY_NOTICES.md",
+    "docs/project/ASSET_PROVENANCE.md",
+    "docs/project/PRIVACY.md",
+    "docs/project/LEGAL.md",
 )
 
 tasks.withType<Copy>().configureEach {

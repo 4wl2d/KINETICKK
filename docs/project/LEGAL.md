@@ -4,7 +4,7 @@
 # Open-source and release guide
 
 This page explains the repository's legal structure. The full
-[GNU GPL version 3](../LICENSE) controls if this summary differs from it.
+[GNU GPL version 3](../../LICENSE) controls if this summary differs from it.
 
 ## Project status
 
@@ -14,12 +14,12 @@ GPL-3.0-or-later unless a file clearly says otherwise.
 
 Copyright stays with its authors. The GPL is the permission that lets everyone
 use the work while requiring distributed derivatives to remain free. The
-[NOTICE](../NOTICE) also offers the original material authored by Vladislav
+[NOTICE](../../NOTICE) also offers the original material authored by Vladislav
 Tomilov in the reachable history through revision `3abbfea` under the GPL,
 despite the older proprietary notices in those revisions.
 
 Third-party components keep their own licenses. See
-[THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## What anyone may do
 
@@ -70,13 +70,13 @@ gameplay mechanic.
 The GPL also does not license the KINETICKK name, logo, or claim of official
 status. A lawful fork may use the GPL-covered work, but it may not mislead users
 into thinking that Vladislav Tomilov published or endorsed it. See
-[TRADEMARKS.md](../TRADEMARKS.md).
+[TRADEMARKS.md](TRADEMARKS.md).
 
 ## Contributions and future licensing
 
 Every pull-request commit must carry a Developer Certificate of Origin sign-off.
 Before copyrightable work is merged, its author must also sign the
-[Contributor License Agreement](../CONTRIBUTOR_LICENSE_AGREEMENT.md).
+[Contributor License Agreement](CONTRIBUTOR_LICENSE_AGREEMENT.md).
 
 The contributor keeps copyright. The CLA gives Vladislav Tomilov a broad right
 to license accepted work under the public GPL and under separate store or
@@ -123,8 +123,8 @@ Before a public desktop, web, Steam, or other store release:
 8. archive the signed contributor agreements, editable asset sources, receipts,
    release source, binaries, and hashes.
 
-See [SOURCE.md](../SOURCE.md) for the corresponding-source plan and
-[GOVERNANCE.md](../GOVERNANCE.md) for control of the official project.
+See [SOURCE.md](SOURCE.md) for the corresponding-source plan and
+[GOVERNANCE.md](GOVERNANCE.md) for control of the official project.
 
 ## Primary references
 
