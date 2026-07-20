@@ -47,9 +47,9 @@ whole game locally, experiment with it, and contribute changes under the GPL.
 
 ## At a glance
 
-| 400 items | 12 weapons | 40 Relics | 9 enemy archetypes | 92 desktop tests |
+| 400 items | 12 weapons | 40 Relics | 9 enemy archetypes | 8 focused modules |
 |:---:|:---:|:---:|:---:|:---:|
-| Deterministic catalog | Movement-reactive | Six aspects | Architect included | Seeded simulation |
+| Deterministic catalog | Movement-reactive | Six aspects | Architect included | Layered KMP build |
 
 ## How to play
 
@@ -93,7 +93,7 @@ Open the local URL printed by Gradle. A production WebAssembly bundle can be bui
 ./gradlew wasmJsBrowserDistribution
 ```
 
-The optimized bundle is written to `build/dist/wasmJs/productionExecutable`.
+The optimized bundle is written to `app/web/build/dist/wasmJs/productionExecutable`.
 
 ### Verification and packaging
 
@@ -116,10 +116,20 @@ The optimized bundle is written to `build/dist/wasmJs/productionExecutable`.
 
 | Path | Responsibility |
 |---|---|
-| `src/commonMain` | Shared simulation, input orchestration, content, audio logic, Canvas UI, and rendering |
-| `src/desktopMain` | Desktop window, JVM persistence, and platform tone output |
-| `src/wasmJsMain` | Browser entry point, WebAssembly host page, `localStorage`, and web audio |
-| `src/commonTest` | Deterministic engine, catalog, progression, Relic, audio, and math tests |
+| `app/desktop` | Thin JVM/desktop application host and native packaging |
+| `app/web` | Thin Wasm browser host and production web bundle |
+| `core/common` | Small platform-independent collection and random utilities |
+| `feature/game/api` | Stable Compose entry point exposed to application hosts |
+| `feature/game/domain` | Game model, semantic actions, reducer, projections, and resource ports |
+| `feature/game/data` | Desktop/Wasm implementations for progress and audio resources |
+| `feature/game/presentation` | Canvas rendering, visual effects, validation, and coordinate hit-testing |
+| `feature/game/impl` | Feature composition, state/effect orchestration, and Compose lifecycle |
+| `build-logic` | Reusable Gradle convention plugins for shared, Compose, desktop, and Wasm modules |
+
+Dependencies point inward: application hosts know only the feature API and its implementation;
+the implementation composes domain, data, and presentation; data and presentation depend on
+domain contracts, while domain depends only on `core/common`. The root project contains no
+production sources.
 
 ## Contributing
 

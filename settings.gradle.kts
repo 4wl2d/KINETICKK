@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 pluginManagement {
+    includeBuild("build-logic")
+
     repositories {
         google()
         mavenCentral()
@@ -16,4 +18,17 @@ dependencyResolutionManagement {
     }
 }
 
+enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
+
 rootProject.name = "KINETICKK"
+
+include(
+    ":app:desktop",
+    ":app:web",
+    ":core:common",
+    ":feature:game:api",
+    ":feature:game:data",
+    ":feature:game:domain",
+    ":feature:game:impl",
+    ":feature:game:presentation",
+)
