@@ -6,6 +6,5 @@ plugins {
 }
 
 dependencies {
-    implementation(projects.feature.game.api)
-    implementation(projects.feature.game.impl)
+    implementation(projects.app.shared)
 }

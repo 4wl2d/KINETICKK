@@ -38,7 +38,9 @@
 
 The cursor or touch point is both a magnetic target and a lethal singularity. Pull it away from the Core to build speed, turn that momentum into impact damage, and never let the Core touch the singularity.
 
-The same shared engine, renderer, content catalog, progression system, and tests run across desktop (macOS, Windows, and Linux) and modern browsers through WebAssembly.
+The same shared application composition, vertical features, gameplay simulation,
+content catalogs, profile codec, and tests run across desktop (macOS, Windows,
+and Linux) and modern browsers through WebAssembly.
 
 The repository is published as a working learning example for Kotlin
 Multiplatform, Compose Canvas rendering, deterministic simulation, progression
@@ -47,9 +49,9 @@ whole game locally, experiment with it, and contribute changes under the GPL.
 
 ## At a glance
 
-| 400 items | 12 weapons | 40 Relics | 9 enemy archetypes | 8 focused modules |
+| 400 items | 12 weapons | 40 Relics | 9 enemy archetypes | 7 vertical features |
 |:---:|:---:|:---:|:---:|:---:|
-| Deterministic catalog | Movement-reactive | Six aspects | Architect included | Layered KMP build |
+| Deterministic catalog | Movement-reactive | Six aspects | Architect included | 26 leaf modules |
 
 ## How to play
 
@@ -101,6 +103,7 @@ The optimized bundle is written to `app/web/build/dist/wasmJs/productionExecutab
 |---|---|
 | Run desktop tests | `./gradlew desktopTest` |
 | Build the production web bundle | `./gradlew wasmJsBrowserDistribution` |
+| Verify architecture, tests, Wasm compilation, and the web bundle | `./gradlew verifyArchitecture desktopTest compileTestKotlinWasmJs wasmJsBrowserDistribution` |
 | List every available task | `./gradlew tasks` |
 
 ## Systems
@@ -116,19 +119,29 @@ The optimized bundle is written to `app/web/build/dist/wasmJs/productionExecutab
 
 | Path | Responsibility |
 |---|---|
-| `app/desktop` | Thin JVM/desktop application host and native packaging |
-| `app/web` | Thin Wasm browser host and production web bundle |
+| `app/shared` | Application composition root: navigation, back stack, global shortcuts, audio lifecycle, and preservation of the active gameplay session beneath overlay features |
+| `app/desktop` | Thin JVM/desktop host and native packaging; depends only on `app/shared` |
+| `app/web` | Thin Wasm browser host and production web bundle; depends only on `app/shared` |
 | `core/common` | Small platform-independent collection and random utilities |
-| `feature/game/api` | Stable Compose entry point exposed to application hosts |
-| `feature/game/domain` | Game model, semantic actions, reducer, projections, and resource ports |
-| `feature/game/data` | Desktop/Wasm implementations for progress and audio resources |
-| `feature/game/presentation` | Canvas rendering, visual effects, validation, and coordinate hit-testing |
-| `feature/game/impl` | Feature composition, state/effect orchestration, and Compose lifecycle |
-| `build-logic` | Reusable Gradle convention plugins for shared, Compose, desktop, and Wasm modules |
+| `core/content` | Shared persistent IDs, definitions, and content catalogs |
+| `core/design-system` | Canvas tokens, text, geometry, and reusable UI primitives |
+| `core/profile/api`, `core/profile/data` | Immutable profile slices and narrow capability contracts; atomic v2/v3 codec and platform storage |
+| `core/audio/api`, `core/audio/impl` | Audio contract and Desktop/Wasm implementations |
+| `feature/home/api`, `feature/home/impl` | Home route, render model, outputs, reducer, renderer, and input mapping |
+| `feature/gameplay/api`, `feature/gameplay/domain`, `feature/gameplay/presentation`, `feature/gameplay/impl` | Live-run configuration and outputs, simulation and run state, Canvas presentation and input mapping, and Compose orchestration |
+| `feature/settings/api`, `feature/settings/impl` | Persisted player preferences and local page state |
+| `feature/lab/api`, `feature/lab/impl` | Permanent meta-upgrade purchases |
+| `feature/armory/api`, `feature/armory/impl` | Weapon unlocks, loadout selection, and local pagination |
+| `feature/rebirth/api`, `feature/rebirth/impl` | Two-step Rebirth confirmation and cycle advancement |
+| `feature/codex/api`, `feature/codex/impl` | Collection browsing, local pagination, and a read-only snapshot of current run stacks |
+| `build-logic` | Gradle conventions plus `verifyArchitecture` dependency-boundary enforcement |
 
-Dependencies point inward: application hosts know only the feature API and its implementation;
-the implementation composes domain, data, and presentation; data and presentation depend on
-domain contracts, while domain depends only on `core/common`. The root project contains no
+Each feature API exposes a Compose entry point, a small immutable render model,
+and feature-specific output events. Its implementation owns the corresponding
+actions, reducer, renderer, and input mapping. Features never navigate to one
+another directly: `app/shared` handles their outputs and supplies narrow core
+capabilities or snapshots. The build rejects `impl → impl`, `core → feature`,
+`feature → app`, and cross-feature dependencies. The root project contains no
 production sources.
 
 ## Contributing
