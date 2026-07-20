@@ -70,8 +70,8 @@ runtime, whose license and notices must be inventoried and shipped. At minimum,
 review:
 
 ```bash
-./gradlew dependencies --configuration desktopRuntimeClasspath
-./gradlew dependencies --configuration wasmJsRuntimeClasspath
+./gradlew :app:desktop:dependencies --configuration runtimeClasspath
+./gradlew :app:web:dependencies --configuration wasmJsRuntimeClasspath
 ```
 
 A dependency update makes the versions above stale and requires this file and
