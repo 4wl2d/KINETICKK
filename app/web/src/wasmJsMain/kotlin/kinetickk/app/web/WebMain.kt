@@ -5,13 +5,12 @@ package kinetickk.app.web
 
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.window.ComposeViewport
-import kinetickk.feature.game.impl.DefaultGameFeature
+import kinetickk.app.shared.KinetickkApp
 import kotlinx.browser.document
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
-    val gameFeature = DefaultGameFeature()
     ComposeViewport(document.body!!) {
-        gameFeature.Content()
+        KinetickkApp()
     }
 }
