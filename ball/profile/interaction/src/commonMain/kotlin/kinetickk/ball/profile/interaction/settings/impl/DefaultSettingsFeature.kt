@@ -17,14 +17,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.rememberTextMeasurer
 import kinetickk.foundation.design.CanvasTextMeasurer
-import kinetickk.ball.profile.api.SettingsProfileCapability
+import kinetickk.ball.profile.api.ProfilePort
+import kinetickk.ball.profile.api.ProfilePulse
+import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.interaction.audio.ProfileAudioExecutor
 import kinetickk.ball.profile.interaction.settings.api.SettingsFeature
 import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
 import kinetickk.resource.audio.api.AudioService
 
 class DefaultSettingsFeature(
-    private val capability: SettingsProfileCapability,
+    private val profilePort: ProfilePort,
     audioService: AudioService,
 ) : SettingsFeature {
     private val audioExecutor = ProfileAudioExecutor(audioService)
@@ -34,8 +36,10 @@ class DefaultSettingsFeature(
         routeToken: Int,
         onOutput: (SettingsOutput) -> Unit,
     ) {
-        var renderModelValue by remember(capability, routeToken) {
-            mutableStateOf(capability.preferences().toRenderModel())
+        var renderModelValue by remember(profilePort, routeToken) {
+            mutableStateOf(
+                profilePort.query(ProfileQuery.GetPreferences).preferences.toRenderModel(),
+            )
         }
         var pageValue by rememberSaveable(routeToken) { mutableIntStateOf(0) }
         val composeTextMeasurer = rememberTextMeasurer(cacheSize = 64)
@@ -53,9 +57,12 @@ class DefaultSettingsFeature(
             pageValue = reduction.state.page
             reduction.effects.forEach { effect ->
                 when (effect) {
-                    is SettingsEffect.UpdatePreferences -> {
-                        capability.updatePreferences(effect.preferences)
-                        renderModelValue = capability.preferences().toRenderModel()
+                    is SettingsEffect.AdjustPreference -> {
+                        profilePort.accept(ProfilePulse.AdjustPreference(effect.adjustment))
+                        renderModelValue = profilePort
+                            .query(ProfileQuery.GetPreferences)
+                            .preferences
+                            .toRenderModel()
                         audioExecutor.updatePreferences(renderModelValue.preferences)
                     }
                     is SettingsEffect.PlayAudio -> audioExecutor.play(effect.cue)

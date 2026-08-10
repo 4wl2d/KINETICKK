@@ -28,10 +28,17 @@ import kinetickk.flow.session.interaction.audio.SessionAudioExecutor
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
 import kinetickk.resource.audio.impl.DefaultAudioService
+import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.PlayerPreferences
-import kinetickk.ball.profile.api.ProfileMutationResult
-import kinetickk.ball.profile.api.ProfileStore
-import kinetickk.ball.profile.impl.createPlatformProfileStore
+import kinetickk.ball.profile.api.PersistenceStatusProjection
+import kinetickk.ball.profile.api.ProfileAcceptance
+import kinetickk.ball.profile.api.ProfileBootstrapStatus
+import kinetickk.ball.profile.api.ProfilePort
+import kinetickk.ball.profile.api.ProfilePulse
+import kinetickk.ball.profile.api.ProfileQuery
+import kinetickk.ball.profile.api.ProfileResetStatus
+import kinetickk.ball.profile.api.ProfileRunBootstrapResult
+import kinetickk.ball.profile.impl.createPlatformProfileComponent
 import kinetickk.ball.profile.interaction.armory.api.ArmoryFeature
 import kinetickk.ball.profile.interaction.armory.api.ArmoryOutput
 import kinetickk.ball.profile.interaction.armory.impl.DefaultArmoryFeature
@@ -60,6 +67,11 @@ import kinetickk.ball.profile.interaction.rebirth.impl.DefaultRebirthFeature
 import kinetickk.ball.profile.interaction.settings.api.SettingsFeature
 import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
 import kinetickk.ball.profile.interaction.settings.impl.DefaultSettingsFeature
+import kinetickk.flow.session.interaction.reset.api.ResetModalFeature
+import kinetickk.flow.session.interaction.reset.api.ResetModalMode
+import kinetickk.flow.session.interaction.reset.api.ResetModalOutput
+import kinetickk.flow.session.interaction.reset.api.ResetModalRenderModel
+import kinetickk.flow.session.interaction.reset.impl.DefaultResetModalFeature
 
 /** The single UI entry point used by Desktop and Web hosts. */
 @Composable
@@ -73,7 +85,7 @@ fun KinetickkApp() {
 
 internal class AppCompositionOwner(
     private val contentCatalog: ContentCatalog = createContentCatalog(),
-    profileStore: ProfileStore? = null,
+    profilePort: ProfilePort? = null,
     audioService: AudioService? = null,
     gameplayFeature: GameplayFeature? = null,
     homeFeature: HomeFeature? = null,
@@ -82,54 +94,51 @@ internal class AppCompositionOwner(
     armoryFeature: ArmoryFeature? = null,
     rebirthFeature: RebirthFeature? = null,
     codexFeature: CodexFeature? = null,
+    resetModalFeature: ResetModalFeature? = null,
 ) {
     private val profilePolicy = contentCatalog.profilePolicy()
     private val gameplayContent = contentCatalog.gameplayContent()
     private val uiCatalog = contentCatalog.uiCatalog()
 
-    private val profileStore: ProfileStore = profileStore ?: createPlatformProfileStore(profilePolicy)
+    private val profilePort: ProfilePort = profilePort ?: createPlatformProfileComponent(profilePolicy)
     private val audioService: AudioService = audioService ?: DefaultAudioService()
     private val sessionAudioExecutor = SessionAudioExecutor(this.audioService)
     private val gameplayFeature: GameplayFeature = gameplayFeature ?: DefaultGameplayFeature(
-        this.profileStore,
+        this.profilePort,
         this.audioService,
     )
     private val homeFeature: HomeFeature = homeFeature ?: DefaultHomeFeature(
-        loadoutCapability = this.profileStore,
-        collectionCapability = this.profileStore,
-        rebirthCapability = this.profileStore,
-        preferencesReader = this.profileStore,
+        profilePort = this.profilePort,
         uiCatalog = uiCatalog,
         audioService = this.audioService,
     )
     private val settingsFeature: SettingsFeature = settingsFeature ?: DefaultSettingsFeature(
-        this.profileStore,
+        this.profilePort,
         this.audioService,
     )
     private val labFeature: LabFeature = labFeature ?: DefaultLabFeature(
-        capability = this.profileStore,
-        preferencesReader = this.profileStore,
+        profilePort = this.profilePort,
         metaUpgrades = uiCatalog.metaUpgrades,
         audioService = this.audioService,
     )
     private val armoryFeature: ArmoryFeature = armoryFeature ?: DefaultArmoryFeature(
-        loadoutCapability = this.profileStore,
-        preferencesReader = this.profileStore,
+        profilePort = this.profilePort,
         weapons = uiCatalog.weapons,
         weaponMasteries = uiCatalog.weaponMasteries,
         audioService = this.audioService,
     )
     private val rebirthFeature: RebirthFeature = rebirthFeature ?: DefaultRebirthFeature(
-        capability = this.profileStore,
-        preferencesReader = this.profileStore,
+        profilePort = this.profilePort,
         rebirthPolicy = uiCatalog.rebirth,
         audioService = this.audioService,
     )
     private val codexFeature: CodexFeature = codexFeature ?: DefaultCodexFeature(
-        collectionCapability = this.profileStore,
-        preferencesReader = this.profileStore,
+        profilePort = this.profilePort,
         uiCatalog = uiCatalog,
         audioService = this.audioService,
+    )
+    private val resetModalFeature: ResetModalFeature = resetModalFeature ?: DefaultResetModalFeature(
+        this.audioService,
     )
 
     private val navigator = AppNavigator()
@@ -145,9 +154,13 @@ internal class AppCompositionOwner(
     fun Content() {
         val focusRequester = remember(this) { FocusRequester() }
         var backStackValue by remember(this) { mutableStateOf(backStack) }
+        var persistenceStatusValue by remember(this) {
+            mutableStateOf(profilePort.query(ProfileQuery.GetPersistenceStatus))
+        }
 
         fun refreshShell() {
             backStackValue = backStack
+            persistenceStatusValue = profilePort.query(ProfileQuery.GetPersistenceStatus)
         }
 
         LaunchedEffect(this) {
@@ -168,16 +181,18 @@ internal class AppCompositionOwner(
                 }
                 .focusable(),
         ) {
+            val resetModalModel = persistenceStatusValue.toResetModalRenderModelOrNull()
+            val normalInputEnabled = resetModalModel == null
             when (backStackValue.base) {
                 AppDestination.Home -> homeFeature.Content(
-                    inputEnabled = backStackValue.overlay == null,
+                    inputEnabled = normalInputEnabled && backStackValue.overlay == null,
                     onOutput = { output ->
                         handleHomeOutput(output)
                         refreshShell()
                     },
                 )
                 AppDestination.Gameplay -> gameplayFeature.Content(
-                    inputEnabled = backStackValue.overlay == null,
+                    inputEnabled = normalInputEnabled && backStackValue.overlay == null,
                     onOutput = { output ->
                         handleGameplayOutput(output)
                         refreshShell()
@@ -186,7 +201,7 @@ internal class AppCompositionOwner(
                 else -> error("Only Home and Gameplay may be base destinations")
             }
 
-            when (backStackValue.overlay) {
+            when (backStackValue.overlay.takeIf { normalInputEnabled }) {
                 null -> Unit
                 AppDestination.Settings -> settingsFeature.Content(
                     routeToken = backStackValue.routeToken,
@@ -228,6 +243,13 @@ internal class AppCompositionOwner(
                 AppDestination.Gameplay,
                 -> error("Base destinations cannot be overlays")
             }
+
+            if (resetModalModel != null) {
+                resetModalFeature.Content(resetModalModel) { output ->
+                    handleResetModalOutput(output)
+                    refreshShell()
+                }
+            }
         }
     }
 
@@ -235,7 +257,11 @@ internal class AppCompositionOwner(
         audioService.close()
     }
 
-    internal fun handleShortcut(shortcut: AppShortcut): Boolean = when (shortcut) {
+    internal fun handleShortcut(shortcut: AppShortcut): Boolean = handleReadyShortcut(shortcut)
+
+    private fun handleReadyShortcut(shortcut: AppShortcut): Boolean {
+        if (currentResetModalModel() != null) return false
+        return when (shortcut) {
         AppShortcut.SETTINGS -> openOverlay(AppDestination.Settings)
         AppShortcut.LAB -> openOverlay(AppDestination.Lab)
         AppShortcut.ARMORY -> openOverlay(AppDestination.Armory)
@@ -261,6 +287,7 @@ internal class AppCompositionOwner(
                 true
             }
             else -> false
+        }
         }
     }
 
@@ -315,6 +342,21 @@ internal class AppCompositionOwner(
         }
     }
 
+    internal fun handleResetModalOutput(output: ResetModalOutput) {
+        val mode = currentResetModalModel()?.mode ?: return
+        when (output) {
+            ResetModalOutput.Cancel -> Unit
+            ResetModalOutput.ConfirmDelete -> if (mode == ResetModalMode.CONFIRMATION_REQUIRED) {
+                if (profilePort.accept(ProfilePulse.ConfirmLegacyReset) is ProfileAcceptance.Accepted) {
+                    syncAudioPreferences()
+                }
+            }
+            ResetModalOutput.RetryPurge -> if (mode == ResetModalMode.PURGE_NEEDS_ATTENTION) {
+                profilePort.accept(ProfilePulse.RetryLegacyPurge)
+            }
+        }
+    }
+
     internal fun openOverlay(destination: AppDestination): Boolean {
         val before = backStack
         val transition = navigator.openOverlay(destination, gameplayPhase())
@@ -335,7 +377,9 @@ internal class AppCompositionOwner(
     }
 
     internal fun startNewRun() {
-        gameplayFeature.start(profileStore.profileSnapshot().toRunConfiguration(gameplayContent))
+        val bootstrap = profilePort.query(ProfileQuery.GetRunBootstrap).result
+        if (bootstrap !is ProfileRunBootstrapResult.Ready) return
+        gameplayFeature.start(bootstrap.snapshot.toRunConfiguration(gameplayContent))
         navigator.showGameplay()
     }
 
@@ -367,26 +411,28 @@ internal class AppCompositionOwner(
     }
 
     private fun toggleMute() {
-        val current = profileStore.preferences()
-        val enable = !current.soundEnabled && !current.musicEnabled
-        val result = profileStore.updatePreferences(
-            current.copy(soundEnabled = enable, musicEnabled = enable),
-        )
-        if (result is ProfileMutationResult.Applied) {
-            gameplayFeature.applyPreferences(profileStore.preferences())
+        val result = profilePort.accept(ProfilePulse.ToggleMute)
+        if (result is ProfileAcceptance.Accepted) {
+            gameplayFeature.applyPreferences(currentPreferences())
         }
         syncAudioPreferences()
         sessionAudioExecutor.playUiClick()
     }
 
     private fun applyPersistedSettings() {
-        gameplayFeature.applyPreferences(profileStore.preferences())
+        gameplayFeature.applyPreferences(currentPreferences())
         syncAudioPreferences()
     }
 
     private fun syncAudioPreferences() {
-        audioService.updatePreferences(profileStore.preferences().toAudioPreferences())
+        audioService.updatePreferences(currentPreferences().toAudioPreferences())
     }
+
+    private fun currentPreferences(): PlayerPreferences =
+        profilePort.query(ProfileQuery.GetPreferences).preferences
+
+    private fun currentResetModalModel(): ResetModalRenderModel? =
+        profilePort.query(ProfileQuery.GetPersistenceStatus).toResetModalRenderModelOrNull()
 }
 
 internal enum class AppShortcut {
@@ -412,7 +458,7 @@ internal fun Key.toAppShortcut(): AppShortcut? = when (this) {
     else -> null
 }
 
-internal fun kinetickk.ball.profile.api.PlayerProfile.toRunConfiguration(
+internal fun GameplayProfileSnapshot.toRunConfiguration(
     content: GameplayContentSnapshot,
 ): RunConfiguration =
     RunConfiguration(
@@ -433,3 +479,22 @@ private fun PlayerPreferences.toAudioPreferences(): AudioPreferences = AudioPref
     musicEnabled = musicEnabled,
     masterVolume = masterVolume,
 )
+
+private fun PersistenceStatusProjection.toResetModalRenderModelOrNull(): ResetModalRenderModel? =
+    when (reset) {
+        is ProfileResetStatus.ConfirmationRequired -> ResetModalRenderModel(
+            ResetModalMode.CONFIRMATION_REQUIRED,
+        )
+        is ProfileResetStatus.WritingFreshV4,
+        is ProfileResetStatus.PurgingLegacy,
+        -> ResetModalRenderModel(ResetModalMode.RESET_IN_PROGRESS)
+        is ProfileResetStatus.NeedsAttention -> ResetModalRenderModel(
+            ResetModalMode.PURGE_NEEDS_ATTENTION,
+        )
+        is ProfileResetStatus.NotRequired -> when (bootstrap) {
+            ProfileBootstrapStatus.Ready -> null
+            ProfileBootstrapStatus.AwaitingResource,
+            is ProfileBootstrapStatus.Blocked,
+            -> ResetModalRenderModel(ResetModalMode.BOOTSTRAP_UNAVAILABLE)
+        }
+    }

@@ -3,8 +3,11 @@
 
 package kinetickk.ball.profile.interaction.rebirth.impl
 
+import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.RebirthProfileSnapshot
+import kinetickk.ball.profile.api.RebirthProgressProjection
 import kinetickk.ball.profile.api.RebirthProgress
+import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.interaction.testRebirthPolicy
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthOutput
@@ -18,8 +21,9 @@ class RebirthReducerTest {
     @Test
     fun eligibleSnapshotMapsCurrentAndNextCycle() {
         val rebirthPolicy = testRebirthPolicy(maximumLevel = 3)
-        val model = RebirthProfileSnapshot(
+        val model = rebirthProjection(
             progress = RebirthProgress(level = 2, highestCleared = 2),
+            canAdvance = true,
         ).toRenderModel(rebirthPolicy, eligible = true)
 
         assertEquals(2, model.current.tier)
@@ -27,8 +31,9 @@ class RebirthReducerTest {
         assertTrue(model.canAdvance)
         assertFalse(model.isMaximumTier)
 
-        val shellBlocked = RebirthProfileSnapshot(
+        val shellBlocked = rebirthProjection(
             progress = RebirthProgress(level = 2, highestCleared = 2),
+            canAdvance = true,
         ).toRenderModel(rebirthPolicy, eligible = false)
         assertFalse(shellBlocked.canAdvance)
     }
@@ -36,8 +41,9 @@ class RebirthReducerTest {
     @Test
     fun firstRequestArmsAndSecondRequestsExactlyOneCapabilityMutation() {
         val rebirthPolicy = testRebirthPolicy()
-        val model = RebirthProfileSnapshot(
+        val model = rebirthProjection(
             progress = RebirthProgress(level = 0, highestCleared = 0),
+            canAdvance = true,
         ).toRenderModel(rebirthPolicy)
         val first = RebirthReducer.reduce(
             RebirthState(model, armed = false),
@@ -56,8 +62,9 @@ class RebirthReducerTest {
     @Test
     fun lockedAndMaximumCyclesCannotArm() {
         val rebirthPolicy = testRebirthPolicy(maximumLevel = 3)
-        val locked = RebirthProfileSnapshot(
+        val locked = rebirthProjection(
             progress = RebirthProgress(level = 1, highestCleared = 0),
+            canAdvance = false,
         ).toRenderModel(rebirthPolicy)
         val lockedReduction = RebirthReducer.reduce(
             RebirthState(locked, armed = false),
@@ -66,11 +73,12 @@ class RebirthReducerTest {
         assertFalse(lockedReduction.state.armed)
         assertTrue(lockedReduction.effects.isEmpty())
 
-        val maximum = RebirthProfileSnapshot(
+        val maximum = rebirthProjection(
             progress = RebirthProgress(
                 level = rebirthPolicy.maximumLevel,
                 highestCleared = rebirthPolicy.maximumLevel,
             ),
+            canAdvance = false,
         ).toRenderModel(rebirthPolicy)
         assertTrue(maximum.isMaximumTier)
         assertFalse(maximum.canAdvance)
@@ -78,7 +86,10 @@ class RebirthReducerTest {
 
     @Test
     fun backDisarmsBeforeEmittingClickAndNavigation() {
-        val model = RebirthProfileSnapshot(RebirthProgress(0, 0)).toRenderModel(testRebirthPolicy())
+        val model = rebirthProjection(
+            progress = RebirthProgress(0, 0),
+            canAdvance = true,
+        ).toRenderModel(testRebirthPolicy())
         val reduction = RebirthReducer.reduce(
             RebirthState(model, armed = true),
             RebirthAction.Back,
@@ -88,3 +99,13 @@ class RebirthReducerTest {
         assertEquals(RebirthOutput.Back, assertIs<RebirthEffect.Emit>(reduction.effects[1]).output)
     }
 }
+
+private fun rebirthProjection(
+    progress: RebirthProgress,
+    canAdvance: Boolean,
+): RebirthProgressProjection = RebirthProgressProjection(
+    instanceId = LOCAL_PROFILE_INSTANCE_ID,
+    revision = ProfileRevision.ZERO,
+    snapshot = RebirthProfileSnapshot(progress),
+    canAdvance = canAdvance,
+)

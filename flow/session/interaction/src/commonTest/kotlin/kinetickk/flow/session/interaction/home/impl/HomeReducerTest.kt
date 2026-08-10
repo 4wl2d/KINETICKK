@@ -5,17 +5,14 @@ package kinetickk.flow.session.interaction.home.impl
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.WeaponId
-import kinetickk.ball.profile.api.CollectionCapability
-import kinetickk.ball.profile.api.LoadoutCapability
-import kinetickk.ball.profile.api.LoadoutProfileSnapshot
+import kinetickk.ball.profile.api.HomeProgressProjection
+import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerLoadout
-import kinetickk.ball.profile.api.ProfileMutationResult
-import kinetickk.ball.profile.api.ProfilePersistResult
-import kinetickk.ball.profile.api.RebirthCapability
-import kinetickk.ball.profile.api.RebirthProfileSnapshot
+import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.RebirthProgress
+import kinetickk.flow.session.interaction.audio.SessionAudioCue
 import kinetickk.flow.session.interaction.home.api.HomeOutput
 import kinetickk.flow.session.interaction.TestCoreShapes
 import kinetickk.flow.session.interaction.TestRebirthPolicy
@@ -23,13 +20,12 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class HomeReducerTest {
     @Test
-    fun modelCombinesOnlyNarrowProfileSnapshots() {
-        val profile = FakeHomeProfile(
+    fun modelMapsOnlyTheAuthoritativeHomeProjection() {
+        val projection = homeProjection(
             economy = PlayerEconomy(matter = 81, lifetimeMatter = 120),
             loadout = PlayerLoadout(
                 coreShape = CoreShape.PRISM,
@@ -38,9 +34,10 @@ class HomeReducerTest {
             ),
             collection = PlayerCollection(setOf(0, 399)),
             rebirth = RebirthProgress(level = 2, highestCleared = 1),
+            canAdvanceRebirth = false,
         )
 
-        val model = homeReducer(profile).uiModel()
+        val model = homeReducer().uiModel(projection)
 
         assertEquals(CoreShape.PRISM, model.coreShape)
         assertEquals(81, model.totalMatter)
@@ -51,14 +48,22 @@ class HomeReducerTest {
     }
 
     @Test
-    fun actionsSelectLoadoutOrEmitShellOutputs() {
-        val profile = FakeHomeProfile()
-        val reducer = homeReducer(profile)
+    fun actionsEmitTypedProfileIntentOrOrderedShellEffects() {
+        val reducer = homeReducer()
 
-        assertNull(reducer.reduce(HomeAction.SelectCoreShape(CoreShape.PRISM)))
-        assertEquals(CoreShape.PRISM, profile.loadout.coreShape)
-        assertIs<HomeOutput.StartRun>(reducer.reduce(HomeAction.StartRun))
-        assertIs<HomeOutput.OpenSettings>(reducer.reduce(HomeAction.OpenSettings))
+        val selection = reducer.reduce(HomeAction.SelectCoreShape(CoreShape.PRISM)).effects
+        assertEquals(
+            CoreShape.PRISM,
+            assertIs<HomeEffect.SelectCoreShape>(selection[0]).shape,
+        )
+        assertEquals(SessionAudioCue.UI_CLICK, assertIs<HomeEffect.PlayAudio>(selection[1]).cue)
+
+        val start = reducer.reduce(HomeAction.StartRun).effects
+        assertEquals(SessionAudioCue.UI_CLICK, assertIs<HomeEffect.PlayAudio>(start[0]).cue)
+        assertIs<HomeOutput.StartRun>(assertIs<HomeEffect.Emit>(start[1]).output)
+
+        val settings = reducer.reduce(HomeAction.OpenSettings).effects
+        assertIs<HomeOutput.OpenSettings>(assertIs<HomeEffect.Emit>(settings[1]).output)
     }
 
     @Test
@@ -74,38 +79,25 @@ class HomeReducerTest {
     }
 }
 
-private fun homeReducer(profile: FakeHomeProfile): HomeReducer = HomeReducer(
-    loadoutCapability = profile,
-    collectionCapability = profile,
-    rebirthCapability = profile,
+private fun homeReducer(): HomeReducer = HomeReducer(
     coreShapes = TestCoreShapes,
     itemCount = 400,
     weaponCount = 12,
     rebirthPolicy = TestRebirthPolicy,
 )
 
-private class FakeHomeProfile(
-    var economy: PlayerEconomy = PlayerEconomy(lifetimeMatter = 100),
-    var loadout: PlayerLoadout = PlayerLoadout(),
-    var collection: PlayerCollection = PlayerCollection(),
-    var rebirth: RebirthProgress = RebirthProgress(),
-) : LoadoutCapability, CollectionCapability, RebirthCapability {
-    override fun loadoutSnapshot(): LoadoutProfileSnapshot = LoadoutProfileSnapshot(economy, loadout)
-
-    override fun selectCoreShape(shape: CoreShape): ProfileMutationResult {
-        loadout = loadout.copy(coreShape = shape)
-        return applied()
-    }
-
-    override fun purchaseOrEquipWeapon(id: WeaponId): ProfileMutationResult = applied()
-
-    override fun collectionSnapshot(): PlayerCollection = collection
-
-    override fun rebirthSnapshot(): RebirthProfileSnapshot = RebirthProfileSnapshot(rebirth)
-
-    override fun advanceRebirth(): ProfileMutationResult = applied()
-
-    private fun applied(): ProfileMutationResult.Applied = ProfileMutationResult.Applied(
-        persistence = ProfilePersistResult.Persisted,
-    )
-}
+private fun homeProjection(
+    economy: PlayerEconomy = PlayerEconomy(lifetimeMatter = 100),
+    loadout: PlayerLoadout = PlayerLoadout(),
+    collection: PlayerCollection = PlayerCollection(),
+    rebirth: RebirthProgress = RebirthProgress(),
+    canAdvanceRebirth: Boolean = false,
+): HomeProgressProjection = HomeProgressProjection(
+    instanceId = LOCAL_PROFILE_INSTANCE_ID,
+    revision = ProfileRevision.ZERO,
+    economy = economy,
+    loadout = loadout,
+    collection = collection,
+    rebirthProgress = rebirth,
+    canAdvanceRebirth = canAdvanceRebirth,
+)

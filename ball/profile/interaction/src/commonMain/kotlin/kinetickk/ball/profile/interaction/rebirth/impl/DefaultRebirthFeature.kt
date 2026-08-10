@@ -16,9 +16,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.rememberTextMeasurer
 import kinetickk.ball.content.api.RebirthPolicySnapshot
-import kinetickk.ball.profile.api.PreferencesReader
-import kinetickk.ball.profile.api.ProfileMutationResult
-import kinetickk.ball.profile.api.RebirthCapability
+import kinetickk.ball.profile.api.ProfileAcceptance
+import kinetickk.ball.profile.api.ProfilePort
+import kinetickk.ball.profile.api.ProfilePulse
+import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.audio.ProfileAudioExecutor
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthFeature
@@ -27,8 +28,7 @@ import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.resource.audio.api.AudioService
 
 class DefaultRebirthFeature(
-    private val capability: RebirthCapability,
-    private val preferencesReader: PreferencesReader,
+    private val profilePort: ProfilePort,
     private val rebirthPolicy: RebirthPolicySnapshot,
     audioService: AudioService,
 ) : RebirthFeature {
@@ -40,12 +40,16 @@ class DefaultRebirthFeature(
         eligible: Boolean,
         onOutput: (RebirthOutput) -> Unit,
     ) {
-        var renderModelValue by remember(capability, rebirthPolicy, routeToken, eligible) {
-            mutableStateOf(capability.rebirthSnapshot().toRenderModel(rebirthPolicy, eligible))
+        var renderModelValue by remember(profilePort, rebirthPolicy, routeToken, eligible) {
+            mutableStateOf(
+                profilePort
+                    .query(ProfileQuery.GetRebirthProgress)
+                    .toRenderModel(rebirthPolicy, eligible),
+            )
         }
         var confirmationArmedValue by rememberSaveable(routeToken, eligible) { mutableStateOf(false) }
-        val textScale = remember(preferencesReader, routeToken) {
-            preferencesReader.preferences().textScale
+        val textScale = remember(profilePort, routeToken) {
+            profilePort.query(ProfileQuery.GetPreferences).preferences.textScale
         }
         val composeTextMeasurer = rememberTextMeasurer(cacheSize = 64)
         val textMeasurer = CanvasTextMeasurer(
@@ -63,13 +67,13 @@ class DefaultRebirthFeature(
             reduction.effects.forEach { effect ->
                 when (effect) {
                     RebirthEffect.AdvanceCycle -> {
-                        val result = capability.advanceRebirth()
-                        renderModelValue = capability.rebirthSnapshot().toRenderModel(rebirthPolicy, eligible)
+                        val acceptance = profilePort.accept(ProfilePulse.AdvanceRebirth)
+                        val projection = profilePort.query(ProfileQuery.GetRebirthProgress)
+                        renderModelValue = projection.toRenderModel(rebirthPolicy, eligible)
                         confirmationArmedValue = false
-                        if (result is ProfileMutationResult.Applied) {
-                            val progress = capability.rebirthSnapshot().progress
+                        if (acceptance is ProfileAcceptance.Accepted) {
                             audioExecutor.play(ProfileAudioCue.PURCHASE)
-                            onOutput(RebirthOutput.CycleAdvanced(progress))
+                            onOutput(RebirthOutput.CycleAdvanced(projection.snapshot.progress))
                         }
                     }
                     is RebirthEffect.PlayAudio -> audioExecutor.play(effect.cue)

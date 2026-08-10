@@ -19,22 +19,41 @@ import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.impl.createContentCatalog
 import kinetickk.ball.profile.api.GameplayProgressUpdate
+import kinetickk.ball.profile.api.CollectionProjection
+import kinetickk.ball.profile.api.HomeProgressProjection
 import kinetickk.ball.profile.api.LabProfileSnapshot
 import kinetickk.ball.profile.api.LabProgress
+import kinetickk.ball.profile.api.LabProgressProjection
 import kinetickk.ball.profile.api.LoadoutProfileSnapshot
+import kinetickk.ball.profile.api.LoadoutProjection
+import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PlayerProfile
-import kinetickk.ball.profile.api.ProfileLoadResult
-import kinetickk.ball.profile.api.ProfileMutationRejection
-import kinetickk.ball.profile.api.ProfileMutationResult
-import kinetickk.ball.profile.api.ProfilePersistResult
-import kinetickk.ball.profile.api.ProfileProviderId
-import kinetickk.ball.profile.api.ProfileStore
+import kinetickk.ball.profile.api.PersistenceStatusProjection
+import kinetickk.ball.profile.api.PreferencesProjection
+import kinetickk.ball.profile.api.ProfileAcceptance
+import kinetickk.ball.profile.api.ProfileBootstrapStatus
+import kinetickk.ball.profile.api.ProfileBootstrapBlockReason
+import kinetickk.ball.profile.api.ProfileCommand
+import kinetickk.ball.profile.api.ProfileCommandAdmission
+import kinetickk.ball.profile.api.ProfileLegacyKeys
+import kinetickk.ball.profile.api.ProfileLegacyPurgeResult
+import kinetickk.ball.profile.api.ProfilePersistenceStatus
+import kinetickk.ball.profile.api.ProfilePort
+import kinetickk.ball.profile.api.ProfilePulse
+import kinetickk.ball.profile.api.ProfileQuery
+import kinetickk.ball.profile.api.ProfileResetReason
+import kinetickk.ball.profile.api.ProfileResetStatus
+import kinetickk.ball.profile.api.ProfileResourceFailure
+import kinetickk.ball.profile.api.ProfileRevision
+import kinetickk.ball.profile.api.ProfileRunBootstrapResult
 import kinetickk.ball.profile.api.RebirthProfileSnapshot
 import kinetickk.ball.profile.api.RebirthProgress
+import kinetickk.ball.profile.api.RebirthProgressProjection
+import kinetickk.ball.profile.api.RunBootstrapProjection
 import kinetickk.ball.profile.interaction.armory.api.ArmoryFeature
 import kinetickk.ball.profile.interaction.armory.api.ArmoryOutput
 import kinetickk.flow.session.interaction.codex.api.CodexFeature
@@ -54,6 +73,7 @@ import kinetickk.ball.profile.interaction.rebirth.api.RebirthFeature
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthOutput
 import kinetickk.ball.profile.interaction.settings.api.SettingsFeature
 import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
+import kinetickk.flow.session.interaction.reset.api.ResetModalOutput
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -106,12 +126,12 @@ class AppCompositionOwnerTest {
         val shell = testShell()
         shell.owner.startNewRun()
         shell.owner.handleShortcut(AppShortcut.SETTINGS)
-        val changed = shell.store.profileSnapshot().preferences.copy(
+        val changed = shell.store.profile.preferences.copy(
             simulationSpeed = 1.75f,
             textScale = 1.5f,
             soundEnabled = false,
         )
-        shell.store.setProfile(shell.store.profileSnapshot().copy(preferences = changed))
+        shell.store.setProfile(shell.store.profile.copy(preferences = changed))
 
         assertTrue(shell.gameplay.appliedPreferences.isEmpty())
 
@@ -126,8 +146,8 @@ class AppCompositionOwnerTest {
         val shell = testShell()
         shell.owner.startNewRun()
         shell.owner.handleShortcut(AppShortcut.SETTINGS)
-        val changed = shell.store.preferences().copy(textScale = 1.75f)
-        shell.store.setProfile(shell.store.profileSnapshot().copy(preferences = changed))
+        val changed = shell.store.preferences.copy(textScale = 1.75f)
+        shell.store.setProfile(shell.store.profile.copy(preferences = changed))
 
         shell.owner.handleShortcut(AppShortcut.LAB)
 
@@ -144,7 +164,7 @@ class AppCompositionOwnerTest {
         )
         shell.owner.startNewRun()
         val activeConfiguration = shell.gameplay.starts.single()
-        val nextProfile = shell.store.profileSnapshot().copy(
+        val nextProfile = shell.store.profile.copy(
             loadout = PlayerLoadout(
                 coreShape = CoreShape.PRISM,
                 selectedWeapon = WeaponId.MORNINGSTAR,
@@ -194,7 +214,7 @@ class AppCompositionOwnerTest {
         val shell = testShell()
         shell.owner.handleShortcut(AppShortcut.REBIRTH)
         val advanced = RebirthProgress(level = 1, highestCleared = 0)
-        val nextProfile = shell.store.profileSnapshot().copy(
+        val nextProfile = shell.store.profile.copy(
             economy = PlayerEconomy(matter = 0L, lifetimeMatter = 1_500L),
             rebirthProgress = advanced,
         )
@@ -215,7 +235,7 @@ class AppCompositionOwnerTest {
 
         assertEquals(
             listOf(
-                workflowEvent("profile.snapshot", AppDestination.Home),
+                workflowEvent("profile.runBootstrap", AppDestination.Home),
                 workflowEvent("gameplay.start", AppDestination.Home),
                 workflowEvent("start.returned", AppDestination.Gameplay),
             ),
@@ -224,7 +244,7 @@ class AppCompositionOwnerTest {
 
         assertEquals(
             listOf(
-                workflowEvent("profile.snapshot", AppDestination.Gameplay),
+                workflowEvent("profile.runBootstrap", AppDestination.Gameplay),
                 workflowEvent("gameplay.start", AppDestination.Gameplay),
                 workflowEvent("restart.returned", AppDestination.Gameplay),
             ),
@@ -267,7 +287,7 @@ class AppCompositionOwnerTest {
 
         assertEquals(
             listOf(
-                workflowEvent("profile.snapshot", AppDestination.Home, AppDestination.Rebirth),
+                workflowEvent("profile.runBootstrap", AppDestination.Home, AppDestination.Rebirth),
                 workflowEvent("gameplay.start", AppDestination.Home, AppDestination.Rebirth),
                 workflowEvent("rebirth.returned", AppDestination.Gameplay),
             ),
@@ -316,10 +336,10 @@ class AppCompositionOwnerTest {
 
         val muteShell = testShell()
         assertTrue(muteShell.owner.handleShortcut(AppShortcut.MUTE))
-        assertFalse(muteShell.store.preferences().soundEnabled)
-        assertFalse(muteShell.store.preferences().musicEnabled)
+        assertFalse(muteShell.store.preferences.soundEnabled)
+        assertFalse(muteShell.store.preferences.musicEnabled)
         assertEquals(
-            listOf(muteShell.store.preferences()),
+            listOf(muteShell.store.preferences),
             muteShell.gameplay.appliedPreferences,
         )
     }
@@ -332,7 +352,7 @@ class AppCompositionOwnerTest {
         assertEquals(listOf(initialPreferences.toExpectedAudioPreferences()), shell.audio.preferencesUpdates)
 
         val updatedPreferences = initialPreferences.copy(masterVolume = 0.25f)
-        shell.store.setProfile(shell.store.profileSnapshot().copy(preferences = updatedPreferences))
+        shell.store.setProfile(shell.store.profile.copy(preferences = updatedPreferences))
         shell.owner.handleShortcut(AppShortcut.MUTE)
 
         val mutedPreferences = updatedPreferences.copy(soundEnabled = false, musicEnabled = false)
@@ -345,12 +365,88 @@ class AppCompositionOwnerTest {
         shell.owner.close()
         assertEquals(1, shell.audio.closeCalls)
     }
+
+    @Test
+    fun resetConfirmationBlocksNormalRoutesAndCancelDoesNothingUntilExplicitConfirmation() {
+        val obsoletePreferences = PlayerPreferences(
+            soundEnabled = false,
+            musicEnabled = false,
+            masterVolume = 0.25f,
+        )
+        val shell = testShell(
+            profile = PlayerProfile(
+                preferences = obsoletePreferences,
+                economy = PlayerEconomy(matter = 99L),
+            ),
+        )
+        shell.store.requireLegacyReset()
+
+        assertFalse(shell.owner.handleShortcut(AppShortcut.ENTER))
+        assertFalse(shell.owner.handleShortcut(AppShortcut.LAB))
+        assertTrue(shell.gameplay.starts.isEmpty())
+        assertEquals(AppDestination.Home, shell.owner.backStack.active)
+
+        val resetBeforeCancel = shell.store.resetStatus
+        shell.owner.handleResetModalOutput(ResetModalOutput.Cancel)
+
+        assertEquals(resetBeforeCancel, shell.store.resetStatus)
+        assertTrue(shell.store.acceptedPulses.isEmpty())
+
+        shell.owner.handleResetModalOutput(ResetModalOutput.ConfirmDelete)
+
+        assertEquals(
+            listOf<ProfilePulse.Business>(ProfilePulse.ConfirmLegacyReset),
+            shell.store.acceptedPulses,
+        )
+        assertEquals(PlayerProfile(), shell.store.profile)
+        assertEquals(
+            listOf(
+                obsoletePreferences.toExpectedAudioPreferences(),
+                PlayerPreferences().toExpectedAudioPreferences(),
+            ),
+            shell.audio.preferencesUpdates,
+        )
+        assertTrue(shell.owner.handleShortcut(AppShortcut.ENTER))
+        assertEquals(1, shell.gameplay.starts.size)
+    }
+
+    @Test
+    fun purgeNeedsAttentionAllowsOnlyExplicitRetry() {
+        val shell = testShell()
+        shell.store.requirePurgeRetry()
+
+        shell.owner.handleResetModalOutput(ResetModalOutput.ConfirmDelete)
+        assertTrue(shell.store.acceptedPulses.isEmpty())
+        assertFalse(shell.owner.handleShortcut(AppShortcut.ENTER))
+
+        shell.owner.handleResetModalOutput(ResetModalOutput.RetryPurge)
+
+        assertEquals(
+            listOf<ProfilePulse.Business>(ProfilePulse.RetryLegacyPurge),
+            shell.store.acceptedPulses,
+        )
+        assertTrue(shell.owner.handleShortcut(AppShortcut.ENTER))
+    }
+
+    @Test
+    fun unknownBootstrapCannotTriggerResetOrEnterTheApplication() {
+        val shell = testShell()
+        shell.store.blockBootstrapRead()
+
+        shell.owner.handleResetModalOutput(ResetModalOutput.ConfirmDelete)
+        shell.owner.handleResetModalOutput(ResetModalOutput.RetryPurge)
+
+        assertTrue(shell.store.acceptedPulses.isEmpty())
+        assertFalse(shell.owner.handleShortcut(AppShortcut.ENTER))
+        assertFalse(shell.owner.handleShortcut(AppShortcut.MUTE))
+        assertTrue(shell.gameplay.starts.isEmpty())
+    }
 }
 
 private data class TestShell(
     val owner: AppCompositionOwner,
     val contentCatalog: CountingContentCatalog,
-    val store: FakeProfileStore,
+    val store: FakeProfilePort,
     val gameplay: FakeGameplayFeature,
     val audio: FakeAudioService,
     val workflow: WorkflowRecorder,
@@ -360,13 +456,13 @@ private fun testShell(
     profile: PlayerProfile = PlayerProfile(),
 ): TestShell {
     val workflow = WorkflowRecorder()
-    val store = FakeProfileStore(profile, workflow)
+    val store = FakeProfilePort(profile, workflow)
     val audio = FakeAudioService(workflow)
     val gameplay = FakeGameplayFeature(workflow)
     val contentCatalog = CountingContentCatalog()
     val owner = AppCompositionOwner(
         contentCatalog = contentCatalog,
-        profileStore = store,
+        profilePort = store,
         audioService = audio,
         gameplayFeature = gameplay,
         homeFeature = FakeHomeFeature(),
@@ -491,73 +587,185 @@ private class FakeGameplayFeature(
     override fun Content(inputEnabled: Boolean, onOutput: (GameplayOutput) -> Unit) = Unit
 }
 
-private class FakeProfileStore(
+private class FakeProfilePort(
     initialProfile: PlayerProfile,
     private val workflow: WorkflowRecorder,
-) : ProfileStore {
-    private var profile = initialProfile
-
-    override val providerId = ProfileProviderId.PLATFORM_LOCAL
-    override val bootstrapResult: ProfileLoadResult = ProfileLoadResult.Loaded(initialProfile)
+) : ProfilePort {
+    override val instanceId = LOCAL_PROFILE_INSTANCE_ID
+    var profile: PlayerProfile = initialProfile
+        private set
+    val preferences: PlayerPreferences
+        get() = profile.preferences
+    private var revision = ProfileRevision(1L)
+    var bootstrapStatus: ProfileBootstrapStatus = ProfileBootstrapStatus.Ready
+    var resetStatus: ProfileResetStatus = ProfileResetStatus.NotRequired(
+        legacyResetConfirmed = false,
+    )
+    var persistenceStatus: ProfilePersistenceStatus = ProfilePersistenceStatus.NotAttempted
+    val acceptedPulses = mutableListOf<ProfilePulse.Business>()
 
     fun setProfile(value: PlayerProfile) {
         profile = value
+        revision = ProfileRevision(revision.value + 1L)
     }
 
-    override fun profileSnapshot(): PlayerProfile {
-        workflow.record("profile.snapshot")
-        return profile
+    fun requireLegacyReset() {
+        val reason = ProfileResetReason.LegacyDataDetected
+        bootstrapStatus = ProfileBootstrapStatus.Blocked(
+            ProfileBootstrapBlockReason.ResetRequired(reason),
+        )
+        resetStatus = ProfileResetStatus.ConfirmationRequired(reason, ProfileLegacyKeys.ALL)
     }
 
-    override fun preferences(): PlayerPreferences {
+    fun requirePurgeRetry() {
+        val result = ProfileLegacyPurgeResult.Partial(ProfileLegacyKeys.ALL)
+        bootstrapStatus = ProfileBootstrapStatus.Blocked(
+            ProfileBootstrapBlockReason.ResetNeedsAttention(result),
+        )
+        resetStatus = ProfileResetStatus.NeedsAttention(ProfileLegacyKeys.ALL, result)
+    }
+
+    fun blockBootstrapRead() {
+        bootstrapStatus = ProfileBootstrapStatus.Blocked(
+            ProfileBootstrapBlockReason.ResourceOutcomeUnknown(
+                ProfileResourceFailure.PROVIDER_READ_FAILED,
+            ),
+        )
+        resetStatus = ProfileResetStatus.NotRequired(legacyResetConfirmed = false)
+    }
+
+    override fun accept(pulse: ProfilePulse.Business): ProfileAcceptance {
+        acceptedPulses += pulse
+        if (
+            bootstrapStatus != ProfileBootstrapStatus.Ready &&
+            pulse != ProfilePulse.ConfirmLegacyReset &&
+            pulse != ProfilePulse.RetryLegacyPurge
+        ) {
+            return ProfileAcceptance.Rejected(instanceId, revision, kinetickk.ball.profile.api.ProfileRejection.ResetRequired)
+        }
+        return when (pulse) {
+            ProfilePulse.ToggleMute -> {
+                val enable = !profile.preferences.soundEnabled && !profile.preferences.musicEnabled
+                profile = profile.copy(
+                    preferences = profile.preferences.copy(
+                        soundEnabled = enable,
+                        musicEnabled = enable,
+                    ),
+                )
+                accepted()
+            }
+            ProfilePulse.ConfirmLegacyReset -> {
+                profile = PlayerProfile()
+                resetStatus = ProfileResetStatus.NotRequired(legacyResetConfirmed = true)
+                bootstrapStatus = ProfileBootstrapStatus.Ready
+                accepted()
+            }
+            ProfilePulse.RetryLegacyPurge -> {
+                resetStatus = ProfileResetStatus.NotRequired(legacyResetConfirmed = true)
+                bootstrapStatus = ProfileBootstrapStatus.Ready
+                accepted()
+            }
+            is ProfilePulse.ApplyGameplayProgress -> {
+                workflow.record("profile.applyGameplayProgress")
+                rejected()
+            }
+            is ProfilePulse.AdjustPreference,
+            ProfilePulse.AdvanceRebirth,
+            is ProfilePulse.PurchaseMetaUpgrade,
+            is ProfilePulse.PurchaseOrEquipWeapon,
+            is ProfilePulse.SelectCoreShape,
+            -> rejected()
+        }
+    }
+
+    override fun accept(
+        command: ProfileCommand,
+        admission: ProfileCommandAdmission,
+    ): ProfileAcceptance = error("not used")
+
+    override fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection {
+        workflow.record("profile.runBootstrap")
+        val result = if (
+            bootstrapStatus == ProfileBootstrapStatus.Ready &&
+            resetStatus is ProfileResetStatus.NotRequired
+        ) {
+            ProfileRunBootstrapResult.Ready(profile.toGameplaySnapshot())
+        } else {
+            ProfileRunBootstrapResult.Unavailable(bootstrapStatus)
+        }
+        return RunBootstrapProjection(instanceId, revision, result)
+    }
+
+    override fun query(query: ProfileQuery.GetPreferences): PreferencesProjection {
         workflow.record("profile.preferences")
-        return profile.preferences
+        return PreferencesProjection(instanceId, revision, profile.preferences)
     }
 
-    override fun updatePreferences(preferences: PlayerPreferences): ProfileMutationResult =
-        applied(profile.copy(preferences = preferences))
+    override fun query(query: ProfileQuery.GetHomeProgress): HomeProgressProjection =
+        HomeProgressProjection(
+            instanceId = instanceId,
+            revision = revision,
+            economy = profile.economy,
+            loadout = profile.loadout,
+            collection = profile.collection,
+            rebirthProgress = profile.rebirthProgress,
+            canAdvanceRebirth = profile.rebirthProgress.highestCleared >= profile.rebirthProgress.level,
+        )
 
-    override fun labSnapshot(): LabProfileSnapshot = LabProfileSnapshot(
-        economy = profile.economy,
-        progress = profile.labProgress,
+    override fun query(query: ProfileQuery.GetLabProgress): LabProgressProjection =
+        LabProgressProjection(
+            instanceId,
+            revision,
+            LabProfileSnapshot(profile.economy, profile.labProgress),
+        )
+
+    override fun query(query: ProfileQuery.GetLoadout): LoadoutProjection =
+        LoadoutProjection(
+            instanceId,
+            revision,
+            LoadoutProfileSnapshot(profile.economy, profile.loadout),
+        )
+
+    override fun query(query: ProfileQuery.GetCollection): CollectionProjection =
+        CollectionProjection(instanceId, revision, profile.collection)
+
+    override fun query(query: ProfileQuery.GetRebirthProgress): RebirthProgressProjection =
+        RebirthProgressProjection(
+            instanceId,
+            revision,
+            RebirthProfileSnapshot(profile.rebirthProgress),
+            canAdvance = profile.rebirthProgress.highestCleared >= profile.rebirthProgress.level,
+        )
+
+    override fun query(query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection =
+        PersistenceStatusProjection(
+            instanceId,
+            revision,
+            bootstrapStatus,
+            resetStatus,
+            persistenceStatus,
+        )
+
+    private fun accepted(): ProfileAcceptance.Accepted {
+        revision = ProfileRevision(revision.value + 1L)
+        return ProfileAcceptance.Accepted(instanceId, revision)
+    }
+
+    private fun rejected(): ProfileAcceptance.Rejected = ProfileAcceptance.Rejected(
+        instanceId,
+        revision,
+        kinetickk.ball.profile.api.ProfileRejection.NoChange,
     )
-
-    override fun purchaseMetaUpgrade(id: MetaUpgradeId): ProfileMutationResult = rejected()
-
-    override fun loadoutSnapshot(): LoadoutProfileSnapshot = LoadoutProfileSnapshot(
-        economy = profile.economy,
-        loadout = profile.loadout,
-    )
-
-    override fun selectCoreShape(shape: CoreShape): ProfileMutationResult = rejected()
-
-    override fun purchaseOrEquipWeapon(id: WeaponId): ProfileMutationResult = rejected()
-
-    override fun collectionSnapshot(): PlayerCollection = profile.collection
-
-    override fun rebirthSnapshot(): RebirthProfileSnapshot =
-        RebirthProfileSnapshot(profile.rebirthProgress)
-
-    override fun advanceRebirth(): ProfileMutationResult = rejected()
-
-    override fun applyGameplayProgress(update: GameplayProgressUpdate): ProfileMutationResult {
-        workflow.record("profile.applyGameplayProgress")
-        return rejected()
-    }
-
-    override fun replaceProfile(profile: PlayerProfile): ProfilePersistResult {
-        this.profile = profile
-        return ProfilePersistResult.Persisted
-    }
-
-    private fun applied(value: PlayerProfile): ProfileMutationResult {
-        profile = value
-        return ProfileMutationResult.Applied(ProfilePersistResult.Persisted)
-    }
-
-    private fun rejected(): ProfileMutationResult =
-        ProfileMutationResult.Rejected(ProfileMutationRejection.NO_CHANGE)
 }
+
+private fun PlayerProfile.toGameplaySnapshot() = kinetickk.ball.profile.api.GameplayProfileSnapshot(
+    preferences = preferences,
+    economy = economy,
+    loadout = loadout,
+    labProgress = labProgress,
+    collection = collection,
+    rebirthProgress = rebirthProgress,
+)
 
 private class FakeAudioService(
     private val workflow: WorkflowRecorder,

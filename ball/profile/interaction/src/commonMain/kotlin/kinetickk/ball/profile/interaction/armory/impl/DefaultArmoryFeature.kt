@@ -31,8 +31,11 @@ import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
 import kinetickk.foundation.design.*
-import kinetickk.ball.profile.api.LoadoutCapability
-import kinetickk.ball.profile.api.PreferencesReader
+import kinetickk.ball.profile.api.ProfileAcceptance
+import kinetickk.ball.profile.api.ProfilePort
+import kinetickk.ball.profile.api.ProfilePulse
+import kinetickk.ball.profile.api.ProfileQuery
+import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.audio.ProfileAudioExecutor
 import kinetickk.ball.profile.interaction.armory.api.ArmoryFeature
 import kinetickk.ball.profile.interaction.armory.api.ArmoryOutput
@@ -42,13 +45,12 @@ import kinetickk.resource.audio.api.AudioService
 import kotlin.math.min
 
 class DefaultArmoryFeature(
-    loadoutCapability: LoadoutCapability,
-    private val preferencesReader: PreferencesReader,
+    private val profilePort: ProfilePort,
     private val weapons: ImmutableList<WeaponDefinition>,
     weaponMasteries: ImmutableList<WeaponMastery>,
     audioService: AudioService,
 ) : ArmoryFeature {
-    private val reducer = ArmoryReducer(loadoutCapability, weapons)
+    private val reducer = ArmoryReducer(weapons)
     private val audioExecutor = ProfileAudioExecutor(audioService)
     private val weaponMasteryProgressionLabel = weaponMasteries.drop(1).joinToString("  ") {
         "L${it.minimumLevel} ${it.displayLabel.uppercase()}"
@@ -59,23 +61,35 @@ class DefaultArmoryFeature(
         val density = LocalDensity.current.density
         val composeTextMeasurer = rememberTextMeasurer(cacheSize = 64)
         var pageValue by rememberSaveable { mutableIntStateOf(0) }
-        var revisionValue by remember { mutableIntStateOf(0) }
+        var loadoutProjectionValue by remember(profilePort) {
+            mutableStateOf(profilePort.query(ProfileQuery.GetLoadout))
+        }
         var viewportValue by remember { mutableStateOf(ArmoryViewport(1f, 1f, density)) }
         var renderTimeSecondsValue by remember { mutableFloatStateOf(0f) }
-        @Suppress("UNUSED_EXPRESSION")
-        revisionValue
-        val model = reducer.renderModel(activeRunWeapon)
+        val model = reducer.renderModel(loadoutProjectionValue.snapshot, activeRunWeapon)
         val textMeasurer = CanvasTextMeasurer(
             composeTextMeasurer,
-            preferencesReader.preferences().textScale,
+            profilePort.query(ProfileQuery.GetPreferences).preferences.textScale,
         )
 
         fun dispatch(action: ArmoryAction) {
             val reduction = reducer.reduce(pageValue, action)
             pageValue = reduction.page
-            if (reduction.profileChanged) revisionValue++
-            reduction.feedbackCue?.let(audioExecutor::play)
-            if (reduction.close) onOutput(ArmoryOutput.Back)
+            reduction.effects.forEach { effect ->
+                when (effect) {
+                    is ArmoryEffect.PurchaseOrEquipWeapon -> {
+                        val acceptance = profilePort.accept(
+                            ProfilePulse.PurchaseOrEquipWeapon(effect.id),
+                        )
+                        loadoutProjectionValue = profilePort.query(ProfileQuery.GetLoadout)
+                        if (acceptance is ProfileAcceptance.Accepted) {
+                            audioExecutor.play(ProfileAudioCue.PURCHASE)
+                        }
+                    }
+                    is ArmoryEffect.PlayAudio -> audioExecutor.play(effect.cue)
+                    is ArmoryEffect.Emit -> onOutput(effect.output)
+                }
+            }
         }
 
         LaunchedEffect(Unit) {

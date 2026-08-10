@@ -5,10 +5,10 @@ package kinetickk.ball.profile.interaction.armory.impl
 
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
-import kinetickk.ball.profile.api.LoadoutCapability
-import kinetickk.ball.profile.api.ProfileMutationResult
+import kinetickk.ball.profile.api.LoadoutProfileSnapshot
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.armory.api.ArmoryRenderModel
+import kinetickk.ball.profile.interaction.armory.api.ArmoryOutput
 import kinetickk.foundation.collections.ImmutableList
 
 internal const val ARMORY_PAGE_SIZE = 3
@@ -22,51 +22,51 @@ internal sealed interface ArmoryAction {
 
 internal data class ArmoryReduction(
     val page: Int,
-    val close: Boolean = false,
-    val profileChanged: Boolean = false,
-    val feedbackCue: ProfileAudioCue? = null,
+    val effects: List<ArmoryEffect> = emptyList(),
 )
 
+internal sealed interface ArmoryEffect {
+    data class PurchaseOrEquipWeapon(val id: WeaponId) : ArmoryEffect
+    data class PlayAudio(val cue: ProfileAudioCue) : ArmoryEffect
+    data class Emit(val output: ArmoryOutput) : ArmoryEffect
+}
+
 internal class ArmoryReducer(
-    private val capability: LoadoutCapability,
     private val weapons: ImmutableList<WeaponDefinition>,
 ) {
     val maxPage: Int
         get() = (weapons.size - 1) / ARMORY_PAGE_SIZE
 
-    fun renderModel(activeRunWeapon: WeaponId?): ArmoryRenderModel {
-        val snapshot = capability.loadoutSnapshot()
-        return ArmoryRenderModel(
-            totalMatter = snapshot.economy.matter,
-            selectedWeapon = snapshot.loadout.selectedWeapon,
-            unlockedWeapons = snapshot.loadout.unlockedWeapons,
-            activeRunWeapon = activeRunWeapon,
-        )
-    }
+    fun renderModel(
+        snapshot: LoadoutProfileSnapshot,
+        activeRunWeapon: WeaponId?,
+    ): ArmoryRenderModel = ArmoryRenderModel(
+        totalMatter = snapshot.economy.matter,
+        selectedWeapon = snapshot.loadout.selectedWeapon,
+        unlockedWeapons = snapshot.loadout.unlockedWeapons,
+        activeRunWeapon = activeRunWeapon,
+    )
 
     fun reduce(page: Int, action: ArmoryAction): ArmoryReduction = when (action) {
         ArmoryAction.Back -> ArmoryReduction(
             page.coerceIn(0, maxPage),
-            close = true,
-            feedbackCue = ProfileAudioCue.UI_CLICK,
+            effects = listOf(
+                ArmoryEffect.PlayAudio(ProfileAudioCue.UI_CLICK),
+                ArmoryEffect.Emit(ArmoryOutput.Back),
+            ),
         )
         ArmoryAction.PreviousPage -> ArmoryReduction(
             (page.coerceIn(0, maxPage) - 1).coerceAtLeast(0),
-            feedbackCue = ProfileAudioCue.UI_CLICK,
+            effects = listOf(ArmoryEffect.PlayAudio(ProfileAudioCue.UI_CLICK)),
         )
         ArmoryAction.NextPage -> ArmoryReduction(
             (page.coerceIn(0, maxPage) + 1).coerceAtMost(maxPage),
-            feedbackCue = ProfileAudioCue.UI_CLICK,
+            effects = listOf(ArmoryEffect.PlayAudio(ProfileAudioCue.UI_CLICK)),
         )
-        is ArmoryAction.SelectWeapon -> {
-            val result = capability.purchaseOrEquipWeapon(action.id)
-            val applied = result is ProfileMutationResult.Applied
-            ArmoryReduction(
-                page.coerceIn(0, maxPage),
-                profileChanged = applied,
-                feedbackCue = if (applied) ProfileAudioCue.PURCHASE else null,
-            )
-        }
+        is ArmoryAction.SelectWeapon -> ArmoryReduction(
+            page.coerceIn(0, maxPage),
+            effects = listOf(ArmoryEffect.PurchaseOrEquipWeapon(action.id)),
+        )
     }
 }
 

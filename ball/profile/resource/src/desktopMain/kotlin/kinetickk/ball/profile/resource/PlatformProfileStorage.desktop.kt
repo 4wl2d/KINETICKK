@@ -4,23 +4,60 @@
 package kinetickk.ball.profile.resource
 
 import java.util.prefs.Preferences
-import kinetickk.ball.content.api.ProfilePolicySnapshot
-import kinetickk.ball.profile.api.ProfileResource
 
-private val preferences: Preferences by lazy {
-    Preferences.userRoot().node(ProfileStorageKeys.DESKTOP_NODE)
-}
+actual fun createPlatformProfileResource(): ProfileResource =
+    FixedKeyProfileResource(
+        provider = DesktopProfileStorageProvider(
+            profileNode = {
+                Preferences.userRoot().node(ProfileStorageKeys.DESKTOP_PROFILE_NODE)
+            },
+            legacyNode = {
+                Preferences.userRoot().node(ProfileStorageKeys.DESKTOP_LEGACY_NODE)
+            },
+        ),
+    )
 
-actual fun createPlatformProfileResource(policy: ProfilePolicySnapshot): ProfileResource = FixedKeyProfileResource(
-    policy = policy,
-    readProfilePayload = { preferences.get(ProfileStorageKeys.DESKTOP_PRIMARY, null) },
-    readLegacyMatter = { preferences.get(ProfileStorageKeys.LEGACY_MATTER, null) },
-    writeProfilePayload = { value ->
-        preferences.put(ProfileStorageKeys.DESKTOP_PRIMARY, value)
-        preferences.flush()
-    },
-    writeLegacyMatter = { value ->
-        preferences.putInt(ProfileStorageKeys.LEGACY_MATTER, value)
-        preferences.flush()
-    },
+internal fun createDesktopProfileResource(
+    profileNode: Preferences,
+    legacyNode: Preferences,
+): ProfileResource = FixedKeyProfileResource(
+    provider = DesktopProfileStorageProvider(
+        profileNode = { profileNode },
+        legacyNode = { legacyNode },
+    ),
 )
+
+private class DesktopProfileStorageProvider(
+    private val profileNode: () -> Preferences,
+    private val legacyNode: () -> Preferences,
+) : ProfileStorageProvider {
+    override fun readV4(): String? =
+        profileNode().get(ProfileStorageKeys.DESKTOP_SNAPSHOT_V4, null)
+
+    override fun writeV4(payload: String) {
+        profileNode().apply {
+            put(ProfileStorageKeys.DESKTOP_SNAPSHOT_V4, payload)
+            flush()
+        }
+    }
+
+    override fun readLegacyProgressV2(): String? =
+        legacyNode().get(ProfileStorageKeys.DESKTOP_LEGACY_PROGRESS_V2, null)
+
+    override fun readLegacyMatter(): String? =
+        legacyNode().get(ProfileStorageKeys.DESKTOP_LEGACY_MATTER, null)
+
+    override fun removeLegacyProgressV2() {
+        legacyNode().apply {
+            remove(ProfileStorageKeys.DESKTOP_LEGACY_PROGRESS_V2)
+            flush()
+        }
+    }
+
+    override fun removeLegacyMatter() {
+        legacyNode().apply {
+            remove(ProfileStorageKeys.DESKTOP_LEGACY_MATTER)
+            flush()
+        }
+    }
+}

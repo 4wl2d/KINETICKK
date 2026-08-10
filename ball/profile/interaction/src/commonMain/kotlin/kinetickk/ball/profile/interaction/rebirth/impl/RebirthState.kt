@@ -4,7 +4,7 @@
 package kinetickk.ball.profile.interaction.rebirth.impl
 
 import kinetickk.ball.content.api.RebirthPolicySnapshot
-import kinetickk.ball.profile.api.RebirthProfileSnapshot
+import kinetickk.ball.profile.api.RebirthProgressProjection
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthOutput
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthRenderModel
@@ -55,28 +55,24 @@ internal object RebirthReducer {
     }
 }
 
-internal fun RebirthProfileSnapshot.toRenderModel(
+internal fun RebirthProgressProjection.toRenderModel(
     rebirthPolicy: RebirthPolicySnapshot,
     eligible: Boolean = true,
 ): RebirthRenderModel = rebirthRenderModel(
     rebirthPolicy = rebirthPolicy,
-    level = progress.level,
-    highestCleared = progress.highestCleared,
-    eligible = eligible,
+    level = snapshot.progress.level,
+    canAdvance = eligible && canAdvance,
 )
 
 private fun rebirthRenderModel(
     rebirthPolicy: RebirthPolicySnapshot,
     level: Int,
-    highestCleared: Int,
-    eligible: Boolean,
+    canAdvance: Boolean,
 ): RebirthRenderModel {
     val normalizedLevel = level.coerceIn(rebirthPolicy.minimumLevel, rebirthPolicy.maximumLevel)
     return RebirthRenderModel(
         current = rebirthPolicy.profile(normalizedLevel),
         next = rebirthPolicy.profile(normalizedLevel + 1),
-        canAdvance = eligible &&
-            normalizedLevel < rebirthPolicy.maximumLevel &&
-            highestCleared.coerceIn(-1, normalizedLevel) >= normalizedLevel,
+        canAdvance = canAdvance && normalizedLevel < rebirthPolicy.maximumLevel,
     )
 }

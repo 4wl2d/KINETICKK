@@ -7,9 +7,23 @@ import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.ball.content.api.WeaponId
-import kinetickk.ball.profile.api.GameplayProgressCapability
 import kinetickk.ball.profile.api.GameplayProgressUpdate
-import kinetickk.ball.profile.api.ProfileMutationResult
+import kinetickk.ball.profile.api.CollectionProjection
+import kinetickk.ball.profile.api.HomeProgressProjection
+import kinetickk.ball.profile.api.LabProgressProjection
+import kinetickk.ball.profile.api.LoadoutProjection
+import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
+import kinetickk.ball.profile.api.PersistenceStatusProjection
+import kinetickk.ball.profile.api.PreferencesProjection
+import kinetickk.ball.profile.api.ProfileAcceptance
+import kinetickk.ball.profile.api.ProfileCommand
+import kinetickk.ball.profile.api.ProfileCommandAdmission
+import kinetickk.ball.profile.api.ProfilePort
+import kinetickk.ball.profile.api.ProfilePulse
+import kinetickk.ball.profile.api.ProfileQuery
+import kinetickk.ball.profile.api.ProfileRevision
+import kinetickk.ball.profile.api.RebirthProgressProjection
+import kinetickk.ball.profile.api.RunBootstrapProjection
 import kinetickk.ball.gameplay.api.RunConfiguration
 import kinetickk.ball.gameplay.nucleus.engine.GameDispatchResult
 import kinetickk.ball.gameplay.nucleus.model.GamePhase
@@ -26,7 +40,7 @@ private val testContent = SyntheticGameplayContent
 class GameComponentTest {
     @Test
     fun componentExecutesAudioVisualAndGestureEffectsAfterCommit() {
-        val progress = RecordingGameplayProgressCapability()
+        val profile = RecordingProfilePort()
         val observedOutputRevisions = mutableListOf<ULong>()
         lateinit var component: GameComponent
         val audio = RecordingGameplayAudioExecutor {
@@ -34,7 +48,7 @@ class GameComponentTest {
         }
         component = GameComponent.create(
             configuration = RunConfiguration(content = testContent),
-            progressCapability = progress,
+            profilePort = profile,
             audioExecutor = audio,
             seed = 2,
         )
@@ -60,15 +74,15 @@ class GameComponentTest {
         assertEquals(gesture.snapshot, component.snapshot())
         assertEquals(gesture.snapshot.revision, observedOutputRevisions.last())
         assertEquals(1, audio.unlockCount)
-        assertTrue(progress.updates.isEmpty())
+        assertTrue(profile.updates.isEmpty())
     }
 
     @Test
     fun progressResourceFailureDoesNotRollBackChoiceCommit() {
-        val progress = RecordingGameplayProgressCapability()
+        val profile = RecordingProfilePort(throwOnAccept = true)
         val component = GameComponent.create(
             configuration = resilientRunConfiguration(),
-            progressCapability = progress,
+            profilePort = profile,
             audioExecutor = RecordingGameplayAudioExecutor(),
             seed = 11,
         )
@@ -85,7 +99,7 @@ class GameComponentTest {
         assertEquals(1, selected.snapshot.renderModel.itemStack(chosenItemId))
         assertEquals(
             setOf(chosenItemId),
-            progress.updates.single().discoveredItemIds.toSet(),
+            profile.updates.single().discoveredItemIds.toSet(),
         )
     }
 
@@ -94,7 +108,7 @@ class GameComponentTest {
         val audio = RecordingGameplayAudioExecutor(throwOnEveryCall = true)
         val component = GameComponent.create(
             configuration = RunConfiguration(content = testContent),
-            progressCapability = RecordingGameplayProgressCapability(),
+            profilePort = RecordingProfilePort(),
             audioExecutor = audio,
             seed = 3,
         )
@@ -154,11 +168,29 @@ private class RecordingGameplayAudioExecutor(
 }
 
 /** Deliberately narrow fake: configuration is supplied to the component separately. */
-private class RecordingGameplayProgressCapability : GameplayProgressCapability {
+private class RecordingProfilePort(
+    private val throwOnAccept: Boolean = false,
+) : ProfilePort {
+    override val instanceId = LOCAL_PROFILE_INSTANCE_ID
     val updates = mutableListOf<GameplayProgressUpdate>()
 
-    override fun applyGameplayProgress(update: GameplayProgressUpdate): ProfileMutationResult {
-        updates += update
-        error("profile persistence unavailable")
+    override fun accept(pulse: ProfilePulse.Business): ProfileAcceptance {
+        if (pulse is ProfilePulse.ApplyGameplayProgress) updates += pulse.update
+        if (throwOnAccept) error("profile persistence unavailable")
+        return ProfileAcceptance.Accepted(instanceId, ProfileRevision(1L))
     }
+
+    override fun accept(
+        command: ProfileCommand,
+        admission: ProfileCommandAdmission,
+    ): ProfileAcceptance = error("not used")
+
+    override fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection = error("not used")
+    override fun query(query: ProfileQuery.GetPreferences): PreferencesProjection = error("not used")
+    override fun query(query: ProfileQuery.GetHomeProgress): HomeProgressProjection = error("not used")
+    override fun query(query: ProfileQuery.GetLabProgress): LabProgressProjection = error("not used")
+    override fun query(query: ProfileQuery.GetLoadout): LoadoutProjection = error("not used")
+    override fun query(query: ProfileQuery.GetCollection): CollectionProjection = error("not used")
+    override fun query(query: ProfileQuery.GetRebirthProgress): RebirthProgressProjection = error("not used")
+    override fun query(query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection = error("not used")
 }

@@ -15,9 +15,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.rememberTextMeasurer
 import kinetickk.ball.content.api.MetaUpgradeDefinition
-import kinetickk.ball.profile.api.LabPurchaseCapability
-import kinetickk.ball.profile.api.PreferencesReader
-import kinetickk.ball.profile.api.ProfileMutationResult
+import kinetickk.ball.profile.api.ProfileAcceptance
+import kinetickk.ball.profile.api.ProfilePort
+import kinetickk.ball.profile.api.ProfilePulse
+import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.audio.ProfileAudioExecutor
 import kinetickk.ball.profile.interaction.lab.api.LabFeature
@@ -27,8 +28,7 @@ import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.resource.audio.api.AudioService
 
 class DefaultLabFeature(
-    private val capability: LabPurchaseCapability,
-    private val preferencesReader: PreferencesReader,
+    private val profilePort: ProfilePort,
     private val metaUpgrades: ImmutableList<MetaUpgradeDefinition>,
     audioService: AudioService,
 ) : LabFeature {
@@ -39,11 +39,16 @@ class DefaultLabFeature(
         routeToken: Int,
         onOutput: (LabOutput) -> Unit,
     ) {
-        var renderModelValue by remember(capability, metaUpgrades, routeToken) {
-            mutableStateOf(capability.labSnapshot().toRenderModel(metaUpgrades))
+        var renderModelValue by remember(profilePort, metaUpgrades, routeToken) {
+            mutableStateOf(
+                profilePort
+                    .query(ProfileQuery.GetLabProgress)
+                    .snapshot
+                    .toRenderModel(metaUpgrades),
+            )
         }
-        val textScale = remember(preferencesReader, routeToken) {
-            preferencesReader.preferences().textScale
+        val textScale = remember(profilePort, routeToken) {
+            profilePort.query(ProfileQuery.GetPreferences).preferences.textScale
         }
         val composeTextMeasurer = rememberTextMeasurer(cacheSize = 64)
         val textMeasurer = CanvasTextMeasurer(
@@ -57,9 +62,12 @@ class DefaultLabFeature(
             reduction.effects.forEach { effect ->
                 when (effect) {
                     is LabEffect.Purchase -> {
-                        val result = capability.purchaseMetaUpgrade(effect.id)
-                        renderModelValue = capability.labSnapshot().toRenderModel(metaUpgrades)
-                        if (result is ProfileMutationResult.Applied) {
+                        val acceptance = profilePort.accept(ProfilePulse.PurchaseMetaUpgrade(effect.id))
+                        renderModelValue = profilePort
+                            .query(ProfileQuery.GetLabProgress)
+                            .snapshot
+                            .toRenderModel(metaUpgrades)
+                        if (acceptance is ProfileAcceptance.Accepted) {
                             audioExecutor.play(ProfileAudioCue.PURCHASE)
                         }
                     }

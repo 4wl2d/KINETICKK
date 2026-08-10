@@ -31,11 +31,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.foundation.design.*
-import kinetickk.ball.profile.api.CollectionCapability
-import kinetickk.ball.profile.api.LoadoutCapability
-import kinetickk.ball.profile.api.RebirthCapability
-import kinetickk.ball.profile.api.PreferencesReader
-import kinetickk.flow.session.interaction.audio.SessionAudioCue
+import kinetickk.ball.profile.api.ProfilePort
+import kinetickk.ball.profile.api.ProfilePulse
+import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.flow.session.interaction.audio.SessionAudioExecutor
 import kinetickk.flow.session.interaction.home.api.HomeFeature
 import kinetickk.flow.session.interaction.home.api.HomeOutput
@@ -45,17 +43,11 @@ import kotlin.math.PI
 import kotlin.math.min
 
 class DefaultHomeFeature(
-    loadoutCapability: LoadoutCapability,
-    collectionCapability: CollectionCapability,
-    rebirthCapability: RebirthCapability,
-    private val preferencesReader: PreferencesReader,
+    private val profilePort: ProfilePort,
     uiCatalog: UiCatalogSnapshot,
     audioService: AudioService,
 ) : HomeFeature {
     private val reducer = HomeReducer(
-        loadoutCapability = loadoutCapability,
-        collectionCapability = collectionCapability,
-        rebirthCapability = rebirthCapability,
         coreShapes = uiCatalog.coreShapes,
         itemCount = uiCatalog.items.size,
         weaponCount = uiCatalog.weapons.size,
@@ -72,17 +64,25 @@ class DefaultHomeFeature(
         var renderTimeSecondsValue by remember { mutableFloatStateOf(0f) }
         @Suppress("UNUSED_EXPRESSION")
         revisionValue
-        val uiModel = reducer.uiModel()
+        val uiModel = reducer.uiModel(profilePort.query(ProfileQuery.GetHomeProgress))
         val textMeasurer = CanvasTextMeasurer(
             delegate = composeTextMeasurer,
-            scale = preferencesReader.preferences().textScale,
+            scale = profilePort.query(ProfileQuery.GetPreferences).preferences.textScale,
         )
 
         fun dispatch(action: HomeAction) {
-            val output = reducer.reduce(action)
+            val reduction = reducer.reduce(action)
             revisionValue++
-            audioExecutor.play(SessionAudioCue.UI_CLICK)
-            if (output != null) onOutput(output)
+            reduction.effects.forEach { effect ->
+                when (effect) {
+                    is HomeEffect.SelectCoreShape -> {
+                        profilePort.accept(ProfilePulse.SelectCoreShape(effect.shape))
+                        profilePort.query(ProfileQuery.GetHomeProgress)
+                    }
+                    is HomeEffect.PlayAudio -> audioExecutor.play(effect.cue)
+                    is HomeEffect.Emit -> onOutput(effect.output)
+                }
+            }
         }
 
         LaunchedEffect(Unit) {

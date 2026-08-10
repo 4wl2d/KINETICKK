@@ -5,57 +5,59 @@ package kinetickk.ball.profile.interaction.armory.impl
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.WeaponId
-import kinetickk.ball.profile.api.LoadoutCapability
 import kinetickk.ball.profile.api.LoadoutProfileSnapshot
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerLoadout
-import kinetickk.ball.profile.api.ProfileMutationResult
-import kinetickk.ball.profile.api.ProfileMutationRejection
-import kinetickk.ball.profile.api.ProfilePersistResult
 import kinetickk.ball.profile.interaction.TestWeapons
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.foundation.collections.toImmutableList
-import kinetickk.foundation.collections.toImmutableSet
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertIs
-import kotlin.test.assertTrue
 
 class ArmoryReducerTest {
     @Test
     fun paginationIsLocalAndClamped() {
-        val reducer = ArmoryReducer(FakeLoadout(), TestWeapons)
+        val reducer = ArmoryReducer(TestWeapons)
 
         assertEquals(1, reducer.reduce(0, ArmoryAction.NextPage).page)
         assertEquals(reducer.maxPage, reducer.reduce(Int.MAX_VALUE, ArmoryAction.NextPage).page)
         assertEquals(0, reducer.reduce(0, ArmoryAction.PreviousPage).page)
-        assertTrue(reducer.reduce(2, ArmoryAction.Back).close)
+        val backEffects = reducer.reduce(2, ArmoryAction.Back).effects
+        assertEquals(ProfileAudioCue.UI_CLICK, assertIs<ArmoryEffect.PlayAudio>(backEffects[0]).cue)
+        assertIs<ArmoryEffect.Emit>(backEffects[1])
     }
 
     @Test
-    fun selectingWeaponUsesOnlyLoadoutCapability() {
-        val capability = FakeLoadout()
-        val reducer = ArmoryReducer(capability, TestWeapons)
+    fun selectingWeaponEmitsOnlyTheTypedProfileIntent() {
+        val reducer = ArmoryReducer(TestWeapons)
 
         val reduction = reducer.reduce(0, ArmoryAction.SelectWeapon(WeaponId.MORNINGSTAR))
 
-        assertTrue(reduction.profileChanged)
-        assertEquals(ProfileAudioCue.PURCHASE, reduction.feedbackCue)
-        assertEquals(WeaponId.MORNINGSTAR, capability.loadout.selectedWeapon)
-        assertFalse(reduction.close)
+        assertEquals(
+            WeaponId.MORNINGSTAR,
+            assertIs<ArmoryEffect.PurchaseOrEquipWeapon>(reduction.effects.single()).id,
+        )
     }
 
     @Test
-    fun rejectedSelectionDoesNotReportAProfileChangeOrPurchaseCue() {
-        val capability = FakeLoadout(rejectSelection = true)
-        val reducer = ArmoryReducer(capability, TestWeapons)
+    fun renderModelUsesOnlyTheAuthoritativeProjectionSnapshot() {
+        val reducer = ArmoryReducer(TestWeapons)
+        val snapshot = LoadoutProfileSnapshot(
+            economy = PlayerEconomy(matter = 42L, lifetimeMatter = 100L),
+            loadout = PlayerLoadout(
+                coreShape = CoreShape.PRISM,
+                selectedWeapon = WeaponId.MORNINGSTAR,
+                unlockedWeapons = setOf(WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR),
+            ),
+        )
 
-        val reduction = reducer.reduce(0, ArmoryAction.SelectWeapon(WeaponId.MORNINGSTAR))
+        val model = reducer.renderModel(snapshot, activeRunWeapon = WeaponId.FLUX_WAKE)
 
-        assertFalse(reduction.profileChanged)
-        assertEquals(null, reduction.feedbackCue)
-        assertEquals(WeaponId.FLUX_WAKE, capability.loadout.selectedWeapon)
+        assertEquals(42L, model.totalMatter)
+        assertEquals(WeaponId.MORNINGSTAR, model.selectedWeapon)
+        assertEquals(snapshot.loadout.unlockedWeapons, model.unlockedWeapons)
+        assertEquals(WeaponId.FLUX_WAKE, model.activeRunWeapon)
     }
 
     @Test
@@ -69,7 +71,7 @@ class ArmoryReducerTest {
         assertEquals(TestWeapons.first().id, first.id)
         assertIs<ArmoryAction.Back>(resolveArmoryPress(viewport, TestWeapons, 0, 250f, 690f))
         assertIs<ArmoryAction.NextPage>(resolveArmoryPress(viewport, TestWeapons, 0, 1_050f, 690f))
-        assertEquals((TestWeapons.size - 1) / ARMORY_PAGE_SIZE, ArmoryReducer(FakeLoadout(), TestWeapons).maxPage)
+        assertEquals((TestWeapons.size - 1) / ARMORY_PAGE_SIZE, ArmoryReducer(TestWeapons).maxPage)
 
         val reversed = TestWeapons.reversed().toImmutableList()
         val reorderedFirst = assertIs<ArmoryAction.SelectWeapon>(
@@ -77,34 +79,4 @@ class ArmoryReducerTest {
         )
         assertEquals(reversed.first().id, reorderedFirst.id)
     }
-}
-
-private class FakeLoadout(
-    private val rejectSelection: Boolean = false,
-) : LoadoutCapability {
-    var economy = PlayerEconomy(matter = 100_000, lifetimeMatter = 100_000)
-    var loadout = PlayerLoadout(
-        coreShape = CoreShape.ORB,
-        selectedWeapon = WeaponId.FLUX_WAKE,
-        unlockedWeapons = setOf(WeaponId.FLUX_WAKE),
-    )
-
-    override fun loadoutSnapshot(): LoadoutProfileSnapshot = LoadoutProfileSnapshot(economy, loadout)
-
-    override fun selectCoreShape(shape: CoreShape): ProfileMutationResult = applied()
-
-    override fun purchaseOrEquipWeapon(id: WeaponId): ProfileMutationResult {
-        if (rejectSelection) {
-            return ProfileMutationResult.Rejected(ProfileMutationRejection.INSUFFICIENT_MATTER)
-        }
-        loadout = loadout.copy(
-            selectedWeapon = id,
-            unlockedWeapons = (loadout.unlockedWeapons + id).toImmutableSet(),
-        )
-        return applied()
-    }
-
-    private fun applied() = ProfileMutationResult.Applied(
-        ProfilePersistResult.Persisted,
-    )
 }

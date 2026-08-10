@@ -28,8 +28,8 @@ import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.foundation.design.*
-import kinetickk.ball.profile.api.CollectionCapability
-import kinetickk.ball.profile.api.PreferencesReader
+import kinetickk.ball.profile.api.ProfilePort
+import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.flow.session.interaction.audio.SessionAudioCue
 import kinetickk.flow.session.interaction.audio.SessionAudioExecutor
 import kinetickk.flow.session.interaction.codex.api.CodexFeature
@@ -40,12 +40,11 @@ import kinetickk.resource.audio.api.AudioService
 import kotlin.math.min
 
 class DefaultCodexFeature(
-    collectionCapability: CollectionCapability,
-    private val preferencesReader: PreferencesReader,
+    private val profilePort: ProfilePort,
     uiCatalog: UiCatalogSnapshot,
     audioService: AudioService,
 ) : CodexFeature {
-    private val reducer = CodexReducer(collectionCapability, uiCatalog.items)
+    private val reducer = CodexReducer(uiCatalog.items)
     private val audioExecutor = SessionAudioExecutor(audioService)
 
     @Composable
@@ -54,10 +53,13 @@ class DefaultCodexFeature(
         val composeTextMeasurer = rememberTextMeasurer(cacheSize = 64)
         var pageValue by rememberSaveable { mutableIntStateOf(0) }
         var viewportValue by remember { mutableStateOf(CodexViewport(1f, 1f, density)) }
-        val model = reducer.renderModel(runStacks)
+        val model = reducer.renderModel(
+            profilePort.query(ProfileQuery.GetCollection),
+            runStacks,
+        )
         val textMeasurer = CanvasTextMeasurer(
             composeTextMeasurer,
-            preferencesReader.preferences().textScale,
+            profilePort.query(ProfileQuery.GetPreferences).preferences.textScale,
         )
 
         fun dispatch(action: CodexAction) {

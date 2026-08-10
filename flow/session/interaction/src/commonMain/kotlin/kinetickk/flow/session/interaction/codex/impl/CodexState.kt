@@ -4,10 +4,10 @@
 package kinetickk.flow.session.interaction.codex.impl
 
 import kinetickk.ball.content.api.ItemDefinition
-import kinetickk.foundation.collections.ImmutableList
-import kinetickk.ball.profile.api.CollectionCapability
+import kinetickk.ball.profile.api.CollectionProjection
 import kinetickk.flow.session.interaction.codex.api.CodexRenderModel
 import kinetickk.flow.session.interaction.codex.api.CodexRunStacks
+import kinetickk.foundation.collections.ImmutableList
 
 internal const val CODEX_PAGE_SIZE = 10
 
@@ -20,14 +20,16 @@ internal sealed interface CodexAction {
 internal data class CodexReduction(val page: Int, val close: Boolean = false)
 
 internal class CodexReducer(
-    private val capability: CollectionCapability,
     private val items: ImmutableList<ItemDefinition>,
 ) {
     val maxPage: Int
         get() = if (items.isEmpty()) 0 else (items.size - 1) / CODEX_PAGE_SIZE
 
-    fun renderModel(runStacks: CodexRunStacks): CodexRenderModel = CodexRenderModel(
-        discoveredItemIds = capability.collectionSnapshot().discoveredItemIds,
+    fun renderModel(
+        projection: CollectionProjection,
+        runStacks: CodexRunStacks,
+    ): CodexRenderModel = CodexRenderModel(
+        discoveredItemIds = projection.collection.discoveredItemIds,
         runStacks = runStacks,
         items = items,
     )

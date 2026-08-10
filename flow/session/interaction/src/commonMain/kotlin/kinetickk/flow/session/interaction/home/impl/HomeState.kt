@@ -6,13 +6,11 @@ package kinetickk.flow.session.interaction.home.impl
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.CoreShapeDefinition
 import kinetickk.ball.content.api.RebirthPolicySnapshot
-import kinetickk.foundation.collections.ImmutableList
-import kinetickk.ball.profile.api.CollectionCapability
-import kinetickk.ball.profile.api.LoadoutCapability
-import kinetickk.ball.profile.api.ProfileMutationResult
-import kinetickk.ball.profile.api.RebirthCapability
+import kinetickk.ball.profile.api.HomeProgressProjection
+import kinetickk.flow.session.interaction.audio.SessionAudioCue
 import kinetickk.flow.session.interaction.home.api.HomeOutput
 import kinetickk.flow.session.interaction.home.api.HomeUiModel
+import kinetickk.foundation.collections.ImmutableList
 
 internal sealed interface HomeAction {
     data class SelectCoreShape(val shape: CoreShape) : HomeAction
@@ -24,47 +22,57 @@ internal sealed interface HomeAction {
     data object OpenSettings : HomeAction
 }
 
+internal sealed interface HomeEffect {
+    data class SelectCoreShape(val shape: CoreShape) : HomeEffect
+    data class PlayAudio(val cue: SessionAudioCue) : HomeEffect
+    data class Emit(val output: HomeOutput) : HomeEffect
+}
+
+internal data class HomeReduction(
+    val effects: List<HomeEffect>,
+)
+
 internal class HomeReducer(
-    private val loadoutCapability: LoadoutCapability,
-    private val collectionCapability: CollectionCapability,
-    private val rebirthCapability: RebirthCapability,
     private val coreShapes: ImmutableList<CoreShapeDefinition>,
     private val itemCount: Int,
     private val weaponCount: Int,
     private val rebirthPolicy: RebirthPolicySnapshot,
 ) {
-    fun uiModel(): HomeUiModel {
-        val loadout = loadoutCapability.loadoutSnapshot()
-        val collection = collectionCapability.collectionSnapshot()
-        val rebirth = rebirthCapability.rebirthSnapshot().progress
-        return HomeUiModel(
-            coreShape = loadout.loadout.coreShape,
-            totalMatter = loadout.economy.matter,
-            lifetimeMatter = loadout.economy.lifetimeMatter,
-            discoveredItemCount = collection.discoveredItemIds.size,
-            unlockedWeaponCount = loadout.loadout.unlockedWeapons.size,
-            rebirthLevel = rebirth.level,
-            rebirthProfile = rebirthPolicy.profile(rebirth.level),
-            canRebirth = rebirth.level < rebirthPolicy.maximumLevel &&
-                rebirth.highestCleared >= rebirth.level,
-            coreShapes = coreShapes,
-            itemCount = itemCount,
-            weaponCount = weaponCount,
+    fun uiModel(projection: HomeProgressProjection): HomeUiModel = HomeUiModel(
+        coreShape = projection.loadout.coreShape,
+        totalMatter = projection.economy.matter,
+        lifetimeMatter = projection.economy.lifetimeMatter,
+        discoveredItemCount = projection.collection.discoveredItemIds.size,
+        unlockedWeaponCount = projection.loadout.unlockedWeapons.size,
+        rebirthLevel = projection.rebirthProgress.level,
+        rebirthProfile = rebirthPolicy.profile(projection.rebirthProgress.level),
+        canRebirth = projection.canAdvanceRebirth,
+        coreShapes = coreShapes,
+        itemCount = itemCount,
+        weaponCount = weaponCount,
+    )
+
+    fun reduce(action: HomeAction): HomeReduction = when (action) {
+        is HomeAction.SelectCoreShape -> HomeReduction(
+            effects = listOf(
+                HomeEffect.SelectCoreShape(action.shape),
+                HomeEffect.PlayAudio(SessionAudioCue.UI_CLICK),
+            ),
         )
+        HomeAction.StartRun -> navigate(HomeOutput.StartRun)
+        HomeAction.OpenLab -> navigate(HomeOutput.OpenLab)
+        HomeAction.OpenArmory -> navigate(HomeOutput.OpenArmory)
+        HomeAction.OpenRebirth -> navigate(HomeOutput.OpenRebirth)
+        HomeAction.OpenCodex -> navigate(HomeOutput.OpenCodex)
+        HomeAction.OpenSettings -> navigate(HomeOutput.OpenSettings)
     }
 
-    fun reduce(action: HomeAction): HomeOutput? = when (action) {
-        is HomeAction.SelectCoreShape -> when (loadoutCapability.selectCoreShape(action.shape)) {
-            is ProfileMutationResult.Applied -> null
-            is ProfileMutationResult.Rejected -> null
-        }
-        HomeAction.StartRun -> HomeOutput.StartRun
-        HomeAction.OpenLab -> HomeOutput.OpenLab
-        HomeAction.OpenArmory -> HomeOutput.OpenArmory
-        HomeAction.OpenRebirth -> HomeOutput.OpenRebirth
-        HomeAction.OpenCodex -> HomeOutput.OpenCodex
-        HomeAction.OpenSettings -> HomeOutput.OpenSettings
-    }
+    private fun navigate(output: HomeOutput): HomeReduction = HomeReduction(
+        effects = listOf(
+            HomeEffect.PlayAudio(SessionAudioCue.UI_CLICK),
+            HomeEffect.Emit(output),
+        ),
+    )
 }
 
 internal data class HomeViewport(

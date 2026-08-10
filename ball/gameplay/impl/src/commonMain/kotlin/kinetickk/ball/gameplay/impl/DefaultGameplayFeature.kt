@@ -11,8 +11,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import kinetickk.foundation.design.SpaceBlack
-import kinetickk.ball.profile.api.GameplayProgressCapability
 import kinetickk.ball.profile.api.PlayerPreferences
+import kinetickk.ball.profile.api.ProfilePort
 import kinetickk.ball.gameplay.api.GameplayOutput
 import kinetickk.ball.gameplay.api.GameplayUiModel
 import kinetickk.ball.gameplay.api.GameplayUiPhase
@@ -25,7 +25,7 @@ import kinetickk.ball.gameplay.nucleus.protocol.GameplayAction
 import kinetickk.resource.audio.api.AudioService
 
 class DefaultGameplayFeature(
-    private val progressCapability: GameplayProgressCapability,
+    private val profilePort: ProfilePort,
     audioService: AudioService,
 ) : GameplayFeature {
     private val audioExecutor = ResourceGameplayAudioExecutor(audioService)
@@ -34,7 +34,7 @@ class DefaultGameplayFeature(
     override fun start(configuration: RunConfiguration) {
         componentValue = GameComponent.create(
             configuration = configuration,
-            progressCapability = progressCapability,
+            profilePort = profilePort,
             audioExecutor = audioExecutor,
         )
     }

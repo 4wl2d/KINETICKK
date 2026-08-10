@@ -3,5 +3,5 @@
 
 package kinetickk.ball.content.api
 
-/** Persistent core identity. Declaration order is part of the v2/v3 save format. */
+/** Persistent core identity; save v4 serializes explicit stable IDs instead of enum ordinals. */
 enum class CoreShape { ORB, PRISM, SHARD }

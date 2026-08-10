@@ -4,12 +4,13 @@
 package kinetickk.ball.gameplay.impl
 
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
-import kinetickk.ball.profile.api.GameplayProgressCapability
 import kinetickk.ball.profile.api.LabProgress
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.api.RebirthProgress
+import kinetickk.ball.profile.api.ProfilePort
+import kinetickk.ball.profile.api.ProfilePulse
 import kinetickk.ball.gameplay.api.RunConfiguration
 import kinetickk.ball.gameplay.interaction.GameplayInteractionPort
 import kinetickk.ball.gameplay.nucleus.engine.GameDispatchResult
@@ -20,10 +21,10 @@ import kinetickk.ball.gameplay.nucleus.protocol.GameplayAction
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.fx.InteractionFxReducer
 
-/** Executes gameplay effects while exposing only the gameplay progress capability. */
+/** Executes gameplay effects against the canonical Profile target. */
 internal class GameComponent private constructor(
     private val engine: GameEngine,
-    private val progressCapability: GameplayProgressCapability,
+    private val profilePort: ProfilePort,
     private val audioExecutor: GameplayAudioExecutor,
     private val interactionFxReducer: InteractionFxReducer,
 ) : GameplayInteractionPort {
@@ -47,7 +48,7 @@ internal class GameComponent private constructor(
                 audioExecutor.ensureUnlocked()
             }
             is GameEffect.PublishProgress -> runCatching {
-                progressCapability.applyGameplayProgress(effect.update)
+                profilePort.accept(ProfilePulse.ApplyGameplayProgress(effect.update))
             }
             is GameEffect.EmitVisualFx -> interactionFxReducer.apply(effect.cues)
         }
@@ -56,7 +57,7 @@ internal class GameComponent private constructor(
     companion object {
         fun create(
             configuration: RunConfiguration,
-            progressCapability: GameplayProgressCapability,
+            profilePort: ProfilePort,
             audioExecutor: GameplayAudioExecutor,
             seed: Int = 731_991,
         ): GameComponent = GameComponent(
@@ -65,7 +66,7 @@ internal class GameComponent private constructor(
                 bootstrapProgress = configuration.toGameplayProfileSnapshot(),
                 seed = seed,
             ),
-            progressCapability = progressCapability,
+            profilePort = profilePort,
             audioExecutor = audioExecutor,
             interactionFxReducer = InteractionFxReducer(seed),
         )

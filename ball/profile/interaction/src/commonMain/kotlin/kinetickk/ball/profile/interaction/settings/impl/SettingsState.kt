@@ -3,16 +3,12 @@
 
 package kinetickk.ball.profile.interaction.settings.impl
 
-import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
-import kinetickk.ball.profile.api.DamageNumberFormat
-import kinetickk.ball.profile.api.DamageNumberSize
-import kinetickk.ball.profile.api.ParticleDensity
+import kinetickk.ball.profile.api.PreferenceAdjustmentDirection
 import kinetickk.ball.profile.api.PlayerPreferences
+import kinetickk.ball.profile.api.ProfilePreferenceAdjustment
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
 import kinetickk.ball.profile.interaction.settings.api.SettingsRenderModel
-import kotlin.math.abs
-import kotlin.math.roundToInt
 
 internal enum class SettingsRow {
     SFX,
@@ -40,7 +36,10 @@ internal data class SettingsState(
 )
 
 internal sealed interface SettingsEffect {
-    data class UpdatePreferences(val preferences: PlayerPreferences) : SettingsEffect
+    data class AdjustPreference(
+        val adjustment: ProfilePreferenceAdjustment,
+    ) : SettingsEffect
+
     data class PlayAudio(val cue: ProfileAudioCue) : SettingsEffect
     data class Emit(val output: SettingsOutput) : SettingsEffect
 }
@@ -56,15 +55,12 @@ internal object SettingsReducer {
             if (action.direction != -1 && action.direction != 1) {
                 SettingsReduction(state)
             } else {
-                val preferences = adjustPreferences(
-                    preferences = state.model.preferences,
-                    row = action.row,
-                    direction = action.direction,
-                )
                 SettingsReduction(
-                    state = state.copy(model = preferences.toRenderModel()),
+                    state = state,
                     effects = listOf(
-                        SettingsEffect.UpdatePreferences(preferences),
+                        SettingsEffect.AdjustPreference(
+                            adjustment = action.row.toAdjustment(action.direction),
+                        ),
                         SettingsEffect.PlayAudio(ProfileAudioCue.UI_CLICK),
                     ),
                 )
@@ -88,63 +84,24 @@ internal fun PlayerPreferences.toRenderModel(): SettingsRenderModel = SettingsRe
     preferences = normalized(),
 )
 
-private fun adjustPreferences(
-    preferences: PlayerPreferences,
-    row: SettingsRow,
-    direction: Int,
-): PlayerPreferences = when (row) {
-    SettingsRow.SFX -> preferences.copy(soundEnabled = !preferences.soundEnabled)
-    SettingsRow.MUSIC -> preferences.copy(musicEnabled = !preferences.musicEnabled)
-    SettingsRow.MASTER_VOLUME -> preferences.copy(
-        masterVolume = stepPercentage(preferences.masterVolume, direction, 0f, 1f),
-    )
-    SettingsRow.SIMULATION_SPEED -> {
-        val current = SIMULATION_SPEEDS.indices.minByOrNull { index ->
-            abs(SIMULATION_SPEEDS[index] - preferences.simulationSpeed)
-        } ?: 2
-        preferences.copy(
-            simulationSpeed = SIMULATION_SPEEDS[
-                (current + direction).coerceIn(SIMULATION_SPEEDS.indices)
-            ],
-        )
+private fun SettingsRow.toAdjustment(direction: Int): ProfilePreferenceAdjustment {
+    val adjustmentDirection = if (direction < 0) {
+        PreferenceAdjustmentDirection.DECREASE
+    } else {
+        PreferenceAdjustmentDirection.INCREASE
     }
-    SettingsRow.TEXT_SIZE -> preferences.copy(
-        textScale = stepPercentage(preferences.textScale, direction, 1f, 1.75f),
-    )
-    SettingsRow.SCREEN_SHAKE -> preferences.copy(screenShake = !preferences.screenShake)
-    SettingsRow.PARTICLES -> {
-        val next = (preferences.particleDensity.ordinal + direction)
-            .coerceIn(ParticleDensity.entries.indices)
-        preferences.copy(particleDensity = ParticleDensity.entries[next])
+    return when (this) {
+        SettingsRow.SFX -> ProfilePreferenceAdjustment.ToggleSoundEffects
+        SettingsRow.MUSIC -> ProfilePreferenceAdjustment.ToggleMusic
+        SettingsRow.MASTER_VOLUME -> ProfilePreferenceAdjustment.StepMasterVolume(adjustmentDirection)
+        SettingsRow.SIMULATION_SPEED -> ProfilePreferenceAdjustment.StepSimulationSpeed(adjustmentDirection)
+        SettingsRow.TEXT_SIZE -> ProfilePreferenceAdjustment.StepTextScale(adjustmentDirection)
+        SettingsRow.SCREEN_SHAKE -> ProfilePreferenceAdjustment.ToggleScreenShake
+        SettingsRow.PARTICLES -> ProfilePreferenceAdjustment.StepParticleDensity(adjustmentDirection)
+        SettingsRow.DAMAGE_NUMBERS -> ProfilePreferenceAdjustment.ToggleDamageNumbers
+        SettingsRow.DAMAGE_NUMBER_SIZE -> ProfilePreferenceAdjustment.StepDamageNumberSize(adjustmentDirection)
+        SettingsRow.DAMAGE_NUMBER_FORMAT -> ProfilePreferenceAdjustment.StepDamageNumberFormat(adjustmentDirection)
+        SettingsRow.DAMAGE_COLOR_THRESHOLDS ->
+            ProfilePreferenceAdjustment.StepDamageNumberTierThreshold(adjustmentDirection)
     }
-    SettingsRow.DAMAGE_NUMBERS -> preferences.copy(damageNumbers = !preferences.damageNumbers)
-    SettingsRow.DAMAGE_NUMBER_SIZE -> {
-        val next = (preferences.damageNumberSize.ordinal + direction)
-            .coerceIn(DamageNumberSize.entries.indices)
-        preferences.copy(damageNumberSize = DamageNumberSize.entries[next])
-    }
-    SettingsRow.DAMAGE_NUMBER_FORMAT -> {
-        val next = (preferences.damageNumberFormat.ordinal + direction)
-            .coerceIn(DamageNumberFormat.entries.indices)
-        preferences.copy(damageNumberFormat = DamageNumberFormat.entries[next])
-    }
-    SettingsRow.DAMAGE_COLOR_THRESHOLDS -> {
-        val current = DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS.indices.minByOrNull { index ->
-            abs(DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS[index] - preferences.damageNumberTierThreshold)
-        } ?: 2
-        val next = (current + direction).coerceIn(DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS.indices)
-        preferences.copy(damageNumberTierThreshold = DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS[next])
-    }
-}.normalized()
-
-private fun stepPercentage(
-    value: Float,
-    direction: Int,
-    minimum: Float,
-    maximum: Float,
-): Float {
-    val nextPercent = (value * 100f).roundToInt() + direction.coerceIn(-1, 1)
-    return (nextPercent / 100f).coerceIn(minimum, maximum)
 }
-
-private val SIMULATION_SPEEDS = listOf(0.75f, 1f, 1.15f, 1.35f, 1.6f, 2f)
