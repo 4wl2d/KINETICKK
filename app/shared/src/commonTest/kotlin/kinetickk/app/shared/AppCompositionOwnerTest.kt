@@ -183,6 +183,84 @@ class AppCompositionOwnerTest {
     }
 
     @Test
+    fun workflowParticipantCallsKeepTheirCurrentCausalOrder() {
+        val runShell = testShell()
+
+        assertEquals(
+            listOf(
+                workflowEvent("profile.snapshot", AppDestination.Home),
+                workflowEvent("gameplay.start", AppDestination.Home),
+                workflowEvent("start.returned", AppDestination.Gameplay),
+            ),
+            runShell.workflow.capture("start.returned", runShell.owner::startNewRun),
+        )
+
+        assertEquals(
+            listOf(
+                workflowEvent("profile.snapshot", AppDestination.Gameplay),
+                workflowEvent("gameplay.start", AppDestination.Gameplay),
+                workflowEvent("restart.returned", AppDestination.Gameplay),
+            ),
+            runShell.workflow.capture("restart.returned") {
+                runShell.owner.handleGameplayOutput(GameplayOutput.RestartRun)
+            },
+        )
+
+        assertEquals(
+            listOf(
+                workflowEvent("gameplay.uiModel", AppDestination.Gameplay),
+                workflowEvent("gameplay.pause", AppDestination.Gameplay, AppDestination.Lab),
+                workflowEvent("overlay.returned", AppDestination.Gameplay, AppDestination.Lab),
+            ),
+            runShell.workflow.capture("overlay.returned") {
+                runShell.owner.handleShortcut(AppShortcut.LAB)
+            },
+        )
+
+        val settingsShell = testShell()
+        settingsShell.owner.startNewRun()
+        settingsShell.owner.handleShortcut(AppShortcut.SETTINGS)
+
+        assertEquals(
+            listOf(
+                workflowEvent("profile.preferences", AppDestination.Gameplay),
+                workflowEvent("gameplay.applyPreferences", AppDestination.Gameplay),
+                workflowEvent("profile.preferences", AppDestination.Gameplay),
+                workflowEvent("audio.updatePreferences", AppDestination.Gameplay),
+                workflowEvent("settings.returned", AppDestination.Gameplay),
+            ),
+            settingsShell.workflow.capture("settings.returned") {
+                settingsShell.owner.handleSettingsOutput(SettingsOutput.Back)
+            },
+        )
+
+        val rebirthShell = testShell()
+        rebirthShell.owner.handleShortcut(AppShortcut.REBIRTH)
+        val advanced = RebirthProgress(level = 1, highestCleared = 0)
+
+        assertEquals(
+            listOf(
+                workflowEvent("profile.snapshot", AppDestination.Home, AppDestination.Rebirth),
+                workflowEvent("gameplay.start", AppDestination.Home, AppDestination.Rebirth),
+                workflowEvent("rebirth.returned", AppDestination.Gameplay),
+            ),
+            rebirthShell.workflow.capture("rebirth.returned") {
+                rebirthShell.owner.handleRebirthOutput(RebirthOutput.CycleAdvanced(advanced))
+            },
+        )
+
+        val exitShell = testShell()
+        exitShell.owner.startNewRun()
+
+        assertEquals(
+            listOf(workflowEvent("exit.returned", AppDestination.Home)),
+            exitShell.workflow.capture("exit.returned") {
+                exitShell.owner.handleGameplayOutput(GameplayOutput.ExitToHome)
+            },
+        )
+    }
+
+    @Test
     fun globalShortcutRoutingCoversEveryOverlayAndBaseAction() {
         val expectedDestinations = listOf(
             AppShortcut.SETTINGS to AppDestination.Settings,
@@ -253,14 +331,16 @@ private data class TestShell(
     val store: FakeProfileStore,
     val gameplay: FakeGameplayFeature,
     val audio: FakeAudioService,
+    val workflow: WorkflowRecorder,
 )
 
 private fun testShell(
     profile: PlayerProfile = PlayerProfile(),
-    gameplay: FakeGameplayFeature = FakeGameplayFeature(),
 ): TestShell {
-    val store = FakeProfileStore(profile)
-    val audio = FakeAudioService()
+    val workflow = WorkflowRecorder()
+    val store = FakeProfileStore(profile, workflow)
+    val audio = FakeAudioService(workflow)
+    val gameplay = FakeGameplayFeature(workflow)
     val owner = AppCompositionOwner(
         profileStore = store,
         audioService = audio,
@@ -272,10 +352,41 @@ private fun testShell(
         rebirthFeature = FakeRebirthFeature(),
         codexFeature = FakeCodexFeature(),
     )
-    return TestShell(owner, store, gameplay, audio)
+    workflow.bind(owner)
+    return TestShell(owner, store, gameplay, audio, workflow)
 }
 
-private class FakeGameplayFeature : GameplayFeature {
+private data class WorkflowEvent(
+    val action: String,
+    val backStack: List<AppDestination>,
+)
+
+private fun workflowEvent(action: String, vararg destinations: AppDestination): WorkflowEvent =
+    WorkflowEvent(action, destinations.toList())
+
+private class WorkflowRecorder {
+    private var owner: AppCompositionOwner? = null
+    private val events = mutableListOf<WorkflowEvent>()
+
+    fun bind(owner: AppCompositionOwner) {
+        this.owner = owner
+    }
+
+    fun capture(returnedAction: String, operation: () -> Unit): List<WorkflowEvent> {
+        events.clear()
+        operation()
+        record(returnedAction)
+        return events.toList()
+    }
+
+    fun record(action: String) {
+        events += WorkflowEvent(action, owner?.backStack?.entries?.toList().orEmpty())
+    }
+}
+
+private class FakeGameplayFeature(
+    private val workflow: WorkflowRecorder,
+) : GameplayFeature {
     var model: GameplayUiModel = GameplayUiModel()
     val starts = mutableListOf<RunConfiguration>()
     val appliedPreferences = mutableListOf<PlayerPreferences>()
@@ -283,6 +394,7 @@ private class FakeGameplayFeature : GameplayFeature {
     var togglePauseCalls = 0
 
     override fun start(configuration: RunConfiguration) {
+        workflow.record("gameplay.start")
         starts += configuration
         model = model.copy(
             phase = GameplayUiPhase.RUNNING,
@@ -291,10 +403,12 @@ private class FakeGameplayFeature : GameplayFeature {
     }
 
     override fun applyPreferences(preferences: PlayerPreferences) {
+        workflow.record("gameplay.applyPreferences")
         appliedPreferences += preferences
     }
 
     override fun pauseForOverlay(): Boolean {
+        workflow.record("gameplay.pause")
         pauseCalls += 1
         if (model.phase != GameplayUiPhase.RUNNING) return false
         model = model.copy(phase = GameplayUiPhase.PAUSED)
@@ -312,13 +426,19 @@ private class FakeGameplayFeature : GameplayFeature {
         )
     }
 
-    override fun uiModel(): GameplayUiModel = model
+    override fun uiModel(): GameplayUiModel {
+        workflow.record("gameplay.uiModel")
+        return model
+    }
 
     @Composable
     override fun Content(inputEnabled: Boolean, onOutput: (GameplayOutput) -> Unit) = Unit
 }
 
-private class FakeProfileStore(initialProfile: PlayerProfile) : ProfileStore {
+private class FakeProfileStore(
+    initialProfile: PlayerProfile,
+    private val workflow: WorkflowRecorder,
+) : ProfileStore {
     private var profile = initialProfile
 
     override val providerId = ProfileProviderId.PLATFORM_LOCAL
@@ -328,9 +448,15 @@ private class FakeProfileStore(initialProfile: PlayerProfile) : ProfileStore {
         profile = value
     }
 
-    override fun profileSnapshot(): PlayerProfile = profile
+    override fun profileSnapshot(): PlayerProfile {
+        workflow.record("profile.snapshot")
+        return profile
+    }
 
-    override fun preferences(): PlayerPreferences = profile.preferences
+    override fun preferences(): PlayerPreferences {
+        workflow.record("profile.preferences")
+        return profile.preferences
+    }
 
     override fun updatePreferences(preferences: PlayerPreferences): ProfileMutationResult =
         applied(profile.copy(preferences = preferences))
@@ -358,7 +484,10 @@ private class FakeProfileStore(initialProfile: PlayerProfile) : ProfileStore {
 
     override fun advanceRebirth(): ProfileMutationResult = rejected()
 
-    override fun applyGameplayProgress(update: GameplayProgressUpdate): ProfileMutationResult = rejected()
+    override fun applyGameplayProgress(update: GameplayProgressUpdate): ProfileMutationResult {
+        workflow.record("profile.applyGameplayProgress")
+        return rejected()
+    }
 
     override fun replaceProfile(profile: PlayerProfile): ProfilePersistResult {
         this.profile = profile
@@ -374,13 +503,16 @@ private class FakeProfileStore(initialProfile: PlayerProfile) : ProfileStore {
         ProfileMutationResult.Rejected(ProfileMutationRejection.NO_CHANGE)
 }
 
-private class FakeAudioService : AudioService {
+private class FakeAudioService(
+    private val workflow: WorkflowRecorder,
+) : AudioService {
     val preferencesUpdates = mutableListOf<AudioPreferences>()
     val advances = mutableListOf<Pair<Float, List<AudioCue>>>()
     var unlockCalls = 0
     var closeCalls = 0
 
     override fun updatePreferences(preferences: AudioPreferences) {
+        workflow.record("audio.updatePreferences")
         preferencesUpdates += preferences
     }
 
