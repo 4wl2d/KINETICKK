@@ -4,49 +4,50 @@
 package kinetickk.app.shared
 
 import androidx.compose.runtime.Composable
-import kinetickk.core.audio.api.AudioCue
-import kinetickk.core.audio.api.AudioPreferences
-import kinetickk.core.audio.api.AudioService
-import kinetickk.core.collections.immutableListOf
-import kinetickk.core.collections.toImmutableSet
-import kinetickk.core.content.CoreShape
-import kinetickk.core.content.MetaUpgradeId
-import kinetickk.core.content.WeaponId
-import kinetickk.core.profile.api.GameplayProgressUpdate
-import kinetickk.core.profile.api.LabProfileSnapshot
-import kinetickk.core.profile.api.LabProgress
-import kinetickk.core.profile.api.LoadoutProfileSnapshot
-import kinetickk.core.profile.api.PlayerCollection
-import kinetickk.core.profile.api.PlayerEconomy
-import kinetickk.core.profile.api.PlayerLoadout
-import kinetickk.core.profile.api.PlayerPreferences
-import kinetickk.core.profile.api.PlayerProfile
-import kinetickk.core.profile.api.ProfileLoadResult
-import kinetickk.core.profile.api.ProfileMutationRejection
-import kinetickk.core.profile.api.ProfileMutationResult
-import kinetickk.core.profile.api.ProfilePersistResult
-import kinetickk.core.profile.api.ProfileProviderId
-import kinetickk.core.profile.api.ProfileStore
-import kinetickk.core.profile.api.RebirthProfileSnapshot
-import kinetickk.core.profile.api.RebirthProgress
-import kinetickk.feature.armory.api.ArmoryFeature
-import kinetickk.feature.armory.api.ArmoryOutput
-import kinetickk.feature.codex.api.CodexFeature
-import kinetickk.feature.codex.api.CodexOutput
-import kinetickk.feature.codex.api.CodexRunStacks
-import kinetickk.feature.gameplay.api.GameplayFeature
-import kinetickk.feature.gameplay.api.GameplayOutput
-import kinetickk.feature.gameplay.api.GameplayUiModel
-import kinetickk.feature.gameplay.api.GameplayUiPhase
-import kinetickk.feature.gameplay.api.RunConfiguration
-import kinetickk.feature.home.api.HomeFeature
-import kinetickk.feature.home.api.HomeOutput
-import kinetickk.feature.lab.api.LabFeature
-import kinetickk.feature.lab.api.LabOutput
-import kinetickk.feature.rebirth.api.RebirthFeature
-import kinetickk.feature.rebirth.api.RebirthOutput
-import kinetickk.feature.settings.api.SettingsFeature
-import kinetickk.feature.settings.api.SettingsOutput
+import kinetickk.resource.audio.api.AudioCue
+import kinetickk.resource.audio.api.AudioPreferences
+import kinetickk.resource.audio.api.AudioService
+import kinetickk.foundation.collections.immutableListOf
+import kinetickk.foundation.collections.toImmutableSet
+import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.profile.api.GameplayProgressUpdate
+import kinetickk.ball.profile.api.LabProfileSnapshot
+import kinetickk.ball.profile.api.LabProgress
+import kinetickk.ball.profile.api.LoadoutProfileSnapshot
+import kinetickk.ball.profile.api.PlayerCollection
+import kinetickk.ball.profile.api.PlayerEconomy
+import kinetickk.ball.profile.api.PlayerLoadout
+import kinetickk.ball.profile.api.PlayerPreferences
+import kinetickk.ball.profile.api.PlayerProfile
+import kinetickk.ball.profile.api.ProfileLoadResult
+import kinetickk.ball.profile.api.ProfileMutationRejection
+import kinetickk.ball.profile.api.ProfileMutationResult
+import kinetickk.ball.profile.api.ProfilePersistResult
+import kinetickk.ball.profile.api.ProfileProviderId
+import kinetickk.ball.profile.api.ProfileStore
+import kinetickk.ball.profile.api.RebirthProfileSnapshot
+import kinetickk.ball.profile.api.RebirthProgress
+import kinetickk.ball.profile.interaction.armory.api.ArmoryFeature
+import kinetickk.ball.profile.interaction.armory.api.ArmoryOutput
+import kinetickk.flow.session.interaction.codex.api.CodexFeature
+import kinetickk.flow.session.interaction.codex.api.CodexOutput
+import kinetickk.flow.session.interaction.codex.api.CodexRunStacks
+import kinetickk.ball.gameplay.interaction.GameplayFeature
+import kinetickk.ball.gameplay.api.GameplayOutput
+import kinetickk.ball.gameplay.api.GameplayUiModel
+import kinetickk.ball.gameplay.api.GameplayUiPhase
+import kinetickk.ball.gameplay.api.RunConfiguration
+import kinetickk.flow.session.interaction.home.api.HomeFeature
+import kinetickk.flow.session.interaction.home.api.HomeOutput
+import kinetickk.flow.session.nucleus.AppDestination
+import kinetickk.ball.profile.interaction.lab.api.LabFeature
+import kinetickk.ball.profile.interaction.lab.api.LabOutput
+import kinetickk.ball.profile.interaction.rebirth.api.RebirthFeature
+import kinetickk.ball.profile.interaction.rebirth.api.RebirthOutput
+import kinetickk.ball.profile.interaction.settings.api.SettingsFeature
+import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -298,21 +299,11 @@ class AppCompositionOwnerTest {
     }
 
     @Test
-    fun shellOwnsAudioPreferencesCuesUnlockAndCloseLifecycle() {
+    fun shellOwnsAudioPreferencesUiCuesAndCloseLifecycle() {
         val initialPreferences = PlayerPreferences(masterVolume = 0.4f)
         val shell = testShell(profile = PlayerProfile(preferences = initialPreferences))
 
         assertEquals(listOf(initialPreferences.toExpectedAudioPreferences()), shell.audio.preferencesUpdates)
-
-        shell.owner.handleGameplayOutput(GameplayOutput.UserGestureObserved)
-        shell.owner.handleGameplayOutput(
-            GameplayOutput.AudioFrame(
-                realDeltaSeconds = 0.016f,
-                cues = immutableListOf(AudioCue.DASH),
-            ),
-        )
-        assertEquals(1, shell.audio.unlockCalls)
-        assertEquals(0.016f to listOf(AudioCue.DASH), shell.audio.advances.last())
 
         val updatedPreferences = initialPreferences.copy(soundEnabled = false, masterVolume = 0.25f)
         shell.store.setProfile(shell.store.profileSnapshot().copy(preferences = updatedPreferences))

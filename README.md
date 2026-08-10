@@ -122,27 +122,21 @@ The optimized bundle is written to `app/web/build/dist/wasmJs/productionExecutab
 | `app/shared` | Application composition root: navigation, back stack, global shortcuts, audio lifecycle, and preservation of the active gameplay session beneath overlay features |
 | `app/desktop` | Thin JVM/desktop host and native packaging; depends only on `app/shared` |
 | `app/web` | Thin Wasm browser host and production web bundle; depends only on `app/shared` |
-| `core/common` | Small platform-independent collection and random utilities |
-| `core/content` | Shared persistent IDs, definitions, and content catalogs |
-| `core/design-system` | Canvas tokens, text, geometry, and reusable UI primitives |
-| `core/profile/api`, `core/profile/data` | Immutable profile slices and narrow capability contracts; atomic v2/v3 codec and platform storage |
-| `core/audio/api`, `core/audio/impl` | Audio contract and Desktop/Wasm implementations |
-| `feature/home/api`, `feature/home/impl` | Home route, render model, outputs, reducer, renderer, and input mapping |
-| `feature/gameplay/api`, `feature/gameplay/domain`, `feature/gameplay/presentation`, `feature/gameplay/impl` | Live-run configuration and outputs, simulation and run state, Canvas presentation and input mapping, and Compose orchestration |
-| `feature/settings/api`, `feature/settings/impl` | Persisted player preferences and local page state |
-| `feature/lab/api`, `feature/lab/impl` | Permanent meta-upgrade purchases |
-| `feature/armory/api`, `feature/armory/impl` | Weapon unlocks, loadout selection, and local pagination |
-| `feature/rebirth/api`, `feature/rebirth/impl` | Two-step Rebirth confirmation and cycle advancement |
-| `feature/codex/api`, `feature/codex/impl` | Collection browsing, local pagination, and a read-only snapshot of current run stacks |
+| `foundation/common`, `foundation/design` | Shared mechanical collections, random utilities, Canvas tokens, text, geometry, and UI primitives |
+| `resource/audio/api`, `resource/audio/impl` | Bounded audio Resource contract and Desktop/Wasm provider implementations |
+| `ball/content/api`, `ball/content/impl` | Stable content types and the immutable Content authority role |
+| `ball/profile/api`, `ball/profile/nucleus`, `ball/profile/resource`, `ball/profile/interaction`, `ball/profile/impl` | Profile protocols, pure decisions, persistence edge, Settings/Lab/Armory/Rebirth UI, and the accepting component |
+| `ball/gameplay/api`, `ball/gameplay/nucleus`, `ball/gameplay/interaction`, `ball/gameplay/impl` | Run protocols, deterministic simulation, Canvas/input interaction, and accepted-effect execution |
+| `flow/session/api`, `flow/session/nucleus`, `flow/session/interaction`, `flow/session/impl` | Session protocols, navigation/workflow decisions, Home/Codex interaction, and orchestration role |
 | `build-logic` | Gradle conventions plus `verifyArchitecture` dependency-boundary enforcement |
 
-Each feature API exposes a Compose entry point, a small immutable render model,
-and feature-specific output events. Its implementation owns the corresponding
-actions, reducer, renderer, and input mapping. Features never navigate to one
-another directly: `app/shared` handles their outputs and supplies narrow core
-capabilities or snapshots. The build rejects `impl → impl`, `core → feature`,
-`feature → app`, and cross-feature dependencies. The root project contains no
-production sources.
+The graph has exactly 22 leaf modules. Ball APIs and Nuclei are separate from
+Compose Interaction and provider-facing Resource roles; Desktop and Web depend
+only on `app/shared`. During the staged migration, `app/shared` remains the
+construction host while Session orchestration moves behind its declared Flow
+protocol. The build rejects legacy `core:*` and `feature:*` modules and
+dependencies, `impl → impl` edges, unexpected graph endpoints, and production
+sources in the root project.
 
 ## Contributing
 

@@ -6,7 +6,7 @@ import org.gradle.api.artifacts.ProjectDependency
 
 val verifyArchitectureTask = tasks.register<VerifyArchitectureTask>("verifyArchitecture") {
     group = "verification"
-    description = "Verifies the vertical feature module graph without resolving dependencies."
+    description = "Verifies the declared 22-module Pokeball role graph without resolving dependencies."
     leafProjectPaths.set(
         rootProject.subprojects
             .filter { it.childProjects.isEmpty() }

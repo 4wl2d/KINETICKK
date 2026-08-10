@@ -102,9 +102,9 @@ private fun MutableList<String>.addModuleSetViolations(actualLeafProjects: Set<S
         add("Unexpected leaf modules: ${unexpected.sorted().joinToString()}")
     }
 
-    val legacyGameModules = actualLeafProjects.filter(::isLegacyGameModule)
-    if (legacyGameModules.isNotEmpty()) {
-        add("Legacy feature:game modules are forbidden: ${legacyGameModules.sorted().joinToString()}")
+    val legacyModules = actualLeafProjects.filter(::isLegacyModule)
+    if (legacyModules.isNotEmpty()) {
+        add("Legacy core/feature modules are forbidden: ${legacyModules.sorted().joinToString()}")
     }
 }
 
@@ -123,49 +123,24 @@ private fun MutableList<String>.addDependencyViolations(dependencies: List<Decla
     }
 
     dependencies.forEach { dependency ->
-        val sourceFeature = dependency.source.featureName()
-        val targetFeature = dependency.target.featureName()
-
-        if (
-            dependency.source.isCoreProject() &&
-            (dependency.target.isFeatureProject() || dependency.target.isAppProject())
-        ) {
-            add("core -> feature/app dependency is forbidden: ${dependency.displayName}")
-        }
-
-        if (dependency.source.isFeatureProject() && dependency.target.isAppProject()) {
-            add("feature -> app dependency is forbidden: ${dependency.displayName}")
-        }
-
-        if (sourceFeature != null && targetFeature != null && sourceFeature != targetFeature) {
-            add("Cross-feature dependency is forbidden: ${dependency.displayName}")
-        }
-
         if (dependency.source.isImplementationProject() && dependency.target.isImplementationProject()) {
             add("impl -> impl dependency is forbidden: ${dependency.displayName}")
         }
 
-        if (isLegacyGameModule(dependency.source) || isLegacyGameModule(dependency.target)) {
-            add("Legacy feature:game dependency is forbidden: ${dependency.displayName}")
+        if (isLegacyModule(dependency.source) || isLegacyModule(dependency.target)) {
+            add("Legacy core/feature dependency is forbidden: ${dependency.displayName}")
+        }
+
+        if (dependency.source !in EXPECTED_LEAF_PROJECTS || dependency.target !in EXPECTED_LEAF_PROJECTS) {
+            add("Dependency endpoint is outside the declared 22-module graph: ${dependency.displayName}")
         }
     }
 }
 
-private fun String.isAppProject(): Boolean = startsWith(":app:")
-
-private fun String.isCoreProject(): Boolean = startsWith(":core:")
-
-private fun String.isFeatureProject(): Boolean = startsWith(":feature:")
-
 private fun String.isImplementationProject(): Boolean = endsWith(":impl")
 
-private fun String.featureName(): String? {
-    if (!isFeatureProject()) return null
-    return removePrefix(":").split(':').getOrNull(1)
-}
-
-private fun isLegacyGameModule(path: String): Boolean =
-    path == ":feature:game" || path.startsWith(":feature:game:")
+private fun isLegacyModule(path: String): Boolean =
+    path.startsWith(":core:") || path.startsWith(":feature:")
 
 private const val EDGE_SEPARATOR = '\t'
 private const val APP_SHARED_PROJECT = ":app:shared"
@@ -179,27 +154,23 @@ private val EXPECTED_LEAF_PROJECTS = setOf(
     ":app:desktop",
     ":app:shared",
     ":app:web",
-    ":core:audio:api",
-    ":core:audio:impl",
-    ":core:common",
-    ":core:content",
-    ":core:design-system",
-    ":core:profile:api",
-    ":core:profile:data",
-    ":feature:armory:api",
-    ":feature:armory:impl",
-    ":feature:codex:api",
-    ":feature:codex:impl",
-    ":feature:gameplay:api",
-    ":feature:gameplay:domain",
-    ":feature:gameplay:impl",
-    ":feature:gameplay:presentation",
-    ":feature:home:api",
-    ":feature:home:impl",
-    ":feature:lab:api",
-    ":feature:lab:impl",
-    ":feature:rebirth:api",
-    ":feature:rebirth:impl",
-    ":feature:settings:api",
-    ":feature:settings:impl",
+    ":foundation:common",
+    ":foundation:design",
+    ":resource:audio:api",
+    ":resource:audio:impl",
+    ":ball:content:api",
+    ":ball:content:impl",
+    ":ball:profile:api",
+    ":ball:profile:nucleus",
+    ":ball:profile:resource",
+    ":ball:profile:interaction",
+    ":ball:profile:impl",
+    ":ball:gameplay:api",
+    ":ball:gameplay:nucleus",
+    ":ball:gameplay:interaction",
+    ":ball:gameplay:impl",
+    ":flow:session:api",
+    ":flow:session:nucleus",
+    ":flow:session:interaction",
+    ":flow:session:impl",
 )

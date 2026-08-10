@@ -21,38 +21,42 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import kinetickk.core.audio.api.AudioCue
-import kinetickk.core.audio.api.AudioPreferences
-import kinetickk.core.audio.api.AudioService
-import kinetickk.core.audio.impl.DefaultAudioService
-import kinetickk.core.profile.api.PlayerPreferences
-import kinetickk.core.profile.api.ProfileMutationResult
-import kinetickk.core.profile.api.ProfileStore
-import kinetickk.core.profile.data.createPlatformProfileStore
-import kinetickk.feature.armory.api.ArmoryFeature
-import kinetickk.feature.armory.api.ArmoryOutput
-import kinetickk.feature.armory.impl.DefaultArmoryFeature
-import kinetickk.feature.codex.api.CodexFeature
-import kinetickk.feature.codex.api.CodexOutput
-import kinetickk.feature.codex.api.CodexRunStacks
-import kinetickk.feature.codex.impl.DefaultCodexFeature
-import kinetickk.feature.gameplay.api.GameplayFeature
-import kinetickk.feature.gameplay.api.GameplayOutput
-import kinetickk.feature.gameplay.api.GameplayUiPhase
-import kinetickk.feature.gameplay.api.RunConfiguration
-import kinetickk.feature.gameplay.impl.DefaultGameplayFeature
-import kinetickk.feature.home.api.HomeFeature
-import kinetickk.feature.home.api.HomeOutput
-import kinetickk.feature.home.impl.DefaultHomeFeature
-import kinetickk.feature.lab.api.LabFeature
-import kinetickk.feature.lab.api.LabOutput
-import kinetickk.feature.lab.impl.DefaultLabFeature
-import kinetickk.feature.rebirth.api.RebirthFeature
-import kinetickk.feature.rebirth.api.RebirthOutput
-import kinetickk.feature.rebirth.impl.DefaultRebirthFeature
-import kinetickk.feature.settings.api.SettingsFeature
-import kinetickk.feature.settings.api.SettingsOutput
-import kinetickk.feature.settings.impl.DefaultSettingsFeature
+import kinetickk.resource.audio.api.AudioCue
+import kinetickk.resource.audio.api.AudioPreferences
+import kinetickk.resource.audio.api.AudioService
+import kinetickk.resource.audio.impl.DefaultAudioService
+import kinetickk.ball.profile.api.PlayerPreferences
+import kinetickk.ball.profile.api.ProfileMutationResult
+import kinetickk.ball.profile.api.ProfileStore
+import kinetickk.ball.profile.impl.createPlatformProfileStore
+import kinetickk.ball.profile.interaction.armory.api.ArmoryFeature
+import kinetickk.ball.profile.interaction.armory.api.ArmoryOutput
+import kinetickk.ball.profile.interaction.armory.impl.DefaultArmoryFeature
+import kinetickk.flow.session.interaction.codex.api.CodexFeature
+import kinetickk.flow.session.interaction.codex.api.CodexOutput
+import kinetickk.flow.session.interaction.codex.api.CodexRunStacks
+import kinetickk.flow.session.interaction.codex.impl.DefaultCodexFeature
+import kinetickk.ball.gameplay.interaction.GameplayFeature
+import kinetickk.ball.gameplay.api.GameplayOutput
+import kinetickk.ball.gameplay.api.GameplayUiPhase
+import kinetickk.ball.gameplay.api.RunConfiguration
+import kinetickk.ball.gameplay.impl.DefaultGameplayFeature
+import kinetickk.flow.session.interaction.home.api.HomeFeature
+import kinetickk.flow.session.interaction.home.api.HomeOutput
+import kinetickk.flow.session.interaction.home.impl.DefaultHomeFeature
+import kinetickk.flow.session.nucleus.AppBackStack
+import kinetickk.flow.session.nucleus.AppDestination
+import kinetickk.flow.session.nucleus.AppGameplayPhase
+import kinetickk.flow.session.nucleus.AppNavigator
+import kinetickk.ball.profile.interaction.lab.api.LabFeature
+import kinetickk.ball.profile.interaction.lab.api.LabOutput
+import kinetickk.ball.profile.interaction.lab.impl.DefaultLabFeature
+import kinetickk.ball.profile.interaction.rebirth.api.RebirthFeature
+import kinetickk.ball.profile.interaction.rebirth.api.RebirthOutput
+import kinetickk.ball.profile.interaction.rebirth.impl.DefaultRebirthFeature
+import kinetickk.ball.profile.interaction.settings.api.SettingsFeature
+import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
+import kinetickk.ball.profile.interaction.settings.impl.DefaultSettingsFeature
 
 /** The single UI entry point used by Desktop and Web hosts. */
 @Composable
@@ -67,7 +71,7 @@ fun KinetickkApp() {
 internal class AppCompositionOwner(
     private val profileStore: ProfileStore = createPlatformProfileStore(),
     private val audioService: AudioService = DefaultAudioService(),
-    private val gameplayFeature: GameplayFeature = DefaultGameplayFeature(profileStore),
+    private val gameplayFeature: GameplayFeature = DefaultGameplayFeature(profileStore, audioService),
     private val homeFeature: HomeFeature = DefaultHomeFeature(
         loadoutCapability = profileStore,
         collectionCapability = profileStore,
@@ -230,11 +234,6 @@ internal class AppCompositionOwner(
             GameplayOutput.OpenRebirth -> openOverlay(AppDestination.Rebirth)
             GameplayOutput.ExitToHome -> navigator.showHome()
             GameplayOutput.RestartRun -> startNewRun()
-            GameplayOutput.UserGestureObserved -> audioService.ensureUnlocked()
-            is GameplayOutput.AudioFrame -> {
-                syncAudioPreferences()
-                audioService.advance(output.realDeltaSeconds, output.cues)
-            }
         }
     }
 
@@ -378,7 +377,7 @@ internal fun Key.toAppShortcut(): AppShortcut? = when (this) {
     else -> null
 }
 
-internal fun kinetickk.core.profile.api.PlayerProfile.toRunConfiguration(): RunConfiguration =
+internal fun kinetickk.ball.profile.api.PlayerProfile.toRunConfiguration(): RunConfiguration =
     RunConfiguration(
         preferences = preferences,
         coreShape = loadout.coreShape,
