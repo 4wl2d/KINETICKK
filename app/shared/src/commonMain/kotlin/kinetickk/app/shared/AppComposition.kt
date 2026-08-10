@@ -33,6 +33,7 @@ import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.ProfileAcceptance
 import kinetickk.ball.profile.api.ProfileBootstrapStatus
+import kinetickk.ball.profile.api.ProfileCommandResult
 import kinetickk.ball.profile.api.ProfilePort
 import kinetickk.ball.profile.api.ProfilePulse
 import kinetickk.ball.profile.api.ProfileQuery
@@ -46,9 +47,21 @@ import kinetickk.flow.session.interaction.codex.api.CodexFeature
 import kinetickk.flow.session.interaction.codex.api.CodexOutput
 import kinetickk.flow.session.interaction.codex.api.CodexRunStacks
 import kinetickk.flow.session.interaction.codex.impl.DefaultCodexFeature
+import kinetickk.ball.gameplay.api.GameplayAcceptance
+import kinetickk.ball.gameplay.api.GameplayCommand
+import kinetickk.ball.gameplay.api.GameplayCommandAdmission
+import kinetickk.ball.gameplay.api.GameplayCommandOutcome
+import kinetickk.ball.gameplay.api.GameplayCommandRef
+import kinetickk.ball.gameplay.api.GameplayCommandResult
+import kinetickk.ball.gameplay.api.GameplayCommandSource
+import kinetickk.ball.gameplay.api.GameplayExitProfileOutcome
+import kinetickk.ball.gameplay.api.GameplayPort
+import kinetickk.ball.gameplay.api.GameplayQuery
+import kinetickk.ball.gameplay.api.GameplayRunPhase
+import kinetickk.ball.gameplay.api.GameplaySessionPulse
+import kinetickk.ball.gameplay.api.RunId
 import kinetickk.ball.gameplay.interaction.GameplayFeature
-import kinetickk.ball.gameplay.api.GameplayOutput
-import kinetickk.ball.gameplay.api.GameplayUiPhase
+import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.gameplay.api.RunConfiguration
 import kinetickk.ball.gameplay.impl.DefaultGameplayFeature
 import kinetickk.flow.session.interaction.home.api.HomeFeature
@@ -100,7 +113,15 @@ internal class AppCompositionOwner(
     private val gameplayContent = contentCatalog.gameplayContent()
     private val uiCatalog = contentCatalog.uiCatalog()
 
-    private val profilePort: ProfilePort = profilePort ?: createPlatformProfileComponent(profilePolicy)
+    private var gameplayResultBinding: GameplayFeature? = null
+    private val profilePort: ProfilePort = profilePort ?: createPlatformProfileComponent(
+        policy = profilePolicy,
+        commandResultSink = { result ->
+            checkNotNull(gameplayResultBinding) {
+                "Gameplay result binding must exist before Profile can complete a command"
+            }.receiveProfileCommandResult(result)
+        },
+    )
     private val audioService: AudioService = audioService ?: DefaultAudioService()
     private val sessionAudioExecutor = SessionAudioExecutor(this.audioService)
     private val gameplayFeature: GameplayFeature = gameplayFeature ?: DefaultGameplayFeature(
@@ -142,11 +163,21 @@ internal class AppCompositionOwner(
     )
 
     private val navigator = AppNavigator()
+    private var nextRunIdValue: Long? = 0L
+    private var sessionRevisionValue: Long = 0L
+    private var nextGameplayCommandOrdinalValue: Int? = 0
+    private var pendingGameplayCommandRefValue: GameplayCommandRef? = null
+    private var pendingGameplayResultHandlerValue:
+        ((GameplayCommandResult.Accepted) -> Unit)? = null
+
+    internal var gameplayWorkflowFailure: AppGameplayWorkflowFailure? = null
+        private set
 
     val backStack: AppBackStack
         get() = navigator.backStack
 
     init {
+        gameplayResultBinding = this.gameplayFeature
         syncAudioPreferences()
     }
 
@@ -302,12 +333,12 @@ internal class AppCompositionOwner(
         }
     }
 
-    internal fun handleGameplayOutput(output: GameplayOutput) {
+    internal fun handleGameplayOutput(output: GameplayInteractionOutput) {
         when (output) {
-            GameplayOutput.OpenSettings -> openOverlay(AppDestination.Settings)
-            GameplayOutput.OpenRebirth -> openOverlay(AppDestination.Rebirth)
-            GameplayOutput.ExitToHome -> navigator.showHome()
-            GameplayOutput.RestartRun -> startNewRun()
+            GameplayInteractionOutput.OpenSettings -> openOverlay(AppDestination.Settings)
+            GameplayInteractionOutput.OpenRebirth -> openOverlay(AppDestination.Rebirth)
+            GameplayInteractionOutput.ExitToHome -> exitRun()
+            GameplayInteractionOutput.RestartRun -> startNewRun()
         }
     }
 
@@ -359,69 +390,257 @@ internal class AppCompositionOwner(
 
     internal fun openOverlay(destination: AppDestination): Boolean {
         val before = backStack
-        val transition = navigator.openOverlay(destination, gameplayPhase())
-        val changed = transition.backStack != before
-        if (changed && before.overlay == AppDestination.Settings && destination != AppDestination.Settings) {
-            applyPersistedSettings()
+        val phase = gameplayPhase()
+        if (before.base == AppDestination.Gameplay && phase == AppGameplayPhase.RUNNING) {
+            var changed = false
+            val run = gameplayFeature.activeRun() ?: return false
+            dispatchGameplayCommand(run, GameplaySessionPulse.PauseForOverlay) { result ->
+                if (result.outcome == GameplayCommandOutcome.OverlayPaused) {
+                    val transition = navigator.openOverlay(
+                        destination,
+                        AppGameplayPhase.PAUSED,
+                    )
+                    changed = transition.backStack != before
+                    if (
+                        changed &&
+                        before.overlay == AppDestination.Settings &&
+                        destination != AppDestination.Settings
+                    ) {
+                        applyPersistedSettings()
+                    }
+                } else {
+                    gameplayWorkflowFailure =
+                        AppGameplayWorkflowFailure.UnexpectedResult(result)
+                }
+            }
+            return changed
         }
-        if (transition.pauseGameplay) gameplayFeature.pauseForOverlay()
+
+        if (before.overlay == AppDestination.Settings && destination != AppDestination.Settings) {
+            var replaced = false
+            applyPersistedSettings {
+                replaced = navigator.openOverlay(destination, phase).backStack != before
+            }
+            return replaced
+        }
+        val transition = navigator.openOverlay(destination, phase)
+        val changed = transition.backStack != before
         return changed
     }
 
     internal fun closeOverlay() {
         val closing = backStack.overlay
-        navigator.back()
         if (closing == AppDestination.Settings) {
-            applyPersistedSettings()
+            applyPersistedSettings { navigator.back() }
+        } else {
+            navigator.back()
         }
     }
 
     internal fun startNewRun() {
         val bootstrap = profilePort.query(ProfileQuery.GetRunBootstrap).result
         if (bootstrap !is ProfileRunBootstrapResult.Ready) return
-        gameplayFeature.start(bootstrap.snapshot.toRunConfiguration(gameplayContent))
-        navigator.showGameplay()
+        val retainedRun = gameplayFeature.activeRun()
+            ?.takeIf { run ->
+                val status = run.query(GameplayQuery.GetRunStatus)
+                status.phase == GameplayRunPhase.CREATED && !status.profileCommandPending
+            }
+        val run = retainedRun ?: gameplayFeature.createRun(
+            runId = allocateRunId(),
+            commandResultSink = ::receiveGameplayCommandResult,
+        )
+        dispatchGameplayCommand(
+            target = run,
+            pulse = GameplaySessionPulse.StartRun(
+                bootstrap.snapshot.toRunConfiguration(gameplayContent),
+            ),
+        ) { result ->
+            if (result.outcome == GameplayCommandOutcome.RunStarted) {
+                navigator.showGameplay()
+            } else {
+                gameplayWorkflowFailure =
+                    AppGameplayWorkflowFailure.UnexpectedResult(result)
+            }
+        }
     }
 
-    private fun gameplayPhase(): AppGameplayPhase = when (gameplayFeature.uiModel().phase) {
-        GameplayUiPhase.IDLE -> AppGameplayPhase.IDLE
-        GameplayUiPhase.RUNNING -> AppGameplayPhase.RUNNING
-        GameplayUiPhase.PAUSED -> AppGameplayPhase.PAUSED
-        GameplayUiPhase.CHOICE -> AppGameplayPhase.CHOICE
-        GameplayUiPhase.GAME_OVER -> AppGameplayPhase.GAME_OVER
-        GameplayUiPhase.VICTORY -> AppGameplayPhase.VICTORY
+    private fun gameplayPhase(): AppGameplayPhase {
+        val run = gameplayFeature.activeRun() ?: return AppGameplayPhase.IDLE
+        return when (run.query(GameplayQuery.GetRunStatus).phase) {
+            GameplayRunPhase.CREATED,
+            GameplayRunPhase.EXITED,
+            -> AppGameplayPhase.IDLE
+            GameplayRunPhase.RUNNING -> AppGameplayPhase.RUNNING
+            GameplayRunPhase.PAUSED -> AppGameplayPhase.PAUSED
+            GameplayRunPhase.CHOICE -> AppGameplayPhase.CHOICE
+            GameplayRunPhase.GAME_OVER -> AppGameplayPhase.GAME_OVER
+            GameplayRunPhase.VICTORY -> AppGameplayPhase.VICTORY
+        }
     }
 
     private fun activeGameplayWeapon() = if (backStack.base == AppDestination.Gameplay) {
-        gameplayFeature.uiModel().activeWeapon
+        gameplayFeature.activeRun()?.query(GameplayQuery.GetActiveWeapon)?.weapon
     } else {
         null
     }
 
     internal fun currentRunStacks(): CodexRunStacks = if (backStack.base == AppDestination.Gameplay) {
-        CodexRunStacks(gameplayFeature.uiModel().itemStacks)
+        CodexRunStacks(
+            gameplayFeature.activeRun()
+                ?.query(GameplayQuery.GetCodexStacks)
+                ?.itemStacks
+                ?: kinetickk.foundation.collections.immutableListOf(),
+        )
     } else {
         CodexRunStacks()
     }
 
     private fun isRebirthRouteEligible(): Boolean {
         val routeEligible = backStack.base == AppDestination.Home ||
-            gameplayFeature.uiModel().phase == GameplayUiPhase.VICTORY
+            gameplayFeature.activeRun()?.query(GameplayQuery.GetRunStatus)?.phase ==
+            GameplayRunPhase.VICTORY
         return routeEligible
     }
 
     private fun toggleMute() {
         val result = profilePort.accept(ProfilePulse.ToggleMute)
         if (result is ProfileAcceptance.Accepted) {
-            gameplayFeature.applyPreferences(currentPreferences())
+            applyPreferencesToGameplay(currentPreferences())
         }
         syncAudioPreferences()
         sessionAudioExecutor.playUiClick()
     }
 
-    private fun applyPersistedSettings() {
-        gameplayFeature.applyPreferences(currentPreferences())
-        syncAudioPreferences()
+    private fun applyPersistedSettings(onApplied: () -> Unit = {}) {
+        val preferences = currentPreferences()
+        val run = gameplayFeature.activeRun()
+        if (run == null) {
+            syncAudioPreferences()
+            onApplied()
+            return
+        }
+        dispatchGameplayCommand(
+            target = run,
+            pulse = GameplaySessionPulse.ApplyPreferences(preferences),
+        ) { result ->
+            if (result.outcome is GameplayCommandOutcome.PreferencesApplied) {
+                syncAudioPreferences()
+                onApplied()
+            } else {
+                gameplayWorkflowFailure =
+                    AppGameplayWorkflowFailure.UnexpectedResult(result)
+            }
+        }
+    }
+
+    private fun applyPreferencesToGameplay(preferences: PlayerPreferences) {
+        val run = gameplayFeature.activeRun() ?: return
+        dispatchGameplayCommand(
+            target = run,
+            pulse = GameplaySessionPulse.ApplyPreferences(preferences),
+        ) { result ->
+            if (result.outcome !is GameplayCommandOutcome.PreferencesApplied) {
+                gameplayWorkflowFailure =
+                    AppGameplayWorkflowFailure.UnexpectedResult(result)
+            }
+        }
+    }
+
+    private fun exitRun() {
+        val run = gameplayFeature.activeRun() ?: return
+        dispatchGameplayCommand(run, GameplaySessionPulse.ExitRun) { result ->
+            when (val outcome = result.outcome) {
+                is GameplayCommandOutcome.RunExited -> when (val profile = outcome.profile) {
+                    GameplayExitProfileOutcome.NoProgress,
+                    GameplayExitProfileOutcome.ProgressApplied,
+                    -> navigator.showHome()
+                    is GameplayExitProfileOutcome.ProgressRejected -> {
+                        gameplayWorkflowFailure =
+                            AppGameplayWorkflowFailure.ExitProgressRejected(profile)
+                    }
+                }
+                else -> {
+                    gameplayWorkflowFailure =
+                        AppGameplayWorkflowFailure.UnexpectedResult(result)
+                }
+            }
+        }
+    }
+
+    private fun dispatchGameplayCommand(
+        target: GameplayPort,
+        pulse: GameplaySessionPulse,
+        onResult: (GameplayCommandResult.Accepted) -> Unit,
+    ): GameplayAcceptance {
+        check(pendingGameplayCommandRefValue == null) {
+            "Only one temporary AppSession Gameplay command may be pending"
+        }
+        check(sessionRevisionValue < Long.MAX_VALUE) {
+            "Temporary AppSession revision is exhausted"
+        }
+        val ordinal = checkNotNull(nextGameplayCommandOrdinalValue) {
+            "Temporary AppSession Gameplay command ordinal is exhausted"
+        }
+        val sourceRevision = sessionRevisionValue + 1L
+        val commandRef = GameplayCommandRef(
+            sourceInstance = GameplayCommandSource.LocalSession,
+            targetInstance = target.instanceId,
+            sourceRevision = sourceRevision,
+            ordinal = ordinal,
+        )
+        val command = GameplayCommand(commandRef, pulse)
+
+        pendingGameplayCommandRefValue = commandRef
+        pendingGameplayResultHandlerValue = onResult
+        sessionRevisionValue = sourceRevision
+        nextGameplayCommandOrdinalValue = if (ordinal == Int.MAX_VALUE) null else ordinal + 1
+        gameplayWorkflowFailure = null
+
+        val acceptance = target.accept(command, GameplayCommandAdmission(commandRef))
+        check(acceptance.instanceId == commandRef.targetInstance) {
+            "Gameplay acceptance marker target identity mismatch"
+        }
+        when (acceptance) {
+            is GameplayAcceptance.Rejected -> {
+                check(pendingGameplayCommandRefValue == commandRef) {
+                    "Gameplay cannot both complete and reject one command before acceptance"
+                }
+                clearPendingGameplayCommand()
+                gameplayWorkflowFailure = AppGameplayWorkflowFailure.RejectedBeforeAcceptance(
+                    commandRef = commandRef,
+                    rejection = acceptance,
+                )
+            }
+            is GameplayAcceptance.Accepted -> {
+                check(pendingGameplayCommandRefValue == null) {
+                    "Accepted synchronous Gameplay command returned without its reserved result"
+                }
+            }
+        }
+        return acceptance
+    }
+
+    private fun receiveGameplayCommandResult(result: GameplayCommandResult.Accepted) {
+        val commandRef = checkNotNull(pendingGameplayCommandRefValue) {
+            "Gameplay result arrived without a pending temporary AppSession command"
+        }
+        check(result.commandRef == commandRef) {
+            "Gameplay result command correlation mismatch"
+        }
+        val handler = checkNotNull(pendingGameplayResultHandlerValue)
+        clearPendingGameplayCommand()
+        handler(result)
+    }
+
+    private fun clearPendingGameplayCommand() {
+        pendingGameplayCommandRefValue = null
+        pendingGameplayResultHandlerValue = null
+    }
+
+    private fun allocateRunId(): RunId {
+        val value = checkNotNull(nextRunIdValue) { "Gameplay RunId space is exhausted" }
+        nextRunIdValue = if (value == Long.MAX_VALUE) null else value + 1L
+        return RunId(value)
     }
 
     private fun syncAudioPreferences() {
@@ -446,6 +665,21 @@ internal enum class AppShortcut {
     ENTER,
 }
 
+internal sealed interface AppGameplayWorkflowFailure {
+    data class RejectedBeforeAcceptance(
+        val commandRef: GameplayCommandRef,
+        val rejection: GameplayAcceptance.Rejected,
+    ) : AppGameplayWorkflowFailure
+
+    data class UnexpectedResult(
+        val result: GameplayCommandResult.Accepted,
+    ) : AppGameplayWorkflowFailure
+
+    data class ExitProgressRejected(
+        val outcome: GameplayExitProfileOutcome.ProgressRejected,
+    ) : AppGameplayWorkflowFailure
+}
+
 internal fun Key.toAppShortcut(): AppShortcut? = when (this) {
     Key.S -> AppShortcut.SETTINGS
     Key.L -> AppShortcut.LAB
@@ -463,15 +697,7 @@ internal fun GameplayProfileSnapshot.toRunConfiguration(
 ): RunConfiguration =
     RunConfiguration(
         content = content,
-        preferences = preferences,
-        coreShape = loadout.coreShape,
-        startingWeapon = loadout.selectedWeapon,
-        unlockedWeapons = loadout.unlockedWeapons,
-        metaRanks = labProgress.ranks,
-        knownItemIds = collection.discoveredItemIds,
-        rebirthLevel = rebirthProgress.level,
-        matterAtStart = economy.matter,
-        lifetimeMatterAtStart = economy.lifetimeMatter,
+        profile = this,
     )
 
 private fun PlayerPreferences.toAudioPreferences(): AudioPreferences = AudioPreferences(

@@ -16,8 +16,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import kinetickk.ball.gameplay.nucleus.model.clamp
 import kinetickk.ball.gameplay.nucleus.model.formatRunTime
-import kinetickk.ball.gameplay.nucleus.model.GamePhase
-import kinetickk.ball.gameplay.nucleus.renderModel.GameplayRenderModel
+import kinetickk.ball.gameplay.api.GamePhase
+import kinetickk.ball.gameplay.api.GameplayRenderModel
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin

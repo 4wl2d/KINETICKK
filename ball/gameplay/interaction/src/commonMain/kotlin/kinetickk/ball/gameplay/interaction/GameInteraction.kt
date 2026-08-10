@@ -30,12 +30,12 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.rememberTextMeasurer
+import kinetickk.ball.gameplay.api.BrakeSource
+import kinetickk.ball.gameplay.api.GamePhase
+import kinetickk.ball.gameplay.api.GameplayAcceptance
+import kinetickk.ball.gameplay.api.GameplayInteractionPulse
+import kinetickk.ball.gameplay.api.GameplayQuery
 import kinetickk.foundation.design.CanvasTextMeasurer
-import kinetickk.ball.gameplay.api.GameplayOutput
-import kinetickk.ball.gameplay.nucleus.engine.GameDispatchResult
-import kinetickk.ball.gameplay.nucleus.model.GamePhase
-import kinetickk.ball.gameplay.nucleus.protocol.BrakeSource
-import kinetickk.ball.gameplay.nucleus.protocol.GameplayAction
 import kinetickk.ball.gameplay.interaction.canvas.drawGameplay
 import kinetickk.ball.gameplay.interaction.input.GameInteractionValidator
 import kinetickk.ball.gameplay.interaction.input.GameplayInput
@@ -48,29 +48,33 @@ import kinetickk.ball.gameplay.interaction.input.resolveGameplayPress
 fun GameplayContent(
     component: GameplayInteractionPort,
     inputEnabled: Boolean,
-    onShellOutput: (GameplayOutput) -> Unit,
+    onOutput: (GameplayInteractionOutput) -> Unit,
 ) {
     val focusRequester = remember(component) { FocusRequester() }
     val composeTextMeasurer = rememberTextMeasurer(cacheSize = 64)
     val density = LocalDensity.current.density
     val interactionValidator = remember(component) { GameInteractionValidator() }
-    var renderModelValue by remember(component) { mutableStateOf(component.snapshot().renderModel) }
+    var renderModelValue by remember(component) {
+        mutableStateOf(requireNotNull(component.query(GameplayQuery.GetRender).renderModel))
+    }
     var visualFxProjectionValue by remember(component) {
         mutableStateOf(component.visualFxSnapshot())
     }
     var renderTimeSecondsValue by remember(component) { mutableFloatStateOf(0f) }
 
-    fun dispatch(action: GameplayAction) {
-        when (val result = component.dispatch(action)) {
-            is GameDispatchResult.Committed -> {
-                renderModelValue = result.snapshot.renderModel
+    fun dispatch(pulse: GameplayInteractionPulse) {
+        when (component.accept(pulse)) {
+            is GameplayAcceptance.Accepted -> {
+                renderModelValue = requireNotNull(
+                    component.query(GameplayQuery.GetRender).renderModel,
+                )
                 visualFxProjectionValue = component.visualFxSnapshot()
             }
-            is GameDispatchResult.Rejected -> Unit
+            is GameplayAcceptance.Rejected -> Unit
         }
     }
 
-    fun dispatchValidated(result: InteractionValidationResult<GameplayAction>) {
+    fun dispatchValidated(result: InteractionValidationResult<GameplayInteractionPulse>) {
         when (result) {
             is InteractionValidationResult.Valid -> dispatch(result.intent)
             is InteractionValidationResult.Invalid -> reportInvalidInteractionInput(result.failure)
@@ -80,13 +84,10 @@ fun GameplayContent(
     fun dispatchInput(input: GameplayInput) {
         when (input) {
             is GameplayInput.Action -> dispatch(input.action)
-            GameplayInput.OpenSettings -> onShellOutput(GameplayOutput.OpenSettings)
-            GameplayInput.OpenRebirth -> onShellOutput(GameplayOutput.OpenRebirth)
-            GameplayInput.ExitToHome -> {
-                dispatch(GameplayAction.ExitRunRequested)
-                onShellOutput(GameplayOutput.ExitToHome)
-            }
-            GameplayInput.RestartRun -> onShellOutput(GameplayOutput.RestartRun)
+            GameplayInput.OpenSettings -> onOutput(GameplayInteractionOutput.OpenSettings)
+            GameplayInput.OpenRebirth -> onOutput(GameplayInteractionOutput.OpenRebirth)
+            GameplayInput.ExitToHome -> onOutput(GameplayInteractionOutput.ExitToHome)
+            GameplayInput.RestartRun -> onOutput(GameplayInteractionOutput.RestartRun)
         }
     }
 
@@ -133,31 +134,45 @@ fun GameplayContent(
             .onKeyEvent { event ->
                 if (!inputEnabled) return@onKeyEvent false
                 if (event.type == KeyEventType.KeyDown) {
-                    dispatch(GameplayAction.UserGestureObserved)
+                    dispatch(GameplayInteractionPulse.UserGestureObserved)
                 }
                 when (event.key) {
-                    Key.Spacebar -> keyDown(event.type) { dispatch(GameplayAction.DashRequested) }
+                    Key.Spacebar -> keyDown(event.type) {
+                        dispatch(GameplayInteractionPulse.DashRequested)
+                    }
                     Key.ShiftLeft, Key.ShiftRight -> {
                         dispatch(
-                            GameplayAction.BrakeChanged(
+                            GameplayInteractionPulse.BrakeChanged(
                                 source = BrakeSource.KEYBOARD,
                                 active = event.type == KeyEventType.KeyDown,
                             ),
                         )
                         true
                     }
-                    Key.P, Key.Escape -> keyDown(event.type) { dispatch(GameplayAction.PauseToggled) }
-                    Key.Q -> keyDown(event.type) { dispatch(GameplayAction.ChoicesRerolled) }
-                    Key.One -> keyDown(event.type) { dispatch(GameplayAction.ChoiceSelected(0)) }
-                    Key.Two -> keyDown(event.type) { dispatch(GameplayAction.ChoiceSelected(1)) }
-                    Key.Three -> keyDown(event.type) { dispatch(GameplayAction.ChoiceSelected(2)) }
-                    Key.Four -> keyDown(event.type) { dispatch(GameplayAction.ChoiceSelected(3)) }
+                    Key.P, Key.Escape -> keyDown(event.type) {
+                        dispatch(GameplayInteractionPulse.PauseToggled)
+                    }
+                    Key.Q -> keyDown(event.type) {
+                        dispatch(GameplayInteractionPulse.ChoicesRerolled)
+                    }
+                    Key.One -> keyDown(event.type) {
+                        dispatch(GameplayInteractionPulse.ChoiceSelected(0))
+                    }
+                    Key.Two -> keyDown(event.type) {
+                        dispatch(GameplayInteractionPulse.ChoiceSelected(1))
+                    }
+                    Key.Three -> keyDown(event.type) {
+                        dispatch(GameplayInteractionPulse.ChoiceSelected(2))
+                    }
+                    Key.Four -> keyDown(event.type) {
+                        dispatch(GameplayInteractionPulse.ChoiceSelected(3))
+                    }
                     Key.Enter -> keyDown(event.type) {
                         when (renderModelValue.phase) {
-                            GamePhase.PAUSED -> dispatch(GameplayAction.PauseToggled)
+                            GamePhase.PAUSED -> dispatch(GameplayInteractionPulse.PauseToggled)
                             GamePhase.GAME_OVER,
                             GamePhase.VICTORY,
-                            -> onShellOutput(GameplayOutput.RestartRun)
+                            -> onOutput(GameplayInteractionOutput.RestartRun)
                             GamePhase.RUNNING,
                             GamePhase.CHOICE,
                             -> Unit
@@ -167,7 +182,7 @@ fun GameplayContent(
                         if (renderModelValue.phase == GamePhase.GAME_OVER ||
                             renderModelValue.phase == GamePhase.VICTORY
                         ) {
-                            onShellOutput(GameplayOutput.RestartRun)
+                            onOutput(GameplayInteractionOutput.RestartRun)
                         }
                     }
                     else -> false
@@ -183,7 +198,9 @@ fun GameplayContent(
                         val event = awaitPointerEvent(PointerEventPass.Main)
                         val position = event.changes.firstOrNull()?.position
                         val pressed = event.changes.any { it.pressed }
-                        val currentRenderModel = component.snapshot().renderModel
+                        val currentRenderModel = requireNotNull(
+                            component.query(GameplayQuery.GetRender).renderModel,
+                        )
                         val validatedMove = position?.let { pointerPosition ->
                             when (
                                 val result = interactionValidator.pointerMoved(
@@ -213,19 +230,24 @@ fun GameplayContent(
                             dispatch(validatedMove)
                         }
                         if (pressed && !wasPressedValue && validatedMove != null) {
-                            dispatch(GameplayAction.UserGestureObserved)
+                            dispatch(GameplayInteractionPulse.UserGestureObserved)
                             currentRenderModel.resolveGameplayPress(validatedMove.x, validatedMove.y)
                                 ?.let(::dispatchInput)
                         }
                         if (!pressed && wasPressedValue) {
-                            dispatch(GameplayAction.BrakeChanged(BrakeSource.TOUCH_CONTROL, active = false))
+                            dispatch(
+                                GameplayInteractionPulse.BrakeChanged(
+                                    BrakeSource.TOUCH_CONTROL,
+                                    active = false,
+                                ),
+                            )
                             hudGestureActiveValue = false
                         }
                         val secondaryPressed = event.buttons.isSecondaryPressed
                         if (secondaryPressed != secondaryBrakeValue) {
                             secondaryBrakeValue = secondaryPressed
                             dispatch(
-                                GameplayAction.BrakeChanged(
+                                GameplayInteractionPulse.BrakeChanged(
                                     BrakeSource.SECONDARY_POINTER,
                                     secondaryPressed,
                                 ),

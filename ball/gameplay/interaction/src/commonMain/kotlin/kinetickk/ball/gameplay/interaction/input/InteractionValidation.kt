@@ -3,9 +3,9 @@
 
 package kinetickk.ball.gameplay.interaction.input
 
-import kinetickk.ball.gameplay.nucleus.protocol.GameplayAction
+import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 
-/** Finite limits enforced before raw platform numbers can become a [GameplayAction]. */
+/** Finite limits enforced before raw platform numbers can become a [GameplayInteractionPulse]. */
 object InteractionIngressLimits {
     const val MIN_FRAME_DELTA_SECONDS = 0f
     const val MAX_FRAME_DELTA_SECONDS = 1f
@@ -48,8 +48,8 @@ sealed interface ValidationFailure {
     }
 }
 
-sealed interface InteractionValidationResult<out Intent : GameplayAction> {
-    data class Valid<out Intent : GameplayAction>(
+sealed interface InteractionValidationResult<out Intent : GameplayInteractionPulse> {
+    data class Valid<out Intent : GameplayInteractionPulse>(
         val intent: Intent,
     ) : InteractionValidationResult<Intent>
 
@@ -70,21 +70,21 @@ class GameInteractionValidator {
 
     fun frameElapsed(
         rawDeltaSeconds: Float,
-    ): InteractionValidationResult<GameplayAction.FrameElapsed> =
+    ): InteractionValidationResult<GameplayInteractionPulse.FrameElapsed> =
         validateBounded(
             value = rawDeltaSeconds,
             field = InteractionInputField.FRAME_DELTA_SECONDS,
             minimum = InteractionIngressLimits.MIN_FRAME_DELTA_SECONDS,
             maximum = InteractionIngressLimits.MAX_FRAME_DELTA_SECONDS,
         ) {
-            GameplayAction.FrameElapsed(realDeltaSeconds = rawDeltaSeconds)
+            GameplayInteractionPulse.FrameElapsed(realDeltaSeconds = rawDeltaSeconds)
         }
 
     fun viewportChanged(
         rawWidthPx: Float,
         rawHeightPx: Float,
         rawDensity: Float,
-    ): InteractionValidationResult<GameplayAction.ViewportChanged> {
+    ): InteractionValidationResult<GameplayInteractionPulse.ViewportChanged> {
         val failure =
             boundedFailure(
                 value = rawWidthPx,
@@ -105,7 +105,7 @@ class GameInteractionValidator {
 
         if (failure != null) return InteractionValidationResult.Invalid(failure)
 
-        val intent = GameplayAction.ViewportChanged(
+        val intent = GameplayInteractionPulse.ViewportChanged(
             width = rawWidthPx,
             height = rawHeightPx,
             density = rawDensity,
@@ -118,12 +118,12 @@ class GameInteractionValidator {
         rawXpx: Float,
         rawYpx: Float,
         active: Boolean = true,
-    ): InteractionValidationResult<GameplayAction.PointerMoved> =
+    ): InteractionValidationResult<GameplayInteractionPulse.PointerMoved> =
         validatePointer(rawXpx, rawYpx) { validatedX, validatedY ->
-            GameplayAction.PointerMoved(x = validatedX, y = validatedY, active = active)
+            GameplayInteractionPulse.PointerMoved(x = validatedX, y = validatedY, active = active)
         }
 
-    private fun <Intent : GameplayAction> validatePointer(
+    private fun <Intent : GameplayInteractionPulse> validatePointer(
         rawXpx: Float,
         rawYpx: Float,
         createIntent: (Float, Float) -> Intent,
@@ -151,7 +151,7 @@ class GameInteractionValidator {
         }
     }
 
-    private inline fun <Intent : GameplayAction> validateBounded(
+    private inline fun <Intent : GameplayInteractionPulse> validateBounded(
         value: Float,
         field: InteractionInputField,
         minimum: Float,

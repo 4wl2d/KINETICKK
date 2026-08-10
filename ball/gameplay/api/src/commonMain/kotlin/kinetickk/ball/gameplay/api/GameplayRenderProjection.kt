@@ -1,28 +1,53 @@
 // SPDX-FileCopyrightText: 2026 Vladislav Tomilov
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package kinetickk.ball.gameplay.nucleus.renderModel
+package kinetickk.ball.gameplay.api
 
-import kinetickk.ball.content.api.*
-
-import kinetickk.foundation.collections.ImmutableList
-import kinetickk.foundation.collections.ImmutableSet
-import kinetickk.ball.gameplay.nucleus.model.ChoiceOption
-import kinetickk.ball.gameplay.nucleus.model.ChoiceType
-import kinetickk.ball.gameplay.nucleus.model.clamp
 import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.gameplay.nucleus.model.EnemyType
 import kinetickk.ball.content.api.EquippedRelic
-import kinetickk.ball.gameplay.nucleus.model.GamePhase
-import kinetickk.ball.profile.api.PlayerPreferences
+import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
-import kinetickk.ball.gameplay.nucleus.model.length
-import kinetickk.ball.gameplay.nucleus.model.PickupType
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
-import kinetickk.ball.gameplay.nucleus.model.WeaponNodeType
+import kinetickk.ball.profile.api.PlayerPreferences
+import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.ImmutableSet
+import kotlin.math.sqrt
+
+enum class GamePhase { RUNNING, PAUSED, CHOICE, GAME_OVER, VICTORY }
+
+enum class EnemyType {
+    DRIFTER,
+    SHOOTER,
+    CHARGER,
+    INTERCEPTOR,
+    WEAVER,
+    WARDEN,
+    SPLITTER,
+    ELITE,
+    ARCHITECT,
+}
+
+enum class PickupType { DATA, KEY, REPAIR, RELIC }
+enum class ChoiceType { ITEM, TOTEM, WEAPON, RELIC, RELIC_BIND }
+enum class TotemAction { AMPLIFY_CURRENT, CHANGE_WEAPON }
+enum class RelicChoiceAction { ACQUIRE, MELD, REPLACE, MELD_TARGET }
+enum class WeaponNodeType { GRAVITY_MINE }
+
+data class ChoiceOption(
+    val type: ChoiceType,
+    val title: String,
+    val description: String,
+    val tag: String,
+    val itemId: Int? = null,
+    val weaponId: WeaponId? = null,
+    val totemAction: TotemAction? = null,
+    val relicId: RelicId? = null,
+    val relicAction: RelicChoiceAction? = null,
+    val relicSlot: Int? = null,
+)
 
 data class EnemyProjection(
     val id: Int,
@@ -71,7 +96,6 @@ data class PickupProjection(
 )
 
 data class TrailPointProjection(val x: Float, val y: Float, val age: Float)
-
 data class TotemProjection(val x: Float, val y: Float, val pulse: Float)
 
 data class WeaponNodeProjection(
@@ -85,10 +109,8 @@ data class WeaponNodeProjection(
 
 data class WeaponOrbitalProjection(val index: Int, val x: Float, val y: Float, val radius: Float)
 
-/**
- * Immutable render payload. No mutable simulation container crosses this boundary.
- */
-class GameplayRenderModel internal constructor(
+/** Immutable, API-owned projection of a committed GameplayRun frame. */
+class GameplayRenderModel(
     val content: GameplayContentSnapshot,
     val phase: GamePhase,
     val settings: PlayerPreferences,
@@ -181,13 +203,13 @@ class GameplayRenderModel internal constructor(
     private val discoveredItemIds: ImmutableSet<Int>,
     private val relicRanks: ImmutableList<Int>,
 ) {
-    val speed: Float get() = length(velocityX, velocityY)
-    val runProgress: Float get() = clamp(elapsed / RUN_DURATION_SECONDS, 0f, 1f)
+    val speed: Float get() = vectorLength(velocityX, velocityY)
+    val runProgress: Float get() = (elapsed / RUN_DURATION_SECONDS).coerceIn(0f, 1f)
     val tetherDistance: Float
         get() {
             val targetX = cameraX + pointerX - screenWidth * 0.5f
             val targetY = cameraY + pointerY - screenHeight * 0.5f
-            return length(targetX - coreX, targetY - coreY)
+            return vectorLength(targetX - coreX, targetY - coreY)
         }
     val dashReady: Boolean get() = !overheated && heat <= MAX_HEAT - dashHeatCost * 0.5f
     val tetherAuthority: Float get() = polarityStability * polarityStability
@@ -207,11 +229,8 @@ class GameplayRenderModel internal constructor(
         get() {
             val current = currentWeaponMastery
             val next = nextWeaponMastery ?: return 1f
-            return clamp(
-                (weaponLevel - current.minimumLevel).toFloat() / (next.minimumLevel - current.minimumLevel),
-                0f,
-                1f,
-            )
+            return ((weaponLevel - current.minimumLevel).toFloat() /
+                (next.minimumLevel - current.minimumLevel)).coerceIn(0f, 1f)
         }
     val choicesCanReroll: Boolean
         get() = phase == GamePhase.CHOICE && rerollsRemaining > 0 && when (choiceType) {
@@ -219,8 +238,10 @@ class GameplayRenderModel internal constructor(
             ChoiceType.TOTEM, ChoiceType.RELIC_BIND -> false
         }
     val itemStacksSnapshot: ImmutableList<Int> get() = itemStacks
+
     fun relicRank(id: RelicId): Int = relicRanks.getOrElse(id.ordinal) { 0 }
     fun itemStack(itemId: Int): Int = itemStacks.getOrElse(itemId) { 0 }
+
     companion object {
         const val RUN_DURATION_SECONDS = 20f * 60f
         const val MAX_HEAT = 100f
@@ -228,3 +249,5 @@ class GameplayRenderModel internal constructor(
         const val FIXED_STEP = 1f / 120f
     }
 }
+
+private fun vectorLength(x: Float, y: Float): Float = sqrt(x * x + y * y)

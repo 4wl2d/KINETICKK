@@ -4,14 +4,25 @@
 package kinetickk.ball.gameplay.interaction
 
 import androidx.compose.runtime.Composable
-import kinetickk.ball.gameplay.api.GameplayController
-import kinetickk.ball.gameplay.api.GameplayOutput
+import kinetickk.ball.gameplay.api.GameplayCommandResult
+import kinetickk.ball.gameplay.api.GameplayPort
+import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.profile.api.ProfileCommandResult
 
-/** Compose-facing gameplay facade. Semantic lifecycle control remains in gameplay API. */
-interface GameplayFeature : GameplayController {
+/** Interaction host for the single currently active GameplayRun. */
+interface GameplayFeature {
+    fun createRun(
+        runId: RunId,
+        commandResultSink: (GameplayCommandResult.Accepted) -> Unit,
+    ): GameplayPort
+
+    fun activeRun(): GameplayPort?
+
+    fun receiveProfileCommandResult(result: ProfileCommandResult.Accepted)
+
     @Composable
     fun Content(
         inputEnabled: Boolean,
-        onOutput: (GameplayOutput) -> Unit,
+        onOutput: (GameplayInteractionOutput) -> Unit,
     )
 }

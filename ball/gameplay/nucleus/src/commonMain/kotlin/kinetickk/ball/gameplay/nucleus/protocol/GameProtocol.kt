@@ -3,47 +3,23 @@
 
 package kinetickk.ball.gameplay.nucleus.protocol
 
-import kinetickk.foundation.collections.ImmutableList
 import kinetickk.ball.profile.api.GameplayProgressUpdate
-import kinetickk.ball.profile.api.PlayerPreferences
+import kinetickk.foundation.collections.ImmutableList
 
-/** Live-run user and lifecycle events accepted by the synchronous gameplay reducer. */
-sealed interface GameplayAction {
-    data class FrameElapsed(val realDeltaSeconds: Float) : GameplayAction
-    data class ViewportChanged(val width: Float, val height: Float, val density: Float) : GameplayAction
-    data class PointerMoved(val x: Float, val y: Float, val active: Boolean = true) : GameplayAction
-    data class BrakeChanged(val source: BrakeSource, val active: Boolean) : GameplayAction
-    data object DashRequested : GameplayAction
-    data object PauseToggled : GameplayAction
-    data object PauseForOverlay : GameplayAction
-    data object ExitRunRequested : GameplayAction
-    data class PreferencesChanged(val preferences: PlayerPreferences) : GameplayAction
-    data class ChoiceSelected(val index: Int) : GameplayAction
-    data object ChoicesRerolled : GameplayAction
-    data object UserGestureObserved : GameplayAction
-}
-
-enum class BrakeSource { KEYBOARD, SECONDARY_POINTER, TOUCH_CONTROL }
-
-/** Work requested by the domain and executed by the feature composition root after commit. */
-sealed interface GameEffect {
+/** Simulation consequences awaiting target-owned correlation and accepted-frame publication. */
+internal sealed interface SimulationOutput {
     data class AdvanceAudio(
         val realDeltaSeconds: Float,
         val cues: ImmutableList<GameplayAudioCue>,
-    ) : GameEffect
+    ) : SimulationOutput
 
-    data object EnsureAudioUnlocked : GameEffect
+    data object EnsureAudioUnlocked : SimulationOutput
 
     data class PublishProgress(
         val update: GameplayProgressUpdate,
-    ) : GameEffect
+    ) : SimulationOutput
 
     data class EmitVisualFx(
         val cues: ImmutableList<VisualFxCue>,
-    ) : GameEffect
-}
-
-sealed interface GameRejection {
-    data class InvalidInput(val field: String, val reason: String) : GameRejection
-    data object RevisionExhausted : GameRejection
+    ) : SimulationOutput
 }

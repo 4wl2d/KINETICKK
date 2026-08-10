@@ -5,15 +5,8 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.toImmutableSet
+import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.model.*
-import kinetickk.ball.gameplay.nucleus.renderModel.EnemyProjection
-import kinetickk.ball.gameplay.nucleus.renderModel.GameplayRenderModel
-import kinetickk.ball.gameplay.nucleus.renderModel.PickupProjection
-import kinetickk.ball.gameplay.nucleus.renderModel.ProjectileProjection
-import kinetickk.ball.gameplay.nucleus.renderModel.TotemProjection
-import kinetickk.ball.gameplay.nucleus.renderModel.TrailPointProjection
-import kinetickk.ball.gameplay.nucleus.renderModel.WeaponNodeProjection
-import kinetickk.ball.gameplay.nucleus.renderModel.WeaponOrbitalProjection
 
 
 internal fun MutableGameState.toRenderModel(): GameplayRenderModel = GameplayRenderModel(

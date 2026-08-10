@@ -10,12 +10,12 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
+import kinetickk.ball.gameplay.api.EnemyProjection
+import kinetickk.ball.gameplay.api.EnemyType
+import kinetickk.ball.gameplay.api.GameplayRenderModel
+import kinetickk.ball.gameplay.api.PickupType
 import kinetickk.ball.gameplay.nucleus.model.clamp
-import kinetickk.ball.gameplay.nucleus.model.EnemyType
-import kinetickk.ball.gameplay.nucleus.model.PickupType
 import kinetickk.ball.gameplay.nucleus.model.TAU
-import kinetickk.ball.gameplay.nucleus.renderModel.EnemyProjection
-import kinetickk.ball.gameplay.nucleus.renderModel.GameplayRenderModel
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kotlin.math.atan2
 import kotlin.math.cos

@@ -3,6 +3,10 @@
 
 package kinetickk.ball.gameplay.nucleus.model
 
+import kinetickk.ball.gameplay.api.EnemyType
+import kinetickk.ball.gameplay.api.PickupType
+import kinetickk.ball.gameplay.api.WeaponNodeType
+
 import kinetickk.ball.content.api.*
 
 

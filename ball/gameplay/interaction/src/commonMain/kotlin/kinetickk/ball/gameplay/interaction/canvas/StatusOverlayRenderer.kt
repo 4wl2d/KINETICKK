@@ -11,8 +11,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import kinetickk.ball.gameplay.api.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.model.formatRunTime
-import kinetickk.ball.gameplay.nucleus.renderModel.GameplayRenderModel
 
 internal fun DrawScope.drawPause(textMeasurer: TextMeasurer) {
     drawRect(Color(0xC9050610))

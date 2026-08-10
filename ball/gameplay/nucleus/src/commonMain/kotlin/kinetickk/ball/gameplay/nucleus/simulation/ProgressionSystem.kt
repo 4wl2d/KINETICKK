@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.*
 
+import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.foundation.collections.toImmutableSet

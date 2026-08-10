@@ -60,10 +60,25 @@ import kinetickk.flow.session.interaction.codex.api.CodexFeature
 import kinetickk.flow.session.interaction.codex.api.CodexOutput
 import kinetickk.flow.session.interaction.codex.api.CodexRunStacks
 import kinetickk.ball.gameplay.interaction.GameplayFeature
-import kinetickk.ball.gameplay.api.GameplayOutput
-import kinetickk.ball.gameplay.api.GameplayUiModel
-import kinetickk.ball.gameplay.api.GameplayUiPhase
+import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
+import kinetickk.ball.gameplay.api.GameplayAcceptance
+import kinetickk.ball.gameplay.api.GameplayActiveWeaponProjection
+import kinetickk.ball.gameplay.api.GameplayCodexStacksProjection
+import kinetickk.ball.gameplay.api.GameplayCommand
+import kinetickk.ball.gameplay.api.GameplayCommandAdmission
+import kinetickk.ball.gameplay.api.GameplayCommandOutcome
+import kinetickk.ball.gameplay.api.GameplayCommandResult
+import kinetickk.ball.gameplay.api.GameplayExitProfileOutcome
+import kinetickk.ball.gameplay.api.GameplayInteractionPulse
+import kinetickk.ball.gameplay.api.GameplayPort
+import kinetickk.ball.gameplay.api.GameplayQuery
+import kinetickk.ball.gameplay.api.GameplayRenderProjection
+import kinetickk.ball.gameplay.api.GameplayRejection
+import kinetickk.ball.gameplay.api.GameplayRevision
+import kinetickk.ball.gameplay.api.GameplayRunPhase
+import kinetickk.ball.gameplay.api.GameplayRunStatusProjection
 import kinetickk.ball.gameplay.api.RunConfiguration
+import kinetickk.ball.gameplay.api.RunId
 import kinetickk.flow.session.interaction.home.api.HomeFeature
 import kinetickk.flow.session.interaction.home.api.HomeOutput
 import kinetickk.flow.session.nucleus.AppDestination
@@ -76,7 +91,9 @@ import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
 import kinetickk.flow.session.interaction.reset.api.ResetModalOutput
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -90,9 +107,11 @@ class AppCompositionOwnerTest {
         assertEquals(1, shell.contentCatalog.uiCatalogCalls)
 
         shell.owner.startNewRun()
-        shell.owner.handleGameplayOutput(GameplayOutput.RestartRun)
+        shell.gameplay.phase = GameplayRunPhase.GAME_OVER
+        shell.owner.handleGameplayOutput(GameplayInteractionOutput.RestartRun)
 
         assertEquals(2, shell.gameplay.starts.size)
+        assertEquals(listOf(RunId(0L), RunId(1L)), shell.gameplay.createdRunIds)
         shell.gameplay.starts.forEach { configuration ->
             assertSame(shell.contentCatalog.gameplaySnapshot, configuration.content)
         }
@@ -108,7 +127,7 @@ class AppCompositionOwnerTest {
 
         assertTrue(shell.owner.handleShortcut(AppShortcut.LAB))
         assertEquals(1, shell.gameplay.pauseCalls)
-        assertEquals(GameplayUiPhase.PAUSED, shell.gameplay.uiModel().phase)
+        assertEquals(GameplayRunPhase.PAUSED, shell.gameplay.phase)
         assertEquals(
             listOf(AppDestination.Gameplay, AppDestination.Lab),
             shell.owner.backStack.entries,
@@ -116,9 +135,8 @@ class AppCompositionOwnerTest {
 
         assertTrue(shell.owner.handleShortcut(AppShortcut.BACK))
         assertEquals(listOf(AppDestination.Gameplay), shell.owner.backStack.entries)
-        assertEquals(GameplayUiPhase.PAUSED, shell.gameplay.uiModel().phase)
+        assertEquals(GameplayRunPhase.PAUSED, shell.gameplay.phase)
         assertEquals(1, shell.gameplay.starts.size)
-        assertEquals(0, shell.gameplay.togglePauseCalls)
     }
 
     @Test
@@ -182,22 +200,25 @@ class AppCompositionOwnerTest {
         assertEquals(listOf(activeConfiguration), shell.gameplay.starts)
         assertTrue(shell.gameplay.appliedPreferences.isEmpty())
 
-        shell.owner.handleGameplayOutput(GameplayOutput.RestartRun)
+        shell.gameplay.phase = GameplayRunPhase.GAME_OVER
+        shell.owner.handleGameplayOutput(GameplayInteractionOutput.RestartRun)
 
         assertEquals(2, shell.gameplay.starts.size)
-        assertEquals(CoreShape.PRISM, shell.gameplay.starts.last().coreShape)
-        assertEquals(WeaponId.MORNINGSTAR, shell.gameplay.starts.last().startingWeapon)
-        assertEquals(nextProfile.labProgress.ranks, shell.gameplay.starts.last().metaRanks)
+        assertEquals(CoreShape.PRISM, shell.gameplay.starts.last().profile.loadout.coreShape)
+        assertEquals(
+            WeaponId.MORNINGSTAR,
+            shell.gameplay.starts.last().profile.loadout.selectedWeapon,
+        )
+        assertEquals(
+            nextProfile.labProgress.ranks,
+            shell.gameplay.starts.last().profile.labProgress.ranks,
+        )
     }
 
     @Test
     fun codexSnapshotContainsCurrentRunStacksOnlyDuringGameplay() {
         val shell = testShell()
-        shell.gameplay.model = GameplayUiModel(
-            phase = GameplayUiPhase.RUNNING,
-            activeWeapon = WeaponId.FLUX_WAKE,
-            itemStacks = immutableListOf(2, 0, 5),
-        )
+        shell.gameplay.nextItemStacks = immutableListOf(2, 0, 5)
 
         assertEquals(CodexRunStacks(), shell.owner.currentRunStacks())
 
@@ -224,9 +245,9 @@ class AppCompositionOwnerTest {
 
         assertEquals(listOf(AppDestination.Gameplay), shell.owner.backStack.entries)
         assertEquals(1, shell.gameplay.starts.size)
-        assertEquals(1, shell.gameplay.starts.single().rebirthLevel)
-        assertEquals(0L, shell.gameplay.starts.single().matterAtStart)
-        assertEquals(1_500L, shell.gameplay.starts.single().lifetimeMatterAtStart)
+        assertEquals(1, shell.gameplay.starts.single().profile.rebirthProgress.level)
+        assertEquals(0L, shell.gameplay.starts.single().profile.economy.matter)
+        assertEquals(1_500L, shell.gameplay.starts.single().profile.economy.lifetimeMatter)
     }
 
     @Test
@@ -245,18 +266,20 @@ class AppCompositionOwnerTest {
         assertEquals(
             listOf(
                 workflowEvent("profile.runBootstrap", AppDestination.Gameplay),
+                workflowEvent("gameplay.status", AppDestination.Gameplay),
                 workflowEvent("gameplay.start", AppDestination.Gameplay),
                 workflowEvent("restart.returned", AppDestination.Gameplay),
             ),
             runShell.workflow.capture("restart.returned") {
-                runShell.owner.handleGameplayOutput(GameplayOutput.RestartRun)
+                runShell.gameplay.phase = GameplayRunPhase.GAME_OVER
+                runShell.owner.handleGameplayOutput(GameplayInteractionOutput.RestartRun)
             },
         )
 
         assertEquals(
             listOf(
-                workflowEvent("gameplay.uiModel", AppDestination.Gameplay),
-                workflowEvent("gameplay.pause", AppDestination.Gameplay, AppDestination.Lab),
+                workflowEvent("gameplay.status", AppDestination.Gameplay),
+                workflowEvent("gameplay.pause", AppDestination.Gameplay),
                 workflowEvent("overlay.returned", AppDestination.Gameplay, AppDestination.Lab),
             ),
             runShell.workflow.capture("overlay.returned") {
@@ -270,10 +293,26 @@ class AppCompositionOwnerTest {
 
         assertEquals(
             listOf(
-                workflowEvent("profile.preferences", AppDestination.Gameplay),
-                workflowEvent("gameplay.applyPreferences", AppDestination.Gameplay),
-                workflowEvent("profile.preferences", AppDestination.Gameplay),
-                workflowEvent("audio.updatePreferences", AppDestination.Gameplay),
+                workflowEvent(
+                    "profile.preferences",
+                    AppDestination.Gameplay,
+                    AppDestination.Settings,
+                ),
+                workflowEvent(
+                    "gameplay.applyPreferences",
+                    AppDestination.Gameplay,
+                    AppDestination.Settings,
+                ),
+                workflowEvent(
+                    "profile.preferences",
+                    AppDestination.Gameplay,
+                    AppDestination.Settings,
+                ),
+                workflowEvent(
+                    "audio.updatePreferences",
+                    AppDestination.Gameplay,
+                    AppDestination.Settings,
+                ),
                 workflowEvent("settings.returned", AppDestination.Gameplay),
             ),
             settingsShell.workflow.capture("settings.returned") {
@@ -300,9 +339,12 @@ class AppCompositionOwnerTest {
         exitShell.owner.startNewRun()
 
         assertEquals(
-            listOf(workflowEvent("exit.returned", AppDestination.Home)),
+            listOf(
+                workflowEvent("gameplay.exit", AppDestination.Gameplay),
+                workflowEvent("exit.returned", AppDestination.Home),
+            ),
             exitShell.workflow.capture("exit.returned") {
-                exitShell.owner.handleGameplayOutput(GameplayOutput.ExitToHome)
+                exitShell.owner.handleGameplayOutput(GameplayInteractionOutput.ExitToHome)
             },
         )
     }
@@ -338,10 +380,7 @@ class AppCompositionOwnerTest {
         assertTrue(muteShell.owner.handleShortcut(AppShortcut.MUTE))
         assertFalse(muteShell.store.preferences.soundEnabled)
         assertFalse(muteShell.store.preferences.musicEnabled)
-        assertEquals(
-            listOf(muteShell.store.preferences),
-            muteShell.gameplay.appliedPreferences,
-        )
+        assertTrue(muteShell.gameplay.appliedPreferences.isEmpty())
     }
 
     @Test
@@ -441,6 +480,68 @@ class AppCompositionOwnerTest {
         assertFalse(shell.owner.handleShortcut(AppShortcut.MUTE))
         assertTrue(shell.gameplay.starts.isEmpty())
     }
+
+    @Test
+    fun gameplayRejectionBeforeAcceptanceUsesTheRetainedCarrierAndDoesNotNavigate() {
+        val shell = testShell()
+        shell.gameplay.nextCommandRejection = GameplayRejection.AlreadyStarted
+
+        shell.owner.startNewRun()
+
+        assertEquals(AppDestination.Home, shell.owner.backStack.base)
+        assertTrue(shell.gameplay.starts.isEmpty())
+        val failure = assertIs<AppGameplayWorkflowFailure.RejectedBeforeAcceptance>(
+            shell.owner.gameplayWorkflowFailure,
+        )
+        assertEquals(RunId(0L), failure.commandRef.targetInstance.runId)
+        assertEquals(failure.commandRef.targetInstance, failure.rejection.instanceId)
+        assertEquals(GameplayRejection.AlreadyStarted, failure.rejection.reason)
+    }
+
+    @Test
+    fun startRetriesTheRetainedCreatedRunAfterRejectionBeforeAcceptance() {
+        val shell = testShell()
+        shell.gameplay.nextCommandRejection = GameplayRejection.AlreadyStarted
+
+        shell.owner.startNewRun()
+        shell.owner.startNewRun()
+
+        assertEquals(listOf(RunId(0L)), shell.gameplay.createdRunIds)
+        assertEquals(1, shell.gameplay.starts.size)
+        assertEquals(AppDestination.Gameplay, shell.owner.backStack.base)
+        assertEquals(null, shell.owner.gameplayWorkflowFailure)
+    }
+
+    @Test
+    fun gameplayAcceptanceMarkerMustRetainTheExactTargetIdentity() {
+        val shell = testShell()
+        shell.gameplay.nextCommandRejection = GameplayRejection.AlreadyStarted
+        shell.gameplay.nextAcceptanceInstance =
+            kinetickk.ball.gameplay.api.GameplayInstanceId(RunId(999L))
+
+        assertFailsWith<IllegalStateException> { shell.owner.startNewRun() }
+
+        assertEquals(AppDestination.Home, shell.owner.backStack.base)
+        assertTrue(shell.gameplay.starts.isEmpty())
+        assertEquals(null, shell.owner.gameplayWorkflowFailure)
+    }
+
+    @Test
+    fun rejectedProfileProgressKeepsTheGameplayRouteAndRecordsAClosedFailure() {
+        val shell = testShell()
+        shell.owner.startNewRun()
+        shell.gameplay.exitProfileOutcome = GameplayExitProfileOutcome.ProgressRejected(
+            observedRevision = ProfileRevision(9L),
+            reason = kinetickk.ball.profile.api.ProfileRejection.NoChange,
+        )
+
+        shell.owner.handleGameplayOutput(GameplayInteractionOutput.ExitToHome)
+
+        assertEquals(AppDestination.Gameplay, shell.owner.backStack.base)
+        assertIs<AppGameplayWorkflowFailure.ExitProgressRejected>(
+            shell.owner.gameplayWorkflowFailure,
+        )
+    }
 }
 
 private data class TestShell(
@@ -539,52 +640,161 @@ private class WorkflowRecorder {
 private class FakeGameplayFeature(
     private val workflow: WorkflowRecorder,
 ) : GameplayFeature {
-    var model: GameplayUiModel = GameplayUiModel()
     val starts = mutableListOf<RunConfiguration>()
     val appliedPreferences = mutableListOf<PlayerPreferences>()
+    val createdRunIds = mutableListOf<RunId>()
+    val receivedProfileResults = mutableListOf<kinetickk.ball.profile.api.ProfileCommandResult.Accepted>()
     var pauseCalls = 0
-    var togglePauseCalls = 0
+    var nextItemStacks = immutableListOf<Int>()
+    var nextCommandRejection: GameplayRejection? = null
+    var nextAcceptanceInstance: kinetickk.ball.gameplay.api.GameplayInstanceId? = null
+    var exitProfileOutcome: GameplayExitProfileOutcome = GameplayExitProfileOutcome.NoProgress
+    private var activeRunValue: FakeGameplayRun? = null
 
-    override fun start(configuration: RunConfiguration) {
-        workflow.record("gameplay.start")
-        starts += configuration
-        model = model.copy(
-            phase = GameplayUiPhase.RUNNING,
-            activeWeapon = configuration.startingWeapon,
-        )
-    }
+    var phase: GameplayRunPhase
+        get() = activeRunValue?.phase ?: GameplayRunPhase.CREATED
+        set(value) {
+            checkNotNull(activeRunValue).phase = value
+        }
 
-    override fun applyPreferences(preferences: PlayerPreferences) {
-        workflow.record("gameplay.applyPreferences")
-        appliedPreferences += preferences
-    }
-
-    override fun pauseForOverlay(): Boolean {
-        workflow.record("gameplay.pause")
-        pauseCalls += 1
-        if (model.phase != GameplayUiPhase.RUNNING) return false
-        model = model.copy(phase = GameplayUiPhase.PAUSED)
-        return true
-    }
-
-    override fun togglePause() {
-        togglePauseCalls += 1
-        model = model.copy(
-            phase = if (model.phase == GameplayUiPhase.PAUSED) {
-                GameplayUiPhase.RUNNING
-            } else {
-                GameplayUiPhase.PAUSED
+    override fun createRun(
+        runId: RunId,
+        commandResultSink: (GameplayCommandResult.Accepted) -> Unit,
+    ): GameplayPort {
+        createdRunIds += runId
+        return FakeGameplayRun(
+            runId = runId,
+            workflow = workflow,
+            commandResultSink = commandResultSink,
+            initialItemStacks = nextItemStacks,
+            onStart = starts::add,
+            onPreferences = appliedPreferences::add,
+            onPause = { pauseCalls += 1 },
+            consumeCommandRejection = {
+                nextCommandRejection.also { nextCommandRejection = null }
             },
-        )
+            consumeAcceptanceInstance = {
+                nextAcceptanceInstance.also { nextAcceptanceInstance = null }
+            },
+            exitProfileOutcome = { exitProfileOutcome },
+        ).also { activeRunValue = it }
     }
 
-    override fun uiModel(): GameplayUiModel {
-        workflow.record("gameplay.uiModel")
-        return model
+    override fun activeRun(): GameplayPort? = activeRunValue
+
+    override fun receiveProfileCommandResult(
+        result: kinetickk.ball.profile.api.ProfileCommandResult.Accepted,
+    ) {
+        receivedProfileResults += result
+        activeRunValue?.receiveProfileCommandResult(result)
     }
 
     @Composable
-    override fun Content(inputEnabled: Boolean, onOutput: (GameplayOutput) -> Unit) = Unit
+    override fun Content(
+        inputEnabled: Boolean,
+        onOutput: (GameplayInteractionOutput) -> Unit,
+    ) = Unit
+}
+
+private class FakeGameplayRun(
+    runId: RunId,
+    private val workflow: WorkflowRecorder,
+    private val commandResultSink: (GameplayCommandResult.Accepted) -> Unit,
+    initialItemStacks: kinetickk.foundation.collections.ImmutableList<Int>,
+    private val onStart: (RunConfiguration) -> Unit,
+    private val onPreferences: (PlayerPreferences) -> Unit,
+    private val onPause: () -> Unit,
+    private val consumeCommandRejection: () -> GameplayRejection?,
+    private val consumeAcceptanceInstance:
+        () -> kinetickk.ball.gameplay.api.GameplayInstanceId?,
+    private val exitProfileOutcome: () -> GameplayExitProfileOutcome,
+) : GameplayPort {
+    override val instanceId = kinetickk.ball.gameplay.api.GameplayInstanceId(runId)
+    private var revisionValue = GameplayRevision.ZERO
+    var phase: GameplayRunPhase = GameplayRunPhase.CREATED
+    private var activeWeaponValue: WeaponId? = null
+    private var itemStacksValue = initialItemStacks
+
+    override fun accept(pulse: GameplayInteractionPulse): GameplayAcceptance {
+        revisionValue = GameplayRevision(revisionValue.value + 1L)
+        if (pulse == GameplayInteractionPulse.PauseToggled) {
+            phase = if (phase == GameplayRunPhase.PAUSED) {
+                GameplayRunPhase.RUNNING
+            } else {
+                GameplayRunPhase.PAUSED
+            }
+        }
+        return GameplayAcceptance.Accepted(instanceId, revisionValue)
+    }
+
+    override fun accept(
+        command: GameplayCommand,
+        admission: GameplayCommandAdmission,
+    ): GameplayAcceptance {
+        check(command.ref.targetInstance == instanceId)
+        check(admission.commandRef == command.ref)
+        val acceptanceInstance = consumeAcceptanceInstance() ?: instanceId
+        consumeCommandRejection()?.let { rejection ->
+            return GameplayAcceptance.Rejected(acceptanceInstance, revisionValue, rejection)
+        }
+        revisionValue = GameplayRevision(revisionValue.value + 1L)
+        val outcome = when (val pulse = command.pulse) {
+            is kinetickk.ball.gameplay.api.GameplaySessionPulse.StartRun -> {
+                workflow.record("gameplay.start")
+                onStart(pulse.configuration)
+                activeWeaponValue = pulse.configuration.profile.loadout.selectedWeapon
+                phase = GameplayRunPhase.RUNNING
+                GameplayCommandOutcome.RunStarted
+            }
+            kinetickk.ball.gameplay.api.GameplaySessionPulse.PauseForOverlay -> {
+                workflow.record("gameplay.pause")
+                onPause()
+                phase = GameplayRunPhase.PAUSED
+                GameplayCommandOutcome.OverlayPaused
+            }
+            is kinetickk.ball.gameplay.api.GameplaySessionPulse.ApplyPreferences -> {
+                workflow.record("gameplay.applyPreferences")
+                onPreferences(pulse.preferences)
+                GameplayCommandOutcome.PreferencesApplied(pulse.preferences)
+            }
+            kinetickk.ball.gameplay.api.GameplaySessionPulse.ExitRun -> {
+                workflow.record("gameplay.exit")
+                phase = GameplayRunPhase.EXITED
+                GameplayCommandOutcome.RunExited(exitProfileOutcome())
+            }
+        }
+        commandResultSink(
+            GameplayCommandResult.Accepted(
+                commandRef = command.ref,
+                targetRevision = revisionValue,
+                outcome = outcome,
+            ),
+        )
+        return GameplayAcceptance.Accepted(acceptanceInstance, revisionValue)
+    }
+
+    override fun query(query: GameplayQuery.GetRender): GameplayRenderProjection =
+        GameplayRenderProjection(instanceId, revisionValue, renderModel = null)
+
+    override fun query(query: GameplayQuery.GetRunStatus): GameplayRunStatusProjection {
+        workflow.record("gameplay.status")
+        return GameplayRunStatusProjection(
+            instanceId = instanceId,
+            revision = revisionValue,
+            phase = phase,
+            profileCommandPending = false,
+        )
+    }
+
+    override fun query(query: GameplayQuery.GetActiveWeapon): GameplayActiveWeaponProjection =
+        GameplayActiveWeaponProjection(instanceId, revisionValue, activeWeaponValue)
+
+    override fun query(query: GameplayQuery.GetCodexStacks): GameplayCodexStacksProjection =
+        GameplayCodexStacksProjection(instanceId, revisionValue, itemStacksValue)
+
+    fun receiveProfileCommandResult(
+        result: kinetickk.ball.profile.api.ProfileCommandResult.Accepted,
+    ) = Unit
 }
 
 private class FakeProfilePort(

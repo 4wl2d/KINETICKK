@@ -3,29 +3,37 @@
 
 package kinetickk.ball.gameplay.nucleus.characterization
 
-import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
+import kinetickk.ball.gameplay.api.BrakeSource
+import kinetickk.ball.gameplay.api.GameplayInteractionPulse
+import kinetickk.ball.gameplay.api.GameplayQuery
+import kinetickk.ball.gameplay.api.GameplayRevision
+import kinetickk.ball.gameplay.api.GameplaySessionPulse
+import kinetickk.ball.gameplay.api.RunConfiguration
+import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.nucleus.GameplayAcceptedFrame
+import kinetickk.ball.gameplay.nucleus.GameplayContext
+import kinetickk.ball.gameplay.nucleus.GameplayDecision
+import kinetickk.ball.gameplay.nucleus.GameplayNucleus
+import kinetickk.ball.gameplay.nucleus.GameplayOutput
+import kinetickk.ball.gameplay.nucleus.GameplayState
 import kinetickk.ball.profile.api.PlayerPreferences
-import kinetickk.ball.gameplay.nucleus.engine.GameDispatchResult
-import kinetickk.ball.gameplay.nucleus.engine.GameEngine
-import kinetickk.ball.gameplay.nucleus.model.EnemyType
+import kinetickk.ball.profile.api.GameplayProfileSnapshot
+import kinetickk.ball.profile.api.PlayerEconomy
+import kinetickk.ball.profile.api.PlayerProfile
+import kinetickk.ball.gameplay.api.GameplayCommand
+import kinetickk.ball.gameplay.api.GameplayCommandAdmission
+import kinetickk.ball.gameplay.api.GameplayCommandRef
+import kinetickk.ball.gameplay.api.GameplayCommandSource
+import kinetickk.ball.gameplay.api.EnemyType
 import kinetickk.ball.gameplay.nucleus.model.Pickup
-import kinetickk.ball.gameplay.nucleus.model.PickupType
+import kinetickk.ball.gameplay.api.PickupType
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.TrailPoint
-import kinetickk.ball.gameplay.nucleus.protocol.BrakeSource
-import kinetickk.ball.gameplay.nucleus.protocol.GameEffect
-import kinetickk.ball.gameplay.nucleus.protocol.GameplayAction
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
-import kinetickk.ball.gameplay.nucleus.reducer.EngineState
-import kinetickk.ball.gameplay.nucleus.reducer.GameReducer
-import kinetickk.ball.gameplay.nucleus.reducer.GameReductionResult
-import kinetickk.ball.gameplay.nucleus.reducer.initialEngineState
 import kinetickk.ball.gameplay.nucleus.simulation.MutableGameState
 import kinetickk.ball.gameplay.nucleus.simulation.addPickup
 import kinetickk.ball.gameplay.nucleus.simulation.addProjectile
 import kinetickk.ball.gameplay.nucleus.simulation.applyPreferences
-import kinetickk.ball.gameplay.nucleus.simulation.emitSound
-import kinetickk.ball.gameplay.nucleus.simulation.emitVisualFx
 import kinetickk.ball.gameplay.nucleus.simulation.sampleFluxTrail
 import kinetickk.ball.gameplay.nucleus.simulation.setVelocityForTesting
 import kinetickk.ball.gameplay.nucleus.simulation.spawnEnemy
@@ -45,38 +53,36 @@ import kotlin.test.assertTrue
 class GameplayBaselineCharacterizationTest {
     @Test
     fun seededIntentTraceHasStableCheckpoints() {
-        val engine = GameEngine.create(
-            content = canonicalGameplayContent,
-            bootstrapProgress = null,
-            seed = 0x4B1D,
-            initialMatter = 17,
-        )
+        var state = startCharacterizedRun(seed = 0x4B1D, initialMatter = 17)
         val actions = listOf(
-            GameplayAction.ViewportChanged(width = 960f, height = 540f, density = 1.25f),
-            GameplayAction.PointerMoved(x = 820f, y = 135f),
-            GameplayAction.FrameElapsed(1f / 60f),
-            GameplayAction.DashRequested,
-            GameplayAction.FrameElapsed(1f / 30f),
-            GameplayAction.BrakeChanged(BrakeSource.KEYBOARD, active = true),
-            GameplayAction.FrameElapsed(0.05f),
-            GameplayAction.PointerMoved(x = 180f, y = 430f),
-            GameplayAction.BrakeChanged(BrakeSource.KEYBOARD, active = false),
-            GameplayAction.FrameElapsed(0.1f),
-            GameplayAction.FrameElapsed(0.075f),
-            GameplayAction.FrameElapsed(0.1f),
-            GameplayAction.FrameElapsed(0.1f),
-            GameplayAction.FrameElapsed(0.1f),
+            GameplayInteractionPulse.ViewportChanged(width = 960f, height = 540f, density = 1.25f),
+            GameplayInteractionPulse.PointerMoved(x = 820f, y = 135f),
+            GameplayInteractionPulse.FrameElapsed(1f / 60f),
+            GameplayInteractionPulse.DashRequested,
+            GameplayInteractionPulse.FrameElapsed(1f / 30f),
+            GameplayInteractionPulse.BrakeChanged(BrakeSource.KEYBOARD, active = true),
+            GameplayInteractionPulse.FrameElapsed(0.05f),
+            GameplayInteractionPulse.PointerMoved(x = 180f, y = 430f),
+            GameplayInteractionPulse.BrakeChanged(BrakeSource.KEYBOARD, active = false),
+            GameplayInteractionPulse.FrameElapsed(0.1f),
+            GameplayInteractionPulse.FrameElapsed(0.075f),
+            GameplayInteractionPulse.FrameElapsed(0.1f),
+            GameplayInteractionPulse.FrameElapsed(0.1f),
+            GameplayInteractionPulse.FrameElapsed(0.1f),
         )
 
         val checkpoints = actions.mapNotNull { action ->
-            val committed = assertIs<GameDispatchResult.Committed>(engine.dispatch(action))
-            if (action is GameplayAction.FrameElapsed) committed.toTraceCheckpoint() else null
+            val frame = assertIs<GameplayDecision.Accepted>(
+                GameplayNucleus.decide(state, action),
+            ).frame
+            state = frame.nextState
+            if (action is GameplayInteractionPulse.FrameElapsed) frame.toTraceCheckpoint() else null
         }
 
         assertEquals(
             listOf(
                 TraceCheckpoint(
-                    revision = 3uL,
+                    revision = 4,
                     elapsedSteps = 2,
                     coreXCentipixels = 35,
                     coreYCentipixels = -14,
@@ -95,7 +101,7 @@ class GameplayBaselineCharacterizationTest {
                     audioCues = "",
                 ),
                 TraceCheckpoint(
-                    revision = 5uL,
+                    revision = 6,
                     elapsedSteps = 6,
                     coreXCentipixels = 2_055,
                     coreYCentipixels = -816,
@@ -114,7 +120,7 @@ class GameplayBaselineCharacterizationTest {
                     audioCues = "DASH",
                 ),
                 TraceCheckpoint(
-                    revision = 7uL,
+                    revision = 8,
                     elapsedSteps = 13,
                     coreXCentipixels = 5_411,
                     coreYCentipixels = -2_148,
@@ -133,7 +139,7 @@ class GameplayBaselineCharacterizationTest {
                     audioCues = "",
                 ),
                 TraceCheckpoint(
-                    revision = 10uL,
+                    revision = 11,
                     elapsedSteps = 27,
                     coreXCentipixels = 10_433,
                     coreYCentipixels = -4_002,
@@ -152,7 +158,7 @@ class GameplayBaselineCharacterizationTest {
                     audioCues = "",
                 ),
                 TraceCheckpoint(
-                    revision = 11uL,
+                    revision = 12,
                     elapsedSteps = 37,
                     coreXCentipixels = 12_615,
                     coreYCentipixels = -4_621,
@@ -171,7 +177,7 @@ class GameplayBaselineCharacterizationTest {
                     audioCues = "",
                 ),
                 TraceCheckpoint(
-                    revision = 12uL,
+                    revision = 13,
                     elapsedSteps = 51,
                     coreXCentipixels = 13_912,
                     coreYCentipixels = -4_610,
@@ -190,7 +196,7 @@ class GameplayBaselineCharacterizationTest {
                     audioCues = "",
                 ),
                 TraceCheckpoint(
-                    revision = 13uL,
+                    revision = 14,
                     elapsedSteps = 65,
                     coreXCentipixels = 13_420,
                     coreYCentipixels = -3_710,
@@ -209,7 +215,7 @@ class GameplayBaselineCharacterizationTest {
                     audioCues = "",
                 ),
                 TraceCheckpoint(
-                    revision = 14uL,
+                    revision = 15,
                     elapsedSteps = 79,
                     coreXCentipixels = 11_414,
                     coreYCentipixels = -2_061,
@@ -310,31 +316,10 @@ class GameplayBaselineCharacterizationTest {
         assertEquals(3, state.enemies.size)
     }
 
-    @Test
-    fun fullSemanticOutputBatchIsBoundedToThreeAndKeepsItsOrdering() {
-        val state = initialEngineState(
-            content = canonicalGameplayContent,
-            seed = 705,
-            bootstrapProgress = null,
-            initialMatter = 0,
-        ).model
-        state.pendingBankedMatter = 9L
-        state.emitVisualFx(VisualFxCue.ShockwaveAdded(1f, 2f, 0.3f, 40f, 2))
-        state.emitSound(GameplayAudioCue.DASH)
-
-        val reduction = assertIs<GameReductionResult.Accepted>(
-            GameReducer().reduce(EngineState(state), GameplayAction.FrameElapsed(0f)),
-        ).value
-
-        assertEquals(3, reduction.effects.size)
-        assertIs<GameEffect.EmitVisualFx>(reduction.effects[0])
-        assertIs<GameEffect.PublishProgress>(reduction.effects[1])
-        assertIs<GameEffect.AdvanceAudio>(reduction.effects[2])
-    }
 }
 
 private data class TraceCheckpoint(
-    val revision: ULong,
+    val revision: Long,
     val elapsedSteps: Int,
     val coreXCentipixels: Int,
     val coreYCentipixels: Int,
@@ -353,10 +338,10 @@ private data class TraceCheckpoint(
     val audioCues: String,
 )
 
-private fun GameDispatchResult.Committed.toTraceCheckpoint(): TraceCheckpoint {
-    val model = snapshot.renderModel
+private fun GameplayAcceptedFrame.toTraceCheckpoint(): TraceCheckpoint {
+    val model = renderProjection.renderModel!!
     return TraceCheckpoint(
-        revision = snapshot.revision,
+        revision = nextState.revision.value,
         elapsedSteps = (model.elapsed / MutableGameState.FIXED_STEP).roundToInt(),
         coreXCentipixels = model.coreX.centi(),
         coreYCentipixels = model.coreY.centi(),
@@ -370,23 +355,57 @@ private fun GameDispatchResult.Committed.toTraceCheckpoint(): TraceCheckpoint {
         projectileCount = model.projectiles.size,
         pickupCount = model.pickups.size,
         trailCount = model.trail.size,
-        effectOrder = effects.joinToString(separator = ">") { effect ->
-            when (effect) {
-                is GameEffect.EmitVisualFx -> "FX"
-                is GameEffect.PublishProgress -> "PROGRESS"
-                is GameEffect.AdvanceAudio -> "AUDIO"
-                GameEffect.EnsureAudioUnlocked -> "UNLOCK_AUDIO"
+        effectOrder = outputs.joinToString(separator = ">") { output ->
+            when (output) {
+                is GameplayOutput.EmitVisualFx -> "FX"
+                is GameplayOutput.SendProfileCommand -> "PROGRESS"
+                is GameplayOutput.AdvanceAudio -> "AUDIO"
+                GameplayOutput.EnsureAudioUnlocked -> "UNLOCK_AUDIO"
+                is GameplayOutput.CompleteCommand -> "COMPLETE"
             }
         },
-        visualCueCount = effects.filterIsInstance<GameEffect.EmitVisualFx>().sumOf { it.cues.size },
-        audioCues = effects.filterIsInstance<GameEffect.AdvanceAudio>()
+        visualCueCount = outputs.filterIsInstance<GameplayOutput.EmitVisualFx>().sumOf { it.cues.size },
+        audioCues = outputs.filterIsInstance<GameplayOutput.AdvanceAudio>()
             .flatMap { it.cues }
             .joinToString(separator = ",") { it.name },
     )
 }
 
-private fun kinetickk.ball.gameplay.nucleus.renderModel.EnemyProjection.traceToken(): String =
+private fun kinetickk.ball.gameplay.api.EnemyProjection.traceToken(): String =
     "$id:${type.name}:${x.centi()}:${y.centi()}:${vx.centi()}:${vy.centi()}:${hp.centi()}"
+
+private fun startCharacterizedRun(seed: Int, initialMatter: Long): GameplayState {
+    val profile = PlayerProfile(
+        economy = PlayerEconomy(initialMatter, initialMatter),
+    ).toGameplaySnapshot()
+    val initial = GameplayState.initial(RunId(0))
+    val pulse = GameplaySessionPulse.StartRun(
+        RunConfiguration(canonicalGameplayContent, profile, seed),
+    )
+    val ref = GameplayCommandRef(
+        GameplayCommandSource.LocalSession,
+        initial.instanceId,
+        sourceRevision = 0,
+        ordinal = 0,
+    )
+    val command = GameplayCommand(ref, pulse)
+    return assertIs<GameplayDecision.Accepted>(
+        GameplayNucleus.decide(
+            initial,
+            pulse,
+            GameplayContext(command, GameplayCommandAdmission(ref)),
+        ),
+    ).frame.nextState
+}
+
+private fun PlayerProfile.toGameplaySnapshot(): GameplayProfileSnapshot = GameplayProfileSnapshot(
+    preferences,
+    economy,
+    loadout,
+    labProgress,
+    collection,
+    rebirthProgress,
+)
 
 private fun Float.centi(): Int = (this * 100f).roundToInt()
 

@@ -5,8 +5,8 @@ package kinetickk.ball.gameplay.interaction.canvas
 
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import kinetickk.foundation.design.*
-import kinetickk.ball.gameplay.nucleus.model.GamePhase
-import kinetickk.ball.gameplay.nucleus.renderModel.GameplayRenderModel
+import kinetickk.ball.gameplay.api.GamePhase
+import kinetickk.ball.gameplay.api.GameplayRenderModel
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kotlin.math.cos
 import kotlin.math.sin

@@ -10,18 +10,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import kinetickk.foundation.design.SpaceBlack
-import kinetickk.ball.profile.api.PlayerPreferences
-import kinetickk.ball.profile.api.ProfilePort
-import kinetickk.ball.gameplay.api.GameplayOutput
-import kinetickk.ball.gameplay.api.GameplayUiModel
-import kinetickk.ball.gameplay.api.GameplayUiPhase
-import kinetickk.ball.gameplay.api.RunConfiguration
+import kinetickk.ball.gameplay.api.GameplayCommandResult
+import kinetickk.ball.gameplay.api.GameplayPort
+import kinetickk.ball.gameplay.api.GameplayQuery
+import kinetickk.ball.gameplay.api.GameplayRunPhase
+import kinetickk.ball.gameplay.api.RunId
 import kinetickk.ball.gameplay.interaction.GameplayContent
 import kinetickk.ball.gameplay.interaction.GameplayFeature
-import kinetickk.ball.gameplay.nucleus.engine.GameDispatchResult
-import kinetickk.ball.gameplay.nucleus.model.GamePhase
-import kinetickk.ball.gameplay.nucleus.protocol.GameplayAction
+import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
+import kinetickk.ball.profile.api.ProfileCommandResult
+import kinetickk.ball.profile.api.ProfilePort
+import kinetickk.foundation.design.SpaceBlack
 import kinetickk.resource.audio.api.AudioService
 
 class DefaultGameplayFeature(
@@ -31,43 +30,31 @@ class DefaultGameplayFeature(
     private val audioExecutor = ResourceGameplayAudioExecutor(audioService)
     private var componentValue by mutableStateOf<GameComponent?>(null)
 
-    override fun start(configuration: RunConfiguration) {
-        componentValue = GameComponent.create(
-            configuration = configuration,
+    override fun createRun(
+        runId: RunId,
+        commandResultSink: (GameplayCommandResult.Accepted) -> Unit,
+    ): GameplayPort {
+        ensureReplacementAllowed(runId)
+        return GameComponent.create(
+            runId = runId,
             profilePort = profilePort,
             audioExecutor = audioExecutor,
-        )
+            commandResultSink = commandResultSink,
+        ).also { componentValue = it }
     }
 
-    override fun applyPreferences(preferences: PlayerPreferences) {
-        componentValue?.dispatch(GameplayAction.PreferencesChanged(preferences))
-    }
+    override fun activeRun(): GameplayPort? = componentValue
 
-    override fun pauseForOverlay(): Boolean {
-        val component = componentValue ?: return false
-        if (component.snapshot().renderModel.phase != GamePhase.RUNNING) return false
-        val result = component.dispatch(GameplayAction.PauseForOverlay)
-        return result is GameDispatchResult.Committed &&
-            result.snapshot.renderModel.phase == GamePhase.PAUSED
-    }
-
-    override fun togglePause() {
-        componentValue?.dispatch(GameplayAction.PauseToggled)
-    }
-
-    override fun uiModel(): GameplayUiModel {
-        val renderModel = componentValue?.snapshot()?.renderModel ?: return GameplayUiModel()
-        return GameplayUiModel(
-            phase = renderModel.phase.toUiPhase(),
-            activeWeapon = renderModel.weapon,
-            itemStacks = renderModel.itemStacksSnapshot,
-        )
+    override fun receiveProfileCommandResult(result: ProfileCommandResult.Accepted) {
+        checkNotNull(componentValue) {
+            "Cannot deliver a Profile command result before creating a GameplayRun"
+        }.receiveProfileCommandResult(result)
     }
 
     @Composable
     override fun Content(
         inputEnabled: Boolean,
-        onOutput: (GameplayOutput) -> Unit,
+        onOutput: (GameplayInteractionOutput) -> Unit,
     ) {
         val component = componentValue
         if (component == null) {
@@ -76,16 +63,31 @@ class DefaultGameplayFeature(
             GameplayContent(
                 component = component,
                 inputEnabled = inputEnabled,
-                onShellOutput = onOutput,
+                onOutput = onOutput,
             )
         }
     }
-}
 
-private fun GamePhase.toUiPhase(): GameplayUiPhase = when (this) {
-    GamePhase.RUNNING -> GameplayUiPhase.RUNNING
-    GamePhase.PAUSED -> GameplayUiPhase.PAUSED
-    GamePhase.CHOICE -> GameplayUiPhase.CHOICE
-    GamePhase.GAME_OVER -> GameplayUiPhase.GAME_OVER
-    GamePhase.VICTORY -> GameplayUiPhase.VICTORY
+    private fun ensureReplacementAllowed(runId: RunId) {
+        val active = componentValue ?: return
+        val status = active.query(GameplayQuery.GetRunStatus)
+        check(!status.profileCommandPending) {
+            "Cannot replace a GameplayRun with a pending Profile command"
+        }
+        when (status.phase) {
+            GameplayRunPhase.CREATED,
+            GameplayRunPhase.RUNNING,
+            GameplayRunPhase.PAUSED,
+            GameplayRunPhase.CHOICE,
+            -> error("Cannot replace a non-terminal GameplayRun")
+
+            GameplayRunPhase.GAME_OVER,
+            GameplayRunPhase.VICTORY,
+            GameplayRunPhase.EXITED,
+            -> Unit
+        }
+        require(runId.value > active.instanceId.runId.value) {
+            "Gameplay RunId must increase monotonically"
+        }
+    }
 }

@@ -3,14 +3,10 @@
 
 package kinetickk.ball.gameplay.interaction
 
+import kinetickk.ball.gameplay.api.GameplayPort
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
-import kinetickk.ball.gameplay.nucleus.engine.GameDispatchResult
-import kinetickk.ball.gameplay.nucleus.engine.GameSnapshot
-import kinetickk.ball.gameplay.nucleus.protocol.GameplayAction
 
 /** Ball-internal bridge used by Interaction without depending on gameplay impl. */
-interface GameplayInteractionPort {
-    fun dispatch(action: GameplayAction): GameDispatchResult
-    fun snapshot(): GameSnapshot
+interface GameplayInteractionPort : GameplayPort {
     fun visualFxSnapshot(): VisualFxProjection
 }

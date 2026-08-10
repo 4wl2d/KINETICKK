@@ -14,11 +14,11 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
-import kinetickk.ball.gameplay.nucleus.model.ChoiceOption
-import kinetickk.ball.gameplay.nucleus.model.ChoiceType
-import kinetickk.ball.gameplay.nucleus.model.RelicChoiceAction
-import kinetickk.ball.gameplay.nucleus.model.TotemAction
-import kinetickk.ball.gameplay.nucleus.renderModel.GameplayRenderModel
+import kinetickk.ball.gameplay.api.ChoiceOption
+import kinetickk.ball.gameplay.api.ChoiceType
+import kinetickk.ball.gameplay.api.GameplayRenderModel
+import kinetickk.ball.gameplay.api.RelicChoiceAction
+import kinetickk.ball.gameplay.api.TotemAction
 import kotlin.math.min
 import kotlin.math.sin
 

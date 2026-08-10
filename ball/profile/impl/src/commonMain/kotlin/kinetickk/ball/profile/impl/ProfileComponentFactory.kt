@@ -4,11 +4,16 @@
 package kinetickk.ball.profile.impl
 
 import kinetickk.ball.content.api.ProfilePolicySnapshot
+import kinetickk.ball.profile.api.ProfileCommandResult
 import kinetickk.ball.profile.api.ProfilePort
 import kinetickk.ball.profile.resource.createPlatformProfileResource
 
-fun createPlatformProfileComponent(policy: ProfilePolicySnapshot): ProfilePort =
+fun createPlatformProfileComponent(
+    policy: ProfilePolicySnapshot,
+    commandResultSink: (ProfileCommandResult.Accepted) -> Unit = {},
+): ProfilePort =
     DefaultProfileComponent(
         resource = createPlatformProfileResource(),
         policy = policy,
+        commandResultSink = commandResultSink,
     )

@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.*
 
+import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.model.*
 import kotlin.math.max
 import kotlin.math.min

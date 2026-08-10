@@ -3,7 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.input
 
-import kinetickk.ball.gameplay.nucleus.protocol.GameplayAction
+import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.interaction.input.GameInteractionValidator
 import kinetickk.ball.gameplay.interaction.input.InteractionIngressLimits
 import kinetickk.ball.gameplay.interaction.input.InteractionInputField
@@ -22,13 +22,13 @@ class GameInteractionValidationTest {
 
         assertEquals(
             InteractionIngressLimits.MIN_FRAME_DELTA_SECONDS,
-            valid<GameplayAction.FrameElapsed>(
+            valid<GameplayInteractionPulse.FrameElapsed>(
                 validator.frameElapsed(InteractionIngressLimits.MIN_FRAME_DELTA_SECONDS),
             ).realDeltaSeconds,
         )
         assertEquals(
             InteractionIngressLimits.MAX_FRAME_DELTA_SECONDS,
-            valid<GameplayAction.FrameElapsed>(
+            valid<GameplayInteractionPulse.FrameElapsed>(
                 validator.frameElapsed(InteractionIngressLimits.MAX_FRAME_DELTA_SECONDS),
             ).realDeltaSeconds,
         )
@@ -55,7 +55,7 @@ class GameInteractionValidationTest {
     fun viewportAcceptsNAndRejectsNPlusOneForEveryBoundedField() {
         val validator = GameInteractionValidator()
         val maximum = InteractionIngressLimits.MAX_VIEWPORT_DIMENSION_PX
-        val accepted = valid<GameplayAction.ViewportChanged>(
+        val accepted = valid<GameplayInteractionPulse.ViewportChanged>(
             validator.viewportChanged(
                 rawWidthPx = maximum,
                 rawHeightPx = maximum,
@@ -91,7 +91,7 @@ class GameInteractionValidationTest {
             InteractionInputField.DENSITY,
         )
 
-        valid<GameplayAction.ViewportChanged>(
+        valid<GameplayInteractionPulse.ViewportChanged>(
             validator.viewportChanged(
                 rawWidthPx = InteractionIngressLimits.MIN_VIEWPORT_DIMENSION_PX,
                 rawHeightPx = InteractionIngressLimits.MIN_VIEWPORT_DIMENSION_PX,
@@ -118,11 +118,17 @@ class GameInteractionValidationTest {
         assertIs<ValidationFailure.MissingValidatedViewport>(
             invalid(validator.pointerMoved(0f, 0f)),
         )
-        valid<GameplayAction.ViewportChanged>(validator.viewportChanged(100f, 50f, 1f))
+        valid<GameplayInteractionPulse.ViewportChanged>(
+            validator.viewportChanged(100f, 50f, 1f),
+        )
 
-        val origin = valid<GameplayAction.PointerMoved>(validator.pointerMoved(0f, 0f, active = false))
+        val origin = valid<GameplayInteractionPulse.PointerMoved>(
+            validator.pointerMoved(0f, 0f, active = false),
+        )
         assertFalse(origin.active)
-        val edge = valid<GameplayAction.PointerMoved>(validator.pointerMoved(100f, 50f))
+        val edge = valid<GameplayInteractionPulse.PointerMoved>(
+            validator.pointerMoved(100f, 50f),
+        )
         assertEquals(100f, edge.x)
         assertEquals(50f, edge.y)
 
@@ -147,32 +153,34 @@ class GameInteractionValidationTest {
     @Test
     fun invalidViewportDoesNotReplaceTheLastValidatedPointerBoundary() {
         val validator = GameInteractionValidator()
-        valid<GameplayAction.ViewportChanged>(validator.viewportChanged(100f, 50f, 1f))
+        valid<GameplayInteractionPulse.ViewportChanged>(
+            validator.viewportChanged(100f, 50f, 1f),
+        )
         assertNonFinite(
             validator.viewportChanged(200f, 100f, Float.NaN),
             InteractionInputField.DENSITY,
         )
 
-        valid<GameplayAction.PointerMoved>(validator.pointerMoved(100f, 50f))
+        valid<GameplayInteractionPulse.PointerMoved>(validator.pointerMoved(100f, 50f))
         assertOutOfRange(
             validator.pointerMoved(101f, 50f),
             InteractionInputField.POINTER_X_PX,
         )
     }
 
-    private inline fun <reified Intent : GameplayAction> valid(
-        result: InteractionValidationResult<GameplayAction>,
+    private inline fun <reified Intent : GameplayInteractionPulse> valid(
+        result: InteractionValidationResult<GameplayInteractionPulse>,
     ): Intent {
         val valid = assertIs<InteractionValidationResult.Valid<*>>(result)
         return assertIs<Intent>(valid.intent)
     }
 
     private fun invalid(
-        result: InteractionValidationResult<GameplayAction>,
+        result: InteractionValidationResult<GameplayInteractionPulse>,
     ): ValidationFailure = assertIs<InteractionValidationResult.Invalid>(result).failure
 
     private fun assertOutOfRange(
-        result: InteractionValidationResult<GameplayAction>,
+        result: InteractionValidationResult<GameplayInteractionPulse>,
         expectedField: InteractionInputField,
     ) {
         val failure = assertIs<ValidationFailure.OutOfRange>(invalid(result))
@@ -182,7 +190,7 @@ class GameInteractionValidationTest {
     }
 
     private fun assertNonFinite(
-        result: InteractionValidationResult<GameplayAction>,
+        result: InteractionValidationResult<GameplayInteractionPulse>,
         expectedField: InteractionInputField,
     ) {
         val failure = assertIs<ValidationFailure.NonFinite>(invalid(result))
