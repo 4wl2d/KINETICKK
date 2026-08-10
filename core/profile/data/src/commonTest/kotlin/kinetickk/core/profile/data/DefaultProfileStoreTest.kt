@@ -234,6 +234,21 @@ class DefaultProfileStoreTest {
     }
 
     @Test
+    fun rejectedLabPurchaseDoesNotPublishOrPersist() {
+        val original = PlayerProfile(economy = PlayerEconomy(0L, 0L))
+        val resource = RecordingResource(loaded = original)
+        val store = DefaultProfileStore(resource)
+
+        val result = assertIs<ProfileMutationResult.Rejected>(
+            store.purchaseMetaUpgrade(MetaUpgradeId.CORE_INTEGRITY),
+        )
+
+        assertEquals(ProfileMutationRejection.INSUFFICIENT_MATTER, result.reason)
+        assertEquals(original, store.profileSnapshot())
+        assertTrue(resource.persisted.isEmpty())
+    }
+
+    @Test
     fun persistenceUncertaintyDoesNotRollbackCommittedProfile() {
         val resource = RecordingResource(
             loaded = PlayerProfile(),
@@ -250,11 +265,55 @@ class DefaultProfileStoreTest {
         assertIs<ProfilePersistResult.OutcomeUnknown>(result.persistence)
         assertEquals(0.5f, store.preferences().masterVolume)
     }
+
+    @Test
+    fun persistenceUncertaintyDoesNotRollbackAcceptedLabPurchase() {
+        val initialMatter = 1_000L
+        val resource = RecordingResource(
+            loaded = PlayerProfile(economy = PlayerEconomy(initialMatter, initialMatter)),
+            persistResult = ProfilePersistResult.OutcomeUnknown(
+                kinetickk.core.profile.api.ProfileResourceFailure.PROVIDER_WRITE_MAY_HAVE_EXECUTED,
+            ),
+        )
+        val store = DefaultProfileStore(resource)
+
+        val result = assertIs<ProfileMutationResult.Applied>(
+            store.purchaseMetaUpgrade(MetaUpgradeId.CORE_INTEGRITY),
+        )
+
+        assertIs<ProfilePersistResult.OutcomeUnknown>(result.persistence)
+        assertEquals(1, store.labSnapshot().progress.rank(MetaUpgradeId.CORE_INTEGRITY))
+        assertEquals(
+            initialMatter - MetaUpgradeCatalog.byId(MetaUpgradeId.CORE_INTEGRITY).cost(0),
+            store.labSnapshot().economy.matter,
+        )
+    }
+
+    @Test
+    fun acceptedProfileStateIsVisibleBeforeItsPersistenceEffectRuns() {
+        lateinit var store: DefaultProfileStore
+        var effectObserved = false
+        val resource = RecordingResource(
+            loaded = PlayerProfile(economy = PlayerEconomy(1_000L, 1_000L)),
+            onPersist = { acceptedSnapshot ->
+                effectObserved = true
+                assertEquals(acceptedSnapshot, store.profileSnapshot())
+            },
+        )
+        store = DefaultProfileStore(resource)
+
+        assertIs<ProfileMutationResult.Applied>(
+            store.purchaseMetaUpgrade(MetaUpgradeId.CORE_INTEGRITY),
+        )
+
+        assertTrue(effectObserved)
+    }
 }
 
 private class RecordingResource(
     loaded: PlayerProfile? = null,
     private val persistResult: ProfilePersistResult = ProfilePersistResult.Persisted,
+    private val onPersist: (PlayerProfile) -> Unit = {},
 ) : ProfileResource {
     override val providerId: ProfileProviderId = ProfileProviderId.PLATFORM_LOCAL
     private val loadResult = loaded?.let(ProfileLoadResult::Loaded) ?: ProfileLoadResult.NotFound
@@ -263,6 +322,7 @@ private class RecordingResource(
     override fun load(): ProfileLoadResult = loadResult
 
     override fun persist(profile: PlayerProfile): ProfilePersistResult {
+        onPersist(profile)
         persisted += profile
         return persistResult
     }

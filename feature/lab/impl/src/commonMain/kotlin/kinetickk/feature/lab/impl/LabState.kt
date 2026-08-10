@@ -33,17 +33,11 @@ internal data class LabReduction(
 
 internal object LabReducer {
     fun reduce(state: LabState, action: LabAction): LabReduction = when (action) {
-        is LabAction.PurchaseRequested -> {
-            val upgrade = state.model.upgrades.firstOrNull { it.id == action.id }
-            if (upgrade == null || upgrade.isMaxed || !upgrade.isAffordable) {
-                LabReduction(state)
-            } else {
-                LabReduction(
-                    state = state,
-                    effects = listOf(LabEffect.Purchase(action.id)),
-                )
-            }
-        }
+        is LabAction.PurchaseRequested -> LabReduction(
+            state = state,
+            // Affordability and rank limits depend on canonical Profile state and belong to its Nucleus.
+            effects = listOf(LabEffect.Purchase(action.id)),
+        )
         LabAction.Back -> LabReduction(
             state = state,
             effects = listOf(

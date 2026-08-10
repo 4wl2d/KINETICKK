@@ -50,16 +50,19 @@ class LabReducerTest {
     }
 
     @Test
-    fun unaffordableOrMaxedCardsDoNotRequestMutation() {
+    fun purchaseIntentAlwaysReachesTheCanonicalProfileAuthority() {
         val poor = LabProfileSnapshot(
             economy = PlayerEconomy(matter = 0L),
             progress = LabProgress(),
         ).toRenderModel()
-        assertTrue(
-            LabReducer.reduce(
-                LabState(poor),
-                LabAction.PurchaseRequested(MetaUpgradeId.CORE_INTEGRITY),
-            ).effects.isEmpty(),
+        assertEquals(
+            MetaUpgradeId.CORE_INTEGRITY,
+            assertIs<LabEffect.Purchase>(
+                LabReducer.reduce(
+                    LabState(poor),
+                    LabAction.PurchaseRequested(MetaUpgradeId.CORE_INTEGRITY),
+                ).effects.single(),
+            ).id,
         )
 
         val maxRanks = MetaUpgradeId.entries.map { MetaUpgradeCatalog.byId(it).maxRanks }
@@ -67,11 +70,14 @@ class LabReducerTest {
             economy = PlayerEconomy(matter = Long.MAX_VALUE),
             progress = LabProgress(maxRanks),
         ).toRenderModel()
-        assertTrue(
-            LabReducer.reduce(
-                LabState(maxed),
-                LabAction.PurchaseRequested(MetaUpgradeId.CORE_INTEGRITY),
-            ).effects.isEmpty(),
+        assertEquals(
+            MetaUpgradeId.CORE_INTEGRITY,
+            assertIs<LabEffect.Purchase>(
+                LabReducer.reduce(
+                    LabState(maxed),
+                    LabAction.PurchaseRequested(MetaUpgradeId.CORE_INTEGRITY),
+                ).effects.single(),
+            ).id,
         )
     }
 

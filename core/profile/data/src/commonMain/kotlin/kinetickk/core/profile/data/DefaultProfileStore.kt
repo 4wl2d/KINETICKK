@@ -5,7 +5,6 @@ package kinetickk.core.profile.data
 
 import kinetickk.core.content.CoreShape
 import kinetickk.core.content.ItemCatalog
-import kinetickk.core.content.MetaUpgradeCatalog
 import kinetickk.core.content.MetaUpgradeId
 import kinetickk.core.content.RebirthProgression
 import kinetickk.core.content.WeaponCatalog
@@ -13,7 +12,6 @@ import kinetickk.core.content.WeaponId
 import kinetickk.core.profile.api.CollectionCapability
 import kinetickk.core.profile.api.GameplayProgressUpdate
 import kinetickk.core.profile.api.LabProfileSnapshot
-import kinetickk.core.profile.api.LabProgress
 import kinetickk.core.profile.api.LoadoutProfileSnapshot
 import kinetickk.core.profile.api.PlayerCollection
 import kinetickk.core.profile.api.PlayerEconomy
@@ -29,7 +27,6 @@ import kinetickk.core.profile.api.ProfileResource
 import kinetickk.core.profile.api.ProfileResourceFailure
 import kinetickk.core.profile.api.ProfileStore
 import kinetickk.core.profile.api.RebirthProfileSnapshot
-import kinetickk.core.profile.api.RebirthProgress
 import kotlin.math.max
 
 /** Single owner of the complete profile and all cross-slice transactions. */
@@ -104,22 +101,8 @@ class DefaultProfileStore(
         return commit(currentProfile.copy(preferences = normalized))
     }
 
-    override fun purchaseMetaUpgrade(id: MetaUpgradeId): ProfileMutationResult {
-        val definition = MetaUpgradeCatalog.byId(id)
-        val currentRank = currentProfile.labProgress.rank(id)
-        if (currentRank >= definition.maxRanks) return rejected(ProfileMutationRejection.MAX_RANK_REACHED)
-        val cost = definition.cost(currentRank).toLong()
-        if (currentProfile.economy.matter < cost) return rejected(ProfileMutationRejection.INSUFFICIENT_MATTER)
-
-        val ranks = currentProfile.labProgress.ranks.toMutableList()
-        ranks[id.ordinal] = currentRank + 1
-        return commit(
-            currentProfile.copy(
-                economy = currentProfile.economy.copy(matter = currentProfile.economy.matter - cost),
-                labProgress = LabProgress(ranks),
-            ),
-        )
-    }
+    override fun purchaseMetaUpgrade(id: MetaUpgradeId): ProfileMutationResult =
+        decidePurchase(ProfilePulse.PurchaseMetaUpgrade(id))
 
     override fun selectCoreShape(shape: CoreShape): ProfileMutationResult {
         if (currentProfile.economy.lifetimeMatter < shape.unlockLifetimeMatter()) {
@@ -204,6 +187,31 @@ class DefaultProfileStore(
         )
         if (next == currentProfile) return rejected(ProfileMutationRejection.NO_CHANGE)
         return commit(next)
+    }
+
+    private fun decidePurchase(pulse: ProfilePulse.PurchaseMetaUpgrade): ProfileMutationResult =
+        when (val result = ProfileNucleus.decide(currentProfile, pulse)) {
+            is ProfileDecisionResult.Rejected -> ProfileMutationResult.Rejected(result.reason)
+            is ProfileDecisionResult.Accepted -> ProfileMutationResult.Applied(acceptPurchase(result.decision))
+        }
+
+    private fun acceptPurchase(decision: ProfileDecision): ProfilePersistResult {
+        val effect = decision.outputs.single()
+        check(
+            effect is ProfileEffect.PersistSnapshot &&
+                effect.profile == decision.nextState,
+        )
+        currentProfile = decision.nextState
+        return execute(effect)
+    }
+
+    private fun execute(effect: ProfileEffect.PersistSnapshot): ProfilePersistResult {
+        if (!providerAccepted) {
+            return ProfilePersistResult.OutcomeUnknown(ProfileResourceFailure.PROVIDER_WRITE_MAY_HAVE_EXECUTED)
+        }
+        return runCatching { resource.persist(effect.profile) }.getOrElse {
+            ProfilePersistResult.OutcomeUnknown(ProfileResourceFailure.PROVIDER_WRITE_MAY_HAVE_EXECUTED)
+        }
     }
 
     private fun commit(profile: PlayerProfile): ProfileMutationResult {
