@@ -17,6 +17,7 @@ import kinetickk.ball.gameplay.nucleus.renderModel.WeaponOrbitalProjection
 
 
 internal fun MutableGameState.toRenderModel(): GameplayRenderModel = GameplayRenderModel(
+    content = content,
     phase = phase,
     settings = settings,
     rebirthLevel = rebirthLevel,
@@ -183,7 +184,7 @@ internal fun MutableGameState.boundedCollectionSizes(): List<Int> = buildList {
 }
 
 internal fun MutableGameState.domainCollectionLimits(): List<DomainCollectionLimit> = listOf(
-    DomainCollectionLimit("enemies", enemies.size, MutableGameState.MAX_ENEMIES),
+    DomainCollectionLimit("enemies", enemies.size, content.rebirth.maxActiveEnemies),
     DomainCollectionLimit("projectiles", projectiles.size, MutableGameState.MAX_PROJECTILES),
     DomainCollectionLimit("pickups", pickups.size, MutableGameState.MAX_PICKUPS),
     DomainCollectionLimit("trail", trail.size, MutableGameState.MAX_TRAIL_POINTS),
@@ -209,6 +210,7 @@ internal fun MutableGameState.estimatedStateBytes(): Long =
  */
 internal fun MutableGameState.copyForReduction(): MutableGameState {
     val target = MutableGameState(
+        content = content,
         seed = 0,
         initialMatter = 0,
         initialRebirthLevel = rebirthLevel,

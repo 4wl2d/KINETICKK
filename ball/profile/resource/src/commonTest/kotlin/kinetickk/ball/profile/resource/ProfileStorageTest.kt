@@ -47,7 +47,7 @@ class ProfileStorageTest {
     @Test
     fun loadsValidatedProfileWithFixedProviderIdentity() {
         val expected = PlayerProfile(economy = PlayerEconomy(42L, 99L))
-        val resource = fakeResource(profilePayload = { ProfileCodec.encode(expected) })
+        val resource = fakeResource(profilePayload = { encodeProfile(expected) })
 
         assertEquals(ProfileProviderId.PLATFORM_LOCAL, resource.providerId)
         assertEquals(ProfileLoadResult.Loaded(expected), resource.load())
@@ -70,9 +70,9 @@ class ProfileStorageTest {
 
     @Test
     fun rawUtf8LimitAndInvalidSurrogatesAreRejectedBeforeDecode() {
-        val atLimit = decodeProfilePayload("x".repeat(MAX_PROFILE_PAYLOAD_BYTES))
-        val overLimit = decodeProfilePayload("x".repeat(MAX_PROFILE_PAYLOAD_BYTES + 1))
-        val invalidUtf8 = decodeProfilePayload("\uD800")
+        val atLimit = decodeTestProfilePayload("x".repeat(MAX_PROFILE_PAYLOAD_BYTES))
+        val overLimit = decodeTestProfilePayload("x".repeat(MAX_PROFILE_PAYLOAD_BYTES + 1))
+        val invalidUtf8 = decodeTestProfilePayload("\uD800")
 
         assertEquals(ProfileLoadResult.Rejected(ProfileLoadRejection.MALFORMED_PAYLOAD), atLimit)
         assertEquals(ProfileLoadResult.Rejected(ProfileLoadRejection.PAYLOAD_TOO_LARGE), overLimit)
@@ -100,7 +100,7 @@ class ProfileStorageTest {
         )
 
         assertEquals(ProfilePersistResult.Persisted, resource.persist(expected))
-        assertEquals(expected, ProfileCodec.decode(persistedProfile))
+        assertEquals(expected, decodeProfile(persistedProfile))
         assertEquals(71, persistedMatter)
     }
 
@@ -150,7 +150,7 @@ class ProfileStorageTest {
         legacyMatter: () -> String? = { null },
         writeProfile: (String) -> Unit = {},
         writeMatter: (Int) -> Unit = {},
-    ): ProfileResource = FixedKeyProfileResource(
+    ): ProfileResource = testFixedKeyProfileResource(
         readProfilePayload = profilePayload,
         readLegacyMatter = legacyMatter,
         writeProfilePayload = writeProfile,

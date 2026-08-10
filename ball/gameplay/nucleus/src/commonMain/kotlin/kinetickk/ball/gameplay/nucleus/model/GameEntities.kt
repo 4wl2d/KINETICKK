@@ -26,9 +26,9 @@ internal data class Enemy(
     var dead: Boolean = false,
     var relicKillProcsEligible: Boolean = false,
     var relicQualificationCooldown: Float = 0f,
-    val relicCounters: IntArray = IntArray(RelicCatalog.RELIC_COUNT),
-    val relicTimers: FloatArray = FloatArray(RelicCatalog.RELIC_COUNT),
-    val relicValues: FloatArray = FloatArray(RelicCatalog.RELIC_COUNT),
+    val relicCounters: IntArray,
+    val relicTimers: FloatArray,
+    val relicValues: FloatArray,
 )
 
 internal data class Projectile(

@@ -6,6 +6,7 @@ package kinetickk.ball.gameplay.nucleus.reducer
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
+import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.gameplay.nucleus.protocol.BrakeSource
 import kinetickk.ball.gameplay.nucleus.protocol.GameEffect
@@ -18,12 +19,14 @@ internal data class EngineState(
 )
 
 internal fun initialEngineState(
+    content: GameplayContentSnapshot,
     seed: Int,
     bootstrapProgress: GameplayProfileSnapshot?,
     initialMatter: Int? = null,
     initialRebirthLevel: Int = 0,
 ): EngineState {
     val model = MutableGameState(
+        content = content,
         seed = seed,
         initialMatter = initialMatter,
         initialRebirthLevel = initialRebirthLevel,

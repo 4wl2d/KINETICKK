@@ -3,12 +3,12 @@
 
 package kinetickk.ball.profile.interaction.lab.impl
 
-import kinetickk.resource.audio.api.AudioCue
-import kinetickk.ball.content.api.MetaUpgradeCatalog
 import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.profile.api.LabProfileSnapshot
 import kinetickk.ball.profile.api.LabProgress
 import kinetickk.ball.profile.api.PlayerEconomy
+import kinetickk.ball.profile.interaction.TestMetaUpgrades
+import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.lab.api.LabOutput
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -20,15 +20,15 @@ class LabReducerTest {
     fun snapshotMapsEightOrderedUpgradesAndExactNextCost() {
         val ranks = List(MetaUpgradeId.entries.size) { index -> if (index == 0) 1 else 0 }
         val model = LabProfileSnapshot(
-            economy = PlayerEconomy(matter = 100L),
+            economy = PlayerEconomy(matter = 1_000L),
             progress = LabProgress(ranks),
-        ).toRenderModel()
+        ).toRenderModel(TestMetaUpgrades)
 
         assertEquals(MetaUpgradeId.entries.size, model.upgrades.size)
         val integrity = model.upgrades.first()
         assertEquals(MetaUpgradeId.CORE_INTEGRITY, integrity.id)
         assertEquals(1, integrity.rank)
-        assertEquals(MetaUpgradeCatalog.byId(integrity.id).cost(1).toLong(), integrity.nextCost)
+        assertEquals(TestMetaUpgrades.first().cost(1).toLong(), integrity.nextCost)
         assertTrue(integrity.isAffordable)
     }
 
@@ -37,7 +37,7 @@ class LabReducerTest {
         val model = LabProfileSnapshot(
             economy = PlayerEconomy(matter = 1_000L),
             progress = LabProgress(),
-        ).toRenderModel()
+        ).toRenderModel(TestMetaUpgrades)
         val reduction = LabReducer.reduce(
             LabState(model),
             LabAction.PurchaseRequested(MetaUpgradeId.CORE_INTEGRITY),
@@ -54,7 +54,7 @@ class LabReducerTest {
         val poor = LabProfileSnapshot(
             economy = PlayerEconomy(matter = 0L),
             progress = LabProgress(),
-        ).toRenderModel()
+        ).toRenderModel(TestMetaUpgrades)
         assertEquals(
             MetaUpgradeId.CORE_INTEGRITY,
             assertIs<LabEffect.Purchase>(
@@ -65,11 +65,11 @@ class LabReducerTest {
             ).id,
         )
 
-        val maxRanks = MetaUpgradeId.entries.map { MetaUpgradeCatalog.byId(it).maxRanks }
+        val maxRanks = TestMetaUpgrades.map { definition -> definition.maxRanks }
         val maxed = LabProfileSnapshot(
             economy = PlayerEconomy(matter = Long.MAX_VALUE),
             progress = LabProgress(maxRanks),
-        ).toRenderModel()
+        ).toRenderModel(TestMetaUpgrades)
         assertEquals(
             MetaUpgradeId.CORE_INTEGRITY,
             assertIs<LabEffect.Purchase>(
@@ -83,9 +83,9 @@ class LabReducerTest {
 
     @Test
     fun backEmitsClickThenNavigationOutput() {
-        val model = LabProfileSnapshot(PlayerEconomy(), LabProgress()).toRenderModel()
+        val model = LabProfileSnapshot(PlayerEconomy(), LabProgress()).toRenderModel(TestMetaUpgrades)
         val effects = LabReducer.reduce(LabState(model), LabAction.Back).effects
-        assertEquals(LabOutput.Cue(AudioCue.UI_CLICK), assertIs<LabEffect.Emit>(effects[0]).output)
+        assertEquals(ProfileAudioCue.UI_CLICK, assertIs<LabEffect.PlayAudio>(effects[0]).cue)
         assertEquals(LabOutput.Back, assertIs<LabEffect.Emit>(effects[1]).output)
     }
 }

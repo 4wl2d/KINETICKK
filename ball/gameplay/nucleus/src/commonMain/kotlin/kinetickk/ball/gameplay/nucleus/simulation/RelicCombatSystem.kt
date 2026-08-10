@@ -232,10 +232,10 @@ internal fun MutableGameState.distinctRelicAspectCount(): Int {
     var count = 0
     for (index in equippedRelics.indices) {
         val relic = equippedRelics[index]
-        val aspect = RelicCatalog.byId(relic.id).aspect
+        val aspect = content.relic(relic.id).aspect
         var seen = false
         for (prior in 0 until index) {
-            if (RelicCatalog.byId(equippedRelics[prior].id).aspect == aspect) {
+            if (content.relic(equippedRelics[prior].id).aspect == aspect) {
                 seen = true
                 break
             }

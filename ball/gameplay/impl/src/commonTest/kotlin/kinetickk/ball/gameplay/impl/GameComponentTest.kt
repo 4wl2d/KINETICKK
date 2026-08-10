@@ -6,7 +6,6 @@ package kinetickk.ball.gameplay.impl
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.toImmutableSet
-import kinetickk.ball.content.api.MetaUpgradeCatalog
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.profile.api.GameplayProgressCapability
 import kinetickk.ball.profile.api.GameplayProgressUpdate
@@ -19,7 +18,10 @@ import kinetickk.ball.gameplay.nucleus.protocol.GameplayAction
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
+
+private val testContent = SyntheticGameplayContent
 
 class GameComponentTest {
     @Test
@@ -31,7 +33,7 @@ class GameComponentTest {
             observedOutputRevisions += component.snapshot().revision
         }
         component = GameComponent.create(
-            configuration = RunConfiguration(),
+            configuration = RunConfiguration(content = testContent),
             progressCapability = progress,
             audioExecutor = audio,
             seed = 2,
@@ -41,6 +43,7 @@ class GameComponentTest {
             component.dispatch(GameplayAction.FrameElapsed(0.1f)),
         )
         assertEquals(frame.snapshot, component.snapshot())
+        assertSame(testContent, frame.snapshot.renderModel.content)
         assertEquals(listOf(frame.snapshot.revision), observedOutputRevisions)
         assertEquals(1, audio.frames.size)
 
@@ -90,7 +93,7 @@ class GameComponentTest {
     fun audioResourceFailuresDoNotRollBackCommittedState() {
         val audio = RecordingGameplayAudioExecutor(throwOnEveryCall = true)
         val component = GameComponent.create(
-            configuration = RunConfiguration(),
+            configuration = RunConfiguration(content = testContent),
             progressCapability = RecordingGameplayProgressCapability(),
             audioExecutor = audio,
             seed = 3,
@@ -113,8 +116,9 @@ class GameComponentTest {
 }
 
 private fun resilientRunConfiguration(): RunConfiguration = RunConfiguration(
+    content = testContent,
     unlockedWeapons = WeaponId.entries.toImmutableSet(),
-    metaRanks = MetaUpgradeCatalog.all.map { it.maxRanks }.toImmutableList(),
+    metaRanks = testContent.metaUpgrades.map { it.maxRanks }.toImmutableList(),
 )
 
 private fun GameComponent.advanceToFirstItemChoice() {

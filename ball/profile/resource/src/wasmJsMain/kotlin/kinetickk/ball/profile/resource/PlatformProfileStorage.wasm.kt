@@ -3,10 +3,12 @@
 
 package kinetickk.ball.profile.resource
 
+import kinetickk.ball.content.api.ProfilePolicySnapshot
 import kinetickk.ball.profile.api.ProfileResource
 import kotlinx.browser.localStorage
 
-actual fun createPlatformProfileResource(): ProfileResource = FixedKeyProfileResource(
+actual fun createPlatformProfileResource(policy: ProfilePolicySnapshot): ProfileResource = FixedKeyProfileResource(
+    policy = policy,
     readProfilePayload = { localStorage.getItem(ProfileStorageKeys.WEB_PRIMARY) },
     readLegacyMatter = { localStorage.getItem(ProfileStorageKeys.LEGACY_MATTER) },
     writeProfilePayload = { value -> localStorage.setItem(ProfileStorageKeys.WEB_PRIMARY, value) },

@@ -17,6 +17,7 @@ import kinetickk.ball.gameplay.nucleus.protocol.GameEffect
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAction
 import kinetickk.ball.gameplay.nucleus.protocol.GameRejection
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
+import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
@@ -150,6 +151,7 @@ class GameEngineTest {
     @Test
     fun bootstrapProgressIsVisibleAtRevisionZero() {
         val engine = GameEngine.create(
+            content = canonicalGameplayContent,
             bootstrapProgress = PlayerProfile(
                 economy = PlayerEconomy(matter = 42, lifetimeMatter = 84),
             ).toGameplaySnapshot(),
@@ -160,7 +162,27 @@ class GameEngineTest {
         assertEquals(42L, engine.snapshot().renderModel.totalMatter)
     }
 
+    @Test
+    fun capturedContentIdentityAndVersionSurviveCommittedReductions() {
+        val engine = GameEngine.create(
+            content = canonicalGameplayContent,
+            bootstrapProgress = null,
+            initialMatter = 0,
+        )
+
+        assertSame(canonicalGameplayContent, engine.snapshot().renderModel.content)
+        assertEquals(KINETICKK_CONTENT_VERSION, engine.snapshot().renderModel.content.version)
+
+        repeat(3) {
+            val committed = assertIs<GameDispatchResult.Committed>(
+                engine.dispatch(GameplayAction.FrameElapsed(0.1f)),
+            )
+            assertSame(canonicalGameplayContent, committed.snapshot.renderModel.content)
+        }
+    }
+
     private fun engine(seed: Int = 731_991): GameEngine = GameEngine.create(
+        content = canonicalGameplayContent,
         bootstrapProgress = null,
         seed = seed,
         initialMatter = 0,

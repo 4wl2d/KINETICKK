@@ -16,8 +16,6 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
-import kinetickk.ball.content.api.ItemRarity
-import kinetickk.ball.content.api.WeaponId
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.max
@@ -39,7 +37,7 @@ fun DrawScope.drawFooterBack(textMeasurer: TextMeasurer, bounds: Rect, accent: C
     drawLabel(textMeasurer, "BACK [ESC / ENTER]", bounds.center.x, top + d(13f), 9f, accent, centered = true, weight = FontWeight.Bold)
 }
 
-fun DrawScope.drawLabFooter(textMeasurer: TextMeasurer, bounds: Rect, accent: Color) {
+fun DrawScope.drawStripFooter(textMeasurer: TextMeasurer, bounds: Rect, accent: Color) {
     val top = bounds.bottom - d(55f)
     drawRect(accent.copy(alpha = 0.08f), Offset(bounds.left, top), Size(bounds.width, d(55f)))
     drawLine(accent.copy(alpha = 0.65f), Offset(bounds.left, top), Offset(bounds.right, top), d(1f))
@@ -66,41 +64,63 @@ fun DrawScope.overlayBounds(maxWidth: Float = 900f, maxHeight: Float = 650f): Re
     return Rect(left, top, left + width, top + height)
 }
 
-fun DrawScope.drawWeaponGlyph(id: WeaponId, center: Offset, radius: Float, time: Float, color: Color) {
-    when (id) {
-        WeaponId.FLUX_WAKE -> {
+enum class SystemGlyphStyle {
+    DIAGONAL_SLASH,
+    ORBITING_NODE,
+    CONCENTRIC_RING,
+    ARROW_LINE,
+    HEX_ORBIT,
+    DIAMOND_TRIAD,
+    TWIN_DIAMONDS,
+    ZIGZAG_RING,
+    RINGED_BEAM,
+    HEPTAGON_ORBIT,
+    SPEAR_LINE,
+    TRIANGLE_NETWORK,
+}
+
+/** Draws one geometry-only system glyph; semantic ID mapping stays in Interaction. */
+fun DrawScope.drawSystemGlyph(
+    style: SystemGlyphStyle,
+    center: Offset,
+    radius: Float,
+    time: Float,
+    color: Color,
+) {
+    when (style) {
+        SystemGlyphStyle.DIAGONAL_SLASH -> {
             drawLine(color.copy(alpha = 0.35f), Offset(center.x - radius, center.y + radius * 0.55f), Offset(center.x + radius, center.y - radius * 0.55f), radius * 0.35f, StrokeCap.Round)
             drawLine(White, Offset(center.x - radius * 0.7f, center.y + radius * 0.4f), Offset(center.x + radius * 0.75f, center.y - radius * 0.4f), radius * 0.08f, StrokeCap.Round)
         }
-        WeaponId.MORNINGSTAR -> {
+        SystemGlyphStyle.ORBITING_NODE -> {
             drawCircle(color.copy(alpha = 0.3f), radius, center, style = Stroke(radius * 0.08f, pathEffect = dashEffect))
             val ball = polar(center, radius, time * 2f)
             drawLine(color, center, ball, radius * 0.08f)
             drawPolygon(ball, radius * 0.32f, 8, time, White, Fill)
         }
-        WeaponId.PHASE_LATTICE -> {
+        SystemGlyphStyle.CONCENTRIC_RING -> {
             drawCircle(color.copy(alpha = 0.22f), radius, center)
             drawCircle(color, radius * 0.78f, center, style = Stroke(radius * 0.09f))
             drawCircle(White, radius * 0.35f, center, style = Stroke(radius * 0.05f, pathEffect = dashEffect))
         }
-        WeaponId.NULL_LANCE -> {
+        SystemGlyphStyle.ARROW_LINE -> {
             drawLine(color.copy(alpha = 0.3f), Offset(center.x - radius, center.y), Offset(center.x + radius, center.y), radius * 0.28f, StrokeCap.Round)
             drawPolygon(Offset(center.x + radius * 0.72f, center.y), radius * 0.34f, 3, 0f, White, Fill)
         }
-        WeaponId.GRAVITY_MINES -> {
+        SystemGlyphStyle.HEX_ORBIT -> {
             drawCircle(color.copy(alpha = 0.2f), radius, center)
             drawCircle(color, radius * 0.75f, center, style = Stroke(radius * 0.07f, pathEffect = dashEffect))
             drawPolygon(center, radius * 0.42f, 6, time, White, Stroke(radius * 0.07f))
         }
-        WeaponId.ION_SWARM -> repeat(3) { index ->
+        SystemGlyphStyle.DIAMOND_TRIAD -> repeat(3) { index ->
             val point = polar(center, radius * 0.78f, time + index * TAU / 3f)
             drawPolygon(point, radius * 0.2f, 4, time + index, color, Fill)
         }
-        WeaponId.RIFT_BLADES -> {
+        SystemGlyphStyle.TWIN_DIAMONDS -> {
             drawPolygon(Offset(center.x - radius * 0.38f, center.y), radius * 0.55f, 4, time, color, Fill)
             drawPolygon(Offset(center.x + radius * 0.38f, center.y), radius * 0.55f, 4, -time, White, Fill)
         }
-        WeaponId.ARC_COIL -> {
+        SystemGlyphStyle.ZIGZAG_RING -> {
             drawCircle(color, radius, center, style = Stroke(radius * 0.1f))
             var previous = Offset(center.x - radius, center.y)
             repeat(5) { index ->
@@ -109,22 +129,22 @@ fun DrawScope.drawWeaponGlyph(id: WeaponId, center: Offset, radius: Float, time:
                 previous = next
             }
         }
-        WeaponId.QUASAR_CANNON -> {
+        SystemGlyphStyle.RINGED_BEAM -> {
             drawLine(color.copy(alpha = 0.35f), Offset(center.x - radius, center.y), Offset(center.x + radius, center.y), radius * 0.42f, StrokeCap.Round)
             drawCircle(White, radius * 0.23f, Offset(center.x + radius * 0.72f, center.y))
             drawCircle(color, radius * 0.82f, center, style = Stroke(radius * 0.07f))
         }
-        WeaponId.ENTROPY_FIELD -> {
+        SystemGlyphStyle.HEPTAGON_ORBIT -> {
             drawCircle(color.copy(alpha = 0.12f), radius, center)
             drawCircle(color, radius, center, style = Stroke(radius * 0.07f, pathEffect = dashEffect))
             drawPolygon(center, radius * 0.48f, 7, time * 0.3f, White, Stroke(radius * 0.06f))
         }
-        WeaponId.SINGULARITY_SPEAR -> {
+        SystemGlyphStyle.SPEAR_LINE -> {
             drawLine(color.copy(alpha = 0.28f), Offset(center.x - radius, center.y), Offset(center.x + radius, center.y), radius * 0.35f, StrokeCap.Round)
             drawLine(White, Offset(center.x - radius, center.y), Offset(center.x + radius, center.y), radius * 0.09f, StrokeCap.Round)
             drawPolygon(Offset(center.x + radius * 0.8f, center.y), radius * 0.37f, 3, 0f, color, Fill)
         }
-        WeaponId.PRISM_RELAY -> {
+        SystemGlyphStyle.TRIANGLE_NETWORK -> {
             val first = polar(center, radius * 0.78f, time * 1.8f)
             val second = polar(center, radius * 0.78f, time * 1.8f + TAU / 3f)
             val third = polar(center, radius * 0.78f, time * 1.8f + TAU * 2f / 3f)
@@ -135,10 +155,6 @@ fun DrawScope.drawWeaponGlyph(id: WeaponId, center: Offset, radius: Float, time:
         }
     }
 }
-
-fun weaponColor(id: WeaponId): Color = WeaponColors[id.ordinal.coerceIn(WeaponColors.indices)]
-
-fun rarityColor(rarity: ItemRarity): Color = RarityColors[(rarity.rank - 1).coerceIn(RarityColors.indices)]
 
 fun polar(center: Offset, radius: Float, angle: Float): Offset =
     Offset(center.x + cos(angle) * radius, center.y + sin(angle) * radius)

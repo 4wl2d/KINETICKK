@@ -16,11 +16,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import kinetickk.ball.gameplay.nucleus.model.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.model.ChoiceType
-import kinetickk.ball.content.api.ItemCatalog
-import kinetickk.ball.content.api.RelicCatalog
 import kinetickk.ball.gameplay.nucleus.model.RelicChoiceAction
 import kinetickk.ball.gameplay.nucleus.model.TotemAction
-import kinetickk.ball.content.api.WeaponCatalog
 import kinetickk.ball.gameplay.nucleus.renderModel.GameplayRenderModel
 import kotlin.math.min
 import kotlin.math.sin
@@ -39,7 +36,7 @@ internal fun DrawScope.drawChoice(engine: GameplayRenderModel, textMeasurer: Tex
         ChoiceType.ITEM -> "TIME IS SUSPENDED"
         ChoiceType.TOTEM -> "AMPLIFY THE CURRENT SYSTEM OR RECALIBRATE"
         ChoiceType.WEAPON -> "SELECT THE NEXT RUN WEAPON"
-        ChoiceType.RELIC -> if (engine.equippedRelics.size >= RelicCatalog.MAX_SLOTS) {
+        ChoiceType.RELIC -> if (engine.equippedRelics.size >= engine.content.relicPolicy.maxSlots) {
             "MATRIX FULL // CLAIM A SIGNAL OR MELD IT INTO THE MATRIX"
         } else {
             "ELITE SIGNAL CAPTURED // RELICS SYNCHRONIZE WITH EVERY WEAPON"
@@ -85,8 +82,8 @@ internal fun DrawScope.drawChoiceCard(engine: GameplayRenderModel, textMeasurer:
         drawRelicChoiceCard(engine, textMeasurer, choice, index, x, y, width, height, renderTime)
         return
     }
-    val item = choice.itemId?.let(ItemCatalog::byId)
-    val weapon = choice.weaponId?.let(WeaponCatalog::byId)
+    val item = choice.itemId?.let(engine.content::item)
+    val weapon = choice.weaponId?.let(engine.content::weapon)
     val accent = item?.let { rarityColor(it.rarity) } ?: weapon?.let { weaponColor(it.id) } ?: ParticleColors[index.coerceIn(0, 2)]
     drawRect(OverlayPanel, Offset(x, y), Size(width, height))
     val pulse = (sin(renderTime * 2.4f + index * 1.6f) + 1f) * 0.5f
@@ -96,7 +93,13 @@ internal fun DrawScope.drawChoiceCard(engine: GameplayRenderModel, textMeasurer:
     drawLabel(textMeasurer, "0${index + 1} // $tag", x + d(16f), y + d(15f), 8f, accent, weight = FontWeight.Bold)
     val glyphCenter = Offset(x + width * 0.5f, y + d(91f))
     when {
-        weapon != null -> drawWeaponGlyph(weapon.id, glyphCenter, d(25f), renderTime, accent)
+        weapon != null -> drawSystemGlyph(
+            weaponGlyphStyle(weapon.id),
+            glyphCenter,
+            d(25f),
+            renderTime,
+            accent,
+        )
         item != null -> drawItemIcon(
             item = item,
             center = glyphCenter,
@@ -140,8 +143,13 @@ internal fun DrawScope.drawRelicChoiceCard(
     val slotRelic = choice.relicSlot?.let(engine.equippedRelics::getOrNull)
     val optionRelicId = choice.relicId ?: slotRelic?.id
     val displayRelicId = if (choice.relicAction == RelicChoiceAction.REPLACE) slotRelic?.id ?: optionRelicId else optionRelicId
-    val relic = displayRelicId?.let(RelicCatalog::byId)
-    val replacementRelic = if (choice.relicAction == RelicChoiceAction.REPLACE) choice.relicId?.let(RelicCatalog::byId) else null
+    val relic = displayRelicId?.let(engine.content::relic)
+    val replacementRelic = if (choice.relicAction == RelicChoiceAction.REPLACE) {
+        choice.relicId?.let(engine.content::relic)
+    } else {
+        null
+    }
+    val relicPolicy = engine.content.relicPolicy
     val accent = relic?.let { relicAspectColor(it.aspect) } ?: Gold
     val pulse = (sin(renderTime * 2.1f + index * 1.45f) + 1f) * 0.5f
     drawRect(OverlayPanel, Offset(x, y), Size(width, height))
@@ -166,17 +174,31 @@ internal fun DrawScope.drawRelicChoiceCard(
 
     val glyphCenter = Offset(x + width * 0.5f, y + d(78f))
     val previewRank = when (choice.relicAction) {
-        RelicChoiceAction.ACQUIRE -> optionRelicId?.let { (engine.relicRank(it) + 1).coerceIn(1, RelicCatalog.MAX_RANK) }
+        RelicChoiceAction.ACQUIRE -> optionRelicId?.let { (engine.relicRank(it) + 1).coerceIn(1, relicPolicy.maxRank) }
         RelicChoiceAction.REPLACE -> slotRelic?.rank
-        RelicChoiceAction.MELD_TARGET -> slotRelic?.rank?.plus(1)?.coerceAtMost(RelicCatalog.MAX_RANK)
+        RelicChoiceAction.MELD_TARGET -> slotRelic?.rank?.plus(1)?.coerceAtMost(relicPolicy.maxRank)
         RelicChoiceAction.MELD, null -> null
     }
-    if (displayRelicId != null) {
-        drawRelicIcon(displayRelicId, glyphCenter, d(if (width / density < 175f) 21f else 24f), previewRank, renderTime)
+    if (relic != null) {
+        drawRelicIcon(
+            definition = relic,
+            policy = relicPolicy,
+            center = glyphCenter,
+            radius = d(if (width / density < 175f) 21f else 24f),
+            rank = previewRank,
+            time = renderTime,
+        )
         replacementRelic?.let { incoming ->
             val incomingCenter = Offset(glyphCenter.x + d(23f), glyphCenter.y + d(13f))
             drawCircle(SpaceBlack.copy(alpha = 0.92f), d(12f), incomingCenter)
-            drawRelicIcon(incoming.id, incomingCenter, d(9f), rank = 1, time = renderTime)
+            drawRelicIcon(
+                definition = incoming,
+                policy = relicPolicy,
+                center = incomingCenter,
+                radius = d(9f),
+                rank = 1,
+                time = renderTime,
+            )
             drawLabel(textMeasurer, "→", glyphCenter.x + d(13f), glyphCenter.y - d(2f), 7f, Gold, centered = true, weight = FontWeight.Bold)
         }
     } else {
@@ -222,14 +244,14 @@ internal fun DrawScope.drawRelicChoiceCard(
     }
     val actionLabel = when (choice.relicAction) {
         RelicChoiceAction.ACQUIRE -> when {
-            optionRelicId != null && engine.relicRank(optionRelicId) >= RelicCatalog.MAX_RANK -> "SALVAGE RESONANCE"
+            optionRelicId != null && engine.relicRank(optionRelicId) >= relicPolicy.maxRank -> "SALVAGE RESONANCE"
             optionRelicId != null && engine.relicRank(optionRelicId) > 0 ->
                 "MELD // R${engine.relicRank(optionRelicId)} > R${previewRank ?: engine.relicRank(optionRelicId)}"
             else -> "BIND TO MATRIX"
         }
         RelicChoiceAction.MELD -> "MELD SIGNAL INTO A SLOT"
         RelicChoiceAction.REPLACE -> "REPLACE SLOT ${(choice.relicSlot ?: index) + 1}"
-        RelicChoiceAction.MELD_TARGET -> if ((slotRelic?.rank ?: 1) >= RelicCatalog.MAX_RANK) {
+        RelicChoiceAction.MELD_TARGET -> if ((slotRelic?.rank ?: 1) >= relicPolicy.maxRank) {
             "SALVAGE EXCESS"
         } else {
             "MELD // R${slotRelic?.rank ?: 1} > R${previewRank ?: slotRelic?.rank ?: 1}"

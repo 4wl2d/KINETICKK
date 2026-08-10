@@ -3,6 +3,7 @@
 
 package kinetickk.ball.profile.resource
 
+import kinetickk.ball.content.api.ProfilePolicySnapshot
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.ProfileLoadRejection
@@ -19,9 +20,10 @@ internal object ProfileStorageKeys {
     const val LEGACY_MATTER: String = "kinetickk_matter"
 }
 
-expect fun createPlatformProfileResource(): ProfileResource
+expect fun createPlatformProfileResource(policy: ProfilePolicySnapshot): ProfileResource
 
 internal class FixedKeyProfileResource(
+    private val policy: ProfilePolicySnapshot,
     private val readProfilePayload: () -> String?,
     private val readLegacyMatter: () -> String?,
     private val writeProfilePayload: (String) -> Unit,
@@ -35,7 +37,7 @@ internal class FixedKeyProfileResource(
         } catch (_: Throwable) {
             return ProfileLoadResult.OutcomeUnknown(ProfileResourceFailure.PROVIDER_READ_FAILED)
         }
-        if (profilePayload != null) return decodeProfilePayload(profilePayload)
+        if (profilePayload != null) return decodeProfilePayload(profilePayload, policy)
 
         val legacyMatter = try {
             readLegacyMatter()
@@ -48,7 +50,7 @@ internal class FixedKeyProfileResource(
 
     override fun persist(profile: PlayerProfile): ProfilePersistResult {
         val encoded = try {
-            ProfileCodec.encode(profile)
+            ProfileCodec.encode(profile, policy)
         } catch (_: Throwable) {
             return ProfilePersistResult.OutcomeUnknown(ProfileResourceFailure.ENCODING_FAILED)
         }
@@ -66,10 +68,13 @@ internal class FixedKeyProfileResource(
     }
 }
 
-internal fun decodeProfilePayload(payload: String): ProfileLoadResult = when (payload.utf8Validation()) {
+internal fun decodeProfilePayload(
+    payload: String,
+    policy: ProfilePolicySnapshot,
+): ProfileLoadResult = when (payload.utf8Validation()) {
     Utf8Validation.TooLarge -> ProfileLoadResult.Rejected(ProfileLoadRejection.PAYLOAD_TOO_LARGE)
     Utf8Validation.Invalid -> ProfileLoadResult.Rejected(ProfileLoadRejection.INVALID_UTF8)
-    Utf8Validation.Accepted -> ProfileCodec.decode(payload)
+    Utf8Validation.Accepted -> ProfileCodec.decode(payload, policy)
         ?.let(ProfileLoadResult::Loaded)
         ?: ProfileLoadResult.Rejected(ProfileLoadRejection.MALFORMED_PAYLOAD)
 }

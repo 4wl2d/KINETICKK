@@ -3,10 +3,10 @@
 
 package kinetickk.ball.profile.interaction.settings.impl
 
-import kinetickk.resource.audio.api.AudioCue
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
 import kinetickk.ball.profile.api.PlayerPreferences
+import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -28,8 +28,8 @@ class SettingsReducerTest {
             assertIs<SettingsEffect.UpdatePreferences>(volume.effects.first()).preferences,
         )
         assertEquals(
-            SettingsOutput.Cue(AudioCue.UI_CLICK),
-            assertIs<SettingsEffect.Emit>(volume.effects.last()).output,
+            ProfileAudioCue.UI_CLICK,
+            assertIs<SettingsEffect.PlayAudio>(volume.effects.last()).cue,
         )
 
         val text = SettingsReducer.reduce(
@@ -69,7 +69,7 @@ class SettingsReducerTest {
         assertTrue(paged.effects.none { it is SettingsEffect.UpdatePreferences })
 
         val back = SettingsReducer.reduce(paged.state, SettingsAction.Back)
-        assertEquals(SettingsOutput.Cue(AudioCue.UI_CLICK), assertIs<SettingsEffect.Emit>(back.effects[0]).output)
+        assertEquals(ProfileAudioCue.UI_CLICK, assertIs<SettingsEffect.PlayAudio>(back.effects[0]).cue)
         assertEquals(SettingsOutput.Back, assertIs<SettingsEffect.Emit>(back.effects[1]).output)
     }
 

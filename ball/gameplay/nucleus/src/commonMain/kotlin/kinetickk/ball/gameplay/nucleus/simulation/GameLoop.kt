@@ -83,7 +83,7 @@ internal fun MutableGameState.simulateStep(delta: Float) {
         messageTime = 3f
         projectiles.removeAll { it.hostile }
         // The terminal boss has priority over the oldest ordinary enemy at the hard cap.
-        if (enemies.size >= MutableGameState.MAX_ENEMIES) enemies.removeAt(0)
+        if (enemies.size >= content.rebirth.maxActiveEnemies) enemies.removeAt(0)
         spawnEnemy(EnemyType.ARCHITECT)
     }
 }

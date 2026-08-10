@@ -4,7 +4,7 @@
 package kinetickk.flow.session.interaction.codex.api
 
 import androidx.compose.runtime.Composable
-import kinetickk.resource.audio.api.AudioCue
+import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.ImmutableSet
 import kinetickk.foundation.collections.immutableListOf
@@ -16,6 +16,7 @@ data class CodexRunStacks(
 data class CodexRenderModel(
     val discoveredItemIds: ImmutableSet<Int>,
     val runStacks: CodexRunStacks,
+    val items: ImmutableList<ItemDefinition>,
 ) {
     fun isDiscovered(itemId: Int): Boolean = itemId in discoveredItemIds
     fun itemStack(itemId: Int): Int = runStacks.itemStacks.getOrElse(itemId) { 0 }
@@ -23,7 +24,6 @@ data class CodexRenderModel(
 
 sealed interface CodexOutput {
     data object Back : CodexOutput
-    data class Cue(val cue: AudioCue) : CodexOutput
 }
 
 interface CodexFeature {

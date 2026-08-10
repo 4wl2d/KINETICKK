@@ -17,6 +17,8 @@ import kinetickk.ball.profile.api.RebirthCapability
 import kinetickk.ball.profile.api.RebirthProfileSnapshot
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.flow.session.interaction.home.api.HomeOutput
+import kinetickk.flow.session.interaction.TestCoreShapes
+import kinetickk.flow.session.interaction.TestRebirthPolicy
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -38,7 +40,7 @@ class HomeReducerTest {
             rebirth = RebirthProgress(level = 2, highestCleared = 1),
         )
 
-        val model = HomeReducer(profile, profile, profile).uiModel()
+        val model = homeReducer(profile).uiModel()
 
         assertEquals(CoreShape.PRISM, model.coreShape)
         assertEquals(81, model.totalMatter)
@@ -51,7 +53,7 @@ class HomeReducerTest {
     @Test
     fun actionsSelectLoadoutOrEmitShellOutputs() {
         val profile = FakeHomeProfile()
-        val reducer = HomeReducer(profile, profile, profile)
+        val reducer = homeReducer(profile)
 
         assertNull(reducer.reduce(HomeAction.SelectCoreShape(CoreShape.PRISM)))
         assertEquals(CoreShape.PRISM, profile.loadout.coreShape)
@@ -71,6 +73,16 @@ class HomeReducerTest {
         assertEquals(HomeAction.OpenRebirth, resolveHomePress(viewport, 640f, 720f * 0.9f))
     }
 }
+
+private fun homeReducer(profile: FakeHomeProfile): HomeReducer = HomeReducer(
+    loadoutCapability = profile,
+    collectionCapability = profile,
+    rebirthCapability = profile,
+    coreShapes = TestCoreShapes,
+    itemCount = 400,
+    weaponCount = 12,
+    rebirthPolicy = TestRebirthPolicy,
+)
 
 private class FakeHomeProfile(
     var economy: PlayerEconomy = PlayerEconomy(lifetimeMatter = 100),

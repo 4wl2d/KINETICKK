@@ -28,20 +28,20 @@ class RelicSystemTest {
     @Test
     fun relicMatrixStopsAtFourSlotsAndDuplicateRanksStopAtFive() {
         val engine = runningEngine(seed = 201)
-        val installed = RelicId.entries.take(RelicCatalog.MAX_SLOTS)
+        val installed = RelicId.entries.take(engine.content.relicPolicy.maxSlots)
         installed.forEach(engine::acquireRelicForTesting)
 
         val matrixBeforeOverflow = engine.equippedRelics
-        engine.acquireRelicForTesting(RelicId.entries[RelicCatalog.MAX_SLOTS])
+        engine.acquireRelicForTesting(RelicId.entries[engine.content.relicPolicy.maxSlots])
 
-        assertEquals(RelicCatalog.MAX_SLOTS, engine.equippedRelics.size)
+        assertEquals(engine.content.relicPolicy.maxSlots, engine.equippedRelics.size)
         assertEquals(matrixBeforeOverflow, engine.equippedRelics)
 
         val duplicate = installed.first()
-        repeat(RelicCatalog.MAX_RANK + 3) { engine.acquireRelicForTesting(duplicate) }
+        repeat(engine.content.relicPolicy.maxRank + 3) { engine.acquireRelicForTesting(duplicate) }
 
-        assertEquals(RelicCatalog.MAX_RANK, engine.relicRank(duplicate))
-        assertEquals(RelicCatalog.MAX_SLOTS, engine.equippedRelics.size)
+        assertEquals(engine.content.relicPolicy.maxRank, engine.relicRank(duplicate))
+        assertEquals(engine.content.relicPolicy.maxSlots, engine.equippedRelics.size)
         assertEquals(1, engine.equippedRelics.count { it.id == duplicate })
     }
 
@@ -57,7 +57,7 @@ class RelicSystemTest {
 
         assertEquals(ChoiceType.RELIC_BIND, engine.choiceType)
         assertEquals(
-            (0 until RelicCatalog.MAX_SLOTS).toList(),
+            (0 until engine.content.relicPolicy.maxSlots).toList(),
             engine.choices.mapNotNull(ChoiceOption::relicSlot),
         )
         assertTrue(engine.choices.all { it.relicAction == RelicChoiceAction.MELD_TARGET })
@@ -89,7 +89,7 @@ class RelicSystemTest {
 
         assertEquals(ChoiceType.RELIC_BIND, engine.choiceType)
         assertEquals(
-            (0 until RelicCatalog.MAX_SLOTS).toList(),
+            (0 until engine.content.relicPolicy.maxSlots).toList(),
             engine.choices.mapNotNull(ChoiceOption::relicSlot),
         )
         assertTrue(engine.choices.all { it.relicAction == RelicChoiceAction.REPLACE })
@@ -338,12 +338,12 @@ class RelicSystemTest {
         return engine.agonyMutationCountsForTesting()
     }
 
-    private fun runningEngine(seed: Int): GameScenario = GameScenario(seed = seed, initialMatter = 0).apply {
+    private fun runningEngine(seed: Int): GameScenario = gameScenario(seed = seed, initialMatter = 0).apply {
         resize(1_280f, 720f)
         startRun()
     }
 
     private fun fullRelicEngine(seed: Int): GameScenario = runningEngine(seed).apply {
-        RelicId.entries.take(RelicCatalog.MAX_SLOTS).forEach(::acquireRelicForTesting)
+        RelicId.entries.take(content.relicPolicy.maxSlots).forEach(::acquireRelicForTesting)
     }
 }

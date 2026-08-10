@@ -4,14 +4,20 @@
 package kinetickk.app.shared
 
 import androidx.compose.runtime.Composable
-import kinetickk.resource.audio.api.AudioCue
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
+import kinetickk.resource.audio.api.ToneRequest
+import kinetickk.resource.audio.api.ToneWave
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableSet
+import kinetickk.ball.content.api.ContentCatalog
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.ProfilePolicySnapshot
+import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.impl.createContentCatalog
 import kinetickk.ball.profile.api.GameplayProgressUpdate
 import kinetickk.ball.profile.api.LabProfileSnapshot
 import kinetickk.ball.profile.api.LabProgress
@@ -51,9 +57,30 @@ import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class AppCompositionOwnerTest {
+    @Test
+    fun ownerCapturesContentOnceAndReusesTheGameplaySnapshotForEveryRun() {
+        val shell = testShell()
+
+        assertEquals(1, shell.contentCatalog.profilePolicyCalls)
+        assertEquals(1, shell.contentCatalog.gameplayContentCalls)
+        assertEquals(1, shell.contentCatalog.uiCatalogCalls)
+
+        shell.owner.startNewRun()
+        shell.owner.handleGameplayOutput(GameplayOutput.RestartRun)
+
+        assertEquals(2, shell.gameplay.starts.size)
+        shell.gameplay.starts.forEach { configuration ->
+            assertSame(shell.contentCatalog.gameplaySnapshot, configuration.content)
+        }
+        assertEquals(1, shell.contentCatalog.profilePolicyCalls)
+        assertEquals(1, shell.contentCatalog.gameplayContentCalls)
+        assertEquals(1, shell.contentCatalog.uiCatalogCalls)
+    }
+
     @Test
     fun openingOverlayPausesRunAndBackKeepsSameSessionPaused() {
         val shell = testShell()
@@ -86,7 +113,6 @@ class AppCompositionOwnerTest {
         )
         shell.store.setProfile(shell.store.profileSnapshot().copy(preferences = changed))
 
-        shell.owner.handleSettingsOutput(SettingsOutput.Cue(AudioCue.UI_CLICK))
         assertTrue(shell.gameplay.appliedPreferences.isEmpty())
 
         shell.owner.handleSettingsOutput(SettingsOutput.Back)
@@ -299,18 +325,22 @@ class AppCompositionOwnerTest {
     }
 
     @Test
-    fun shellOwnsAudioPreferencesUiCuesAndCloseLifecycle() {
+    fun shellOwnsAudioPreferencesShortcutToneAndCloseLifecycle() {
         val initialPreferences = PlayerPreferences(masterVolume = 0.4f)
         val shell = testShell(profile = PlayerProfile(preferences = initialPreferences))
 
         assertEquals(listOf(initialPreferences.toExpectedAudioPreferences()), shell.audio.preferencesUpdates)
 
-        val updatedPreferences = initialPreferences.copy(soundEnabled = false, masterVolume = 0.25f)
+        val updatedPreferences = initialPreferences.copy(masterVolume = 0.25f)
         shell.store.setProfile(shell.store.profileSnapshot().copy(preferences = updatedPreferences))
-        shell.owner.handleSettingsOutput(SettingsOutput.Cue(AudioCue.UI_CLICK))
+        shell.owner.handleShortcut(AppShortcut.MUTE)
 
-        assertEquals(updatedPreferences.toExpectedAudioPreferences(), shell.audio.preferencesUpdates.last())
-        assertEquals(0f to listOf(AudioCue.UI_CLICK), shell.audio.advances.last())
+        val mutedPreferences = updatedPreferences.copy(soundEnabled = false, musicEnabled = false)
+        assertEquals(mutedPreferences.toExpectedAudioPreferences(), shell.audio.preferencesUpdates.last())
+        assertEquals(
+            0f to listOf(ToneRequest(520f, 0.035f, 0.11f, ToneWave.SINE)),
+            shell.audio.advances.last(),
+        )
 
         shell.owner.close()
         assertEquals(1, shell.audio.closeCalls)
@@ -319,6 +349,7 @@ class AppCompositionOwnerTest {
 
 private data class TestShell(
     val owner: AppCompositionOwner,
+    val contentCatalog: CountingContentCatalog,
     val store: FakeProfileStore,
     val gameplay: FakeGameplayFeature,
     val audio: FakeAudioService,
@@ -332,7 +363,9 @@ private fun testShell(
     val store = FakeProfileStore(profile, workflow)
     val audio = FakeAudioService(workflow)
     val gameplay = FakeGameplayFeature(workflow)
+    val contentCatalog = CountingContentCatalog()
     val owner = AppCompositionOwner(
+        contentCatalog = contentCatalog,
         profileStore = store,
         audioService = audio,
         gameplayFeature = gameplay,
@@ -344,7 +377,39 @@ private fun testShell(
         codexFeature = FakeCodexFeature(),
     )
     workflow.bind(owner)
-    return TestShell(owner, store, gameplay, audio, workflow)
+    return TestShell(owner, contentCatalog, store, gameplay, audio, workflow)
+}
+
+private class CountingContentCatalog(
+    delegate: ContentCatalog = createContentCatalog(),
+) : ContentCatalog {
+    private val profilePolicySnapshot: ProfilePolicySnapshot = delegate.profilePolicy()
+    val gameplaySnapshot: GameplayContentSnapshot = delegate.gameplayContent()
+    private val uiCatalogSnapshot: UiCatalogSnapshot = delegate.uiCatalog()
+
+    override val version = delegate.version
+
+    var profilePolicyCalls: Int = 0
+        private set
+    var gameplayContentCalls: Int = 0
+        private set
+    var uiCatalogCalls: Int = 0
+        private set
+
+    override fun profilePolicy(): ProfilePolicySnapshot {
+        profilePolicyCalls++
+        return profilePolicySnapshot
+    }
+
+    override fun gameplayContent(): GameplayContentSnapshot {
+        gameplayContentCalls++
+        return gameplaySnapshot
+    }
+
+    override fun uiCatalog(): UiCatalogSnapshot {
+        uiCatalogCalls++
+        return uiCatalogSnapshot
+    }
 }
 
 private data class WorkflowEvent(
@@ -498,7 +563,7 @@ private class FakeAudioService(
     private val workflow: WorkflowRecorder,
 ) : AudioService {
     val preferencesUpdates = mutableListOf<AudioPreferences>()
-    val advances = mutableListOf<Pair<Float, List<AudioCue>>>()
+    val advances = mutableListOf<Pair<Float, List<ToneRequest>>>()
     var unlockCalls = 0
     var closeCalls = 0
 
@@ -507,8 +572,8 @@ private class FakeAudioService(
         preferencesUpdates += preferences
     }
 
-    override fun advance(realDeltaSeconds: Float, cues: List<AudioCue>) {
-        advances += realDeltaSeconds to cues.toList()
+    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) {
+        advances += realDeltaSeconds to requests.toList()
     }
 
     override fun ensureUnlocked() {

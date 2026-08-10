@@ -3,8 +3,9 @@
 
 package kinetickk.ball.profile.impl
 
+import kinetickk.ball.content.api.ProfilePolicySnapshot
 import kinetickk.ball.profile.api.ProfileStore
 import kinetickk.ball.profile.resource.createPlatformProfileResource
 
-fun createPlatformProfileStore(): ProfileStore =
-    DefaultProfileStore(createPlatformProfileResource())
+fun createPlatformProfileStore(policy: ProfilePolicySnapshot): ProfileStore =
+    DefaultProfileStore(createPlatformProfileResource(policy), policy)

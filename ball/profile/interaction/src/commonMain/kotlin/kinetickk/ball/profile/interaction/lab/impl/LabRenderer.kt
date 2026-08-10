@@ -16,7 +16,7 @@ import kinetickk.foundation.design.TextMeasurer
 import kinetickk.foundation.design.White
 import kinetickk.foundation.design.d
 import kinetickk.foundation.design.drawLabel
-import kinetickk.foundation.design.drawLabFooter
+import kinetickk.foundation.design.drawStripFooter
 import kinetickk.foundation.design.drawOverlayFrame
 import kinetickk.foundation.design.formatCompact
 import kinetickk.foundation.design.overlayBounds
@@ -40,7 +40,7 @@ internal fun DrawScope.drawLab(model: LabRenderModel, textMeasurer: TextMeasurer
         val top = contentTop + rowHeight * row
         drawMetaCard(textMeasurer, upgrade, left, top, columnWidth, rowHeight)
     }
-    drawLabFooter(textMeasurer, bounds, Acid)
+    drawStripFooter(textMeasurer, bounds, Acid)
 }
 
 private fun DrawScope.drawMetaCard(

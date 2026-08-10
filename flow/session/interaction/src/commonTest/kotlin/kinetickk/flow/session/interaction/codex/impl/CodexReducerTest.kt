@@ -7,6 +7,7 @@ import kinetickk.foundation.collections.ImmutableList
 import kinetickk.ball.profile.api.CollectionCapability
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.flow.session.interaction.codex.api.CodexRunStacks
+import kinetickk.flow.session.interaction.testItems
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -15,7 +16,7 @@ import kotlin.test.assertTrue
 class CodexReducerTest {
     @Test
     fun modelCombinesProfileDiscoveryWithShellRunStacks() {
-        val reducer = CodexReducer(FakeCollection(PlayerCollection(setOf(2, 399))))
+        val reducer = CodexReducer(FakeCollection(PlayerCollection(setOf(2, 399))), testItems())
         val stacks = MutableList(400) { 0 }.also { it[2] = 4 }
 
         val model = reducer.renderModel(CodexRunStacks(ImmutableList.copyOf(stacks)))
@@ -27,7 +28,7 @@ class CodexReducerTest {
 
     @Test
     fun pageReducerAndFooterPointerAreLocal() {
-        val reducer = CodexReducer(FakeCollection(PlayerCollection()))
+        val reducer = CodexReducer(FakeCollection(PlayerCollection()), testItems())
         assertEquals(1, reducer.reduce(0, CodexAction.NextPage).page)
         assertEquals(reducer.maxPage, reducer.reduce(Int.MAX_VALUE, CodexAction.NextPage).page)
         assertTrue(reducer.reduce(3, CodexAction.Back).close)

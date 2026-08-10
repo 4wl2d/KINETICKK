@@ -164,7 +164,7 @@ internal fun MutableGameState.spawnSplitterFragments(enemy: Enemy) {
     val fragmentLimit = rebirthProfile.enemyCap(90)
     val fragmentCount = min(2, max(0, fragmentLimit - enemies.count { !it.dead }))
     repeat(fragmentCount) { index ->
-        if (enemies.size >= MutableGameState.MAX_ENEMIES) return@repeat
+        if (enemies.size >= content.rebirth.maxActiveEnemies) return@repeat
         val angle = gameplayRandom.nextFloat() * TAU + index * TAU * 0.5f
         val fragmentHp = rebirthProfile.enemyHealth(24f * difficulty)
         val fragmentSpeed = 175f * rebirthProfile.enemySpeedMultiplier
@@ -179,6 +179,9 @@ internal fun MutableGameState.spawnSplitterFragments(enemy: Enemy) {
             maxHp = fragmentHp,
             radius = 12f,
             actionTimer = 0.2f,
+            relicCounters = IntArray(content.relics.size),
+            relicTimers = FloatArray(content.relics.size),
+            relicValues = FloatArray(content.relics.size),
         )
     }
 }

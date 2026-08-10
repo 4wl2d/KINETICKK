@@ -3,12 +3,12 @@
 
 package kinetickk.ball.profile.interaction.settings.impl
 
-import kinetickk.resource.audio.api.AudioCue
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.profile.api.PlayerPreferences
+import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
 import kinetickk.ball.profile.interaction.settings.api.SettingsRenderModel
 import kotlin.math.abs
@@ -41,6 +41,7 @@ internal data class SettingsState(
 
 internal sealed interface SettingsEffect {
     data class UpdatePreferences(val preferences: PlayerPreferences) : SettingsEffect
+    data class PlayAudio(val cue: ProfileAudioCue) : SettingsEffect
     data class Emit(val output: SettingsOutput) : SettingsEffect
 }
 
@@ -64,19 +65,19 @@ internal object SettingsReducer {
                     state = state.copy(model = preferences.toRenderModel()),
                     effects = listOf(
                         SettingsEffect.UpdatePreferences(preferences),
-                        SettingsEffect.Emit(SettingsOutput.Cue(AudioCue.UI_CLICK)),
+                        SettingsEffect.PlayAudio(ProfileAudioCue.UI_CLICK),
                     ),
                 )
             }
         }
         is SettingsAction.PageSelected -> SettingsReduction(
             state = state.copy(page = action.page.coerceAtLeast(0)),
-            effects = listOf(SettingsEffect.Emit(SettingsOutput.Cue(AudioCue.UI_CLICK))),
+            effects = listOf(SettingsEffect.PlayAudio(ProfileAudioCue.UI_CLICK)),
         )
         SettingsAction.Back -> SettingsReduction(
             state = state,
             effects = listOf(
-                SettingsEffect.Emit(SettingsOutput.Cue(AudioCue.UI_CLICK)),
+                SettingsEffect.PlayAudio(ProfileAudioCue.UI_CLICK),
                 SettingsEffect.Emit(SettingsOutput.Back),
             ),
         )

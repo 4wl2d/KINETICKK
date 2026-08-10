@@ -61,6 +61,7 @@ internal class GameComponent private constructor(
             seed: Int = 731_991,
         ): GameComponent = GameComponent(
             engine = GameEngine.create(
+                content = configuration.content,
                 bootstrapProgress = configuration.toGameplayProfileSnapshot(),
                 seed = seed,
             ),

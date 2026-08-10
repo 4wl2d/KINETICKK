@@ -249,7 +249,7 @@ internal fun MutableGameState.choose(index: Int) {
         ChoiceType.RELIC -> when (option.relicAction ?: return) {
             RelicChoiceAction.ACQUIRE -> {
                 val relicId = option.relicId ?: return
-                if (relicRank(relicId) > 0 || equippedRelics.size < RelicCatalog.MAX_SLOTS) {
+                if (relicRank(relicId) > 0 || equippedRelics.size < content.relicPolicy.maxSlots) {
                     acquireRelic(relicId)
                     GameplayAudioCue.WEAPON_ACQUIRED
                 } else {

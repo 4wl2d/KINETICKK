@@ -4,7 +4,6 @@
 package kinetickk.ball.profile.interaction.lab.api
 
 import androidx.compose.runtime.Composable
-import kinetickk.resource.audio.api.AudioCue
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.ball.content.api.MetaUpgradeId
 
@@ -27,7 +26,6 @@ data class LabRenderModel(
 
 sealed interface LabOutput {
     data object Back : LabOutput
-    data class Cue(val cue: AudioCue) : LabOutput
 }
 
 interface LabFeature {

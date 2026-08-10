@@ -30,7 +30,18 @@ internal fun MutableGameState.addEnemyForTesting(
     radius: Float = 17f,
     type: EnemyType = EnemyType.DRIFTER,
 ): Enemy {
-    val enemy = Enemy(nextEntityId++, type, x, y, hp = hp, maxHp = hp, radius = radius)
+    val enemy = Enemy(
+        id = nextEntityId++,
+        type = type,
+        x = x,
+        y = y,
+        hp = hp,
+        maxHp = hp,
+        radius = radius,
+        relicCounters = IntArray(content.relics.size),
+        relicTimers = FloatArray(content.relics.size),
+        relicValues = FloatArray(content.relics.size),
+    )
     enemies += enemy
     return enemy
 }

@@ -18,12 +18,17 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.rememberTextMeasurer
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.ball.profile.api.SettingsProfileCapability
+import kinetickk.ball.profile.interaction.audio.ProfileAudioExecutor
 import kinetickk.ball.profile.interaction.settings.api.SettingsFeature
 import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
+import kinetickk.resource.audio.api.AudioService
 
 class DefaultSettingsFeature(
     private val capability: SettingsProfileCapability,
+    audioService: AudioService,
 ) : SettingsFeature {
+    private val audioExecutor = ProfileAudioExecutor(audioService)
+
     @Composable
     override fun Content(
         routeToken: Int,
@@ -51,7 +56,9 @@ class DefaultSettingsFeature(
                     is SettingsEffect.UpdatePreferences -> {
                         capability.updatePreferences(effect.preferences)
                         renderModelValue = capability.preferences().toRenderModel()
+                        audioExecutor.updatePreferences(renderModelValue.preferences)
                     }
+                    is SettingsEffect.PlayAudio -> audioExecutor.play(effect.cue)
                     is SettingsEffect.Emit -> onOutput(effect.output)
                 }
             }

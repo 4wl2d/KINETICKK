@@ -27,23 +27,32 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
-import kinetickk.ball.content.api.WeaponCatalog
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
 import kinetickk.foundation.design.*
 import kinetickk.ball.profile.api.LoadoutCapability
 import kinetickk.ball.profile.api.PreferencesReader
+import kinetickk.ball.profile.interaction.audio.ProfileAudioExecutor
 import kinetickk.ball.profile.interaction.armory.api.ArmoryFeature
 import kinetickk.ball.profile.interaction.armory.api.ArmoryOutput
 import kinetickk.ball.profile.interaction.armory.api.ArmoryRenderModel
+import kinetickk.foundation.collections.ImmutableList
+import kinetickk.resource.audio.api.AudioService
 import kotlin.math.min
 
 class DefaultArmoryFeature(
     loadoutCapability: LoadoutCapability,
     private val preferencesReader: PreferencesReader,
+    private val weapons: ImmutableList<WeaponDefinition>,
+    weaponMasteries: ImmutableList<WeaponMastery>,
+    audioService: AudioService,
 ) : ArmoryFeature {
-    private val reducer = ArmoryReducer(loadoutCapability)
+    private val reducer = ArmoryReducer(loadoutCapability, weapons)
+    private val audioExecutor = ProfileAudioExecutor(audioService)
+    private val weaponMasteryProgressionLabel = weaponMasteries.drop(1).joinToString("  ") {
+        "L${it.minimumLevel} ${it.displayLabel.uppercase()}"
+    }
 
     @Composable
     override fun Content(activeRunWeapon: WeaponId?, onOutput: (ArmoryOutput) -> Unit) {
@@ -65,7 +74,7 @@ class DefaultArmoryFeature(
             val reduction = reducer.reduce(pageValue, action)
             pageValue = reduction.page
             if (reduction.profileChanged) revisionValue++
-            reduction.feedbackCue?.let { cue -> onOutput(ArmoryOutput.Cue(cue)) }
+            reduction.feedbackCue?.let(audioExecutor::play)
             if (reduction.close) onOutput(ArmoryOutput.Back)
         }
 
@@ -86,21 +95,33 @@ class DefaultArmoryFeature(
                 }
                 .pointerInput(viewportValue, pageValue) {
                     detectTapGestures { position ->
-                        resolveArmoryPress(viewportValue, pageValue, position.x, position.y)?.let(::dispatch)
+                        resolveArmoryPress(
+                            viewport = viewportValue,
+                            weapons = weapons,
+                            page = pageValue,
+                            x = position.x,
+                            y = position.y,
+                        )?.let(::dispatch)
                     }
                 },
         ) {
-            drawArmory(model, pageValue, reducer.maxPage, textMeasurer, renderTimeSecondsValue)
+            drawArmory(
+                engine = model,
+                weapons = weapons,
+                weaponMasteryProgressionLabel = weaponMasteryProgressionLabel,
+                page = pageValue,
+                maxPage = reducer.maxPage,
+                textMeasurer = textMeasurer,
+                renderTime = renderTimeSecondsValue,
+            )
         }
     }
 }
 
-private val WeaponMasteryProgressionLabel = WeaponMastery.entries.drop(1).joinToString("  ") {
-    "L${it.minimumLevel} ${it.displayLabel.uppercase()}"
-}
-
 private fun DrawScope.drawArmory(
     engine: ArmoryRenderModel,
+    weapons: ImmutableList<WeaponDefinition>,
+    weaponMasteryProgressionLabel: String,
     page: Int,
     maxPage: Int,
     textMeasurer: TextMeasurer,
@@ -110,7 +131,7 @@ private fun DrawScope.drawArmory(
     val bounds = overlayBounds()
     drawOverlayFrame(bounds, Cyan)
     drawLabel(textMeasurer, "WEAPON ARMORY", bounds.left + d(25f), bounds.top + d(24f), 20f, Cyan, weight = FontWeight.Bold)
-    drawLabel(textMeasurer, "${WeaponCatalog.all.size} SYSTEMS // ${engine.unlockedWeapons.size} UNLOCKED // MATTER ${formatCompact(engine.totalMatter)}", bounds.right - d(25f), bounds.top + d(30f), 8f, White, alignRight = true)
+    drawLabel(textMeasurer, "${weapons.size} SYSTEMS // ${engine.unlockedWeapons.size} UNLOCKED // MATTER ${formatCompact(engine.totalMatter)}", bounds.right - d(25f), bounds.top + d(30f), 8f, White, alignRight = true)
     val cardWidth = min(d(245f), (bounds.width - d(80f)) / 3f)
     val gap = d(16f)
     val total = cardWidth * 3f + gap * 2f
@@ -118,9 +139,19 @@ private fun DrawScope.drawArmory(
     val cardTop = bounds.top + d(118f)
     val cardBottom = bounds.bottom - d(85f)
     val start = page.coerceIn(0, maxPage) * ARMORY_PAGE_SIZE
-    WeaponCatalog.all.subList(start, min(start + ARMORY_PAGE_SIZE, WeaponCatalog.all.size))
+    weapons.subList(start, min(start + ARMORY_PAGE_SIZE, weapons.size))
         .forEachIndexed { index, definition ->
-            drawWeaponCard(engine, textMeasurer, definition, startX + index * (cardWidth + gap), cardTop, cardWidth, cardBottom - cardTop, renderTime)
+            drawWeaponCard(
+                engine = engine,
+                textMeasurer = textMeasurer,
+                definition = definition,
+                weaponMasteryProgressionLabel = weaponMasteryProgressionLabel,
+                x = startX + index * (cardWidth + gap),
+                y = cardTop,
+                width = cardWidth,
+                height = cardBottom - cardTop,
+                renderTime = renderTime,
+            )
         }
     drawPagedFooter(textMeasurer, bounds, page.coerceIn(0, maxPage), maxPage, Cyan)
 }
@@ -129,6 +160,7 @@ private fun DrawScope.drawWeaponCard(
     engine: ArmoryRenderModel,
     textMeasurer: TextMeasurer,
     definition: WeaponDefinition,
+    weaponMasteryProgressionLabel: String,
     x: Float,
     y: Float,
     width: Float,
@@ -138,15 +170,21 @@ private fun DrawScope.drawWeaponCard(
     val unlocked = definition.id in engine.unlockedWeapons
     val equipped = engine.selectedWeapon == definition.id
     val active = engine.activeRunWeapon == definition.id
-    val accent = if (unlocked) weaponColor(definition.id) else Muted
+    val accent = if (unlocked) armoryWeaponColor(definition.id) else Muted
     drawRect(Color(0xB00B0D1D), Offset(x, y), Size(width, height))
     drawRect(accent, Offset(x, y), Size(width, height), style = Stroke(d(if (equipped) 2.2f else 1f)))
     drawRect(accent.copy(alpha = 0.12f), Offset(x, y), Size(width, d(50f)))
-    drawWeaponGlyph(definition.id, Offset(x + width * 0.5f, y + d(95f)), d(28f), renderTime, accent)
+    drawSystemGlyph(
+        armoryWeaponGlyphStyle(definition.id),
+        Offset(x + width * 0.5f, y + d(95f)),
+        d(28f),
+        renderTime,
+        accent,
+    )
     drawLabel(textMeasurer, definition.name.uppercase(), x + width * 0.5f, y + d(139f), 11f, accent, centered = true, weight = FontWeight.Bold)
     drawLabel(textMeasurer, definition.tags.joinToString(" / "), x + width * 0.5f, y + d(164f), 7f, Muted, centered = true)
     drawLabel(textMeasurer, definition.description, x + d(14f), y + d(193f), 7f, White, maxWidth = width - d(28f), maxLines = 3)
-    drawLabel(textMeasurer, WeaponMasteryProgressionLabel, x + width * 0.5f, y + d(274f), 6f, accent, centered = true, maxWidth = width - d(20f), maxLines = 2)
+    drawLabel(textMeasurer, weaponMasteryProgressionLabel, x + width * 0.5f, y + d(274f), 6f, accent, centered = true, maxWidth = width - d(20f), maxLines = 2)
     drawLabel(textMeasurer, "MILESTONES BOOST DAMAGE + ACTIVATION", x + width * 0.5f, y + d(295f), 6f, Muted, centered = true)
     val state = when {
         equipped -> "EQUIPPED LOADOUT"
@@ -155,4 +193,34 @@ private fun DrawScope.drawWeaponCard(
         else -> "UNLOCK ${formatCompact(definition.permanentUnlockCost.toLong())}"
     }
     drawLabel(textMeasurer, state, x + width * 0.5f, y + height - d(34f), 9f, if (equipped) Acid else accent, centered = true, weight = FontWeight.Bold)
+}
+
+private fun armoryWeaponColor(id: WeaponId): Color = when (id) {
+    WeaponId.FLUX_WAKE -> Cyan
+    WeaponId.MORNINGSTAR -> Violet
+    WeaponId.PHASE_LATTICE -> Magenta
+    WeaponId.NULL_LANCE -> Acid
+    WeaponId.GRAVITY_MINES -> Orange
+    WeaponId.ION_SWARM -> Cyan
+    WeaponId.RIFT_BLADES -> Magenta
+    WeaponId.ARC_COIL -> Violet
+    WeaponId.QUASAR_CANNON -> Orange
+    WeaponId.ENTROPY_FIELD -> Red
+    WeaponId.SINGULARITY_SPEAR -> White
+    WeaponId.PRISM_RELAY -> Blue
+}
+
+private fun armoryWeaponGlyphStyle(id: WeaponId): SystemGlyphStyle = when (id) {
+    WeaponId.FLUX_WAKE -> SystemGlyphStyle.DIAGONAL_SLASH
+    WeaponId.MORNINGSTAR -> SystemGlyphStyle.ORBITING_NODE
+    WeaponId.PHASE_LATTICE -> SystemGlyphStyle.CONCENTRIC_RING
+    WeaponId.NULL_LANCE -> SystemGlyphStyle.ARROW_LINE
+    WeaponId.GRAVITY_MINES -> SystemGlyphStyle.HEX_ORBIT
+    WeaponId.ION_SWARM -> SystemGlyphStyle.DIAMOND_TRIAD
+    WeaponId.RIFT_BLADES -> SystemGlyphStyle.TWIN_DIAMONDS
+    WeaponId.ARC_COIL -> SystemGlyphStyle.ZIGZAG_RING
+    WeaponId.QUASAR_CANNON -> SystemGlyphStyle.RINGED_BEAM
+    WeaponId.ENTROPY_FIELD -> SystemGlyphStyle.HEPTAGON_ORBIT
+    WeaponId.SINGULARITY_SPEAR -> SystemGlyphStyle.SPEAR_LINE
+    WeaponId.PRISM_RELAY -> SystemGlyphStyle.TRIANGLE_NETWORK
 }

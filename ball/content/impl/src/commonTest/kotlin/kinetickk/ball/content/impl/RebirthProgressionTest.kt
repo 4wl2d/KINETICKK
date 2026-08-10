@@ -1,16 +1,19 @@
 // SPDX-FileCopyrightText: 2026 Vladislav Tomilov
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package kinetickk.ball.content.api
+package kinetickk.ball.content.impl
 
+import kinetickk.ball.content.api.RebirthDirective
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import kotlin.test.Test
 
 class RebirthProgressionTest {
+    private val rebirth = createContentCatalog().gameplayContent().rebirth
+
     @Test
     fun tierZeroPreservesBaselineTuning() {
-        val profile = RebirthProgression.profile(0)
+        val profile = rebirth.profile(0)
 
         assertEquals(0, profile.tier)
         assertEquals(RebirthDirective.BASELINE, profile.directive)
@@ -39,7 +42,7 @@ class RebirthProgressionTest {
 
     @Test
     fun profilesProgressMonotonicallyFromZeroThroughMaxLevel() {
-        val profiles = (0..RebirthProgression.MAX_LEVEL).map(RebirthProgression::profile)
+        val profiles = rebirth.profiles
 
         profiles.zipWithNext().forEach { (previous, current) ->
             assertEquals(previous.tier + 1, current.tier)
@@ -65,11 +68,11 @@ class RebirthProgressionTest {
 
     @Test
     fun profileInputsClampAndDerivedValuesRemainFiniteAndBounded() {
-        assertEquals(0, RebirthProgression.profile(Int.MIN_VALUE).tier)
-        assertEquals(RebirthProgression.MAX_LEVEL, RebirthProgression.profile(Int.MAX_VALUE).tier)
+        assertEquals(rebirth.minimumLevel, rebirth.profile(Int.MIN_VALUE).tier)
+        assertEquals(rebirth.maximumLevel, rebirth.profile(Int.MAX_VALUE).tier)
 
-        (-2..RebirthProgression.MAX_LEVEL + 2).forEach { requestedLevel ->
-            val profile = RebirthProgression.profile(requestedLevel)
+        (-2..rebirth.maximumLevel + 2).forEach { requestedLevel ->
+            val profile = rebirth.profile(requestedLevel)
             val scalarValues = listOf(
                 profile.enemyCapMultiplier,
                 profile.spawnRateMultiplier,
@@ -83,11 +86,14 @@ class RebirthProgressionTest {
                 profile.matterGainMultiplier,
             )
 
-            assertTrue(scalarValues.all(Float::isFinite), "Non-finite profile for requested level $requestedLevel: $profile")
-            assertTrue(profile.openingEnemyCount in 5..RebirthProgression.MAX_ACTIVE_ENEMIES)
-            assertTrue(profile.enemyCap(10_000) <= RebirthProgression.MAX_ACTIVE_ENEMIES)
-            assertTrue(profile.spawnInterval(0f) >= RebirthProgression.MIN_SPAWN_INTERVAL_SECONDS)
-            assertTrue(profile.eliteInterval(0f) >= RebirthProgression.MIN_ELITE_INTERVAL_SECONDS)
+            assertTrue(
+                scalarValues.all(Float::isFinite),
+                "Non-finite profile for requested level $requestedLevel: $profile",
+            )
+            assertTrue(profile.openingEnemyCount in 5..rebirth.maxActiveEnemies)
+            assertTrue(profile.enemyCap(10_000) <= rebirth.maxActiveEnemies)
+            assertTrue(profile.spawnInterval(0f) >= rebirth.minSpawnIntervalSeconds)
+            assertTrue(profile.eliteInterval(0f) >= rebirth.minEliteIntervalSeconds)
             assertTrue(profile.enemyHealth(5_400f).isFinite())
             assertTrue(profile.enemyHealth(5_400f) > 0f)
         }

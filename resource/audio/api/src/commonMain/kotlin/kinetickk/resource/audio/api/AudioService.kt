@@ -3,24 +3,31 @@
 
 package kinetickk.resource.audio.api
 
-/** A semantic audio event. Feature code never depends on a platform sound implementation. */
-enum class AudioCue {
-    UI_CLICK,
-    DASH,
-    WEAPON_LIGHT,
-    WEAPON_HEAVY,
-    IMPACT,
-    ENEMY_DESTROYED,
-    PICKUP,
-    LEVEL_UP,
-    OVERHEAT,
-    RECOVERED,
-    HURT,
-    OVERDRIVE,
-    WEAPON_ACQUIRED,
-    PURCHASE,
-    GAME_OVER,
-    VICTORY,
+enum class ToneWave {
+    SINE,
+    SQUARE,
+    SAW,
+    TRIANGLE,
+}
+
+/** Validated mechanical work accepted by the platform audio resource. */
+data class ToneRequest(
+    val frequencyHz: Float,
+    val durationSeconds: Float,
+    val gain: Float,
+    val wave: ToneWave,
+) {
+    init {
+        require(frequencyHz.isFinite() && frequencyHz in 20f..20_000f) {
+            "Tone frequency must be finite and between 20 and 20,000 Hz"
+        }
+        require(durationSeconds.isFinite() && durationSeconds in 0.001f..1f) {
+            "Tone duration must be finite and between 0.001 and 1 second"
+        }
+        require(gain.isFinite() && gain in 0f..1f) {
+            "Tone gain must be finite and between 0 and 1"
+        }
+    }
 }
 
 /** The persisted preference slice observed by application-owned audio. */
@@ -30,10 +37,10 @@ data class AudioPreferences(
     val masterVolume: Float = 0.65f,
 )
 
-/** Application-scoped audio lifecycle and cue sink. */
+/** Application-scoped lifecycle and bounded mechanical tone sink. */
 interface AudioService {
     fun updatePreferences(preferences: AudioPreferences)
-    fun advance(realDeltaSeconds: Float, cues: List<AudioCue>)
+    fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>)
     fun ensureUnlocked()
     fun close()
 }

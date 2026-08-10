@@ -4,7 +4,6 @@
 package kinetickk.ball.profile.interaction.armory.api
 
 import androidx.compose.runtime.Composable
-import kinetickk.resource.audio.api.AudioCue
 import kinetickk.foundation.collections.ImmutableSet
 import kinetickk.ball.content.api.WeaponId
 
@@ -17,7 +16,6 @@ data class ArmoryRenderModel(
 
 sealed interface ArmoryOutput {
     data object Back : ArmoryOutput
-    data class Cue(val cue: AudioCue) : ArmoryOutput
 }
 
 interface ArmoryFeature {

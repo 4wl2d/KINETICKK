@@ -9,13 +9,13 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             api(projects.ball.gameplay.interaction)
+            api(projects.resource.audio.api)
 
             implementation(libs.compose.foundation)
             implementation(libs.compose.runtime)
             implementation(libs.compose.ui)
             implementation(projects.foundation.common)
             implementation(projects.foundation.design)
-            implementation(projects.resource.audio.api)
             implementation(projects.ball.profile.api)
             implementation(projects.ball.gameplay.api)
             implementation(projects.ball.gameplay.nucleus)

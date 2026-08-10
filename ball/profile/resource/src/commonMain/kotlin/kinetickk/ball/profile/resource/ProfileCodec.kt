@@ -4,7 +4,7 @@
 package kinetickk.ball.profile.resource
 
 import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.content.api.RebirthProgression
+import kinetickk.ball.content.api.ProfilePolicySnapshot
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
@@ -24,10 +24,13 @@ internal object ProfileCodec {
     private const val VERSION = 3
     private const val LEGACY_VERSION = 2
 
-    fun encode(profile: PlayerProfile): String {
+    fun encode(profile: PlayerProfile, policy: ProfilePolicySnapshot): String {
         val preferences = profile.preferences.normalized()
         val matter = profile.economy.matter.coerceAtLeast(0L)
-        val rebirthLevel = profile.rebirthProgress.level.coerceIn(0, RebirthProgression.MAX_LEVEL)
+        val rebirthLevel = profile.rebirthProgress.level.coerceIn(
+            policy.rebirth.minimumLevel,
+            policy.rebirth.maximumLevel,
+        )
         val highestCleared = profile.rebirthProgress.highestCleared.coerceIn(-1, rebirthLevel)
         val weaponMask = profile.loadout.unlockedWeapons
             .map(WeaponId::ordinal)
@@ -61,7 +64,7 @@ internal object ProfileCodec {
         ).joinToString("|")
     }
 
-    fun decode(value: String?): PlayerProfile? {
+    fun decode(value: String?, policy: ProfilePolicySnapshot): PlayerProfile? {
         if (value.isNullOrBlank()) return null
         return runCatching {
             val parts = value.split('|')
@@ -77,11 +80,13 @@ internal object ProfileCodec {
             val unlockedWeapons = (0..30)
                 .filter { index -> weaponMask and (1 shl index) != 0 }
                 .mapNotNullTo(mutableSetOf()) { index -> WeaponId.entries.getOrNull(index) }
-                .apply { if (isEmpty()) add(WeaponId.FLUX_WAKE) }
+                .apply { if (isEmpty()) add(policy.weapons.first().id) }
             val metaLevels = parts[6].split(',')
                 .mapNotNull(String::toIntOrNull)
                 .map { it.coerceAtLeast(0) }
-                .let { levels -> List(8) { index -> levels.getOrElse(index) { 0 } } }
+                .let { levels ->
+                    List(policy.metaUpgrades.size) { index -> levels.getOrElse(index) { 0 } }
+                }
             val discoveries = parts[7].split(',')
                 .mapNotNull(String::toIntOrNull)
                 .filterTo(mutableSetOf()) { it >= 0 }
@@ -113,9 +118,12 @@ internal object ProfileCodec {
                 ),
             ).normalized()
             val rebirthLevel = if (version >= VERSION) {
-                parts[9].toIntOrNull()?.coerceIn(0, RebirthProgression.MAX_LEVEL) ?: 0
+                parts[9].toIntOrNull()?.coerceIn(
+                    policy.rebirth.minimumLevel,
+                    policy.rebirth.maximumLevel,
+                ) ?: policy.rebirth.minimumLevel
             } else {
-                0
+                policy.rebirth.minimumLevel
             }
             val highestCleared = if (version >= VERSION) {
                 parts[10].toIntOrNull()?.coerceIn(-1, rebirthLevel) ?: -1

@@ -16,8 +16,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import kinetickk.ball.content.api.RelicAspect
-import kinetickk.ball.content.api.RelicCatalog
+import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RelicPolicy
 import kotlin.math.cos
 import kotlin.math.PI
 import kotlin.math.sin
@@ -44,11 +45,12 @@ internal fun relicAspectColor(aspect: RelicAspect): Color = when (aspect) {
 }
 
 /**
- * A compact procedural mark shared by world pickups, the four-slot matrix, and
+ * A compact procedural mark shared by world pickups, the bounded Relic matrix, and
  * choice cards. Aspect owns the frame/color; every relic owns a different rune.
  */
 internal fun DrawScope.drawRelicIcon(
-    id: RelicId,
+    definition: RelicDefinition,
+    policy: RelicPolicy,
     center: Offset,
     radius: Float,
     rank: Int? = null,
@@ -56,7 +58,7 @@ internal fun DrawScope.drawRelicIcon(
     alpha: Float = 1f,
 ) {
     if (radius <= 0f || alpha <= 0f) return
-    val definition = RelicCatalog.byId(id)
+    val id = definition.id
     val accent = relicAspectColor(definition.aspect).copy(alpha = alpha.coerceIn(0f, 1f))
     val stroke = (radius * 0.085f).coerceAtLeast(0.65f)
     val sides = when (definition.aspect) {
@@ -77,9 +79,9 @@ internal fun DrawScope.drawRelicIcon(
 
     drawRelicRune(id, center, radius * 0.62f, accent, time)
 
-    val visibleRank = rank?.coerceIn(1, RelicCatalog.MAX_RANK)
+    val visibleRank = rank?.coerceIn(1, policy.maxRank)
     if (visibleRank != null) {
-        repeat(RelicCatalog.MAX_RANK) { index ->
+        repeat(policy.maxRank) { index ->
             val angle = PI.toFloat() * 0.72f + index * PI.toFloat() * 0.14f
             drawCircle(
                 color = if (index < visibleRank) RelicInk.copy(alpha = alpha) else accent.copy(alpha = alpha * 0.22f),

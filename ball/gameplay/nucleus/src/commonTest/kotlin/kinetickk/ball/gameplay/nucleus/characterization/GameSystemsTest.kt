@@ -16,7 +16,7 @@ import kotlin.test.Test
 class GameSystemsTest {
     @Test
     fun defaultSimulationSpeedIsSlightlyAccelerated() {
-        val engine = GameScenario(seed = 10, initialMatter = 0)
+        val engine = gameScenario(seed = 10, initialMatter = 0)
 
         assertEquals(1.15f, engine.settings.simulationSpeed)
     }
@@ -54,14 +54,14 @@ class GameSystemsTest {
 
     @Test
     fun everyCatalogItemCanBeAcquiredAndDiscovered() {
-        val engine = GameScenario(seed = 13, initialMatter = 0)
+        val engine = gameScenario(seed = 13, initialMatter = 0)
 
-        ItemCatalog.all.forEach { engine.acquireItemForTesting(it.id) }
+        engine.content.items.forEach { engine.acquireItemForTesting(it.id) }
 
-        assertEquals(ItemCatalog.ITEM_COUNT, engine.acquiredItemCount)
-        assertEquals(ItemCatalog.ITEM_COUNT, engine.discoveredItemCount)
-        assertEquals(ItemCatalog.all.last(), engine.recentItem)
-        ItemCatalog.all.forEach { item ->
+        assertEquals(engine.content.items.size, engine.acquiredItemCount)
+        assertEquals(engine.content.items.size, engine.discoveredItemCount)
+        assertEquals(engine.content.items.last(), engine.recentItem)
+        engine.content.items.forEach { item ->
             assertEquals(1, engine.itemStack(item.id), "Item ${item.id} was not acquired exactly once")
             assertTrue(engine.isItemDiscovered(item.id), "Item ${item.id} was not discovered")
         }
@@ -72,10 +72,10 @@ class GameSystemsTest {
 
     @Test
     fun itemStacksStopAtMaximumAndThreeFamilyItemsTriggerResonance() {
-        val engine = GameScenario(seed = 14, initialMatter = 0)
-        val first = requireNotNull(ItemCatalog.byId(0))
-        val second = requireNotNull(ItemCatalog.byId(1))
-        val third = requireNotNull(ItemCatalog.byId(2))
+        val engine = gameScenario(seed = 14, initialMatter = 0)
+        val first = requireNotNull(engine.content.item(0))
+        val second = requireNotNull(engine.content.item(1))
+        val third = requireNotNull(engine.content.item(2))
 
         engine.acquireItemForTesting(first.id)
         engine.acquireItemForTesting(second.id)
@@ -466,7 +466,7 @@ class GameSystemsTest {
         )
     }
 
-    private fun runningEngine(seed: Int): GameScenario = GameScenario(seed = seed, initialMatter = 0).apply {
+    private fun runningEngine(seed: Int): GameScenario = gameScenario(seed = seed, initialMatter = 0).apply {
         resize(1_280f, 720f)
         startRun()
     }

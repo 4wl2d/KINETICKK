@@ -3,9 +3,9 @@
 
 package kinetickk.ball.profile.interaction.rebirth.impl
 
-import kinetickk.resource.audio.api.AudioCue
-import kinetickk.ball.content.api.RebirthProgression
+import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.profile.api.RebirthProfileSnapshot
+import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthOutput
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthRenderModel
 
@@ -21,6 +21,7 @@ internal data class RebirthState(
 
 internal sealed interface RebirthEffect {
     data object AdvanceCycle : RebirthEffect
+    data class PlayAudio(val cue: ProfileAudioCue) : RebirthEffect
     data class Emit(val output: RebirthOutput) : RebirthEffect
 }
 
@@ -36,7 +37,7 @@ internal object RebirthReducer {
             !state.armed -> RebirthReduction(
                 state = state.copy(armed = true),
                 effects = listOf(
-                    RebirthEffect.Emit(RebirthOutput.Cue(AudioCue.UI_CLICK)),
+                    RebirthEffect.PlayAudio(ProfileAudioCue.UI_CLICK),
                 ),
             )
             else -> RebirthReduction(
@@ -47,26 +48,35 @@ internal object RebirthReducer {
         RebirthAction.Back -> RebirthReduction(
             state = state.copy(armed = false),
             effects = listOf(
-                RebirthEffect.Emit(RebirthOutput.Cue(AudioCue.UI_CLICK)),
+                RebirthEffect.PlayAudio(ProfileAudioCue.UI_CLICK),
                 RebirthEffect.Emit(RebirthOutput.Back),
             ),
         )
     }
 }
 
-internal fun RebirthProfileSnapshot.toRenderModel(eligible: Boolean = true): RebirthRenderModel = rebirthRenderModel(
+internal fun RebirthProfileSnapshot.toRenderModel(
+    rebirthPolicy: RebirthPolicySnapshot,
+    eligible: Boolean = true,
+): RebirthRenderModel = rebirthRenderModel(
+    rebirthPolicy = rebirthPolicy,
     level = progress.level,
     highestCleared = progress.highestCleared,
     eligible = eligible,
 )
 
-private fun rebirthRenderModel(level: Int, highestCleared: Int, eligible: Boolean): RebirthRenderModel {
-    val normalizedLevel = level.coerceIn(0, RebirthProgression.MAX_LEVEL)
+private fun rebirthRenderModel(
+    rebirthPolicy: RebirthPolicySnapshot,
+    level: Int,
+    highestCleared: Int,
+    eligible: Boolean,
+): RebirthRenderModel {
+    val normalizedLevel = level.coerceIn(rebirthPolicy.minimumLevel, rebirthPolicy.maximumLevel)
     return RebirthRenderModel(
-        current = RebirthProgression.profile(normalizedLevel),
-        next = RebirthProgression.profile(normalizedLevel + 1),
+        current = rebirthPolicy.profile(normalizedLevel),
+        next = rebirthPolicy.profile(normalizedLevel + 1),
         canAdvance = eligible &&
-            normalizedLevel < RebirthProgression.MAX_LEVEL &&
+            normalizedLevel < rebirthPolicy.maximumLevel &&
             highestCleared.coerceIn(-1, normalizedLevel) >= normalizedLevel,
     )
 }

@@ -3,11 +3,7 @@
 
 package kinetickk.ball.profile.resource
 
-import kinetickk.ball.content.api.ItemCatalog
-import kinetickk.ball.content.api.MetaUpgradeCatalog
-import kinetickk.ball.content.api.MetaUpgradeId
-import kinetickk.ball.content.api.RebirthProgression
-import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.ProfilePolicySnapshot
 import kinetickk.ball.profile.api.LabProgress
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
@@ -18,11 +14,14 @@ import kinetickk.ball.profile.api.ProfileLoadResult
 import kinetickk.ball.profile.api.RebirthProgress
 
 /** Bounds and defensively recopies a profile supplied by an untrusted resource. */
-fun quarantineBootstrapProfile(profile: PlayerProfile): ProfileLoadResult {
+fun quarantineBootstrapProfile(
+    profile: PlayerProfile,
+    policy: ProfilePolicySnapshot,
+): ProfileLoadResult {
     if (
-        profile.loadout.unlockedWeapons.size > WeaponId.entries.size ||
-        profile.labProgress.ranks.size > MetaUpgradeId.entries.size ||
-        profile.collection.discoveredItemIds.size > ItemCatalog.ITEM_COUNT
+        profile.loadout.unlockedWeapons.size > policy.weapons.size ||
+        profile.labProgress.ranks.size > policy.metaUpgrades.size ||
+        profile.collection.discoveredItemIds.size > policy.itemCount
     ) {
         return ProfileLoadResult.Rejected(ProfileLoadRejection.BOOTSTRAP_COLLECTION_LIMIT_EXCEEDED)
     }
@@ -37,17 +36,21 @@ fun quarantineBootstrapProfile(profile: PlayerProfile): ProfileLoadResult {
     }
 
     val matter = profile.economy.matter.coerceAtLeast(0L)
-    val rebirthLevel = profile.rebirthProgress.level.coerceIn(0, RebirthProgression.MAX_LEVEL)
+    val rebirthLevel = profile.rebirthProgress.level.coerceIn(
+        policy.rebirth.minimumLevel,
+        policy.rebirth.maximumLevel,
+    )
+    val acceptedWeapons = policy.weapons.mapTo(mutableSetOf()) { definition -> definition.id }
     val unlockedWeapons = profile.loadout.unlockedWeapons
-        .filterTo(mutableSetOf()) { it in WeaponId.entries }
-        .apply { add(WeaponId.FLUX_WAKE) }
-    val normalizedMetaLevels = List(MetaUpgradeId.entries.size) { index ->
+        .filterTo(mutableSetOf()) { it in acceptedWeapons }
+        .apply { add(policy.weapons.first().id) }
+    val normalizedMetaLevels = List(policy.metaUpgrades.size) { index ->
         profile.labProgress.ranks.getOrNull(index)
-            ?.coerceIn(0, MetaUpgradeCatalog.all[index].maxRanks)
+            ?.coerceIn(0, policy.metaUpgrades[index].maxRanks)
             ?: 0
     }
     val discoveries = profile.collection.discoveredItemIds
-        .filterTo(mutableSetOf()) { it in 0 until ItemCatalog.ITEM_COUNT }
+        .filterTo(mutableSetOf(), policy::containsItem)
 
     return ProfileLoadResult.Loaded(
         PlayerProfile(

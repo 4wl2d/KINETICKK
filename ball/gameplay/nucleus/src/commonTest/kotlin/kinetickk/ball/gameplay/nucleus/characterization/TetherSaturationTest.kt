@@ -110,7 +110,7 @@ class TetherSaturationTest {
         assertTrue(polarityStability <= 0.001f, "Test setup failed to saturate tether: $polarityStability")
     }
 
-    private fun runningEngine(seed: Int): GameScenario = GameScenario(seed = seed, initialMatter = 0).apply {
+    private fun runningEngine(seed: Int): GameScenario = gameScenario(seed = seed, initialMatter = 0).apply {
         resize(SCREEN_WIDTH, SCREEN_HEIGHT)
         startRun()
         clearHazards(this)

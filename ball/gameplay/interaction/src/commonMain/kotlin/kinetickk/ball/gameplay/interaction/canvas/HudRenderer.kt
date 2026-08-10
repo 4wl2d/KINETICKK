@@ -17,7 +17,6 @@ import androidx.compose.ui.text.font.FontWeight
 import kinetickk.ball.gameplay.nucleus.model.clamp
 import kinetickk.ball.gameplay.nucleus.model.formatRunTime
 import kinetickk.ball.gameplay.nucleus.model.GamePhase
-import kinetickk.ball.content.api.RelicCatalog
 import kinetickk.ball.gameplay.nucleus.renderModel.GameplayRenderModel
 import kotlin.math.max
 import kotlin.math.min
@@ -138,14 +137,15 @@ internal fun DrawScope.drawHud(engine: GameplayRenderModel, textMeasurer: TextMe
 }
 
 internal fun DrawScope.drawRelicMatrix(engine: GameplayRenderModel, textMeasurer: TextMeasurer, narrow: Boolean, right: Float) {
+    val relicPolicy = engine.content.relicPolicy
     val slotSize = d(if (narrow) 31f else 36f)
     val gap = d(6f)
-    val totalWidth = slotSize * RelicCatalog.MAX_SLOTS + gap * (RelicCatalog.MAX_SLOTS - 1)
+    val totalWidth = slotSize * relicPolicy.maxSlots + gap * (relicPolicy.maxSlots - 1)
     val startX = right - totalWidth
     val top = d(if (narrow) 156f else 174f)
     drawLabel(
         textMeasurer,
-        "RELIC MATRIX ${engine.equippedRelics.size}/${RelicCatalog.MAX_SLOTS}",
+        "RELIC MATRIX ${engine.equippedRelics.size}/${relicPolicy.maxSlots}",
         right,
         top - d(15f),
         7f,
@@ -153,11 +153,11 @@ internal fun DrawScope.drawRelicMatrix(engine: GameplayRenderModel, textMeasurer
         alignRight = true,
         weight = FontWeight.Bold,
     )
-    repeat(RelicCatalog.MAX_SLOTS) { index ->
+    repeat(relicPolicy.maxSlots) { index ->
         val left = startX + index * (slotSize + gap)
         val center = Offset(left + slotSize * 0.5f, top + slotSize * 0.5f)
         val equipped = engine.equippedRelics.getOrNull(index)
-        val accent = equipped?.let { relicAspectColor(RelicCatalog.byId(it.id).aspect) } ?: DarkLine
+        val accent = equipped?.let { relicAspectColor(engine.content.relic(it.id).aspect) } ?: DarkLine
         drawRect(Color(0xB00B0D1D), Offset(left, top), Size(slotSize, slotSize))
         drawRect(accent.copy(alpha = if (equipped == null) 0.7f else 0.95f), Offset(left, top), Size(slotSize, slotSize), style = Stroke(d(1f)))
         drawLabel(textMeasurer, "${index + 1}", left + d(3f), top + d(2f), 5f, if (equipped == null) Muted else accent, weight = FontWeight.Bold)
@@ -166,7 +166,8 @@ internal fun DrawScope.drawRelicMatrix(engine: GameplayRenderModel, textMeasurer
             drawLine(DarkLine, Offset(center.x - slotSize * 0.09f, center.y), Offset(center.x + slotSize * 0.09f, center.y), d(1f))
         } else {
             drawRelicIcon(
-                id = equipped.id,
+                definition = engine.content.relic(equipped.id),
+                policy = relicPolicy,
                 center = center,
                 radius = slotSize * 0.31f,
                 rank = equipped.rank,

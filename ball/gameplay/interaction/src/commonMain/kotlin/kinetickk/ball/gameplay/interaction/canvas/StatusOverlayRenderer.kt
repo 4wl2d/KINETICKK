@@ -39,7 +39,7 @@ internal fun DrawScope.drawEnd(engine: GameplayRenderModel, textMeasurer: TextMe
     drawLabel(textMeasurer, "KILLS ${engine.kills}", size.width * 0.5f, statY, 13f, White, centered = true)
     drawLabel(textMeasurer, "MATTER ${formatCompact(engine.runMatter)}", size.width * 0.5f + d(165f), statY, 13f, Acid, centered = true)
     drawLabel(textMeasurer, "WEAPON ${engine.currentWeaponDefinition.name.uppercase()} // LV ${engine.weaponLevel}", size.width * 0.5f, statY + d(38f), 10f, weaponColor(engine.weapon), centered = true)
-    drawLabel(textMeasurer, "ITEMS ${engine.acquiredItemCount}   DISCOVERIES ${engine.discoveredItemCount}/400   PEAK ${VelocityNames[engine.velocityTier.coerceIn(VelocityNames.indices)]}", size.width * 0.5f, statY + d(64f), 9f, Muted, centered = true)
+    drawLabel(textMeasurer, "ITEMS ${engine.acquiredItemCount}   DISCOVERIES ${engine.discoveredItemCount}/${engine.content.items.size}   PEAK ${VelocityNames[engine.velocityTier.coerceIn(VelocityNames.indices)]}", size.width * 0.5f, statY + d(64f), 9f, Muted, centered = true)
     val buttonY = size.height * 0.72f
     drawRect(color.copy(alpha = 0.1f), Offset(size.width * 0.5f - d(155f), buttonY - d(38f)), Size(d(310f), d(76f)))
     drawRect(color, Offset(size.width * 0.5f - d(155f), buttonY - d(38f)), Size(d(310f), d(76f)), style = Stroke(d(2f)))

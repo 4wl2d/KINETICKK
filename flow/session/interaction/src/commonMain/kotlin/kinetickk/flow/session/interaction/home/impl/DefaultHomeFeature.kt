@@ -28,18 +28,19 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.input.pointer.pointerInput
-import kinetickk.resource.audio.api.AudioCue
 import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.content.api.WeaponCatalog
+import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.foundation.design.*
 import kinetickk.ball.profile.api.CollectionCapability
 import kinetickk.ball.profile.api.LoadoutCapability
 import kinetickk.ball.profile.api.RebirthCapability
 import kinetickk.ball.profile.api.PreferencesReader
+import kinetickk.flow.session.interaction.audio.SessionAudioCue
+import kinetickk.flow.session.interaction.audio.SessionAudioExecutor
 import kinetickk.flow.session.interaction.home.api.HomeFeature
 import kinetickk.flow.session.interaction.home.api.HomeOutput
 import kinetickk.flow.session.interaction.home.api.HomeUiModel
-import kinetickk.flow.session.interaction.home.api.unlockMatter
+import kinetickk.resource.audio.api.AudioService
 import kotlin.math.PI
 import kotlin.math.min
 
@@ -48,8 +49,19 @@ class DefaultHomeFeature(
     collectionCapability: CollectionCapability,
     rebirthCapability: RebirthCapability,
     private val preferencesReader: PreferencesReader,
+    uiCatalog: UiCatalogSnapshot,
+    audioService: AudioService,
 ) : HomeFeature {
-    private val reducer = HomeReducer(loadoutCapability, collectionCapability, rebirthCapability)
+    private val reducer = HomeReducer(
+        loadoutCapability = loadoutCapability,
+        collectionCapability = collectionCapability,
+        rebirthCapability = rebirthCapability,
+        coreShapes = uiCatalog.coreShapes,
+        itemCount = uiCatalog.items.size,
+        weaponCount = uiCatalog.weapons.size,
+        rebirthPolicy = uiCatalog.rebirth,
+    )
+    private val audioExecutor = SessionAudioExecutor(audioService)
 
     @Composable
     override fun Content(inputEnabled: Boolean, onOutput: (HomeOutput) -> Unit) {
@@ -69,7 +81,7 @@ class DefaultHomeFeature(
         fun dispatch(action: HomeAction) {
             val output = reducer.reduce(action)
             revisionValue++
-            onOutput(HomeOutput.Cue(AudioCue.UI_CLICK))
+            audioExecutor.play(SessionAudioCue.UI_CLICK)
             if (output != null) onOutput(output)
         }
 
@@ -127,7 +139,8 @@ private fun DrawScope.drawHome(engine: HomeUiModel, textMeasurer: TextMeasurer, 
     drawLabel(textMeasurer, "SELECT CORE", size.width * 0.5f, size.height * 0.51f, 10f, Muted, centered = true)
 
     val centers = listOf(size.width * 0.5f - d(130f), size.width * 0.5f, size.width * 0.5f + d(130f))
-    CoreShape.entries.forEachIndexed { index, shape ->
+    engine.coreShapes.forEachIndexed { index, definition ->
+        val shape = definition.id
         val cardCenter = Offset(centers[index], size.height * 0.62f)
         val selected = engine.coreShape == shape
         val unlocked = engine.isCoreShapeUnlocked(shape)
@@ -139,7 +152,7 @@ private fun DrawScope.drawHome(engine: HomeUiModel, textMeasurer: TextMeasurer, 
             CoreShape.SHARD -> drawPolygon(Offset(cardCenter.x, cardCenter.y - d(12f)), d(18f), 3, -(PI / 2).toFloat(), if (unlocked) Magenta else Muted, Fill)
         }
         drawLabel(textMeasurer, shape.name, cardCenter.x, cardCenter.y + d(17f), 9f, if (selected) White else Muted, centered = true, weight = FontWeight.Bold)
-        if (!unlocked) drawLabel(textMeasurer, "${formatCompact(shape.unlockMatter)} LIFETIME", cardCenter.x, cardCenter.y + d(34f), 7f, Orange, centered = true)
+        if (!unlocked) drawLabel(textMeasurer, "${formatCompact(definition.unlockLifetimeMatter)} LIFETIME", cardCenter.x, cardCenter.y + d(34f), 7f, Orange, centered = true)
     }
 
     val buttonY = size.height * 0.78f
@@ -167,7 +180,7 @@ private fun DrawScope.drawHome(engine: HomeUiModel, textMeasurer: TextMeasurer, 
         drawLabel(textMeasurer, label, centerX, navY - d(5f), if (narrow) 6f else 8f, labelColor, centered = true, weight = FontWeight.Bold)
     }
     drawLabel(textMeasurer, "KINETIC MATTER ${formatCompact(engine.totalMatter)} // REBIRTH ${engine.rebirthLevel}", d(20f), d(20f), 9f, Acid)
-    drawLabel(textMeasurer, "DISCOVERED ${engine.discoveredItemCount}/400  //  WEAPONS ${engine.unlockedWeaponCount}/${WeaponCatalog.all.size}", d(20f), d(39f), 7f, Muted)
+    drawLabel(textMeasurer, "DISCOVERED ${engine.discoveredItemCount}/${engine.itemCount}  //  WEAPONS ${engine.unlockedWeaponCount}/${engine.weaponCount}", d(20f), d(39f), 7f, Muted)
     drawLabel(textMeasurer, "DIRECTIVE ${engine.rebirthProfile.directive.displayName.uppercase()}", d(20f), d(56f), 7f, Orange)
     drawLabel(textMeasurer, "KINETICKK 0.1.0 // COPYRIGHT (C) 2026 VLADISLAV TOMILOV // GNU GPL V3+", size.width * 0.5f, size.height - d(24f), if (narrow) 5f else 6f, Muted, centered = true)
     drawLabel(textMeasurer, "YOU MAY REDISTRIBUTE UNDER GPL V3+ // NO WARRANTY", size.width * 0.5f, size.height - d(14f), if (narrow) 4f else 5f, Muted, centered = true)

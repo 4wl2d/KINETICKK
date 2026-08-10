@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.nucleus.engine
 
 import kinetickk.foundation.collections.ImmutableList
+import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.gameplay.nucleus.renderModel.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.protocol.GameEffect
@@ -70,12 +71,14 @@ class GameEngine private constructor(
 
     companion object {
         fun create(
+            content: GameplayContentSnapshot,
             bootstrapProgress: GameplayProfileSnapshot?,
             seed: Int = 731_991,
             initialMatter: Int? = null,
             initialRebirthLevel: Int = 0,
         ): GameEngine = GameEngine(
             initialState = initialEngineState(
+                content = content,
                 seed = seed,
                 bootstrapProgress = bootstrapProgress,
                 initialMatter = initialMatter,

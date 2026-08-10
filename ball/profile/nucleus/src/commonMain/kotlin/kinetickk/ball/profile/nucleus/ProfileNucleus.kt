@@ -5,8 +5,8 @@ package kinetickk.ball.profile.nucleus
 
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
-import kinetickk.ball.content.api.MetaUpgradeCatalog
 import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.ProfilePolicySnapshot
 import kinetickk.ball.profile.api.LabProgress
 import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.ProfileMutationRejection
@@ -32,15 +32,20 @@ sealed interface ProfileEffect {
 
 /** Pure business-decision authority for the bounded Lab purchase pilot. */
 object ProfileNucleus {
-    fun decide(state: PlayerProfile, pulse: ProfilePulse): ProfileDecisionResult = when (pulse) {
-        is ProfilePulse.PurchaseMetaUpgrade -> purchaseMetaUpgrade(state, pulse.id)
+    fun decide(
+        state: PlayerProfile,
+        policy: ProfilePolicySnapshot,
+        pulse: ProfilePulse,
+    ): ProfileDecisionResult = when (pulse) {
+        is ProfilePulse.PurchaseMetaUpgrade -> purchaseMetaUpgrade(state, policy, pulse.id)
     }
 
     private fun purchaseMetaUpgrade(
         state: PlayerProfile,
+        policy: ProfilePolicySnapshot,
         id: MetaUpgradeId,
     ): ProfileDecisionResult {
-        val definition = MetaUpgradeCatalog.byId(id)
+        val definition = policy.metaUpgrade(id)
         val currentRank = state.labProgress.rank(id)
         if (currentRank >= definition.maxRanks) {
             return rejected(ProfileMutationRejection.MAX_RANK_REACHED)

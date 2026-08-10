@@ -4,7 +4,9 @@
 package kinetickk.flow.session.interaction.home.impl
 
 import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.content.api.RebirthProgression
+import kinetickk.ball.content.api.CoreShapeDefinition
+import kinetickk.ball.content.api.RebirthPolicySnapshot
+import kinetickk.foundation.collections.ImmutableList
 import kinetickk.ball.profile.api.CollectionCapability
 import kinetickk.ball.profile.api.LoadoutCapability
 import kinetickk.ball.profile.api.ProfileMutationResult
@@ -26,6 +28,10 @@ internal class HomeReducer(
     private val loadoutCapability: LoadoutCapability,
     private val collectionCapability: CollectionCapability,
     private val rebirthCapability: RebirthCapability,
+    private val coreShapes: ImmutableList<CoreShapeDefinition>,
+    private val itemCount: Int,
+    private val weaponCount: Int,
+    private val rebirthPolicy: RebirthPolicySnapshot,
 ) {
     fun uiModel(): HomeUiModel {
         val loadout = loadoutCapability.loadoutSnapshot()
@@ -38,9 +44,12 @@ internal class HomeReducer(
             discoveredItemCount = collection.discoveredItemIds.size,
             unlockedWeaponCount = loadout.loadout.unlockedWeapons.size,
             rebirthLevel = rebirth.level,
-            rebirthProfile = RebirthProgression.profile(rebirth.level),
-            canRebirth = rebirth.level < RebirthProgression.MAX_LEVEL &&
+            rebirthProfile = rebirthPolicy.profile(rebirth.level),
+            canRebirth = rebirth.level < rebirthPolicy.maximumLevel &&
                 rebirth.highestCleared >= rebirth.level,
+            coreShapes = coreShapes,
+            itemCount = itemCount,
+            weaponCount = weaponCount,
         )
     }
 

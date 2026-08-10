@@ -21,7 +21,10 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import kinetickk.resource.audio.api.AudioCue
+import kinetickk.ball.content.api.ContentCatalog
+import kinetickk.ball.content.api.GameplayContentSnapshot
+import kinetickk.ball.content.impl.createContentCatalog
+import kinetickk.flow.session.interaction.audio.SessionAudioExecutor
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
 import kinetickk.resource.audio.impl.DefaultAudioService
@@ -69,21 +72,66 @@ fun KinetickkApp() {
 }
 
 internal class AppCompositionOwner(
-    private val profileStore: ProfileStore = createPlatformProfileStore(),
-    private val audioService: AudioService = DefaultAudioService(),
-    private val gameplayFeature: GameplayFeature = DefaultGameplayFeature(profileStore, audioService),
-    private val homeFeature: HomeFeature = DefaultHomeFeature(
-        loadoutCapability = profileStore,
-        collectionCapability = profileStore,
-        rebirthCapability = profileStore,
-        preferencesReader = profileStore,
-    ),
-    private val settingsFeature: SettingsFeature = DefaultSettingsFeature(profileStore),
-    private val labFeature: LabFeature = DefaultLabFeature(profileStore, profileStore),
-    private val armoryFeature: ArmoryFeature = DefaultArmoryFeature(profileStore, profileStore),
-    private val rebirthFeature: RebirthFeature = DefaultRebirthFeature(profileStore, profileStore),
-    private val codexFeature: CodexFeature = DefaultCodexFeature(profileStore, profileStore),
+    private val contentCatalog: ContentCatalog = createContentCatalog(),
+    profileStore: ProfileStore? = null,
+    audioService: AudioService? = null,
+    gameplayFeature: GameplayFeature? = null,
+    homeFeature: HomeFeature? = null,
+    settingsFeature: SettingsFeature? = null,
+    labFeature: LabFeature? = null,
+    armoryFeature: ArmoryFeature? = null,
+    rebirthFeature: RebirthFeature? = null,
+    codexFeature: CodexFeature? = null,
 ) {
+    private val profilePolicy = contentCatalog.profilePolicy()
+    private val gameplayContent = contentCatalog.gameplayContent()
+    private val uiCatalog = contentCatalog.uiCatalog()
+
+    private val profileStore: ProfileStore = profileStore ?: createPlatformProfileStore(profilePolicy)
+    private val audioService: AudioService = audioService ?: DefaultAudioService()
+    private val sessionAudioExecutor = SessionAudioExecutor(this.audioService)
+    private val gameplayFeature: GameplayFeature = gameplayFeature ?: DefaultGameplayFeature(
+        this.profileStore,
+        this.audioService,
+    )
+    private val homeFeature: HomeFeature = homeFeature ?: DefaultHomeFeature(
+        loadoutCapability = this.profileStore,
+        collectionCapability = this.profileStore,
+        rebirthCapability = this.profileStore,
+        preferencesReader = this.profileStore,
+        uiCatalog = uiCatalog,
+        audioService = this.audioService,
+    )
+    private val settingsFeature: SettingsFeature = settingsFeature ?: DefaultSettingsFeature(
+        this.profileStore,
+        this.audioService,
+    )
+    private val labFeature: LabFeature = labFeature ?: DefaultLabFeature(
+        capability = this.profileStore,
+        preferencesReader = this.profileStore,
+        metaUpgrades = uiCatalog.metaUpgrades,
+        audioService = this.audioService,
+    )
+    private val armoryFeature: ArmoryFeature = armoryFeature ?: DefaultArmoryFeature(
+        loadoutCapability = this.profileStore,
+        preferencesReader = this.profileStore,
+        weapons = uiCatalog.weapons,
+        weaponMasteries = uiCatalog.weaponMasteries,
+        audioService = this.audioService,
+    )
+    private val rebirthFeature: RebirthFeature = rebirthFeature ?: DefaultRebirthFeature(
+        capability = this.profileStore,
+        preferencesReader = this.profileStore,
+        rebirthPolicy = uiCatalog.rebirth,
+        audioService = this.audioService,
+    )
+    private val codexFeature: CodexFeature = codexFeature ?: DefaultCodexFeature(
+        collectionCapability = this.profileStore,
+        preferencesReader = this.profileStore,
+        uiCatalog = uiCatalog,
+        audioService = this.audioService,
+    )
+
     private val navigator = AppNavigator()
 
     val backStack: AppBackStack
@@ -224,7 +272,6 @@ internal class AppCompositionOwner(
             HomeOutput.OpenArmory -> openOverlay(AppDestination.Armory)
             HomeOutput.OpenRebirth -> openOverlay(AppDestination.Rebirth)
             HomeOutput.OpenCodex -> openOverlay(AppDestination.Codex)
-            is HomeOutput.Cue -> playCue(output.cue)
         }
     }
 
@@ -240,31 +287,24 @@ internal class AppCompositionOwner(
     internal fun handleSettingsOutput(output: SettingsOutput) {
         when (output) {
             SettingsOutput.Back -> closeOverlay()
-            is SettingsOutput.Cue -> {
-                syncAudioPreferences()
-                playCue(output.cue)
-            }
         }
     }
 
     internal fun handleLabOutput(output: LabOutput) {
         when (output) {
             LabOutput.Back -> closeOverlay()
-            is LabOutput.Cue -> playCue(output.cue)
         }
     }
 
     internal fun handleArmoryOutput(output: ArmoryOutput) {
         when (output) {
             ArmoryOutput.Back -> closeOverlay()
-            is ArmoryOutput.Cue -> playCue(output.cue)
         }
     }
 
     internal fun handleRebirthOutput(output: RebirthOutput) {
         when (output) {
             RebirthOutput.Back -> closeOverlay()
-            is RebirthOutput.Cue -> playCue(output.cue)
             is RebirthOutput.CycleAdvanced -> startNewRun()
         }
     }
@@ -272,7 +312,6 @@ internal class AppCompositionOwner(
     internal fun handleCodexOutput(output: CodexOutput) {
         when (output) {
             CodexOutput.Back -> closeOverlay()
-            is CodexOutput.Cue -> playCue(output.cue)
         }
     }
 
@@ -296,7 +335,7 @@ internal class AppCompositionOwner(
     }
 
     internal fun startNewRun() {
-        gameplayFeature.start(profileStore.profileSnapshot().toRunConfiguration())
+        gameplayFeature.start(profileStore.profileSnapshot().toRunConfiguration(gameplayContent))
         navigator.showGameplay()
     }
 
@@ -337,11 +376,7 @@ internal class AppCompositionOwner(
             gameplayFeature.applyPreferences(profileStore.preferences())
         }
         syncAudioPreferences()
-        playCue(AudioCue.UI_CLICK)
-    }
-
-    private fun playCue(cue: AudioCue) {
-        audioService.advance(0f, listOf(cue))
+        sessionAudioExecutor.playUiClick()
     }
 
     private fun applyPersistedSettings() {
@@ -377,8 +412,11 @@ internal fun Key.toAppShortcut(): AppShortcut? = when (this) {
     else -> null
 }
 
-internal fun kinetickk.ball.profile.api.PlayerProfile.toRunConfiguration(): RunConfiguration =
+internal fun kinetickk.ball.profile.api.PlayerProfile.toRunConfiguration(
+    content: GameplayContentSnapshot,
+): RunConfiguration =
     RunConfiguration(
+        content = content,
         preferences = preferences,
         coreShape = loadout.coreShape,
         startingWeapon = loadout.selectedWeapon,

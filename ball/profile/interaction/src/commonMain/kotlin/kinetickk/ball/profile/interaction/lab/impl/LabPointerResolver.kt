@@ -3,11 +3,12 @@
 
 package kinetickk.ball.profile.interaction.lab.impl
 
-import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.profile.interaction.lab.api.LabRenderModel
 import kotlin.math.floor
 import kotlin.math.min
 
 internal fun resolveLabPress(
+    model: LabRenderModel,
     screenWidth: Float,
     screenHeight: Float,
     density: Float,
@@ -30,12 +31,12 @@ internal fun resolveLabPress(
     val rowHeight = d(105f)
     if (
         x !in left + d(25f)..right - d(25f) ||
-        y !in contentTop..contentTop + rowHeight * 4f
+        y !in contentTop..contentTop + rowHeight * ((model.upgrades.size + 1) / 2)
     ) {
         return null
     }
     val column = if (x < left + d(25f) + columnWidth) 0 else 1
     val row = floor((y - contentTop) / rowHeight).toInt()
-    val upgrade = MetaUpgradeId.entries.getOrNull(row * 2 + column) ?: return null
-    return LabAction.PurchaseRequested(upgrade)
+    val upgrade = model.upgrades.getOrNull(row * 2 + column) ?: return null
+    return LabAction.PurchaseRequested(upgrade.id)
 }

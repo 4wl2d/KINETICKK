@@ -9,7 +9,6 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             api(libs.compose.ui)
-            implementation(projects.ball.content.api)
         }
     }
 }

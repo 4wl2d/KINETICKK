@@ -13,5 +13,8 @@ kotlin {
             implementation(projects.ball.profile.api)
             implementation(projects.ball.gameplay.api)
         }
+        commonTest.dependencies {
+            implementation(projects.ball.content.impl)
+        }
     }
 }

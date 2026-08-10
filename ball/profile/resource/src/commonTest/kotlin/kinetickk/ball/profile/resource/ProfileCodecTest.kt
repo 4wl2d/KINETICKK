@@ -4,11 +4,7 @@
 package kinetickk.ball.profile.resource
 
 import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.content.api.ItemCatalog
-import kinetickk.ball.content.api.ItemDefinition
-import kinetickk.ball.content.api.MetaUpgradeCatalog
 import kinetickk.ball.content.api.MetaUpgradeId
-import kinetickk.ball.content.api.RebirthProgression
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.DamageNumberFormat
@@ -22,6 +18,7 @@ import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.RebirthProgress
+import kinetickk.foundation.collections.toImmutableList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -31,13 +28,13 @@ class ProfileCodecTest {
     @Test
     fun defaultProfileHasStableV3GoldenAndRoundTrips() {
         val profile = PlayerProfile()
-        val encoded = ProfileCodec.encode(profile)
+        val encoded = encodeProfile(profile)
 
         assertEquals(
             "3|0|0|0|0|1|0,0,0,0,0,0,0,0||1,1,65,115,1,1,1,125,1,0,50|0|-1",
             encoded,
         )
-        assertEquals(profile, ProfileCodec.decode(encoded))
+        assertEquals(profile, decodeProfile(encoded))
     }
 
     @Test
@@ -67,13 +64,13 @@ class ProfileCodecTest {
             rebirthProgress = RebirthProgress(3, 2),
         )
 
-        val encoded = ProfileCodec.encode(profile)
+        val encoded = encodeProfile(profile)
 
         assertEquals(
             "3|75|100|2|3|5|1,2,3,4,5,6,7,8|0,399|0,1,50,150,0,2,0,140,2,1,2500|3|2",
             encoded,
         )
-        assertEquals(profile, ProfileCodec.decode(encoded))
+        assertEquals(profile, decodeProfile(encoded))
     }
 
     @Test
@@ -98,27 +95,27 @@ class ProfileCodecTest {
                 WeaponId.SINGULARITY_SPEAR,
                 WeaponId.entries.toSet(),
             ),
-            labProgress = LabProgress(MetaUpgradeCatalog.all.map { it.maxRanks }),
-            collection = PlayerCollection(ItemCatalog.all.mapTo(mutableSetOf(), ItemDefinition::id)),
+            labProgress = LabProgress(TestProfilePolicy.metaUpgrades.map { it.maxRanks }),
+            collection = PlayerCollection((0 until TestProfilePolicy.itemCount).toSet()),
             rebirthProgress = RebirthProgress(7, 6),
         )
 
-        val decoded = ProfileCodec.decode(ProfileCodec.encode(profile))
+        val decoded = decodeProfile(encodeProfile(profile))
 
         assertEquals(profile, decoded)
-        assertEquals(ItemCatalog.ITEM_COUNT, decoded?.collection?.discoveredItemIds?.size)
+        assertEquals(TestProfilePolicy.itemCount, decoded?.collection?.discoveredItemIds?.size)
         assertEquals(WeaponId.entries.size, decoded?.loadout?.unlockedWeapons?.size)
         assertEquals(MetaUpgradeId.entries.size, decoded?.labProgress?.ranks?.size)
     }
 
     @Test
     fun blankCorruptAndWrongVersionPayloadsReturnNull() {
-        assertNull(ProfileCodec.decode(null))
-        assertNull(ProfileCodec.decode(""))
-        assertNull(ProfileCodec.decode("   "))
-        assertNull(ProfileCodec.decode("not-a-progress-payload"))
-        assertNull(ProfileCodec.decode("2|0|0"))
-        assertNull(ProfileCodec.decode("1|0|0|0|0|1|0,0,0,0,0,0,0,0||1,1,65,115,1,1,1"))
+        assertNull(decodeProfile(null))
+        assertNull(decodeProfile(""))
+        assertNull(decodeProfile("   "))
+        assertNull(decodeProfile("not-a-progress-payload"))
+        assertNull(decodeProfile("2|0|0"))
+        assertNull(decodeProfile("1|0|0|0|0|1|0,0,0,0,0,0,0,0||1,1,65,115,1,1,1"))
     }
 
     @Test
@@ -132,27 +129,27 @@ class ProfileCodecTest {
             ),
             economy = PlayerEconomy(-50L, -100L),
             labProgress = LabProgress(listOf(-5, 2)),
-            collection = PlayerCollection(setOf(-1, 0, ItemCatalog.ITEM_COUNT - 1)),
+            collection = PlayerCollection(setOf(-1, 0, TestProfilePolicy.itemCount - 1)),
             rebirthProgress = RebirthProgress(Int.MAX_VALUE, Int.MAX_VALUE),
         )
 
-        val decoded = requireNotNull(ProfileCodec.decode(ProfileCodec.encode(profile)))
+        val decoded = requireNotNull(decodeProfile(encodeProfile(profile)))
 
         assertEquals(PlayerEconomy(0L, 0L), decoded.economy)
         assertEquals(listOf(0, 2, 0, 0, 0, 0, 0, 0), decoded.labProgress.ranks)
-        assertEquals(setOf(0, ItemCatalog.ITEM_COUNT - 1), decoded.collection.discoveredItemIds)
+        assertEquals(setOf(0, TestProfilePolicy.itemCount - 1), decoded.collection.discoveredItemIds)
         assertEquals(0f, decoded.preferences.masterVolume)
         assertEquals(2f, decoded.preferences.simulationSpeed)
         assertEquals(1.75f, decoded.preferences.textScale)
         assertEquals(DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS.last(), decoded.preferences.damageNumberTierThreshold)
         assertTrue(decoded.preferences.soundEnabled)
         assertTrue(decoded.preferences.musicEnabled)
-        assertEquals(RebirthProgression.MAX_LEVEL, decoded.rebirthProgress.level)
-        assertEquals(RebirthProgression.MAX_LEVEL, decoded.rebirthProgress.highestCleared)
+        assertEquals(TestProfilePolicy.rebirth.maximumLevel, decoded.rebirthProgress.level)
+        assertEquals(TestProfilePolicy.rebirth.maximumLevel, decoded.rebirthProgress.highestCleared)
 
         val lifetimeDecoded = requireNotNull(
-            ProfileCodec.decode(
-                ProfileCodec.encode(PlayerProfile(economy = PlayerEconomy(75L, 1L))),
+            decodeProfile(
+                encodeProfile(PlayerProfile(economy = PlayerEconomy(75L, 1L))),
             ),
         )
         assertEquals(75L, lifetimeDecoded.economy.lifetimeMatter)
@@ -161,7 +158,7 @@ class ProfileCodecTest {
     @Test
     fun legacyV2PayloadRetainsOldDefaultsAndIdentities() {
         val decoded = requireNotNull(
-            ProfileCodec.decode(
+            decodeProfile(
                 "2|75|100|2|3|5|1,2,3,4,5,6,7,8|0,399|0,1,50,150,0,2,0,140",
             ),
         )
@@ -180,7 +177,7 @@ class ProfileCodecTest {
     @Test
     fun olderV3SettingsPayloadUsesDamageNumberDefaults() {
         val decoded = requireNotNull(
-            ProfileCodec.decode(
+            decodeProfile(
                 "3|0|0|0|0|1|0,0,0,0,0,0,0,0||1,1,65,115,1,1,1,125|0|-1",
             ),
         )
@@ -193,7 +190,7 @@ class ProfileCodecTest {
     @Test
     fun invalidPersistentOrdinalsFallBackOrClampSafely() {
         val decoded = requireNotNull(
-            ProfileCodec.decode(
+            decodeProfile(
                 "3|0|0|999|999|1|0,0,0,0,0,0,0,0||1,1,65,115,1,999,1,125,999,-1,50|0|-1",
             ),
         )
@@ -203,6 +200,30 @@ class ProfileCodecTest {
         assertEquals(ParticleDensity.NORMAL, decoded.preferences.particleDensity)
         assertEquals(DamageNumberSize.NORMAL, decoded.preferences.damageNumberSize)
         assertEquals(DamageNumberFormat.COMPACT, decoded.preferences.damageNumberFormat)
+    }
+
+    @Test
+    fun legacyDecodeUsesCapturedWeaponAndRebirthPolicyFallbacks() {
+        val customPolicy = TestProfilePolicy.copy(
+            weapons = (
+                TestProfilePolicy.weapons.drop(1) + TestProfilePolicy.weapons.first()
+                ).toImmutableList(),
+            rebirth = TestProfilePolicy.rebirth.copy(
+                minimumLevel = 2,
+                maximumLevel = 3,
+                profiles = TestProfilePolicy.rebirth.profiles.drop(2).take(2).toImmutableList(),
+            ),
+        )
+
+        val decoded = requireNotNull(
+            ProfileCodec.decode(
+                "3|0|0|0|0|0|0,0,0,0,0,0,0,0||1,1,65,115,1,1,1,125,1,0,50|99|99",
+                customPolicy,
+            ),
+        )
+
+        assertEquals(setOf(WeaponId.MORNINGSTAR), decoded.loadout.unlockedWeapons)
+        assertEquals(RebirthProgress(level = 3, highestCleared = 3), decoded.rebirthProgress)
     }
 
     @Test
@@ -226,6 +247,6 @@ class ProfileCodecTest {
         assertEquals(listOf("LOW", "NORMAL", "HIGH"), ParticleDensity.entries.map { it.name })
         assertEquals(listOf("SMALL", "NORMAL", "LARGE", "HUGE"), DamageNumberSize.entries.map { it.name })
         assertEquals(listOf("COMPACT", "FULL"), DamageNumberFormat.entries.map { it.name })
-        assertEquals((0..399).toList(), ItemCatalog.all.map(ItemDefinition::id))
+        assertEquals((0..399).toList(), (0 until TestProfilePolicy.itemCount).toList())
     }
 }

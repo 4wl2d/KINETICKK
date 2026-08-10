@@ -1,18 +1,30 @@
 // SPDX-FileCopyrightText: 2026 Vladislav Tomilov
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package kinetickk.ball.content.api
+package kinetickk.ball.content.impl
 
+import kinetickk.ball.content.api.ContentBounds
+import kinetickk.ball.content.api.ItemDefinition
+import kinetickk.ball.content.api.ItemEffect
+import kinetickk.ball.content.api.ItemRarity
+import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.RebirthProfile
+import kinetickk.ball.content.api.RelicDefinition
+import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.WeaponId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class ContentBalanceCharacterizationTest {
+    private val catalog = createContentCatalog()
+    private val ui = catalog.uiCatalog()
+
     @Test
     fun itemCatalogCardinalityOrderingAndContentAreGolden() {
-        val items = ItemCatalog.all
+        val items = ui.items
 
-        assertEquals(400, ItemCatalog.ITEM_COUNT)
-        assertEquals((0 until ItemCatalog.ITEM_COUNT).toList(), items.map(ItemDefinition::id))
+        assertEquals(ContentBounds.MAX_ITEMS, items.size)
+        assertEquals((0 until ContentBounds.MAX_ITEMS).toList(), items.map(ItemDefinition::id))
         assertEquals(
             "456e042b2ce96b71",
             goldenFingerprint {
@@ -64,7 +76,7 @@ class ContentBalanceCharacterizationTest {
                 WeaponId.SINGULARITY_SPEAR to 1_200,
                 WeaponId.PRISM_RELAY to 1_650,
             ),
-            WeaponCatalog.all.map { weapon -> weapon.id to weapon.permanentUnlockCost },
+            ui.weapons.map { weapon -> weapon.id to weapon.permanentUnlockCost },
         )
         assertEquals(
             listOf(
@@ -77,7 +89,7 @@ class ContentBalanceCharacterizationTest {
                 MetaPolicy(MetaUpgradeId.DATA_ARCHIVE, maxRanks = 10, baseCost = 38),
                 MetaPolicy(MetaUpgradeId.ARMORY_LICENSE, maxRanks = 12, baseCost = 45),
             ),
-            MetaUpgradeCatalog.all.map { upgrade ->
+            ui.metaUpgrades.map { upgrade ->
                 MetaPolicy(upgrade.id, upgrade.maxRanks, upgrade.baseCost)
             },
         )
@@ -85,7 +97,7 @@ class ContentBalanceCharacterizationTest {
             "3d19c0391c2422a3",
             goldenFingerprint {
                 add("weapons")
-                WeaponCatalog.all.forEach { weapon ->
+                ui.weapons.forEach { weapon ->
                     add(weapon.id.name)
                     add(weapon.name)
                     add(weapon.description)
@@ -94,7 +106,7 @@ class ContentBalanceCharacterizationTest {
                     add(weapon.permanentUnlockCost)
                 }
                 add("meta-upgrades")
-                MetaUpgradeCatalog.all.forEach { upgrade ->
+                ui.metaUpgrades.forEach { upgrade ->
                     add(upgrade.id.name)
                     add(upgrade.name)
                     add(upgrade.description)
@@ -109,12 +121,13 @@ class ContentBalanceCharacterizationTest {
 
     @Test
     fun rebirthLevelsZeroThroughTenAreGolden() {
-        val profiles = (0..RebirthProgression.MAX_LEVEL).map(RebirthProgression::profile)
+        val rebirth = ui.rebirth
+        val profiles = rebirth.profiles
 
-        assertEquals(10, RebirthProgression.MAX_LEVEL)
-        assertEquals(120, RebirthProgression.MAX_ACTIVE_ENEMIES)
-        assertEquals(0.09f, RebirthProgression.MIN_SPAWN_INTERVAL_SECONDS)
-        assertEquals(24f, RebirthProgression.MIN_ELITE_INTERVAL_SECONDS)
+        assertEquals(10, rebirth.maximumLevel)
+        assertEquals(120, rebirth.maxActiveEnemies)
+        assertEquals(0.09f, rebirth.minSpawnIntervalSeconds)
+        assertEquals(24f, rebirth.minEliteIntervalSeconds)
         assertEquals((0..10).toList(), profiles.map(RebirthProfile::tier))
         assertEquals(
             "4748c45a6b647fcf",
@@ -141,11 +154,11 @@ class ContentBalanceCharacterizationTest {
 
     @Test
     fun relicLimitsOrderingAndContentIdentityAreGolden() {
-        val relics = RelicCatalog.all
+        val relics = ui.relics
 
-        assertEquals(40, RelicCatalog.RELIC_COUNT)
-        assertEquals(4, RelicCatalog.MAX_SLOTS)
-        assertEquals(5, RelicCatalog.MAX_RANK)
+        assertEquals(ContentBounds.MAX_RELICS, relics.size)
+        assertEquals(4, ui.relicPolicy.maxSlots)
+        assertEquals(5, ui.relicPolicy.maxRank)
         assertEquals(RelicId.entries.toList(), relics.map(RelicDefinition::id))
         assertEquals(
             "5b480a9cc724582c",

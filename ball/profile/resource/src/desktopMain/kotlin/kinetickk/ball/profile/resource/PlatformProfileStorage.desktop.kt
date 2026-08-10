@@ -4,13 +4,15 @@
 package kinetickk.ball.profile.resource
 
 import java.util.prefs.Preferences
+import kinetickk.ball.content.api.ProfilePolicySnapshot
 import kinetickk.ball.profile.api.ProfileResource
 
 private val preferences: Preferences by lazy {
     Preferences.userRoot().node(ProfileStorageKeys.DESKTOP_NODE)
 }
 
-actual fun createPlatformProfileResource(): ProfileResource = FixedKeyProfileResource(
+actual fun createPlatformProfileResource(policy: ProfilePolicySnapshot): ProfileResource = FixedKeyProfileResource(
+    policy = policy,
     readProfilePayload = { preferences.get(ProfileStorageKeys.DESKTOP_PRIMARY, null) },
     readLegacyMatter = { preferences.get(ProfileStorageKeys.LEGACY_MATTER, null) },
     writeProfilePayload = { value ->

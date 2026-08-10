@@ -4,10 +4,8 @@
 package kinetickk.ball.profile.impl
 
 import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.content.api.ItemCatalog
 import kinetickk.ball.content.api.MetaUpgradeId
-import kinetickk.ball.content.api.RebirthProgression
-import kinetickk.ball.content.api.WeaponCatalog
+import kinetickk.ball.content.api.ProfilePolicySnapshot
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.profile.api.CollectionCapability
 import kinetickk.ball.profile.api.GameplayProgressUpdate
@@ -38,6 +36,7 @@ import kotlin.math.max
 /** Single owner of the complete profile and all cross-slice transactions. */
 class DefaultProfileStore(
     private val resource: ProfileResource,
+    private val policy: ProfilePolicySnapshot,
 ) : ProfileStore {
     private val providerAccepted: Boolean = runCatching {
         resource.providerId == ProfileProviderId.PLATFORM_LOCAL
@@ -58,7 +57,7 @@ class DefaultProfileStore(
             ProfileLoadResult.OutcomeUnknown(ProfileResourceFailure.PROVIDER_READ_FAILED)
         }
         bootstrapResult = when (rawLoadResult) {
-            is ProfileLoadResult.Loaded -> quarantineBootstrapProfile(rawLoadResult.profile)
+            is ProfileLoadResult.Loaded -> quarantineBootstrapProfile(rawLoadResult.profile, policy)
             ProfileLoadResult.NotFound -> ProfileLoadResult.NotFound
             is ProfileLoadResult.Rejected -> rawLoadResult
             is ProfileLoadResult.OutcomeUnknown -> rawLoadResult
@@ -86,7 +85,7 @@ class DefaultProfileStore(
         RebirthProfileSnapshot(currentProfile.rebirthProgress)
 
     override fun replaceProfile(profile: PlayerProfile): ProfilePersistResult {
-        val quarantined = quarantineBootstrapProfile(profile)
+        val quarantined = quarantineBootstrapProfile(profile, policy)
         if (quarantined !is ProfileLoadResult.Loaded) {
             return ProfilePersistResult.OutcomeUnknown(ProfileResourceFailure.ENCODING_FAILED)
         }
@@ -111,7 +110,7 @@ class DefaultProfileStore(
         decidePurchase(ProfilePulse.PurchaseMetaUpgrade(id))
 
     override fun selectCoreShape(shape: CoreShape): ProfileMutationResult {
-        if (currentProfile.economy.lifetimeMatter < shape.unlockLifetimeMatter()) {
+        if (currentProfile.economy.lifetimeMatter < policy.coreShape(shape).unlockLifetimeMatter) {
             return rejected(ProfileMutationRejection.CORE_SHAPE_LOCKED)
         }
         if (shape == currentProfile.loadout.coreShape) return rejected(ProfileMutationRejection.NO_CHANGE)
@@ -124,7 +123,7 @@ class DefaultProfileStore(
         val unlocked = currentProfile.loadout.unlockedWeapons.toMutableSet()
         var economy = currentProfile.economy
         if (id !in unlocked) {
-            val cost = WeaponCatalog.byId(id).permanentUnlockCost.toLong()
+            val cost = policy.weapon(id).permanentUnlockCost.toLong()
             if (economy.matter < cost) return rejected(ProfileMutationRejection.INSUFFICIENT_MATTER)
             economy = economy.copy(matter = economy.matter - cost)
             unlocked += id
@@ -146,7 +145,7 @@ class DefaultProfileStore(
     override fun advanceRebirth(): ProfileMutationResult {
         val progress = currentProfile.rebirthProgress
         if (
-            progress.level >= RebirthProgression.MAX_LEVEL ||
+            progress.level >= policy.rebirth.maximumLevel ||
             progress.highestCleared < progress.level
         ) {
             return rejected(ProfileMutationRejection.REBIRTH_UNAVAILABLE)
@@ -162,8 +161,9 @@ class DefaultProfileStore(
         val clearedLevel = update.clearedRebirthLevel
         if (
             update.bankedMatter < 0L ||
-            update.discoveredItemIds.any { it !in 0 until ItemCatalog.ITEM_COUNT } ||
-            clearedLevel != null && clearedLevel !in 0..currentProfile.rebirthProgress.level
+            update.discoveredItemIds.any { !policy.containsItem(it) } ||
+            clearedLevel != null &&
+                clearedLevel !in policy.rebirth.minimumLevel..currentProfile.rebirthProgress.level
         ) {
             return rejected(ProfileMutationRejection.INVALID_GAMEPLAY_PROGRESS)
         }
@@ -196,7 +196,7 @@ class DefaultProfileStore(
     }
 
     private fun decidePurchase(pulse: ProfilePulse.PurchaseMetaUpgrade): ProfileMutationResult =
-        when (val result = ProfileNucleus.decide(currentProfile, pulse)) {
+        when (val result = ProfileNucleus.decide(currentProfile, policy, pulse)) {
             is ProfileDecisionResult.Rejected -> ProfileMutationResult.Rejected(result.reason)
             is ProfileDecisionResult.Accepted -> ProfileMutationResult.Applied(acceptPurchase(result.decision))
         }
@@ -236,12 +236,6 @@ class DefaultProfileStore(
             ProfilePersistResult.OutcomeUnknown(ProfileResourceFailure.PROVIDER_WRITE_MAY_HAVE_EXECUTED)
         }
     }
-}
-
-private fun CoreShape.unlockLifetimeMatter(): Long = when (this) {
-    CoreShape.ORB -> 0L
-    CoreShape.PRISM -> 25L
-    CoreShape.SHARD -> 90L
 }
 
 private fun saturatedAdd(left: Long, right: Long): Long =

@@ -9,7 +9,7 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             api(projects.ball.profile.api)
-            implementation(projects.ball.content.api)
+            api(projects.ball.content.api)
             implementation(projects.ball.profile.nucleus)
             implementation(projects.ball.profile.resource)
         }

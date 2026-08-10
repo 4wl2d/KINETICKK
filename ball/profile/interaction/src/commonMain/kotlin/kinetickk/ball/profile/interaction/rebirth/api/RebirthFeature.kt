@@ -4,7 +4,6 @@
 package kinetickk.ball.profile.interaction.rebirth.api
 
 import androidx.compose.runtime.Composable
-import kinetickk.resource.audio.api.AudioCue
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.profile.api.RebirthProgress
 
@@ -20,7 +19,6 @@ data class RebirthRenderModel(
 
 sealed interface RebirthOutput {
     data object Back : RebirthOutput
-    data class Cue(val cue: AudioCue) : RebirthOutput
     data class CycleAdvanced(val progress: RebirthProgress) : RebirthOutput
 }
 

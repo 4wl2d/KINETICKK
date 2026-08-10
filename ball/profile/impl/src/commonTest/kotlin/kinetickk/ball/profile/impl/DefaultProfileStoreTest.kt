@@ -4,9 +4,7 @@
 package kinetickk.ball.profile.impl
 
 import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.content.api.MetaUpgradeCatalog
 import kinetickk.ball.content.api.MetaUpgradeId
-import kinetickk.ball.content.api.WeaponCatalog
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.profile.api.GameplayProgressUpdate
 import kinetickk.ball.profile.api.LabProgress
@@ -22,6 +20,7 @@ import kinetickk.ball.profile.api.ProfilePersistResult
 import kinetickk.ball.profile.api.ProfileProviderId
 import kinetickk.ball.profile.api.ProfileResource
 import kinetickk.ball.profile.api.RebirthProgress
+import kinetickk.foundation.collections.toImmutableList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -30,7 +29,7 @@ import kotlin.test.assertTrue
 class DefaultProfileStoreTest {
     @Test
     fun bootstrapQuarantineNormalizesEverySliceBeforeExposure() {
-        val store = DefaultProfileStore(
+        val store = testProfileStore(
             RecordingResource(
                 loaded = PlayerProfile(
                     preferences = PlayerPreferences(masterVolume = -2f, simulationSpeed = 99f),
@@ -49,7 +48,7 @@ class DefaultProfileStoreTest {
         assertEquals(0f, profile.preferences.masterVolume)
         assertEquals(2f, profile.preferences.simulationSpeed)
         assertEquals(setOf(WeaponId.FLUX_WAKE), profile.loadout.unlockedWeapons)
-        assertEquals(MetaUpgradeCatalog.byId(MetaUpgradeId.CORE_INTEGRITY).maxRanks, profile.labProgress.ranks.first())
+        assertEquals(TestProfilePolicy.metaUpgrade(MetaUpgradeId.CORE_INTEGRITY).maxRanks, profile.labProgress.ranks.first())
         assertTrue(profile.collection.discoveredItemIds.isEmpty())
         assertEquals(RebirthProgress(10, 10), profile.rebirthProgress)
         assertEquals(profile.economy, store.profileSnapshot().economy)
@@ -60,7 +59,7 @@ class DefaultProfileStoreTest {
         val resource = RecordingResource(
             loaded = PlayerProfile(economy = PlayerEconomy(10_000L, 10_000L)),
         )
-        val store = DefaultProfileStore(resource)
+        val store = testProfileStore(resource)
 
         assertIs<ProfileMutationResult.Applied>(
             store.purchaseMetaUpgrade(MetaUpgradeId.CORE_INTEGRITY),
@@ -70,8 +69,8 @@ class DefaultProfileStoreTest {
         )
         assertIs<ProfileMutationResult.Applied>(store.selectCoreShape(CoreShape.SHARD))
 
-        val expectedMatter = 10_000L - MetaUpgradeCatalog.byId(MetaUpgradeId.CORE_INTEGRITY).cost(0) -
-            WeaponCatalog.byId(WeaponId.SINGULARITY_SPEAR).permanentUnlockCost
+        val expectedMatter = 10_000L - TestProfilePolicy.metaUpgrade(MetaUpgradeId.CORE_INTEGRITY).cost(0) -
+            TestProfilePolicy.weapon(WeaponId.SINGULARITY_SPEAR).permanentUnlockCost
         assertEquals(expectedMatter, store.profileSnapshot().economy.matter)
         assertEquals(1, resource.persisted[0].labProgress.rank(MetaUpgradeId.CORE_INTEGRITY))
         assertEquals(WeaponId.SINGULARITY_SPEAR, resource.persisted[1].loadout.selectedWeapon)
@@ -88,7 +87,7 @@ class DefaultProfileStoreTest {
                 rebirthProgress = RebirthProgress(2, 1),
             ),
         )
-        val store = DefaultProfileStore(resource)
+        val store = testProfileStore(resource)
 
         assertIs<ProfileMutationResult.Applied>(
             store.applyGameplayProgress(
@@ -113,7 +112,7 @@ class DefaultProfileStoreTest {
         val resource = RecordingResource(
             loaded = PlayerProfile(economy = PlayerEconomy(initialMatter, initialMatter)),
         )
-        val store = DefaultProfileStore(resource)
+        val store = testProfileStore(resource)
 
         MetaUpgradeId.entries.forEach { id ->
             assertIs<ProfileMutationResult.Applied>(store.purchaseMetaUpgrade(id))
@@ -121,7 +120,7 @@ class DefaultProfileStoreTest {
 
         assertEquals(List(MetaUpgradeId.entries.size) { 1 }, store.profileSnapshot().labProgress.ranks)
         assertEquals(
-            initialMatter - MetaUpgradeCatalog.all.sumOf { definition -> definition.cost(0).toLong() },
+            initialMatter - TestProfilePolicy.metaUpgrades.sumOf { definition -> definition.cost(0).toLong() },
             store.profileSnapshot().economy.matter,
         )
         assertEquals(MetaUpgradeId.entries.size, resource.persisted.size)
@@ -133,13 +132,13 @@ class DefaultProfileStoreTest {
         val resource = RecordingResource(
             loaded = PlayerProfile(economy = PlayerEconomy(initialMatter, initialMatter)),
         )
-        val store = DefaultProfileStore(resource)
+        val store = testProfileStore(resource)
         val weapon = WeaponId.MORNINGSTAR
 
         assertIs<ProfileMutationResult.Applied>(store.purchaseOrEquipWeapon(weapon))
         val matterAfterUnlock = store.profileSnapshot().economy.matter
         assertEquals(
-            initialMatter - WeaponCatalog.byId(weapon).permanentUnlockCost,
+            initialMatter - TestProfilePolicy.weapon(weapon).permanentUnlockCost,
             matterAfterUnlock,
         )
         val alreadySelected = assertIs<ProfileMutationResult.Rejected>(store.purchaseOrEquipWeapon(weapon))
@@ -167,7 +166,7 @@ class DefaultProfileStoreTest {
             rebirthProgress = RebirthProgress(level = 0, highestCleared = 0),
         )
         val resource = RecordingResource(loaded = initial)
-        val store = DefaultProfileStore(resource)
+        val store = testProfileStore(resource)
 
         assertIs<ProfileMutationResult.Applied>(store.advanceRebirth())
         assertIs<ProfileMutationResult.Applied>(
@@ -187,15 +186,15 @@ class DefaultProfileStoreTest {
 
     @Test
     fun quarantineRejectsNonFiniteAndOversizedBootstrapPayloads() {
-        val nonFinite = DefaultProfileStore(
+        val nonFinite = testProfileStore(
             RecordingResource(loaded = PlayerProfile(preferences = PlayerPreferences(masterVolume = Float.NaN))),
         )
-        val oversizedRanks = DefaultProfileStore(
+        val oversizedRanks = testProfileStore(
             RecordingResource(
                 loaded = PlayerProfile(labProgress = LabProgress(List(MetaUpgradeId.entries.size + 1) { 0 })),
             ),
         )
-        val oversizedCollection = DefaultProfileStore(
+        val oversizedCollection = testProfileStore(
             RecordingResource(
                 loaded = PlayerProfile(collection = PlayerCollection((0..400).toSet())),
             ),
@@ -222,7 +221,7 @@ class DefaultProfileStoreTest {
     fun rejectedMutationDoesNotWriteOrPartiallyChangeAnotherSlice() {
         val original = PlayerProfile(economy = PlayerEconomy(0L, 0L))
         val resource = RecordingResource(loaded = original)
-        val store = DefaultProfileStore(resource)
+        val store = testProfileStore(resource)
 
         val result = assertIs<ProfileMutationResult.Rejected>(
             store.purchaseOrEquipWeapon(WeaponId.MORNINGSTAR),
@@ -237,7 +236,7 @@ class DefaultProfileStoreTest {
     fun rejectedLabPurchaseDoesNotPublishOrPersist() {
         val original = PlayerProfile(economy = PlayerEconomy(0L, 0L))
         val resource = RecordingResource(loaded = original)
-        val store = DefaultProfileStore(resource)
+        val store = testProfileStore(resource)
 
         val result = assertIs<ProfileMutationResult.Rejected>(
             store.purchaseMetaUpgrade(MetaUpgradeId.CORE_INTEGRITY),
@@ -256,7 +255,7 @@ class DefaultProfileStoreTest {
                 kinetickk.ball.profile.api.ProfileResourceFailure.PROVIDER_WRITE_MAY_HAVE_EXECUTED,
             ),
         )
-        val store = DefaultProfileStore(resource)
+        val store = testProfileStore(resource)
 
         val result = assertIs<ProfileMutationResult.Applied>(
             store.updatePreferences(PlayerPreferences(masterVolume = 0.5f)),
@@ -275,7 +274,7 @@ class DefaultProfileStoreTest {
                 kinetickk.ball.profile.api.ProfileResourceFailure.PROVIDER_WRITE_MAY_HAVE_EXECUTED,
             ),
         )
-        val store = DefaultProfileStore(resource)
+        val store = testProfileStore(resource)
 
         val result = assertIs<ProfileMutationResult.Applied>(
             store.purchaseMetaUpgrade(MetaUpgradeId.CORE_INTEGRITY),
@@ -284,7 +283,7 @@ class DefaultProfileStoreTest {
         assertIs<ProfilePersistResult.OutcomeUnknown>(result.persistence)
         assertEquals(1, store.labSnapshot().progress.rank(MetaUpgradeId.CORE_INTEGRITY))
         assertEquals(
-            initialMatter - MetaUpgradeCatalog.byId(MetaUpgradeId.CORE_INTEGRITY).cost(0),
+            initialMatter - TestProfilePolicy.metaUpgrade(MetaUpgradeId.CORE_INTEGRITY).cost(0),
             store.labSnapshot().economy.matter,
         )
     }
@@ -300,13 +299,71 @@ class DefaultProfileStoreTest {
                 assertEquals(acceptedSnapshot, store.profileSnapshot())
             },
         )
-        store = DefaultProfileStore(resource)
+        store = testProfileStore(resource)
 
         assertIs<ProfileMutationResult.Applied>(
             store.purchaseMetaUpgrade(MetaUpgradeId.CORE_INTEGRITY),
         )
 
         assertTrue(effectObserved)
+    }
+
+    @Test
+    fun mutationsUseTheCapturedNonDefaultPolicy() {
+        val customRebirth = TestProfilePolicy.rebirth.copy(
+            minimumLevel = 2,
+            maximumLevel = 3,
+            profiles = TestProfilePolicy.rebirth.profiles.drop(2).take(2).toImmutableList(),
+        )
+        val customPolicy = TestProfilePolicy.copy(
+            itemCount = 2,
+            coreShapes = TestProfilePolicy.coreShapes.map { definition ->
+                if (definition.id == CoreShape.PRISM) {
+                    definition.copy(unlockLifetimeMatter = 500L)
+                } else {
+                    definition
+                }
+            }.toImmutableList(),
+            weapons = TestProfilePolicy.weapons.map { definition ->
+                if (definition.id == WeaponId.MORNINGSTAR) {
+                    kinetickk.ball.content.api.WeaponDefinition(
+                        definition.id,
+                        definition.name,
+                        definition.description,
+                        definition.tags,
+                        permanentUnlockCost = 7,
+                    )
+                } else {
+                    definition
+                }
+            }.toImmutableList(),
+            rebirth = customRebirth,
+        )
+        val resource = RecordingResource(
+            loaded = PlayerProfile(
+                economy = PlayerEconomy(matter = 20L, lifetimeMatter = 100L),
+                rebirthProgress = RebirthProgress(level = 2, highestCleared = 2),
+            ),
+        )
+        val store = DefaultProfileStore(resource, customPolicy)
+
+        assertEquals(
+            ProfileMutationRejection.CORE_SHAPE_LOCKED,
+            assertIs<ProfileMutationResult.Rejected>(store.selectCoreShape(CoreShape.PRISM)).reason,
+        )
+        assertIs<ProfileMutationResult.Applied>(store.purchaseOrEquipWeapon(WeaponId.MORNINGSTAR))
+        assertEquals(13L, store.profileSnapshot().economy.matter)
+        assertEquals(
+            ProfileMutationRejection.INVALID_GAMEPLAY_PROGRESS,
+            assertIs<ProfileMutationResult.Rejected>(
+                store.applyGameplayProgress(GameplayProgressUpdate(discoveredItemIds = setOf(2))),
+            ).reason,
+        )
+        assertIs<ProfileMutationResult.Applied>(store.advanceRebirth())
+        assertEquals(
+            ProfileMutationRejection.REBIRTH_UNAVAILABLE,
+            assertIs<ProfileMutationResult.Rejected>(store.advanceRebirth()).reason,
+        )
     }
 }
 

@@ -3,12 +3,13 @@
 
 package kinetickk.ball.profile.interaction.armory.impl
 
-import kinetickk.resource.audio.api.AudioCue
-import kinetickk.ball.content.api.WeaponCatalog
+import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.profile.api.LoadoutCapability
 import kinetickk.ball.profile.api.ProfileMutationResult
+import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.armory.api.ArmoryRenderModel
+import kinetickk.foundation.collections.ImmutableList
 
 internal const val ARMORY_PAGE_SIZE = 3
 
@@ -23,12 +24,15 @@ internal data class ArmoryReduction(
     val page: Int,
     val close: Boolean = false,
     val profileChanged: Boolean = false,
-    val feedbackCue: AudioCue? = null,
+    val feedbackCue: ProfileAudioCue? = null,
 )
 
-internal class ArmoryReducer(private val capability: LoadoutCapability) {
+internal class ArmoryReducer(
+    private val capability: LoadoutCapability,
+    private val weapons: ImmutableList<WeaponDefinition>,
+) {
     val maxPage: Int
-        get() = (WeaponCatalog.all.size - 1) / ARMORY_PAGE_SIZE
+        get() = (weapons.size - 1) / ARMORY_PAGE_SIZE
 
     fun renderModel(activeRunWeapon: WeaponId?): ArmoryRenderModel {
         val snapshot = capability.loadoutSnapshot()
@@ -44,15 +48,15 @@ internal class ArmoryReducer(private val capability: LoadoutCapability) {
         ArmoryAction.Back -> ArmoryReduction(
             page.coerceIn(0, maxPage),
             close = true,
-            feedbackCue = AudioCue.UI_CLICK,
+            feedbackCue = ProfileAudioCue.UI_CLICK,
         )
         ArmoryAction.PreviousPage -> ArmoryReduction(
             (page.coerceIn(0, maxPage) - 1).coerceAtLeast(0),
-            feedbackCue = AudioCue.UI_CLICK,
+            feedbackCue = ProfileAudioCue.UI_CLICK,
         )
         ArmoryAction.NextPage -> ArmoryReduction(
             (page.coerceIn(0, maxPage) + 1).coerceAtMost(maxPage),
-            feedbackCue = AudioCue.UI_CLICK,
+            feedbackCue = ProfileAudioCue.UI_CLICK,
         )
         is ArmoryAction.SelectWeapon -> {
             val result = capability.purchaseOrEquipWeapon(action.id)
@@ -60,7 +64,7 @@ internal class ArmoryReducer(private val capability: LoadoutCapability) {
             ArmoryReduction(
                 page.coerceIn(0, maxPage),
                 profileChanged = applied,
-                feedbackCue = if (applied) AudioCue.PURCHASE else null,
+                feedbackCue = if (applied) ProfileAudioCue.PURCHASE else null,
             )
         }
     }
@@ -68,7 +72,13 @@ internal class ArmoryReducer(private val capability: LoadoutCapability) {
 
 internal data class ArmoryViewport(val width: Float, val height: Float, val density: Float)
 
-internal fun resolveArmoryPress(viewport: ArmoryViewport, page: Int, x: Float, y: Float): ArmoryAction? {
+internal fun resolveArmoryPress(
+    viewport: ArmoryViewport,
+    weapons: ImmutableList<WeaponDefinition>,
+    page: Int,
+    x: Float,
+    y: Float,
+): ArmoryAction? {
     val d = viewport.density
     val width = minOf(900f * d, viewport.width - 30f * d)
     val height = minOf(650f * d, viewport.height - 30f * d)
@@ -76,7 +86,7 @@ internal fun resolveArmoryPress(viewport: ArmoryViewport, page: Int, x: Float, y
     val top = (viewport.height - height) * 0.5f
     val right = left + width
     val bottom = top + height
-    val maxPage = (WeaponCatalog.all.size - 1) / ARMORY_PAGE_SIZE
+    val maxPage = (weapons.size - 1) / ARMORY_PAGE_SIZE
     if (y > bottom - 55f * d) {
         return when {
             x < left + width * 0.45f -> ArmoryAction.Back
@@ -91,7 +101,7 @@ internal fun resolveArmoryPress(viewport: ArmoryViewport, page: Int, x: Float, y
     repeat(3) { index ->
         val cardLeft = startX + index * (cardWidth + gap)
         if (x in cardLeft..cardLeft + cardWidth) {
-            val id = WeaponCatalog.all.getOrNull(page.coerceIn(0, maxPage) * ARMORY_PAGE_SIZE + index)?.id
+            val id = weapons.getOrNull(page.coerceIn(0, maxPage) * ARMORY_PAGE_SIZE + index)?.id
             return id?.let(ArmoryAction::SelectWeapon)
         }
     }

@@ -25,7 +25,7 @@ internal fun MutableGameState.openItemChoice() {
 internal fun MutableGameState.buildItemChoices() {
     val lifetimeUnlock = (1L + lifetimeMatter / 40L).coerceAtMost(80L).toInt()
     val catalogLevel = max(level, lifetimeUnlock)
-    val unlocked = ItemCatalog.all.filter { it.unlockLevel <= catalogLevel }
+    val unlocked = content.items.filter { it.unlockLevel <= catalogLevel }
     val eligible = unlocked.filter { itemStacks[it.id] < it.maxStacks }
     val selected = mutableListOf<ItemDefinition>()
     repeat(3) {
@@ -61,7 +61,7 @@ internal fun MutableGameState.rollRarity(): ItemRarity {
 internal fun MutableGameState.openTotemChoice() {
     activeChoiceType = ChoiceType.TOTEM
     val nextLevel = weaponLevel + 1
-    val nextMastery = WeaponMastery.forLevel(nextLevel)
+    val nextMastery = content.weaponMasteryForLevel(nextLevel)
     val masteryTag = if (nextMastery != currentWeaponMastery) {
         nextMastery.displayLabel.uppercase()
     } else {
@@ -96,7 +96,7 @@ internal fun MutableGameState.openWeaponChoice() {
 }
 
 internal fun MutableGameState.buildWeaponChoices() {
-    val pool = WeaponCatalog.all.filter { it.id != weapon }.shuffled(gameplayRandom).take(3)
+    val pool = content.weapons.filter { it.id != weapon }.shuffled(gameplayRandom).take(3)
     choices = pool.map {
         ChoiceOption(
             type = ChoiceType.WEAPON,
@@ -125,8 +125,8 @@ internal fun MutableGameState.buildRelicChoices() {
         } else {
             RelicAspect.entries[gameplayRandom.nextInt(RelicAspect.entries.size - 1)]
         }
-        val preferred = RelicCatalog.all.filter { it.aspect == preferredAspect && it.id !in excluded }
-        val available = preferred.ifEmpty { RelicCatalog.all.filter { it.id !in excluded } }
+        val preferred = content.relics.filter { it.aspect == preferredAspect && it.id !in excluded }
+        val available = preferred.ifEmpty { content.relics.filter { it.id !in excluded } }
         selected += available[gameplayRandom.nextInt(available.size)]
     }
     choices = buildList {
@@ -137,10 +137,10 @@ internal fun MutableGameState.buildRelicChoices() {
                     type = ChoiceType.RELIC,
                     title = relic.name,
                     description = if (currentRank > 0) {
-                        if (currentRank < RelicCatalog.MAX_RANK) {
+                        if (currentRank < content.relicPolicy.maxRank) {
                             "Merge the duplicate resonance and advance rank $currentRank to ${currentRank + 1}."
                         } else {
-                            "This resonance is already rank ${RelicCatalog.MAX_RANK}; selecting it salvages Kinetic Matter."
+                            "This resonance is already rank ${content.relicPolicy.maxRank}; selecting it salvages Kinetic Matter."
                         }
                     } else {
                         relic.description
@@ -151,12 +151,13 @@ internal fun MutableGameState.buildRelicChoices() {
                 ),
             )
         }
-        if (equippedRelics.size >= RelicCatalog.MAX_SLOTS) {
+        if (equippedRelics.size >= content.relicPolicy.maxSlots) {
+            val slotCountLabel = content.relicPolicy.maxSlots.let { if (it == 4) "four" else it.toString() }
             add(
                 ChoiceOption(
                     type = ChoiceType.RELIC,
                     title = "Meld resonance",
-                    description = "Collapse this offering into one of the four bound Relics and raise its rank.",
+                    description = "Collapse this offering into one of the $slotCountLabel bound Relics and raise its rank.",
                     tag = "MELD",
                     relicAction = RelicChoiceAction.MELD,
                 ),
@@ -170,10 +171,10 @@ internal fun MutableGameState.openRelicBindChoice() {
     val action = pendingRelicBindAction ?: return
     val incoming = pendingBindingRelic
     choices = equippedRelics.mapIndexed { index, equipped ->
-        val current = RelicCatalog.byId(equipped.id)
+        val current = content.relic(equipped.id)
         when (action) {
             RelicChoiceAction.REPLACE -> {
-                val replacement = RelicCatalog.byId(incoming ?: return)
+                val replacement = content.relic(incoming ?: return)
                 ChoiceOption(
                     type = ChoiceType.RELIC_BIND,
                     title = "Replace ${current.name}",
@@ -187,10 +188,10 @@ internal fun MutableGameState.openRelicBindChoice() {
             RelicChoiceAction.MELD_TARGET -> ChoiceOption(
                 type = ChoiceType.RELIC_BIND,
                 title = "Meld ${current.name}",
-                description = if (equipped.rank < RelicCatalog.MAX_RANK) {
+                description = if (equipped.rank < content.relicPolicy.maxRank) {
                     "Collapse the offering into slot ${index + 1} and advance rank ${equipped.rank} to ${equipped.rank + 1}."
                 } else {
-                    "Slot ${index + 1} is already rank ${RelicCatalog.MAX_RANK}; salvage the excess resonance."
+                    "Slot ${index + 1} is already rank ${content.relicPolicy.maxRank}; salvage the excess resonance."
                 },
                 tag = "SLOT ${index + 1} // RANK ${equipped.rank}",
                 relicId = equipped.id,
@@ -208,23 +209,23 @@ internal fun MutableGameState.acquireRelic(id: RelicId) {
     val currentIndex = equippedRelics.indexOfFirst { it.id == id }
     if (currentIndex >= 0) {
         val current = equippedRelics[currentIndex]
-        if (current.rank >= RelicCatalog.MAX_RANK) {
+        if (current.rank >= content.relicPolicy.maxRank) {
             grantMatter(8f)
-            message = RelicCatalog.byId(id).name.uppercase() + " // RESONANCE SALVAGED"
+            message = content.relic(id).name.uppercase() + " // RESONANCE SALVAGED"
         } else {
             val updated = equippedRelics.toMutableList()
             updated[currentIndex] = current.copy(rank = current.rank + 1)
             equippedRelics = updated.toList()
             relicRanks[id.ordinal] = current.rank + 1
-            message = RelicCatalog.byId(id).name.uppercase() + " // RANK " + (current.rank + 1)
+            message = content.relic(id).name.uppercase() + " // RANK " + (current.rank + 1)
         }
         messageTime = 1.7f
         return
     }
-    if (equippedRelics.size >= RelicCatalog.MAX_SLOTS) return
+    if (equippedRelics.size >= content.relicPolicy.maxSlots) return
     equippedRelics = equippedRelics + EquippedRelic(id, 1)
     relicRanks[id.ordinal] = 1
-    message = RelicCatalog.byId(id).name.uppercase() + " // BOUND"
+    message = content.relic(id).name.uppercase() + " // BOUND"
     messageTime = 1.7f
 }
 
@@ -237,22 +238,22 @@ internal fun MutableGameState.replaceRelic(slot: Int, id: RelicId) {
     equippedRelics = updated.toList()
     relicRanks[replaced.id.ordinal] = 0
     relicRanks[id.ordinal] = 1
-    message = RelicCatalog.byId(id).name.uppercase() + " // SLOT ${slot + 1} BOUND"
+    message = content.relic(id).name.uppercase() + " // SLOT ${slot + 1} BOUND"
     messageTime = 1.7f
 }
 
 internal fun MutableGameState.meldRelic(slot: Int) {
     if (slot !in equippedRelics.indices) return
     val current = equippedRelics[slot]
-    if (current.rank >= RelicCatalog.MAX_RANK) {
+    if (current.rank >= content.relicPolicy.maxRank) {
         grantMatter(8f)
-        message = RelicCatalog.byId(current.id).name.uppercase() + " // RESONANCE SALVAGED"
+        message = content.relic(current.id).name.uppercase() + " // RESONANCE SALVAGED"
     } else {
         val updated = equippedRelics.toMutableList()
         updated[slot] = current.copy(rank = current.rank + 1)
         equippedRelics = updated.toList()
         relicRanks[current.id.ordinal] = current.rank + 1
-        message = RelicCatalog.byId(current.id).name.uppercase() + " // RANK " + (current.rank + 1)
+        message = content.relic(current.id).name.uppercase() + " // RANK " + (current.rank + 1)
     }
     messageTime = 1.7f
 }
@@ -291,7 +292,7 @@ internal fun MutableGameState.openNextPendingChoice() {
 
 internal fun MutableGameState.amplifyCurrentWeapon() {
     weaponLevel++
-    val reachedMastery = WeaponMastery.entries.firstOrNull { it.minimumLevel == weaponLevel }
+    val reachedMastery = content.weaponMasteries.firstOrNull { it.minimumLevel == weaponLevel }
     message = if (reachedMastery != null) {
         currentWeaponDefinition.name.uppercase() + " // " + reachedMastery.displayLabel.uppercase()
     } else {
@@ -301,7 +302,7 @@ internal fun MutableGameState.amplifyCurrentWeapon() {
 }
 
 internal fun MutableGameState.acquireItem(itemId: Int) {
-    val item = ItemCatalog.byId(itemId) ?: return
+    val item = content.item(itemId) ?: return
     if (itemStacks[itemId] >= item.maxStacks) {
         grantMatter((item.rarity.rank * 2).toFloat())
         message = item.name.uppercase() + " SALVAGED"
@@ -363,7 +364,7 @@ internal fun MutableGameState.metaLevel(id: MetaUpgradeId): Int = metaRanks[id.o
 internal fun MutableGameState.equipRunWeapon(id: WeaponId) {
     weapon = id
     resetWeaponRuntime()
-    message = WeaponCatalog.byId(id).name.uppercase() + " SYNCHRONIZED"
+    message = content.weapon(id).name.uppercase() + " SYNCHRONIZED"
     messageTime = 1.8f
 }
 

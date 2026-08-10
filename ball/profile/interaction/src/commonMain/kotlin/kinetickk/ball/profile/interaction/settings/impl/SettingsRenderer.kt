@@ -10,8 +10,8 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import kinetickk.foundation.design.Cyan
-import kinetickk.foundation.design.DamageNumberColors
 import kinetickk.foundation.design.DarkLine
+import kinetickk.foundation.design.Gold
 import kinetickk.foundation.design.Muted
 import kinetickk.foundation.design.Orange
 import kinetickk.foundation.design.Red
@@ -74,7 +74,7 @@ internal fun DrawScope.drawSettings(
         drawRect(DarkLine, Offset(bounds.left + d(20f), top), Size(bounds.width - d(40f), rowHeight), style = Stroke(d(1f)))
         drawLabel(textMeasurer, SETTINGS_LABELS[row.ordinal], bounds.left + d(35f), labelY, 9f, White, weight = FontWeight.Bold)
         if (row == SettingsRow.DAMAGE_COLOR_THRESHOLDS) {
-            DamageNumberColors.forEachIndexed { colorIndex, color ->
+            SettingsDamageNumberColors.forEachIndexed { colorIndex, color ->
                 drawCircle(
                     color = color,
                     radius = d(3.5f),
@@ -100,6 +100,8 @@ internal fun DrawScope.drawSettings(
         drawFooterBack(textMeasurer, bounds, Violet)
     }
 }
+
+private val SettingsDamageNumberColors = listOf(Color(0xFFFFF2C2), Gold, Orange, Red)
 
 internal fun settingsRowsPerPage(availableHeight: Float, density: Float): Int {
     val logicalHeight = availableHeight.coerceAtLeast(0f) / density.coerceAtLeast(1f)

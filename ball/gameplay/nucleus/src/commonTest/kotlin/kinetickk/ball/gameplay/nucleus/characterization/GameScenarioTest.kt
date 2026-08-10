@@ -9,6 +9,7 @@ import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.simulation.*
+import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.math.roundToLong
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -18,7 +19,7 @@ import kotlin.test.Test
 class GameScenarioTest {
     @Test
     fun dashAddsVelocityAndHeat() {
-        val engine = GameScenario(seed = 1, initialMatter = 0)
+        val engine = gameScenario(seed = 1, initialMatter = 0)
         engine.resize(1280f, 720f)
         engine.startRun()
 
@@ -32,7 +33,7 @@ class GameScenarioTest {
 
     @Test
     fun repeatedDashesTriggerOverheat() {
-        val engine = GameScenario(seed = 2, initialMatter = 0)
+        val engine = gameScenario(seed = 2, initialMatter = 0)
         engine.resize(1280f, 720f)
         engine.startRun()
 
@@ -47,7 +48,7 @@ class GameScenarioTest {
 
     @Test
     fun resizingARunKeepsThePointerInsideTheArenaAtTheSameRelativeAim() {
-        val engine = GameScenario(seed = 20, initialMatter = 0)
+        val engine = gameScenario(seed = 20, initialMatter = 0)
         engine.resize(1280f, 720f)
         engine.startRun()
         engine.updatePointer(1200f, 700f)
@@ -62,7 +63,7 @@ class GameScenarioTest {
 
     @Test
     fun touchingSingularityEndsTheRunAfterGracePeriod() {
-        val engine = GameScenario(seed = 3, initialMatter = 0)
+        val engine = gameScenario(seed = 3, initialMatter = 0)
         engine.resize(1280f, 720f)
         engine.startRun()
         engine.updatePointer(640f, 360f)
@@ -82,7 +83,7 @@ class GameScenarioTest {
 
     @Test
     fun exitingAMidRunSessionBanksMatterExactlyOnce() {
-        val engine = GameScenario(seed = 41, initialMatter = 10)
+        val engine = gameScenario(seed = 41, initialMatter = 10)
         engine.startRun()
         engine.runMatter = 37L
 
@@ -98,7 +99,7 @@ class GameScenarioTest {
 
     @Test
     fun damageEventsEmitTypedVisualCuesAndRespectTheVisibilitySetting() {
-        val enabledEngine = GameScenario(seed = 22, initialMatter = 0)
+        val enabledEngine = gameScenario(seed = 22, initialMatter = 0)
         val enabledTarget = enabledEngine.addEnemyForTesting(x = 20f, y = 30f, hp = 100_000f)
 
         val appliedDamage = enabledEngine.damageEnemyForTesting(enabledTarget, 14_000.6f)
@@ -111,7 +112,7 @@ class GameScenarioTest {
         assertEquals("14.4K", formatDamageNumber(number.amount, DamageNumberFormat.COMPACT))
         assertEquals(number.amount.toString(), formatDamageNumber(number.amount, DamageNumberFormat.FULL))
 
-        val disabledEngine = GameScenario(seed = 23, initialMatter = 0)
+        val disabledEngine = gameScenario(seed = 23, initialMatter = 0)
         disabledEngine.resize(1280f, 720f)
         disabledEngine.applyPreferences(disabledEngine.settings.copy(damageNumbers = false))
         val disabledTarget = disabledEngine.addEnemyForTesting(x = 20f, y = 30f, hp = 100_000f)
@@ -127,19 +128,22 @@ class GameScenarioTest {
 
     @Test
     fun openingEnemyCountIncreasesWithRebirthTier() {
-        val baseline = GameScenario(seed = 8, initialMatter = 0, initialRebirthLevel = 0)
-        val maximum = GameScenario(
+        val baseline = gameScenario(seed = 8, initialMatter = 0, initialRebirthLevel = 0)
+        val maximum = gameScenario(
             seed = 8,
             initialMatter = 0,
-            initialRebirthLevel = RebirthProgression.MAX_LEVEL,
+            initialRebirthLevel = canonicalGameplayContent.rebirth.maximumLevel,
         )
 
         baseline.startRun()
         maximum.startRun()
 
-        assertEquals(RebirthProgression.profile(0).openingEnemyCount, baseline.enemies.size)
+        assertEquals(canonicalGameplayContent.rebirth.profile(0).openingEnemyCount, baseline.enemies.size)
         assertTrue(baseline.enemies.all { it.type == EnemyType.DRIFTER })
-        assertEquals(RebirthProgression.profile(RebirthProgression.MAX_LEVEL).openingEnemyCount, maximum.enemies.size)
+        assertEquals(
+            canonicalGameplayContent.rebirth.profile(canonicalGameplayContent.rebirth.maximumLevel).openingEnemyCount,
+            maximum.enemies.size,
+        )
         assertTrue(maximum.enemies.size > baseline.enemies.size)
     }
 

@@ -24,23 +24,29 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
-import kinetickk.resource.audio.api.AudioCue
-import kinetickk.ball.content.api.ItemCatalog
 import kinetickk.ball.content.api.ItemDefinition
+import kinetickk.ball.content.api.ItemRarity
+import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.foundation.design.*
 import kinetickk.ball.profile.api.CollectionCapability
 import kinetickk.ball.profile.api.PreferencesReader
+import kinetickk.flow.session.interaction.audio.SessionAudioCue
+import kinetickk.flow.session.interaction.audio.SessionAudioExecutor
 import kinetickk.flow.session.interaction.codex.api.CodexFeature
 import kinetickk.flow.session.interaction.codex.api.CodexOutput
 import kinetickk.flow.session.interaction.codex.api.CodexRenderModel
 import kinetickk.flow.session.interaction.codex.api.CodexRunStacks
+import kinetickk.resource.audio.api.AudioService
 import kotlin.math.min
 
 class DefaultCodexFeature(
     collectionCapability: CollectionCapability,
     private val preferencesReader: PreferencesReader,
+    uiCatalog: UiCatalogSnapshot,
+    audioService: AudioService,
 ) : CodexFeature {
-    private val reducer = CodexReducer(collectionCapability)
+    private val reducer = CodexReducer(collectionCapability, uiCatalog.items)
+    private val audioExecutor = SessionAudioExecutor(audioService)
 
     @Composable
     override fun Content(runStacks: CodexRunStacks, onOutput: (CodexOutput) -> Unit) {
@@ -57,7 +63,7 @@ class DefaultCodexFeature(
         fun dispatch(action: CodexAction) {
             val reduction = reducer.reduce(pageValue, action)
             pageValue = reduction.page
-            onOutput(CodexOutput.Cue(AudioCue.UI_CLICK))
+            audioExecutor.play(SessionAudioCue.UI_CLICK)
             if (reduction.close) onOutput(CodexOutput.Back)
         }
 
@@ -88,13 +94,13 @@ private fun DrawScope.drawCodex(
     val bounds = overlayBounds()
     drawOverlayFrame(bounds, Magenta)
     drawLabel(textMeasurer, "ARTIFACT CODEX", bounds.left + d(25f), bounds.top + d(24f), 20f, Magenta, weight = FontWeight.Bold)
-    drawLabel(textMeasurer, "${engine.discoveredItemIds.size}/400 DISCOVERED // PAGE ${page + 1}/${maxPage + 1}", bounds.right - d(25f), bounds.top + d(30f), 8f, White, alignRight = true)
+    drawLabel(textMeasurer, "${engine.discoveredItemIds.size}/${engine.items.size} DISCOVERED // PAGE ${page + 1}/${maxPage + 1}", bounds.right - d(25f), bounds.top + d(30f), 8f, White, alignRight = true)
     val contentTop = bounds.top + d(76f)
     val contentWidth = bounds.width - d(50f)
     val columnWidth = contentWidth * 0.5f
     val rowHeight = (bounds.height - d(146f)) / 5f
     val start = page.coerceIn(0, maxPage) * CODEX_PAGE_SIZE
-    ItemCatalog.all.subList(start, min(start + CODEX_PAGE_SIZE, ItemCatalog.all.size))
+    engine.items.subList(start.coerceAtMost(engine.items.size), min(start + CODEX_PAGE_SIZE, engine.items.size))
         .forEachIndexed { index, item ->
             val column = index % 2
             val row = index / 2
@@ -116,7 +122,7 @@ private fun DrawScope.drawCodexItem(
 ) {
     val discovered = engine.isDiscovered(item.id)
     val stack = engine.itemStack(item.id)
-    val accent = if (discovered) rarityColor(item.rarity) else DarkLine
+    val accent = if (discovered) codexRarityColor(item.rarity) else DarkLine
     drawRect(Color(0x8A0B0D1D), Offset(x, y), Size(width, height))
     drawRect(accent, Offset(x, y), Size(width, height), style = Stroke(d(1f)))
     drawLabel(textMeasurer, "#${item.id.toString().padStart(3, '0')}", x + d(10f), y + d(9f), 7f, Muted)
@@ -140,4 +146,12 @@ private fun DrawScope.drawCodexItem(
         maxWidth = width - d(59f),
         maxLines = 2,
     )
+}
+
+private fun codexRarityColor(rarity: ItemRarity): Color = when (rarity) {
+    ItemRarity.COMMON -> Muted
+    ItemRarity.UNCOMMON -> Cyan
+    ItemRarity.RARE -> Violet
+    ItemRarity.EPIC -> Magenta
+    ItemRarity.LEGENDARY -> Acid
 }

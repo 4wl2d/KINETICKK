@@ -34,6 +34,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.takeSoundCues
 import kinetickk.ball.gameplay.nucleus.simulation.takeVisualFxCues
 import kinetickk.ball.gameplay.nucleus.simulation.update
 import kinetickk.ball.gameplay.nucleus.simulation.updatePointer
+import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.math.roundToInt
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -45,6 +46,7 @@ class GameplayBaselineCharacterizationTest {
     @Test
     fun seededIntentTraceHasStableCheckpoints() {
         val engine = GameEngine.create(
+            content = canonicalGameplayContent,
             bootstrapProgress = null,
             seed = 0x4B1D,
             initialMatter = 17,
@@ -232,7 +234,7 @@ class GameplayBaselineCharacterizationTest {
 
     @Test
     fun fixedStepsRunAt120HzAndPublishPerStepVisualConsequencesInOrder() {
-        val state = MutableGameState(seed = 700, initialMatter = 0)
+        val state = MutableGameState(content = canonicalGameplayContent, seed = 700, initialMatter = 0)
         state.startRun()
         state.takeSoundCues()
         state.takeVisualFxCues()
@@ -250,20 +252,21 @@ class GameplayBaselineCharacterizationTest {
 
     @Test
     fun authoritativeCollectionsEnforceTheCurrentNPlusOneCaps() {
-        assertEquals(120, MutableGameState.MAX_ENEMIES)
+        val maximumActiveEnemies = canonicalGameplayContent.rebirth.maxActiveEnemies
+        assertEquals(120, maximumActiveEnemies)
         assertEquals(650, MutableGameState.MAX_PROJECTILES)
         assertEquals(420, MutableGameState.MAX_PICKUPS)
         assertEquals(110, MutableGameState.MAX_TRAIL_POINTS)
 
-        val enemyState = MutableGameState(seed = 701, initialMatter = 0)
-        val enemyResults = List(MutableGameState.MAX_ENEMIES + 1) {
+        val enemyState = MutableGameState(content = canonicalGameplayContent, seed = 701, initialMatter = 0)
+        val enemyResults = List(maximumActiveEnemies + 1) {
             enemyState.spawnEnemy(EnemyType.DRIFTER)
         }
-        assertTrue(enemyResults.take(MutableGameState.MAX_ENEMIES).all { it })
+        assertTrue(enemyResults.take(maximumActiveEnemies).all { it })
         assertFalse(enemyResults.last())
-        assertEquals(MutableGameState.MAX_ENEMIES, enemyState.enemies.size)
+        assertEquals(maximumActiveEnemies, enemyState.enemies.size)
 
-        val projectileState = MutableGameState(seed = 702, initialMatter = 0)
+        val projectileState = MutableGameState(content = canonicalGameplayContent, seed = 702, initialMatter = 0)
         repeat(MutableGameState.MAX_PROJECTILES + 1) { index ->
             projectileState.addProjectile(
                 Projectile(index.toFloat(), 0f, 0f, 0f, radius = 1f, life = 1f),
@@ -272,14 +275,14 @@ class GameplayBaselineCharacterizationTest {
         assertEquals(MutableGameState.MAX_PROJECTILES, projectileState.projectiles.size)
         assertEquals((MutableGameState.MAX_PROJECTILES - 1).toFloat(), projectileState.projectiles.last().x)
 
-        val pickupState = MutableGameState(seed = 703, initialMatter = 0)
+        val pickupState = MutableGameState(content = canonicalGameplayContent, seed = 703, initialMatter = 0)
         repeat(MutableGameState.MAX_PICKUPS + 1) { index ->
             pickupState.addPickup(Pickup(PickupType.DATA, index.toFloat(), 0f))
         }
         assertEquals(MutableGameState.MAX_PICKUPS, pickupState.pickups.size)
         assertEquals((MutableGameState.MAX_PICKUPS - 1).toFloat(), pickupState.pickups.last().x)
 
-        val trailState = MutableGameState(seed = 704, initialMatter = 0)
+        val trailState = MutableGameState(content = canonicalGameplayContent, seed = 704, initialMatter = 0)
         repeat(MutableGameState.MAX_TRAIL_POINTS) { index ->
             trailState.trail += TrailPoint(index.toFloat(), 0f)
         }
@@ -295,8 +298,22 @@ class GameplayBaselineCharacterizationTest {
     }
 
     @Test
+    fun enemyCapComesFromTheCapturedGameplaySnapshot() {
+        val capturedContent = canonicalGameplayContent.copy(
+            rebirth = canonicalGameplayContent.rebirth.copy(maxActiveEnemies = 3),
+        )
+        val state = MutableGameState(content = capturedContent, seed = 706, initialMatter = 0)
+
+        val spawnResults = List(4) { state.spawnEnemy(EnemyType.DRIFTER) }
+
+        assertEquals(listOf(true, true, true, false), spawnResults)
+        assertEquals(3, state.enemies.size)
+    }
+
+    @Test
     fun fullSemanticOutputBatchIsBoundedToThreeAndKeepsItsOrdering() {
         val state = initialEngineState(
+            content = canonicalGameplayContent,
             seed = 705,
             bootstrapProgress = null,
             initialMatter = 0,

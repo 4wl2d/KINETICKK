@@ -19,7 +19,6 @@ import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.model.PickupType
 import kinetickk.ball.content.api.RelicId
-import kinetickk.ball.content.api.WeaponCatalog
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
@@ -90,6 +89,7 @@ data class WeaponOrbitalProjection(val index: Int, val x: Float, val y: Float, v
  * Immutable render payload. No mutable simulation container crosses this boundary.
  */
 class GameplayRenderModel internal constructor(
+    val content: GameplayContentSnapshot,
     val phase: GamePhase,
     val settings: PlayerPreferences,
     val rebirthLevel: Int,
@@ -200,9 +200,9 @@ class GameplayRenderModel internal constructor(
             else -> 0
         }
     val discoveredItemCount: Int get() = discoveredItemIds.size
-    val currentWeaponDefinition: WeaponDefinition get() = WeaponCatalog.byId(weapon)
-    val currentWeaponMastery: WeaponMastery get() = WeaponMastery.forLevel(weaponLevel)
-    val nextWeaponMastery: WeaponMastery? get() = WeaponMastery.after(weaponLevel)
+    val currentWeaponDefinition: WeaponDefinition get() = content.weapon(weapon)
+    val currentWeaponMastery: WeaponMastery get() = content.weaponMasteryForLevel(weaponLevel)
+    val nextWeaponMastery: WeaponMastery? get() = content.weaponMasteryAfter(weaponLevel)
     val weaponMasteryProgress: Float
         get() {
             val current = currentWeaponMastery

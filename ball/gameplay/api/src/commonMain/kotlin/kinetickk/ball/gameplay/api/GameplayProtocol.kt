@@ -8,11 +8,13 @@ import kinetickk.foundation.collections.ImmutableSet
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.immutableSetOf
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.profile.api.PlayerPreferences
 
 /** Immutable inputs captured when a run is created. Profile changes never mutate this object. */
 data class RunConfiguration(
+    val content: GameplayContentSnapshot,
     val preferences: PlayerPreferences = PlayerPreferences(),
     val coreShape: CoreShape = CoreShape.ORB,
     val startingWeapon: WeaponId = WeaponId.FLUX_WAKE,

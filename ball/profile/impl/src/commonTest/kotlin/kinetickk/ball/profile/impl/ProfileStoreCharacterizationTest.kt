@@ -4,11 +4,7 @@
 package kinetickk.ball.profile.impl
 
 import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.content.api.ItemCatalog
-import kinetickk.ball.content.api.MetaUpgradeCatalog
 import kinetickk.ball.content.api.MetaUpgradeId
-import kinetickk.ball.content.api.RebirthProgression
-import kinetickk.ball.content.api.WeaponCatalog
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.profile.api.GameplayProgressUpdate
 import kinetickk.ball.profile.api.LabProfileSnapshot
@@ -48,7 +44,7 @@ class ProfileStoreCharacterizationTest {
         val loadedResource = CharacterizationProfileResource(
             loadResult = ProfileLoadResult.Loaded(loadedProfile),
         )
-        val loadedStore = DefaultProfileStore(loadedResource)
+        val loadedStore = testProfileStore(loadedResource)
 
         assertEquals(ProfileProviderId.PLATFORM_LOCAL, loadedStore.providerId)
         assertEquals(ProfileLoadResult.Loaded(loadedProfile), loadedStore.bootstrapResult)
@@ -63,7 +59,7 @@ class ProfileStoreCharacterizationTest {
         )
         unavailableResults.forEach { loadResult ->
             val resource = CharacterizationProfileResource(loadResult = loadResult)
-            val store = DefaultProfileStore(resource)
+            val store = testProfileStore(resource)
 
             assertEquals(loadResult, store.bootstrapResult)
             assertProfileViews(PlayerProfile(), store)
@@ -74,7 +70,7 @@ class ProfileStoreCharacterizationTest {
         val throwingResource = CharacterizationProfileResource(
             loadFailure = IllegalStateException("read failed"),
         )
-        val throwingStore = DefaultProfileStore(throwingResource)
+        val throwingStore = testProfileStore(throwingResource)
         assertEquals(
             ProfileLoadResult.OutcomeUnknown(ProfileResourceFailure.PROVIDER_READ_FAILED),
             throwingStore.bootstrapResult,
@@ -97,7 +93,7 @@ class ProfileStoreCharacterizationTest {
             economy = PlayerEconomy(matter = -5L, lifetimeMatter = 3L),
             loadout = PlayerLoadout(unlockedWeapons = emptySet()),
             labProgress = LabProgress(listOf(Int.MAX_VALUE)),
-            collection = PlayerCollection(setOf(-1, 399, ItemCatalog.ITEM_COUNT)),
+            collection = PlayerCollection(setOf(-1, 399, TestProfilePolicy.itemCount)),
             rebirthProgress = RebirthProgress(level = 99, highestCleared = 99),
         )
         val expected = PlayerProfile(
@@ -107,7 +103,7 @@ class ProfileStoreCharacterizationTest {
             labProgress = LabProgress(
                 List(MetaUpgradeId.entries.size) { index ->
                     if (index == MetaUpgradeId.CORE_INTEGRITY.ordinal) {
-                        MetaUpgradeCatalog.byId(MetaUpgradeId.CORE_INTEGRITY).maxRanks
+                        TestProfilePolicy.metaUpgrade(MetaUpgradeId.CORE_INTEGRITY).maxRanks
                     } else {
                         0
                     }
@@ -115,15 +111,15 @@ class ProfileStoreCharacterizationTest {
             ),
             collection = PlayerCollection(setOf(399)),
             rebirthProgress = RebirthProgress(
-                level = RebirthProgression.MAX_LEVEL,
-                highestCleared = RebirthProgression.MAX_LEVEL,
+                level = TestProfilePolicy.rebirth.maximumLevel,
+                highestCleared = TestProfilePolicy.rebirth.maximumLevel,
             ),
         )
         lateinit var store: DefaultProfileStore
         val resource = CharacterizationProfileResource(
             beforePersist = { snapshot -> assertProfileViews(snapshot, store) },
         )
-        store = DefaultProfileStore(resource)
+        store = testProfileStore(resource)
 
         assertEquals(ProfilePersistResult.Persisted, store.replaceProfile(replacement))
         assertProfileViews(expected, store)
@@ -145,7 +141,7 @@ class ProfileStoreCharacterizationTest {
     fun preferencesNormalizeAndMuteBothChannelsWhileNoChangeAndNonFiniteValuesReject() {
         val initial = representativeProfile()
         val resource = CharacterizationProfileResource(ProfileLoadResult.Loaded(initial))
-        val store = DefaultProfileStore(resource)
+        val store = testProfileStore(resource)
         val requested = initial.preferences.copy(
             soundEnabled = false,
             musicEnabled = false,
@@ -190,13 +186,13 @@ class ProfileStoreCharacterizationTest {
     @Test
     fun labPurchaseUsesTheCurrentRankPriceAndRejectsInsufficientOrMaxedProfilesAtomically() {
         val id = MetaUpgradeId.CORE_INTEGRITY
-        val cost = MetaUpgradeCatalog.byId(id).cost(0).toLong()
+        val cost = TestProfilePolicy.metaUpgrade(id).cost(0).toLong()
         val initial = representativeProfile().copy(
             economy = PlayerEconomy(matter = cost, lifetimeMatter = 500L),
             labProgress = LabProgress(),
         )
         val resource = CharacterizationProfileResource(ProfileLoadResult.Loaded(initial))
-        val store = DefaultProfileStore(resource)
+        val store = testProfileStore(resource)
         val expectedRanks = initial.labProgress.ranks.toMutableList().apply {
             this[id.ordinal] = 1
         }
@@ -214,7 +210,7 @@ class ProfileStoreCharacterizationTest {
 
         val insufficient = initial.copy(economy = PlayerEconomy(cost - 1L, 500L))
         val insufficientResource = CharacterizationProfileResource(ProfileLoadResult.Loaded(insufficient))
-        val insufficientStore = DefaultProfileStore(insufficientResource)
+        val insufficientStore = testProfileStore(insufficientResource)
         assertRejectedWithoutPublication(
             result = insufficientStore.purchaseMetaUpgrade(id),
             reason = ProfileMutationRejection.INSUFFICIENT_MATTER,
@@ -224,11 +220,11 @@ class ProfileStoreCharacterizationTest {
         )
 
         val maxRanks = List(MetaUpgradeId.entries.size) { index ->
-            if (index == id.ordinal) MetaUpgradeCatalog.byId(id).maxRanks else 0
+            if (index == id.ordinal) TestProfilePolicy.metaUpgrade(id).maxRanks else 0
         }
         val maxed = initial.copy(labProgress = LabProgress(maxRanks))
         val maxedResource = CharacterizationProfileResource(ProfileLoadResult.Loaded(maxed))
-        val maxedStore = DefaultProfileStore(maxedResource)
+        val maxedStore = testProfileStore(maxedResource)
         assertRejectedWithoutPublication(
             result = maxedStore.purchaseMetaUpgrade(id),
             reason = ProfileMutationRejection.MAX_RANK_REACHED,
@@ -245,7 +241,7 @@ class ProfileStoreCharacterizationTest {
             loadout = PlayerLoadout(),
         )
         val resource = CharacterizationProfileResource(ProfileLoadResult.Loaded(prismReady))
-        val store = DefaultProfileStore(resource)
+        val store = testProfileStore(resource)
         val prismSelected = prismReady.copy(
             loadout = prismReady.loadout.copy(coreShape = CoreShape.PRISM),
         )
@@ -269,7 +265,7 @@ class ProfileStoreCharacterizationTest {
             economy = PlayerEconomy(matter = 0L, lifetimeMatter = 89L),
         )
         val lockedResource = CharacterizationProfileResource(ProfileLoadResult.Loaded(shardLocked))
-        val lockedStore = DefaultProfileStore(lockedResource)
+        val lockedStore = testProfileStore(lockedResource)
         assertRejectedWithoutPublication(
             result = lockedStore.selectCoreShape(CoreShape.SHARD),
             reason = ProfileMutationRejection.CORE_SHAPE_LOCKED,
@@ -280,7 +276,7 @@ class ProfileStoreCharacterizationTest {
 
         val shardReady = shardLocked.copy(economy = shardLocked.economy.copy(lifetimeMatter = 90L))
         val shardResource = CharacterizationProfileResource(ProfileLoadResult.Loaded(shardReady))
-        val shardStore = DefaultProfileStore(shardResource)
+        val shardStore = testProfileStore(shardResource)
         val shardSelected = shardReady.copy(
             loadout = shardReady.loadout.copy(coreShape = CoreShape.SHARD),
         )
@@ -295,13 +291,13 @@ class ProfileStoreCharacterizationTest {
     @Test
     fun weaponMutationDistinguishesUnlockEquipAndAlreadySelectedPaths() {
         val weapon = WeaponId.MORNINGSTAR
-        val cost = WeaponCatalog.byId(weapon).permanentUnlockCost.toLong()
+        val cost = TestProfilePolicy.weapon(weapon).permanentUnlockCost.toLong()
         val initial = representativeProfile().copy(
             economy = PlayerEconomy(matter = cost, lifetimeMatter = 500L),
             loadout = PlayerLoadout(),
         )
         val resource = CharacterizationProfileResource(ProfileLoadResult.Loaded(initial))
-        val store = DefaultProfileStore(resource)
+        val store = testProfileStore(resource)
         val purchased = initial.copy(
             economy = initial.economy.copy(matter = 0L),
             loadout = PlayerLoadout(
@@ -347,7 +343,7 @@ class ProfileStoreCharacterizationTest {
 
         val insufficient = initial.copy(economy = PlayerEconomy(cost - 1L, 500L))
         val insufficientResource = CharacterizationProfileResource(ProfileLoadResult.Loaded(insufficient))
-        val insufficientStore = DefaultProfileStore(insufficientResource)
+        val insufficientStore = testProfileStore(insufficientResource)
         assertRejectedWithoutPublication(
             result = insufficientStore.purchaseOrEquipWeapon(weapon),
             reason = ProfileMutationRejection.INSUFFICIENT_MATTER,
@@ -363,7 +359,7 @@ class ProfileStoreCharacterizationTest {
             rebirthProgress = RebirthProgress(level = 0, highestCleared = -1),
         )
         val unavailableResource = CharacterizationProfileResource(ProfileLoadResult.Loaded(unavailable))
-        val unavailableStore = DefaultProfileStore(unavailableResource)
+        val unavailableStore = testProfileStore(unavailableResource)
         assertRejectedWithoutPublication(
             result = unavailableStore.advanceRebirth(),
             reason = ProfileMutationRejection.REBIRTH_UNAVAILABLE,
@@ -374,7 +370,7 @@ class ProfileStoreCharacterizationTest {
 
         val ready = unavailable.copy(rebirthProgress = RebirthProgress(level = 0, highestCleared = 0))
         val resource = CharacterizationProfileResource(ProfileLoadResult.Loaded(ready))
-        val store = DefaultProfileStore(resource)
+        val store = testProfileStore(resource)
         val advanced = ready.copy(rebirthProgress = RebirthProgress(level = 1, highestCleared = 0))
         assertEquals(
             ProfileMutationResult.Applied(ProfilePersistResult.Persisted),
@@ -393,12 +389,12 @@ class ProfileStoreCharacterizationTest {
 
         val maximum = ready.copy(
             rebirthProgress = RebirthProgress(
-                level = RebirthProgression.MAX_LEVEL,
-                highestCleared = RebirthProgression.MAX_LEVEL,
+                level = TestProfilePolicy.rebirth.maximumLevel,
+                highestCleared = TestProfilePolicy.rebirth.maximumLevel,
             ),
         )
         val maximumResource = CharacterizationProfileResource(ProfileLoadResult.Loaded(maximum))
-        val maximumStore = DefaultProfileStore(maximumResource)
+        val maximumStore = testProfileStore(maximumResource)
         assertRejectedWithoutPublication(
             result = maximumStore.advanceRebirth(),
             reason = ProfileMutationRejection.REBIRTH_UNAVAILABLE,
@@ -416,10 +412,10 @@ class ProfileStoreCharacterizationTest {
             rebirthProgress = RebirthProgress(level = 2, highestCleared = 1),
         )
         val resource = CharacterizationProfileResource(ProfileLoadResult.Loaded(initial))
-        val store = DefaultProfileStore(resource)
+        val store = testProfileStore(resource)
         val expected = initial.copy(
             economy = PlayerEconomy(Long.MAX_VALUE, Long.MAX_VALUE),
-            collection = PlayerCollection(setOf(1, ItemCatalog.ITEM_COUNT - 1)),
+            collection = PlayerCollection(setOf(1, TestProfilePolicy.itemCount - 1)),
             rebirthProgress = RebirthProgress(level = 2, highestCleared = 2),
         )
 
@@ -428,7 +424,7 @@ class ProfileStoreCharacterizationTest {
             store.applyGameplayProgress(
                 GameplayProgressUpdate(
                     bankedMatter = 10L,
-                    discoveredItemIds = setOf(1, ItemCatalog.ITEM_COUNT - 1),
+                    discoveredItemIds = setOf(1, TestProfilePolicy.itemCount - 1),
                     clearedRebirthLevel = 2,
                 ),
             ),
@@ -453,7 +449,7 @@ class ProfileStoreCharacterizationTest {
         listOf(
             GameplayProgressUpdate(bankedMatter = -1L),
             GameplayProgressUpdate(discoveredItemIds = setOf(-1)),
-            GameplayProgressUpdate(discoveredItemIds = setOf(ItemCatalog.ITEM_COUNT)),
+            GameplayProgressUpdate(discoveredItemIds = setOf(TestProfilePolicy.itemCount)),
             GameplayProgressUpdate(clearedRebirthLevel = -1),
             GameplayProgressUpdate(clearedRebirthLevel = 3),
         ).forEach { invalid ->
@@ -475,7 +471,7 @@ class ProfileStoreCharacterizationTest {
             persistFailure = IllegalStateException("write failed"),
             beforePersist = { snapshot -> assertProfileViews(snapshot, store) },
         )
-        store = DefaultProfileStore(resource)
+        store = testProfileStore(resource)
         val muted = PlayerProfile(
             preferences = PlayerPreferences(soundEnabled = false, musicEnabled = false),
         )
@@ -525,7 +521,7 @@ private fun representativeProfile(): PlayerProfile = PlayerProfile(
         unlockedWeapons = setOf(WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR),
     ),
     labProgress = LabProgress(List(MetaUpgradeId.entries.size) { index -> index % 2 }),
-    collection = PlayerCollection(setOf(0, 199, ItemCatalog.ITEM_COUNT - 1)),
+    collection = PlayerCollection(setOf(0, 199, TestProfilePolicy.itemCount - 1)),
     rebirthProgress = RebirthProgress(level = 2, highestCleared = 1),
 )
 

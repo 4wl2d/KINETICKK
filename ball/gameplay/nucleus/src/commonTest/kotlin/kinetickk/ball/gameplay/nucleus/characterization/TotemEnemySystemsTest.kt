@@ -273,7 +273,7 @@ class TotemEnemySystemsTest {
         }
     }
 
-    private fun runningEngine(seed: Int): GameScenario = GameScenario(seed = seed, initialMatter = 0).also { engine ->
+    private fun runningEngine(seed: Int): GameScenario = gameScenario(seed = seed, initialMatter = 0).also { engine ->
         engine.resize(1_280f, 720f)
         engine.startRun()
         engine.enemies.clear()

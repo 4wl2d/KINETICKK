@@ -16,6 +16,7 @@ import kotlin.math.min
 
 
 internal class MutableGameState(
+    internal val content: GameplayContentSnapshot,
     seed: Int = 731_991,
     initialMatter: Int? = null,
     initialRebirthLevel: Int = 0,
@@ -28,7 +29,6 @@ internal class MutableGameState(
         const val MAX_HEAT = 100f
         const val FIXED_STEP = 1f / 120f
         const val DASH_INPUT_BUFFER_SECONDS = 0.16f
-        const val MAX_ENEMIES = RebirthProgression.MAX_ACTIVE_ENEMIES
         const val MAX_PROJECTILES = 650
         const val MAX_PICKUPS = 420
         const val MAX_TRAIL_POINTS = 110
@@ -38,7 +38,7 @@ internal class MutableGameState(
     }
 
     internal var gameplayRandom = CloneableXorWowRandom(seed)
-    internal var activeRebirthProfile = RebirthProgression.profile(
+    internal var activeRebirthProfile = content.rebirth.profile(
         bootstrapProgress?.rebirthProgress?.level ?: initialRebirthLevel,
     )
     internal val unlockedWeaponSet = mutableSetOf<WeaponId>().apply {
@@ -46,16 +46,16 @@ internal class MutableGameState(
         add(WeaponId.FLUX_WAKE)
     }
     internal var unlockedWeaponView: Set<WeaponId> = unlockedWeaponSet.toSet()
-    internal val metaRanks = IntArray(MetaUpgradeId.entries.size) { index ->
-        val definition = MetaUpgradeCatalog.all[index]
+    internal val metaRanks = IntArray(content.metaUpgrades.size) { index ->
+        val definition = content.metaUpgrades[index]
         bootstrapProgress?.labProgress?.ranks?.getOrNull(index)?.coerceIn(0, definition.maxRanks) ?: 0
     }
     internal val discoveredItemIds = bootstrapProgress?.collection?.discoveredItemIds
-        ?.filterTo(mutableSetOf()) { it in 0 until ItemCatalog.ITEM_COUNT }
+        ?.filterTo(mutableSetOf()) { content.item(it) != null }
         ?: mutableSetOf()
     internal val pendingDiscoveredItemIds = mutableSetOf<Int>()
-    internal val itemStacks = IntArray(ItemCatalog.ITEM_COUNT)
-    internal val familyStacks = IntArray(20)
+    internal val itemStacks = IntArray(content.items.size)
+    internal val familyStacks = IntArray(content.items.maxOfOrNull { it.id / 20 + 1 } ?: 0)
     internal val soundCues = mutableListOf<GameplayAudioCue>()
     internal var visualFxCues = BoundedVisualFxCueAccumulator()
     internal var pendingBankedMatter = 0L
@@ -86,12 +86,12 @@ internal class MutableGameState(
     internal var pendingRelicChoices = 0
     internal var pendingBindingRelic: RelicId? = null
     internal var pendingRelicBindAction: RelicChoiceAction? = null
-    internal val relicRanks = IntArray(RelicCatalog.RELIC_COUNT)
-    internal val relicCooldowns = FloatArray(RelicCatalog.RELIC_COUNT)
-    internal val relicCounters = IntArray(RelicCatalog.RELIC_COUNT)
-    internal val relicProcCounts = IntArray(RelicCatalog.RELIC_COUNT)
+    internal val relicRanks = IntArray(content.relics.size)
+    internal val relicCooldowns = FloatArray(content.relics.size)
+    internal val relicCounters = IntArray(content.relics.size)
+    internal val relicProcCounts = IntArray(content.relics.size)
     internal val delayedRelicHits = mutableListOf<DelayedRelicHit>()
-    internal val agonyMutationCounts = IntArray(WeaponId.entries.size)
+    internal val agonyMutationCounts = IntArray(content.weapons.size)
     internal var slipstreamRelayTime = 0f
     internal var borrowedMomentTime = 0f
     internal var brakepointCharge = 0f
@@ -304,9 +304,9 @@ internal class MutableGameState(
         }
     val discoveredItemCount: Int get() = discoveredItemIds.size
     val unlockedWeapons: Set<WeaponId> get() = unlockedWeaponView
-    val currentWeaponDefinition: WeaponDefinition get() = WeaponCatalog.byId(weapon)
-    val currentWeaponMastery: WeaponMastery get() = WeaponMastery.forLevel(weaponLevel)
-    val nextWeaponMastery: WeaponMastery? get() = WeaponMastery.after(weaponLevel)
+    val currentWeaponDefinition: WeaponDefinition get() = content.weapon(weapon)
+    val currentWeaponMastery: WeaponMastery get() = content.weaponMasteryForLevel(weaponLevel)
+    val nextWeaponMastery: WeaponMastery? get() = content.weaponMasteryAfter(weaponLevel)
     val weaponMasteryProgress: Float
         get() {
             val current = currentWeaponMastery

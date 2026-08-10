@@ -36,6 +36,7 @@ class GameplayInputMappingTest {
     }
 
     private fun engine(): GameEngine = GameEngine.create(
+        content = SyntheticGameplayContent,
         bootstrapProgress = null,
         seed = 73,
         initialMatter = 0,

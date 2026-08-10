@@ -234,7 +234,7 @@ internal fun MutableGameState.spawnWave(delta: Float) {
     if (bossSpawned) return
     spawnClock -= delta
     val baseMaxEnemies = min(90, 14 + floor(elapsed / 20f).toInt())
-    val maxEnemies = min(MutableGameState.MAX_ENEMIES, rebirthProfile.enemyCap(baseMaxEnemies))
+    val maxEnemies = min(content.rebirth.maxActiveEnemies, rebirthProfile.enemyCap(baseMaxEnemies))
     if (spawnClock <= 0f && enemies.size < maxEnemies) {
         val baseInterval = max(0.13f, 0.84f - elapsed / 1_700f)
         spawnClock = rebirthProfile.spawnInterval(baseInterval)
@@ -257,7 +257,7 @@ internal fun MutableGameState.spawnWave(delta: Float) {
 }
 
 internal fun MutableGameState.spawnEnemy(type: EnemyType): Boolean {
-    if (enemies.size >= MutableGameState.MAX_ENEMIES) return false
+    if (enemies.size >= content.rebirth.maxActiveEnemies) return false
     val useForwardCorridor = type != EnemyType.ELITE &&
         type != EnemyType.ARCHITECT &&
         speed > 500f &&
@@ -297,6 +297,9 @@ internal fun MutableGameState.spawnEnemy(type: EnemyType): Boolean {
         maxHp = stats.first,
         radius = stats.second,
         actionTimer = stats.third,
+        relicCounters = IntArray(content.relics.size),
+        relicTimers = FloatArray(content.relics.size),
+        relicValues = FloatArray(content.relics.size),
     )
     return true
 }

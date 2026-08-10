@@ -15,26 +15,33 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.rememberTextMeasurer
-import kinetickk.resource.audio.api.AudioCue
-import kinetickk.foundation.design.CanvasTextMeasurer
+import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.profile.api.PreferencesReader
 import kinetickk.ball.profile.api.ProfileMutationResult
 import kinetickk.ball.profile.api.RebirthCapability
+import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
+import kinetickk.ball.profile.interaction.audio.ProfileAudioExecutor
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthFeature
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthOutput
+import kinetickk.foundation.design.CanvasTextMeasurer
+import kinetickk.resource.audio.api.AudioService
 
 class DefaultRebirthFeature(
     private val capability: RebirthCapability,
     private val preferencesReader: PreferencesReader,
+    private val rebirthPolicy: RebirthPolicySnapshot,
+    audioService: AudioService,
 ) : RebirthFeature {
+    private val audioExecutor = ProfileAudioExecutor(audioService)
+
     @Composable
     override fun Content(
         routeToken: Int,
         eligible: Boolean,
         onOutput: (RebirthOutput) -> Unit,
     ) {
-        var renderModelValue by remember(capability, routeToken, eligible) {
-            mutableStateOf(capability.rebirthSnapshot().toRenderModel(eligible))
+        var renderModelValue by remember(capability, rebirthPolicy, routeToken, eligible) {
+            mutableStateOf(capability.rebirthSnapshot().toRenderModel(rebirthPolicy, eligible))
         }
         var confirmationArmedValue by rememberSaveable(routeToken, eligible) { mutableStateOf(false) }
         val textScale = remember(preferencesReader, routeToken) {
@@ -57,14 +64,15 @@ class DefaultRebirthFeature(
                 when (effect) {
                     RebirthEffect.AdvanceCycle -> {
                         val result = capability.advanceRebirth()
-                        renderModelValue = capability.rebirthSnapshot().toRenderModel(eligible)
+                        renderModelValue = capability.rebirthSnapshot().toRenderModel(rebirthPolicy, eligible)
                         confirmationArmedValue = false
                         if (result is ProfileMutationResult.Applied) {
                             val progress = capability.rebirthSnapshot().progress
-                            onOutput(RebirthOutput.Cue(AudioCue.PURCHASE))
+                            audioExecutor.play(ProfileAudioCue.PURCHASE)
                             onOutput(RebirthOutput.CycleAdvanced(progress))
                         }
                     }
+                    is RebirthEffect.PlayAudio -> audioExecutor.play(effect.cue)
                     is RebirthEffect.Emit -> onOutput(effect.output)
                 }
             }
