@@ -238,7 +238,7 @@ class ProfileNucleusTest {
     @Test
     fun commandsEnforceClosedSourceKindsAndOrderPersistBeforeCompletion() {
         val state = readyState()
-        val pulse = ProfilePulse.AdjustPreference(ProfilePreferenceAdjustment.ToggleMusic)
+        val pulse = ProfilePulse.ToggleMute
         val command = sessionCommand(pulse)
         val context = ProfileContext(command, ProfileCommandAdmission(command.ref))
         val frame = ProfileNucleus.decide(state, pulse, context).acceptedFrame()
@@ -249,6 +249,20 @@ class ProfileNucleusTest {
         assertEquals(command.ref, completion.commandRef)
         assertEquals(frame.nextState.revision, completion.targetRevision)
         assertIs<ProfileCommandOutcome.PreferencesChanged>(completion.outcome)
+
+        val adjustment = ProfilePulse.AdjustPreference(ProfilePreferenceAdjustment.ToggleMusic)
+        val forbiddenAdjustment = sessionCommand(adjustment)
+        assertEquals(
+            ProfileRejection.InvalidCommandRef(ProfileCommandRefRejection.WRONG_SOURCE_KIND),
+            ProfileNucleus.decide(
+                state,
+                adjustment,
+                ProfileContext(
+                    forbiddenAdjustment,
+                    ProfileCommandAdmission(forbiddenAdjustment.ref),
+                ),
+            ).rejection(),
+        )
 
         val purchase = ProfilePulse.PurchaseMetaUpgrade(MetaUpgradeId.CORE_INTEGRITY)
         val forbidden = sessionCommand(purchase)
@@ -280,6 +294,82 @@ class ProfileNucleusTest {
                 ProfileContext(command, ProfileCommandAdmission(command.ref.copy(ordinal = 8))),
             ).rejection(),
         )
+    }
+
+    @Test
+    fun sessionCoreSelectionUsesExactAdmissionAndCompletesAfterThePersistOutput() {
+        val state = readyState(
+            profile = defaultPlayerProfile(TestProfilePolicy).copy(
+                economy = PlayerEconomy(matter = 7L, lifetimeMatter = 25L),
+            ),
+        )
+        val pulse = ProfilePulse.SelectCoreShape(CoreShape.PRISM)
+        val command = sessionCommand(pulse)
+
+        val frame = ProfileNucleus.decide(
+            state,
+            pulse,
+            ProfileContext(command, ProfileCommandAdmission(command.ref)),
+        ).acceptedFrame()
+
+        assertEquals(ProfileRevision(state.revision.value + 1L), frame.nextState.revision)
+        assertEquals(CoreShape.PRISM, frame.nextState.profile.loadout.coreShape)
+        assertEquals(state.profile.economy, frame.nextState.profile.economy)
+        assertEquals(2, frame.outputs.size)
+        assertTrue(frame.outputs.size <= MAX_PROFILE_OUTPUTS_PER_DECISION)
+        val persist = assertIs<ProfileOutput.PersistV4Snapshot>(frame.outputs[0])
+        assertEquals(frame.nextState.revision, persist.snapshot.revision)
+        assertEquals(CoreShape.PRISM, persist.snapshot.profile.loadout.coreShape)
+        val completion = assertIs<ProfileOutput.CompleteCommand>(frame.outputs[1]).result
+        assertEquals(command.ref, completion.commandRef)
+        assertEquals(frame.nextState.revision, completion.targetRevision)
+        assertEquals(
+            ProfileCommandOutcome.CoreShapeSelected(CoreShape.PRISM),
+            completion.outcome,
+        )
+    }
+
+    @Test
+    fun sessionCoreSelectionPreservesNoChangeLockedAndWrongSourceRejections() {
+        val state = readyState()
+        val unchanged = ProfilePulse.SelectCoreShape(CoreShape.ORB)
+        val unchangedCommand = sessionCommand(unchanged)
+        assertEquals(
+            ProfileRejection.NoChange,
+            ProfileNucleus.decide(
+                state,
+                unchanged,
+                ProfileContext(unchangedCommand, ProfileCommandAdmission(unchangedCommand.ref)),
+            ).rejection(),
+        )
+
+        val locked = ProfilePulse.SelectCoreShape(CoreShape.PRISM)
+        val lockedCommand = sessionCommand(locked)
+        assertEquals(
+            ProfileRejection.CoreShapeLocked,
+            ProfileNucleus.decide(
+                state,
+                locked,
+                ProfileContext(lockedCommand, ProfileCommandAdmission(lockedCommand.ref)),
+            ).rejection(),
+        )
+
+        val unlocked = state.copy(
+            profile = state.profile.copy(
+                economy = PlayerEconomy(matter = 0L, lifetimeMatter = 25L),
+            ),
+        )
+        val wrongSource = gameplayCommand(locked)
+        assertEquals(
+            ProfileRejection.InvalidCommandRef(ProfileCommandRefRejection.WRONG_SOURCE_KIND),
+            ProfileNucleus.decide(
+                unlocked,
+                locked,
+                ProfileContext(wrongSource, ProfileCommandAdmission(wrongSource.ref)),
+            ).rejection(),
+        )
+        assertEquals(ProfileRevision(1L), state.revision)
+        assertEquals(CoreShape.ORB, state.profile.loadout.coreShape)
     }
 
     @Test

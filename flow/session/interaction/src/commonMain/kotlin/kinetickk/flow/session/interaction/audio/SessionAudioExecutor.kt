@@ -3,6 +3,8 @@
 
 package kinetickk.flow.session.interaction.audio
 
+import kinetickk.ball.profile.api.PlayerPreferences
+import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
 import kinetickk.resource.audio.api.ToneRequest
 import kinetickk.resource.audio.api.ToneWave
@@ -17,6 +19,20 @@ class SessionAudioExecutor(
 ) {
     fun playUiClick() {
         play(SessionAudioCue.UI_CLICK)
+    }
+
+    fun updatePreferences(preferences: PlayerPreferences) {
+        audioService.updatePreferences(
+            AudioPreferences(
+                soundEnabled = preferences.soundEnabled,
+                musicEnabled = preferences.musicEnabled,
+                masterVolume = preferences.masterVolume,
+            ),
+        )
+    }
+
+    fun ensureUnlocked() {
+        audioService.ensureUnlocked()
     }
 
     internal fun play(cue: SessionAudioCue) {

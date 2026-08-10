@@ -32,7 +32,6 @@ import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.foundation.design.*
 import kinetickk.ball.profile.api.ProfilePort
-import kinetickk.ball.profile.api.ProfilePulse
 import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.flow.session.interaction.audio.SessionAudioExecutor
 import kinetickk.flow.session.interaction.home.api.HomeFeature
@@ -75,10 +74,6 @@ class DefaultHomeFeature(
             revisionValue++
             reduction.effects.forEach { effect ->
                 when (effect) {
-                    is HomeEffect.SelectCoreShape -> {
-                        profilePort.accept(ProfilePulse.SelectCoreShape(effect.shape))
-                        profilePort.query(ProfileQuery.GetHomeProgress)
-                    }
                     is HomeEffect.PlayAudio -> audioExecutor.play(effect.cue)
                     is HomeEffect.Emit -> onOutput(effect.output)
                 }

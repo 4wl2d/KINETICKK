@@ -33,7 +33,7 @@ class DefaultSettingsFeature(
 
     @Composable
     override fun Content(
-        routeToken: Int,
+        routeToken: Long,
         onOutput: (SettingsOutput) -> Unit,
     ) {
         var renderModelValue by remember(profilePort, routeToken) {

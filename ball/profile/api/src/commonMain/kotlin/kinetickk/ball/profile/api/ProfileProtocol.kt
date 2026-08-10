@@ -159,6 +159,7 @@ sealed interface ProfileAcceptance {
 
 sealed interface ProfileCommandOutcome {
     data class PreferencesChanged(val preferences: PlayerPreferences) : ProfileCommandOutcome
+    data class CoreShapeSelected(val shape: CoreShape) : ProfileCommandOutcome
     data class RebirthAdvanced(val progress: RebirthProgress) : ProfileCommandOutcome
     data object GameplayProgressApplied : ProfileCommandOutcome
     data object ResetCompleted : ProfileCommandOutcome
@@ -170,16 +171,11 @@ sealed interface ProfileCommandOutcome {
 sealed interface ProfileCommandResult {
     val commandRef: ProfileCommandRef
 
+    /** Accepted-only target result; pre-accept rejection is carried separately by the source. */
     data class Accepted(
         override val commandRef: ProfileCommandRef,
         val targetRevision: ProfileRevision,
         val outcome: ProfileCommandOutcome,
-    ) : ProfileCommandResult
-
-    data class Rejected(
-        override val commandRef: ProfileCommandRef,
-        val observedRevision: ProfileRevision,
-        val reason: ProfileRejection,
     ) : ProfileCommandResult
 }
 

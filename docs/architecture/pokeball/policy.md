@@ -47,6 +47,7 @@ Foundation only.
 |---|---:|---|
 | Profile semantic outputs per accepted Decision | 2 | Profile acceptor preflight; whole Decision rejected/faulted before publication on overflow |
 | Gameplay semantic outputs per accepted Decision | 3 | Gameplay acceptor preflight |
+| Session semantic outputs per accepted Decision | 3 | Session acceptor preflight |
 | Session participant commands at one time | 1 | Session State/Nucleus plus acceptor |
 | Session participant authorities | 2 | static `FlowParticipation`/Assembly validation |
 | same-stack causal depth | 8 | binding reservation before source/target acceptance |

@@ -36,7 +36,7 @@ class DefaultLabFeature(
 
     @Composable
     override fun Content(
-        routeToken: Int,
+        routeToken: Long,
         onOutput: (LabOutput) -> Unit,
     ) {
         var renderModelValue by remember(profilePort, metaUpgrades, routeToken) {

@@ -3,7 +3,8 @@
 
 package kinetickk.ball.profile.impl
 
-import kinetickk.ball.profile.api.PreferenceAdjustmentDirection
+import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.ProfileAcceptance
 import kinetickk.ball.profile.api.ProfileBootstrapBlockReason
 import kinetickk.ball.profile.api.ProfileBootstrapResourceResult
@@ -12,6 +13,7 @@ import kinetickk.ball.profile.api.ProfileCommand
 import kinetickk.ball.profile.api.ProfileCommandAdmission
 import kinetickk.ball.profile.api.ProfileCommandOutcome
 import kinetickk.ball.profile.api.ProfileCommandRef
+import kinetickk.ball.profile.api.ProfileCommandRefRejection
 import kinetickk.ball.profile.api.ProfileCommandResult
 import kinetickk.ball.profile.api.ProfileCommandSource
 import kinetickk.ball.profile.api.ProfileEffectRef
@@ -21,6 +23,7 @@ import kinetickk.ball.profile.api.ProfilePersistenceStatus
 import kinetickk.ball.profile.api.ProfilePreferenceAdjustment
 import kinetickk.ball.profile.api.ProfilePulse
 import kinetickk.ball.profile.api.ProfileQuery
+import kinetickk.ball.profile.api.ProfileRejection
 import kinetickk.ball.profile.api.ProfileResetReason
 import kinetickk.ball.profile.api.ProfileResetStatus
 import kinetickk.ball.profile.api.ProfileResourceFailure
@@ -235,14 +238,7 @@ class DefaultProfileComponentTest {
             sourceRevision = 7L,
             ordinal = 3,
         )
-        val command = ProfileCommand(
-            ref,
-            ProfilePulse.AdjustPreference(
-                ProfilePreferenceAdjustment.StepMasterVolume(
-                    PreferenceAdjustmentDirection.INCREASE,
-                ),
-            ),
-        )
+        val command = ProfileCommand(ref, ProfilePulse.ToggleMute)
 
         val acceptance = assertIs<ProfileAcceptance.Accepted>(
             component.accept(command, ProfileCommandAdmission(ref)),
@@ -254,6 +250,119 @@ class DefaultProfileComponentTest {
         assertEquals(acceptance.revision, completion.targetRevision)
         assertIs<ProfileCommandOutcome.PreferencesChanged>(completion.outcome)
         assertEquals(ProfileRevision(3L), component.query(ProfileQuery.GetPreferences).revision)
+    }
+
+    @Test
+    fun sessionCoreSelectionPublishesAndWritesBeforeItsExactAcceptedCompletion() {
+        val initial = testDefaultProfile().copy(
+            economy = PlayerEconomy(matter = 7L, lifetimeMatter = 90L),
+        )
+        val resource = RecordingProfileResource(
+            ProfileBootstrapResourceResult.Observed(
+                snapshot = v4Snapshot(profile = initial, revision = 10L),
+                legacyKeys = ProfileLegacyKeys.NONE,
+            ),
+        )
+        val events = mutableListOf<String>()
+        val completions = mutableListOf<ProfileCommandResult.Accepted>()
+        lateinit var component: DefaultProfileComponent
+        resource.beforeWrite = { snapshot ->
+            events += "write"
+            assertEquals(CoreShape.PRISM, snapshot.profile.loadout.coreShape)
+            val published = component.query(ProfileQuery.GetLoadout)
+            assertEquals(snapshot.revision, published.revision)
+            assertEquals(CoreShape.PRISM, published.snapshot.loadout.coreShape)
+        }
+        component = testProfileComponent(resource) { result ->
+            events += "completion"
+            completions += result
+            val published = component.query(ProfileQuery.GetLoadout)
+            assertEquals(result.targetRevision, published.revision)
+            assertEquals(CoreShape.PRISM, published.snapshot.loadout.coreShape)
+        }
+        val ref = ProfileCommandRef(
+            sourceInstance = ProfileCommandSource.LocalSession,
+            targetInstance = component.instanceId,
+            sourceRevision = 22L,
+            ordinal = 5,
+        )
+        val command = ProfileCommand(ref, ProfilePulse.SelectCoreShape(CoreShape.PRISM))
+
+        val acceptance = assertIs<ProfileAcceptance.Accepted>(
+            component.accept(command, ProfileCommandAdmission(ref)),
+        )
+
+        assertEquals(ProfileRevision(12L), acceptance.revision)
+        assertEquals(listOf("write", "completion"), events)
+        val completion = completions.single()
+        assertEquals(ref, completion.commandRef)
+        assertEquals(acceptance.revision, completion.targetRevision)
+        assertEquals(
+            ProfileCommandOutcome.CoreShapeSelected(CoreShape.PRISM),
+            completion.outcome,
+        )
+        assertEquals(1, resource.writes.size)
+        assertEquals(ProfileRevision(13L), component.query(ProfileQuery.GetLoadout).revision)
+        assertEquals(initial.economy, component.query(ProfileQuery.GetLoadout).snapshot.economy)
+
+        val beforeRejected = component.stateSnapshot()
+        val noChangeRef = ref.copy(sourceRevision = 23L, ordinal = 6)
+        val noChange = ProfileCommand(
+            noChangeRef,
+            ProfilePulse.SelectCoreShape(CoreShape.PRISM),
+        )
+        val noChangeAcceptance = assertIs<ProfileAcceptance.Rejected>(
+            component.accept(noChange, ProfileCommandAdmission(noChangeRef)),
+        )
+        assertEquals(ProfileRejection.NoChange, noChangeAcceptance.reason)
+        assertEquals(beforeRejected, component.stateSnapshot())
+        assertEquals(1, resource.writes.size)
+        assertEquals(1, completions.size)
+
+        val wrongSourceRef = ref.copy(
+            sourceInstance = ProfileCommandSource.GameplayRun(4L),
+            sourceRevision = 24L,
+            ordinal = 7,
+        )
+        val wrongSource = ProfileCommand(
+            wrongSourceRef,
+            ProfilePulse.SelectCoreShape(CoreShape.SHARD),
+        )
+        val wrongSourceAcceptance = assertIs<ProfileAcceptance.Rejected>(
+            component.accept(wrongSource, ProfileCommandAdmission(wrongSourceRef)),
+        )
+        assertEquals(
+            ProfileRejection.InvalidCommandRef(ProfileCommandRefRejection.WRONG_SOURCE_KIND),
+            wrongSourceAcceptance.reason,
+        )
+        assertEquals(beforeRejected, component.stateSnapshot())
+        assertEquals(1, resource.writes.size)
+        assertEquals(1, completions.size)
+    }
+
+    @Test
+    fun lockedSessionCoreSelectionRejectsAtomicallyWithoutCompletion() {
+        val resource = RecordingProfileResource()
+        val completions = mutableListOf<ProfileCommandResult.Accepted>()
+        val component = testProfileComponent(resource, commandResultSink = completions::add)
+        val ref = ProfileCommandRef(
+            sourceInstance = ProfileCommandSource.LocalSession,
+            targetInstance = component.instanceId,
+            sourceRevision = 2L,
+            ordinal = 0,
+        )
+        val command = ProfileCommand(ref, ProfilePulse.SelectCoreShape(CoreShape.PRISM))
+        val before = component.stateSnapshot()
+
+        val rejection = assertIs<ProfileAcceptance.Rejected>(
+            component.accept(command, ProfileCommandAdmission(ref)),
+        )
+
+        assertEquals(ProfileRejection.CoreShapeLocked, rejection.reason)
+        assertEquals(before.revision, rejection.observedRevision)
+        assertEquals(before, component.stateSnapshot())
+        assertTrue(resource.writes.isEmpty())
+        assertTrue(completions.isEmpty())
     }
 
     @Test

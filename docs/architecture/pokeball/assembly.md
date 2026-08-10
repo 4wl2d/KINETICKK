@@ -46,10 +46,11 @@ before constructing the source result Pulse.
 
 | Route ID | Source -> target | Target-owned operation | Source completion |
 |---|---|---|---|
-| `session-profile-preferences` | AppSession -> Profile | adjust/toggle preferences | Profile participant result Pulse |
+| `session-profile-core-shape` | AppSession -> Profile | select Home core shape | Profile participant result Pulse |
+| `session-profile-mute` | AppSession -> Profile | toggle mute | Profile participant result Pulse |
 | `session-profile-rebirth` | AppSession -> Profile | advance Rebirth | Profile participant result Pulse |
 | `session-profile-reset` | AppSession -> Profile | confirm reset or retry legacy purge | Profile participant result Pulse |
-| `session-gameplay-start` | AppSession -> GameplayRun | start a newly allocated run | Gameplay participant result Pulse |
+| `session-gameplay-start` | AppSession -> GameplayRun | start the reserved or retained `Created` run | Gameplay participant result Pulse |
 | `session-gameplay-pause` | AppSession -> GameplayRun | pause for overlay | Gameplay participant result Pulse |
 | `session-gameplay-preferences` | AppSession -> GameplayRun | apply accepted preferences | Gameplay participant result Pulse |
 | `session-gameplay-exit` | AppSession -> GameplayRun | exit active run | Gameplay participant result Pulse |
@@ -72,7 +73,8 @@ carrier completion.
 ```text
 start/restart: Profile GetRunBootstrap -> Gameplay StartRun accepted -> Session navigation accepted
 overlay:       Gameplay PauseForOverlay accepted -> Session overlay accepted
-settings:      Profile preference mutation accepted -> Gameplay ApplyPreferences accepted -> Session closes overlay
+settings row:  Profile Interaction -> local Profile adjustment accepted
+settings exit: Profile GetPreferences -> active Gameplay ApplyPreferences accepted -> Session closes/replaces overlay
 rebirth:       Profile AdvanceRebirth accepted -> allocate/accept new GameplayRun -> Session navigation accepted
 exit:          Gameplay ExitRun accepted -> Profile ApplyGameplayProgress accepted -> Session Home accepted
 reset:         Profile bootstrap/reset result -> Session reset-modal projection; no Assembly-created reset payload

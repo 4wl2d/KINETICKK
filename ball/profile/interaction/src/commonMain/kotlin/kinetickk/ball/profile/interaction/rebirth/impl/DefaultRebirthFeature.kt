@@ -7,18 +7,12 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.rememberTextMeasurer
 import kinetickk.ball.content.api.RebirthPolicySnapshot
-import kinetickk.ball.profile.api.ProfileAcceptance
 import kinetickk.ball.profile.api.ProfilePort
-import kinetickk.ball.profile.api.ProfilePulse
 import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.audio.ProfileAudioExecutor
@@ -34,20 +28,28 @@ class DefaultRebirthFeature(
 ) : RebirthFeature {
     private val audioExecutor = ProfileAudioExecutor(audioService)
 
+    override fun playAcceptedFeedback() {
+        audioExecutor.play(ProfileAudioCue.PURCHASE)
+    }
+
     @Composable
     override fun Content(
-        routeToken: Int,
+        routeToken: Long,
         eligible: Boolean,
+        confirmationArmed: Boolean,
         onOutput: (RebirthOutput) -> Unit,
     ) {
-        var renderModelValue by remember(profilePort, rebirthPolicy, routeToken, eligible) {
-            mutableStateOf(
-                profilePort
-                    .query(ProfileQuery.GetRebirthProgress)
-                    .toRenderModel(rebirthPolicy, eligible),
-            )
+        val renderModelValue = remember(
+            profilePort,
+            rebirthPolicy,
+            routeToken,
+            eligible,
+            confirmationArmed,
+        ) {
+            profilePort
+                .query(ProfileQuery.GetRebirthProgress)
+                .toRenderModel(rebirthPolicy, eligible)
         }
-        var confirmationArmedValue by rememberSaveable(routeToken, eligible) { mutableStateOf(false) }
         val textScale = remember(profilePort, routeToken) {
             profilePort.query(ProfileQuery.GetPreferences).preferences.textScale
         }
@@ -59,23 +61,11 @@ class DefaultRebirthFeature(
 
         fun dispatch(action: RebirthAction) {
             val reduction = RebirthReducer.reduce(
-                state = RebirthState(renderModelValue, confirmationArmedValue),
+                state = RebirthState(renderModelValue, confirmationArmed),
                 action = action,
             )
-            renderModelValue = reduction.state.model
-            confirmationArmedValue = reduction.state.armed
             reduction.effects.forEach { effect ->
                 when (effect) {
-                    RebirthEffect.AdvanceCycle -> {
-                        val acceptance = profilePort.accept(ProfilePulse.AdvanceRebirth)
-                        val projection = profilePort.query(ProfileQuery.GetRebirthProgress)
-                        renderModelValue = projection.toRenderModel(rebirthPolicy, eligible)
-                        confirmationArmedValue = false
-                        if (acceptance is ProfileAcceptance.Accepted) {
-                            audioExecutor.play(ProfileAudioCue.PURCHASE)
-                            onOutput(RebirthOutput.CycleAdvanced(projection.snapshot.progress))
-                        }
-                    }
                     is RebirthEffect.PlayAudio -> audioExecutor.play(effect.cue)
                     is RebirthEffect.Emit -> onOutput(effect.output)
                 }
@@ -85,7 +75,7 @@ class DefaultRebirthFeature(
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(routeToken, eligible, renderModelValue, confirmationArmedValue, onOutput) {
+                .pointerInput(routeToken, eligible, renderModelValue, confirmationArmed, onOutput) {
                     detectTapGestures { position ->
                         resolveRebirthPress(
                             screenWidth = size.width.toFloat(),
@@ -99,7 +89,7 @@ class DefaultRebirthFeature(
         ) {
             drawRebirth(
                 model = renderModelValue,
-                confirmationArmed = confirmationArmedValue,
+                confirmationArmed = confirmationArmed,
                 textMeasurer = textMeasurer,
             )
         }

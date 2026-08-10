@@ -31,7 +31,7 @@ sealed interface LabOutput {
 interface LabFeature {
     @Composable
     fun Content(
-        routeToken: Int,
+        routeToken: Long,
         onOutput: (LabOutput) -> Unit,
     )
 }

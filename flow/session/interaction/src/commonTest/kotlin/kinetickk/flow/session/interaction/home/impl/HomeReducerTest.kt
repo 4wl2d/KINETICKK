@@ -52,10 +52,10 @@ class HomeReducerTest {
         val reducer = homeReducer()
 
         val selection = reducer.reduce(HomeAction.SelectCoreShape(CoreShape.PRISM)).effects
-        assertEquals(
-            CoreShape.PRISM,
-            assertIs<HomeEffect.SelectCoreShape>(selection[0]).shape,
+        val emittedSelection = assertIs<HomeOutput.SelectCoreShape>(
+            assertIs<HomeEffect.Emit>(selection[0]).output,
         )
+        assertEquals(CoreShape.PRISM, emittedSelection.shape)
         assertEquals(SessionAudioCue.UI_CLICK, assertIs<HomeEffect.PlayAudio>(selection[1]).cue)
 
         val start = reducer.reduce(HomeAction.StartRun).effects

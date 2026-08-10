@@ -5,7 +5,6 @@ package kinetickk.ball.profile.interaction.rebirth.api
 
 import androidx.compose.runtime.Composable
 import kinetickk.ball.content.api.RebirthProfile
-import kinetickk.ball.profile.api.RebirthProgress
 
 /** Small immutable payload rendered by the Rebirth feature. */
 data class RebirthRenderModel(
@@ -19,14 +18,19 @@ data class RebirthRenderModel(
 
 sealed interface RebirthOutput {
     data object Back : RebirthOutput
-    data class CycleAdvanced(val progress: RebirthProgress) : RebirthOutput
+    data object ArmRequested : RebirthOutput
+    data object ConfirmRequested : RebirthOutput
 }
 
 interface RebirthFeature {
+    /** Plays the Profile-owned feedback after Session observes an accepted Rebirth command. */
+    fun playAcceptedFeedback()
+
     @Composable
     fun Content(
-        routeToken: Int,
+        routeToken: Long,
         eligible: Boolean,
+        confirmationArmed: Boolean,
         onOutput: (RebirthOutput) -> Unit,
     )
 }

@@ -30,6 +30,7 @@ data class HomeUiModel(
 }
 
 sealed interface HomeOutput {
+    data class SelectCoreShape(val shape: CoreShape) : HomeOutput
     data object StartRun : HomeOutput
     data object OpenSettings : HomeOutput
     data object OpenLab : HomeOutput

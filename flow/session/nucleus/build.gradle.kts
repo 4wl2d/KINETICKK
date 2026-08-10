@@ -9,6 +9,10 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             api(projects.flow.session.api)
+            implementation(projects.foundation.common)
+            implementation(projects.ball.content.api)
+            implementation(projects.ball.profile.api)
+            implementation(projects.ball.gameplay.api)
         }
     }
 }

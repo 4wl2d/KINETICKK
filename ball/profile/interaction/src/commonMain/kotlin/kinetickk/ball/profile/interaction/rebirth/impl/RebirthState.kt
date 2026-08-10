@@ -16,11 +16,10 @@ internal sealed interface RebirthAction {
 
 internal data class RebirthState(
     val model: RebirthRenderModel,
-    val armed: Boolean,
+    val confirmationArmed: Boolean,
 )
 
 internal sealed interface RebirthEffect {
-    data object AdvanceCycle : RebirthEffect
     data class PlayAudio(val cue: ProfileAudioCue) : RebirthEffect
     data class Emit(val output: RebirthOutput) : RebirthEffect
 }
@@ -34,19 +33,20 @@ internal object RebirthReducer {
     fun reduce(state: RebirthState, action: RebirthAction): RebirthReduction = when (action) {
         RebirthAction.AdvanceRequested -> when {
             !state.model.canAdvance || state.model.isMaximumTier -> RebirthReduction(state)
-            !state.armed -> RebirthReduction(
-                state = state.copy(armed = true),
+            !state.confirmationArmed -> RebirthReduction(
+                state = state,
                 effects = listOf(
+                    RebirthEffect.Emit(RebirthOutput.ArmRequested),
                     RebirthEffect.PlayAudio(ProfileAudioCue.UI_CLICK),
                 ),
             )
             else -> RebirthReduction(
                 state = state,
-                effects = listOf(RebirthEffect.AdvanceCycle),
+                effects = listOf(RebirthEffect.Emit(RebirthOutput.ConfirmRequested)),
             )
         }
         RebirthAction.Back -> RebirthReduction(
-            state = state.copy(armed = false),
+            state = state,
             effects = listOf(
                 RebirthEffect.PlayAudio(ProfileAudioCue.UI_CLICK),
                 RebirthEffect.Emit(RebirthOutput.Back),

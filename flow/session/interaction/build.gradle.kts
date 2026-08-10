@@ -10,11 +10,12 @@ kotlin {
         commonMain.dependencies {
             api(libs.compose.runtime)
             api(projects.flow.session.api)
-            api(projects.flow.session.nucleus)
             api(projects.foundation.common)
             api(projects.resource.audio.api)
             api(projects.ball.content.api)
             api(projects.ball.profile.api)
+            api(projects.ball.profile.interaction)
+            api(projects.ball.gameplay.interaction)
             implementation(libs.compose.foundation)
             implementation(libs.compose.ui)
             implementation(projects.foundation.design)

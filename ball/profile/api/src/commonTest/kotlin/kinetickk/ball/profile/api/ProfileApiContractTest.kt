@@ -3,6 +3,7 @@
 
 package kinetickk.ball.profile.api
 
+import kinetickk.ball.content.api.CoreShape
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -38,6 +39,25 @@ class ProfileApiContractTest {
         assertFailsWith<IllegalArgumentException> {
             ProfileEffectRef(ProfileRevision.ZERO, ordinal = -1)
         }
+    }
+
+    @Test
+    fun sessionCoreSelectionCommandRetainsExactCorrelationPayloadAndOutcome() {
+        val ref = ProfileCommandRef(
+            sourceInstance = ProfileCommandSource.LocalSession,
+            targetInstance = LOCAL_PROFILE_INSTANCE_ID,
+            sourceRevision = 19L,
+            ordinal = 4,
+        )
+        val pulse = ProfilePulse.SelectCoreShape(CoreShape.SHARD)
+        val command = ProfileCommand(ref, pulse)
+        val admission = ProfileCommandAdmission(ref)
+        val outcome = ProfileCommandOutcome.CoreShapeSelected(CoreShape.SHARD)
+
+        assertEquals(ref, command.ref)
+        assertEquals(pulse, command.pulse)
+        assertEquals(ref, admission.commandRef)
+        assertEquals(CoreShape.SHARD, outcome.shape)
     }
 
     @Test

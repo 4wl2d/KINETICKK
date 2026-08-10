@@ -18,7 +18,7 @@ sealed interface SettingsOutput {
 interface SettingsFeature {
     @Composable
     fun Content(
-        routeToken: Int,
+        routeToken: Long,
         onOutput: (SettingsOutput) -> Unit,
     )
 }

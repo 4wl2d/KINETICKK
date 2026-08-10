@@ -23,7 +23,6 @@ internal sealed interface HomeAction {
 }
 
 internal sealed interface HomeEffect {
-    data class SelectCoreShape(val shape: CoreShape) : HomeEffect
     data class PlayAudio(val cue: SessionAudioCue) : HomeEffect
     data class Emit(val output: HomeOutput) : HomeEffect
 }
@@ -55,7 +54,7 @@ internal class HomeReducer(
     fun reduce(action: HomeAction): HomeReduction = when (action) {
         is HomeAction.SelectCoreShape -> HomeReduction(
             effects = listOf(
-                HomeEffect.SelectCoreShape(action.shape),
+                HomeEffect.Emit(HomeOutput.SelectCoreShape(action.shape)),
                 HomeEffect.PlayAudio(SessionAudioCue.UI_CLICK),
             ),
         )

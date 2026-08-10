@@ -281,7 +281,7 @@ object ProfileNucleus {
                 loadout = state.profile.loadout.copy(coreShape = shape),
             ),
             context = context,
-            commandOutcome = null,
+            commandOutcome = ProfileCommandOutcome.CoreShapeSelected(shape),
         )
     }
 
@@ -829,8 +829,8 @@ object ProfileNucleus {
             return ProfileRejection.InvalidCommandRef(ProfileCommandRefRejection.WRONG_TARGET)
         }
         val sourceAccepted = when (command.ref.sourceInstance) {
-            ProfileCommandSource.LocalSession -> command.pulse is ProfilePulse.AdjustPreference ||
-                command.pulse == ProfilePulse.ToggleMute ||
+            ProfileCommandSource.LocalSession -> command.pulse == ProfilePulse.ToggleMute ||
+                command.pulse is ProfilePulse.SelectCoreShape ||
                 command.pulse == ProfilePulse.AdvanceRebirth ||
                 command.pulse == ProfilePulse.ConfirmLegacyReset ||
                 command.pulse == ProfilePulse.RetryLegacyPurge
