@@ -191,8 +191,13 @@ internal class DefaultAppSessionComponent private constructor(
         check(next.revision.value == before.revision.value + 1L) {
             "Session revision must advance exactly once"
         }
-        check(frame.shellProjection == AppSessionNucleus.query(next, AppSessionQuery.GetShell)) {
-            "Session frame shell projection does not match the next State"
+        val shellProjection = AppSessionNucleus.query(next, AppSessionQuery.GetShell)
+        check(
+            shellProjection.instanceId == next.instanceId &&
+                shellProjection.revision == next.revision &&
+                shellProjection.routeRevision == next.routeRevision,
+        ) {
+            "Session shell projection must derive from the accepted next State"
         }
         check(frame.outputs.size <= MAX_SESSION_OUTPUTS_PER_DECISION) {
             "Session output limit exceeded"

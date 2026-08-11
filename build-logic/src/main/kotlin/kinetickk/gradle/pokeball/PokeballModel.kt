@@ -189,6 +189,8 @@ internal const val SESSION_DECISION_PATH =
     "flow/session/nucleus/src/commonMain/kotlin/kinetickk/flow/session/nucleus/AppSessionDecision.kt"
 private const val PROFILE_NUCLEUS_PATH =
     "ball/profile/nucleus/src/commonMain/kotlin/kinetickk/ball/profile/nucleus/ProfileNucleus.kt"
+internal const val PROFILE_DECISION_PATH =
+    "ball/profile/nucleus/src/commonMain/kotlin/kinetickk/ball/profile/nucleus/ProfileDecision.kt"
 private const val PROFILE_STATE_PATH =
     "ball/profile/nucleus/src/commonMain/kotlin/kinetickk/ball/profile/nucleus/ProfileState.kt"
 private const val GAMEPLAY_NUCLEUS_PATH =
@@ -443,6 +445,57 @@ internal val commandOutcomeFamilies = listOf(
 }
 
 internal val canonicalProtocolDataClassShapes = listOf(
+    CanonicalDataClassShape(
+        PROFILE_DECISION_PATH,
+        "ProfileAcceptedFrame",
+        listOf(
+            CanonicalFieldShape("nextState", "ProfileState"),
+            CanonicalFieldShape("outputs", "ImmutableList<ProfileOutput>"),
+        ),
+        forbidFieldDefaults = true,
+        forbidFieldModifiers = true,
+        requireExplicitPublicVisibility = true,
+        requireDirectPrimaryConstructorSyntax = true,
+        forbidClassHeaderSuffix = true,
+        forbidBodyProperties = true,
+        reserveExtraComponentSpellings = true,
+        requireDirectPrivateForExtensionProperties = true,
+        forbidTypeAliases = true,
+    ),
+    CanonicalDataClassShape(
+        GAMEPLAY_DECISION_PATH,
+        "GameplayAcceptedFrame",
+        listOf(
+            CanonicalFieldShape("nextState", "GameplayState"),
+            CanonicalFieldShape("outputs", "ImmutableList<GameplayOutput>"),
+        ),
+        forbidFieldDefaults = true,
+        forbidFieldModifiers = true,
+        requireExplicitPublicVisibility = true,
+        requireDirectPrimaryConstructorSyntax = true,
+        forbidClassHeaderSuffix = true,
+        forbidBodyProperties = true,
+        reserveExtraComponentSpellings = true,
+        requireDirectPrivateForExtensionProperties = true,
+        forbidTypeAliases = true,
+    ),
+    CanonicalDataClassShape(
+        SESSION_DECISION_PATH,
+        "AppSessionAcceptedFrame",
+        listOf(
+            CanonicalFieldShape("nextState", "AppSessionState"),
+            CanonicalFieldShape("outputs", "ImmutableList<AppSessionOutput>"),
+        ),
+        forbidFieldDefaults = true,
+        forbidFieldModifiers = true,
+        requireExplicitPublicVisibility = true,
+        requireDirectPrimaryConstructorSyntax = true,
+        forbidClassHeaderSuffix = true,
+        forbidBodyProperties = true,
+        reserveExtraComponentSpellings = true,
+        requireDirectPrivateForExtensionProperties = true,
+        forbidTypeAliases = true,
+    ),
     CanonicalDataClassShape(
         PROFILE_IDENTITY_PATH,
         "ProfileSemanticHandle",

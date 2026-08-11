@@ -388,10 +388,11 @@ internal class GameComponent private constructor(
         check(next.revision.value == before.revision.value + 1L) {
             "Gameplay revision must advance exactly once"
         }
-        check(frame.renderSnapshot.instanceId == next.instanceId)
-        check(frame.renderSnapshot.revision == next.revision)
-        check((frame.renderSnapshot.renderModel == null) == (next.engine == null))
-        frame.renderSnapshot.renderModel?.let { render ->
+        val renderSnapshot = GameplayNucleus.renderSnapshot(next)
+        check(renderSnapshot.instanceId == next.instanceId)
+        check(renderSnapshot.revision == next.revision)
+        check((renderSnapshot.renderModel == null) == (next.engine == null))
+        renderSnapshot.renderModel?.let { render ->
             check(render.content === next.content)
             val expectedRenderPhase = when (next.phase) {
                 GameplayRunPhase.CREATED -> error("Created GameplayRun cannot expose a render model")

@@ -1072,7 +1072,6 @@ private fun accepted(
 ): AppSessionDecision = AppSessionDecision.Accepted(
     AppSessionAcceptedFrame(
         nextState = nextState,
-        shellProjection = nextState.toShellProjection(),
         outputs = outputs,
     ),
 )

@@ -10,7 +10,6 @@ import kinetickk.ball.gameplay.api.GameplayModuleResultOutput
 import kinetickk.ball.gameplay.api.GameplayRejection
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
-import kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.ProfileCommandBoundaryResponse
@@ -73,18 +72,11 @@ sealed interface GameplayDecision {
     data class Rejected(val reason: GameplayRejection) : GameplayDecision
 }
 
-data class GameplayAcceptedFrame(
+public data class GameplayAcceptedFrame(
     val nextState: GameplayState,
-    val renderSnapshot: GameplayRenderSnapshot,
     val outputs: ImmutableList<GameplayOutput>,
 ) {
     init {
-        require(renderSnapshot.instanceId == nextState.instanceId)
-        require(renderSnapshot.revision == nextState.revision)
-        require((renderSnapshot.renderModel == null) == (nextState.engine == null))
-        renderSnapshot.renderModel?.let { render ->
-            require(render.content === nextState.content)
-        }
         require(outputs.size <= MAX_GAMEPLAY_OUTPUTS_PER_DECISION)
         val completionIndex = outputs.indexOfFirst { it is GameplayOutput.CompleteCommand }
         require(completionIndex < 0 || completionIndex == outputs.lastIndex)

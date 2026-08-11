@@ -343,7 +343,7 @@ private data class TraceCheckpoint(
 )
 
 private fun GameplayAcceptedFrame.toTraceCheckpoint(): TraceCheckpoint {
-    val model = renderSnapshot.renderModel!!
+    val model = GameplayNucleus.renderSnapshot(nextState).renderModel!!
     return TraceCheckpoint(
         revision = nextState.revision.value,
         elapsedSteps = (model.elapsed / MutableGameState.FIXED_STEP).roundToInt(),

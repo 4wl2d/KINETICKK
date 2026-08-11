@@ -106,7 +106,7 @@ class GameplayNucleusTest {
         assertEquals(GameplayRunPhase.RUNNING, frame.nextState.phase)
         assertSame(inputs.content, frame.nextState.content)
         assertSame(inputs.content, frame.nextState.engine!!.model.content)
-        val renderModel = checkNotNull(frame.renderSnapshot.renderModel)
+        val renderModel = checkNotNull(GameplayNucleus.renderSnapshot(frame.nextState).renderModel)
         assertSame(inputs.content, renderModel.content)
         assertEquals(KINETICKK_CONTENT_VERSION, renderModel.content.version)
         val completion = assertIs<GameplayOutput.CompleteCommand>(frame.outputs.single())
@@ -446,10 +446,8 @@ class GameplayNucleusTest {
     @Test
     fun acceptedFrameEnforcesOutputBoundOrderAndFinalCompletion() {
         val state = initial(26)
-        val render = GameplayNucleus.renderSnapshot(state)
         GameplayAcceptedFrame(
             state,
-            render,
             immutableListOf(
                 GameplayOutput.EnsureAudioUnlocked,
                 GameplayOutput.EnsureAudioUnlocked,
@@ -459,7 +457,6 @@ class GameplayNucleusTest {
         assertFailsWith<IllegalArgumentException> {
             GameplayAcceptedFrame(
                 state,
-                render,
                 immutableListOf(
                     GameplayOutput.EnsureAudioUnlocked,
                     GameplayOutput.EnsureAudioUnlocked,
@@ -471,7 +468,6 @@ class GameplayNucleusTest {
         assertFailsWith<IllegalArgumentException> {
             GameplayAcceptedFrame(
                 state,
-                render,
                 immutableListOf(
                     GameplayOutput.AdvanceAudio(0f, immutableListOf()),
                     GameplayOutput.EmitVisualFx(immutableListOf()),
@@ -482,7 +478,6 @@ class GameplayNucleusTest {
         assertFailsWith<IllegalArgumentException> {
             GameplayAcceptedFrame(
                 state,
-                render,
                 immutableListOf(
                     GameplayOutput.CompleteCommand(
                         GameplayModuleResultOutput(

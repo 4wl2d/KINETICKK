@@ -439,7 +439,6 @@ object GameplayNucleus {
     ): GameplayDecision.Accepted = GameplayDecision.Accepted(
         GameplayAcceptedFrame(
             nextState = nextState,
-            renderSnapshot = renderSnapshot(nextState),
             outputs = outputs,
         ),
     )

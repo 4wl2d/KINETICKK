@@ -26,7 +26,6 @@ import kinetickk.ball.profile.api.ProfileResultSourceToken
 import kinetickk.ball.profile.api.ProfileTargetBoundaryProvenance
 import kinetickk.ball.profile.api.RebirthProgressProjection
 import kinetickk.ball.profile.api.RunBootstrapProjection
-import kinetickk.flow.session.api.AppShellProjection
 import kinetickk.flow.session.api.SessionInteractionPulse
 import kinetickk.flow.session.api.SessionRejection
 import kinetickk.foundation.collections.ImmutableList
@@ -147,21 +146,12 @@ sealed interface AppSessionDecision {
     data class Rejected(val reason: SessionRejection) : AppSessionDecision
 }
 
-data class AppSessionAcceptedFrame(
+/** Canonical accepted frame; shell UI is derived separately through the Session Query surface. */
+public data class AppSessionAcceptedFrame(
     val nextState: AppSessionState,
-    val shellProjection: AppShellProjection,
     val outputs: ImmutableList<AppSessionOutput>,
 ) {
     init {
-        require(shellProjection.instanceId == nextState.instanceId) {
-            "Session frame projection must retain the next State identity"
-        }
-        require(shellProjection.revision == nextState.revision) {
-            "Session frame projection must retain the next State revision"
-        }
-        require(shellProjection.routeRevision == nextState.routeRevision) {
-            "Session frame projection must retain the accepted route revision"
-        }
         require(outputs.size <= MAX_SESSION_OUTPUTS_PER_DECISION) {
             "Session semantic output bound exceeded: ${outputs.size}"
         }

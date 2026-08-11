@@ -101,18 +101,16 @@ class AppSessionNucleusTest {
     @Test
     fun acceptedFrameOutputBoundAcceptsThreeAndRejectsFour() {
         val next = initialState().copy(revision = SessionRevision(1L))
-        val projection = AppSessionNucleus.query(next, AppSessionQuery.GetShell)
         val three = immutableListOf<AppSessionOutput>(
             AppSessionOutput.SynchronizeAudioPreferences(PlayerPreferences()),
             AppSessionOutput.PlayMuteFeedback,
             AppSessionOutput.PlayRebirthAcceptedFeedback,
         )
 
-        AppSessionAcceptedFrame(next, projection, three)
+        AppSessionAcceptedFrame(next, three)
         assertFailsWith<IllegalArgumentException> {
             AppSessionAcceptedFrame(
                 next,
-                projection,
                 (three.asIterable() + AppSessionOutput.PlayMuteFeedback).toImmutableList(),
             )
         }
@@ -139,7 +137,7 @@ class AppSessionNucleusTest {
         val mute = decide(initial, SessionInteractionPulse.ToggleMuteRequested).accepted()
         assertEquals(SessionRevision(1L), mute.nextState.revision)
         assertEquals(SessionRevision.ZERO, mute.nextState.routeRevision)
-        assertEquals(initial.toShell().routeToken, mute.shellProjection.routeToken)
+        assertEquals(initial.toShell().routeToken, mute.nextState.toShell().routeToken)
 
         val armed = decide(
             initial.copy(overlay = AppDestination.Rebirth),
@@ -153,7 +151,7 @@ class AppSessionNucleusTest {
             SessionInteractionPulse.OpenOverlay(AppDestination.Settings),
         ).accepted()
         assertEquals(opened.nextState.revision, opened.nextState.routeRevision)
-        assertEquals(opened.nextState.revision.value, opened.shellProjection.routeToken.value)
+        assertEquals(opened.nextState.revision.value, opened.nextState.toShell().routeToken.value)
     }
 
     @Test
@@ -376,7 +374,7 @@ class AppSessionNucleusTest {
         val context = AppSessionContext(rebirthProgress = rebirthProjection(progress))
 
         val armed = decide(state, SessionInteractionPulse.RebirthRequested, context).accepted()
-        assertTrue(armed.shellProjection.rebirthConfirmationArmed)
+        assertTrue(armed.nextState.toShell().rebirthConfirmationArmed)
         assertTrue(armed.outputs.isEmpty())
 
         val requested = decide(
@@ -845,7 +843,6 @@ class AppSessionNucleusTest {
         assertFailsWith<IllegalArgumentException> {
             AppSessionAcceptedFrame(
                 exact.nextState,
-                exact.shellProjection,
                 (exact.outputs + AppSessionOutput.PlayMuteFeedback).toImmutableList(),
             )
         }
@@ -855,7 +852,6 @@ class AppSessionNucleusTest {
         assertFailsWith<IllegalArgumentException> {
             AppSessionAcceptedFrame(
                 start.nextState,
-                start.shellProjection,
                 immutableListOf(send, ensure),
             )
         }
@@ -875,8 +871,9 @@ private fun decide(
 private fun AppSessionDecision.accepted(): AppSessionAcceptedFrame =
     assertIs<AppSessionDecision.Accepted>(this).frame.also { frame ->
         assertTrue(frame.outputs.size <= MAX_SESSION_OUTPUTS_PER_DECISION)
-        assertEquals(frame.nextState.instanceId, frame.shellProjection.instanceId)
-        assertEquals(frame.nextState.revision, frame.shellProjection.revision)
+        val shell = frame.nextState.toShell()
+        assertEquals(frame.nextState.instanceId, shell.instanceId)
+        assertEquals(frame.nextState.revision, shell.revision)
     }
 
 private fun AppSessionDecision.rejection(): SessionRejection =

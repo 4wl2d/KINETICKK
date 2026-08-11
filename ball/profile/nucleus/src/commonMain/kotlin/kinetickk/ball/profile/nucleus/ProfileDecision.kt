@@ -46,7 +46,7 @@ sealed interface ProfileDecision {
 }
 
 /** Flattened snapshot frame: the full next State plus an ordered semantic output batch. */
-data class ProfileAcceptedFrame(
+public data class ProfileAcceptedFrame(
     val nextState: ProfileState,
     val outputs: ImmutableList<ProfileOutput>,
 ) {
