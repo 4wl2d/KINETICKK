@@ -82,4 +82,57 @@ class PokeballResolverTest {
         assertFalse("generatedAt" in first)
     }
 
+    @Test
+    fun productionKotlinSourceScopeIncludesMainAndKmpMainOnly() {
+        fun source(path: String) = SourceDocument(path, "")
+
+        assertTrue(source("app/desktop/src/main/kotlin/fixture/Main.kt").isProductionKotlinSource())
+        assertTrue(source("app/shared/src/commonMain/kotlin/fixture/Main.kt").isProductionKotlinSource())
+        assertFalse(source("app/desktop/src/test/kotlin/fixture/Test.kt").isProductionKotlinSource())
+        assertFalse(source("app/shared/src/commonTest/kotlin/fixture/Test.kt").isProductionKotlinSource())
+        assertFalse(source("app/desktop/build/generated/src/main/kotlin/fixture/Main.kt").isProductionKotlinSource())
+        assertFalse(source("app/desktop/generated/src/main/kotlin/fixture/Main.kt").isProductionKotlinSource())
+        assertFalse(source("app/desktop/src/main/kotlin/fixture/NotKotlin.java").isProductionKotlinSource())
+    }
+
+    @Test
+    fun foundationAndRegistryScanCoversConventionalAndKmpMainOnly() {
+        val conventionalMain =
+            "foundation/common/src/main/kotlin/kinetickk/foundation/registry/GlobalRegistry.kt"
+        val kmpMain =
+            "foundation/common/src/commonMain/kotlin/kinetickk/foundation/registry/ServiceLocator.kt"
+        val sources = listOf(
+            SourceDocument(conventionalMain, "object GlobalRegistry"),
+            SourceDocument(kmpMain, "object ServiceLocator"),
+            SourceDocument(
+                "foundation/common/src/test/kotlin/kinetickk/foundation/registry/GlobalRegistry.kt",
+                "object GlobalRegistry",
+            ),
+            SourceDocument(
+                "foundation/common/src/commonTest/kotlin/kinetickk/foundation/registry/GlobalRegistry.kt",
+                "object GlobalRegistry",
+            ),
+            SourceDocument(
+                "foundation/common/build/generated/src/main/kotlin/kinetickk/foundation/registry/GlobalRegistry.kt",
+                "object GlobalRegistry",
+            ),
+            SourceDocument(
+                "foundation/common/generated/src/main/kotlin/kinetickk/foundation/registry/GlobalRegistry.kt",
+                "object GlobalRegistry",
+            ),
+            SourceDocument(
+                "foundation/common/src/main/kotlin/kinetickk/foundation/time/Clock.kt",
+                "interface Clock",
+            ),
+        )
+
+        assertEquals(
+            listOf(
+                "Dynamic registry/bus/queue token `GlobalRegistry` is forbidden in $conventionalMain",
+                "Dynamic registry/bus/queue token `ServiceLocator` is forbidden in $kmpMain",
+            ),
+            foundationAndRegistryViolations(sources),
+        )
+    }
+
 }

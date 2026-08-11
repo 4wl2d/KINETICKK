@@ -56,6 +56,27 @@ class PlatformCapabilityBoundaryVerifierTest {
     }
 
     @Test
+    fun conventionalDesktopMainCannotAcquireBroadPlatformAuthority() {
+        val path = "app/desktop/src/main/kotlin/kinetickk/app/desktop/LeakedPreferences.kt"
+        val leakedPreferences = SourceDocument(
+            path,
+            """
+                package kinetickk.app.desktop
+
+                import java.util.prefs.Preferences
+
+                internal val leakedPreferences = Preferences.userRoot()
+            """.trimIndent(),
+        )
+
+        val violations = platformCapabilityBoundaryViolations(validCapabilitySources() + leakedPreferences)
+        assertTrue(
+            violations.any { path in it && "java.util.prefs.Preferences" in it },
+            violations.joinToString("\n"),
+        )
+    }
+
+    @Test
     fun broadHandleReturnsAndApplicationSurfaceForwardingFail() {
         val executorEscape = mutate(DESKTOP_PATH) { source ->
             source + "\ninternal fun leakedExecutor(): ThreadPoolExecutor = ThreadPoolExecutor()"

@@ -1171,7 +1171,7 @@ class ProtocolShapeVerifierTest {
         assertTrue(decisionContextBoundaryViolations(listOf(allowed)).isEmpty())
 
         val forbidden = source(
-            "ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/Decision.kt",
+            "ball/gameplay/nucleus/src/main/kotlin/kinetickk/ball/gameplay/nucleus/Decision.kt",
             """
                 data class GameplayContext(
                     val command: GameplayModuleCommand? = null,
@@ -1196,7 +1196,7 @@ class ProtocolShapeVerifierTest {
                 "kinetickk.ball.profile.api.GameplayProfileSnapshot",
             ),
         )
-        val path = "ball/gameplay/api/src/commonMain/kotlin/kinetickk/ball/gameplay/api/Protocol.kt"
+        val path = "ball/gameplay/api/src/main/kotlin/kinetickk/ball/gameplay/api/Protocol.kt"
         val valid = source(
             path,
             """
@@ -1255,7 +1255,7 @@ class ProtocolShapeVerifierTest {
         )
 
         val publicCompletion = source(
-            "flow/session/api/src/commonMain/kotlin/kinetickk/flow/session/api/SessionProtocol.kt",
+            "flow/session/api/src/main/kotlin/kinetickk/flow/session/api/SessionProtocol.kt",
             "data class SessionProfileCommandCompleted(val result: ProfileModuleResultDelivery)",
         )
         assertTrue(

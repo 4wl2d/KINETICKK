@@ -438,6 +438,37 @@ class AppSessionNucleusTest {
     }
 
     @Test
+    fun resetCancelAdvancesOnlySessionRevisionAndKeepsEveryResetModalBlocking() {
+        val blockingLifecycles = SessionResetLifecycle.entries.filterNot {
+            it == SessionResetLifecycle.READY
+        }
+
+        blockingLifecycles.forEach { lifecycle ->
+            val state = initialState().copy(
+                revision = SessionRevision(12L),
+                routeRevision = SessionRevision(7L),
+                overlay = AppDestination.Settings,
+                resetLifecycle = lifecycle,
+                lastFailure = SessionWorkflowFailureCode.RESET_NEEDS_ATTENTION,
+            )
+
+            val cancelled = decide(state, SessionInteractionPulse.ResetCancelled).accepted()
+
+            assertEquals(
+                state.copy(revision = SessionRevision(13L)),
+                cancelled.nextState,
+                "Cancel must retain the complete blocking Session context for $lifecycle",
+            )
+            assertTrue(
+                cancelled.outputs.isEmpty(),
+                "Cancel must not invoke Profile, Gameplay, storage, or another participant for $lifecycle",
+            )
+            assertEquals(lifecycle, cancelled.nextState.toShell().resetLifecycle)
+            assertFalse(cancelled.nextState.toShell().normalInputEnabled)
+        }
+    }
+
+    @Test
     fun resetConfirmationMapsExactResultAndSynchronizesFreshPreferences() {
         val state = initialState(confirmationPersistence())
         val requested = decide(

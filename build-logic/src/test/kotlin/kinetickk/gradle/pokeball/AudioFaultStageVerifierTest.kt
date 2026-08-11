@@ -15,6 +15,21 @@ class AudioFaultStageVerifierTest {
     }
 
     @Test
+    fun conventionalMainCannotDeclareSemanticAudioStatus() {
+        val path = "app/desktop/src/main/kotlin/kinetickk/app/desktop/AudioPlaybackStatus.kt"
+        val semanticStatus = SourceDocument(
+            path,
+            "package kinetickk.app.desktop\n\ndata class AudioPlaybackStatus(val active: Boolean)",
+        )
+
+        val violations = audioRuntimeFaultStageViolations(validAudioSources() + semanticStatus)
+        assertTrue(
+            violations.any { path in it && "AudioPlaybackStatus" in it },
+            violations.joinToString("\n"),
+        )
+    }
+
+    @Test
     fun resourceRunCatchingCannotReplaceSynchronousFaultPropagation() {
         val sources = mutate(AUDIO_RESOURCE_PATH) { code ->
             code.replace("platform.close()", "runCatching { platform.close() }")

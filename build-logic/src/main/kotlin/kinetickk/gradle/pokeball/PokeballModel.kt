@@ -34,6 +34,18 @@ internal data class SourceDocument(
     val text: String,
 )
 
+internal fun SourceDocument.isProductionKotlinSource(): Boolean {
+    if (!relativePath.endsWith(".kt")) return false
+    val pathSegments = relativePath.split('/')
+    val sourceRootIndex = pathSegments.indexOf("src")
+    if (sourceRootIndex <= 0) return false
+    if (pathSegments.take(sourceRootIndex).any { it == "build" || it == ".gradle" || it == "generated" }) {
+        return false
+    }
+    val sourceSet = pathSegments.getOrNull(sourceRootIndex + 1) ?: return false
+    return sourceSet == "main" || sourceSet.endsWith("Main")
+}
+
 internal data class BoundProjection(
     val id: String,
     val value: String,

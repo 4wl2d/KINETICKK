@@ -250,10 +250,7 @@ private val exactProfilePersistenceConstants = linkedMapOf(
 internal fun platformCapabilityBoundaryViolations(
     sources: Collection<SourceDocument>,
 ): List<String> = buildList {
-    val production = sources.filter { source ->
-        source.relativePath.endsWith(".kt") &&
-            Regex("/src/[^/]+Main/").containsMatchIn(source.relativePath)
-    }
+    val production = sources.filter(SourceDocument::isProductionKotlinSource)
     val codeByPath = production.associate { source ->
         source.relativePath to source.text.withoutKotlinComments()
     }
@@ -454,12 +451,7 @@ private fun resourceFaultStageViolations(
     requireCanonicalProfileDispatches: Boolean,
 ): List<String> = buildList {
     sources.asSequence()
-        .filter { source ->
-            source.relativePath.endsWith(".kt") &&
-                source.relativePath.substringAfter("/src/", missingDelimiterValue = "")
-                    .substringBefore('/')
-                    .let { sourceSet -> sourceSet == "main" || sourceSet.endsWith("Main") }
-        }
+        .filter(SourceDocument::isProductionKotlinSource)
         .forEach { source ->
             val code = source.text.withoutKotlinComments()
             val kotlinCode = source.text.maskKotlinNonCode()
@@ -588,10 +580,7 @@ private fun resourceFaultStageViolations(
 internal fun audioRuntimeFaultStageViolations(
     sources: Collection<SourceDocument>,
 ): List<String> = buildList {
-    val production = sources.filter { source ->
-        source.relativePath.endsWith(".kt") &&
-            Regex("/src/[^/]+Main/").containsMatchIn(source.relativePath)
-    }
+    val production = sources.filter(SourceDocument::isProductionKotlinSource)
     val codeByPath = production.associate { source ->
         source.relativePath to source.text.withoutKotlinComments()
     }
@@ -826,10 +815,7 @@ internal fun audioProjectionPolicyViolations(
 internal fun leastAuthorityCompositionViolations(
     sources: Collection<SourceDocument>,
 ): List<String> = buildList {
-    val production = sources.filter { source ->
-        source.relativePath.endsWith(".kt") &&
-            Regex("/src/[^/]+Main/").containsMatchIn(source.relativePath)
-    }
+    val production = sources.filter(SourceDocument::isProductionKotlinSource)
     restrictedProductionTypes.forEach { restriction ->
         val token = Regex("\\b${Regex.escape(restriction.typeName)}\\b")
         production.filter { source -> token.containsMatchIn(source.text.withoutKotlinComments()) }
@@ -869,10 +855,7 @@ internal fun leastAuthorityCompositionViolations(
 internal fun trustedNucleusInputCallsiteViolations(
     sources: Collection<SourceDocument>,
 ): List<String> = buildList {
-    val production = sources.filter { source ->
-        source.relativePath.endsWith(".kt") &&
-            Regex("/src/[^/]+Main/").containsMatchIn(source.relativePath)
-    }
+    val production = sources.filter(SourceDocument::isProductionKotlinSource)
     trustedNucleusCallsites.forEach { callsite ->
         val call = Regex("\\b${Regex.escape(callsite.token)}\\s*\\(")
         production.forEach { source ->

@@ -113,7 +113,7 @@ internal fun exactDataClassShapeViolations(
         if (shape.reserveExtraComponentSpellings) {
             sources.values
                 .asSequence()
-                .filter(SourceDocument::isProductionMainKotlinSource)
+                .filter(SourceDocument::isProductionKotlinSource)
                 .forEach { candidate ->
                     extraComponentIdentifiers(candidate.text, shape.fields.size)
                         .forEach { component ->
@@ -128,7 +128,7 @@ internal fun exactDataClassShapeViolations(
         if (shape.requireDirectPrivateForExtensionProperties) {
             sources.values
                 .asSequence()
-                .filter(SourceDocument::isProductionMainKotlinSource)
+                .filter(SourceDocument::isProductionKotlinSource)
                 .forEach { candidate ->
                     nonPrivateTopLevelExtensionProperties(candidate.text).forEach { property ->
                         add(
@@ -142,7 +142,7 @@ internal fun exactDataClassShapeViolations(
         if (shape.forbidTypeAliases) {
             sources.values
                 .asSequence()
-                .filter(SourceDocument::isProductionMainKotlinSource)
+                .filter(SourceDocument::isProductionKotlinSource)
                 .forEach { candidate ->
                     acceptedFrameDeclaredTypeAliases(candidate.text, shape.typeName).forEach { alias ->
                         add(
@@ -189,8 +189,7 @@ internal fun decisionContextBoundaryViolations(sources: List<SourceDocument>): L
     sources.asSequence()
         .filter { source ->
             source.relativePath.contains("/nucleus/src/") &&
-                source.relativePath.contains("Main/") &&
-                source.relativePath.endsWith(".kt")
+                source.isProductionKotlinSource()
         }
         .forEach { source ->
             dataClassNames(source.text)
@@ -221,8 +220,7 @@ internal fun foreignApplicationSurfaceSignatureViolations(
             .filter { source ->
                 source.relativePath.startsWith(policy.sourceRoot) &&
                     source.relativePath.contains("/src/") &&
-                    source.relativePath.contains("Main/") &&
-                    source.relativePath.endsWith(".kt")
+                    source.isProductionKotlinSource()
             }
             .forEach { source ->
                 referencedSurfaceTypes(source.text).forEach { referencedType ->
@@ -256,8 +254,7 @@ internal fun publicSourceCompletionWrapperViolations(
         .filter { source ->
             applicationSurfaceRoots.any(source.relativePath::startsWith) &&
                 source.relativePath.contains("/src/") &&
-                source.relativePath.contains("Main/") &&
-                source.relativePath.endsWith(".kt")
+                source.isProductionKotlinSource()
         }
         .forEach { source ->
             completionDeclaration.findAll(source.text).forEach { match ->
@@ -609,13 +606,6 @@ private fun extraComponentIdentifiers(text: String, maximumOrdinal: Int): List<S
                 decimalOrdinalExceeds(suffix, maximumOrdinal)
         }
     }.toList()
-}
-
-private fun SourceDocument.isProductionMainKotlinSource(): Boolean {
-    if (!relativePath.endsWith(".kt")) return false
-    val sourceSet = relativePath.substringAfter("/src/", missingDelimiterValue = "")
-        .substringBefore('/')
-    return sourceSet == "main" || sourceSet.endsWith("Main")
 }
 
 private fun decimalOrdinalExceeds(decimal: String, maximum: Int): Boolean {

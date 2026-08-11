@@ -59,7 +59,7 @@ internal fun resolveArchitectureViolations(
     addAll(leastAuthorityCompositionViolations(sources))
     addAll(trustedNucleusInputCallsiteViolations(sources))
     addAuthorityViolations(sourceByPath)
-    addFoundationAndRegistryViolations(sources)
+    addAll(foundationAndRegistryViolations(sources))
     addAssemblyViolations(sourceByPath)
     addProtocolRouteViolations(sourceByPath, architectureRecords)
     addBoundViolations(sourceByPath, architectureRecords)
@@ -199,7 +199,7 @@ internal fun resolvedSemanticDirectControl(
         )
     }.toSet()
     val sourceUses = sources.asSequence()
-        .filter { source -> source.relativePath.endsWith(".kt") && source.relativePath.contains("Main/") }
+        .filter(SourceDocument::isProductionKotlinSource)
         .flatMap { source ->
             val sourceProject = projectPathForSource(source.relativePath) ?: return@flatMap emptySequence()
             val sourceAuthority = authorityForKnownProject(sourceProject) ?: return@flatMap emptySequence()
@@ -352,7 +352,7 @@ private fun MutableList<String>.addPackageAndImportViolations(sources: List<Sour
             add("Legacy core/feature namespace is forbidden in $path")
         }
 
-        val isNucleusProduction = path.contains("/nucleus/src/") && path.contains("Main/")
+        val isNucleusProduction = path.contains("/nucleus/src/") && source.isProductionKotlinSource()
         if (isNucleusProduction) {
             val forbidden = listOf(
                 "androidx.compose",
@@ -384,8 +384,7 @@ internal fun applicationSurfaceViolations(sources: List<SourceDocument>): List<S
     )
     val surfaceSources = sources.filter { source ->
         source.relativePath.contains("/src/") &&
-            source.relativePath.contains("Main/") &&
-            source.relativePath.endsWith(".kt")
+            source.isProductionKotlinSource()
     }
     surfaceRoots.forEach { (root, packageName) ->
         if (surfaceSources.none { source -> source.relativePath.startsWith(root) }) {
@@ -496,8 +495,8 @@ private fun MutableList<String>.addAuthorityViolations(sources: Map<String, Sour
     }
 }
 
-private fun MutableList<String>.addFoundationAndRegistryViolations(sources: List<SourceDocument>) {
-    val production = sources.filter { it.relativePath.contains("Main/") }
+internal fun foundationAndRegistryViolations(sources: List<SourceDocument>): List<String> = buildList {
+    val production = sources.filter(SourceDocument::isProductionKotlinSource)
     production.filter { it.relativePath.startsWith("foundation/") }.forEach { source ->
         val forbidden = listOf(
             "import kinetickk.ball.",
@@ -535,7 +534,7 @@ private fun MutableList<String>.addFoundationAndRegistryViolations(sources: List
             add("Top-level mutable global is forbidden in ${source.relativePath}")
         }
     }
-}
+}.distinct().sorted()
 
 private fun MutableList<String>.addAssemblyViolations(sources: Map<String, SourceDocument>) {
     val app = sources[
@@ -775,7 +774,7 @@ internal fun productionProtocolUseViolations(
     )
 
     sources.values.asSequence()
-        .filter { source -> source.relativePath.endsWith(".kt") && source.relativePath.contains("Main/") }
+        .filter(SourceDocument::isProductionKotlinSource)
         .forEach { source ->
             val project = projectPathForSource(source.relativePath) ?: return@forEach
             val sourceAuthority = authorityForKnownProject(project) ?: return@forEach

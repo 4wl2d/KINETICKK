@@ -169,10 +169,12 @@ class PokeballArchitectureVerifierTest {
         assertEquals(null, findCycle(resolved.edges.map(::decodeAuthorityEdge)))
 
         val extraEdge = ProjectEdge(":ball:profile:api", "commonMainApi", ":ball:gameplay:api")
-        val extraUse = productionSource(
-            "ball/profile/api",
-            "import kinetickk.ball.content.api.ContentVersion\n" +
-                "import kinetickk.ball.gameplay.api.GameplayModuleCommand",
+        val extraUse = SourceDocument(
+            "ball/profile/api/src/main/kotlin/kinetickk/fixture/Fixture.kt",
+            "package kinetickk.fixture\n\n" +
+                "import kinetickk.ball.content.api.ContentVersion\n" +
+                "import kinetickk.ball.gameplay.api.GameplayModuleCommand\n\n" +
+                "sealed interface Fixture",
         )
         val invalid = resolvedSemanticDirectControl(
             edges + extraEdge,
@@ -193,6 +195,8 @@ class PokeballArchitectureVerifierTest {
         assertTrue(applicationSurfaceViolations(valid).isEmpty())
 
         val invalid = valid[1].copy(
+            relativePath =
+                "ball/profile/api/src/main/kotlin/kinetickk/ball/profile/api/ConventionalLeak.kt",
             text = """
                 package kinetickk.ball.gameplay.api
 
@@ -202,7 +206,7 @@ class PokeballArchitectureVerifierTest {
                 typealias LeakedProfileState = ProfileState
             """.trimIndent(),
         )
-        val violations = applicationSurfaceViolations(valid.toMutableList().apply { this[1] = invalid })
+        val violations = applicationSurfaceViolations(valid + invalid)
 
         assertTrue(violations.any { "exact package kinetickk.ball.profile.api" in it })
         assertTrue(violations.any { "forbidden dependency token `.impl.`" in it })
@@ -242,7 +246,7 @@ class PokeballArchitectureVerifierTest {
         assertTrue(leastAuthorityCompositionViolations(listOf(assembly)).isEmpty())
 
         val leakedComposite = SourceDocument(
-            "flow/session/impl/src/commonMain/kotlin/kinetickk/flow/session/impl/CompositeLeak.kt",
+            "app/desktop/src/main/kotlin/kinetickk/app/desktop/CompositeLeak.kt",
             "import kinetickk.ball.profile.impl.ProfileComponent\nval leaked: ProfileComponent? = null",
         )
         val leakedRoute = SourceDocument(
@@ -285,7 +289,7 @@ class PokeballArchitectureVerifierTest {
         assertTrue(trustedNucleusInputCallsiteViolations(valid).isEmpty())
 
         val unauthorized = SourceDocument(
-            "app/shared/src/commonMain/kotlin/kinetickk/app/shared/Untrusted.kt",
+            "app/desktop/src/main/kotlin/kinetickk/app/desktop/Untrusted.kt",
             "profileModuleResultPulse()",
         )
         assertTrue(
@@ -447,9 +451,16 @@ class PokeballArchitectureVerifierTest {
                     }
                 """.trimIndent(),
             ),
-            "flow/session/impl/src/commonMain/kotlin/kinetickk/flow/session/impl/Unmapped.kt" to SourceDocument(
-                "flow/session/impl/src/commonMain/kotlin/kinetickk/flow/session/impl/Unmapped.kt",
-                "ProfileQuery.GetLoadout\nProfilePulse.PurchaseMetaUpgrade(1)",
+            "app/desktop/src/main/kotlin/kinetickk/app/desktop/Unmapped.kt" to SourceDocument(
+                "app/desktop/src/main/kotlin/kinetickk/app/desktop/Unmapped.kt",
+                """
+                    package kinetickk.app.desktop
+
+                    fun unmapped() {
+                        ProfileQuery.GetLoadout
+                        ProfilePulse.PurchaseMetaUpgrade(1)
+                    }
+                """.trimIndent(),
             ),
         )
 
