@@ -62,10 +62,14 @@ guarantee. ContentCatalog is immutable/query-only after bootstrap and has no
 runtime mutation path; that absence does not remove it from explicit
 effective-profile resolution.
 
-The Inline binding adds no actor, mailbox, worker pool, reflection registry,
-service locator, coroutine queue, transport serialization, or thread hop.
+The four-authority Inline binding adds no semantic actor, mailbox, worker pool,
+reflection registry, service locator, coroutine queue, transport serialization,
+or thread hop to authority Decision, command, result, output, or Fact delivery.
 `InlineDispatchGuard` and a bounded synchronous completion deque are mechanical
-Foundation only.
+Foundation only. The App-owned Desktop Audio projection broker is separate
+mechanical machinery with one bounded worker and a 24-task queue; it carries no
+semantic Pulse, command, result, output, or Fact and does not change the
+four-authority execution profile.
 
 Impl-owned `ProfileComponent` and `GameplayCompositionComponent` are
 Assembly-only composite construction handles. Session receives only

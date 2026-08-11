@@ -36,9 +36,13 @@ the fresh temporary profile on the loopback app origin:
    `kinetickk_progress_v2`, and reload;
 2. for the partial-purge scenario, wrap that isolated page's
    `Storage.prototype.removeItem` so the first removal of exactly that key
-   throws, restores the original method, and never affects another origin;
-3. after setup, use visible Canvas input for Cancel, Confirm, and Retry; and
-4. inspect the same origin's storage after each step to prove Cancel retained
+   throws `new DOMException("QA one-shot purge failure", "SecurityError")`
+   exactly once; a generic `Error` or another DOMException name is not a valid
+   fixture because unclassified faults propagate;
+3. after `RESET NEEDS ATTENTION` is observed, restore the original
+   `removeItem` method before Retry and never affect another origin;
+4. after setup, use visible Canvas input for Cancel, Confirm, and Retry; and
+5. inspect the same origin's storage after each step to prove Cancel retained
    the key, Confirm wrote a valid v4 snapshot before the injected purge
    failure, and Retry removed only the declared legacy key.
 
@@ -53,7 +57,7 @@ component, or install an application-visible test API.
 | fresh launch | Home renders and no reset modal is present |
 | legacy reset confirmation | an isolated legacy key blocks Home with `SAVE RESET REQUIRED` |
 | cancel | `CANCEL` leaves the confirmation modal blocking and deletes nothing |
-| write-before-purge failure | a one-shot isolated purge failure leaves a valid default v4 snapshot and renders `RESET NEEDS ATTENTION` |
+| write-before-purge failure | a one-shot isolated `SecurityError` purge failure leaves a valid default v4 snapshot and renders `RESET NEEDS ATTENTION` |
 | explicit retry | `RETRY PURGE` removes only the declared legacy key and returns to Home |
 | seven routes | Home, Gameplay, Settings, Lab, Armory, Rebirth, and Codex each render through public keyboard/pointer input |
 | Gameplay lifecycle | start, pause, exit, and restart render the corresponding accepted Session/Gameplay state |

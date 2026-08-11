@@ -78,17 +78,26 @@ All sixteen existing semantic cues keep their frequency, duration, gain, and
 wave mapping. The music sequence and `0.32s` step remain unchanged. At most 32
 caller cue requests are accepted and 3 caller sound requests are selected per
 advance; the independent internal music tone is separate. Invalid tone
-requests and provider faults remain contained.
+requests remain rejected. Normal cue and music behavior is unchanged;
+failure-path observability is intentionally tightened as described below.
 
 ## Intentional delta
 
-Save v4 is the sole intentional product incompatibility. Existing v2/v3 and
-legacy-matter values are detected but never imported. The application blocks on
-an explicit reset modal and deletes only the enumerated old keys after a
-default v4 snapshot is successfully written. Cancel deletes nothing. Failed or
-unknown write preserves legacy data; partial or unknown purge requires an
+Save v4 is the sole intentional persistent-data incompatibility. Existing v2/v3
+and legacy-matter values are detected but never imported. The application
+blocks on an explicit reset modal and deletes only the enumerated old keys after
+a default v4 snapshot is successfully written. Cancel deletes nothing. Failed
+or unknown write preserves legacy data; partial or unknown purge requires an
 explicit user retry. No Preferences node, storage area, or unrelated key is
 cleared.
+
+Audio fault staging is a deliberate operational delta. Synchronous Resource,
+platform, and programming faults are no longer swallowed by best-effort
+wrappers: they remain runtime faults and propagate after any already accepted
+frame and output batch drains. Detached Desktop synthesis faults escape the
+worker task to runtime. Web native `resume()` and `close()` Promise rejections
+alone are observed and consumed as non-semantic post-acceptance projection
+loss. No typed Audio Fact, result, or status is fabricated.
 
 The migration may change internal ordering only where Pokeball acceptance
 semantics require it, such as pause acceptance before overlay publication and
