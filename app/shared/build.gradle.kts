@@ -26,5 +26,8 @@ kotlin {
             implementation(projects.flow.session.interaction)
             implementation(projects.flow.session.impl)
         }
+        wasmJsMain.dependencies {
+            implementation(libs.kotlinx.browser)
+        }
     }
 }

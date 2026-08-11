@@ -3,21 +3,6 @@
 
 package kinetickk.ball.gameplay.api
 
-import kinetickk.ball.content.api.GameplayContentSnapshot
-import kinetickk.ball.profile.api.GameplayProfileSnapshot
-import kinetickk.ball.profile.api.PlayerPreferences
-import kinetickk.ball.profile.api.ProfileAcceptance
-import kinetickk.ball.profile.api.ProfileCommandRef
-import kinetickk.ball.profile.api.ProfileCommandResult
-import kinetickk.ball.profile.api.ProfileRejection
-import kinetickk.ball.profile.api.ProfileRevision
-
-data class RunConfiguration(
-    val content: GameplayContentSnapshot,
-    val profile: GameplayProfileSnapshot,
-    val seed: Int = 731_991,
-)
-
 enum class GameplayRunPhase {
     CREATED,
     RUNNING,
@@ -28,102 +13,164 @@ enum class GameplayRunPhase {
     EXITED,
 }
 
-sealed interface GameplayPulse
+object GameplayInteractionLimits {
+    const val MIN_FRAME_DELTA_SECONDS: Float = 0f
+    const val MAX_FRAME_DELTA_SECONDS: Float = 1f
+    const val MIN_VIEWPORT_DIMENSION_PX: Float = 1f
+    const val MAX_VIEWPORT_DIMENSION_PX: Float = 32_768f
+    const val MIN_DENSITY: Float = 0.5f
+    const val MAX_DENSITY: Float = 8f
+    const val MIN_CHOICE_INDEX: Int = 0
+    const val MAX_CHOICE_INDEX: Int = 3
+}
 
-sealed interface GameplayInteractionPulse : GameplayPulse {
-    data class FrameElapsed(val realDeltaSeconds: Float) : GameplayInteractionPulse
-    data class ViewportChanged(val width: Float, val height: Float, val density: Float) : GameplayInteractionPulse
-    data class PointerMoved(val x: Float, val y: Float, val active: Boolean = true) : GameplayInteractionPulse
+/** Closed, already-validated Interaction intent inventory. */
+sealed interface GameplayInteractionPulse {
+    class FrameElapsed private constructor(
+        val realDeltaSeconds: Float,
+    ) : GameplayInteractionPulse {
+        companion object {
+            fun fromValidated(realDeltaSeconds: Float): FrameElapsed {
+                require(
+                    realDeltaSeconds.isFinite() &&
+                        realDeltaSeconds in
+                        GameplayInteractionLimits.MIN_FRAME_DELTA_SECONDS..
+                        GameplayInteractionLimits.MAX_FRAME_DELTA_SECONDS,
+                )
+                return FrameElapsed(realDeltaSeconds)
+            }
+        }
+    }
+
+    class ViewportChanged private constructor(
+        val width: Float,
+        val height: Float,
+        val density: Float,
+    ) : GameplayInteractionPulse {
+        companion object {
+            fun fromValidated(width: Float, height: Float, density: Float): ViewportChanged {
+                require(
+                    width.isFinite() &&
+                        width in
+                        GameplayInteractionLimits.MIN_VIEWPORT_DIMENSION_PX..
+                        GameplayInteractionLimits.MAX_VIEWPORT_DIMENSION_PX,
+                )
+                require(
+                    height.isFinite() &&
+                        height in
+                        GameplayInteractionLimits.MIN_VIEWPORT_DIMENSION_PX..
+                        GameplayInteractionLimits.MAX_VIEWPORT_DIMENSION_PX,
+                )
+                require(
+                    density.isFinite() &&
+                        density in GameplayInteractionLimits.MIN_DENSITY..
+                        GameplayInteractionLimits.MAX_DENSITY,
+                )
+                return ViewportChanged(width, height, density)
+            }
+        }
+    }
+
+    class PointerMoved private constructor(
+        val x: Float,
+        val y: Float,
+        val active: Boolean = true,
+    ) : GameplayInteractionPulse {
+        companion object {
+            fun fromValidated(x: Float, y: Float, active: Boolean = true): PointerMoved {
+                require(x.isFinite() && y.isFinite())
+                return PointerMoved(x, y, active)
+            }
+        }
+    }
+
     data class BrakeChanged(val source: BrakeSource, val active: Boolean) : GameplayInteractionPulse
     data object DashRequested : GameplayInteractionPulse
     data object PauseToggled : GameplayInteractionPulse
-    data object PauseForOverlay : GameplayInteractionPulse
-    data object ExitRunRequested : GameplayInteractionPulse
-    data class PreferencesChanged(val preferences: PlayerPreferences) : GameplayInteractionPulse
-    data class ChoiceSelected(val index: Int) : GameplayInteractionPulse
+    class ChoiceSelected private constructor(
+        val index: Int,
+    ) : GameplayInteractionPulse {
+        companion object {
+            fun fromValidated(index: Int): ChoiceSelected {
+                require(
+                    index in GameplayInteractionLimits.MIN_CHOICE_INDEX..
+                        GameplayInteractionLimits.MAX_CHOICE_INDEX,
+                )
+                return ChoiceSelected(index)
+            }
+        }
+    }
     data object ChoicesRerolled : GameplayInteractionPulse
     data object UserGestureObserved : GameplayInteractionPulse
 }
 
 enum class BrakeSource { KEYBOARD, SECONDARY_POINTER, TOUCH_CONTROL }
 
-sealed interface GameplaySessionPulse : GameplayPulse {
-    data class StartRun(val configuration: RunConfiguration) : GameplaySessionPulse
-    data object PauseForOverlay : GameplaySessionPulse
-    data class ApplyPreferences(val preferences: PlayerPreferences) : GameplaySessionPulse
-    data object ExitRun : GameplaySessionPulse
+sealed interface GameplayModuleCommand {
+    data object StartRun : GameplayModuleCommand
+    data object PauseForOverlay : GameplayModuleCommand
+    data object ApplyPreferences : GameplayModuleCommand
+    data object ExitRun : GameplayModuleCommand
 }
 
-/** Control returns accepted only through the statically reserved completion path. */
-sealed interface GameplayControlPulse : GameplayPulse {
-    data class ProfileCommandCompleted(
-        val result: ProfileCommandResult.Accepted,
-    ) : GameplayControlPulse
-
-    data class ProfileCommandRejectedBeforeAcceptance(
-        val commandRef: ProfileCommandRef,
-        val rejection: ProfileAcceptance.Rejected,
-    ) : GameplayControlPulse
+data class GameplayModuleCommandRequest(
+    val semanticHandle: GameplaySemanticHandle,
+    val sourceOrdinal: Int,
+    val targetInstance: GameplayInstanceId,
+    val command: GameplayModuleCommand,
+) {
+    init {
+        require(sourceOrdinal == semanticHandle.sourceOrdinal) {
+            "Gameplay command request ordinal must match its semantic handle"
+        }
+    }
 }
 
-data class GameplayCommand(
-    val ref: GameplayCommandRef,
-    val pulse: GameplaySessionPulse,
+data class GameplayModuleCommandPulse(
+    val commandSource: GameplayCommandSourceToken,
+    val effectiveProtocolIdentity: GameplayEffectiveProtocolIdentity,
+    val command: GameplayModuleCommand,
+    val issuerProvenance: GameplayCommandIssuerProvenance,
 )
 
-sealed interface GameplayCommandOutcome {
-    data object RunStarted : GameplayCommandOutcome
-    data object OverlayPaused : GameplayCommandOutcome
-    data class PreferencesApplied(val preferences: PlayerPreferences) : GameplayCommandOutcome
-    data class RunExited(val profile: GameplayExitProfileOutcome) : GameplayCommandOutcome
+sealed interface GameplayModuleResult {
+    data object RunStarted : GameplayModuleResult
+    data object OverlayPaused : GameplayModuleResult
+    data object PreferencesApplied : GameplayModuleResult
+    data class RunExited(val progress: GameplayExitProgressResult) : GameplayModuleResult
 }
 
-sealed interface GameplayExitProfileOutcome {
-    data object NoProgress : GameplayExitProfileOutcome
-    data object ProgressApplied : GameplayExitProfileOutcome
-    data class ProgressRejected(
-        val observedRevision: ProfileRevision,
-        val reason: ProfileRejection,
-    ) : GameplayExitProfileOutcome
+/** Gameplay-owned workflow meaning; exact Profile payloads stay inside Gameplay Nucleus inputs. */
+sealed interface GameplayExitProgressResult {
+    data object NoProgress : GameplayExitProgressResult
+    data object Applied : GameplayExitProgressResult
+    data object NotApplied : GameplayExitProgressResult
 }
 
-sealed interface GameplayCommandResult {
-    val commandRef: GameplayCommandRef
-
-    data class Accepted(
-        override val commandRef: GameplayCommandRef,
-        val targetRevision: GameplayRevision,
-        val outcome: GameplayCommandOutcome,
-    ) : GameplayCommandResult
+data class GameplayModuleResultOutput(
+    val semanticHandle: GameplaySemanticHandle,
+    val sourceOrdinal: Int,
+    val commandSource: GameplayCommandSourceToken,
+    val result: GameplayModuleResult,
+) {
+    init {
+        require(semanticHandle == commandSource.semanticHandle) {
+            "Gameplay result output must preserve the command semantic handle"
+        }
+    }
 }
 
-enum class GameplayInputField {
-    FRAME_DELTA_SECONDS,
-    VIEWPORT_WIDTH,
-    VIEWPORT_HEIGHT,
-    DENSITY,
-    POINTER_X,
-    POINTER_Y,
-    CHOICE_INDEX,
-}
+data class GameplayModuleResultDelivery(
+    val commandSource: GameplayCommandSourceToken,
+    val resultSource: GameplayResultSourceToken,
+    val effectiveProtocolIdentity: GameplayEffectiveProtocolIdentity,
+    val result: GameplayModuleResult,
+    val issuerProvenance: GameplayResultIssuerProvenance,
+)
 
-enum class GameplayInputReason {
-    NON_FINITE,
-    BELOW_MINIMUM,
-    ABOVE_MAXIMUM,
-}
-
-enum class GameplayCommandRefRejection {
-    WRONG_TARGET,
-    WRONG_SOURCE_KIND,
-    ADMISSION_MISMATCH,
-}
-
-enum class GameplayProfileResultRejection {
-    NO_COMMAND_PENDING,
-    COMMAND_REF_MISMATCH,
-    TARGET_INSTANCE_MISMATCH,
-    OUTCOME_MISMATCH,
+sealed interface GameplayCommandValidationFailureReason {
+    data object WrongTarget : GameplayCommandValidationFailureReason
+    data object WrongSourceKind : GameplayCommandValidationFailureReason
 }
 
 enum class GameplayConfigurationRejection {
@@ -139,30 +186,24 @@ enum class GameplayConfigurationRejection {
 }
 
 sealed interface GameplayRejection {
-    data object RevisionExhausted : GameplayRejection
     data object NotStarted : GameplayRejection
     data object AlreadyStarted : GameplayRejection
     data object RunExited : GameplayRejection
     data object PauseUnavailable : GameplayRejection
     data object ProfileCommandPending : GameplayRejection
+    data object ProfileBootstrapUnavailable : GameplayRejection
+    data object InvalidPreferencesProjection : GameplayRejection
 
-    data class InvalidInput(
-        val field: GameplayInputField,
-        val reason: GameplayInputReason,
-    ) : GameplayRejection
-
-    data class InvalidConfiguration(
+    data class InvalidStartConfiguration(
         val reason: GameplayConfigurationRejection,
     ) : GameplayRejection
 
-    data class InvalidCommandRef(
-        val reason: GameplayCommandRefRejection,
-    ) : GameplayRejection
-
-    data class UnexpectedProfileResult(
-        val reason: GameplayProfileResultRejection,
+    data class PointerOutsideViewport(
+        val axis: GameplayPointerAxis,
     ) : GameplayRejection
 }
+
+enum class GameplayPointerAxis { HORIZONTAL, VERTICAL }
 
 sealed interface GameplayAcceptance {
     val instanceId: GameplayInstanceId
@@ -177,4 +218,47 @@ sealed interface GameplayAcceptance {
         val observedRevision: GameplayRevision,
         val reason: GameplayRejection,
     ) : GameplayAcceptance
+}
+
+sealed interface GameplayCommandAdmissionFailureReason {
+    data class CausalBudgetExceeded(
+        val causalScope: Long,
+        val limit: Int,
+    ) : GameplayCommandAdmissionFailureReason
+
+    data object CompletionCapacityExhausted : GameplayCommandAdmissionFailureReason
+    data object RevisionCapacityExhausted : GameplayCommandAdmissionFailureReason
+}
+
+sealed interface GameplayCommandBoundaryResponse {
+    data class ValidationFailure(
+        val reason: GameplayCommandValidationFailureReason,
+    ) : GameplayCommandBoundaryResponse
+
+    data class AdmissionFailure(
+        val reason: GameplayCommandAdmissionFailureReason,
+    ) : GameplayCommandBoundaryResponse
+
+    data class DecisionRejected(
+        val reason: GameplayRejection,
+    ) : GameplayCommandBoundaryResponse
+}
+
+/** Verified target-ingress refusal evidence; Session owns its ControlPulse carrier wrapper. */
+data class GameplayCommandRefusalEvidence(
+    val commandSource: GameplayCommandSourceToken,
+    val effectiveProtocolIdentity: GameplayEffectiveProtocolIdentity,
+    val boundaryResponse: GameplayCommandBoundaryResponse,
+    val targetBoundaryProvenance: GameplayTargetBoundaryProvenance,
+)
+
+sealed interface GameplayCommandIngressResult {
+    data class Accepted(
+        val targetInstance: GameplayInstanceId,
+        val targetRevision: GameplayRevision,
+    ) : GameplayCommandIngressResult
+
+    data class RejectedBeforeAcceptance(
+        val refusal: GameplayCommandRefusalEvidence,
+    ) : GameplayCommandIngressResult
 }

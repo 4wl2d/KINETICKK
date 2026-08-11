@@ -38,18 +38,69 @@ sealed interface GameplayCommandSource {
     }
 }
 
-data class GameplayCommandRef(
+data class GameplaySemanticHandle(
     val sourceInstance: GameplayCommandSource,
-    val targetInstance: GameplayInstanceId,
     val sourceRevision: Long,
-    val ordinal: Int,
+    val sourceOrdinal: Int,
 ) {
     init {
         require(sourceRevision >= 0L) { "Command source revision must be non-negative" }
-        require(ordinal >= 0) { "Command ordinal must be non-negative" }
+        require(sourceOrdinal >= 0) { "Command source ordinal must be non-negative" }
     }
 }
 
-data class GameplayCommandAdmission(
-    val commandRef: GameplayCommandRef,
+data class GameplayCommandSourceToken(
+    val semanticHandle: GameplaySemanticHandle,
+    val targetInstance: GameplayInstanceId,
+    val causalScope: Long,
+    val causalDepth: Int,
+) {
+    init {
+        require(causalScope >= 0L) { "Command causal scope must be non-negative" }
+        require(causalDepth >= 0) { "Command causal depth must be non-negative" }
+    }
+
+    val sourceInstance: GameplayCommandSource
+        get() = semanticHandle.sourceInstance
+
+    val sourceRevision: Long
+        get() = semanticHandle.sourceRevision
+
+    val sourceOrdinal: Int
+        get() = semanticHandle.sourceOrdinal
+}
+
+data class GameplayResultSourceToken(
+    val semanticHandle: GameplaySemanticHandle,
+    val targetInstance: GameplayInstanceId,
+    val targetRevision: GameplayRevision,
+    val sourceOrdinal: Int,
+    val causalScope: Long,
+    val causalDepth: Int,
+) {
+    init {
+        require(sourceOrdinal >= 0) { "Result source ordinal must be non-negative" }
+        require(causalScope >= 0L) { "Result causal scope must be non-negative" }
+        require(causalDepth >= 0) { "Result causal depth must be non-negative" }
+    }
+}
+
+enum class GameplayEffectiveProtocolIdentity {
+    SESSION_START,
+    SESSION_PAUSE,
+    SESSION_PREFERENCES,
+    SESSION_EXIT,
+}
+
+enum class GameplayCommandIssuerProvenance {
+    LOCAL_SESSION_STATIC_BINDING,
+}
+
+enum class GameplayResultIssuerProvenance {
+    GAMEPLAY_RUN_STATIC_BINDING,
+}
+
+data class GameplayTargetBoundaryProvenance(
+    val targetInstance: GameplayInstanceId,
+    val effectiveProtocolIdentity: GameplayEffectiveProtocolIdentity,
 )

@@ -102,23 +102,53 @@ data class PersistenceStatusProjection(
     val persistence: ProfilePersistenceStatus,
 ) : ProfileProjection
 
-/** One canonical Profile surface; query overloads remain statically typed. */
-interface ProfilePort {
+/** Query-only Profile surface used by Home and Codex presentation. */
+interface ProfileReadPort {
     val instanceId: ProfileInstanceId
+
+    fun query(query: ProfileQuery.GetPreferences): PreferencesProjection
+    fun query(query: ProfileQuery.GetHomeProgress): HomeProgressProjection
+    fun query(query: ProfileQuery.GetCollection): CollectionProjection
+}
+
+/** Local Profile Interaction authority plus the complete read surface. */
+interface ProfilePort : ProfileReadPort {
 
     fun accept(pulse: ProfilePulse.Business): ProfileAcceptance
 
-    fun accept(
-        command: ProfileCommand,
-        admission: ProfileCommandAdmission,
-    ): ProfileAcceptance
+    fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection
+    fun query(query: ProfileQuery.GetLabProgress): LabProgressProjection
+    fun query(query: ProfileQuery.GetLoadout): LoadoutProjection
+    fun query(query: ProfileQuery.GetRebirthProgress): RebirthProgressProjection
+    fun query(query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection
+}
+
+/** Statically bound AppSession command route with only the reads its workflow consumes. */
+interface SessionProfileRoute {
+    val instanceId: ProfileInstanceId
+
+    fun acceptFromSession(
+        request: ProfileModuleCommandRequest,
+        causalScope: Long,
+        causalDepth: Int,
+    ): ProfileCommandIngressResult
 
     fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection
     fun query(query: ProfileQuery.GetPreferences): PreferencesProjection
-    fun query(query: ProfileQuery.GetHomeProgress): HomeProgressProjection
-    fun query(query: ProfileQuery.GetLabProgress): LabProgressProjection
-    fun query(query: ProfileQuery.GetLoadout): LoadoutProjection
-    fun query(query: ProfileQuery.GetCollection): CollectionProjection
     fun query(query: ProfileQuery.GetRebirthProgress): RebirthProgressProjection
     fun query(query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection
+}
+
+/** Statically bound GameplayRun command route and its two admitted Profile reads. */
+interface GameplayProfileRoute {
+    val instanceId: ProfileInstanceId
+
+    fun acceptFromGameplay(
+        request: ProfileModuleCommandRequest,
+        causalScope: Long,
+        causalDepth: Int,
+    ): ProfileCommandIngressResult
+
+    fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection
+    fun query(query: ProfileQuery.GetPreferences): PreferencesProjection
 }

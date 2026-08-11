@@ -31,6 +31,15 @@ a reverse direct-control edge. Generated or inline dispatch remains a direct
 edge until the target returns; the bounded completion deque prevents recursive
 source acceptor entry without pretending there is an asynchronous transport.
 
+`app/shared/AppComposition.kt` is the only production holder/importer of the
+Impl-owned `ProfileComponent` and `GameplayCompositionComponent` composites.
+It passes only `SessionProfileRoute` plus `GameplaySessionHost` to Session,
+`GameplayProfileRoute` to Gameplay, `GameplayPresentation` to Session
+Interaction, and local/read-only Profile views to their declared Interactions.
+The mechanical Profile result router is
+`app/shared/ProfileModuleResultRouter.kt`; it switches only on the accepted
+command-source identity and never inspects or reconstructs the ModuleResult.
+
 ## Read dependencies
 
 | ID | Caller -> target | Target-owned query/result use | Consistency |
@@ -46,6 +55,8 @@ source acceptor entry without pretending there is an asynchronous transport.
 | `session-gameplay-weapon` | AppSession -> GameplayRun | `GameplayQuery.GetActiveWeapon` -> `GameplayActiveWeaponProjection` | explicitly non-atomic UI projection |
 | `session-gameplay-codex` | AppSession -> GameplayRun | `GameplayQuery.GetCodexStacks` -> `GameplayCodexStacksProjection` | explicitly non-atomic UI projection |
 | `gameplay-content-bootstrap` | GameplayRun -> ContentCatalog | `ContentCatalog.gameplayContent` -> `GameplayContentSnapshot` | captured at accepted `StartRun`; no later global lookup |
+| `gameplay-profile-run-bootstrap` | GameplayRun -> Profile | `ProfileQuery.GetRunBootstrap` -> `RunBootstrapProjection` | validated trusted start Context for the exact Profile instance/revision |
+| `gameplay-profile-preferences` | GameplayRun -> Profile | `ProfileQuery.GetPreferences` -> `PreferencesProjection` | validated trusted preferences Context for the exact Profile instance/revision |
 | `profile-content-policy` | Profile -> ContentCatalog | `ContentCatalog.profilePolicy` -> `ProfilePolicySnapshot` | captured at Profile bootstrap/reset; no later global lookup |
 
 An admitted read creates no Decision, accepted-input marker, revision, handle,
@@ -54,23 +65,26 @@ or semantic output.
 ## Command/result routes
 
 Every route is same-process, same-stack, target-owned, and statically bound.
-Each accepted source command carries a `CommandRef` containing source instance,
-target instance, source revision, and source ordinal. Target acceptance creates
-the only result frame. Return delivery verifies the complete correlation tuple
-before constructing the source result Pulse.
+Each accepted source command carries a target-owned `ModuleCommandRequest` and
+semantic handle containing source instance, target instance, source revision,
+and source ordinal. Target acceptance creates the only `ModuleResult` frame.
+Return delivery verifies the complete correlation tuple before the trusted
+caller Impl constructs its Nucleus-private `ModuleResultPulse`. A refusal before
+target acceptance uses only the caller-owned flattened four-field carrier; no
+public source completion wrapper exists.
 
 | Route ID | Source -> target | Target-owned operation | Source completion |
 |---|---|---|---|
-| `session-profile-core-shape` | AppSession -> Profile | `ProfilePulse.SelectCoreShape` -> `ProfileCommandOutcome.CoreShapeSelected` | `SessionControlPulse.ProfileCommandCompleted` / `SessionControlPulse.ProfileCommandRejectedBeforeAcceptance` |
-| `session-profile-mute` | AppSession -> Profile | `ProfilePulse.ToggleMute` -> `ProfileCommandOutcome.PreferencesChanged` | `SessionControlPulse.ProfileCommandCompleted` / `SessionControlPulse.ProfileCommandRejectedBeforeAcceptance` |
-| `session-profile-rebirth` | AppSession -> Profile | `ProfilePulse.AdvanceRebirth` -> `ProfileCommandOutcome.RebirthAdvanced` | `SessionControlPulse.ProfileCommandCompleted` / `SessionControlPulse.ProfileCommandRejectedBeforeAcceptance` |
-| `session-profile-reset-confirm` | AppSession -> Profile | `ProfilePulse.ConfirmLegacyReset` -> `ProfileCommandOutcome.ResetCompleted` / `ProfileCommandOutcome.ResetWriteRejected` / `ProfileCommandOutcome.ResetWriteOutcomeUnknown` / `ProfileCommandOutcome.ResetNeedsAttention` | `SessionControlPulse.ProfileCommandCompleted` / `SessionControlPulse.ProfileCommandRejectedBeforeAcceptance` |
-| `session-profile-reset-retry` | AppSession -> Profile | `ProfilePulse.RetryLegacyPurge` -> `ProfileCommandOutcome.ResetCompleted` / `ProfileCommandOutcome.ResetNeedsAttention` | `SessionControlPulse.ProfileCommandCompleted` / `SessionControlPulse.ProfileCommandRejectedBeforeAcceptance` |
-| `session-gameplay-start` | AppSession -> GameplayRun | `GameplaySessionPulse.StartRun` -> `GameplayCommandOutcome.RunStarted` | `SessionControlPulse.GameplayCommandCompleted` / `SessionControlPulse.GameplayCommandRejectedBeforeAcceptance` |
-| `session-gameplay-pause` | AppSession -> GameplayRun | `GameplaySessionPulse.PauseForOverlay` -> `GameplayCommandOutcome.OverlayPaused` | `SessionControlPulse.GameplayCommandCompleted` / `SessionControlPulse.GameplayCommandRejectedBeforeAcceptance` |
-| `session-gameplay-preferences` | AppSession -> GameplayRun | `GameplaySessionPulse.ApplyPreferences` -> `GameplayCommandOutcome.PreferencesApplied` | `SessionControlPulse.GameplayCommandCompleted` / `SessionControlPulse.GameplayCommandRejectedBeforeAcceptance` |
-| `session-gameplay-exit` | AppSession -> GameplayRun | `GameplaySessionPulse.ExitRun` -> `GameplayCommandOutcome.RunExited` | `SessionControlPulse.GameplayCommandCompleted` / `SessionControlPulse.GameplayCommandRejectedBeforeAcceptance` |
-| `gameplay-profile-progress` | GameplayRun -> Profile | `ProfilePulse.ApplyGameplayProgress` -> `ProfileCommandOutcome.GameplayProgressApplied` | `GameplayControlPulse.ProfileCommandCompleted` / `GameplayControlPulse.ProfileCommandRejectedBeforeAcceptance` |
+| `session-profile-core-shape` | AppSession -> Profile | `ProfileModuleCommand.SelectCoreShape` -> `ProfileModuleResult.CoreShapeSelected` | `ProfileModuleResultPulse` / `ProfileCommandRejectedBeforeAcceptance` |
+| `session-profile-mute` | AppSession -> Profile | `ProfileModuleCommand.ToggleMute` -> `ProfileModuleResult.PreferencesChanged` | `ProfileModuleResultPulse` / `ProfileCommandRejectedBeforeAcceptance` |
+| `session-profile-rebirth` | AppSession -> Profile | `ProfileModuleCommand.AdvanceRebirth` -> `ProfileModuleResult.RebirthAdvanced` | `ProfileModuleResultPulse` / `ProfileCommandRejectedBeforeAcceptance` |
+| `session-profile-reset-confirm` | AppSession -> Profile | `ProfileModuleCommand.ConfirmLegacyReset` -> `ProfileModuleResult.ResetCompleted` / `ProfileModuleResult.ResetWriteRejected` / `ProfileModuleResult.ResetWriteOutcomeUnknown` / `ProfileModuleResult.ResetNeedsAttention` | `ProfileModuleResultPulse` / `ProfileCommandRejectedBeforeAcceptance` |
+| `session-profile-reset-retry` | AppSession -> Profile | `ProfileModuleCommand.RetryLegacyPurge` -> `ProfileModuleResult.ResetCompleted` / `ProfileModuleResult.ResetNeedsAttention` | `ProfileModuleResultPulse` / `ProfileCommandRejectedBeforeAcceptance` |
+| `session-gameplay-start` | AppSession -> GameplayRun | `GameplayModuleCommand.StartRun` -> `GameplayModuleResult.RunStarted` | `GameplayModuleResultPulse` / `GameplayCommandRejectedBeforeAcceptance` |
+| `session-gameplay-pause` | AppSession -> GameplayRun | `GameplayModuleCommand.PauseForOverlay` -> `GameplayModuleResult.OverlayPaused` | `GameplayModuleResultPulse` / `GameplayCommandRejectedBeforeAcceptance` |
+| `session-gameplay-preferences` | AppSession -> GameplayRun | `GameplayModuleCommand.ApplyPreferences` -> `GameplayModuleResult.PreferencesApplied` | `GameplayModuleResultPulse` / `GameplayCommandRejectedBeforeAcceptance` |
+| `session-gameplay-exit` | AppSession -> GameplayRun | `GameplayModuleCommand.ExitRun` -> `GameplayModuleResult.RunExited` | `GameplayModuleResultPulse` / `GameplayCommandRejectedBeforeAcceptance` |
+| `gameplay-profile-progress` | GameplayRun -> Profile | `ProfileModuleCommand.ApplyGameplayProgress` -> `ProfileModuleResult.GameplayProgressApplied` | `GameplayNucleusPulse.ProfileModuleResultPulse` / `GameplayNucleusPulse.ProfileCommandRejectedBeforeAcceptance` |
 
 The AppSession Flow has exactly two participant authorities: Profile and
 GameplayRun. A `FlowParticipation` declaration exists once per pair. The
@@ -79,8 +93,9 @@ five distinct command/result mappings. The AppSession/GameplayRun participation
 references the three declared Gameplay reads and four distinct command/result
 mappings. Its owned coordination is lifecycle, ordering, branching,
 reset/recovery, and terminal navigation; referenced reads and commands retain
-their own ownership. Therefore AppSession has exactly nine command/result route
-mappings; the repository has ten after adding GameplayRun/Profile progress.
+their own ownership. The repository has exactly fourteen typed read routes.
+AppSession has exactly nine command/result route mappings; the repository has ten
+after adding GameplayRun/Profile progress.
 
 ## Flow participations
 
@@ -95,6 +110,63 @@ acceptance reserves the next alternative-completion slot; target acceptance
 reserves the result return before publishing. A target pre-acceptance failure
 creates no target frame or revision and is delivered only through the verified
 carrier completion.
+
+## Closed semantic output executors
+
+Every declared semantic output variant has exactly one statically selected
+effective route and consumer/executor. A closed command-route row may select one
+of its already declared effective target routes from the target-owned command
+variant; it does not add a consumer or wildcard registry.
+
+| ID | Output variant | Conditional selection | Effective route | Consumer/executor |
+|---|---|---|---|---|
+| `ProfileOutput.PersistV4Snapshot` | `ProfileOutput.PersistV4Snapshot` | always | `profile-resource-write-v4` | `DefaultProfileComponent.execute -> ProfileResource.writeV4` |
+| `ProfileOutput.PurgeLegacy` | `ProfileOutput.PurgeLegacy` | always | `profile-resource-purge-legacy` | `DefaultProfileComponent.execute -> ProfileResource.purgeLegacy` |
+| `ProfileOutput.CompleteCommand@app-session` | `ProfileOutput.CompleteCommand` | `profile-complete-consumer/app-session-command-source` | `profile-result-to-app-session` | `AppSession Nucleus` |
+| `ProfileOutput.CompleteCommand@gameplay-run` | `ProfileOutput.CompleteCommand` | `profile-complete-consumer/gameplay-run-command-source` | `profile-result-to-gameplay-run` | `GameplayRun Nucleus` |
+| `GameplayOutput.EmitVisualFx` | `GameplayOutput.EmitVisualFx` | always | `gameplay-visual-fx` | `InteractionFxReducer.apply` |
+| `GameplayOutput.SendProfileCommand` | `GameplayOutput.SendProfileCommand` | always | `gameplay-profile-progress` | `GameComponent.executeProfileCommand -> GameplayProfileRoute.acceptFromGameplay` |
+| `GameplayOutput.AdvanceAudio` | `GameplayOutput.AdvanceAudio` | always | `gameplay-audio-advance` | `GameComponent.execute -> GameplayAudioExecutor.advance` |
+| `GameplayOutput.EnsureAudioUnlocked` | `GameplayOutput.EnsureAudioUnlocked` | always | `gameplay-audio-unlock` | `GameComponent.execute -> GameplayAudioExecutor.ensureUnlocked` |
+| `GameplayOutput.CompleteCommand` | `GameplayOutput.CompleteCommand` | AppSession is the only command source | `gameplay-result-to-app-session` | `AppSession Nucleus` |
+| `AppSessionOutput.EnsureGameplayRun` | `AppSessionOutput.EnsureGameplayRun` | always | `session-ensure-gameplay-run` | `DefaultAppSessionComponent.ensureGameplayRun -> GameplaySessionHost.createRun` |
+| `AppSessionOutput.SendProfileCommand` | `AppSessionOutput.SendProfileCommand` | target operation selects one of five closed routes | `session-profile-command-closed-route` | `DefaultAppSessionComponent.executeProfileCommand -> SessionProfileRoute.acceptFromSession` |
+| `AppSessionOutput.SendGameplayCommand` | `AppSessionOutput.SendGameplayCommand` | target operation selects one of four closed routes | `session-gameplay-command-closed-route` | `DefaultAppSessionComponent.executeGameplayCommand -> GameplaySessionRunPort.acceptFromSession` |
+| `AppSessionOutput.SynchronizeAudioPreferences` | `AppSessionOutput.SynchronizeAudioPreferences` | always | `session-audio-preferences` | `DefaultAppSessionComponent.updateAudioPreferences` |
+| `AppSessionOutput.PlayMuteFeedback` | `AppSessionOutput.PlayMuteFeedback` | always | `session-audio-mute-feedback` | `DefaultAppSessionComponent.playMuteFeedback` |
+| `AppSessionOutput.PlayRebirthAcceptedFeedback` | `AppSessionOutput.PlayRebirthAcceptedFeedback` | always | `session-audio-rebirth-feedback` | `DefaultAppSessionComponent.playRebirthAcceptedFeedback` |
+
+The two `ProfileOutput.CompleteCommand` rows are mutually exclusive final
+consumers selected only by the canonical `commandSource` and effective protocol
+identity. The transport router/sink is not a semantic consumer. Their shared
+reservation is therefore `max=1`, never two branches for one accepted output.
+`GameplayOutput.CompleteCommand` has AppSession as its only final consumer.
+
+## Cumulative fan-out scope
+
+`maxCumulativeFanout=9840` applies to one accepted root causal scope. One unit
+is one distinct accepted `SemanticOutput` branch from its complete accepted source tuple
+(authority, instance, accepted-frame commit revision, source
+ordinal, and output variant, plus `OutputId` when materialized and
+`semanticHandle` only for a triggered inter-Ball/addressable contract) through
+one effective route to one effective consumer/executor. Each output in the
+closed table above has one consumer.
+
+Terminal branches count. All co-reachable branches across accepted causal
+depths `0..7` sum, and separate converging branches to the same authority
+remain separate units (a diamond counts route traversals, not unique
+authorities). Mutually exclusive alternatives share one reservation equal to
+their maximum and only the selected accepted alternative consumes it. Retry or redelivery of the same source tuple
+through the same route to the same consumer
+adds no unit; a newly accepted source tuple does. A separately accepted
+independent root starts a fresh scope and ceiling.
+
+The source-derived graph is same-stack: No asynchronous semantic handoff exists
+and none can reset or escape the root scope. With at most three outputs, one
+consumer per output, and eight accepted levels, the static ceiling is
+`3^1 + 3^2 + ... + 3^8 = 9840`. The verifier resolves the closed output table and
+tree, diamond, terminal, co-reachable, mutually exclusive, duplicate, and
+independent-root fixtures. This proof introduces no runtime fan-out counter.
 
 ## Required workflow order
 

@@ -43,57 +43,53 @@ data class GameplayProgressUpdate(
     ) : this(bankedMatter, discoveredItemIds.toImmutableSet(), clearedRebirthLevel)
 }
 
-/** Complete closed Profile input inventory. Resource-result variants are impl-only entry points. */
+/** Closed local Interaction intent inventory. */
 sealed interface ProfilePulse {
     sealed interface Business : ProfilePulse
-    sealed interface ResourceResult : ProfilePulse
 
     data class AdjustPreference(
         val adjustment: ProfilePreferenceAdjustment,
     ) : Business
 
-    data object ToggleMute : Business
-
     data class PurchaseMetaUpgrade(
         val id: MetaUpgradeId,
-    ) : Business
-
-    data class SelectCoreShape(
-        val shape: CoreShape,
     ) : Business
 
     data class PurchaseOrEquipWeapon(
         val id: WeaponId,
     ) : Business
-
-    data object AdvanceRebirth : Business
-
-    data class ApplyGameplayProgress(
-        val update: GameplayProgressUpdate,
-    ) : Business
-
-    data object ConfirmLegacyReset : Business
-    data object RetryLegacyPurge : Business
-
-    data class BootstrapCompleted(
-        val result: ProfileBootstrapResourceResult,
-    ) : ResourceResult
-
-    data class V4WriteCompleted(
-        val effectRef: ProfileEffectRef,
-        val result: ProfileV4WriteResult,
-    ) : ResourceResult
-
-    data class LegacyPurgeCompleted(
-        val effectRef: ProfileEffectRef,
-        val result: ProfileLegacyPurgeResult,
-    ) : ResourceResult
 }
 
-/** A cross-Ball command wraps the same business Pulse used by local Interaction. */
-data class ProfileCommand(
-    val ref: ProfileCommandRef,
-    val pulse: ProfilePulse.Business,
+/** Target-owned Profile ModuleCommand payloads. They are not aliases of local Interaction intents. */
+sealed interface ProfileModuleCommand {
+    data class SelectCoreShape(val shape: CoreShape) : ProfileModuleCommand
+    data object ToggleMute : ProfileModuleCommand
+    data object AdvanceRebirth : ProfileModuleCommand
+    data object ConfirmLegacyReset : ProfileModuleCommand
+    data object RetryLegacyPurge : ProfileModuleCommand
+    data class ApplyGameplayProgress(val update: GameplayProgressUpdate) : ProfileModuleCommand
+}
+
+/** Canonical accepted-source ModuleCommandRequest retained in a caller frame. */
+data class ProfileModuleCommandRequest(
+    val semanticHandle: ProfileSemanticHandle,
+    val sourceOrdinal: Int,
+    val targetInstance: ProfileInstanceId,
+    val command: ProfileModuleCommand,
+) {
+    init {
+        require(sourceOrdinal == semanticHandle.sourceOrdinal) {
+            "Profile command request ordinal must match its semantic handle"
+        }
+    }
+}
+
+/** Canonical target Nucleus command input, constructed only by the trusted binding boundary. */
+data class ProfileModuleCommandPulse(
+    val commandSource: ProfileCommandSourceToken,
+    val effectiveProtocolIdentity: ProfileEffectiveProtocolIdentity,
+    val command: ProfileModuleCommand,
+    val issuerProvenance: ProfileCommandIssuerProvenance,
 )
 
 sealed interface ProfileGameplayProgressRejection {
@@ -104,18 +100,9 @@ sealed interface ProfileGameplayProgressRejection {
     data class ClearedLevelAboveCurrent(val level: Int) : ProfileGameplayProgressRejection
 }
 
-enum class ProfileCommandRefRejection {
+enum class ProfileCommandValidationFailureReason {
     WRONG_TARGET,
     WRONG_SOURCE_KIND,
-    ADMISSION_MISMATCH,
-}
-
-enum class ProfileResourceResultRejection {
-    BOOTSTRAP_ALREADY_RESOLVED,
-    NO_EFFECT_PENDING,
-    EFFECT_REF_MISMATCH,
-    RESULT_KIND_MISMATCH,
-    WRITTEN_REVISION_MISMATCH,
 }
 
 sealed interface ProfileRejection {
@@ -133,13 +120,6 @@ sealed interface ProfileRejection {
         val reason: ProfileGameplayProgressRejection,
     ) : ProfileRejection
 
-    data class InvalidCommandRef(
-        val reason: ProfileCommandRefRejection,
-    ) : ProfileRejection
-
-    data class UnexpectedResourceResult(
-        val reason: ProfileResourceResultRejection,
-    ) : ProfileRejection
 }
 
 sealed interface ProfileAcceptance {
@@ -157,26 +137,84 @@ sealed interface ProfileAcceptance {
     ) : ProfileAcceptance
 }
 
-sealed interface ProfileCommandOutcome {
-    data class PreferencesChanged(val preferences: PlayerPreferences) : ProfileCommandOutcome
-    data class CoreShapeSelected(val shape: CoreShape) : ProfileCommandOutcome
-    data class RebirthAdvanced(val progress: RebirthProgress) : ProfileCommandOutcome
-    data object GameplayProgressApplied : ProfileCommandOutcome
-    data object ResetCompleted : ProfileCommandOutcome
-    data class ResetWriteRejected(val reason: ProfileV4Rejection) : ProfileCommandOutcome
-    data class ResetWriteOutcomeUnknown(val reason: ProfileResourceFailure) : ProfileCommandOutcome
-    data class ResetNeedsAttention(val status: ProfileResetStatus.NeedsAttention) : ProfileCommandOutcome
+/** Target-owned ModuleResult payload family for the six Profile mappings. */
+sealed interface ProfileModuleResult {
+    data class PreferencesChanged(val preferences: PlayerPreferences) : ProfileModuleResult
+    data class CoreShapeSelected(val shape: CoreShape) : ProfileModuleResult
+    data class RebirthAdvanced(val progress: RebirthProgress) : ProfileModuleResult
+    data object GameplayProgressApplied : ProfileModuleResult
+    data object ResetCompleted : ProfileModuleResult
+    data class ResetWriteRejected(val reason: ProfileV4Rejection) : ProfileModuleResult
+    data class ResetWriteOutcomeUnknown(
+        val reason: ProfileWriteOutcomeUnknownReason,
+    ) : ProfileModuleResult
+    data class ResetNeedsAttention(val status: ProfileResetStatus.NeedsAttention) : ProfileModuleResult
 }
 
-sealed interface ProfileCommandResult {
-    val commandRef: ProfileCommandRef
+/** Canonical target output, created only inside an accepted Profile Decision. */
+data class ProfileModuleResultOutput(
+    val semanticHandle: ProfileSemanticHandle,
+    val sourceOrdinal: Int,
+    val commandSource: ProfileCommandSourceToken,
+    val result: ProfileModuleResult,
+) {
+    init {
+        require(semanticHandle == commandSource.semanticHandle) {
+            "Profile result output must preserve the command semantic handle"
+        }
+    }
+}
 
-    /** Accepted-only target result; pre-accept rejection is carried separately by the source. */
+/** Full accepted-frame evidence transported by the statically bound Profile result route. */
+data class ProfileModuleResultDelivery(
+    val commandSource: ProfileCommandSourceToken,
+    val resultSource: ProfileResultSourceToken,
+    val effectiveProtocolIdentity: ProfileEffectiveProtocolIdentity,
+    val result: ProfileModuleResult,
+    val issuerProvenance: ProfileResultIssuerProvenance,
+)
+
+sealed interface ProfileCommandAdmissionFailureReason {
+    data class CausalBudgetExceeded(
+        val causalScope: Long,
+        val limit: Int,
+    ) : ProfileCommandAdmissionFailureReason
+
+    data object CompletionCapacityExhausted : ProfileCommandAdmissionFailureReason
+    data object RevisionCapacityExhausted : ProfileCommandAdmissionFailureReason
+}
+
+sealed interface ProfileCommandBoundaryResponse {
+    data class ValidationFailure(
+        val reason: ProfileCommandValidationFailureReason,
+    ) : ProfileCommandBoundaryResponse
+
+    data class AdmissionFailure(
+        val reason: ProfileCommandAdmissionFailureReason,
+    ) : ProfileCommandBoundaryResponse
+
+    data class DecisionRejected(
+        val reason: ProfileRejection,
+    ) : ProfileCommandBoundaryResponse
+}
+
+/** Verified target-ingress refusal evidence; the caller owns its ControlPulse carrier wrapper. */
+data class ProfileCommandRefusalEvidence(
+    val commandSource: ProfileCommandSourceToken,
+    val effectiveProtocolIdentity: ProfileEffectiveProtocolIdentity,
+    val boundaryResponse: ProfileCommandBoundaryResponse,
+    val targetBoundaryProvenance: ProfileTargetBoundaryProvenance,
+)
+
+sealed interface ProfileCommandIngressResult {
     data class Accepted(
-        override val commandRef: ProfileCommandRef,
+        val targetInstance: ProfileInstanceId,
         val targetRevision: ProfileRevision,
-        val outcome: ProfileCommandOutcome,
-    ) : ProfileCommandResult
+    ) : ProfileCommandIngressResult
+
+    data class RejectedBeforeAcceptance(
+        val refusal: ProfileCommandRefusalEvidence,
+    ) : ProfileCommandIngressResult
 }
 
 sealed interface ProfileResetReason {
@@ -190,22 +228,20 @@ sealed interface ProfileResetReason {
 }
 
 sealed interface ProfileBootstrapBlockReason {
-    data class ResourceOutcomeUnknown(val reason: ProfileResourceFailure) : ProfileBootstrapBlockReason
+    data class ResourceFailure(val reason: ProfileReadFailure) : ProfileBootstrapBlockReason
     data class ResetRequired(val reason: ProfileResetReason) : ProfileBootstrapBlockReason
     data object ResetInProgress : ProfileBootstrapBlockReason
     data class ResetNeedsAttention(val result: ProfileLegacyPurgeResult) : ProfileBootstrapBlockReason
 }
 
 sealed interface ProfileBootstrapStatus {
-    data object AwaitingResource : ProfileBootstrapStatus
     data object Ready : ProfileBootstrapStatus
     data class Blocked(val reason: ProfileBootstrapBlockReason) : ProfileBootstrapStatus
 }
 
-sealed interface ProfileResetCompletion {
-    data object Local : ProfileResetCompletion
-    data class Command(val commandRef: ProfileCommandRef) : ProfileResetCompletion
-}
+data class ProfileResetCompletion(
+    val commandSource: ProfileCommandSourceToken,
+)
 
 sealed interface ProfileResetStatus {
     data class NotRequired(
@@ -261,6 +297,6 @@ sealed interface ProfilePersistenceStatus {
 
     data class OutcomeUnknown(
         val snapshotRevision: ProfileRevision,
-        val reason: ProfileResourceFailure,
+        val reason: ProfileWriteOutcomeUnknownReason,
     ) : ProfilePersistenceStatus
 }

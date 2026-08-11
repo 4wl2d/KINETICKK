@@ -15,6 +15,7 @@ import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
 
 import kinetickk.ball.gameplay.api.*
+import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.foundation.collections.toImmutableSet
@@ -39,10 +40,10 @@ internal fun MutableGameState.buildItemChoices() {
     val unlocked = content.items.filter { it.unlockLevel <= catalogLevel }
     val eligible = unlocked.filter { itemStacks[it.id] < it.maxStacks }
     val selected = mutableListOf<ItemDefinition>()
-    repeat(MAX_GENERATED_REWARD_CHOICES) {
+    repeat(MAX_GENERATED_REWARD_CHOICES) itemChoiceLoop@{
         val preferred = eligible.filter { candidate -> selected.none { it.id == candidate.id } }
         val available = preferred.ifEmpty { unlocked.filter { candidate -> selected.none { it.id == candidate.id } } }
-        if (available.isEmpty()) return@repeat
+        if (available.isEmpty()) return@itemChoiceLoop
         val rarity = rollRarity()
         val rarityPool = available.filter { it.rarity == rarity }.ifEmpty { available }
         selected += rarityPool[gameplayRandom.nextInt(rarityPool.size)]
@@ -131,7 +132,7 @@ internal fun MutableGameState.openRelicChoice() {
 
 internal fun MutableGameState.buildRelicChoices() {
     val selected = mutableListOf<RelicDefinition>()
-    repeat(MAX_GENERATED_REWARD_CHOICES) {
+    repeat(MAX_GENERATED_REWARD_CHOICES) relicChoiceLoop@{
         val excluded = selected.mapTo(mutableSetOf()) { it.id }
         val sovereignChance = (0.08f + luck.coerceIn(0f, 2f) * 0.01f).coerceAtMost(0.10f)
         val preferredAspect = if (gameplayRandom.nextFloat() < sovereignChance) {

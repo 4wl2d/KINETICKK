@@ -7,21 +7,11 @@ import kinetickk.ball.profile.api.ProfileBootstrapResourceResult
 import kinetickk.ball.profile.api.ProfileLegacyKeys
 import kinetickk.ball.profile.api.ProfileLegacyPurgeRejection
 import kinetickk.ball.profile.api.ProfileLegacyPurgeResult
-import kinetickk.ball.profile.api.ProfileResourceFailure
+import kinetickk.ball.profile.api.ProfilePurgeOutcomeUnknownReason
+import kinetickk.ball.profile.api.ProfileReadFailure
 import kinetickk.ball.profile.api.ProfileV4Snapshot
 import kinetickk.ball.profile.api.ProfileV4WriteResult
-
-internal object ProfileStorageKeys {
-    const val DESKTOP_PROFILE_NODE: String = "kinetickk/profile"
-    const val DESKTOP_SNAPSHOT_V4: String = "snapshot_v4"
-    const val DESKTOP_LEGACY_NODE: String = "kinetickk/progression"
-    const val DESKTOP_LEGACY_PROGRESS_V2: String = "progress_v2"
-    const val DESKTOP_LEGACY_MATTER: String = "kinetickk_matter"
-
-    const val WEB_SNAPSHOT_V4: String = "kinetickk_profile_v4"
-    const val WEB_LEGACY_PROGRESS_V2: String = "kinetickk_progress_v2"
-    const val WEB_LEGACY_MATTER: String = "kinetickk_matter"
-}
+import kinetickk.ball.profile.api.ProfileWriteOutcomeUnknownReason
 
 /** Minimal synchronous port exposed to the Profile acceptor. */
 interface ProfileResource {
@@ -32,10 +22,13 @@ interface ProfileResource {
     fun purgeLegacy(): ProfileLegacyPurgeResult
 }
 
-expect fun createPlatformProfileResource(): ProfileResource
-
-/** Exact-key capability exposed to common code; broad clear/remove-node operations are absent. */
-internal interface ProfileStorageProvider {
+/**
+ * Exact persistence authority accepted by the Profile Resource.
+ *
+ * Platform stores, roots, nodes, key selection, bulk clearing, and global acquisition are
+ * deliberately absent. The app platform broker is the only place that may hold those powers.
+ */
+interface ExactProfilePersistence {
     fun readV4(): String?
 
     fun writeV4(payload: String)
@@ -49,8 +42,12 @@ internal interface ProfileStorageProvider {
     fun removeLegacyMatter()
 }
 
-internal class FixedKeyProfileResource(
-    private val provider: ProfileStorageProvider,
+fun createProfileResource(
+    persistence: ExactProfilePersistence,
+): ProfileResource = FixedKeyProfileResource(persistence)
+
+private class FixedKeyProfileResource(
+    private val provider: ExactProfilePersistence,
 ) : ProfileResource {
     override fun readBootstrap(): ProfileBootstrapResourceResult {
         val payload: String?
@@ -62,8 +59,8 @@ internal class FixedKeyProfileResource(
                 matter = provider.readLegacyMatter() != null,
             )
         } catch (_: Throwable) {
-            return ProfileBootstrapResourceResult.OutcomeUnknown(
-                ProfileResourceFailure.PROVIDER_READ_FAILED,
+            return ProfileBootstrapResourceResult.ResourceFailure(
+                ProfileReadFailure.PROVIDER_READ_FAILED,
             )
         }
 
@@ -99,12 +96,12 @@ internal class FixedKeyProfileResource(
                 ProfileV4WriteResult.Written(snapshot.revision)
             } else {
                 ProfileV4WriteResult.OutcomeUnknown(
-                    ProfileResourceFailure.PROVIDER_WRITE_MAY_HAVE_EXECUTED,
+                    ProfileWriteOutcomeUnknownReason.PROVIDER_WRITE_MAY_HAVE_EXECUTED,
                 )
             }
         } catch (_: Throwable) {
             ProfileV4WriteResult.OutcomeUnknown(
-                ProfileResourceFailure.PROVIDER_WRITE_MAY_HAVE_EXECUTED,
+                ProfileWriteOutcomeUnknownReason.PROVIDER_WRITE_MAY_HAVE_EXECUTED,
             )
         }
     }
@@ -113,10 +110,8 @@ internal class FixedKeyProfileResource(
         val guardPayload = try {
             provider.readV4()
         } catch (_: Throwable) {
-            return ProfileLegacyPurgeResult.OutcomeUnknown(
-                remaining = ProfileLegacyKeys(progressV2 = false, matter = false),
-                unknown = ProfileLegacyKeys(progressV2 = true, matter = true),
-                reason = ProfileResourceFailure.PROVIDER_READ_FAILED,
+            return ProfileLegacyPurgeResult.ResourceFailure(
+                ProfileReadFailure.PROVIDER_READ_FAILED,
             )
         }
         val guard = guardPayload?.let(ProfileV4Codec::decode)
@@ -149,7 +144,7 @@ internal class FixedKeyProfileResource(
             unknown.progressV2 || unknown.matter -> ProfileLegacyPurgeResult.OutcomeUnknown(
                 remaining = remaining,
                 unknown = unknown,
-                reason = ProfileResourceFailure.PROVIDER_PURGE_MAY_HAVE_EXECUTED,
+                reason = ProfilePurgeOutcomeUnknownReason.PROVIDER_PURGE_MAY_HAVE_EXECUTED,
             )
             remaining.progressV2 || remaining.matter -> ProfileLegacyPurgeResult.Partial(remaining)
             else -> ProfileLegacyPurgeResult.Purged

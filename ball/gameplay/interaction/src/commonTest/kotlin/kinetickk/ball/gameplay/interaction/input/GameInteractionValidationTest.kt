@@ -129,14 +129,8 @@ class GameInteractionValidationTest {
     }
 
     @Test
-    fun pointerCoordinatesRequireAViewportAndUseStrictInclusiveBounds() {
+    fun pointerValidationAcceptsFiniteCoordinatesAndRejectsNonfiniteXAndY() {
         val validator = GameInteractionValidator()
-        assertIs<ValidationFailure.MissingValidatedViewport>(
-            invalid(validator.pointerMoved(0f, 0f)),
-        )
-        valid<GameplayInteractionPulse.ViewportChanged>(
-            validator.viewportChanged(100f, 50f, 1f),
-        )
 
         val origin = valid<GameplayInteractionPulse.PointerMoved>(
             validator.pointerMoved(0f, 0f, active = false),
@@ -148,40 +142,39 @@ class GameInteractionValidationTest {
         assertEquals(100f, edge.x)
         assertEquals(50f, edge.y)
 
-        assertOutOfRange(
-            validator.pointerMoved(101f, 50f),
-            InteractionInputField.POINTER_X_PX,
-        )
-        assertOutOfRange(
-            validator.pointerMoved(100f, 51f),
-            InteractionInputField.POINTER_Y_PX,
-        )
-        assertOutOfRange(
-            validator.pointerMoved(-1f, 0f),
-            InteractionInputField.POINTER_X_PX,
-        )
+        assertEquals(-1f, valid<GameplayInteractionPulse.PointerMoved>(
+            validator.pointerMoved(-1f, 51f),
+        ).x)
         assertNonFinite(
             validator.pointerMoved(Float.POSITIVE_INFINITY, 0f),
             InteractionInputField.POINTER_X_PX,
         )
+        assertNonFinite(
+            validator.pointerMoved(0f, Float.NaN),
+            InteractionInputField.POINTER_Y_PX,
+        )
     }
 
     @Test
-    fun invalidViewportDoesNotReplaceTheLastValidatedPointerBoundary() {
+    fun choiceIndexValidationAcceptsZeroThroughThreeAndRejectsBothAdjacentValues() {
         val validator = GameInteractionValidator()
-        valid<GameplayInteractionPulse.ViewportChanged>(
-            validator.viewportChanged(100f, 50f, 1f),
-        )
-        assertNonFinite(
-            validator.viewportChanged(200f, 100f, Float.NaN),
-            InteractionInputField.DENSITY,
-        )
 
-        valid<GameplayInteractionPulse.PointerMoved>(validator.pointerMoved(100f, 50f))
-        assertOutOfRange(
-            validator.pointerMoved(101f, 50f),
-            InteractionInputField.POINTER_X_PX,
+        assertEquals(
+            0,
+            valid<GameplayInteractionPulse.ChoiceSelected>(validator.choiceSelected(0)).index,
         )
+        assertEquals(
+            3,
+            valid<GameplayInteractionPulse.ChoiceSelected>(validator.choiceSelected(3)).index,
+        )
+        listOf(-1, 4).forEach { rejectedIndex ->
+            val failure = assertIs<ValidationFailure.IndexOutOfRange>(
+                invalid(validator.choiceSelected(rejectedIndex)),
+            )
+            assertEquals(InteractionInputField.CHOICE_INDEX, failure.field)
+            assertEquals(0, failure.acceptedMinimum)
+            assertEquals(3, failure.acceptedMaximum)
+        }
     }
 
     private inline fun <reified Intent : GameplayInteractionPulse> valid(

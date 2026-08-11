@@ -14,15 +14,37 @@ repeatable automated browser gate.
 - Serve only `app/web/build/dist/wasmJs/productionExecutable` on loopback.
 - Launch the exact declared Chrome for Testing binary with a fresh temporary
   browser profile and a new loopback origin.
-- Never attach to an existing Chrome session, reuse its storage, or use the
-  platform Preferences provider.
-- Drive only visible keyboard and pointer input. No production test registry,
-  global bridge, hidden route mutation, or direct component call is permitted.
+- Never attach to an existing Chrome session, reuse its storage, or reuse a
+  live app platform-storage broker.
+- After the isolated storage precondition is installed, drive application
+  behavior only through visible keyboard and pointer input. No production test
+  registry, global bridge, hidden route mutation, or direct component call is
+  permitted.
 
 Local screenshots and browser traces are written beneath
-`output/playwright/phase8-rendered-qa/`, which is ignored by Git. The formal
+`output/playwright/freeze-<short-sha>/`, which is ignored by Git. The formal
 claim record names the exact freeze SHA, browser version, command result, and
 observed evidence; it does not treat these transient files as product source.
+
+### Isolated storage precondition
+
+Reset evidence requires a controlled precondition that the product UI cannot
+create. Browser automation may use page evaluation only to prepare and inspect
+the fresh temporary profile on the loopback app origin:
+
+1. load the production app once, set only the declared legacy key
+   `kinetickk_progress_v2`, and reload;
+2. for the partial-purge scenario, wrap that isolated page's
+   `Storage.prototype.removeItem` so the first removal of exactly that key
+   throws, restores the original method, and never affects another origin;
+3. after setup, use visible Canvas input for Cancel, Confirm, and Retry; and
+4. inspect the same origin's storage after each step to prove Cancel retained
+   the key, Confirm wrote a valid v4 snapshot before the injected purge
+   failure, and Retry removed only the declared legacy key.
+
+This setup is test-fixture preparation and observation, not a production
+control path. It must never reuse a developer profile, mutate a route, call a
+component, or install an application-visible test API.
 
 ## Rendered scenario inventory
 
@@ -52,7 +74,10 @@ CHROME_BIN=/absolute/path/to/chrome ./gradlew \
   --rerun-tasks
 ```
 
-`BrowserRuntimeQaTest` exercises the same reset and workflow branches with
-isolated in-memory providers inside the Wasm test runtime. The rendered smoke
-above proves that production host, Canvas composition, input mapping, Session
-workflow, and browser storage binding are connected end to end.
+`BrowserRuntimeQaTest` exercises the seven-route and core Session lifecycle
+branches with isolated in-memory participants inside the Wasm test runtime.
+Profile Resource, Session component, and App platform-broker tests exercise the
+reset and storage branches in that same automated browser gate. The rendered
+smoke above joins those layers and proves that the production host, Canvas
+composition, visible input mapping, Session workflow, and browser storage
+binding are connected end to end.

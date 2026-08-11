@@ -253,6 +253,7 @@ abstract class VerifyPokeballConformanceTask : DefaultTask() {
         if (recordBytes == null) {
             val violations = buildList {
                 addAll(repositoryViolations)
+                addAll(validateFrozenAuditPolicy(root, head))
                 if (proofBytes != null) {
                     add("Trigger-absence proofs are committed without a conformance record")
                 }
@@ -339,6 +340,7 @@ internal const val TRIGGER_ABSENCE_PROOFS_PATH = "docs/architecture/pokeball/tri
 internal const val POKEBALL_BASELINE_PATH = "docs/architecture/pokeball/baseline.md"
 internal const val POKEBALL_POLICY_PATH = "docs/architecture/pokeball/policy.md"
 internal const val POKEBALL_ASSEMBLY_PATH = "docs/architecture/pokeball/assembly.md"
+internal const val POKEBALL_APPLICABILITY_PATH = "docs/architecture/pokeball/applicability.md"
 
 internal val docsOnlyAttestationAllowlist = sortedSetOf(
     "docs/architecture/pokeball/README.md",
@@ -392,14 +394,6 @@ internal val requiredTriggerAbsenceProofs = listOf(
         listOf("detached", "asynchronous", "semantic"),
     ),
     RequiredTriggerAbsenceProof(
-        "TA-05-retry-idempotency-cancellation",
-        "path-triggered",
-        "Core §9.6–§9.9 / PBA-21–PBA-24",
-        "PathInventoryRef",
-        POKEBALL_POLICY_PATH,
-        listOf("retry", "idempotency", "cancellation"),
-    ),
-    RequiredTriggerAbsenceProof(
         "TA-06-dynamic-registry",
         "path-triggered",
         "Core §10.4, §10.7 / PBA-27",
@@ -427,6 +421,68 @@ internal val requiredTriggerAbsenceProofs = listOf(
 
 internal val requiredTriggerAbsenceProofIds = requiredTriggerAbsenceProofs.map(RequiredTriggerAbsenceProof::id)
 private val requiredTriggerAbsenceProofById = requiredTriggerAbsenceProofs.associateBy(RequiredTriggerAbsenceProof::id)
+
+private const val AUDIT_POLICY_MARKER = "<!-- pokeball-audit-policy"
+private val requiredAuditPolicyKeys = listOf(
+    "profileAuthorities",
+    "effectiveProfile",
+    "contentMutationPath",
+    "semanticRetry",
+    "semanticRetryAnchor",
+    "semanticRetryPulse",
+    "semanticRetryCommand",
+    "semanticRetryPrimaryOwner",
+    "semanticRetryTarget",
+    "semanticRetryAttemptsPerPulse",
+    "semanticRetryDisabledLayers",
+    "semanticRetryEvidence",
+)
+private val expectedAuditPolicy = linkedMapOf(
+    "profileAuthorities" to "ContentCatalog|Profile|GameplayRun|AppSession",
+    "effectiveProfile" to "Inline+Transient+InProcess+Standard+Static",
+    "contentMutationPath" to "NONE",
+    "semanticRetry" to "PRESENT",
+    "semanticRetryAnchor" to "Core §9.9 / PBA-24",
+    "semanticRetryPulse" to "SessionInteractionPulse.ResetRetryRequested",
+    "semanticRetryCommand" to "ProfileModuleCommand.RetryLegacyPurge",
+    "semanticRetryPrimaryOwner" to "AppSession",
+    "semanticRetryTarget" to "Profile",
+    "semanticRetryAttemptsPerPulse" to "1",
+    "semanticRetryDisabledLayers" to "transport|executor|SDK/provider|reconciliation",
+)
+
+internal data class AuditEvidenceAnchor(
+    val path: String,
+    val tokens: List<String>,
+)
+
+internal val semanticRetryEvidenceAnchors = listOf(
+    AuditEvidenceAnchor(
+        path = "flow/session/nucleus/src/commonTest/kotlin/kinetickk/flow/session/nucleus/AppSessionNucleusTest.kt",
+        tokens = listOf(
+            "SessionInteractionPulse.ResetRetryRequested",
+            "ProfileModuleCommand.RetryLegacyPurge",
+            "oneExplicitResetRetryPulseIssuesExactlyOnePurgeCommand",
+            "assertIs<AppSessionOutput.SendProfileCommand>(retry.outputs.single())",
+        ),
+    ),
+    AuditEvidenceAnchor(
+        path = "ball/profile/nucleus/src/commonTest/kotlin/kinetickk/ball/profile/nucleus/ProfileNucleusTest.kt",
+        tokens = listOf(
+            "local partial result must not auto-retry",
+            "ProfileModuleCommand.RetryLegacyPurge",
+            "assertIs<ProfileOutput.PurgeLegacy>(retry.outputs.single())",
+        ),
+    ),
+    AuditEvidenceAnchor(
+        path = "ball/profile/impl/src/commonTest/kotlin/kinetickk/ball/profile/impl/DefaultProfileComponentTest.kt",
+        tokens = listOf(
+            "ProfileModuleCommand.RetryLegacyPurge",
+            "assertEquals(1, resource.purgeCount)",
+        ),
+    ),
+)
+private val expectedSemanticRetryEvidence = semanticRetryEvidenceAnchors.joinToString("|") { it.path }
 
 private val requiredConformanceMetadataKeys = buildList {
     add("schemaVersion")
@@ -593,6 +649,7 @@ internal fun validateStrictAttestation(
             ""
         }
         projectBaselinePinViolations(baselineText).forEach { add("Frozen baseline: $it") }
+        addAll(validateFrozenAuditPolicy(root, freeze))
     }
 
     if (metadata.getValue("coreCommit") != PokeballBaseline.CORE_COMMIT) {
@@ -651,6 +708,71 @@ internal fun parseStrictConformanceMetadata(record: String): Map<String, String>
     requiredKeys = requiredConformanceMetadataKeys,
     context = "conformance metadata",
 )
+
+internal fun parseStrictAuditPolicy(policy: String): Map<String, String> = parseSingleMetadataBlock(
+    document = policy,
+    marker = AUDIT_POLICY_MARKER,
+    requiredKeys = requiredAuditPolicyKeys,
+    context = "Pokeball audit policy",
+)
+
+internal fun auditPolicyViolations(
+    policy: String,
+    applicability: String,
+    evidenceByPath: Map<String, String>,
+): List<String> = buildList {
+    val auditPolicy = runCatching { parseStrictAuditPolicy(policy) }
+        .getOrElse { failure ->
+            add("Malformed Pokeball audit policy: ${failure.message}")
+            emptyMap()
+        }
+    if (auditPolicy.isNotEmpty()) {
+        (expectedAuditPolicy + ("semanticRetryEvidence" to expectedSemanticRetryEvidence)).forEach { (key, expected) ->
+            val actual = auditPolicy.getValue(key)
+            if (actual != expected) {
+                add("Pokeball audit policy $key must be exactly `$expected`; found `$actual`")
+            }
+        }
+    }
+
+    if ("no runtime mutation profile" in policy) {
+        add("ContentCatalog cannot be exempted from effective-profile resolution merely because it has no mutation path")
+    }
+
+    val presentTriggers = applicability
+        .substringAfter("## Present triggers", missingDelimiterValue = "")
+        .substringBefore("## Absent trigger scopes", missingDelimiterValue = "")
+    listOf(
+        "explicit user semantic retry",
+        "`SessionInteractionPulse.ResetRetryRequested`",
+        "`ProfileModuleCommand.RetryLegacyPurge`",
+        "primary owner `AppSession`",
+        "target `Profile`",
+        "one purge attempt per explicit user Pulse",
+        "`PBA-24`",
+    ).filterNot(presentTriggers::contains).forEach { token ->
+        add("Applicability present-trigger inventory is missing semantic-retry contract `$token`")
+    }
+
+    val absentTriggers = applicability.substringAfter("## Absent trigger scopes", missingDelimiterValue = "")
+    absentTriggers.lineSequence()
+        .filter { line -> line.trimStart().startsWith('|') }
+        .filter { line -> Regex("\\bretr(?:y|ies)\\b", RegexOption.IGNORE_CASE).containsMatchIn(line) }
+        .forEach { line ->
+            add("Applicability absence inventory contradicts present PBA-24 semantic retry: ${line.trim()}")
+        }
+
+    semanticRetryEvidenceAnchors.forEach { anchor ->
+        val evidence = evidenceByPath[anchor.path]
+        if (evidence == null) {
+            add("Semantic-retry policy evidence is missing ${anchor.path}")
+        } else {
+            anchor.tokens.filterNot(evidence::contains).forEach { token ->
+                add("Semantic-retry policy evidence ${anchor.path} is missing `$token`")
+            }
+        }
+    }
+}.distinct().sorted()
 
 internal fun parseStrictTriggerAbsenceProofs(document: String): List<TriggerAbsenceProof> {
     val blocks = mutableListOf<TriggerAbsenceProof>()
@@ -846,6 +968,24 @@ private fun validateFreezeDocumentDigests(
         if (metadata.getValue(key) != actual) {
             add("$key mismatch for frozen $path: expected ${metadata.getValue(key)}, found $actual")
         }
+    }
+}
+
+private fun validateFrozenAuditPolicy(root: Path, revision: String): List<String> = buildList {
+    fun readFrozenText(path: String): String? = runCatching {
+        decodeStrictUtf8(gitBlob(root, revision, path), path)
+    }.getOrElse { failure ->
+        add("Could not read frozen $path: ${failure.message}")
+        null
+    }
+
+    val policy = readFrozenText(POKEBALL_POLICY_PATH)
+    val applicability = readFrozenText(POKEBALL_APPLICABILITY_PATH)
+    val evidence = semanticRetryEvidenceAnchors.mapNotNull { anchor ->
+        readFrozenText(anchor.path)?.let { text -> anchor.path to text }
+    }.toMap()
+    if (policy != null && applicability != null) {
+        addAll(auditPolicyViolations(policy, applicability, evidence))
     }
 }
 

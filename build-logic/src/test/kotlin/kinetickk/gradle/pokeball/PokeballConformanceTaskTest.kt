@@ -57,9 +57,77 @@ class PokeballConformanceTaskTest {
     }
 
     @Test
+    fun auditPolicyPinsAllFourProfilesAndPresentSemanticRetryContract() {
+        val policy = validAuditPolicy()
+        val applicability = validApplicability()
+        val evidence = validSemanticRetryEvidence()
+        assertEquals(12, parseStrictAuditPolicy(policy).size)
+        assertTrue(auditPolicyViolations(policy, applicability, evidence).isEmpty())
+
+        listOf(
+            policy.replace(
+                "profileAuthorities=ContentCatalog|Profile|GameplayRun|AppSession",
+                "profileAuthorities=ContentCatalog|Profile|GameplayRun|AppSession\nunknownPolicyKey=value",
+            ),
+            policy.replace(
+                "semanticRetry=PRESENT",
+                "semanticRetry=PRESENT\nsemanticRetry=PRESENT",
+            ),
+            policy.replace("contentMutationPath=NONE\n", ""),
+        ).forEach { malformed ->
+            assertFailsWith<IllegalArgumentException> { parseStrictAuditPolicy(malformed) }
+        }
+
+        val mutations = listOf(
+            policy.replace(
+                "profileAuthorities=ContentCatalog|Profile|GameplayRun|AppSession",
+                "profileAuthorities=Profile|GameplayRun|AppSession",
+            ) to "profileAuthorities must be exactly",
+            policy.replace(
+                "effectiveProfile=Inline+Transient+InProcess+Standard+Static",
+                "effectiveProfile=Inline+Transient+InProcess+Standard",
+            ) to "effectiveProfile must be exactly",
+            policy.replace("semanticRetry=PRESENT", "semanticRetry=ABSENT") to
+                "semanticRetry must be exactly",
+            policy.replace("semanticRetryPrimaryOwner=AppSession", "semanticRetryPrimaryOwner=Profile") to
+                "semanticRetryPrimaryOwner must be exactly",
+            policy.replace("semanticRetryAttemptsPerPulse=1", "semanticRetryAttemptsPerPulse=2") to
+                "semanticRetryAttemptsPerPulse must be exactly",
+        )
+        mutations.forEach { (changed, expectedMessage) ->
+            val violations = auditPolicyViolations(changed, applicability, evidence)
+            assertTrue(violations.any { expectedMessage in it }, "Missing `$expectedMessage` in $violations")
+        }
+
+        assertTrue(
+            auditPolicyViolations(
+                policy + "\nContentCatalog has no runtime mutation profile.\n",
+                applicability,
+                evidence,
+            ).any { "cannot be exempted from effective-profile resolution" in it },
+        )
+
+        val absentContradiction = applicability +
+            "\n| retry, idempotency, cancellation | incorrectly absent |\n"
+        assertTrue(
+            auditPolicyViolations(policy, absentContradiction, evidence)
+                .any { "contradicts present PBA-24 semantic retry" in it },
+        )
+
+        val firstAnchor = semanticRetryEvidenceAnchors.first()
+        val incompleteEvidence = evidence + (firstAnchor.path to "missing required tokens")
+        assertTrue(
+            auditPolicyViolations(policy, applicability, incompleteEvidence)
+                .any { "Semantic-retry policy evidence ${firstAnchor.path} is missing" in it },
+        )
+    }
+
+    @Test
     fun triggerAbsenceProofParserRejectsCountOrderUnknownDuplicateAndMalformedFields() {
         val freeze = "1".repeat(40)
         val digest = "2".repeat(64)
+        assertEquals(7, requiredTriggerAbsenceProofIds.size)
+        assertTrue("TA-05-retry-idempotency-cancellation" !in requiredTriggerAbsenceProofIds)
         val blocks = requiredTriggerAbsenceProofIds.map { proofBlock(it, freeze, digest) }
         val valid = blocks.joinToString("\n\n")
         assertEquals(requiredTriggerAbsenceProofIds, parseStrictTriggerAbsenceProofs(valid).map { it.id })
@@ -217,13 +285,10 @@ class PokeballConformanceTaskTest {
     private fun strictFixture(): StrictFixture {
         val root = createGitRepository()
         write(root, POKEBALL_BASELINE_PATH, validProjectBaseline())
-        write(root, POKEBALL_POLICY_PATH, "# Policy\n\nPinned policy.\n")
+        write(root, POKEBALL_POLICY_PATH, validAuditPolicy())
         write(root, POKEBALL_ASSEMBLY_PATH, "# Assembly\n\nPinned assembly.\n")
-        write(
-            root,
-            "docs/architecture/pokeball/applicability.md",
-            "# Applicability\n\nClosed denial-by-construction inventory.\n",
-        )
+        write(root, POKEBALL_APPLICABILITY_PATH, validApplicability())
+        validSemanticRetryEvidence().forEach { (path, text) -> write(root, path, text) }
         write(
             root,
             "docs/architecture/pokeball/resolved-manifest.json",
@@ -329,8 +394,6 @@ class PokeballConformanceTaskTest {
                 "Absent iff the closed inventory contains no network, remote, or IPC semantic path"
             "TA-04-detached-async" ->
                 "Absent iff the closed inventory contains no detached asynchronous semantic delivery path"
-            "TA-05-retry-idempotency-cancellation" ->
-                "Absent iff the closed inventory contains no retry, idempotency, or cancellation path"
             "TA-06-dynamic-registry" ->
                 "Absent iff the closed inventory contains no dynamic registry or wildcard route"
             "TA-07-isolation" ->
@@ -387,6 +450,49 @@ class PokeballConformanceTaskTest {
 
         Frozen.
     """.trimIndent() + "\n"
+
+    private fun validAuditPolicy(): String = """
+        # Policy
+
+        ContentCatalog, Profile, GameplayRun, and AppSession use the exact project profile.
+        ContentCatalog remains immutable/query-only after bootstrap and has no runtime mutation path.
+
+        <!-- pokeball-audit-policy
+        profileAuthorities=ContentCatalog|Profile|GameplayRun|AppSession
+        effectiveProfile=Inline+Transient+InProcess+Standard+Static
+        contentMutationPath=NONE
+        semanticRetry=PRESENT
+        semanticRetryAnchor=Core §9.9 / PBA-24
+        semanticRetryPulse=SessionInteractionPulse.ResetRetryRequested
+        semanticRetryCommand=ProfileModuleCommand.RetryLegacyPurge
+        semanticRetryPrimaryOwner=AppSession
+        semanticRetryTarget=Profile
+        semanticRetryAttemptsPerPulse=1
+        semanticRetryDisabledLayers=transport|executor|SDK/provider|reconciliation
+        semanticRetryEvidence=${semanticRetryEvidenceAnchors.joinToString("|") { it.path }}
+        -->
+    """.trimIndent() + "\n"
+
+    private fun validApplicability(): String = """
+        # Applicability
+
+        ## Present triggers
+
+        | Concern | Why it is present | Required construction/evidence |
+        |---|---|---|
+        | explicit user semantic retry | `SessionInteractionPulse.ResetRetryRequested` issues `ProfileModuleCommand.RetryLegacyPurge`; primary owner `AppSession`, target `Profile`, under `PBA-24` | one purge attempt per explicit user Pulse |
+
+        ## Absent trigger scopes
+
+        | Absent scope | Denial by construction |
+        |---|---|
+        | dynamic registry or wildcard routing | static routes only |
+    """.trimIndent() + "\n"
+
+    private fun validSemanticRetryEvidence(): Map<String, String> =
+        semanticRetryEvidenceAnchors.associate { anchor ->
+            anchor.path to anchor.tokens.joinToString("\n", postfix = "\n")
+        }
 
     private fun createGitRepository(): Path = createTempDirectory("pokeball-conformance-test-").also { root ->
         runGit(root, "init", "--quiet")

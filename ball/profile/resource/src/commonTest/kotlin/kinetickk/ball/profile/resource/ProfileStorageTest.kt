@@ -7,9 +7,11 @@ import kinetickk.ball.profile.api.ProfileBootstrapResourceResult
 import kinetickk.ball.profile.api.ProfileLegacyKeys
 import kinetickk.ball.profile.api.ProfileLegacyPurgeRejection
 import kinetickk.ball.profile.api.ProfileLegacyPurgeResult
-import kinetickk.ball.profile.api.ProfileResourceFailure
+import kinetickk.ball.profile.api.ProfilePurgeOutcomeUnknownReason
+import kinetickk.ball.profile.api.ProfileReadFailure
 import kinetickk.ball.profile.api.ProfileV4Rejection
 import kinetickk.ball.profile.api.ProfileV4WriteResult
+import kinetickk.ball.profile.api.ProfileWriteOutcomeUnknownReason
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -66,13 +68,13 @@ class ProfileStorageTest {
     }
 
     @Test
-    fun everyProviderReadExceptionIsContainedAsOutcomeUnknown() {
+    fun everyProviderReadExceptionIsAConfirmedNondestructiveResourceFailure() {
         listOf("readV4", "readLegacyProgressV2", "readLegacyMatter").forEach { operation ->
             val provider = RecordingStorageProvider(throwOn = setOf(operation))
 
             assertEquals(
-                ProfileBootstrapResourceResult.OutcomeUnknown(
-                    ProfileResourceFailure.PROVIDER_READ_FAILED,
+                ProfileBootstrapResourceResult.ResourceFailure(
+                    ProfileReadFailure.PROVIDER_READ_FAILED,
                 ),
                 resource(provider).readBootstrap(),
                 operation,
@@ -121,7 +123,7 @@ class ProfileStorageTest {
         listOf(throwing, ignored).forEach { provider ->
             assertEquals(
                 ProfileV4WriteResult.OutcomeUnknown(
-                    ProfileResourceFailure.PROVIDER_WRITE_MAY_HAVE_EXECUTED,
+                    ProfileWriteOutcomeUnknownReason.PROVIDER_WRITE_MAY_HAVE_EXECUTED,
                 ),
                 resource(provider).writeV4(snapshot),
             )
@@ -198,21 +200,19 @@ class ProfileStorageTest {
             ProfileLegacyPurgeResult.OutcomeUnknown(
                 remaining = ProfileLegacyKeys(progressV2 = true, matter = false),
                 unknown = ProfileLegacyKeys(progressV2 = false, matter = true),
-                reason = ProfileResourceFailure.PROVIDER_PURGE_MAY_HAVE_EXECUTED,
+                reason = ProfilePurgeOutcomeUnknownReason.PROVIDER_PURGE_MAY_HAVE_EXECUTED,
             ),
             resource(provider).purgeLegacy(),
         )
     }
 
     @Test
-    fun purgeGuardReadFailureIsNondestructiveAndUnknown() {
+    fun purgeGuardReadFailureIsKnownNondestructiveAndAttemptsNoRemoval() {
         val provider = confirmedProvider(throwOn = setOf("readV4"))
 
         assertEquals(
-            ProfileLegacyPurgeResult.OutcomeUnknown(
-                remaining = ProfileLegacyKeys.NONE,
-                unknown = ProfileLegacyKeys.ALL,
-                reason = ProfileResourceFailure.PROVIDER_READ_FAILED,
+            ProfileLegacyPurgeResult.ResourceFailure(
+                reason = ProfileReadFailure.PROVIDER_READ_FAILED,
             ),
             resource(provider).purgeLegacy(),
         )
@@ -221,20 +221,8 @@ class ProfileStorageTest {
         assertEquals("1", provider.legacyMatter)
     }
 
-    @Test
-    fun productionStorageKeysAreExactAndClosed() {
-        assertEquals("kinetickk/profile", ProfileStorageKeys.DESKTOP_PROFILE_NODE)
-        assertEquals("snapshot_v4", ProfileStorageKeys.DESKTOP_SNAPSHOT_V4)
-        assertEquals("kinetickk/progression", ProfileStorageKeys.DESKTOP_LEGACY_NODE)
-        assertEquals("progress_v2", ProfileStorageKeys.DESKTOP_LEGACY_PROGRESS_V2)
-        assertEquals("kinetickk_matter", ProfileStorageKeys.DESKTOP_LEGACY_MATTER)
-        assertEquals("kinetickk_profile_v4", ProfileStorageKeys.WEB_SNAPSHOT_V4)
-        assertEquals("kinetickk_progress_v2", ProfileStorageKeys.WEB_LEGACY_PROGRESS_V2)
-        assertEquals("kinetickk_matter", ProfileStorageKeys.WEB_LEGACY_MATTER)
-    }
-
-    private fun resource(provider: ProfileStorageProvider): ProfileResource =
-        FixedKeyProfileResource(provider)
+    private fun resource(provider: ExactProfilePersistence): ProfileResource =
+        createProfileResource(provider)
 
     private fun confirmedProvider(
         retainProgressV2: Boolean = false,
@@ -256,7 +244,7 @@ private class RecordingStorageProvider(
     private val retainMatter: Boolean = false,
     private val ignoreV4Writes: Boolean = false,
     private val throwOn: Set<String> = emptySet(),
-) : ProfileStorageProvider {
+) : ExactProfilePersistence {
     val operations = mutableListOf<String>()
 
     override fun readV4(): String? = operation("readV4") { v4 }

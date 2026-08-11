@@ -9,11 +9,9 @@ import kinetickk.resource.audio.api.ToneRequest
 import kinetickk.resource.audio.api.ToneRequestLimits
 import kinetickk.resource.audio.api.ToneWave
 
-class DefaultAudioService internal constructor(
-    private val platform: NumericTonePlayer,
+class DefaultAudioService(
+    private val platform: TonePlaybackCapability,
 ) : AudioService {
-    constructor() : this(createPlatformTonePlayer())
-
     private var preferences = AudioPreferences()
     private var musicClock = 0f
     private var musicStep = 0
@@ -87,22 +85,18 @@ internal fun selectToneRequests(requests: List<ToneRequest>, limit: Int): List<T
     .distinct()
     .take(limit.coerceAtLeast(0))
 
-internal interface NumericTonePlayer {
+/** Narrow mechanical capability supplied by the app's platform composition broker. */
+interface TonePlaybackCapability {
     fun unlock()
-    fun play(frequency: Float, durationSeconds: Float, volume: Float, wave: Int)
+
+    fun play(request: ToneRequest)
+
     fun close()
 }
 
-private fun NumericTonePlayer.playSafely(request: ToneRequest) {
+private fun TonePlaybackCapability.playSafely(request: ToneRequest) {
     if (!isToneRequestAllowed(request)) return
-    runCatching {
-        play(
-            request.frequencyHz,
-            request.durationSeconds,
-            request.gain,
-            request.wave.ordinal,
-        )
-    }
+    runCatching { play(request) }
 }
 
 internal fun isToneRequestAllowed(request: ToneRequest): Boolean =
@@ -126,5 +120,3 @@ internal fun isToneRequestAllowed(
     durationSeconds <= ToneRequestLimits.MAX_DURATION_SECONDS &&
     gain.isFinite() && gain in ToneRequestLimits.MIN_GAIN..ToneRequestLimits.MAX_GAIN &&
     wave in ToneWave.entries.indices
-
-internal expect fun createPlatformTonePlayer(): NumericTonePlayer

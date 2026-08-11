@@ -4,33 +4,38 @@
 package kinetickk.flow.session.impl
 
 import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.gameplay.api.GameplayAcceptance
-import kinetickk.ball.gameplay.api.GameplayCommandOutcome
-import kinetickk.ball.gameplay.api.GameplayCommandRef
-import kinetickk.ball.gameplay.api.GameplayCommandResult
-import kinetickk.ball.gameplay.api.GameplayCommandSource
+import kinetickk.ball.gameplay.api.GameplayCommandBoundaryResponse
+import kinetickk.ball.gameplay.api.GameplayCommandIngressResult
+import kinetickk.ball.gameplay.api.GameplayCommandAdmissionFailureReason
+import kinetickk.ball.gameplay.api.GameplayCommandValidationFailureReason
+import kinetickk.ball.gameplay.api.GameplayInstanceId
+import kinetickk.ball.gameplay.api.GameplayModuleCommand
+import kinetickk.ball.gameplay.api.GameplayModuleResult
 import kinetickk.ball.gameplay.api.GameplayRejection
-import kinetickk.ball.gameplay.api.GameplayRevision
 import kinetickk.ball.gameplay.api.GameplayRunPhase
-import kinetickk.ball.gameplay.api.GameplaySessionPulse
 import kinetickk.ball.gameplay.api.RunId
 import kinetickk.ball.profile.api.PlayerPreferences
-import kinetickk.ball.profile.api.ProfileAcceptance
 import kinetickk.ball.profile.api.ProfileBootstrapBlockReason
 import kinetickk.ball.profile.api.ProfileBootstrapStatus
-import kinetickk.ball.profile.api.ProfileCommandOutcome
-import kinetickk.ball.profile.api.ProfileCommandSource
+import kinetickk.ball.profile.api.ProfileCommandBoundaryResponse
+import kinetickk.ball.profile.api.ProfileCommandIngressResult
+import kinetickk.ball.profile.api.ProfileCommandAdmissionFailureReason
+import kinetickk.ball.profile.api.ProfileCommandValidationFailureReason
 import kinetickk.ball.profile.api.ProfileLegacyKeys
-import kinetickk.ball.profile.api.ProfilePulse
+import kinetickk.ball.profile.api.ProfileLegacyPurgeResult
+import kinetickk.ball.profile.api.ProfileModuleCommand
+import kinetickk.ball.profile.api.ProfileModuleResult
 import kinetickk.ball.profile.api.ProfileRejection
 import kinetickk.ball.profile.api.ProfileResetReason
 import kinetickk.ball.profile.api.ProfileResetStatus
+import kinetickk.ball.profile.api.ProfileResultSourceToken
 import kinetickk.flow.session.api.AppDestination
 import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.flow.session.api.SessionAcceptance
 import kinetickk.flow.session.api.SessionInteractionPulse
+import kinetickk.flow.session.api.SessionResetLifecycle
 import kinetickk.flow.session.api.SessionRevision
-import kinetickk.flow.session.api.SessionWorkflowFailure
+import kinetickk.flow.session.api.SessionWorkflowFailureCode
 import kinetickk.flow.session.api.SessionWorkflowPhase
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -38,37 +43,55 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
-import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class DefaultAppSessionComponentTest {
     @Test
-    fun startPublishesBeforeEnsureAndCommandThenDrainsTheExactResult() {
-        val content = sessionGameplayContentFixture()
-        val rig = AppSessionTestRig(gameplayContent = content)
+    fun constructionSynchronizesBootstrappedPreferencesBeforeAnyPulse() {
+        val expected = PlayerPreferences(
+            soundEnabled = false,
+            musicEnabled = false,
+            masterVolume = 0.4f,
+        )
+        val profile = FakeSessionProfileRoute().also { route ->
+            route.profile = route.profile.copy(preferences = expected)
+        }
+        val observed = mutableListOf<PlayerPreferences>()
+
+        createAppSessionComponent(
+            profileRoute = profile,
+            gameplaySessionHost = FakeSessionGameplayHost(),
+            updateAudioPreferences = observed::add,
+            playMuteFeedback = {},
+            playRebirthAcceptedFeedback = {},
+        )
+
+        assertEquals(listOf("persistenceStatus", "preferences"), profile.queries)
+        assertEquals(listOf(expected), observed)
+    }
+
+    @Test
+    fun startPublishesBeforeEnsureAndExactTargetCommandThenDrainsResult() {
+        val rig = AppSessionTestRig()
         val events = mutableListOf<String>()
-        rig.profile.queries.clear()
+        val initialRouteToken = shell(rig).routeToken
         rig.gameplay.onCreateRun = { runId ->
             events += "ensure"
             assertEquals(RunId(0L), runId)
-            val shell = rig.component.query(AppSessionQuery.GetShell)
-            assertEquals(SessionRevision(1L), shell.revision)
-            assertEquals(SessionWorkflowPhase.STARTING_RUN, shell.pendingWorkflow)
-            assertEquals(runId, shell.activeRunId)
-            assertEquals(GameplayRunPhase.CREATED, shell.gameplayPhase)
-            assertEquals(AppDestination.Home, shell.base)
+            val published = shell(rig)
+            assertEquals(SessionRevision(1L), published.revision)
+            assertEquals(initialRouteToken, published.routeToken)
+            assertEquals(SessionWorkflowPhase.STARTING_RUN, published.pendingWorkflow)
+            assertEquals(AppDestination.Home, published.base)
         }
         rig.gameplay.configureRun = { run ->
-            run.onCommandObserved = { command ->
-                events += "command"
-                val shell = rig.component.query(AppSessionQuery.GetShell)
-                assertEquals(SessionWorkflowPhase.STARTING_RUN, shell.pendingWorkflow)
-                assertEquals(SessionRevision(1L), shell.revision)
-                assertEquals(command.ref.targetInstance, run.instanceId)
-                assertEquals(1L, command.ref.sourceRevision)
-                assertEquals(0, command.ref.ordinal)
-                val start = assertIs<GameplaySessionPulse.StartRun>(command.pulse)
-                assertSame(content, start.configuration.content)
+            run.onCommandObserved = { call ->
+                events += "gameplay"
+                assertEquals(SessionWorkflowPhase.STARTING_RUN, shell(rig).pendingWorkflow)
+                assertEquals(GameplayModuleCommand.StartRun, call.request.command)
+                assertEquals(1, call.request.sourceOrdinal)
+                assertEquals(1L, call.causalScope)
+                assertEquals(0, call.causalDepth)
             }
         }
 
@@ -77,205 +100,218 @@ class DefaultAppSessionComponentTest {
         )
 
         assertEquals(SessionRevision(1L), acceptance.revision)
-        assertEquals(listOf("ensure", "command"), events)
-        assertEquals(listOf("runBootstrap"), rig.profile.queries)
-        val shell = rig.component.query(AppSessionQuery.GetShell)
-        assertEquals(SessionRevision(2L), shell.revision)
-        assertEquals(AppDestination.Gameplay, shell.base)
-        assertEquals(RunId(0L), shell.activeRunId)
-        assertEquals(GameplayRunPhase.RUNNING, shell.gameplayPhase)
-        assertNull(shell.pendingWorkflow)
-        assertNull(shell.workflowFailure)
+        assertEquals(listOf("ensure", "gameplay"), events)
+        val completed = shell(rig)
+        assertEquals(SessionRevision(2L), completed.revision)
+        assertEquals(completed.revision, completed.routeRevision)
+        assertEquals(AppDestination.Gameplay, completed.base)
+        assertNull(completed.pendingWorkflow)
+        val delivery = rig.gameplay.activeFakeRun()!!.deliveries.single()
+        assertEquals(1, delivery.resultSource.causalDepth)
+        assertEquals(0, delivery.resultSource.sourceOrdinal)
+        assertEquals(delivery.commandSource.causalScope, delivery.resultSource.causalScope)
     }
 
     @Test
-    fun gameplayPreacceptRejectionRetainsCreatedRunForExactStartRetry() {
+    fun preacceptCarrierRetainsCreatedRunAndNextStartReusesItAtOrdinalZero() {
         val rig = AppSessionTestRig()
-        var attempts = 0
-        rig.profile.queries.clear()
+        var rejectFirst = true
         rig.gameplay.configureRun = { run ->
-            run.commandHandler = { command ->
-                attempts += 1
-                if (attempts == 1) {
-                    GameplayAcceptance.Rejected(
-                        run.instanceId,
-                        run.revision,
-                        GameplayRejection.AlreadyStarted,
-                    )
-                } else {
-                    run.phase = GameplayRunPhase.RUNNING
-                    run.complete(command, GameplayCommandOutcome.RunStarted)
-                }
-            }
-        }
-
-        assertIs<SessionAcceptance.Accepted>(
-            rig.component.accept(SessionInteractionPulse.StartRunRequested),
-        )
-
-        val failed = rig.component.query(AppSessionQuery.GetShell)
-        assertEquals(AppDestination.Home, failed.base)
-        assertEquals(RunId(0L), failed.activeRunId)
-        assertEquals(GameplayRunPhase.CREATED, failed.gameplayPhase)
-        assertNull(failed.pendingWorkflow)
-        assertIs<SessionWorkflowFailure.GameplayCommandRejected>(failed.workflowFailure)
-        assertEquals(1, rig.gameplay.createdRunIds.size)
-
-        assertIs<SessionAcceptance.Accepted>(
-            rig.component.accept(SessionInteractionPulse.StartRunRequested),
-        )
-
-        val retried = rig.component.query(AppSessionQuery.GetShell)
-        assertEquals(AppDestination.Gameplay, retried.base)
-        assertEquals(GameplayRunPhase.RUNNING, retried.gameplayPhase)
-        assertNull(retried.pendingWorkflow)
-        assertNull(retried.workflowFailure)
-        assertEquals(1, rig.gameplay.createdRunIds.size)
-        val commands = rig.gameplay.activeFakeRun()!!.commands
-        assertEquals(2, commands.size)
-        assertEquals(0, commands[0].ref.ordinal)
-        assertEquals(1, commands[1].ref.ordinal)
-        assertEquals(listOf("runBootstrap", "runBootstrap"), rig.profile.queries)
-    }
-
-    @Test
-    fun rejectedRestartReturnsHomeAndReusesItsCreatedRunOnStart() {
-        val rig = AppSessionTestRig()
-        var restartAttempts = 0
-        rig.gameplay.configureRun = { run ->
-            if (run.instanceId.runId == RunId(1L)) {
-                run.commandHandler = { command ->
-                    restartAttempts += 1
-                    if (restartAttempts == 1) {
-                        GameplayAcceptance.Rejected(
-                            run.instanceId,
-                            run.revision,
+            run.commandHandler = { call ->
+                if (rejectFirst) {
+                    rejectFirst = false
+                    run.refuse(
+                        call,
+                        GameplayCommandBoundaryResponse.DecisionRejected(
                             GameplayRejection.AlreadyStarted,
-                        )
-                    } else {
-                        run.phase = GameplayRunPhase.RUNNING
-                        run.complete(command, GameplayCommandOutcome.RunStarted)
-                    }
-                }
-            }
-        }
-        assertIs<SessionAcceptance.Accepted>(
-            rig.component.accept(SessionInteractionPulse.StartRunRequested),
-        )
-        rig.gameplay.activeFakeRun()!!.phase = GameplayRunPhase.GAME_OVER
-
-        assertIs<SessionAcceptance.Accepted>(
-            rig.component.accept(SessionInteractionPulse.RestartRunRequested),
-        )
-
-        val rejected = shell(rig)
-        assertEquals(AppDestination.Home, rejected.base)
-        assertNull(rejected.overlay)
-        assertEquals(RunId(1L), rejected.activeRunId)
-        assertEquals(GameplayRunPhase.CREATED, rejected.gameplayPhase)
-        assertNull(rejected.pendingWorkflow)
-        assertIs<SessionWorkflowFailure.GameplayCommandRejected>(rejected.workflowFailure)
-        assertEquals(listOf(RunId(0L), RunId(1L)), rig.gameplay.createdRunIds)
-
-        assertIs<SessionAcceptance.Accepted>(
-            rig.component.accept(SessionInteractionPulse.StartRunRequested),
-        )
-
-        assertEquals(listOf(RunId(0L), RunId(1L)), rig.gameplay.createdRunIds)
-        assertEquals(2, restartAttempts)
-        assertEquals(AppDestination.Gameplay, shell(rig).base)
-        assertEquals(GameplayRunPhase.RUNNING, shell(rig).gameplayPhase)
-        assertNull(shell(rig).workflowFailure)
-    }
-
-    @Test
-    fun rejectedRebirthStartReturnsHomeAndReusesItsCreatedRunOnStart() {
-        val rig = AppSessionTestRig()
-        var startAttempts = 0
-        rig.gameplay.configureRun = { run ->
-            run.commandHandler = { command ->
-                startAttempts += 1
-                if (startAttempts == 1) {
-                    GameplayAcceptance.Rejected(
-                        run.instanceId,
-                        run.revision,
-                        GameplayRejection.AlreadyStarted,
+                        ),
                     )
                 } else {
-                    run.phase = GameplayRunPhase.RUNNING
-                    run.complete(command, GameplayCommandOutcome.RunStarted)
+                    run.complete(call, GameplayModuleResult.RunStarted)
                 }
             }
         }
-        assertIs<SessionAcceptance.Accepted>(
-            rig.component.accept(
-                SessionInteractionPulse.OpenOverlay(AppDestination.Rebirth),
-            ),
-        )
-        assertIs<SessionAcceptance.Accepted>(
-            rig.component.accept(SessionInteractionPulse.RebirthRequested),
-        )
 
         assertIs<SessionAcceptance.Accepted>(
-            rig.component.accept(SessionInteractionPulse.RebirthRequested),
+            rig.component.accept(SessionInteractionPulse.StartRunRequested),
         )
-
-        val rejected = shell(rig)
-        assertEquals(AppDestination.Home, rejected.base)
-        assertNull(rejected.overlay)
-        assertEquals(RunId(0L), rejected.activeRunId)
-        assertEquals(GameplayRunPhase.CREATED, rejected.gameplayPhase)
-        assertNull(rejected.pendingWorkflow)
-        assertIs<SessionWorkflowFailure.GameplayCommandRejected>(rejected.workflowFailure)
+        assertEquals(SessionWorkflowFailureCode.GAMEPLAY_COMMAND_REFUSED, shell(rig).workflowFailure)
+        assertEquals(GameplayRunPhase.CREATED, rig.component.stateSnapshot().gameplayPhase)
         assertEquals(listOf(RunId(0L)), rig.gameplay.createdRunIds)
-        assertEquals(1, rig.rebirthAcceptedFeedbackCount)
 
         assertIs<SessionAcceptance.Accepted>(
             rig.component.accept(SessionInteractionPulse.StartRunRequested),
         )
 
         assertEquals(listOf(RunId(0L)), rig.gameplay.createdRunIds)
-        assertEquals(2, startAttempts)
+        val calls = rig.gameplay.activeFakeRun()!!.commands
+        assertEquals(listOf(1, 0), calls.map { it.request.sourceOrdinal })
+        assertEquals(listOf(1L, 2L), calls.map { it.causalScope })
         assertEquals(AppDestination.Gameplay, shell(rig).base)
-        assertEquals(GameplayRunPhase.RUNNING, shell(rig).gameplayPhase)
         assertNull(shell(rig).workflowFailure)
     }
 
     @Test
-    fun participantDispatchCannotRecursivelyEnterSession() {
+    fun mutePreservesOneScopeAcrossProfileResultAndNestedGameplayCommand() {
         val rig = AppSessionTestRig()
-        var recursiveFailure: Throwable? = null
-        rig.gameplay.configureRun = { run ->
-            run.commandHandler = { command ->
-                recursiveFailure = runCatching {
-                    rig.component.accept(SessionInteractionPulse.ToggleMuteRequested)
-                }.exceptionOrNull()
-                run.phase = GameplayRunPhase.RUNNING
-                run.complete(command, GameplayCommandOutcome.RunStarted)
-            }
-        }
+        rig.component.accept(SessionInteractionPulse.StartRunRequested)
+        rig.profile.commands.clear()
+        rig.profile.deliveries.clear()
+        rig.gameplay.activeFakeRun()!!.commands.clear()
+        rig.gameplay.activeFakeRun()!!.deliveries.clear()
 
         assertIs<SessionAcceptance.Accepted>(
-            rig.component.accept(SessionInteractionPulse.StartRunRequested),
+            rig.component.accept(SessionInteractionPulse.ToggleMuteRequested),
         )
 
-        assertIs<IllegalStateException>(recursiveFailure)
-        assertEquals(AppDestination.Gameplay, rig.component.query(AppSessionQuery.GetShell).base)
+        val profileCall = rig.profile.commands.single()
+        val profileDelivery = rig.profile.deliveries.single()
+        val gameplayCall = rig.gameplay.activeFakeRun()!!.commands.single()
+        val gameplayDelivery = rig.gameplay.activeFakeRun()!!.deliveries.single()
+        assertEquals(0, profileCall.causalDepth)
+        assertEquals(1, profileDelivery.resultSource.causalDepth)
+        assertEquals(2, gameplayCall.causalDepth)
+        assertEquals(3, gameplayDelivery.resultSource.causalDepth)
+        assertEquals(
+            listOf(
+                profileCall.causalScope,
+                profileDelivery.resultSource.causalScope,
+                gameplayCall.causalScope,
+                gameplayDelivery.resultSource.causalScope,
+            ).distinct(),
+            listOf(profileCall.causalScope),
+        )
+        assertEquals(listOf("audio", "mute"), rig.effectEvents.takeLast(2))
+        assertNull(shell(rig).pendingWorkflow)
     }
 
     @Test
-    fun mismatchedGameplayResultIsRejectedBeforeItCanEnterTheCompletionDeque() {
+    fun nestedExitDeliveryKeepsRootScopeAndExactThreeLevelTargetDepth() {
+        val rig = AppSessionTestRig()
+        rig.component.accept(SessionInteractionPulse.StartRunRequested)
+        val run = rig.gameplay.activeFakeRun()!!
+        run.commands.clear()
+        run.deliveries.clear()
+        run.commandHandler = { call ->
+            run.complete(
+                call,
+                GameplayModuleResult.RunExited(
+                    kinetickk.ball.gameplay.api.GameplayExitProgressResult.Applied,
+                ),
+                nestedExit = true,
+            )
+        }
+
+        rig.component.accept(SessionInteractionPulse.ExitRunRequested)
+
+        val call = run.commands.single()
+        val delivery = run.deliveries.single()
+        assertEquals(0, call.causalDepth)
+        assertEquals(3, delivery.resultSource.causalDepth)
+        assertEquals(call.causalScope, delivery.resultSource.causalScope)
+        assertEquals(AppDestination.Home, shell(rig).base)
+        assertNull(shell(rig).pendingWorkflow)
+    }
+
+    @Test
+    fun resetConfirmAndExplicitRetryEachIssueOneExactAttempt() {
+        val reason = ProfileResetReason.LegacyDataDetected
+        val confirmProfile = FakeSessionProfileRoute().apply {
+            bootstrap = ProfileBootstrapStatus.Blocked(ProfileBootstrapBlockReason.ResetRequired(reason))
+            reset = ProfileResetStatus.ConfirmationRequired(reason, ProfileLegacyKeys.ALL)
+        }
+        val confirmRig = AppSessionTestRig(profile = confirmProfile)
+
+        confirmRig.component.accept(SessionInteractionPulse.ResetConfirmed)
+
+        val confirm = confirmProfile.commands.single()
+        assertEquals(ProfileModuleCommand.ConfirmLegacyReset, confirm.request.command)
+        assertEquals(0, confirm.causalDepth)
+        assertEquals(2, confirmProfile.deliveries.single().resultSource.causalDepth)
+        assertEquals(SessionResetLifecycle.READY, shell(confirmRig).resetLifecycle)
+
+        val purgeResult = ProfileLegacyPurgeResult.Partial(ProfileLegacyKeys.ALL)
+        val retryProfile = FakeSessionProfileRoute().apply {
+            reset = ProfileResetStatus.NeedsAttention(ProfileLegacyKeys.ALL, purgeResult)
+            bootstrap = ProfileBootstrapStatus.Blocked(
+                ProfileBootstrapBlockReason.ResetNeedsAttention(purgeResult),
+            )
+        }
+        val retryRig = AppSessionTestRig(profile = retryProfile)
+
+        retryRig.component.accept(SessionInteractionPulse.ResetRetryRequested)
+
+        assertEquals(1, retryProfile.commands.size)
+        assertEquals(ProfileModuleCommand.RetryLegacyPurge, retryProfile.commands.single().request.command)
+        assertEquals(2, retryProfile.deliveries.single().resultSource.causalDepth)
+        assertEquals(SessionResetLifecycle.READY, shell(retryRig).resetLifecycle)
+    }
+
+    @Test
+    fun forgedProfileEvidenceConstructsNoTrustedResultPulse() {
+        val rig = AppSessionTestRig()
+        rig.profile.commandHandler = { call ->
+            rig.profile.complete(
+                call,
+                ProfileModuleResult.CoreShapeSelected(CoreShape.PRISM),
+                deliveryTransform = { delivery ->
+                    delivery.copy(
+                        resultSource = ProfileResultSourceToken(
+                            semanticHandle = delivery.resultSource.semanticHandle,
+                            targetInstance = delivery.resultSource.targetInstance,
+                            targetRevision = delivery.resultSource.targetRevision,
+                            sourceOrdinal = delivery.resultSource.sourceOrdinal + 1,
+                            causalScope = delivery.resultSource.causalScope,
+                            causalDepth = delivery.resultSource.causalDepth,
+                        ),
+                    )
+                },
+            )
+        }
+
+        assertFailsWith<IllegalStateException> {
+            rig.component.accept(SessionInteractionPulse.SelectCoreShapeRequested(CoreShape.PRISM))
+        }
+
+        assertEquals(SessionWorkflowPhase.SELECTING_CORE_SHAPE, shell(rig).pendingWorkflow)
+        assertEquals(SessionRevision(1L), shell(rig).revision)
+
+        val identityRig = AppSessionTestRig()
+        identityRig.profile.commandHandler = { call ->
+            identityRig.profile.complete(
+                call,
+                ProfileModuleResult.CoreShapeSelected(CoreShape.PRISM),
+                deliveryTransform = { delivery ->
+                    delivery.copy(
+                        effectiveProtocolIdentity =
+                            kinetickk.ball.profile.api.ProfileEffectiveProtocolIdentity.SESSION_MUTE,
+                    )
+                },
+            )
+        }
+        assertFailsWith<IllegalStateException> {
+            identityRig.component.accept(
+                SessionInteractionPulse.SelectCoreShapeRequested(CoreShape.PRISM),
+            )
+        }
+        assertEquals(
+            SessionWorkflowPhase.SELECTING_CORE_SHAPE,
+            shell(identityRig).pendingWorkflow,
+        )
+    }
+
+    @Test
+    fun forgedGameplayOutcomeConstructsNoTrustedResultPulse() {
         val rig = AppSessionTestRig()
         rig.gameplay.configureRun = { run ->
-            run.commandHandler = { command ->
-                rig.component.receiveGameplayCommandResult(
-                    GameplayCommandResult.Accepted(
-                        command.ref.copy(ordinal = command.ref.ordinal + 1),
-                        GameplayRevision(1L),
-                        GameplayCommandOutcome.RunStarted,
-                    ),
+            run.commandHandler = { call ->
+                run.complete(
+                    call,
+                    GameplayModuleResult.RunStarted,
+                    deliveryTransform = { delivery ->
+                        delivery.copy(result = GameplayModuleResult.OverlayPaused)
+                    },
                 )
-                error("unreachable")
             }
         }
 
@@ -283,291 +319,215 @@ class DefaultAppSessionComponentTest {
             rig.component.accept(SessionInteractionPulse.StartRunRequested)
         }
 
-        val shell = rig.component.query(AppSessionQuery.GetShell)
-        assertEquals(SessionWorkflowPhase.STARTING_RUN, shell.pendingWorkflow)
-        assertEquals(AppDestination.Home, shell.base)
+        assertEquals(SessionWorkflowPhase.STARTING_RUN, shell(rig).pendingWorkflow)
+        assertEquals(AppDestination.Home, shell(rig).base)
+    }
+
+    @Test
+    fun acceptedWithoutResultAndResultPlusRejectionAreFaults() {
+        val missing = AppSessionTestRig()
+        missing.profile.commandHandler = {
+            ProfileCommandIngressResult.Accepted(missing.profile.instanceId, missing.profile.revision)
+        }
         assertFailsWith<IllegalStateException> {
-            rig.component.receiveGameplayCommandResult(
-                GameplayCommandResult.Accepted(
-                    GameplayCommandRef(
-                        GameplayCommandSource.LocalSession,
-                        rig.gameplay.activeFakeRun()!!.instanceId,
-                        sourceRevision = shell.revision.value,
-                        ordinal = 0,
-                    ),
-                    GameplayRevision(1L),
-                    GameplayCommandOutcome.RunStarted,
-                ),
-            )
-        }
-    }
-
-    @Test
-    fun throwBeforeResultLeavesPendingWhileThrowAfterResultDrainsBeforeRethrow() {
-        val beforeRig = AppSessionTestRig()
-        beforeRig.gameplay.configureRun = { run ->
-            run.commandHandler = { error("before-result") }
-        }
-
-        val beforeFailure = assertFailsWith<IllegalStateException> {
-            beforeRig.component.accept(SessionInteractionPulse.StartRunRequested)
-        }
-        assertEquals("before-result", beforeFailure.message)
-        val pending = beforeRig.component.query(AppSessionQuery.GetShell)
-        assertEquals(SessionWorkflowPhase.STARTING_RUN, pending.pendingWorkflow)
-        assertEquals(AppDestination.Home, pending.base)
-
-        val afterRig = AppSessionTestRig()
-        afterRig.gameplay.configureRun = { run ->
-            run.commandHandler = { command ->
-                run.phase = GameplayRunPhase.RUNNING
-                run.complete(command, GameplayCommandOutcome.RunStarted)
-                error("after-result")
-            }
-        }
-
-        val afterFailure = assertFailsWith<IllegalStateException> {
-            afterRig.component.accept(SessionInteractionPulse.StartRunRequested)
-        }
-        assertEquals("after-result", afterFailure.message)
-        val drained = afterRig.component.query(AppSessionQuery.GetShell)
-        assertEquals(AppDestination.Gameplay, drained.base)
-        assertEquals(GameplayRunPhase.RUNNING, drained.gameplayPhase)
-        assertNull(drained.pendingWorkflow)
-    }
-
-    @Test
-    fun acceptedWithoutResultAndResultPlusRejectedAreProgrammingFaults() {
-        val missingRig = AppSessionTestRig()
-        missingRig.gameplay.configureRun = { run ->
-            run.commandHandler = {
-                GameplayAcceptance.Accepted(run.instanceId, run.revision)
-            }
-        }
-
-        assertFailsWith<IllegalStateException> {
-            missingRig.component.accept(SessionInteractionPulse.StartRunRequested)
-        }
-        assertEquals(
-            SessionWorkflowPhase.STARTING_RUN,
-            missingRig.component.query(AppSessionQuery.GetShell).pendingWorkflow,
-        )
-
-        val contradictoryRig = AppSessionTestRig()
-        contradictoryRig.gameplay.configureRun = { run ->
-            run.commandHandler = { command ->
-                run.phase = GameplayRunPhase.RUNNING
-                run.complete(command, GameplayCommandOutcome.RunStarted)
-                GameplayAcceptance.Rejected(
-                    run.instanceId,
-                    run.revision,
-                    GameplayRejection.AlreadyStarted,
-                )
-            }
-        }
-
-        assertFailsWith<IllegalStateException> {
-            contradictoryRig.component.accept(SessionInteractionPulse.StartRunRequested)
-        }
-        val drained = contradictoryRig.component.query(AppSessionQuery.GetShell)
-        assertEquals(AppDestination.Gameplay, drained.base)
-        assertNull(drained.pendingWorkflow)
-    }
-
-    @Test
-    fun secondRebirthRequestDrainsProfileThenGameplayInOrderedNestedChain() {
-        val rig = AppSessionTestRig()
-        assertIs<SessionAcceptance.Accepted>(
-            rig.component.accept(
-                SessionInteractionPulse.OpenOverlay(AppDestination.Rebirth),
-            ),
-        )
-        rig.effectEvents.clear()
-        rig.profile.onCommandObserved = { command ->
-            rig.effectEvents += "profile"
-            assertEquals(ProfileCommandSource.LocalSession, command.ref.sourceInstance)
-            assertEquals(SessionWorkflowPhase.ADVANCING_REBIRTH, shell(rig).pendingWorkflow)
-        }
-        rig.gameplay.onCreateRun = { runId ->
-            rig.effectEvents += "ensure"
-            assertEquals(RunId(0L), runId)
-            assertEquals(SessionWorkflowPhase.STARTING_REBIRTH_RUN, shell(rig).pendingWorkflow)
-        }
-        rig.gameplay.configureRun = { run ->
-            run.onCommandObserved = { command ->
-                rig.effectEvents += "gameplay"
-                assertEquals(SessionWorkflowPhase.STARTING_REBIRTH_RUN, shell(rig).pendingWorkflow)
-                assertIs<GameplaySessionPulse.StartRun>(command.pulse)
-            }
-        }
-
-        assertIs<SessionAcceptance.Accepted>(
-            rig.component.accept(SessionInteractionPulse.RebirthRequested),
-        )
-        val armed = shell(rig)
-        assertTrue(armed.rebirthConfirmationArmed)
-        assertTrue(rig.profile.commands.isEmpty())
-        assertTrue(rig.effectEvents.isEmpty())
-
-        val acceptance = assertIs<SessionAcceptance.Accepted>(
-            rig.component.accept(SessionInteractionPulse.RebirthRequested),
-        )
-
-        assertEquals(SessionRevision(3L), acceptance.revision)
-        assertEquals(listOf("profile", "ensure", "gameplay", "rebirth"), rig.effectEvents)
-        assertEquals(1, rig.profile.commands.size)
-        assertEquals(ProfilePulse.AdvanceRebirth, rig.profile.commands.single().pulse)
-        assertEquals(1, rig.gameplay.createdRunIds.size)
-        assertEquals(1, rig.rebirthAcceptedFeedbackCount)
-        val completed = shell(rig)
-        assertEquals(SessionRevision(5L), completed.revision)
-        assertEquals(AppDestination.Gameplay, completed.base)
-        assertEquals(GameplayRunPhase.RUNNING, completed.gameplayPhase)
-        assertFalse(completed.rebirthConfirmationArmed)
-        assertNull(completed.pendingWorkflow)
-    }
-
-    @Test
-    fun muteCompletionSynchronizesPreferencesBeforeItsSingleFeedback() {
-        val rig = AppSessionTestRig()
-        rig.effectEvents.clear()
-        rig.profile.onCommandObserved = {
-            rig.effectEvents += "profile"
-            assertEquals(SessionWorkflowPhase.TOGGLING_MUTE, shell(rig).pendingWorkflow)
-        }
-
-        assertIs<SessionAcceptance.Accepted>(
-            rig.component.accept(SessionInteractionPulse.ToggleMuteRequested),
-        )
-
-        assertEquals(listOf("profile", "audio", "mute"), rig.effectEvents)
-        assertEquals(1, rig.muteFeedbackCount)
-        val synchronized = rig.audioPreferences.last()
-        assertFalse(synchronized.soundEnabled)
-        assertFalse(synchronized.musicEnabled)
-        assertNull(shell(rig).pendingWorkflow)
-    }
-
-    @Test
-    fun profilePreacceptRejectionUsesItsExactCarrierWithoutAResultCallback() {
-        val rig = AppSessionTestRig()
-        rig.profile.commandHandler = { command ->
-            assertEquals(ProfilePulse.SelectCoreShape(CoreShape.PRISM), command.pulse)
-            ProfileAcceptance.Rejected(
-                rig.profile.instanceId,
-                rig.profile.revision,
-                ProfileRejection.CoreShapeLocked,
-            )
-        }
-
-        val acceptance = assertIs<SessionAcceptance.Accepted>(
-            rig.component.accept(
-                SessionInteractionPulse.SelectCoreShapeRequested(CoreShape.PRISM),
-            ),
-        )
-
-        assertEquals(SessionRevision(1L), acceptance.revision)
-        val shell = shell(rig)
-        assertEquals(SessionRevision(2L), shell.revision)
-        assertNull(shell.pendingWorkflow)
-        val failure = assertIs<SessionWorkflowFailure.ProfileCommandRejected>(
-            shell.workflowFailure,
-        )
-        assertEquals(rig.profile.commands.single().ref, failure.commandRef)
-        assertEquals(ProfileRejection.CoreShapeLocked, failure.reason)
-        assertEquals(CoreShape.ORB, rig.profile.profile.loadout.coreShape)
-    }
-
-    @Test
-    fun profileAcceptedWithoutResultFaultsWhileThrowAfterResultStillDrains() {
-        val missingRig = AppSessionTestRig()
-        missingRig.profile.commandHandler = {
-            ProfileAcceptance.Accepted(
-                missingRig.profile.instanceId,
-                missingRig.profile.revision,
-            )
-        }
-
-        assertFailsWith<IllegalStateException> {
-            missingRig.component.accept(
+            missing.component.accept(
                 SessionInteractionPulse.SelectCoreShapeRequested(CoreShape.PRISM),
             )
         }
-        assertEquals(
-            SessionWorkflowPhase.SELECTING_CORE_SHAPE,
-            shell(missingRig).pendingWorkflow,
-        )
+        assertEquals(SessionWorkflowPhase.SELECTING_CORE_SHAPE, shell(missing).pendingWorkflow)
 
-        val afterRig = AppSessionTestRig()
-        afterRig.profile.commandHandler = { command ->
-            afterRig.profile.complete(
-                command,
-                ProfileCommandOutcome.CoreShapeSelected(CoreShape.PRISM),
+        val contradiction = AppSessionTestRig()
+        contradiction.profile.commandHandler = { call ->
+            contradiction.profile.complete(
+                call,
+                ProfileModuleResult.CoreShapeSelected(CoreShape.PRISM),
+            )
+            contradiction.profile.refuse(
+                call,
+                ProfileCommandBoundaryResponse.DecisionRejected(ProfileRejection.CoreShapeLocked),
+            )
+        }
+        assertFailsWith<IllegalStateException> {
+            contradiction.component.accept(
+                SessionInteractionPulse.SelectCoreShapeRequested(CoreShape.PRISM),
+            )
+        }
+        assertEquals(SessionWorkflowPhase.SELECTING_CORE_SHAPE, shell(contradiction).pendingWorkflow)
+    }
+
+    @Test
+    fun profileThrowAfterValidatedResultStillDrainsThenRethrows() {
+        val rig = AppSessionTestRig()
+        rig.profile.commandHandler = { call ->
+            rig.profile.complete(
+                call,
+                ProfileModuleResult.CoreShapeSelected(CoreShape.PRISM),
             )
             error("profile-after-result")
         }
 
         val failure = assertFailsWith<IllegalStateException> {
-            afterRig.component.accept(
+            rig.component.accept(SessionInteractionPulse.SelectCoreShapeRequested(CoreShape.PRISM))
+        }
+
+        assertEquals("profile-after-result", failure.message)
+        assertNull(shell(rig).pendingWorkflow)
+        assertNull(shell(rig).workflowFailure)
+        assertEquals(SessionRevision(2L), shell(rig).revision)
+    }
+
+    @Test
+    fun gameplayThrowAfterValidatedResultStillDrainsThenRethrows() {
+        val rig = AppSessionTestRig()
+        rig.gameplay.configureRun = { run ->
+            run.commandHandler = { call ->
+                run.complete(call, GameplayModuleResult.RunStarted)
+                error("gameplay-after-result")
+            }
+        }
+
+        val failure = assertFailsWith<IllegalStateException> {
+            rig.component.accept(SessionInteractionPulse.StartRunRequested)
+        }
+
+        assertEquals("gameplay-after-result", failure.message)
+        assertEquals(AppDestination.Gameplay, shell(rig).base)
+        assertNull(shell(rig).pendingWorkflow)
+        assertEquals(SessionRevision(2L), shell(rig).revision)
+    }
+
+    @Test
+    fun exactProfileAndGameplayPreacceptCarriersRecoverPendingWorkflow() {
+        val profileRig = AppSessionTestRig()
+        profileRig.profile.commandHandler = { call ->
+            profileRig.profile.refuse(
+                call,
+                ProfileCommandBoundaryResponse.DecisionRejected(ProfileRejection.CoreShapeLocked),
+            )
+        }
+        profileRig.component.accept(
+            SessionInteractionPulse.SelectCoreShapeRequested(CoreShape.PRISM),
+        )
+        assertNull(shell(profileRig).pendingWorkflow)
+        assertEquals(SessionWorkflowFailureCode.PROFILE_COMMAND_REFUSED, shell(profileRig).workflowFailure)
+
+        val gameplayRig = AppSessionTestRig()
+        gameplayRig.gameplay.configureRun = { run ->
+            run.commandHandler = { call ->
+                run.refuse(
+                    call,
+                    GameplayCommandBoundaryResponse.DecisionRejected(GameplayRejection.AlreadyStarted),
+                )
+            }
+        }
+        gameplayRig.component.accept(SessionInteractionPulse.StartRunRequested)
+        assertNull(shell(gameplayRig).pendingWorkflow)
+        assertEquals(
+            SessionWorkflowFailureCode.GAMEPLAY_COMMAND_REFUSED,
+            shell(gameplayRig).workflowFailure,
+        )
+    }
+
+    @Test
+    fun validationAdmissionAndDecisionRefusalsAllUseTheOneCarrierBranch() {
+        val profileResponses = listOf(
+            ProfileCommandBoundaryResponse.ValidationFailure(
+                ProfileCommandValidationFailureReason.WRONG_TARGET,
+            ),
+            ProfileCommandBoundaryResponse.AdmissionFailure(
+                ProfileCommandAdmissionFailureReason.CompletionCapacityExhausted,
+            ),
+            ProfileCommandBoundaryResponse.DecisionRejected(ProfileRejection.CoreShapeLocked),
+        )
+        profileResponses.forEach { response ->
+            val rig = AppSessionTestRig()
+            rig.profile.commandHandler = { call -> rig.profile.refuse(call, response) }
+            rig.component.accept(
                 SessionInteractionPulse.SelectCoreShapeRequested(CoreShape.PRISM),
             )
-        }
-        assertEquals("profile-after-result", failure.message)
-        assertNull(shell(afterRig).pendingWorkflow)
-        assertEquals(CoreShape.PRISM, afterRig.profile.profile.loadout.coreShape)
-    }
-
-    @Test
-    fun resetCompletionRereadsPersistenceAndFreshPreferencesBeforeAudioSync() {
-        val profile = FakeSessionProfilePort(
-            profile = kinetickk.ball.profile.api.PlayerProfile(
-                preferences = PlayerPreferences(
-                    soundEnabled = false,
-                    musicEnabled = false,
-                    masterVolume = 0.2f,
-                ),
-            ),
-        ).apply {
-            val reason = ProfileResetReason.LegacyDataDetected
-            bootstrap = ProfileBootstrapStatus.Blocked(
-                ProfileBootstrapBlockReason.ResetRequired(reason),
+            assertNull(shell(rig).pendingWorkflow)
+            assertEquals(
+                SessionWorkflowFailureCode.PROFILE_COMMAND_REFUSED,
+                shell(rig).workflowFailure,
             )
-            reset = ProfileResetStatus.ConfirmationRequired(reason, ProfileLegacyKeys.ALL)
         }
-        val rig = AppSessionTestRig(profile = profile)
-        rig.profile.queries.clear()
-        rig.effectEvents.clear()
 
-        assertIs<SessionAcceptance.Accepted>(
-            rig.component.accept(SessionInteractionPulse.ResetConfirmed),
+        val gameplayResponses = listOf(
+            GameplayCommandBoundaryResponse.ValidationFailure(
+                GameplayCommandValidationFailureReason.WrongTarget,
+            ),
+            GameplayCommandBoundaryResponse.AdmissionFailure(
+                GameplayCommandAdmissionFailureReason.CompletionCapacityExhausted,
+            ),
+            GameplayCommandBoundaryResponse.DecisionRejected(GameplayRejection.AlreadyStarted),
         )
-
-        assertEquals(
-            listOf("persistenceStatus", "preferences", "persistenceStatus"),
-            rig.profile.queries,
-        )
-        assertEquals(listOf("audio"), rig.effectEvents)
-        assertEquals(PlayerPreferences(), rig.audioPreferences.last())
-        assertNull(shell(rig).pendingWorkflow)
-        assertEquals(kinetickk.flow.session.api.SessionResetLifecycle.READY, shell(rig).resetLifecycle)
+        gameplayResponses.forEach { response ->
+            val rig = AppSessionTestRig()
+            rig.gameplay.configureRun = { run ->
+                run.commandHandler = { call -> run.refuse(call, response) }
+            }
+            rig.component.accept(SessionInteractionPulse.StartRunRequested)
+            assertNull(shell(rig).pendingWorkflow)
+            assertEquals(
+                SessionWorkflowFailureCode.GAMEPLAY_COMMAND_REFUSED,
+                shell(rig).workflowFailure,
+            )
+        }
     }
 
     @Test
-    fun deployedCompletionQueueAcceptsEightAndRefusesNinthWithoutTruncation() {
+    fun wrongGameplayReadIdentityFaultsBeforeDecision() {
+        val rig = AppSessionTestRig()
+        rig.component.accept(SessionInteractionPulse.StartRunRequested)
+        val before = shell(rig)
+        val run = rig.gameplay.activeFakeRun()!!
+        run.statusInstanceId = GameplayInstanceId(RunId(99L))
+
+        assertFailsWith<IllegalStateException> {
+            rig.component.accept(
+                SessionInteractionPulse.OpenOverlay(AppDestination.Settings),
+            )
+        }
+        assertEquals(before, shell(rig))
+    }
+
+    @Test
+    fun outputFaultDoesNotRollbackPublishedFrameAndLaterOutputStillRuns() {
+        val profile = FakeSessionProfileRoute()
+        val gameplay = FakeSessionGameplayHost()
+        var muteFeedback = 0
+        var failAudioUpdate = false
+        val component = createAppSessionComponent(
+            profileRoute = profile,
+            gameplaySessionHost = gameplay,
+            updateAudioPreferences = {
+                if (failAudioUpdate) error("audio-fault")
+            },
+            playMuteFeedback = { muteFeedback += 1 },
+            playRebirthAcceptedFeedback = {},
+        ) as DefaultAppSessionComponent
+        profile.resultSink = component::receiveProfileModuleResult
+        failAudioUpdate = true
+
+        val failure = assertFailsWith<IllegalStateException> {
+            component.accept(SessionInteractionPulse.ToggleMuteRequested)
+        }
+
+        assertEquals("audio-fault", failure.message)
+        assertEquals(1, muteFeedback)
+        assertNull(component.query(AppSessionQuery.GetShell).pendingWorkflow)
+        assertEquals(SessionRevision(2L), component.query(AppSessionQuery.GetShell).revision)
+    }
+
+    @Test
+    fun deployedQueueDepthFanoutAndCapacityAcceptNRejectNPlusOne() {
         val completions = sessionCompletionDeque<Int>()
-
         repeat(8) { value -> assertTrue(completions.tryAddLast(value)) }
-
-        assertEquals(8, completions.size)
         assertFalse(completions.tryAddLast(8))
         assertEquals((0 until 8).toList(), List(8) { completions.removeFirstOrNull() })
-    }
 
-    @Test
-    fun acceptorCausalDepthAndOutputFanoutAcceptNAndRefuseNPlusOne() {
         repeat(8, ::requireSessionCausalDepth)
         assertFailsWith<IllegalStateException> { requireSessionCausalDepth(8) }
-
         requireSessionOutputFanoutBounds(participantCount = 1, ensureCount = 1)
         assertFailsWith<IllegalStateException> {
             requireSessionOutputFanoutBounds(participantCount = 2, ensureCount = 1)
@@ -575,7 +535,6 @@ class DefaultAppSessionComponentTest {
         assertFailsWith<IllegalStateException> {
             requireSessionOutputFanoutBounds(participantCount = 1, ensureCount = 2)
         }
-
         requireSessionCompletionCapacity(remainingCapacity = 1, requiredCompletions = 1)
         assertFailsWith<IllegalStateException> {
             requireSessionCompletionCapacity(remainingCapacity = 0, requiredCompletions = 1)

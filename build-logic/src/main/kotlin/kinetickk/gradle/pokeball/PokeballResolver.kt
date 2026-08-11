@@ -33,12 +33,42 @@ internal fun resolveArchitectureViolations(
 
     addGraphViolations(edges, sources)
     addPackageAndImportViolations(sources)
+    addAll(platformCapabilityBoundaryViolations(sources))
     addApplicationSurfaceViolations(sources)
+    addAll(exactDataClassShapeViolations(sourceByPath, canonicalProtocolDataClassShapes))
+    addAll(exactEnumInventoryViolations(sourceByPath, canonicalProtocolEnumInventories))
+    addAll(closedDirectSubtypeInventoryViolations(sourceByPath, canonicalClosedProtocolInventories))
+    addAll(decisionContextBoundaryViolations(sources))
+    addAll(foreignApplicationSurfaceSignatureViolations(sources, foreignApplicationSurfacePolicies))
+    addAll(
+        publicSourceCompletionWrapperViolations(
+            sources,
+            setOf("ball/profile/api/", "ball/gameplay/api/", "flow/session/api/"),
+        ),
+    )
+    addAll(forbiddenProtocolSymbolViolations(sourceByPath, forbiddenCompatibilityProtocolSymbols))
+    addAll(requiredProtocolEvidenceViolations(sourceByPath, canonicalProtocolEvidenceAnchors))
+    addAll(leastAuthorityCompositionViolations(sources))
+    addAll(trustedNucleusInputCallsiteViolations(sources))
     addAuthorityViolations(sourceByPath)
     addFoundationAndRegistryViolations(sources)
     addAssemblyViolations(sourceByPath)
     addProtocolRouteViolations(sourceByPath, architectureRecords)
     addBoundViolations(sourceByPath, architectureRecords)
+    addAll(
+        compositionLimitViolations(
+            sources = sourceByPath,
+            policy = architectureRecords["policy.md"].orEmpty(),
+            assembly = architectureRecords["assembly.md"].orEmpty(),
+        ),
+    )
+    addAll(
+        auditPolicyViolations(
+            policy = architectureRecords["policy.md"].orEmpty(),
+            applicability = architectureRecords["applicability.md"].orEmpty(),
+            evidenceByPath = sourceByPath.mapValues { (_, source) -> source.text },
+        ),
+    )
     addRecordViolations(architectureRecords)
 }.distinct().sorted()
 
@@ -506,14 +536,19 @@ private fun MutableList<String>.addAssemblyViolations(sources: Map<String, Sourc
     if (app.isEmpty()) {
         add("Missing static App Assembly")
     } else {
-        listOf(".nucleus.", "ProfileCommand(", "GameplayCommand(").filter(app::contains).forEach { token ->
+        listOf(".nucleus.", "ProfileModuleCommand(", "GameplayModuleCommand(")
+            .filter(app::contains)
+            .forEach { token ->
             add("App Assembly constructs or imports forbidden business detail `$token`")
         }
     }
     val router = sources[
-        "app/shared/src/commonMain/kotlin/kinetickk/app/shared/ProfileCommandResultRouter.kt"
+        "app/shared/src/commonMain/kotlin/kinetickk/app/shared/ProfileModuleResultRouter.kt"
     ]?.text.orEmpty()
-    if (router.isEmpty() || "result.outcome" in router || "when (result.commandRef.sourceInstance)" !in router) {
+    if (router.isEmpty() ||
+        "delivery.result" in router ||
+        "when (delivery.commandSource.sourceInstance)" !in router
+    ) {
         add("Profile result router must transport exact owner-created results by source identity only")
     }
 
@@ -559,7 +594,7 @@ internal fun parseArchitectureTableRows(markdown: String, heading: String): List
         .map { line -> line.removePrefix("|").removeSuffix("|").split('|').map(String::trim) }
         .filter { cells ->
             cells.isNotEmpty() &&
-                cells.first() !in setOf("ID", "Route ID", "FlowParticipation ID") &&
+                cells.first() !in setOf("ID", "Route ID", "FlowParticipation ID", "Absent scope") &&
                 !cells.all { cell -> cell.isNotEmpty() && cell.all { it == '-' || it == ':' } }
         }
         .mapNotNull { cells ->
@@ -672,6 +707,7 @@ internal fun protocolRouteViolations(
     addAll(commandOutcomeClosureViolations(sources))
     addAll(productionProtocolUseViolations(sources))
     addAll(flowParticipationViolations(assembly))
+    addAll(participantAuthorityInventoryViolations(sources, assembly))
 }.distinct().sorted()
 
 internal fun commandOutcomeClosureViolations(
@@ -764,7 +800,12 @@ internal fun productionProtocolUseViolations(
                             candidate.sourceAuthority == sourceAuthority
                         }
                 }
-                if (route == null) {
+                val guardedException = closedForeignOperationUseExceptions.singleOrNull { exception ->
+                    exception.sourceAuthority == sourceAuthority &&
+                        exception.targetAuthority == operation.targetAuthority &&
+                        exception.operationToken == operation.token
+                }?.requiredGuardTokensByPath?.get(source.relativePath)?.all(source.text::contains) == true
+                if (route == null && !guardedException) {
                     add(
                         "Foreign target operation `${operation.token}` in ${source.relativePath} " +
                             "has no exact Assembly route for $sourceAuthority -> ${operation.targetAuthority}",
@@ -795,6 +836,13 @@ private fun declaredTargetOperations(sources: Map<String, SourceDocument>): Set<
     directSubtypeNames(profileProtocol, "sealed interface ProfilePulse", "Business").forEach { name ->
         add(TargetOperation("Profile", "ProfilePulse.$name"))
     }
+    directSubtypeNames(
+        profileProtocol,
+        "sealed interface ProfileModuleCommand",
+        "ProfileModuleCommand",
+    ).forEach { name ->
+        add(TargetOperation("Profile", "ProfileModuleCommand.$name"))
+    }
     val gameplayQueries = sources[GAMEPLAY_QUERY_PATH]?.text.orEmpty()
     directSubtypeNames(gameplayQueries, "sealed interface GameplayQuery", "GameplayQuery").forEach { name ->
         add(TargetOperation("GameplayRun", "GameplayQuery.$name"))
@@ -802,10 +850,17 @@ private fun declaredTargetOperations(sources: Map<String, SourceDocument>): Set<
     val gameplayProtocol = sources[GAMEPLAY_PROTOCOL_PATH]?.text.orEmpty()
     directSubtypeNames(
         gameplayProtocol,
-        "sealed interface GameplaySessionPulse",
-        "GameplaySessionPulse",
+        "sealed interface GameplayInteractionPulse",
+        "GameplayInteractionPulse",
     ).forEach { name ->
-        add(TargetOperation("GameplayRun", "GameplaySessionPulse.$name"))
+        add(TargetOperation("GameplayRun", "GameplayInteractionPulse.$name"))
+    }
+    directSubtypeNames(
+        gameplayProtocol,
+        "sealed interface GameplayModuleCommand",
+        "GameplayModuleCommand",
+    ).forEach { name ->
+        add(TargetOperation("GameplayRun", "GameplayModuleCommand.$name"))
     }
     val content = sources[CONTENT_SURFACE_PATH]?.text.orEmpty()
     declarationBody(content, "interface ContentCatalog")
@@ -907,6 +962,41 @@ internal fun flowParticipationViolations(assembly: String): List<String> = build
     }
 }.distinct().sorted()
 
+internal fun participantAuthorityInventoryViolations(
+    sources: Map<String, SourceDocument>,
+    assembly: String,
+): List<String> = buildList {
+    val expectedSubtypes = listOf("Profile", "Gameplay")
+    val state = sources[SESSION_STATE_PATH]?.text.orEmpty()
+    val actualSubtypes = directSubtypeDeclarationNames(
+        state,
+        "sealed interface PendingParticipantCommand",
+        "PendingParticipantCommand",
+    )
+    if (actualSubtypes != expectedSubtypes) {
+        add(
+            "PendingParticipantCommand must declare exactly the ordered direct subtype inventory " +
+                expectedSubtypes.joinToString(),
+        )
+    }
+
+    val expectedRows = linkedMapOf(
+        "app-session-profile" to "AppSession / Profile",
+        "app-session-gameplay" to "AppSession / GameplayRun",
+    )
+    val rows = parseArchitectureTableRows(assembly, "## Flow participations")
+    val rowsById = rows.groupBy(ArchitectureTableRow::id)
+    if (rowsById.keys != expectedRows.keys) {
+        add("Participant-authority closure requires exactly the Profile and GameplayRun FlowParticipation rows")
+    }
+    expectedRows.forEach { (id, participantCell) ->
+        val row = rowsById[id]?.singleOrNull()
+        if (row == null || row.cells.getOrNull(1) != participantCell) {
+            add("FlowParticipation `$id` must bind the closed participant authority `$participantCell`")
+        }
+    }
+}.distinct().sorted()
+
 private fun MutableList<String>.addDuplicateRowViolations(
     kind: String,
     rows: List<ArchitectureTableRow>,
@@ -983,6 +1073,61 @@ internal fun boundViolations(
     }
 }.distinct().sorted()
 
+internal fun mechanicallyDerivedBoundViolations(
+    sources: Map<String, SourceDocument>,
+    records: Map<String, String>,
+): List<String> = buildList {
+    mechanicallyDerivedBounds.forEach { projection ->
+        projection.sourceAnchors.forEach { anchor ->
+            val text = sources[anchor.path]?.text
+            anchor.tokens.forEach { token ->
+                if (text == null || token !in text) {
+                    add(
+                        "Mechanically derived bound ${projection.id}=${projection.value} " +
+                            "is not anchored by `$token` in ${anchor.path}",
+                    )
+                }
+            }
+        }
+        projection.evidenceAnchors.forEach { anchor ->
+            val evidence = sources[anchor.path]?.text
+            anchor.tokens.forEach { token ->
+                if (evidence == null || token !in evidence) {
+                    add(
+                        "Mechanically derived bound ${projection.id}=${projection.value} " +
+                            "lacks named derivation evidence `$token` in ${anchor.path}",
+                    )
+                }
+            }
+        }
+        projection.closedEnumInventories.forEach { inventory ->
+            val actualEntries = enumEntryNames(
+                sources[inventory.path]?.text.orEmpty(),
+                inventory.declaration,
+            )
+            if (actualEntries != inventory.expectedEntries) {
+                add(
+                    "Mechanically derived bound ${projection.id} requires `${inventory.declaration}` " +
+                        "to declare exactly ${inventory.expectedEntries.joinToString()}",
+                )
+            }
+        }
+    }
+    val policy = records["policy.md"].orEmpty()
+    mechanicallyDerivedBounds.filterNot { projection -> projection.policyRow in policy }
+        .forEach { projection ->
+            add("Policy mechanically-derived projection is missing exact row `${projection.policyRow}`")
+        }
+}.distinct().sorted()
+
+private fun enumEntryNames(text: String, declaration: String): List<String> {
+    val body = declarationBody(text, declaration) ?: return emptyList()
+    return Regex("(?m)(?:^|,)\\s*([A-Z][A-Z0-9_]*)\\s*(?=\\(|,|$)")
+        .findAll(body.substringBefore(';'))
+        .map { match -> match.groupValues[1] }
+        .toList()
+}
+
 internal val requiredPolicyBoundRows = listOf(
     "| Profile semantic outputs per accepted Decision | 2 |",
     "| Gameplay semantic outputs per accepted Decision | 3 |",
@@ -991,14 +1136,17 @@ internal val requiredPolicyBoundRows = listOf(
     "| Gameplay Profile-command outputs per accepted Decision | 1 |",
     "| Session participant-command / ensure-run outputs per accepted Decision | 1 / 1 |",
     "| Session participant commands at one time | 1 |",
+    "| cross-authority read / command-result routes | 14 / 10 |",
     "| Profile / Gameplay / Session completion deque capacity | 8 / 8 / 8 |",
     "| Session participant authorities | 2 |",
     "| same-stack causal depth | 8 |",
+    "| cumulative fan-out per accepted root causal scope | 9840 |",
     "| active GameplayRun instances | 1 |",
     "| Gameplay fixed steps per render frame | 48 |",
     "| Gameplay simulation raw-delta / accumulator cap seconds | `0.1` / `0.3` |",
     "| enemies / projectiles / pickups / trail | 120 / 650 / 420 / 110 |",
     "| delayed Relic hits | 256 |",
+    "| Relic chain work / visited IDs | 5 / 6 |",
     "| projectile hit-history IDs | 120 |",
     "| Gameplay sound cues / weapon nodes / orbitals / choices | 32 / 8 / 8 / 4 |",
     "| Arc Coil targets / generated item, weapon, or Relic reward choices | 6 / 3 |",
@@ -1008,7 +1156,7 @@ internal val requiredPolicyBoundRows = listOf(
     "| Interaction damage numbers / weapon arcs | 140 / 128 |",
     "| Interaction frame delta seconds | `0..1` |",
     "| Interaction viewport pixels / density | `1..32768` / `0.5..8` |",
-    "| Interaction pointer / choice index | `0..validated viewport` / `0..3` |",
+    "| Interaction pointer representation / choice index | finite / `0..3` |",
     "| authoritative Gameplay frame delta seconds | `0..1` |",
     "| authoritative Gameplay viewport pixels / density | `1..32768` / `0.5..8` |",
     "| authoritative Gameplay pointer | `0..current viewport` |",
@@ -1036,6 +1184,7 @@ private fun MutableList<String>.addBoundViolations(
     records: Map<String, String>,
 ) {
     addAll(boundViolations(sources, records))
+    addAll(mechanicallyDerivedBoundViolations(sources, records))
 }
 
 private fun MutableList<String>.addRecordViolations(records: Map<String, String>) {
@@ -1058,23 +1207,37 @@ private fun MutableList<String>.addRecordViolations(records: Map<String, String>
     if (commands != expectedCommandRoutes) {
         add("Command route inventory drift: expected ${expectedCommandRoutes.joinToString()}, found ${commands.joinToString()}")
     }
-    if ("AppSession has exactly nine command/result route" !in assembly ||
+    if ("repository has exactly fourteen typed read routes" !in assembly ||
+        "AppSession has exactly nine command/result route" !in assembly ||
         "repository has ten" !in assembly
     ) {
-        add("Assembly must resolve nine AppSession mappings and ten repository command mappings")
+        add(
+            "Assembly must resolve fourteen repository reads, nine AppSession command mappings, " +
+                "and ten repository command mappings",
+        )
     }
 
     val applicability = records["applicability.md"].orEmpty()
-    listOf(
-        "actors, authentication, tenants, grants, secrets",
-        "network, remote deployment, IPC",
+    val expectedAbsenceScopes = listOf(
+        "actors, authentication, tenants, grants, secrets, privileged actions",
+        "network, remote deployment, IPC, independently versioned endpoints",
         "detached asynchronous semantic delivery",
-        "automatic delivery retry, root idempotency, or cancellation protocol",
+        "root idempotency or cancellation protocol",
         "dynamic registry or wildcard routing",
         "process/security isolation",
-        "durable outbox, event journal, status materializer",
-    ).filterNot(applicability::contains).forEach { scope ->
+        "durable outbox, event journal, status materializer, or operation-status query",
+    )
+    expectedAbsenceScopes.filterNot(applicability::contains).forEach { scope ->
         add("Applicability inventory is missing bounded absence scope `$scope`")
+    }
+    val absenceRows = parseArchitectureTableRows(applicability, "## Absent trigger scopes")
+    if (absenceRows.size != expectedAbsenceScopes.size ||
+        absenceRows.map(ArchitectureTableRow::id).toSet() != expectedAbsenceScopes.toSet()
+    ) {
+        add(
+            "Applicability must retain exactly seven bounded absence scopes; found " +
+                absenceRows.map(ArchitectureTableRow::id).joinToString(),
+        )
     }
 }
 

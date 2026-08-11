@@ -23,10 +23,11 @@ class PlatformProfileStorageDesktopTest {
         val profileNode = testRoot.node("profile")
         val legacyNode = testRoot.node("legacy")
         try {
-            val resource = createDesktopProfileResource(
+            val persistence = IsolatedDesktopPersistence(
                 profileNode = profileNode,
                 legacyNode = legacyNode,
             )
+            val resource = createProfileResource(persistence)
             assertEquals(
                 ProfileBootstrapResourceResult.Observed(
                     snapshot = null,
@@ -35,8 +36,8 @@ class PlatformProfileStorageDesktopTest {
                 resource.readBootstrap(),
             )
 
-            legacyNode.put(ProfileStorageKeys.DESKTOP_LEGACY_PROGRESS_V2, "legacy")
-            legacyNode.put(ProfileStorageKeys.DESKTOP_LEGACY_MATTER, "1")
+            legacyNode.put(LEGACY_PROGRESS_V2, "legacy")
+            legacyNode.put(LEGACY_MATTER, "1")
             legacyNode.put("unrelated", "preserve-me")
             legacyNode.flush()
             val confirmed = testV4Snapshot(revision = 5L, legacyResetConfirmed = true)
@@ -45,15 +46,45 @@ class PlatformProfileStorageDesktopTest {
                 ProfileV4WriteResult.Written(confirmed.revision),
                 resource.writeV4(confirmed),
             )
-            assertEquals(requireEncoded(confirmed), profileNode.get(ProfileStorageKeys.DESKTOP_SNAPSHOT_V4, null))
-            assertNull(legacyNode.get(ProfileStorageKeys.DESKTOP_SNAPSHOT_V4, null))
+            assertEquals(requireEncoded(confirmed), profileNode.get(SNAPSHOT_V4, null))
+            assertNull(legacyNode.get(SNAPSHOT_V4, null))
             assertEquals(ProfileLegacyPurgeResult.Purged, resource.purgeLegacy())
-            assertNull(legacyNode.get(ProfileStorageKeys.DESKTOP_LEGACY_PROGRESS_V2, null))
-            assertNull(legacyNode.get(ProfileStorageKeys.DESKTOP_LEGACY_MATTER, null))
+            assertNull(legacyNode.get(LEGACY_PROGRESS_V2, null))
+            assertNull(legacyNode.get(LEGACY_MATTER, null))
             assertEquals("preserve-me", legacyNode.get("unrelated", null))
         } finally {
             testRoot.removeNode()
             testParent.flush()
         }
+    }
+}
+
+private const val SNAPSHOT_V4 = "snapshot_v4"
+private const val LEGACY_PROGRESS_V2 = "progress_v2"
+private const val LEGACY_MATTER = "kinetickk_matter"
+
+private class IsolatedDesktopPersistence(
+    private val profileNode: Preferences,
+    private val legacyNode: Preferences,
+) : ExactProfilePersistence {
+    override fun readV4(): String? = profileNode.get(SNAPSHOT_V4, null)
+
+    override fun writeV4(payload: String) {
+        profileNode.put(SNAPSHOT_V4, payload)
+        profileNode.flush()
+    }
+
+    override fun readLegacyProgressV2(): String? = legacyNode.get(LEGACY_PROGRESS_V2, null)
+
+    override fun readLegacyMatter(): String? = legacyNode.get(LEGACY_MATTER, null)
+
+    override fun removeLegacyProgressV2() {
+        legacyNode.remove(LEGACY_PROGRESS_V2)
+        legacyNode.flush()
+    }
+
+    override fun removeLegacyMatter() {
+        legacyNode.remove(LEGACY_MATTER)
+        legacyNode.flush()
     }
 }

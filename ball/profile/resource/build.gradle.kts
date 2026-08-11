@@ -13,7 +13,7 @@ kotlin {
             api(projects.ball.content.api)
             implementation(libs.kotlinx.serialization.json)
         }
-        wasmJsMain.dependencies {
+        wasmJsTest.dependencies {
             implementation(libs.kotlinx.browser)
         }
     }

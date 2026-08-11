@@ -4,10 +4,13 @@
 package kinetickk.ball.profile.api
 
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.WeaponId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class ProfileApiContractTest {
@@ -26,14 +29,20 @@ class ProfileApiContractTest {
     }
 
     @Test
-    fun revisionsAndCorrelationOrdinalsRejectNegativeValues() {
+    fun revisionsSemanticHandlesAndCorrelationOrdinalsRejectNegativeValues() {
         assertFailsWith<IllegalArgumentException> { ProfileRevision(-1L) }
         assertFailsWith<IllegalArgumentException> {
-            ProfileCommandRef(
+            ProfileSemanticHandle(
                 sourceInstance = ProfileCommandSource.LocalSession,
-                targetInstance = LOCAL_PROFILE_INSTANCE_ID,
                 sourceRevision = -1L,
-                ordinal = 0,
+                sourceOrdinal = 0,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            ProfileSemanticHandle(
+                sourceInstance = ProfileCommandSource.LocalSession,
+                sourceRevision = 0L,
+                sourceOrdinal = -1,
             )
         }
         assertFailsWith<IllegalArgumentException> {
@@ -42,22 +51,78 @@ class ProfileApiContractTest {
     }
 
     @Test
-    fun sessionCoreSelectionCommandRetainsExactCorrelationPayloadAndOutcome() {
-        val ref = ProfileCommandRef(
+    fun targetBoundaryRequestRetainsExactAcceptedSourceEvidenceAndCommand() {
+        val handle = ProfileSemanticHandle(
             sourceInstance = ProfileCommandSource.LocalSession,
-            targetInstance = LOCAL_PROFILE_INSTANCE_ID,
             sourceRevision = 19L,
-            ordinal = 4,
+            sourceOrdinal = 4,
         )
-        val pulse = ProfilePulse.SelectCoreShape(CoreShape.SHARD)
-        val command = ProfileCommand(ref, pulse)
-        val admission = ProfileCommandAdmission(ref)
-        val outcome = ProfileCommandOutcome.CoreShapeSelected(CoreShape.SHARD)
+        val command = ProfileModuleCommand.SelectCoreShape(CoreShape.SHARD)
+        val request = ProfileModuleCommandRequest(
+            semanticHandle = handle,
+            sourceOrdinal = handle.sourceOrdinal,
+            targetInstance = LOCAL_PROFILE_INSTANCE_ID,
+            command = command,
+        )
 
-        assertEquals(ref, command.ref)
-        assertEquals(pulse, command.pulse)
-        assertEquals(ref, admission.commandRef)
-        assertEquals(CoreShape.SHARD, outcome.shape)
+        assertEquals(handle, request.semanticHandle)
+        assertEquals(4, request.sourceOrdinal)
+        assertEquals(LOCAL_PROFILE_INSTANCE_ID, request.targetInstance)
+        assertEquals(command, request.command)
+        assertFailsWith<IllegalArgumentException> {
+            request.copy(sourceOrdinal = handle.sourceOrdinal + 1)
+        }
+    }
+
+    @Test
+    fun localIntentInventoryIsClosedAndDoesNotAliasModuleCommands() {
+        val intents: List<ProfilePulse.Business> = listOf(
+            ProfilePulse.AdjustPreference(ProfilePreferenceAdjustment.ToggleSoundEffects),
+            ProfilePulse.PurchaseMetaUpgrade(MetaUpgradeId.CORE_INTEGRITY),
+            ProfilePulse.PurchaseOrEquipWeapon(WeaponId.MORNINGSTAR),
+        )
+
+        assertEquals(3, intents.size)
+        assertIs<ProfilePulse.AdjustPreference>(intents[0])
+        assertIs<ProfilePulse.PurchaseMetaUpgrade>(intents[1])
+        assertIs<ProfilePulse.PurchaseOrEquipWeapon>(intents[2])
+        val moduleCommand: Any = ProfileModuleCommand.ToggleMute
+        assertFalse(moduleCommand is ProfilePulse)
+    }
+
+    @Test
+    fun acceptedResultDeliveryCarriesTheExactCommandAndTargetFrameEvidence() {
+        val handle = ProfileSemanticHandle(ProfileCommandSource.LocalSession, 5L, 2)
+        val commandSource = ProfileCommandSourceToken(
+            semanticHandle = handle,
+            targetInstance = LOCAL_PROFILE_INSTANCE_ID,
+            causalScope = 91L,
+            causalDepth = 3,
+        )
+        val result = ProfileModuleResult.CoreShapeSelected(CoreShape.SHARD)
+        val delivery = ProfileModuleResultDelivery(
+            commandSource = commandSource,
+            resultSource = ProfileResultSourceToken(
+                semanticHandle = handle,
+                targetInstance = LOCAL_PROFILE_INSTANCE_ID,
+                targetRevision = ProfileRevision(12L),
+                sourceOrdinal = 1,
+                causalScope = 91L,
+                causalDepth = 4,
+            ),
+            effectiveProtocolIdentity = ProfileEffectiveProtocolIdentity.SESSION_CORE_SHAPE,
+            result = result,
+            issuerProvenance = ProfileResultIssuerProvenance.LOCAL_PROFILE_STATIC_BINDING,
+        )
+
+        assertEquals(commandSource, delivery.commandSource)
+        assertEquals(handle, delivery.resultSource.semanticHandle)
+        assertEquals(ProfileRevision(12L), delivery.resultSource.targetRevision)
+        assertEquals(91L, delivery.resultSource.causalScope)
+        assertEquals(4, delivery.resultSource.causalDepth)
+        assertEquals(ProfileEffectiveProtocolIdentity.SESSION_CORE_SHAPE, delivery.effectiveProtocolIdentity)
+        assertEquals(result, delivery.result)
+        assertEquals(ProfileResultIssuerProvenance.LOCAL_PROFILE_STATIC_BINDING, delivery.issuerProvenance)
     }
 
     @Test

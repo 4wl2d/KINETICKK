@@ -54,20 +54,84 @@ sealed interface ProfileCommandSource {
     }
 }
 
-/** Correlation carried by every cross-Ball Profile command and result. */
-data class ProfileCommandRef(
+/** Stable semantic identity created by an accepted source command frame. */
+data class ProfileSemanticHandle(
     val sourceInstance: ProfileCommandSource,
-    val targetInstance: ProfileInstanceId,
     val sourceRevision: Long,
-    val ordinal: Int,
+    val sourceOrdinal: Int,
 ) {
     init {
         require(sourceRevision >= 0L) { "Command source revision must be non-negative" }
-        require(ordinal >= 0) { "Command ordinal must be non-negative" }
+        require(sourceOrdinal >= 0) { "Command source ordinal must be non-negative" }
     }
 }
 
-/** Evidence supplied by the static binding after reserving the completion path. */
-data class ProfileCommandAdmission(
-    val commandRef: ProfileCommandRef,
+/**
+ * Complete accepted-source token for one Profile command route.
+ *
+ * The causal scope and depth are binding evidence. They are carried across the Ball boundary but
+ * never become DecisionContext or a hidden input to Profile business policy.
+ */
+data class ProfileCommandSourceToken(
+    val semanticHandle: ProfileSemanticHandle,
+    val targetInstance: ProfileInstanceId,
+    val causalScope: Long,
+    val causalDepth: Int,
+) {
+    init {
+        require(causalScope >= 0L) { "Command causal scope must be non-negative" }
+        require(causalDepth >= 0) { "Command causal depth must be non-negative" }
+    }
+
+    val sourceInstance: ProfileCommandSource
+        get() = semanticHandle.sourceInstance
+
+    val sourceRevision: Long
+        get() = semanticHandle.sourceRevision
+
+    val sourceOrdinal: Int
+        get() = semanticHandle.sourceOrdinal
+}
+
+/** Accepted target-frame token for a Profile ModuleResultOutput. */
+data class ProfileResultSourceToken(
+    val semanticHandle: ProfileSemanticHandle,
+    val targetInstance: ProfileInstanceId,
+    val targetRevision: ProfileRevision,
+    val sourceOrdinal: Int,
+    val causalScope: Long,
+    val causalDepth: Int,
+) {
+    init {
+        require(sourceOrdinal >= 0) { "Result source ordinal must be non-negative" }
+        require(causalScope >= 0L) { "Result causal scope must be non-negative" }
+        require(causalDepth >= 0) { "Result causal depth must be non-negative" }
+    }
+}
+
+/** The six exact same-build Profile command/result mappings. */
+enum class ProfileEffectiveProtocolIdentity {
+    SESSION_CORE_SHAPE,
+    SESSION_MUTE,
+    SESSION_REBIRTH,
+    SESSION_RESET_CONFIRM,
+    SESSION_RESET_RETRY,
+    GAMEPLAY_PROGRESS,
+}
+
+/** Statically verified issuer of a Profile ModuleCommandPulse. */
+enum class ProfileCommandIssuerProvenance {
+    LOCAL_SESSION_STATIC_BINDING,
+    GAMEPLAY_RUN_STATIC_BINDING,
+}
+
+/** Statically verified issuer of a Profile ModuleResultPulse. */
+enum class ProfileResultIssuerProvenance {
+    LOCAL_PROFILE_STATIC_BINDING,
+}
+
+/** Provenance of a Profile pre-acceptance carrier. */
+data class ProfileTargetBoundaryProvenance(
+    val targetInstance: ProfileInstanceId,
+    val effectiveProtocolIdentity: ProfileEffectiveProtocolIdentity,
 )

@@ -4,9 +4,9 @@
 package kinetickk.ball.gameplay.interaction.input
 
 import kinetickk.ball.gameplay.api.BrakeSource
-import kinetickk.ball.gameplay.api.GamePhase
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
-import kinetickk.ball.gameplay.api.GameplayRenderModel
+import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kotlin.math.min
 
 /** A pointer result is either a live-run action or a request for the Session-owned host. */
@@ -108,7 +108,9 @@ private fun GameplayHitTestState.resolveChoicePress(x: Float, y: Float): Gamepla
         repeat(visibleChoiceCount) { index ->
             val left = startX + index * (cardWidth + gap)
             if (x in left..left + cardWidth) {
-                return GameplayInput.Action(GameplayInteractionPulse.ChoiceSelected(index))
+                return GameplayInput.Action(
+                    GameplayInteractionPulse.ChoiceSelected.fromValidated(index),
+                )
             }
         }
     }

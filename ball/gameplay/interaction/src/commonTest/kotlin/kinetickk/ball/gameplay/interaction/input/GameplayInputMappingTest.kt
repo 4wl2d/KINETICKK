@@ -3,8 +3,8 @@
 
 package kinetickk.ball.gameplay.interaction.input
 
-import kinetickk.ball.gameplay.api.GamePhase
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
+import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -43,7 +43,7 @@ class GameplayInputMappingTest {
         val selected = assertIs<GameplayInput.Action>(choice.resolveGameplayPress(800f, 260f))
         val rerolled = assertIs<GameplayInput.Action>(choice.resolveGameplayPress(640f, 648f))
 
-        assertEquals(GameplayInteractionPulse.ChoiceSelected(index = 2), selected.action)
+        assertEquals(2, assertIs<GameplayInteractionPulse.ChoiceSelected>(selected.action).index)
         assertSame(GameplayInteractionPulse.ChoicesRerolled, rerolled.action)
     }
 

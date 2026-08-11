@@ -35,7 +35,7 @@ These components are fetched by Gradle and are not relicensed by KINETICKK:
 | AndroidX Lifecycle / Saved State / Navigation Event / Arch Core | 2.9.4 / 1.4.0 / 1.0.1 / 2.2.0 | [AndroidX licenses](https://github.com/androidx/androidx) |
 | JetBrains AndroidX Lifecycle / Saved State ports | 2.9.6 / 1.3.6 | [Compose Multiplatform dependencies](https://github.com/JetBrains/compose-multiplatform) |
 | kotlinx.coroutines | 1.9.0 | [Apache License 2.0](https://github.com/Kotlin/kotlinx.coroutines/blob/1.9.0/LICENSE.txt) |
-| kotlinx.serialization | 1.7.3 | [Apache License 2.0](https://github.com/Kotlin/kotlinx.serialization/blob/v1.7.3/LICENSE.txt) |
+| kotlinx.serialization | 1.11.0 | [Apache License 2.0](https://github.com/Kotlin/kotlinx.serialization/blob/v1.11.0/LICENSE.txt) |
 | kotlinx.atomicfu | 0.28.0 | [Apache License 2.0](https://github.com/Kotlin/kotlinx-atomicfu/blob/0.28.0/LICENSE.txt) |
 | kotlinx-browser | 0.5.0 | [Apache License 2.0](https://github.com/Kotlin/kotlinx-browser/blob/master/LICENSE) |
 | Skiko | 0.144.6 | [Apache License 2.0](https://github.com/JetBrains/skiko/blob/v0.144.6/LICENSE) and its [NOTICE](https://github.com/JetBrains/skiko/blob/v0.144.6/NOTICE) |

@@ -3,9 +3,9 @@
 
 package kinetickk.ball.gameplay.nucleus.model
 
-import kinetickk.ball.gameplay.api.EnemyType
-import kinetickk.ball.gameplay.api.PickupType
-import kinetickk.ball.gameplay.api.WeaponNodeType
+import kinetickk.ball.gameplay.nucleus.render.EnemyType
+import kinetickk.ball.gameplay.nucleus.render.PickupType
+import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
 

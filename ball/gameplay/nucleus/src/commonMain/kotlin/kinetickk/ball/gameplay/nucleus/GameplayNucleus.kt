@@ -3,46 +3,48 @@
 
 package kinetickk.ball.gameplay.nucleus
 
-import kinetickk.ball.content.api.GameplayContentSnapshot
-import kinetickk.ball.gameplay.api.GamePhase
 import kinetickk.ball.gameplay.api.GameplayActiveWeaponProjection
 import kinetickk.ball.gameplay.api.GameplayCodexStacksProjection
-import kinetickk.ball.gameplay.api.GameplayCommandOutcome
-import kinetickk.ball.gameplay.api.GameplayCommandRefRejection
-import kinetickk.ball.gameplay.api.GameplayCommandSource
+import kinetickk.ball.gameplay.api.GameplayCommandSourceToken
 import kinetickk.ball.gameplay.api.GameplayConfigurationRejection
-import kinetickk.ball.gameplay.api.GameplayControlPulse
-import kinetickk.ball.gameplay.api.GameplayExitProfileOutcome
+import kinetickk.ball.gameplay.api.GameplayExitProgressResult
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
-import kinetickk.ball.gameplay.api.GameplayProfileResultRejection
-import kinetickk.ball.gameplay.api.GameplayPulse
+import kinetickk.ball.gameplay.api.GameplayModuleCommand
+import kinetickk.ball.gameplay.api.GameplayModuleCommandPulse
+import kinetickk.ball.gameplay.api.GameplayModuleResult
+import kinetickk.ball.gameplay.api.GameplayModuleResultOutput
+import kinetickk.ball.gameplay.api.GameplayPointerAxis
 import kinetickk.ball.gameplay.api.GameplayQuery
 import kinetickk.ball.gameplay.api.GameplayRejection
-import kinetickk.ball.gameplay.api.GameplayRenderProjection
 import kinetickk.ball.gameplay.api.GameplayRevision
 import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.GameplayRunStatusProjection
-import kinetickk.ball.gameplay.api.GameplaySessionPulse
-import kinetickk.ball.gameplay.api.RunConfiguration
 import kinetickk.ball.gameplay.nucleus.protocol.SimulationOutput
 import kinetickk.ball.gameplay.nucleus.reducer.EngineState
 import kinetickk.ball.gameplay.nucleus.reducer.GameReducer
+import kinetickk.ball.gameplay.nucleus.reducer.GameReduction
 import kinetickk.ball.gameplay.nucleus.reducer.GameReductionResult
 import kinetickk.ball.gameplay.nucleus.reducer.initialEngineState
+import kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot
+import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kinetickk.ball.gameplay.nucleus.simulation.applyPreferences
+import kinetickk.ball.gameplay.nucleus.simulation.copyForReduction
+import kinetickk.ball.gameplay.nucleus.simulation.exitRun
+import kinetickk.ball.gameplay.nucleus.simulation.pauseForOverlay
 import kinetickk.ball.gameplay.nucleus.simulation.startRun
+import kinetickk.ball.gameplay.nucleus.simulation.takeProgressUpdate
 import kinetickk.ball.gameplay.nucleus.simulation.takeSoundCues
 import kinetickk.ball.gameplay.nucleus.simulation.takeVisualFxCues
 import kinetickk.ball.gameplay.nucleus.simulation.toRenderModel
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
-import kinetickk.ball.profile.api.ProfileAcceptance
-import kinetickk.ball.profile.api.ProfileCommand
-import kinetickk.ball.profile.api.ProfileCommandOutcome
-import kinetickk.ball.profile.api.ProfileCommandRef
-import kinetickk.ball.profile.api.ProfileCommandSource
-import kinetickk.ball.profile.api.ProfilePulse
-import kinetickk.ball.profile.api.ProfileRevision
-import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
+import kinetickk.ball.profile.api.PlayerPreferences
+import kinetickk.ball.profile.api.ProfileCommandSource
+import kinetickk.ball.profile.api.ProfileModuleCommand
+import kinetickk.ball.profile.api.ProfileModuleCommandRequest
+import kinetickk.ball.profile.api.ProfileModuleResult
+import kinetickk.ball.profile.api.ProfileSemanticHandle
+import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
@@ -51,23 +53,24 @@ import kinetickk.foundation.collections.toImmutableList
 object GameplayNucleus {
     fun decide(
         state: GameplayState,
-        pulse: GameplayPulse,
-        context: GameplayContext = GameplayContext.Local,
+        pulse: GameplayNucleusPulse,
+        context: GameplayContext = GameplayContext.Empty,
     ): GameplayDecision {
-        validateContext(state, pulse, context)?.let { return rejected(it) }
-        if (state.revision.value == Long.MAX_VALUE) {
-            return rejected(GameplayRejection.RevisionExhausted)
-        }
-
         return when (pulse) {
-            is GameplayControlPulse -> decideControl(state, pulse)
-            is GameplaySessionPulse -> decideSession(state, pulse, context.command!!.ref)
-            is GameplayInteractionPulse -> decideInteraction(state, pulse)
+            is GameplayNucleusPulse.Intent -> decideInteraction(state, pulse.intent)
+            is GameplayNucleusPulse.ModuleCommand -> decideModuleCommand(state, pulse.pulse, context)
+            is GameplayNucleusPulse.ProfileModuleResultPulse -> decideProfileResult(state, pulse)
+            is GameplayNucleusPulse.ProfileCommandRejectedBeforeAcceptance ->
+                decideProfileRefusal(state, pulse)
         }
     }
 
-    fun query(state: GameplayState, query: GameplayQuery.GetRender): GameplayRenderProjection =
-        renderProjection(state)
+    fun renderSnapshot(state: GameplayState): GameplayRenderSnapshot =
+        GameplayRenderSnapshot(
+            instanceId = state.instanceId,
+            revision = state.revision,
+            renderModel = state.engine?.model?.toRenderModel(),
+        )
 
     fun query(state: GameplayState, query: GameplayQuery.GetRunStatus): GameplayRunStatusProjection =
         GameplayRunStatusProjection(
@@ -92,173 +95,140 @@ object GameplayNucleus {
                 ?: immutableListOf(),
         )
 
-    private fun decideSession(
+    private fun decideModuleCommand(
         state: GameplayState,
-        pulse: GameplaySessionPulse,
-        commandRef: kinetickk.ball.gameplay.api.GameplayCommandRef,
-    ): GameplayDecision = when (pulse) {
-        is GameplaySessionPulse.StartRun -> startRun(state, pulse.configuration, commandRef)
-        GameplaySessionPulse.PauseForOverlay -> pauseForOverlay(state, commandRef)
-        is GameplaySessionPulse.ApplyPreferences -> applyPreferences(state, pulse, commandRef)
-        GameplaySessionPulse.ExitRun -> exitRun(state, commandRef)
+        pulse: GameplayModuleCommandPulse,
+        context: GameplayContext,
+    ): GameplayDecision = when (val command = pulse.command) {
+        GameplayModuleCommand.StartRun -> startRun(
+            state = state,
+            commandSource = pulse.commandSource,
+            start = checkNotNull(context.start) { "Trusted Gameplay start Context was not supplied" },
+        )
+        GameplayModuleCommand.PauseForOverlay -> pauseForOverlay(state, pulse.commandSource)
+        GameplayModuleCommand.ApplyPreferences -> applyPreferences(
+            state,
+            pulse.commandSource,
+            checkNotNull(context.preferences) { "Trusted preferences read was not supplied" },
+        )
+        GameplayModuleCommand.ExitRun -> exitRun(state, pulse.commandSource)
     }
 
     private fun startRun(
         state: GameplayState,
-        configuration: RunConfiguration,
-        commandRef: kinetickk.ball.gameplay.api.GameplayCommandRef,
+        commandSource: GameplayCommandSourceToken,
+        start: GameplayStartContext,
     ): GameplayDecision {
         when (state.phase) {
             GameplayRunPhase.CREATED -> Unit
             GameplayRunPhase.EXITED -> return rejected(GameplayRejection.RunExited)
             else -> return rejected(GameplayRejection.AlreadyStarted)
         }
-        validateConfiguration(configuration)?.let {
-            return rejected(GameplayRejection.InvalidConfiguration(it))
+        if (start == GameplayStartContext.ProfileUnavailable) {
+            return rejected(GameplayRejection.ProfileBootstrapUnavailable)
+        }
+        val startInputs = (start as GameplayStartContext.Ready).inputs
+        check(startInputs.content === state.content) { "Gameplay start changed captured Content" }
+        validateStartInputs(startInputs)?.let { reason ->
+            return rejected(GameplayRejection.InvalidStartConfiguration(reason))
         }
 
         val engine = initialEngineState(
-            content = configuration.content,
-            seed = configuration.seed,
-            bootstrapProgress = configuration.profile,
+            content = state.content,
+            seed = startInputs.seed,
+            bootstrapProgress = startInputs.profile,
         )
         engine.model.startRun()
-        // Start captures RNG/content and preserves the old initialized simulation, but its
-        // initialization-only cues were never externally observable and remain drained here.
         engine.model.takeSoundCues()
         engine.model.takeVisualFxCues()
 
         val revision = state.revision.next()
-        val nextState = GameplayState(
-            instanceId = state.instanceId,
+        val nextState = state.copy(
             revision = revision,
             phase = GameplayRunPhase.RUNNING,
-            content = configuration.content,
             engine = engine,
-            pendingProfileCommand = null,
-            nextProfileCommandOrdinal = state.nextProfileCommandOrdinal,
         )
         return accepted(
             nextState,
             immutableListOf(
-                GameplayOutput.CompleteCommand(
-                    kinetickk.ball.gameplay.api.GameplayCommandResult.Accepted(
-                        commandRef = commandRef,
-                        targetRevision = revision,
-                        outcome = GameplayCommandOutcome.RunStarted,
-                    ),
-                ),
+                completion(commandSource, sourceOrdinal = 0, GameplayModuleResult.RunStarted),
             ),
         )
     }
 
     private fun pauseForOverlay(
         state: GameplayState,
-        commandRef: kinetickk.ball.gameplay.api.GameplayCommandRef,
+        commandSource: GameplayCommandSourceToken,
     ): GameplayDecision {
         lifecycleGate(state)?.let { return rejected(it) }
         if (state.phase != GameplayRunPhase.RUNNING) {
             return rejected(GameplayRejection.PauseUnavailable)
         }
-        val reduction = reduce(state.engine!!, GameplayInteractionPulse.PauseForOverlay)
-            ?: return rejected(GameplayRejection.PauseUnavailable)
+        val reduction = reduceTrusted(state.engine!!) { it.pauseForOverlay() }
         val revision = state.revision.next()
-        val nextState = state.copy(
+        val prepared = state.copy(
             revision = revision,
             phase = reduction.state.model.phase.toRunPhase(),
             engine = reduction.state,
         )
-        val mapped = reduction.outputs.toGameplayOutputs(nextState, exitCompletion = null)
-            ?: return rejected(GameplayRejection.RevisionExhausted)
-        if (mapped.pending != null) return rejected(GameplayRejection.ProfileCommandPending)
+        val mapped = reduction.outputs.toGameplayOutputs(prepared, exitCompletion = null)
+        check(mapped.pending == null) { "Pause unexpectedly emitted Profile progress" }
         return accepted(
-            nextState,
-            mapped.outputs +
-                GameplayOutput.CompleteCommand(
-                    kinetickk.ball.gameplay.api.GameplayCommandResult.Accepted(
-                        commandRef,
-                        revision,
-                        GameplayCommandOutcome.OverlayPaused,
-                    ),
-                ),
+            prepared,
+            mapped.outputs + completion(
+                commandSource,
+                sourceOrdinal = mapped.outputs.size,
+                result = GameplayModuleResult.OverlayPaused,
+            ),
         )
     }
 
     private fun applyPreferences(
         state: GameplayState,
-        pulse: GameplaySessionPulse.ApplyPreferences,
-        commandRef: kinetickk.ball.gameplay.api.GameplayCommandRef,
+        commandSource: GameplayCommandSourceToken,
+        preferences: PlayerPreferences,
     ): GameplayDecision {
         lifecycleGate(state)?.let { return rejected(it) }
-        if (!isValidPreferences(pulse.preferences)) {
-            return rejected(
-                GameplayRejection.InvalidConfiguration(
-                    GameplayConfigurationRejection.INVALID_PREFERENCES,
-                ),
-            )
+        if (!isValidPreferencesProjection(preferences)) {
+            return rejected(GameplayRejection.InvalidPreferencesProjection)
         }
-        val reduction = reduce(
-            state.engine!!,
-            GameplayInteractionPulse.PreferencesChanged(pulse.preferences),
-        ) ?: return rejected(
-            GameplayRejection.InvalidConfiguration(
-                GameplayConfigurationRejection.INVALID_PREFERENCES,
-            ),
-        )
+        val reduction = reduceTrusted(state.engine!!) { it.applyPreferences(preferences) }
         val revision = state.revision.next()
-        val nextState = state.copy(revision = revision, engine = reduction.state)
-        val mapped = reduction.outputs.toGameplayOutputs(nextState, exitCompletion = null)
-            ?: return rejected(GameplayRejection.RevisionExhausted)
-        if (mapped.pending != null) return rejected(GameplayRejection.ProfileCommandPending)
+        val prepared = state.copy(revision = revision, engine = reduction.state)
+        val mapped = reduction.outputs.toGameplayOutputs(prepared, exitCompletion = null)
+        check(mapped.pending == null) { "Preferences unexpectedly emitted Profile progress" }
         return accepted(
-            nextState,
-            mapped.outputs +
-                GameplayOutput.CompleteCommand(
-                    kinetickk.ball.gameplay.api.GameplayCommandResult.Accepted(
-                        commandRef,
-                        revision,
-                        GameplayCommandOutcome.PreferencesApplied(reduction.state.model.settings),
-                    ),
-                ),
+            prepared,
+            mapped.outputs + completion(
+                commandSource,
+                sourceOrdinal = mapped.outputs.size,
+                result = GameplayModuleResult.PreferencesApplied,
+            ),
         )
     }
 
     private fun exitRun(
         state: GameplayState,
-        commandRef: kinetickk.ball.gameplay.api.GameplayCommandRef,
+        commandSource: GameplayCommandSourceToken,
     ): GameplayDecision {
         lifecycleGate(state)?.let { return rejected(it) }
         if (state.pendingProfileCommand != null) {
             return rejected(GameplayRejection.ProfileCommandPending)
         }
-        val result = GameReducer().reduce(state.engine!!, GameplayInteractionPulse.ExitRunRequested)
-        if (result is GameReductionResult.Rejected) return rejected(result.reason)
-        result as GameReductionResult.Accepted
-
+        val reduction = reduceTrusted(state.engine!!) { it.exitRun() }
         val revision = state.revision.next()
         val prepared = state.copy(
             revision = revision,
             phase = GameplayRunPhase.EXITED,
-            engine = result.value.state,
+            engine = reduction.state,
         )
-        val mapped = result.value.outputs.toGameplayOutputs(prepared, commandRef)
-            ?: return rejected(GameplayRejection.RevisionExhausted)
-        val pending = mapped.pending
-        val nextState = prepared.copy(
-            pendingProfileCommand = pending,
-            nextProfileCommandOrdinal = if (pending == null) {
-                state.nextProfileCommandOrdinal
-            } else {
-                state.nextProfileCommandOrdinal.nextOrdinal()
-            },
-        )
-        val outputs = if (pending == null) {
-            mapped.outputs + GameplayOutput.CompleteCommand(
-                kinetickk.ball.gameplay.api.GameplayCommandResult.Accepted(
-                    commandRef,
-                    revision,
-                    GameplayCommandOutcome.RunExited(GameplayExitProfileOutcome.NoProgress),
-                ),
+        val mapped = reduction.outputs.toGameplayOutputs(prepared, commandSource)
+        val nextState = prepared.copy(pendingProfileCommand = mapped.pending)
+        val outputs = if (mapped.pending == null) {
+            mapped.outputs + completion(
+                commandSource,
+                sourceOrdinal = mapped.outputs.size,
+                result = GameplayModuleResult.RunExited(GameplayExitProgressResult.NoProgress),
             )
         } else {
             mapped.outputs
@@ -271,19 +241,7 @@ object GameplayNucleus {
         pulse: GameplayInteractionPulse,
     ): GameplayDecision {
         lifecycleGate(state)?.let { return rejected(it) }
-
-        // Session commands are now the sole lifecycle/configuration writers. These variants stay
-        // in the closed Interaction inventory only until old UI hosts finish migrating.
-        if (
-            pulse == GameplayInteractionPulse.PauseForOverlay ||
-            pulse == GameplayInteractionPulse.ExitRunRequested ||
-            pulse is GameplayInteractionPulse.PreferencesChanged
-        ) {
-            return accepted(state.copy(revision = state.revision.next()), immutableListOf())
-        }
-
-        val result = GameReducer().reduce(state.engine!!, pulse)
-        return when (result) {
+        return when (val result = GameReducer().reduce(state.engine!!, pulse)) {
             is GameReductionResult.Rejected -> rejected(result.reason)
             is GameReductionResult.Accepted -> {
                 val revision = state.revision.next()
@@ -293,124 +251,55 @@ object GameplayNucleus {
                     engine = result.value.state,
                 )
                 val mapped = result.value.outputs.toGameplayOutputs(prepared, exitCompletion = null)
-                    ?: return rejected(GameplayRejection.RevisionExhausted)
                 if (mapped.pending != null && state.pendingProfileCommand != null) {
                     return rejected(GameplayRejection.ProfileCommandPending)
                 }
-                val nextState = prepared.copy(
-                    pendingProfileCommand = mapped.pending ?: state.pendingProfileCommand,
-                    nextProfileCommandOrdinal = if (mapped.pending == null) {
-                        state.nextProfileCommandOrdinal
-                    } else {
-                        state.nextProfileCommandOrdinal.nextOrdinal()
-                    },
+                accepted(
+                    prepared.copy(
+                        pendingProfileCommand = mapped.pending ?: state.pendingProfileCommand,
+                    ),
+                    mapped.outputs,
                 )
-                accepted(nextState, mapped.outputs)
             }
         }
     }
 
-    private fun decideControl(
+    private fun decideProfileResult(
         state: GameplayState,
-        pulse: GameplayControlPulse,
+        pulse: GameplayNucleusPulse.ProfileModuleResultPulse,
     ): GameplayDecision {
-        val pending = state.pendingProfileCommand
-            ?: return rejected(
-                GameplayRejection.UnexpectedProfileResult(
-                    GameplayProfileResultRejection.NO_COMMAND_PENDING,
-                ),
-            )
-        val commandRef = when (pulse) {
-            is GameplayControlPulse.ProfileCommandCompleted -> pulse.result.commandRef
-            is GameplayControlPulse.ProfileCommandRejectedBeforeAcceptance -> pulse.commandRef
-        }
-        if (commandRef != pending.command.ref) {
-            return rejected(
-                GameplayRejection.UnexpectedProfileResult(
-                    GameplayProfileResultRejection.COMMAND_REF_MISMATCH,
-                ),
-            )
-        }
+        val pending = checkNotNull(state.pendingProfileCommand)
+        check(pulse.commandSource.semanticHandle == pending.request.semanticHandle)
+        check(pulse.result == ProfileModuleResult.GameplayProgressApplied)
+        return completeProfileProgress(state, pending, GameplayExitProgressResult.Applied)
+    }
 
-        val profileOutcome = when (pulse) {
-            is GameplayControlPulse.ProfileCommandCompleted -> {
-                if (pulse.result.outcome != ProfileCommandOutcome.GameplayProgressApplied) {
-                    return rejected(
-                        GameplayRejection.UnexpectedProfileResult(
-                            GameplayProfileResultRejection.OUTCOME_MISMATCH,
-                        ),
-                    )
-                }
-                GameplayExitProfileOutcome.ProgressApplied
-            }
-            is GameplayControlPulse.ProfileCommandRejectedBeforeAcceptance -> {
-                if (pulse.rejection.instanceId != pending.command.ref.targetInstance) {
-                    return rejected(
-                        GameplayRejection.UnexpectedProfileResult(
-                            GameplayProfileResultRejection.TARGET_INSTANCE_MISMATCH,
-                        ),
-                    )
-                }
-                GameplayExitProfileOutcome.ProgressRejected(
-                    observedRevision = pulse.rejection.observedRevision,
-                    reason = pulse.rejection.reason,
-                )
-            }
-        }
+    private fun decideProfileRefusal(
+        state: GameplayState,
+        pulse: GameplayNucleusPulse.ProfileCommandRejectedBeforeAcceptance,
+    ): GameplayDecision {
+        val pending = checkNotNull(state.pendingProfileCommand)
+        check(pulse.commandSource.semanticHandle == pending.request.semanticHandle)
+        return completeProfileProgress(state, pending, GameplayExitProgressResult.NotApplied)
+    }
 
+    private fun completeProfileProgress(
+        state: GameplayState,
+        pending: PendingProfileCommand,
+        progressResult: GameplayExitProgressResult,
+    ): GameplayDecision {
         val revision = state.revision.next()
         val nextState = state.copy(revision = revision, pendingProfileCommand = null)
-        val outputs = pending.exitCompletion?.let { completion ->
+        val outputs = pending.exitCompletion?.let { commandSource ->
             immutableListOf(
-                GameplayOutput.CompleteCommand(
-                    kinetickk.ball.gameplay.api.GameplayCommandResult.Accepted(
-                        completion,
-                        revision,
-                        GameplayCommandOutcome.RunExited(profileOutcome),
-                    ),
+                completion(
+                    commandSource,
+                    sourceOrdinal = 0,
+                    result = GameplayModuleResult.RunExited(progressResult),
                 ),
             )
         } ?: immutableListOf()
         return accepted(nextState, outputs)
-    }
-
-    private fun validateContext(
-        state: GameplayState,
-        pulse: GameplayPulse,
-        context: GameplayContext,
-    ): GameplayRejection? {
-        val command = context.command
-        val admission = context.admission
-        if (pulse is GameplaySessionPulse) {
-            if (command == null && admission == null) {
-                return GameplayRejection.InvalidCommandRef(
-                    GameplayCommandRefRejection.WRONG_SOURCE_KIND,
-                )
-            }
-            if (
-                command == null ||
-                admission == null ||
-                command.pulse != pulse ||
-                command.ref != admission.commandRef
-            ) {
-                return GameplayRejection.InvalidCommandRef(
-                    GameplayCommandRefRejection.ADMISSION_MISMATCH,
-                )
-            }
-            if (command.ref.targetInstance != state.instanceId) {
-                return GameplayRejection.InvalidCommandRef(GameplayCommandRefRejection.WRONG_TARGET)
-            }
-            if (command.ref.sourceInstance != GameplayCommandSource.LocalSession) {
-                return GameplayRejection.InvalidCommandRef(
-                    GameplayCommandRefRejection.WRONG_SOURCE_KIND,
-                )
-            }
-            return null
-        }
-        if (command != null || admission != null) {
-            return GameplayRejection.InvalidCommandRef(GameplayCommandRefRejection.WRONG_SOURCE_KIND)
-        }
-        return null
     }
 
     private fun lifecycleGate(state: GameplayState): GameplayRejection? = when (state.phase) {
@@ -419,21 +308,19 @@ object GameplayNucleus {
         else -> null
     }
 
-    private fun validateConfiguration(
-        configuration: RunConfiguration,
+    fun validateStartInputs(
+        inputs: GameplayStartInputs,
     ): GameplayConfigurationRejection? {
-        val profile = configuration.profile
-        val content = configuration.content
-        if (!isValidPreferences(profile.preferences)) {
+        val profile = inputs.profile
+        val content = inputs.content
+        if (!isValidPreferencesProjection(profile.preferences)) {
             return GameplayConfigurationRejection.INVALID_PREFERENCES
         }
         val contentWeapons = content.weapons.map { it.id }
         if (
             profile.loadout.selectedWeapon !in contentWeapons ||
             profile.loadout.unlockedWeapons.any { it !in contentWeapons }
-        ) {
-            return GameplayConfigurationRejection.STARTING_WEAPON_MISSING
-        }
+        ) return GameplayConfigurationRejection.STARTING_WEAPON_MISSING
         if (profile.loadout.selectedWeapon !in profile.loadout.unlockedWeapons) {
             return GameplayConfigurationRejection.STARTING_WEAPON_LOCKED
         }
@@ -449,22 +336,17 @@ object GameplayNucleus {
             return GameplayConfigurationRejection.UNKNOWN_DISCOVERED_ITEM
         }
         if (
-            profile.rebirthProgress.level !in
-            content.rebirth.minimumLevel..content.rebirth.maximumLevel ||
+            profile.rebirthProgress.level !in content.rebirth.minimumLevel..content.rebirth.maximumLevel ||
             profile.rebirthProgress.highestCleared !in -1..profile.rebirthProgress.level
-        ) {
-            return GameplayConfigurationRejection.REBIRTH_LEVEL_OUT_OF_RANGE
-        }
-        if (profile.economy.matter < 0L) {
-            return GameplayConfigurationRejection.NEGATIVE_MATTER
-        }
+        ) return GameplayConfigurationRejection.REBIRTH_LEVEL_OUT_OF_RANGE
+        if (profile.economy.matter < 0L) return GameplayConfigurationRejection.NEGATIVE_MATTER
         if (profile.economy.lifetimeMatter < profile.economy.matter) {
             return GameplayConfigurationRejection.LIFETIME_MATTER_BELOW_CURRENT
         }
         return null
     }
 
-    private fun isValidPreferences(preferences: kinetickk.ball.profile.api.PlayerPreferences): Boolean =
+    fun isValidPreferencesProjection(preferences: PlayerPreferences): Boolean =
         preferences.masterVolume.isFinite() &&
             preferences.simulationSpeed.isFinite() &&
             preferences.textScale.isFinite() &&
@@ -472,14 +354,24 @@ object GameplayNucleus {
             preferences.simulationSpeed in SIMULATION_SPEED_OPTIONS &&
             preferences.damageNumberTierThreshold in DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 
-    private fun reduce(
+    private fun reduceTrusted(
         engine: EngineState,
-        pulse: GameplayInteractionPulse,
-    ): kinetickk.ball.gameplay.nucleus.reducer.GameReduction? =
-        when (val result = GameReducer().reduce(engine, pulse)) {
-            is GameReductionResult.Accepted -> result.value
-            is GameReductionResult.Rejected -> null
-        }
+        mutation: (kinetickk.ball.gameplay.nucleus.simulation.MutableGameState) -> Unit,
+    ): GameReduction {
+        val candidate = engine.model.copyForReduction()
+        mutation(candidate)
+        val outputs = buildList<SimulationOutput> {
+            candidate.takeVisualFxCues().takeIf { it.isNotEmpty() }?.let { cues ->
+                add(SimulationOutput.EmitVisualFx(cues.toImmutableList()))
+            }
+            candidate.takeProgressUpdate()?.let { add(SimulationOutput.PublishProgress(it)) }
+            val soundCues = candidate.takeSoundCues()
+            if (soundCues.isNotEmpty()) {
+                add(SimulationOutput.AdvanceAudio(0f, soundCues.toImmutableList()))
+            }
+        }.toImmutableList()
+        return GameReduction(EngineState(candidate), outputs)
+    }
 
     private data class MappedOutputs(
         val outputs: ImmutableList<GameplayOutput>,
@@ -488,32 +380,31 @@ object GameplayNucleus {
 
     private fun ImmutableList<SimulationOutput>.toGameplayOutputs(
         nextState: GameplayState,
-        exitCompletion: kinetickk.ball.gameplay.api.GameplayCommandRef?,
-    ): MappedOutputs? {
-        if (
-            nextState.nextProfileCommandOrdinal == Int.MAX_VALUE &&
-            any { it is SimulationOutput.PublishProgress }
-        ) {
-            return null
-        }
+        exitCompletion: GameplayCommandSourceToken?,
+    ): MappedOutputs {
         var pending: PendingProfileCommand? = null
-        val mapped = buildList {
+        val mapped = buildList<GameplayOutput> {
             this@toGameplayOutputs.forEach { output ->
                 when (output) {
                     is SimulationOutput.EmitVisualFx -> add(GameplayOutput.EmitVisualFx(output.cues))
                     is SimulationOutput.PublishProgress -> {
-                        check(pending == null) { "A Gameplay decision may emit at most one Profile command" }
-                        val ref = ProfileCommandRef(
+                        check(pending == null) { "A Gameplay Decision may emit at most one Profile command" }
+                        val sourceOrdinal = size
+                        val handle = ProfileSemanticHandle(
                             sourceInstance = ProfileCommandSource.GameplayRun(
                                 nextState.instanceId.runId.value,
                             ),
-                            targetInstance = LOCAL_PROFILE_INSTANCE_ID,
                             sourceRevision = nextState.revision.value,
-                            ordinal = nextState.nextProfileCommandOrdinal,
+                            sourceOrdinal = sourceOrdinal,
                         )
-                        val command = ProfileCommand(ref, ProfilePulse.ApplyGameplayProgress(output.update))
-                        pending = PendingProfileCommand(command, exitCompletion)
-                        add(GameplayOutput.SendProfileCommand(command))
+                        val request = ProfileModuleCommandRequest(
+                            semanticHandle = handle,
+                            sourceOrdinal = sourceOrdinal,
+                            targetInstance = LOCAL_PROFILE_INSTANCE_ID,
+                            command = ProfileModuleCommand.ApplyGameplayProgress(output.update),
+                        )
+                        pending = PendingProfileCommand(request, exitCompletion)
+                        add(GameplayOutput.SendProfileCommand(request))
                     }
                     is SimulationOutput.AdvanceAudio -> add(
                         GameplayOutput.AdvanceAudio(output.realDeltaSeconds, output.cues),
@@ -525,39 +416,36 @@ object GameplayNucleus {
         return MappedOutputs(mapped, pending)
     }
 
+    private fun completion(
+        commandSource: GameplayCommandSourceToken,
+        sourceOrdinal: Int,
+        result: GameplayModuleResult,
+    ): GameplayOutput.CompleteCommand = GameplayOutput.CompleteCommand(
+        GameplayModuleResultOutput(
+            semanticHandle = commandSource.semanticHandle,
+            sourceOrdinal = sourceOrdinal,
+            commandSource = commandSource,
+            result = result,
+        ),
+    )
+
     private operator fun ImmutableList<GameplayOutput>.plus(
         output: GameplayOutput,
-    ): ImmutableList<GameplayOutput> = (this.asIterable() + output).toImmutableList()
+    ): ImmutableList<GameplayOutput> = (asIterable() + output).toImmutableList()
 
     private fun accepted(
         nextState: GameplayState,
         outputs: ImmutableList<GameplayOutput>,
-    ): GameplayDecision.Accepted {
-        check(outputs.size <= MAX_GAMEPLAY_OUTPUTS_PER_DECISION) {
-            "Gameplay semantic output bound exceeded: ${outputs.size}"
-        }
-        val completionIndex = outputs.indexOfFirst { it is GameplayOutput.CompleteCommand }
-        check(completionIndex < 0 || completionIndex == outputs.lastIndex) {
-            "Gameplay command completion must be the final semantic output"
-        }
-        return GameplayDecision.Accepted(
-            GameplayAcceptedFrame(
-                nextState = nextState,
-                renderProjection = renderProjection(nextState),
-                outputs = outputs,
-            ),
-        )
-    }
+    ): GameplayDecision.Accepted = GameplayDecision.Accepted(
+        GameplayAcceptedFrame(
+            nextState = nextState,
+            renderSnapshot = renderSnapshot(nextState),
+            outputs = outputs,
+        ),
+    )
 
     private fun rejected(reason: GameplayRejection): GameplayDecision.Rejected =
         GameplayDecision.Rejected(reason)
-
-    private fun renderProjection(state: GameplayState): GameplayRenderProjection =
-        GameplayRenderProjection(
-            instanceId = state.instanceId,
-            revision = state.revision,
-            renderModel = state.engine?.model?.toRenderModel(),
-        )
 
     private fun GamePhase.toRunPhase(): GameplayRunPhase = when (this) {
         GamePhase.RUNNING -> GameplayRunPhase.RUNNING
@@ -568,9 +456,4 @@ object GameplayNucleus {
     }
 
     private fun GameplayRevision.next(): GameplayRevision = GameplayRevision(value + 1L)
-
-    private fun Int.nextOrdinal(): Int {
-        check(this < Int.MAX_VALUE) { "Gameplay Profile-command ordinal exhausted" }
-        return this + 1
-    }
 }

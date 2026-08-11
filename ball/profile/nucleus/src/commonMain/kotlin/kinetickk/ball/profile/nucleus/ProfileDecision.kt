@@ -3,24 +3,36 @@
 
 package kinetickk.ball.profile.nucleus
 
-import kinetickk.ball.profile.api.ProfileCommand
-import kinetickk.ball.profile.api.ProfileCommandAdmission
-import kinetickk.ball.profile.api.ProfileCommandResult
 import kinetickk.ball.profile.api.ProfileEffectRef
+import kinetickk.ball.profile.api.ProfileLegacyPurgeResult
+import kinetickk.ball.profile.api.ProfileModuleCommandPulse
+import kinetickk.ball.profile.api.ProfileModuleResultOutput
+import kinetickk.ball.profile.api.ProfilePulse
 import kinetickk.ball.profile.api.ProfileRejection
 import kinetickk.ball.profile.api.ProfileV4Snapshot
+import kinetickk.ball.profile.api.ProfileV4WriteResult
 import kinetickk.foundation.collections.ImmutableList
 
 const val MAX_PROFILE_OUTPUTS_PER_DECISION: Int = 2
 
-/** Sparse, immutable evidence available to the pure decision. */
-data class ProfileContext(
-    val command: ProfileCommand? = null,
-    val admission: ProfileCommandAdmission? = null,
-) {
-    companion object {
-        val Local: ProfileContext = ProfileContext()
-    }
+/** Profile currently has no per-Pulse semantic context. */
+data object ProfileContext
+
+sealed interface ProfileNucleusPulse {
+    data class Intent(val intent: ProfilePulse.Business) : ProfileNucleusPulse
+    data class ModuleCommand(val pulse: ProfileModuleCommandPulse) : ProfileNucleusPulse
+
+    sealed interface Fact : ProfileNucleusPulse
+
+    data class V4WriteCompleted(
+        val effectRef: ProfileEffectRef,
+        val result: ProfileV4WriteResult,
+    ) : Fact
+
+    data class LegacyPurgeCompleted(
+        val effectRef: ProfileEffectRef,
+        val result: ProfileLegacyPurgeResult,
+    ) : Fact
 }
 
 sealed interface ProfileDecision {
@@ -56,6 +68,6 @@ sealed interface ProfileOutput {
     ) : ProfileOutput
 
     data class CompleteCommand(
-        val result: ProfileCommandResult.Accepted,
+        val result: ProfileModuleResultOutput,
     ) : ProfileOutput
 }

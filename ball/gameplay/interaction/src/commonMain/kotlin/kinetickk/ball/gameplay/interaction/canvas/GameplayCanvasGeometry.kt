@@ -7,7 +7,7 @@ import kinetickk.foundation.design.*
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import kinetickk.ball.gameplay.api.GameplayRenderModel
+import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kotlin.math.ln
 import kotlin.math.max
 

@@ -28,7 +28,7 @@ import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.foundation.design.*
-import kinetickk.ball.profile.api.ProfilePort
+import kinetickk.ball.profile.api.ProfileReadPort
 import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.flow.session.interaction.audio.SessionAudioCue
 import kinetickk.flow.session.interaction.audio.SessionAudioExecutor
@@ -39,7 +39,7 @@ import kinetickk.flow.session.interaction.codex.api.CodexRunStacks
 import kinetickk.resource.audio.api.AudioService
 
 class DefaultCodexFeature(
-    private val profilePort: ProfilePort,
+    private val profilePort: ProfileReadPort,
     uiCatalog: UiCatalogSnapshot,
     audioService: AudioService,
 ) : CodexFeature {

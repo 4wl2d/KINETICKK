@@ -10,45 +10,51 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import kinetickk.ball.gameplay.api.GameplayCommandResult
-import kinetickk.ball.gameplay.api.GameplayPort
+import kinetickk.ball.content.api.GameplayContentSnapshot
+import kinetickk.ball.gameplay.api.GameplayModuleResultDelivery
+import kinetickk.ball.gameplay.api.GameplayPresentationPort
 import kinetickk.ball.gameplay.api.GameplayQuery
 import kinetickk.ball.gameplay.api.GameplayRunPhase
+import kinetickk.ball.gameplay.api.GameplaySessionRunPort
 import kinetickk.ball.gameplay.api.RunId
 import kinetickk.ball.gameplay.interaction.GameplayContent
-import kinetickk.ball.gameplay.interaction.GameplayFeature
 import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
-import kinetickk.ball.profile.api.ProfileCommandResult
-import kinetickk.ball.profile.api.ProfilePort
+import kinetickk.ball.profile.api.ProfileModuleResultDelivery
+import kinetickk.ball.profile.api.GameplayProfileRoute
 import kinetickk.foundation.design.SpaceBlack
 import kinetickk.resource.audio.api.AudioService
 
 class DefaultGameplayFeature(
-    private val profilePort: ProfilePort,
+    private val gameplayContent: GameplayContentSnapshot,
+    private val profilePort: GameplayProfileRoute,
     audioService: AudioService,
-) : GameplayFeature {
+) : GameplayCompositionComponent {
     private val audioExecutor = ResourceGameplayAudioExecutor(audioService)
     private var componentValue by mutableStateOf<GameComponent?>(null)
 
     override fun createRun(
         runId: RunId,
-        commandResultSink: (GameplayCommandResult.Accepted) -> Unit,
-    ): GameplayPort {
+        commandResultSink: (GameplayModuleResultDelivery) -> Unit,
+    ): GameplaySessionRunPort {
         ensureReplacementAllowed(runId)
         return GameComponent.create(
             runId = runId,
+            content = gameplayContent,
             profilePort = profilePort,
             audioExecutor = audioExecutor,
             commandResultSink = commandResultSink,
+            seed = DEFAULT_GAMEPLAY_SEED,
         ).also { componentValue = it }
     }
 
-    override fun activeRun(): GameplayPort? = componentValue
+    override fun activeRun(): GameplaySessionRunPort? = componentValue
 
-    override fun receiveProfileCommandResult(result: ProfileCommandResult.Accepted) {
+    override fun activePresentation(): GameplayPresentationPort? = componentValue
+
+    override fun receiveProfileModuleResult(delivery: ProfileModuleResultDelivery) {
         checkNotNull(componentValue) {
             "Cannot deliver a Profile command result before creating a GameplayRun"
-        }.receiveProfileCommandResult(result)
+        }.receiveProfileModuleResult(delivery)
     }
 
     @Composable
@@ -91,3 +97,6 @@ class DefaultGameplayFeature(
         }
     }
 }
+
+/** Frozen target-owned construction policy; Session never supplies the simulation seed. */
+internal const val DEFAULT_GAMEPLAY_SEED: Int = 731_991

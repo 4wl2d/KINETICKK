@@ -13,8 +13,8 @@ import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
-import kinetickk.ball.gameplay.api.GameplayRenderModel
-import kinetickk.ball.gameplay.api.WeaponNodeType
+import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
+import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
 import kinetickk.ball.gameplay.nucleus.model.clamp
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.gameplay.nucleus.model.damageNumberTier

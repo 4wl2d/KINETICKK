@@ -25,26 +25,22 @@ import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.PreferenceAdjustmentDirection
 import kinetickk.ball.profile.api.PreferencesProjection
 import kinetickk.ball.profile.api.ProfileBootstrapBlockReason
-import kinetickk.ball.profile.api.ProfileBootstrapResourceResult
 import kinetickk.ball.profile.api.ProfileBootstrapStatus
-import kinetickk.ball.profile.api.ProfileCommandOutcome
-import kinetickk.ball.profile.api.ProfileCommandRefRejection
-import kinetickk.ball.profile.api.ProfileCommandResult
-import kinetickk.ball.profile.api.ProfileCommandSource
 import kinetickk.ball.profile.api.ProfileEffectRef
 import kinetickk.ball.profile.api.ProfileGameplayProgressRejection
 import kinetickk.ball.profile.api.ProfileLegacyKeys
 import kinetickk.ball.profile.api.ProfileLegacyPurgeResult
 import kinetickk.ball.profile.api.ProfilePersistenceStatus
 import kinetickk.ball.profile.api.ProfilePreferenceAdjustment
+import kinetickk.ball.profile.api.ProfileModuleCommand
+import kinetickk.ball.profile.api.ProfileModuleResult
+import kinetickk.ball.profile.api.ProfileModuleResultOutput
 import kinetickk.ball.profile.api.ProfilePulse
 import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.api.ProfileRejection
 import kinetickk.ball.profile.api.ProfileResetCompletion
 import kinetickk.ball.profile.api.ProfileResetReason
 import kinetickk.ball.profile.api.ProfileResetStatus
-import kinetickk.ball.profile.api.ProfileResourceFailure
-import kinetickk.ball.profile.api.ProfileResourceResultRejection
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileRunBootstrapResult
 import kinetickk.ball.profile.api.ProfileV4Snapshot
@@ -65,22 +61,45 @@ import kotlin.math.roundToInt
 object ProfileNucleus {
     fun decide(
         state: ProfileState,
-        pulse: ProfilePulse,
-        context: ProfileContext = ProfileContext.Local,
+        pulse: ProfileNucleusPulse,
+        context: ProfileContext = ProfileContext,
     ): ProfileDecision {
-        validateContext(state, pulse, context)?.let { return rejected(it) }
-
-        if (pulse is ProfilePulse.ResourceResult) {
-            return decideResourceResult(state, pulse)
-        }
-        pulse as ProfilePulse.Business
-
         return when (pulse) {
-            ProfilePulse.ConfirmLegacyReset -> confirmLegacyReset(state, context)
-            ProfilePulse.RetryLegacyPurge -> retryLegacyPurge(state, context)
+            is ProfileNucleusPulse.Intent -> {
+                mutationGate(state)?.let { return rejected(it) }
+                decideMutation(state, pulse.intent, null)
+            }
+            is ProfileNucleusPulse.ModuleCommand -> decideModuleCommand(state, pulse.pulse)
+            is ProfileNucleusPulse.V4WriteCompleted ->
+                decideV4Write(state, pulse.effectRef, pulse.result)
+            is ProfileNucleusPulse.LegacyPurgeCompleted ->
+                decideLegacyPurge(state, pulse.effectRef, pulse.result)
+        }
+    }
+
+    private fun decideModuleCommand(
+        state: ProfileState,
+        pulse: kinetickk.ball.profile.api.ProfileModuleCommandPulse,
+    ): ProfileDecision {
+        val completion = ProfileCommandCompletion(
+            commandSource = pulse.commandSource,
+        )
+        return when (val command = pulse.command) {
+            ProfileModuleCommand.ConfirmLegacyReset -> confirmLegacyReset(state, completion)
+            ProfileModuleCommand.RetryLegacyPurge -> retryLegacyPurge(state, completion)
             else -> {
                 mutationGate(state)?.let { return rejected(it) }
-                decideMutation(state, pulse, context)
+                when (command) {
+                    is ProfileModuleCommand.SelectCoreShape ->
+                        selectCoreShape(state, command.shape, completion)
+                    ProfileModuleCommand.ToggleMute -> toggleMute(state, completion)
+                    ProfileModuleCommand.AdvanceRebirth -> advanceRebirth(state, completion)
+                    is ProfileModuleCommand.ApplyGameplayProgress ->
+                        applyGameplayProgress(state, command.update, completion)
+                    ProfileModuleCommand.ConfirmLegacyReset,
+                    ProfileModuleCommand.RetryLegacyPurge,
+                    -> error("Reset commands are decided before the ordinary command branch")
+                }
             }
         }
     }
@@ -147,24 +166,17 @@ object ProfileNucleus {
     private fun decideMutation(
         state: ProfileState,
         pulse: ProfilePulse.Business,
-        context: ProfileContext,
+        completion: ProfileCommandCompletion?,
     ): ProfileDecision = when (pulse) {
-        is ProfilePulse.AdjustPreference -> adjustPreference(state, pulse.adjustment, context)
-        ProfilePulse.ToggleMute -> toggleMute(state, context)
-        is ProfilePulse.PurchaseMetaUpgrade -> purchaseMetaUpgrade(state, pulse.id, context)
-        is ProfilePulse.SelectCoreShape -> selectCoreShape(state, pulse.shape, context)
-        is ProfilePulse.PurchaseOrEquipWeapon -> purchaseOrEquipWeapon(state, pulse.id, context)
-        ProfilePulse.AdvanceRebirth -> advanceRebirth(state, context)
-        is ProfilePulse.ApplyGameplayProgress -> applyGameplayProgress(state, pulse.update, context)
-        ProfilePulse.ConfirmLegacyReset,
-        ProfilePulse.RetryLegacyPurge,
-        -> error("Reset pulses are decided before the ordinary mutation branch")
+        is ProfilePulse.AdjustPreference -> adjustPreference(state, pulse.adjustment, completion)
+        is ProfilePulse.PurchaseMetaUpgrade -> purchaseMetaUpgrade(state, pulse.id, completion)
+        is ProfilePulse.PurchaseOrEquipWeapon -> purchaseOrEquipWeapon(state, pulse.id, completion)
     }
 
     private fun adjustPreference(
         state: ProfileState,
         adjustment: ProfilePreferenceAdjustment,
-        context: ProfileContext,
+        completion: ProfileCommandCompletion?,
     ): ProfileDecision {
         val current = state.profile.preferences
         val next = when (adjustment) {
@@ -226,27 +238,27 @@ object ProfileNucleus {
         return acceptedMutation(
             state = state,
             nextProfile = state.profile.copy(preferences = next),
-            context = context,
-            commandOutcome = ProfileCommandOutcome.PreferencesChanged(next),
+            completion = completion,
+            commandResult = ProfileModuleResult.PreferencesChanged(next),
         )
     }
 
-    private fun toggleMute(state: ProfileState, context: ProfileContext): ProfileDecision {
+    private fun toggleMute(state: ProfileState, completion: ProfileCommandCompletion?): ProfileDecision {
         val current = state.profile.preferences
         val enable = !current.soundEnabled && !current.musicEnabled
         val next = current.copy(soundEnabled = enable, musicEnabled = enable)
         return acceptedMutation(
             state = state,
             nextProfile = state.profile.copy(preferences = next),
-            context = context,
-            commandOutcome = ProfileCommandOutcome.PreferencesChanged(next),
+            completion = completion,
+            commandResult = ProfileModuleResult.PreferencesChanged(next),
         )
     }
 
     private fun purchaseMetaUpgrade(
         state: ProfileState,
         id: MetaUpgradeId,
-        context: ProfileContext,
+        completion: ProfileCommandCompletion?,
     ): ProfileDecision {
         val definition = state.policy.metaUpgrade(id)
         val currentRank = state.profile.labProgress.rank(id)
@@ -262,15 +274,15 @@ object ProfileNucleus {
                 economy = state.profile.economy.copy(matter = state.profile.economy.matter - cost),
                 labProgress = LabProgress(ranks),
             ),
-            context = context,
-            commandOutcome = null,
+            completion = completion,
+            commandResult = null,
         )
     }
 
     private fun selectCoreShape(
         state: ProfileState,
         shape: kinetickk.ball.content.api.CoreShape,
-        context: ProfileContext,
+        completion: ProfileCommandCompletion?,
     ): ProfileDecision {
         if (state.profile.economy.lifetimeMatter < state.policy.coreShape(shape).unlockLifetimeMatter) {
             return rejected(ProfileRejection.CoreShapeLocked)
@@ -281,15 +293,15 @@ object ProfileNucleus {
             nextProfile = state.profile.copy(
                 loadout = state.profile.loadout.copy(coreShape = shape),
             ),
-            context = context,
-            commandOutcome = ProfileCommandOutcome.CoreShapeSelected(shape),
+            completion = completion,
+            commandResult = ProfileModuleResult.CoreShapeSelected(shape),
         )
     }
 
     private fun purchaseOrEquipWeapon(
         state: ProfileState,
         id: kinetickk.ball.content.api.WeaponId,
-        context: ProfileContext,
+        completion: ProfileCommandCompletion?,
     ): ProfileDecision {
         val unlocked = state.profile.loadout.unlockedWeapons.toMutableSet()
         var economy = state.profile.economy
@@ -311,12 +323,15 @@ object ProfileNucleus {
                     unlockedWeapons = unlocked,
                 ),
             ),
-            context = context,
-            commandOutcome = null,
+            completion = completion,
+            commandResult = null,
         )
     }
 
-    private fun advanceRebirth(state: ProfileState, context: ProfileContext): ProfileDecision {
+    private fun advanceRebirth(
+        state: ProfileState,
+        completion: ProfileCommandCompletion?,
+    ): ProfileDecision {
         val progress = state.profile.rebirthProgress
         if (progress.level >= state.policy.rebirth.maximumLevel) {
             return rejected(ProfileRejection.RebirthMaximumReached)
@@ -328,15 +343,15 @@ object ProfileNucleus {
         return acceptedMutation(
             state = state,
             nextProfile = state.profile.copy(rebirthProgress = next),
-            context = context,
-            commandOutcome = ProfileCommandOutcome.RebirthAdvanced(next),
+            completion = completion,
+            commandResult = ProfileModuleResult.RebirthAdvanced(next),
         )
     }
 
     private fun applyGameplayProgress(
         state: ProfileState,
         update: kinetickk.ball.profile.api.GameplayProgressUpdate,
-        context: ProfileContext,
+        completion: ProfileCommandCompletion?,
     ): ProfileDecision {
         validateGameplayProgress(state, update)?.let {
             return rejected(ProfileRejection.InvalidGameplayProgress(it))
@@ -367,22 +382,22 @@ object ProfileNucleus {
         return acceptedMutation(
             state = state,
             nextProfile = next,
-            context = context,
-            commandOutcome = ProfileCommandOutcome.GameplayProgressApplied,
+            completion = completion,
+            commandResult = ProfileModuleResult.GameplayProgressApplied,
         )
     }
 
     private fun acceptedMutation(
         state: ProfileState,
         nextProfile: PlayerProfile,
-        context: ProfileContext,
-        commandOutcome: ProfileCommandOutcome?,
+        completion: ProfileCommandCompletion?,
+        commandResult: ProfileModuleResult?,
     ): ProfileDecision {
         check(state.persistence !is ProfilePersistenceStatus.Pending) {
             "Inline Profile cannot accept another mutation while a Resource effect is pending"
         }
         val revision = state.revision.next()
-        val effectRef = state.nextEffectRef(revision)
+        val effectRef = resourceEffectRef(revision)
         val reset = state.reset as ProfileResetStatus.NotRequired
         val nextState = state.copy(
             revision = revision,
@@ -392,7 +407,6 @@ object ProfileNucleus {
                 snapshotRevision = revision,
                 purpose = ProfileV4WritePurpose.MUTATION,
             ),
-            nextResourceOrdinal = state.nextResourceOrdinal.nextOrdinal(),
         )
         val persist = ProfileOutput.PersistV4Snapshot(
             effectRef = effectRef,
@@ -403,31 +417,38 @@ object ProfileNucleus {
                 profile = nextProfile,
             ),
         )
-        val outputs = context.command?.let { command ->
-            checkNotNull(commandOutcome) { "Every admitted Profile command must define an outcome" }
+        val outputs = completion?.let { command ->
+            checkNotNull(commandResult) { "Every admitted Profile command must define a result" }
             immutableListOf(
                 persist,
                 ProfileOutput.CompleteCommand(
-                    ProfileCommandResult.Accepted(command.ref, revision, commandOutcome),
+                    ProfileModuleResultOutput(
+                        semanticHandle = command.commandSource.semanticHandle,
+                        sourceOrdinal = 1,
+                        commandSource = command.commandSource,
+                        result = commandResult,
+                    ),
                 ),
             )
         } ?: immutableListOf(persist)
         return accepted(nextState, outputs)
     }
 
-    private fun confirmLegacyReset(state: ProfileState, context: ProfileContext): ProfileDecision {
+    private fun confirmLegacyReset(
+        state: ProfileState,
+        completion: ProfileCommandCompletion?,
+    ): ProfileDecision {
         val reset = state.reset
         if (reset !is ProfileResetStatus.ConfirmationRequired) {
             return rejected(resetRejection(reset))
         }
         check(state.persistence !is ProfilePersistenceStatus.Pending)
         val revision = state.revision.next()
-        val effectRef = state.nextEffectRef(revision)
-        val completion = context.command?.let { ProfileResetCompletion.Command(it.ref) }
-            ?: ProfileResetCompletion.Local
+        val effectRef = resourceEffectRef(revision)
+        val resetCompletion = ProfileResetCompletion(checkNotNull(completion).commandSource)
         val profile = defaultPlayerProfile(state.policy)
         val nextReset = ProfileResetStatus.WritingFreshV4(
-            completion = completion,
+            completion = resetCompletion,
             reason = reset.reason,
             effectRef = effectRef,
             legacyKeys = reset.legacyKeys,
@@ -442,7 +463,6 @@ object ProfileNucleus {
                 snapshotRevision = revision,
                 purpose = ProfileV4WritePurpose.RESET_DEFAULT,
             ),
-            nextResourceOrdinal = state.nextResourceOrdinal.nextOrdinal(),
         )
         return accepted(
             nextState,
@@ -460,159 +480,25 @@ object ProfileNucleus {
         )
     }
 
-    private fun retryLegacyPurge(state: ProfileState, context: ProfileContext): ProfileDecision {
+    private fun retryLegacyPurge(
+        state: ProfileState,
+        completion: ProfileCommandCompletion?,
+    ): ProfileDecision {
         val reset = state.reset
         if (reset !is ProfileResetStatus.NeedsAttention) return rejected(resetRejection(reset))
         val revision = state.revision.next()
-        val effectRef = state.nextEffectRef(revision)
-        val completion = context.command?.let { ProfileResetCompletion.Command(it.ref) }
-            ?: ProfileResetCompletion.Local
+        val effectRef = resourceEffectRef(revision)
+        val resetCompletion = ProfileResetCompletion(checkNotNull(completion).commandSource)
         val nextState = state.copy(
             revision = revision,
             bootstrap = ProfileBootstrapStatus.Blocked(ProfileBootstrapBlockReason.ResetInProgress),
             reset = ProfileResetStatus.PurgingLegacy(
-                completion = completion,
+                completion = resetCompletion,
                 effectRef = effectRef,
                 legacyKeys = reset.legacyKeys,
             ),
-            nextResourceOrdinal = state.nextResourceOrdinal.nextOrdinal(),
         )
         return accepted(nextState, immutableListOf(ProfileOutput.PurgeLegacy(effectRef)))
-    }
-
-    private fun decideResourceResult(
-        state: ProfileState,
-        pulse: ProfilePulse.ResourceResult,
-    ): ProfileDecision = when (pulse) {
-        is ProfilePulse.BootstrapCompleted -> decideBootstrap(state, pulse.result)
-        is ProfilePulse.V4WriteCompleted -> decideV4Write(state, pulse.effectRef, pulse.result)
-        is ProfilePulse.LegacyPurgeCompleted -> decideLegacyPurge(state, pulse.effectRef, pulse.result)
-    }
-
-    private fun decideBootstrap(
-        state: ProfileState,
-        result: ProfileBootstrapResourceResult,
-    ): ProfileDecision {
-        if (state.bootstrap != ProfileBootstrapStatus.AwaitingResource) {
-            return unexpected(ProfileResourceResultRejection.BOOTSTRAP_ALREADY_RESOLVED)
-        }
-        if (
-            result is ProfileBootstrapResourceResult.OutcomeUnknown &&
-            result.reason != ProfileResourceFailure.PROVIDER_READ_FAILED
-        ) {
-            return unexpected(ProfileResourceResultRejection.RESULT_KIND_MISMATCH)
-        }
-        return when (result) {
-            is ProfileBootstrapResourceResult.OutcomeUnknown -> {
-                val revision = state.revision.next()
-                accepted(
-                    state.copy(
-                        revision = revision,
-                        bootstrap = ProfileBootstrapStatus.Blocked(
-                            ProfileBootstrapBlockReason.ResourceOutcomeUnknown(result.reason),
-                        ),
-                    ),
-                )
-            }
-            is ProfileBootstrapResourceResult.Rejected -> bootstrapResetRequired(
-                state = state,
-                profile = defaultPlayerProfile(state.policy),
-                revision = state.revision.next(),
-                resetReason = ProfileResetReason.InvalidV4(result.reason),
-                legacyKeys = result.legacyKeys,
-                persistence = ProfilePersistenceStatus.NotAttempted,
-            )
-            is ProfileBootstrapResourceResult.Observed -> decideObservedBootstrap(state, result)
-        }
-    }
-
-    private fun decideObservedBootstrap(
-        state: ProfileState,
-        observed: ProfileBootstrapResourceResult.Observed,
-    ): ProfileDecision {
-        val snapshot = observed.snapshot
-        if (snapshot == null) {
-            return if (observed.legacyKeys.isEmpty) {
-                accepted(
-                    state.copy(
-                        revision = state.revision.next(),
-                        profile = defaultPlayerProfile(state.policy),
-                        bootstrap = ProfileBootstrapStatus.Ready,
-                        reset = ProfileResetStatus.NotRequired(legacyResetConfirmed = false),
-                        persistence = ProfilePersistenceStatus.NotAttempted,
-                    ),
-                )
-            } else {
-                bootstrapResetRequired(
-                    state = state,
-                    profile = defaultPlayerProfile(state.policy),
-                    revision = state.revision.next(),
-                    resetReason = ProfileResetReason.LegacyDataDetected,
-                    legacyKeys = observed.legacyKeys,
-                    persistence = ProfilePersistenceStatus.NotAttempted,
-                )
-            }
-        }
-
-        if (snapshot.contentVersion != state.policy.version) {
-            return bootstrapResetRequired(
-                state = state,
-                profile = defaultPlayerProfile(state.policy),
-                revision = state.revision.next(),
-                resetReason = ProfileResetReason.ContentVersionMismatch(
-                    expected = state.policy.version,
-                    observed = snapshot.contentVersion,
-                ),
-                legacyKeys = observed.legacyKeys,
-                persistence = ProfilePersistenceStatus.NotAttempted,
-            )
-        }
-        if (snapshot.revision.value == Long.MAX_VALUE || !isPolicyCompatible(snapshot.profile, state)) {
-            return bootstrapResetRequired(
-                state = state,
-                profile = defaultPlayerProfile(state.policy),
-                revision = state.revision.next(),
-                resetReason = ProfileResetReason.IncompatibleProfile,
-                legacyKeys = observed.legacyKeys,
-                persistence = ProfilePersistenceStatus.NotAttempted,
-            )
-        }
-
-        val revision = snapshot.revision.next()
-        val persistence = ProfilePersistenceStatus.Persisted(snapshot.revision)
-        if (observed.legacyKeys.isEmpty) {
-            return accepted(
-                state.copy(
-                    revision = revision,
-                    profile = snapshot.profile,
-                    bootstrap = ProfileBootstrapStatus.Ready,
-                    reset = ProfileResetStatus.NotRequired(snapshot.legacyResetConfirmed),
-                    persistence = persistence,
-                ),
-            )
-        }
-        if (snapshot.legacyResetConfirmed) {
-            val result = ProfileLegacyPurgeResult.Partial(observed.legacyKeys)
-            return accepted(
-                state.copy(
-                    revision = revision,
-                    profile = snapshot.profile,
-                    bootstrap = ProfileBootstrapStatus.Blocked(
-                        ProfileBootstrapBlockReason.ResetNeedsAttention(result),
-                    ),
-                    reset = ProfileResetStatus.NeedsAttention(observed.legacyKeys, result),
-                    persistence = persistence,
-                ),
-            )
-        }
-        return bootstrapResetRequired(
-            state = state,
-            profile = snapshot.profile,
-            revision = revision,
-            resetReason = ProfileResetReason.LegacyDataDetected,
-            legacyKeys = observed.legacyKeys,
-            persistence = persistence,
-        )
     }
 
     private fun decideV4Write(
@@ -620,17 +506,8 @@ object ProfileNucleus {
         effectRef: ProfileEffectRef,
         result: ProfileV4WriteResult,
     ): ProfileDecision {
-        val pending = state.persistence as? ProfilePersistenceStatus.Pending
-            ?: return unexpected(ProfileResourceResultRejection.NO_EFFECT_PENDING)
-        if (pending.effectRef != effectRef) {
-            return unexpected(ProfileResourceResultRejection.EFFECT_REF_MISMATCH)
-        }
-        if (
-            result is ProfileV4WriteResult.OutcomeUnknown &&
-            result.reason != ProfileResourceFailure.PROVIDER_WRITE_MAY_HAVE_EXECUTED
-        ) {
-            return unexpected(ProfileResourceResultRejection.RESULT_KIND_MISMATCH)
-        }
+        val pending = checkNotNull(state.persistence as? ProfilePersistenceStatus.Pending)
+        check(pending.effectRef == effectRef)
         return when (pending.purpose) {
             ProfileV4WritePurpose.MUTATION -> completeMutationWrite(state, pending, result)
             ProfileV4WritePurpose.RESET_DEFAULT -> completeResetWrite(state, pending, result)
@@ -642,8 +519,7 @@ object ProfileNucleus {
         pending: ProfilePersistenceStatus.Pending,
         result: ProfileV4WriteResult,
     ): ProfileDecision {
-        val persistence = result.toPersistenceStatus(pending)
-            ?: return unexpected(ProfileResourceResultRejection.WRITTEN_REVISION_MISMATCH)
+        val persistence = checkNotNull(result.toPersistenceStatus(pending))
         return accepted(state.copy(revision = state.revision.next(), persistence = persistence))
     }
 
@@ -652,16 +528,13 @@ object ProfileNucleus {
         pending: ProfilePersistenceStatus.Pending,
         result: ProfileV4WriteResult,
     ): ProfileDecision {
-        val reset = state.reset as? ProfileResetStatus.WritingFreshV4
-            ?: return unexpected(ProfileResourceResultRejection.RESULT_KIND_MISMATCH)
-        if (reset.effectRef != pending.effectRef) {
-            return unexpected(ProfileResourceResultRejection.EFFECT_REF_MISMATCH)
-        }
+        val reset = checkNotNull(state.reset as? ProfileResetStatus.WritingFreshV4)
+        check(reset.effectRef == pending.effectRef)
         val revision = state.revision.next()
         return when (result) {
             is ProfileV4WriteResult.Written -> {
                 if (result.revision != pending.snapshotRevision) {
-                    return unexpected(ProfileResourceResultRejection.WRITTEN_REVISION_MISMATCH)
+                    error("Trusted Profile write completion revision mismatch")
                 }
                 val persistence = ProfilePersistenceStatus.Persisted(result.revision)
                 if (reset.legacyKeys.isEmpty) {
@@ -671,9 +544,9 @@ object ProfileNucleus {
                         reset = ProfileResetStatus.NotRequired(legacyResetConfirmed = true),
                         persistence = persistence,
                     )
-                    accepted(nextState, reset.completionOutput(revision, ProfileCommandOutcome.ResetCompleted))
+                    accepted(nextState, reset.completionOutput(ProfileModuleResult.ResetCompleted))
                 } else {
-                    val purgeRef = state.nextEffectRef(revision)
+                    val purgeRef = resourceEffectRef(revision)
                     accepted(
                         state.copy(
                             revision = revision,
@@ -686,7 +559,6 @@ object ProfileNucleus {
                                 legacyKeys = reset.legacyKeys,
                             ),
                             persistence = persistence,
-                            nextResourceOrdinal = state.nextResourceOrdinal.nextOrdinal(),
                         ),
                         immutableListOf(ProfileOutput.PurgeLegacy(purgeRef)),
                     )
@@ -703,7 +575,7 @@ object ProfileNucleus {
                 )
                 accepted(
                     nextState,
-                    reset.completionOutput(revision, ProfileCommandOutcome.ResetWriteRejected(result.reason)),
+                    reset.completionOutput(ProfileModuleResult.ResetWriteRejected(result.reason)),
                 )
             }
             is ProfileV4WriteResult.OutcomeUnknown -> {
@@ -721,8 +593,7 @@ object ProfileNucleus {
                 accepted(
                     nextState,
                     reset.completionOutput(
-                        revision,
-                        ProfileCommandOutcome.ResetWriteOutcomeUnknown(result.reason),
+                        ProfileModuleResult.ResetWriteOutcomeUnknown(result.reason),
                     ),
                 )
             }
@@ -734,23 +605,13 @@ object ProfileNucleus {
         effectRef: ProfileEffectRef,
         result: ProfileLegacyPurgeResult,
     ): ProfileDecision {
-        val reset = state.reset as? ProfileResetStatus.PurgingLegacy
-            ?: return unexpected(ProfileResourceResultRejection.NO_EFFECT_PENDING)
-        if (reset.effectRef != effectRef) {
-            return unexpected(ProfileResourceResultRejection.EFFECT_REF_MISMATCH)
-        }
-        if (
-            result is ProfileLegacyPurgeResult.OutcomeUnknown &&
-            result.reason != ProfileResourceFailure.PROVIDER_PURGE_MAY_HAVE_EXECUTED &&
-            result.reason != ProfileResourceFailure.PROVIDER_READ_FAILED
-        ) {
-            return unexpected(ProfileResourceResultRejection.RESULT_KIND_MISMATCH)
-        }
+        val reset = checkNotNull(state.reset as? ProfileResetStatus.PurgingLegacy)
+        check(reset.effectRef == effectRef)
         if (
             result is ProfileLegacyPurgeResult.Partial && result.remaining.isEmpty ||
             result is ProfileLegacyPurgeResult.OutcomeUnknown && result.unknown.isEmpty
         ) {
-            return unexpected(ProfileResourceResultRejection.RESULT_KIND_MISMATCH)
+            error("Trusted Profile purge completion has an invalid result shape")
         }
         val revision = state.revision.next()
         return when (result) {
@@ -760,16 +621,18 @@ object ProfileNucleus {
                     bootstrap = ProfileBootstrapStatus.Ready,
                     reset = ProfileResetStatus.NotRequired(legacyResetConfirmed = true),
                 )
-                accepted(nextState, reset.completionOutput(revision, ProfileCommandOutcome.ResetCompleted))
+                accepted(nextState, reset.completionOutput(ProfileModuleResult.ResetCompleted))
             }
             is ProfileLegacyPurgeResult.Partial,
             is ProfileLegacyPurgeResult.OutcomeUnknown,
             is ProfileLegacyPurgeResult.Rejected,
+            is ProfileLegacyPurgeResult.ResourceFailure,
             -> {
                 val keys = when (result) {
                     is ProfileLegacyPurgeResult.Partial -> result.remaining
                     is ProfileLegacyPurgeResult.OutcomeUnknown -> result.remaining union result.unknown
                     is ProfileLegacyPurgeResult.Rejected -> reset.legacyKeys
+                    is ProfileLegacyPurgeResult.ResourceFailure -> reset.legacyKeys
                     ProfileLegacyPurgeResult.Purged -> error("Handled above")
                 }
                 val status = ProfileResetStatus.NeedsAttention(keys, result)
@@ -783,67 +646,14 @@ object ProfileNucleus {
                 accepted(
                     nextState,
                     reset.completionOutput(
-                        revision,
-                        ProfileCommandOutcome.ResetNeedsAttention(status),
+                        ProfileModuleResult.ResetNeedsAttention(status),
                     ),
                 )
             }
         }
     }
 
-    private fun bootstrapResetRequired(
-        state: ProfileState,
-        profile: PlayerProfile,
-        revision: ProfileRevision,
-        resetReason: ProfileResetReason,
-        legacyKeys: ProfileLegacyKeys,
-        persistence: ProfilePersistenceStatus,
-    ): ProfileDecision = accepted(
-        state.copy(
-            revision = revision,
-            profile = profile,
-            bootstrap = ProfileBootstrapStatus.Blocked(
-                ProfileBootstrapBlockReason.ResetRequired(resetReason),
-            ),
-            reset = ProfileResetStatus.ConfirmationRequired(resetReason, legacyKeys),
-            persistence = persistence,
-        ),
-    )
-
-    private fun validateContext(
-        state: ProfileState,
-        pulse: ProfilePulse,
-        context: ProfileContext,
-    ): ProfileRejection? {
-        val command = context.command
-        val admission = context.admission
-        if (command == null && admission == null) return null
-        if (
-            command == null ||
-            admission == null ||
-            command.pulse != pulse ||
-            command.ref != admission.commandRef
-        ) {
-            return ProfileRejection.InvalidCommandRef(ProfileCommandRefRejection.ADMISSION_MISMATCH)
-        }
-        if (command.ref.targetInstance != state.instanceId) {
-            return ProfileRejection.InvalidCommandRef(ProfileCommandRefRejection.WRONG_TARGET)
-        }
-        val sourceAccepted = when (command.ref.sourceInstance) {
-            ProfileCommandSource.LocalSession -> command.pulse == ProfilePulse.ToggleMute ||
-                command.pulse is ProfilePulse.SelectCoreShape ||
-                command.pulse == ProfilePulse.AdvanceRebirth ||
-                command.pulse == ProfilePulse.ConfirmLegacyReset ||
-                command.pulse == ProfilePulse.RetryLegacyPurge
-            is ProfileCommandSource.GameplayRun -> command.pulse is ProfilePulse.ApplyGameplayProgress
-        }
-        return if (sourceAccepted) null else {
-            ProfileRejection.InvalidCommandRef(ProfileCommandRefRejection.WRONG_SOURCE_KIND)
-        }
-    }
-
     private fun mutationGate(state: ProfileState): ProfileRejection? = when (state.bootstrap) {
-        ProfileBootstrapStatus.AwaitingResource -> ProfileRejection.BootstrapNotReady
         ProfileBootstrapStatus.Ready -> null
         is ProfileBootstrapStatus.Blocked -> when (state.reset) {
             is ProfileResetStatus.WritingFreshV4,
@@ -888,48 +698,6 @@ object ProfileNucleus {
         return null
     }
 
-    private fun isPolicyCompatible(profile: PlayerProfile, state: ProfileState): Boolean {
-        val policy = state.policy
-        val preferences = profile.preferences
-        if (
-            !preferences.masterVolume.isFinite() ||
-            !preferences.simulationSpeed.isFinite() ||
-            !preferences.textScale.isFinite() ||
-            preferences != preferences.normalized() ||
-            preferences.simulationSpeed !in SIMULATION_SPEED_OPTIONS ||
-            preferences.damageNumberTierThreshold !in DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
-        ) return false
-        if (profile.economy.matter < 0L || profile.economy.lifetimeMatter < profile.economy.matter) {
-            return false
-        }
-        val allowedShapes = policy.coreShapes.map { it.id }
-        val allowedWeapons = policy.weapons.map { it.id }
-        if (
-            profile.loadout.coreShape !in allowedShapes ||
-            profile.economy.lifetimeMatter <
-                policy.coreShape(profile.loadout.coreShape).unlockLifetimeMatter ||
-            profile.loadout.selectedWeapon !in allowedWeapons ||
-            profile.loadout.selectedWeapon !in profile.loadout.unlockedWeapons ||
-            policy.weapons.first().id !in profile.loadout.unlockedWeapons ||
-            profile.loadout.unlockedWeapons.isEmpty() ||
-            profile.loadout.unlockedWeapons.size > policy.weapons.size ||
-            profile.loadout.unlockedWeapons.any { it !in allowedWeapons }
-        ) return false
-        if (profile.labProgress.ranks.size != policy.metaUpgrades.size) return false
-        policy.metaUpgrades.forEach { definition ->
-            if (profile.labProgress.rank(definition.id) !in 0..definition.maxRanks) return false
-        }
-        if (
-            profile.collection.discoveredItemIds.size > policy.itemCount ||
-            profile.collection.discoveredItemIds.any { !policy.containsItem(it) }
-        ) return false
-        if (
-            profile.rebirthProgress.level !in policy.rebirth.minimumLevel..policy.rebirth.maximumLevel ||
-            profile.rebirthProgress.highestCleared !in -1..profile.rebirthProgress.level
-        ) return false
-        return true
-    }
-
     private fun canAdvanceRebirth(state: ProfileState): Boolean =
         state.bootstrap == ProfileBootstrapStatus.Ready &&
             state.profile.rebirthProgress.level < state.policy.rebirth.maximumLevel &&
@@ -950,38 +718,32 @@ object ProfileNucleus {
     }
 
     private fun ProfileResetCompletion.output(
-        revision: ProfileRevision,
-        outcome: ProfileCommandOutcome,
-    ): ImmutableList<ProfileOutput> = when (this) {
-        ProfileResetCompletion.Local -> immutableListOf()
-        is ProfileResetCompletion.Command -> immutableListOf(
-            ProfileOutput.CompleteCommand(
-                ProfileCommandResult.Accepted(commandRef, revision, outcome),
+        result: ProfileModuleResult,
+    ): ImmutableList<ProfileOutput> = immutableListOf(
+        ProfileOutput.CompleteCommand(
+            ProfileModuleResultOutput(
+                semanticHandle = commandSource.semanticHandle,
+                sourceOrdinal = 0,
+                commandSource = commandSource,
+                result = result,
             ),
-        )
-    }
+        ),
+    )
 
     private fun ProfileResetStatus.WritingFreshV4.completionOutput(
-        revision: ProfileRevision,
-        outcome: ProfileCommandOutcome,
-    ): ImmutableList<ProfileOutput> = completion.output(revision, outcome)
+        result: ProfileModuleResult,
+    ): ImmutableList<ProfileOutput> = completion.output(result)
 
     private fun ProfileResetStatus.PurgingLegacy.completionOutput(
-        revision: ProfileRevision,
-        outcome: ProfileCommandOutcome,
-    ): ImmutableList<ProfileOutput> = completion.output(revision, outcome)
+        result: ProfileModuleResult,
+    ): ImmutableList<ProfileOutput> = completion.output(result)
 
-    private fun ProfileState.nextEffectRef(revision: ProfileRevision): ProfileEffectRef =
-        ProfileEffectRef(sourceRevision = revision, ordinal = nextResourceOrdinal)
+    private fun resourceEffectRef(revision: ProfileRevision): ProfileEffectRef =
+        ProfileEffectRef(sourceRevision = revision, ordinal = PROFILE_RESOURCE_OUTPUT_ORDINAL)
 
     private fun ProfileRevision.next(): ProfileRevision {
         check(value < Long.MAX_VALUE) { "Profile revision exhausted" }
         return ProfileRevision(value + 1L)
-    }
-
-    private fun Int.nextOrdinal(): Int {
-        check(this < Int.MAX_VALUE) { "Profile Resource ordinal exhausted" }
-        return this + 1
     }
 
     private fun PlayerProfile.toGameplaySnapshot(): GameplayProfileSnapshot = GameplayProfileSnapshot(
@@ -1006,9 +768,13 @@ object ProfileNucleus {
     private fun rejected(reason: ProfileRejection): ProfileDecision.Rejected =
         ProfileDecision.Rejected(reason)
 
-    private fun unexpected(reason: ProfileResourceResultRejection): ProfileDecision.Rejected =
-        rejected(ProfileRejection.UnexpectedResourceResult(reason))
 }
+
+private const val PROFILE_RESOURCE_OUTPUT_ORDINAL: Int = 0
+
+private data class ProfileCommandCompletion(
+    val commandSource: kinetickk.ball.profile.api.ProfileCommandSourceToken,
+)
 
 private val PreferenceAdjustmentDirection.delta: Int
     get() = when (this) {

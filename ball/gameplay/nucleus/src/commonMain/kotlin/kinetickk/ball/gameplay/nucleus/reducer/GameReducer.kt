@@ -8,8 +8,7 @@ import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
-import kinetickk.ball.gameplay.api.GameplayInputField
-import kinetickk.ball.gameplay.api.GameplayInputReason
+import kinetickk.ball.gameplay.api.GameplayPointerAxis
 import kinetickk.ball.gameplay.api.GameplayRejection
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
@@ -101,62 +100,21 @@ internal class GameReducer {
             }
             GameplayInteractionPulse.DashRequested -> state.requestDash()
             GameplayInteractionPulse.PauseToggled -> state.togglePause()
-            GameplayInteractionPulse.PauseForOverlay -> state.pauseForOverlay()
-            GameplayInteractionPulse.ExitRunRequested -> state.exitRun()
-            is GameplayInteractionPulse.PreferencesChanged -> state.applyPreferences(intent.preferences)
             is GameplayInteractionPulse.ChoiceSelected -> state.choose(intent.index)
             GameplayInteractionPulse.ChoicesRerolled -> state.rerollChoices()
             GameplayInteractionPulse.UserGestureObserved -> error("handled before state cloning")
         }
     }
 
-    private fun validate(state: EngineState, intent: GameplayInteractionPulse): GameplayRejection.InvalidInput? =
+    private fun validate(state: EngineState, intent: GameplayInteractionPulse): GameplayRejection? =
         when (intent) {
-            is GameplayInteractionPulse.FrameElapsed -> bounded(
-                field = GameplayInputField.FRAME_DELTA_SECONDS,
-                value = intent.realDeltaSeconds,
-                minimum = MIN_FRAME_DELTA_SECONDS,
-                maximum = MAX_FRAME_DELTA_SECONDS,
-            )
-            is GameplayInteractionPulse.ViewportChanged ->
-                bounded(GameplayInputField.VIEWPORT_WIDTH, intent.width, MIN_VIEWPORT_DIMENSION, MAX_VIEWPORT_DIMENSION)
-                    ?: bounded(GameplayInputField.VIEWPORT_HEIGHT, intent.height, MIN_VIEWPORT_DIMENSION, MAX_VIEWPORT_DIMENSION)
-                    ?: bounded(GameplayInputField.DENSITY, intent.density, MIN_DENSITY, MAX_DENSITY)
-            is GameplayInteractionPulse.PointerMoved ->
-                bounded(GameplayInputField.POINTER_X, intent.x, 0f, state.model.screenWidth)
-                    ?: bounded(GameplayInputField.POINTER_Y, intent.y, 0f, state.model.screenHeight)
-            is GameplayInteractionPulse.ChoiceSelected -> when {
-                intent.index < 0 -> GameplayRejection.InvalidInput(
-                    GameplayInputField.CHOICE_INDEX,
-                    GameplayInputReason.BELOW_MINIMUM,
-                )
-                intent.index >= MutableGameState.MAX_CHOICES -> GameplayRejection.InvalidInput(
-                    GameplayInputField.CHOICE_INDEX,
-                    GameplayInputReason.ABOVE_MAXIMUM,
-                )
+            is GameplayInteractionPulse.PointerMoved -> when {
+                intent.x < 0f || intent.x > state.model.screenWidth ->
+                    GameplayRejection.PointerOutsideViewport(GameplayPointerAxis.HORIZONTAL)
+                intent.y < 0f || intent.y > state.model.screenHeight ->
+                    GameplayRejection.PointerOutsideViewport(GameplayPointerAxis.VERTICAL)
                 else -> null
             }
             else -> null
         }
-
-    private fun bounded(
-        field: GameplayInputField,
-        value: Float,
-        minimum: Float,
-        maximum: Float,
-    ): GameplayRejection.InvalidInput? = when {
-        !value.isFinite() -> GameplayRejection.InvalidInput(field, GameplayInputReason.NON_FINITE)
-        value < minimum -> GameplayRejection.InvalidInput(field, GameplayInputReason.BELOW_MINIMUM)
-        value > maximum -> GameplayRejection.InvalidInput(field, GameplayInputReason.ABOVE_MAXIMUM)
-        else -> null
-    }
-
-    private companion object {
-        const val MIN_FRAME_DELTA_SECONDS = 0f
-        const val MAX_FRAME_DELTA_SECONDS = 1f
-        const val MIN_VIEWPORT_DIMENSION = 1f
-        const val MAX_VIEWPORT_DIMENSION = 32_768f
-        const val MIN_DENSITY = 0.5f
-        const val MAX_DENSITY = 8f
-    }
 }

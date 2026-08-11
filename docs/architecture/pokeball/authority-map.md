@@ -26,13 +26,14 @@ ownership.
 |---|---|---|
 | item, weapon, meta-upgrade, relic, and Rebirth definitions/policy | ContentCatalog | typed Content queries and captured immutable snapshots |
 | preferences and mute state | Profile | Profile queries; captured into Gameplay after accepted Session workflow |
-| economy, permanent Lab ranks, loadout, collection, Rebirth progress | Profile | target-owned Profile queries; Gameplay receives only captured run bootstrap |
+| economy, permanent Lab ranks, loadout, collection, Rebirth progress | Profile | target-owned Profile queries; Gameplay obtains run bootstrap and preferences only through `GameplayProfileRoute`, then captures the validated values in its accepted frame |
 | save bootstrap, v4 compatibility status, reset confirmation, persistence/purge outcome | Profile | Session receives typed Profile results/queries; Resource reports typed facts only |
 | live simulation, deterministic RNG, run matter, discoveries, active weapon, Codex stacks, run terminal result | GameplayRun | Gameplay queries and target-owned result to Session/Profile routes |
 | navigation, overlay policy, start/restart/exit ordering, settings propagation, Rebirth orchestration, reset modal | AppSession | Session projection consumed by Session Interaction |
 | UI page, focus, viewport gesture mechanics, animation clock, local visual FX | owning Interaction role | never consumed as hidden business input; a business-relevant value becomes a Pulse, Context field, or committed State |
 | cue-to-tone meaning | originating Ball's private audio executor | mechanical `ToneRequest` only crosses into Audio Resource |
-| tone validation and platform playback | Audio Resource | no business decision or semantic cue authority |
+| tone validation and bounded playback request selection | Audio Resource | receives only typed `ToneRequest` and a narrow playback capability; no provider acquisition |
+| platform storage/audio provider acquisition and mechanical execution | instance-owned platform capability brokers / Execution-Gate mechanics bound by AppAssembly | Profile/Audio retain Resource operation semantics; Assembly selects and binds only, gains no effect/policy authority, and broad provider types never enter a Resource constructor |
 
 Home and Codex may combine independent Profile and Gameplay reads only in
 Session Interaction and must label the result non-atomic. Assembly never joins
@@ -53,6 +54,17 @@ those reads into a fabricated business snapshot.
 Nucleus modules depend on neither Compose, platform APIs, nor Resource
 implementations. Assembly constructs components and binds declared routes; it
 does not branch on business state or construct business payloads.
+
+The physical implementation remains one Profile component and one active
+Gameplay host, without façade fan-out. Only `app:shared` Assembly may hold the
+Impl composites `ProfileComponent` and `GameplayCompositionComponent`.
+Downstream roles receive least-authority views: `ProfilePort` for local Profile
+Interaction, `ProfileReadPort` for Home/Codex, `SessionProfileRoute` for
+AppSession, `GameplayProfileRoute` for GameplayRun, `GameplaySessionHost` and
+`GameplaySessionRunPort` for Session, and `GameplayPresentation` plus
+`GameplayPresentationPort` for rendering. Result deliveries are validated in
+the corresponding Impl before construction of a Nucleus-private
+`ModuleResultPulse` or flattened pre-acceptance carrier.
 
 ## Writer and transition rules
 

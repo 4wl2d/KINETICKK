@@ -49,9 +49,15 @@ enum class ProfileV4Rejection {
     INCONSISTENT_PROFILE,
 }
 
-enum class ProfileResourceFailure {
+enum class ProfileReadFailure {
     PROVIDER_READ_FAILED,
+}
+
+enum class ProfileWriteOutcomeUnknownReason {
     PROVIDER_WRITE_MAY_HAVE_EXECUTED,
+}
+
+enum class ProfilePurgeOutcomeUnknownReason {
     PROVIDER_PURGE_MAY_HAVE_EXECUTED,
 }
 
@@ -66,8 +72,9 @@ sealed interface ProfileBootstrapResourceResult {
         val legacyKeys: ProfileLegacyKeys,
     ) : ProfileBootstrapResourceResult
 
-    data class OutcomeUnknown(
-        val reason: ProfileResourceFailure,
+    /** The bootstrap read is known not to have mutated provider state. */
+    data class ResourceFailure(
+        val reason: ProfileReadFailure,
     ) : ProfileBootstrapResourceResult
 }
 
@@ -81,7 +88,7 @@ sealed interface ProfileV4WriteResult {
     ) : ProfileV4WriteResult
 
     data class OutcomeUnknown(
-        val reason: ProfileResourceFailure,
+        val reason: ProfileWriteOutcomeUnknownReason,
     ) : ProfileV4WriteResult
 }
 
@@ -99,7 +106,12 @@ sealed interface ProfileLegacyPurgeResult {
     data class OutcomeUnknown(
         val remaining: ProfileLegacyKeys,
         val unknown: ProfileLegacyKeys,
-        val reason: ProfileResourceFailure,
+        val reason: ProfilePurgeOutcomeUnknownReason,
+    ) : ProfileLegacyPurgeResult
+
+    /** Guard/read failure observed before any legacy removal was attempted. */
+    data class ResourceFailure(
+        val reason: ProfileReadFailure,
     ) : ProfileLegacyPurgeResult
 
     data class Rejected(

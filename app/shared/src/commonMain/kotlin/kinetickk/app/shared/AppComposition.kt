@@ -9,9 +9,11 @@ import androidx.compose.runtime.remember
 import kinetickk.ball.content.api.ContentCatalog
 import kinetickk.ball.content.impl.createContentCatalog
 import kinetickk.ball.gameplay.impl.DefaultGameplayFeature
-import kinetickk.ball.gameplay.interaction.GameplayFeature
+import kinetickk.ball.gameplay.impl.GameplayCompositionComponent
 import kinetickk.ball.profile.api.ProfilePort
-import kinetickk.ball.profile.impl.createPlatformProfileComponent
+import kinetickk.ball.profile.impl.ProfileComponent
+import kinetickk.ball.profile.impl.ProfilePersistenceCapability
+import kinetickk.ball.profile.impl.createProfileComponent
 import kinetickk.ball.profile.interaction.armory.api.ArmoryFeature
 import kinetickk.ball.profile.interaction.armory.impl.DefaultArmoryFeature
 import kinetickk.ball.profile.interaction.lab.api.LabFeature
@@ -32,6 +34,7 @@ import kinetickk.flow.session.interaction.reset.api.ResetModalFeature
 import kinetickk.flow.session.interaction.reset.impl.DefaultResetModalFeature
 import kinetickk.resource.audio.api.AudioService
 import kinetickk.resource.audio.impl.DefaultAudioService
+import kinetickk.resource.audio.impl.TonePlaybackCapability
 
 /** The single UI entry point used by Desktop and Web hosts. */
 @Composable
@@ -46,9 +49,9 @@ fun KinetickkApp() {
 /** Static Assembly: constructs components and binds the two declared result routes. */
 internal class AppCompositionOwner(
     contentCatalog: ContentCatalog = createContentCatalog(),
-    profilePort: ProfilePort? = null,
+    profileComponent: ProfileComponent? = null,
     audioService: AudioService? = null,
-    gameplayFeature: GameplayFeature? = null,
+    gameplayComponent: GameplayCompositionComponent? = null,
     appSessionComponent: AppSessionComponent? = null,
     homeFeature: HomeFeature? = null,
     settingsFeature: SettingsFeature? = null,
@@ -61,18 +64,24 @@ internal class AppCompositionOwner(
     private val profilePolicy = contentCatalog.profilePolicy()
     private val gameplayContent = contentCatalog.gameplayContent()
     private val uiCatalog = contentCatalog.uiCatalog()
-    private val profileResultRouter = ProfileCommandResultRouter()
+    private val profileResultRouter = ProfileModuleResultRouter()
 
-    private val profilePort: ProfilePort = profilePort ?: createPlatformProfileComponent(
+    private val profileComponent: ProfileComponent = profileComponent ?: createProfileComponent(
+        persistence = createPlatformProfilePersistenceCapability(),
         policy = profilePolicy,
         commandResultSink = profileResultRouter::route,
     )
-    private val audioService: AudioService = audioService ?: DefaultAudioService()
-    private val sessionAudioExecutor = SessionAudioExecutor(this.audioService)
-    private val gameplayFeature: GameplayFeature = gameplayFeature ?: DefaultGameplayFeature(
-        this.profilePort,
-        this.audioService,
+    private val profilePort: ProfilePort = this.profileComponent
+    private val audioService: AudioService = audioService ?: DefaultAudioService(
+        createPlatformTonePlaybackCapability(),
     )
+    private val sessionAudioExecutor = SessionAudioExecutor(this.audioService)
+    private val gameplayComponent: GameplayCompositionComponent = gameplayComponent ?:
+        DefaultGameplayFeature(
+            gameplayContent = gameplayContent,
+            profilePort = this.profileComponent,
+            audioService = this.audioService,
+        )
     private val homeFeature: HomeFeature = homeFeature ?: DefaultHomeFeature(
         profilePort = this.profilePort,
         uiCatalog = uiCatalog,
@@ -108,9 +117,8 @@ internal class AppCompositionOwner(
     )
     private val appSessionComponent: AppSessionComponent = appSessionComponent ?:
         createAppSessionComponent(
-            gameplayContent = gameplayContent,
-            profilePort = this.profilePort,
-            gameplayFeature = this.gameplayFeature,
+            profileRoute = this.profileComponent,
+            gameplaySessionHost = this.gameplayComponent,
             updateAudioPreferences = sessionAudioExecutor::updatePreferences,
             playMuteFeedback = sessionAudioExecutor::playUiClick,
             playRebirthAcceptedFeedback = this.rebirthFeature::playAcceptedFeedback,
@@ -118,8 +126,8 @@ internal class AppCompositionOwner(
 
     init {
         profileResultRouter.bind(
-            sessionSink = this.appSessionComponent::receiveProfileCommandResult,
-            gameplaySink = this.gameplayFeature::receiveProfileCommandResult,
+            sessionSink = this.appSessionComponent::receiveProfileModuleResult,
+            gameplaySink = this.gameplayComponent::receiveProfileModuleResult,
         )
     }
 
@@ -131,7 +139,7 @@ internal class AppCompositionOwner(
         AppSessionContent(
             sessionPort = appSessionComponent,
             audioExecutor = sessionAudioExecutor,
-            gameplayFeature = gameplayFeature,
+            gameplayPresentation = gameplayComponent,
             homeFeature = homeFeature,
             settingsFeature = settingsFeature,
             labFeature = labFeature,
@@ -146,3 +154,9 @@ internal class AppCompositionOwner(
         audioService.close()
     }
 }
+
+/** Platform authority is acquired only by app composition actuals. */
+internal expect fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability
+
+/** Platform authority is acquired only by app composition actuals. */
+internal expect fun createPlatformTonePlaybackCapability(): TonePlaybackCapability

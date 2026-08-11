@@ -4,31 +4,34 @@
 package kinetickk.flow.session.nucleus
 
 import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.content.api.GameplayContentSnapshot
-import kinetickk.ball.gameplay.api.GameplayCommand
+import kinetickk.ball.gameplay.api.GameplayModuleCommandRequest
 import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.RunId
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.ProfileBootstrapStatus
-import kinetickk.ball.profile.api.ProfileCommand
+import kinetickk.ball.profile.api.ProfileModuleCommandRequest
 import kinetickk.ball.profile.api.ProfileResetStatus
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.flow.session.api.AppDestination
 import kinetickk.flow.session.api.AppSessionInstanceId
 import kinetickk.flow.session.api.LOCAL_APP_SESSION_INSTANCE_ID
-import kinetickk.flow.session.api.SessionConfiguration
 import kinetickk.flow.session.api.SessionResetLifecycle
 import kinetickk.flow.session.api.SessionRevision
-import kinetickk.flow.session.api.SessionWorkflowFailure
+import kinetickk.flow.session.api.SessionWorkflowFailureCode
 import kinetickk.flow.session.api.isBaseDestination
 import kinetickk.flow.session.api.isOverlayDestination
 
 sealed interface PendingParticipantCommand {
-    data class Profile(val command: ProfileCommand) : PendingParticipantCommand
-    data class Gameplay(val command: GameplayCommand) : PendingParticipantCommand
+    data class Profile(
+        val request: ProfileModuleCommandRequest,
+    ) : PendingParticipantCommand
+
+    data class Gameplay(
+        val request: GameplayModuleCommandRequest,
+    ) : PendingParticipantCommand
 }
 
 enum class RunStartReason {
@@ -111,7 +114,7 @@ sealed interface RebirthConfirmation {
 data class AppSessionState(
     val instanceId: AppSessionInstanceId,
     val revision: SessionRevision,
-    val content: GameplayContentSnapshot,
+    val routeRevision: SessionRevision,
     val base: AppDestination,
     val overlay: AppDestination?,
     val activeRunId: RunId?,
@@ -119,10 +122,8 @@ data class AppSessionState(
     val pendingWorkflow: PendingWorkflow?,
     val rebirthConfirmation: RebirthConfirmation,
     val resetLifecycle: SessionResetLifecycle,
-    val lastFailure: SessionWorkflowFailure?,
+    val lastFailure: SessionWorkflowFailureCode?,
     val nextRunId: RunId?,
-    val nextProfileCommandOrdinal: Int?,
-    val nextGameplayCommandOrdinal: Int?,
 ) {
     init {
         require(instanceId == LOCAL_APP_SESSION_INSTANCE_ID) {
@@ -133,27 +134,22 @@ data class AppSessionState(
             "Only feature routes may be overlays"
         }
         require((activeRunId == null) == (gameplayPhase == null)) {
-            "The last observed Gameplay phase must belong to the active RunId"
+            "The retained Gameplay phase must belong to the active RunId"
         }
         require(base != AppDestination.Gameplay || activeRunId != null) {
             "Gameplay base requires an active GameplayRun"
         }
-        require(nextProfileCommandOrdinal == null || nextProfileCommandOrdinal >= 0)
-        require(nextGameplayCommandOrdinal == null || nextGameplayCommandOrdinal >= 0)
     }
 
     companion object {
-        fun initial(
-            configuration: SessionConfiguration,
-            persistenceStatus: PersistenceStatusProjection,
-        ): AppSessionState {
+        fun initial(persistenceStatus: PersistenceStatusProjection): AppSessionState {
             require(persistenceStatus.instanceId == LOCAL_PROFILE_INSTANCE_ID) {
                 "Session bootstrap must observe the local Profile"
             }
             return AppSessionState(
                 instanceId = LOCAL_APP_SESSION_INSTANCE_ID,
                 revision = SessionRevision.ZERO,
-                content = configuration.gameplayContent,
+                routeRevision = SessionRevision.ZERO,
                 base = AppDestination.Home,
                 overlay = null,
                 activeRunId = null,
@@ -163,8 +159,6 @@ data class AppSessionState(
                 resetLifecycle = persistenceStatus.toSessionResetLifecycle(),
                 lastFailure = null,
                 nextRunId = RunId(0L),
-                nextProfileCommandOrdinal = 0,
-                nextGameplayCommandOrdinal = 0,
             )
         }
     }
@@ -177,10 +171,9 @@ internal fun PersistenceStatusProjection.toSessionResetLifecycle(): SessionReset
         is ProfileResetStatus.PurgingLegacy,
         -> SessionResetLifecycle.RESET_IN_PROGRESS
         is ProfileResetStatus.NeedsAttention -> SessionResetLifecycle.PURGE_NEEDS_ATTENTION
-        is ProfileResetStatus.NotRequired -> when (bootstrap) {
-            ProfileBootstrapStatus.Ready -> SessionResetLifecycle.READY
-            ProfileBootstrapStatus.AwaitingResource,
-            is ProfileBootstrapStatus.Blocked,
-            -> SessionResetLifecycle.BOOTSTRAP_UNAVAILABLE
+        is ProfileResetStatus.NotRequired -> if (bootstrap == ProfileBootstrapStatus.Ready) {
+            SessionResetLifecycle.READY
+        } else {
+            SessionResetLifecycle.BOOTSTRAP_UNAVAILABLE
         }
     }

@@ -7,9 +7,9 @@ import kinetickk.ball.content.api.*
 
 import kinetickk.ball.gameplay.nucleus.model.DelayedRelicHit
 import kinetickk.ball.gameplay.nucleus.model.Enemy
-import kinetickk.ball.gameplay.api.EnemyType
+import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.model.Pickup
-import kinetickk.ball.gameplay.api.PickupType
+import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.gameplay.nucleus.model.Totem

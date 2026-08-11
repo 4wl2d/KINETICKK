@@ -3,31 +3,45 @@
 
 package kinetickk.flow.session.impl
 
-import kinetickk.ball.gameplay.api.GameplayAcceptance
-import kinetickk.ball.gameplay.api.GameplayCommand
-import kinetickk.ball.gameplay.api.GameplayCommandAdmission
-import kinetickk.ball.gameplay.api.GameplayCommandResult
+import kinetickk.ball.gameplay.api.GameplayCommandAdmissionFailureReason
+import kinetickk.ball.gameplay.api.GameplayCommandBoundaryResponse
+import kinetickk.ball.gameplay.api.GameplayCommandIngressResult
 import kinetickk.ball.gameplay.api.GameplayCommandSource
-import kinetickk.ball.gameplay.api.GameplayPort
+import kinetickk.ball.gameplay.api.GameplayCommandSourceToken
+import kinetickk.ball.gameplay.api.GameplayEffectiveProtocolIdentity
+import kinetickk.ball.gameplay.api.GameplayExitProgressResult
+import kinetickk.ball.gameplay.api.GameplayModuleCommand
+import kinetickk.ball.gameplay.api.GameplayModuleCommandRequest
+import kinetickk.ball.gameplay.api.GameplayModuleResult
+import kinetickk.ball.gameplay.api.GameplayModuleResultDelivery
 import kinetickk.ball.gameplay.api.GameplayQuery
-import kinetickk.ball.gameplay.interaction.GameplayFeature
+import kinetickk.ball.gameplay.api.GameplayResultIssuerProvenance
+import kinetickk.ball.gameplay.interaction.GameplaySessionHost
+import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
+import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PlayerPreferences
-import kinetickk.ball.profile.api.ProfileAcceptance
-import kinetickk.ball.profile.api.ProfileCommand
-import kinetickk.ball.profile.api.ProfileCommandAdmission
-import kinetickk.ball.profile.api.ProfileCommandResult
+import kinetickk.ball.profile.api.PreferencesProjection
+import kinetickk.ball.profile.api.ProfileCommandAdmissionFailureReason
+import kinetickk.ball.profile.api.ProfileCommandBoundaryResponse
+import kinetickk.ball.profile.api.ProfileCommandIngressResult
 import kinetickk.ball.profile.api.ProfileCommandSource
-import kinetickk.ball.profile.api.ProfilePort
+import kinetickk.ball.profile.api.ProfileCommandSourceToken
+import kinetickk.ball.profile.api.ProfileEffectiveProtocolIdentity
+import kinetickk.ball.profile.api.ProfileModuleCommand
+import kinetickk.ball.profile.api.ProfileModuleCommandRequest
+import kinetickk.ball.profile.api.ProfileModuleResult
+import kinetickk.ball.profile.api.ProfileModuleResultDelivery
 import kinetickk.ball.profile.api.ProfileQuery
+import kinetickk.ball.profile.api.ProfileResultIssuerProvenance
+import kinetickk.ball.profile.api.RebirthProgressProjection
+import kinetickk.ball.profile.api.RunBootstrapProjection
+import kinetickk.ball.profile.api.SessionProfileRoute
 import kinetickk.flow.session.api.AppDestination
 import kinetickk.flow.session.api.AppSessionInstanceId
 import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.flow.session.api.AppShellProjection
 import kinetickk.flow.session.api.SessionAcceptance
-import kinetickk.flow.session.api.SessionConfiguration
-import kinetickk.flow.session.api.SessionControlPulse
 import kinetickk.flow.session.api.SessionInteractionPulse
-import kinetickk.flow.session.api.SessionPulse
 import kinetickk.flow.session.api.SessionResetLifecycle
 import kinetickk.flow.session.api.SessionShortcut
 import kinetickk.flow.session.api.isOverlayDestination
@@ -35,136 +49,136 @@ import kinetickk.flow.session.nucleus.AppSessionAcceptedFrame
 import kinetickk.flow.session.nucleus.AppSessionContext
 import kinetickk.flow.session.nucleus.AppSessionDecision
 import kinetickk.flow.session.nucleus.AppSessionNucleus
+import kinetickk.flow.session.nucleus.AppSessionNucleusPulse
 import kinetickk.flow.session.nucleus.AppSessionOutput
 import kinetickk.flow.session.nucleus.AppSessionState
 import kinetickk.flow.session.nucleus.MAX_SESSION_OUTPUTS_PER_DECISION
 import kinetickk.flow.session.nucleus.PendingParticipantCommand
 import kinetickk.flow.session.nucleus.PendingWorkflow
+import kinetickk.flow.session.nucleus.gameplayCommandRejectedBeforeAcceptance
+import kinetickk.flow.session.nucleus.gameplayModuleResultPulse
+import kinetickk.flow.session.nucleus.profileCommandRejectedBeforeAcceptance
+import kinetickk.flow.session.nucleus.profileModuleResultPulse
 import kinetickk.foundation.dispatch.BoundedCompletionDeque
 import kinetickk.foundation.dispatch.InlineDispatchGuard
 
 /** Sole owner, acceptor, publisher, and ordered-output dispatcher for AppSession. */
 internal class DefaultAppSessionComponent private constructor(
     initialState: AppSessionState,
-    private val profilePort: ProfilePort,
-    private val gameplayFeature: GameplayFeature,
+    private val profileRoute: SessionProfileRoute,
+    private val gameplaySessionHost: GameplaySessionHost,
     private val updateAudioPreferences: (PlayerPreferences) -> Unit,
     private val playMuteFeedback: () -> Unit,
     private val playRebirthAcceptedFeedback: () -> Unit,
 ) : AppSessionComponent {
     private val dispatchGuard = InlineDispatchGuard()
-    private val completions =
-        sessionCompletionDeque<SessionWorkItem>()
+    private val completions = sessionCompletionDeque<SessionWorkItem>()
     private var committedState: AppSessionState = initialState
-    private var profileDispatchSourceDepth: Int? = null
-    private var gameplayDispatchSourceDepth: Int? = null
-    private var profileResultObservedDuringDispatch: Boolean = false
-    private var gameplayResultObservedDuringDispatch: Boolean = false
+    private var activeProfileRoute: ProfileRouteReservation? = null
+    private var activeGameplayRoute: GameplayRouteReservation? = null
+    private var observedProfileDelivery: ProfileModuleResultDelivery? = null
+    private var observedGameplayDelivery: GameplayModuleResultDelivery? = null
+    private var nextLocalCausalScope: Long = 1L
 
     override val instanceId: AppSessionInstanceId
         get() = committedState.instanceId
 
     override fun accept(pulse: SessionInteractionPulse): SessionAcceptance =
-        requireNotNull(dispatchRoot(pulse, reportAcceptance = true))
+        dispatchLocal(pulse)
 
     override fun query(query: AppSessionQuery.GetShell): AppShellProjection =
         AppSessionNucleus.query(committedState, query)
 
-    override fun receiveProfileCommandResult(result: ProfileCommandResult.Accepted) {
+    /** Raw target evidence is validated and retained; no trusted Nucleus pulse exists yet. */
+    override fun receiveProfileModuleResult(delivery: ProfileModuleResultDelivery) {
         check(dispatchGuard.isDispatching) {
             "Inline Profile completion arrived outside its Session causal scope"
         }
-        val pending = committedState.pendingWorkflow?.participant as? PendingParticipantCommand.Profile
-        checkNotNull(pending) { "Profile result arrived without a pending Session command" }
-        check(result.commandRef == pending.command.ref) {
-            "Profile result command correlation mismatch"
+        val route = checkNotNull(activeProfileRoute) {
+            "Profile result arrived without a reserved Session route"
         }
-        val sourceDepth = checkNotNull(profileDispatchSourceDepth) {
-            "Profile result arrived outside Profile output dispatch"
-        }
-        check(!profileResultObservedDuringDispatch) {
+        check(observedProfileDelivery == null) {
             "Profile emitted more than one result for one Session command"
         }
-        profileResultObservedDuringDispatch = true
-        enqueueCompletion(
-            SessionControlPulse.ProfileCommandCompleted(result),
-            sourceDepth + PARTICIPANT_ACCEPTED_COMPLETION_DEPTH,
-        )
+        validateProfileDelivery(route, delivery)
+        observedProfileDelivery = delivery
     }
 
-    override fun receiveGameplayCommandResult(result: GameplayCommandResult.Accepted) {
+    /** Raw target evidence is validated and retained; no trusted Nucleus pulse exists yet. */
+    override fun receiveGameplayModuleResult(delivery: GameplayModuleResultDelivery) {
         check(dispatchGuard.isDispatching) {
             "Inline Gameplay completion arrived outside its Session causal scope"
         }
-        val pending = committedState.pendingWorkflow?.participant as? PendingParticipantCommand.Gameplay
-        checkNotNull(pending) { "Gameplay result arrived without a pending Session command" }
-        check(result.commandRef == pending.command.ref) {
-            "Gameplay result command correlation mismatch"
+        val route = checkNotNull(activeGameplayRoute) {
+            "Gameplay result arrived without a reserved Session route"
         }
-        val sourceDepth = checkNotNull(gameplayDispatchSourceDepth) {
-            "Gameplay result arrived outside Gameplay output dispatch"
-        }
-        check(!gameplayResultObservedDuringDispatch) {
+        check(observedGameplayDelivery == null) {
             "Gameplay emitted more than one result for one Session command"
         }
-        gameplayResultObservedDuringDispatch = true
-        enqueueCompletion(
-            SessionControlPulse.GameplayCommandCompleted(result),
-            sourceDepth + PARTICIPANT_ACCEPTED_COMPLETION_DEPTH,
-        )
+        validateGameplayDelivery(route, delivery)
+        observedGameplayDelivery = delivery
     }
 
     internal fun stateSnapshot(): AppSessionState = committedState
 
-    private fun dispatchRoot(
-        pulse: SessionPulse,
-        reportAcceptance: Boolean,
-    ): SessionAcceptance? = dispatchGuard.dispatch {
-        check(completions.isEmpty) { "Session completion deque leaked across dispatches" }
-        check(completions.tryAddLast(SessionWorkItem(pulse, causalDepth = 0)))
+    private fun dispatchLocal(intent: SessionInteractionPulse): SessionAcceptance =
+        dispatchGuard.dispatch {
+            check(activeProfileRoute == null && activeGameplayRoute == null)
+            check(completions.isEmpty) { "Session completion deque leaked across dispatches" }
+            val causalScope = allocateLocalCausalScope()
+            check(
+                completions.tryAddLast(
+                    SessionWorkItem(
+                        pulse = AppSessionNucleusPulse.Intent(intent),
+                        causalScope = causalScope,
+                        causalDepth = 0,
+                    ),
+                ),
+            )
 
-        var rootAcceptance: SessionAcceptance? = null
-        var root = true
-        var deferredFault: Throwable? = null
-        while (!completions.isEmpty) {
-            val item = checkNotNull(completions.removeFirstOrNull())
-            val before = committedState
-            val context = readContext(before, item.pulse)
-            when (val decision = AppSessionNucleus.decide(before, item.pulse, context)) {
-                is AppSessionDecision.Rejected -> {
-                    check(root && reportAcceptance) {
-                        "A trusted Session completion was rejected: ${decision.reason}"
-                    }
-                    rootAcceptance = SessionAcceptance.Rejected(
-                        instanceId = before.instanceId,
-                        observedRevision = before.revision,
-                        reason = decision.reason,
-                    )
-                }
-                is AppSessionDecision.Accepted -> {
-                    preflight(before, item, decision.frame)
-                    committedState = decision.frame.nextState
-                    if (root && reportAcceptance) {
-                        rootAcceptance = SessionAcceptance.Accepted(
-                            instanceId = committedState.instanceId,
-                            revision = committedState.revision,
+            var rootAcceptance: SessionAcceptance? = null
+            var root = true
+            var deferredFault: Throwable? = null
+            while (!completions.isEmpty) {
+                val item = checkNotNull(completions.removeFirstOrNull())
+                val before = committedState
+                val context = readContext(before, item.pulse)
+                when (val decision = AppSessionNucleus.decide(before, item.pulse, context)) {
+                    is AppSessionDecision.Rejected -> {
+                        check(root) {
+                            "A trusted Session completion was rejected: ${decision.reason}"
+                        }
+                        rootAcceptance = SessionAcceptance.Rejected(
+                            instanceId = before.instanceId,
+                            observedRevision = before.revision,
+                            reason = decision.reason,
                         )
                     }
-                    decision.frame.outputs.forEach { output ->
-                        try {
-                            execute(output, item.causalDepth)
-                        } catch (failure: Throwable) {
-                            if (deferredFault == null) deferredFault = failure
+                    is AppSessionDecision.Accepted -> {
+                        preflight(before, item, decision.frame)
+                        committedState = decision.frame.nextState
+                        if (root) {
+                            rootAcceptance = SessionAcceptance.Accepted(
+                                instanceId = committedState.instanceId,
+                                revision = committedState.revision,
+                            )
+                        }
+                        decision.frame.outputs.forEach { output ->
+                            try {
+                                execute(output, item)
+                            } catch (failure: Throwable) {
+                                if (deferredFault == null) deferredFault = failure
+                            }
                         }
                     }
                 }
+                root = false
             }
-            root = false
-        }
 
-        deferredFault?.let { throw it }
-        if (reportAcceptance) checkNotNull(rootAcceptance) else null
-    }
+            deferredFault?.let { throw it }
+            check(activeProfileRoute == null && activeGameplayRoute == null)
+            checkNotNull(rootAcceptance)
+        }
 
     private fun preflight(
         before: AppSessionState,
@@ -177,7 +191,6 @@ internal class DefaultAppSessionComponent private constructor(
         check(next.revision.value == before.revision.value + 1L) {
             "Session revision must advance exactly once"
         }
-        check(next.content === before.content) { "Captured Session content identity changed" }
         check(frame.shellProjection == AppSessionNucleus.query(next, AppSessionQuery.GetShell)) {
             "Session frame shell projection does not match the next State"
         }
@@ -188,18 +201,17 @@ internal class DefaultAppSessionComponent private constructor(
             left.dispatchOrder <= right.dispatchOrder
         }) { "Session outputs are not in ensure -> participant -> feedback order" }
 
-        val participantOutputs = frame.outputs.filter { output -> output.isParticipantCommand }
+        val participantOutputs = frame.outputs.filter { it.isParticipantCommand }
         val ensureOutputs = frame.outputs.filterIsInstance<AppSessionOutput.EnsureGameplayRun>()
         requireSessionOutputFanoutBounds(participantOutputs.size, ensureOutputs.size)
-
         participantOutputs.singleOrNull()?.let { output ->
-            requireSessionCausalDepth(item.causalDepth + PARTICIPANT_ACCEPTED_COMPLETION_DEPTH)
-            requireSessionCompletionCapacity(completions.remainingCapacity, requiredCompletions = 1)
+            requireSessionCausalDepth(item.causalDepth + 1)
+            requireSessionCompletionCapacity(completions.remainingCapacity, 1)
             when (output) {
-                is AppSessionOutput.SendProfileCommand -> preflightProfileCommand(next, output.command)
+                is AppSessionOutput.SendProfileCommand -> preflightProfileCommand(next, output.request)
                 is AppSessionOutput.SendGameplayCommand -> preflightGameplayCommand(
                     next,
-                    output.command,
+                    output.request,
                     ensureOutputs.singleOrNull(),
                 )
                 else -> error("Filtered Session participant output changed kind")
@@ -210,7 +222,7 @@ internal class DefaultAppSessionComponent private constructor(
 
         ensureOutputs.singleOrNull()?.let { ensure ->
             val gameplay = participantOutputs.singleOrNull() as? AppSessionOutput.SendGameplayCommand
-            check(gameplay?.command?.ref?.targetInstance?.runId == ensure.runId) {
+            check(gameplay?.request?.targetInstance?.runId == ensure.runId) {
                 "Ensured GameplayRun does not match the emitted command target"
             }
         }
@@ -218,42 +230,42 @@ internal class DefaultAppSessionComponent private constructor(
 
     private fun preflightProfileCommand(
         next: AppSessionState,
-        command: ProfileCommand,
+        request: ProfileModuleCommandRequest,
     ) {
         val pending = next.pendingWorkflow?.participant as? PendingParticipantCommand.Profile
         checkNotNull(pending) { "Session emitted Profile command without retaining it" }
-        check(pending.command == command) { "Session retained a different Profile command" }
-        check(command.ref.sourceInstance == ProfileCommandSource.LocalSession)
-        check(command.ref.sourceRevision == next.revision.value)
-        check(command.ref.targetInstance == profilePort.instanceId)
+        check(pending.request == request) { "Session retained a different Profile command" }
+        check(request.semanticHandle.sourceInstance == ProfileCommandSource.LocalSession)
+        check(request.semanticHandle.sourceRevision == next.revision.value)
+        check(request.targetInstance == profileRoute.instanceId)
     }
 
     private fun preflightGameplayCommand(
         next: AppSessionState,
-        command: GameplayCommand,
+        request: GameplayModuleCommandRequest,
         ensure: AppSessionOutput.EnsureGameplayRun?,
     ) {
         val pending = next.pendingWorkflow?.participant as? PendingParticipantCommand.Gameplay
         checkNotNull(pending) { "Session emitted Gameplay command without retaining it" }
-        check(pending.command == command) { "Session retained a different Gameplay command" }
-        check(command.ref.sourceInstance == GameplayCommandSource.LocalSession)
-        check(command.ref.sourceRevision == next.revision.value)
-        check(command.ref.targetInstance.runId == next.activeRunId)
+        check(pending.request == request) { "Session retained a different Gameplay command" }
+        check(request.semanticHandle.sourceInstance == GameplayCommandSource.LocalSession)
+        check(request.semanticHandle.sourceRevision == next.revision.value)
+        check(request.targetInstance.runId == next.activeRunId)
         if (ensure == null) {
-            val active = checkNotNull(gameplayFeature.activeRun()) {
+            val active = checkNotNull(gameplaySessionHost.activeRun()) {
                 "Session emitted a Gameplay command without a bound active run"
             }
-            check(command.ref.targetInstance == active.instanceId) {
+            check(request.targetInstance == active.instanceId) {
                 "Session Gameplay command does not target the bound active run"
             }
         }
     }
 
-    private fun execute(output: AppSessionOutput, sourceDepth: Int) {
+    private fun execute(output: AppSessionOutput, item: SessionWorkItem) {
         when (output) {
             is AppSessionOutput.EnsureGameplayRun -> ensureGameplayRun(output)
-            is AppSessionOutput.SendProfileCommand -> executeProfileCommand(output, sourceDepth)
-            is AppSessionOutput.SendGameplayCommand -> executeGameplayCommand(output, sourceDepth)
+            is AppSessionOutput.SendProfileCommand -> executeProfileCommand(output, item)
+            is AppSessionOutput.SendGameplayCommand -> executeGameplayCommand(output, item)
             is AppSessionOutput.SynchronizeAudioPreferences ->
                 updateAudioPreferences(output.preferences)
             AppSessionOutput.PlayMuteFeedback -> playMuteFeedback()
@@ -262,114 +274,310 @@ internal class DefaultAppSessionComponent private constructor(
     }
 
     private fun ensureGameplayRun(output: AppSessionOutput.EnsureGameplayRun) {
-        val active = gameplayFeature.activeRun()
+        val active = gameplaySessionHost.activeRun()
         val run = if (active?.instanceId?.runId == output.runId) {
             active
         } else {
-            gameplayFeature.createRun(output.runId, ::receiveGameplayCommandResult)
+            gameplaySessionHost.createRun(output.runId, ::receiveGameplayModuleResult)
         }
         check(run.instanceId.runId == output.runId) {
-            "GameplayFeature created a different RunId than Session reserved"
+            "GameplaySessionHost created a different RunId than Session reserved"
         }
-        check(gameplayFeature.activeRun() === run) {
-            "GameplayFeature did not retain the ensured GameplayRun"
+        check(gameplaySessionHost.activeRun() === run) {
+            "GameplaySessionHost did not retain the ensured GameplayRun"
         }
     }
 
     private fun executeProfileCommand(
         output: AppSessionOutput.SendProfileCommand,
-        sourceDepth: Int,
+        item: SessionWorkItem,
     ) {
-        check(profileDispatchSourceDepth == null)
-        profileDispatchSourceDepth = sourceDepth
-        profileResultObservedDuringDispatch = false
-        val acceptance = try {
-            profilePort.accept(
-                output.command,
-                ProfileCommandAdmission(output.command.ref),
-            )
-        } finally {
-            profileDispatchSourceDepth = null
-        }
-        check(acceptance.instanceId == output.command.ref.targetInstance) {
-            "Profile acceptance marker target identity mismatch"
-        }
-        when (acceptance) {
-            is ProfileAcceptance.Accepted -> check(profileResultObservedDuringDispatch) {
-                "Accepted inline Profile command returned without its reserved result"
-            }
-            is ProfileAcceptance.Rejected -> {
-                check(!profileResultObservedDuringDispatch) {
-                    "Profile command both completed and rejected before acceptance"
-                }
-                enqueueCompletion(
-                    SessionControlPulse.ProfileCommandRejectedBeforeAcceptance(
-                        commandRef = output.command.ref,
-                        rejection = acceptance,
-                    ),
-                    sourceDepth + PARTICIPANT_REJECTED_COMPLETION_DEPTH,
+        check(activeProfileRoute == null)
+        val route = ProfileRouteReservation(output.request, item.causalScope, item.causalDepth)
+        activeProfileRoute = route
+        observedProfileDelivery = null
+        try {
+            val ingress = try {
+                profileRoute.acceptFromSession(
+                    request = output.request,
+                    causalScope = item.causalScope,
+                    causalDepth = item.causalDepth,
                 )
+            } catch (failure: Throwable) {
+                observedProfileDelivery?.let(::enqueueProfileDelivery)
+                throw failure
             }
+            when (ingress) {
+                is ProfileCommandIngressResult.Accepted -> {
+                    check(ingress.targetInstance == output.request.targetInstance)
+                    val delivery = checkNotNull(observedProfileDelivery) {
+                        "Accepted inline Profile command returned without its reserved result"
+                    }
+                    validateAcceptedProfileRevision(route, delivery, ingress)
+                    enqueueProfileDelivery(delivery)
+                }
+                is ProfileCommandIngressResult.RejectedBeforeAcceptance -> {
+                    check(observedProfileDelivery == null) {
+                        "Profile command both completed and rejected before acceptance"
+                    }
+                    validateProfileRefusal(route, ingress)
+                    val refusal = ingress.refusal
+                    enqueueCompletion(
+                        pulse = profileCommandRejectedBeforeAcceptance(
+                            commandSource = refusal.commandSource,
+                            effectiveProtocolIdentity = refusal.effectiveProtocolIdentity,
+                            boundaryResponse = refusal.boundaryResponse,
+                            targetBoundaryProvenance = refusal.targetBoundaryProvenance,
+                        ),
+                        causalScope = refusal.commandSource.causalScope,
+                        causalDepth = refusal.commandSource.causalDepth + 1,
+                    )
+                }
+            }
+        } finally {
+            activeProfileRoute = null
+            observedProfileDelivery = null
         }
     }
 
     private fun executeGameplayCommand(
         output: AppSessionOutput.SendGameplayCommand,
-        sourceDepth: Int,
+        item: SessionWorkItem,
     ) {
-        val target = checkNotNull(gameplayFeature.activeRun()) {
+        val target = checkNotNull(gameplaySessionHost.activeRun()) {
             "Session cannot command Gameplay before ensuring a run"
         }
-        check(target.instanceId == output.command.ref.targetInstance) {
+        check(target.instanceId == output.request.targetInstance) {
             "Session Gameplay command target is not the bound active run"
         }
-        check(gameplayDispatchSourceDepth == null)
-        gameplayDispatchSourceDepth = sourceDepth
-        gameplayResultObservedDuringDispatch = false
-        val acceptance = try {
-            target.accept(
-                output.command,
-                GameplayCommandAdmission(output.command.ref),
-            )
-        } finally {
-            gameplayDispatchSourceDepth = null
-        }
-        check(acceptance.instanceId == output.command.ref.targetInstance) {
-            "Gameplay acceptance marker target identity mismatch"
-        }
-        when (acceptance) {
-            is GameplayAcceptance.Accepted -> check(gameplayResultObservedDuringDispatch) {
-                "Accepted inline Gameplay command returned without its reserved result"
-            }
-            is GameplayAcceptance.Rejected -> {
-                check(!gameplayResultObservedDuringDispatch) {
-                    "Gameplay command both completed and rejected before acceptance"
-                }
-                enqueueCompletion(
-                    SessionControlPulse.GameplayCommandRejectedBeforeAcceptance(
-                        commandRef = output.command.ref,
-                        rejection = acceptance,
-                    ),
-                    sourceDepth + PARTICIPANT_REJECTED_COMPLETION_DEPTH,
+        check(activeGameplayRoute == null)
+        val route = GameplayRouteReservation(output.request, item.causalScope, item.causalDepth)
+        activeGameplayRoute = route
+        observedGameplayDelivery = null
+        try {
+            val ingress = try {
+                target.acceptFromSession(
+                    request = output.request,
+                    causalScope = item.causalScope,
+                    causalDepth = item.causalDepth,
                 )
+            } catch (failure: Throwable) {
+                observedGameplayDelivery?.let(::enqueueGameplayDelivery)
+                throw failure
             }
+            when (ingress) {
+                is GameplayCommandIngressResult.Accepted -> {
+                    check(ingress.targetInstance == output.request.targetInstance)
+                    val delivery = checkNotNull(observedGameplayDelivery) {
+                        "Accepted inline Gameplay command returned without its reserved result"
+                    }
+                    validateAcceptedGameplayRevision(route, delivery, ingress)
+                    enqueueGameplayDelivery(delivery)
+                }
+                is GameplayCommandIngressResult.RejectedBeforeAcceptance -> {
+                    check(observedGameplayDelivery == null) {
+                        "Gameplay command both completed and rejected before acceptance"
+                    }
+                    validateGameplayRefusal(route, ingress)
+                    val refusal = ingress.refusal
+                    enqueueCompletion(
+                        pulse = gameplayCommandRejectedBeforeAcceptance(
+                            commandSource = refusal.commandSource,
+                            effectiveProtocolIdentity = refusal.effectiveProtocolIdentity,
+                            boundaryResponse = refusal.boundaryResponse,
+                            targetBoundaryProvenance = refusal.targetBoundaryProvenance,
+                        ),
+                        causalScope = refusal.commandSource.causalScope,
+                        causalDepth = refusal.commandSource.causalDepth + 1,
+                    )
+                }
+            }
+        } finally {
+            activeGameplayRoute = null
+            observedGameplayDelivery = null
         }
+    }
+
+    private fun enqueueProfileDelivery(delivery: ProfileModuleResultDelivery) {
+        enqueueCompletion(
+            pulse = profileModuleResultPulse(
+                commandSource = delivery.commandSource,
+                resultSource = delivery.resultSource,
+                effectiveProtocolIdentity = delivery.effectiveProtocolIdentity,
+                result = delivery.result,
+                issuerProvenance = delivery.issuerProvenance,
+            ),
+            causalScope = delivery.resultSource.causalScope,
+            causalDepth = delivery.resultSource.causalDepth + 1,
+        )
+    }
+
+    private fun enqueueGameplayDelivery(delivery: GameplayModuleResultDelivery) {
+        enqueueCompletion(
+            pulse = gameplayModuleResultPulse(
+                commandSource = delivery.commandSource,
+                resultSource = delivery.resultSource,
+                effectiveProtocolIdentity = delivery.effectiveProtocolIdentity,
+                result = delivery.result,
+                issuerProvenance = delivery.issuerProvenance,
+            ),
+            causalScope = delivery.resultSource.causalScope,
+            causalDepth = delivery.resultSource.causalDepth + 1,
+        )
+    }
+
+    private fun validateProfileDelivery(
+        route: ProfileRouteReservation,
+        delivery: ProfileModuleResultDelivery,
+    ) {
+        check(delivery.commandSource == route.commandSource(profileRoute)) {
+            "Profile result command-source correlation mismatch"
+        }
+        check(delivery.effectiveProtocolIdentity == route.request.command.effectiveIdentity)
+        check(delivery.issuerProvenance == ProfileResultIssuerProvenance.LOCAL_PROFILE_STATIC_BINDING)
+        check(delivery.resultSource.semanticHandle == route.request.semanticHandle)
+        check(delivery.resultSource.targetInstance == route.request.targetInstance)
+        check(delivery.resultSource.causalScope == route.causalScope)
+        check(delivery.resultSource.sourceOrdinal == route.request.command.expectedResultOrdinal)
+        check(delivery.result.matches(route.request.command)) {
+            "Profile result payload contradicted the closed Session mapping"
+        }
+    }
+
+    private fun validateAcceptedProfileRevision(
+        route: ProfileRouteReservation,
+        delivery: ProfileModuleResultDelivery,
+        ingress: ProfileCommandIngressResult.Accepted,
+    ) {
+        val revisionDelta = delivery.resultSource.targetRevision.value - ingress.targetRevision.value
+        val depthDelta = delivery.resultSource.causalDepth - route.sourceDepth
+        when (route.request.command) {
+            is ProfileModuleCommand.SelectCoreShape,
+            ProfileModuleCommand.ToggleMute,
+            ProfileModuleCommand.AdvanceRebirth,
+            -> {
+                check(revisionDelta == 0L)
+                check(depthDelta == 1)
+            }
+            ProfileModuleCommand.ConfirmLegacyReset -> when (delivery.result) {
+                is ProfileModuleResult.ResetWriteRejected,
+                is ProfileModuleResult.ResetWriteOutcomeUnknown,
+                -> {
+                    check(revisionDelta == 1L)
+                    check(depthDelta == 2)
+                }
+                is ProfileModuleResult.ResetNeedsAttention -> {
+                    check(revisionDelta == 2L)
+                    check(depthDelta == 3)
+                }
+                ProfileModuleResult.ResetCompleted -> {
+                    check(revisionDelta in 1L..2L)
+                    check(depthDelta == revisionDelta.toInt() + 1)
+                }
+                else -> error("Profile reset result mapping changed")
+            }
+            ProfileModuleCommand.RetryLegacyPurge -> {
+                check(revisionDelta == 1L)
+                check(depthDelta == 2)
+            }
+            is ProfileModuleCommand.ApplyGameplayProgress ->
+                error("Gameplay progress cannot enter Profile through Session")
+        }
+    }
+
+    private fun validateGameplayDelivery(
+        route: GameplayRouteReservation,
+        delivery: GameplayModuleResultDelivery,
+    ) {
+        check(delivery.commandSource == route.commandSource()) {
+            "Gameplay result command-source correlation mismatch"
+        }
+        check(delivery.effectiveProtocolIdentity == route.request.command.effectiveIdentity)
+        check(delivery.issuerProvenance == GameplayResultIssuerProvenance.GAMEPLAY_RUN_STATIC_BINDING)
+        check(delivery.resultSource.semanticHandle == route.request.semanticHandle)
+        check(delivery.resultSource.targetInstance == route.request.targetInstance)
+        check(delivery.resultSource.sourceOrdinal == 0)
+        check(delivery.resultSource.causalScope == route.causalScope)
+        check(delivery.result.matches(route.request.command)) {
+            "Gameplay result payload contradicted the closed Session mapping"
+        }
+    }
+
+    private fun validateAcceptedGameplayRevision(
+        route: GameplayRouteReservation,
+        delivery: GameplayModuleResultDelivery,
+        ingress: GameplayCommandIngressResult.Accepted,
+    ) {
+        val nestedExit = (delivery.result as? GameplayModuleResult.RunExited)?.progress
+            ?.let { it != GameplayExitProgressResult.NoProgress } == true
+        val expectedRevisionDelta = if (nestedExit) 1L else 0L
+        val expectedDepthDelta = if (nestedExit) 3 else 1
+        check(
+            delivery.resultSource.targetRevision.value - ingress.targetRevision.value ==
+                expectedRevisionDelta,
+        )
+        check(delivery.resultSource.causalDepth - route.sourceDepth == expectedDepthDelta)
+    }
+
+    private fun validateProfileRefusal(
+        route: ProfileRouteReservation,
+        ingress: ProfileCommandIngressResult.RejectedBeforeAcceptance,
+    ) {
+        val refusal = ingress.refusal
+        check(refusal.commandSource == route.commandSource(profileRoute))
+        check(refusal.effectiveProtocolIdentity == route.request.command.effectiveIdentity)
+        check(refusal.targetBoundaryProvenance.targetInstance == profileRoute.instanceId)
+        check(
+            refusal.targetBoundaryProvenance.effectiveProtocolIdentity ==
+                refusal.effectiveProtocolIdentity,
+        )
+        val admission = refusal.boundaryResponse as? ProfileCommandBoundaryResponse.AdmissionFailure
+        val budget = admission?.reason as? ProfileCommandAdmissionFailureReason.CausalBudgetExceeded
+        if (budget != null) check(budget.causalScope == route.causalScope)
+    }
+
+    private fun validateGameplayRefusal(
+        route: GameplayRouteReservation,
+        ingress: GameplayCommandIngressResult.RejectedBeforeAcceptance,
+    ) {
+        val refusal = ingress.refusal
+        check(refusal.commandSource == route.commandSource())
+        check(refusal.effectiveProtocolIdentity == route.request.command.effectiveIdentity)
+        check(refusal.targetBoundaryProvenance.targetInstance == route.request.targetInstance)
+        check(
+            refusal.targetBoundaryProvenance.effectiveProtocolIdentity ==
+                refusal.effectiveProtocolIdentity,
+        )
+        val admission = refusal.boundaryResponse as? GameplayCommandBoundaryResponse.AdmissionFailure
+        val budget = admission?.reason as? GameplayCommandAdmissionFailureReason.CausalBudgetExceeded
+        if (budget != null) check(budget.causalScope == route.causalScope)
+    }
+
+    private fun enqueueCompletion(
+        pulse: AppSessionNucleusPulse,
+        causalScope: Long,
+        causalDepth: Int,
+    ) {
+        requireSessionCausalDepth(causalDepth)
+        check(
+            completions.tryAddLast(SessionWorkItem(pulse, causalScope, causalDepth)),
+        ) { "Pre-reserved Session completion could not be retained" }
     }
 
     private fun readContext(
         state: AppSessionState,
-        pulse: SessionPulse,
+        pulse: AppSessionNucleusPulse,
     ): AppSessionContext {
-        if (state.revision.value == Long.MAX_VALUE) return AppSessionContext.Empty
-        if (pulse is SessionInteractionPulse) {
+        if (pulse is AppSessionNucleusPulse.Intent) {
             if (state.pendingWorkflow != null) return AppSessionContext.Empty
-            val resetAction = pulse == SessionInteractionPulse.ResetCancelled ||
-                pulse == SessionInteractionPulse.ResetConfirmed ||
-                pulse == SessionInteractionPulse.ResetRetryRequested
+            val resetAction = pulse.intent == SessionInteractionPulse.ResetCancelled ||
+                pulse.intent == SessionInteractionPulse.ResetConfirmed ||
+                pulse.intent == SessionInteractionPulse.ResetRetryRequested
             if (state.resetLifecycle != SessionResetLifecycle.READY && !resetAction) {
                 return AppSessionContext.Empty
             }
         }
+
         var runBootstrap = false
         var preferences = false
         var rebirthProgress = false
@@ -390,58 +598,54 @@ internal class DefaultAppSessionComponent private constructor(
         }
 
         when (pulse) {
-            SessionInteractionPulse.StartRunRequested -> {
-                runBootstrap = true
-                gameplayStatus = state.overlay == null && state.activeRunId != null
-            }
-            SessionInteractionPulse.RestartRunRequested -> {
-                runBootstrap = true
-                gameplayStatus = state.overlay == null && state.activeRunId != null
-            }
-            SessionInteractionPulse.ExitRunRequested ->
-                gameplayStatus = state.base == AppDestination.Gameplay &&
-                    state.overlay == null &&
-                    state.activeRunId != null
-            is SessionInteractionPulse.OpenOverlay ->
-                requestOpenOverlayContext(pulse.destination)
-            SessionInteractionPulse.CloseOverlay -> requestCloseOverlayContext()
-            is SessionInteractionPulse.ShortcutObserved -> when (pulse.shortcut) {
-                SessionShortcut.SETTINGS -> requestOpenOverlayContext(AppDestination.Settings)
-                SessionShortcut.LAB -> requestOpenOverlayContext(AppDestination.Lab)
-                SessionShortcut.ARMORY -> requestOpenOverlayContext(AppDestination.Armory)
-                SessionShortcut.REBIRTH -> requestOpenOverlayContext(AppDestination.Rebirth)
-                SessionShortcut.CODEX -> requestOpenOverlayContext(AppDestination.Codex)
-                SessionShortcut.MUTE -> Unit
-                SessionShortcut.BACK -> if (state.overlay != null) {
-                    requestCloseOverlayContext()
+            is AppSessionNucleusPulse.Intent -> when (val intent = pulse.intent) {
+                SessionInteractionPulse.StartRunRequested,
+                SessionInteractionPulse.RestartRunRequested,
+                -> {
+                    runBootstrap = true
+                    gameplayStatus = state.overlay == null && state.activeRunId != null
                 }
-                SessionShortcut.ENTER -> when {
-                    state.overlay != null -> requestCloseOverlayContext()
-                    state.base == AppDestination.Home -> {
+                SessionInteractionPulse.ExitRunRequested ->
+                    gameplayStatus = state.base == AppDestination.Gameplay &&
+                        state.overlay == null &&
+                        state.activeRunId != null
+                is SessionInteractionPulse.OpenOverlay ->
+                    requestOpenOverlayContext(intent.destination)
+                SessionInteractionPulse.CloseOverlay -> requestCloseOverlayContext()
+                is SessionInteractionPulse.ShortcutObserved -> when (intent.shortcut) {
+                    SessionShortcut.SETTINGS -> requestOpenOverlayContext(AppDestination.Settings)
+                    SessionShortcut.LAB -> requestOpenOverlayContext(AppDestination.Lab)
+                    SessionShortcut.ARMORY -> requestOpenOverlayContext(AppDestination.Armory)
+                    SessionShortcut.REBIRTH -> requestOpenOverlayContext(AppDestination.Rebirth)
+                    SessionShortcut.CODEX -> requestOpenOverlayContext(AppDestination.Codex)
+                    SessionShortcut.BACK -> requestCloseOverlayContext()
+                    SessionShortcut.ENTER -> if (state.overlay != null) {
+                        requestCloseOverlayContext()
+                    } else if (state.base == AppDestination.Home) {
                         runBootstrap = true
                         gameplayStatus = state.activeRunId != null
                     }
-                    else -> Unit
+                    SessionShortcut.MUTE -> Unit
                 }
+                SessionInteractionPulse.RebirthRequested -> {
+                    rebirthProgress = state.overlay == AppDestination.Rebirth &&
+                        (state.base == AppDestination.Home ||
+                            state.gameplayPhase == kinetickk.ball.gameplay.api.GameplayRunPhase.VICTORY)
+                }
+                SessionInteractionPulse.ResetConfirmed -> {
+                    persistenceStatus =
+                        state.resetLifecycle == SessionResetLifecycle.CONFIRMATION_REQUIRED
+                }
+                SessionInteractionPulse.ResetRetryRequested -> {
+                    persistenceStatus =
+                        state.resetLifecycle == SessionResetLifecycle.PURGE_NEEDS_ATTENTION
+                }
+                SessionInteractionPulse.ToggleMuteRequested,
+                is SessionInteractionPulse.SelectCoreShapeRequested,
+                SessionInteractionPulse.ResetCancelled,
+                -> Unit
             }
-            SessionInteractionPulse.ToggleMuteRequested,
-            is SessionInteractionPulse.SelectCoreShapeRequested,
-            SessionInteractionPulse.ResetCancelled,
-            -> Unit
-            SessionInteractionPulse.RebirthRequested -> {
-                rebirthProgress = state.overlay == AppDestination.Rebirth &&
-                    (state.base == AppDestination.Home ||
-                        state.gameplayPhase == kinetickk.ball.gameplay.api.GameplayRunPhase.VICTORY)
-            }
-            SessionInteractionPulse.ResetConfirmed -> {
-                persistenceStatus =
-                    state.resetLifecycle == SessionResetLifecycle.CONFIRMATION_REQUIRED
-            }
-            SessionInteractionPulse.ResetRetryRequested -> {
-                persistenceStatus =
-                    state.resetLifecycle == SessionResetLifecycle.PURGE_NEEDS_ATTENTION
-            }
-            is SessionControlPulse.ProfileCommandCompleted -> when (state.pendingWorkflow) {
+            is AppSessionNucleusPulse.ModuleResultPulse -> when (state.pendingWorkflow) {
                 is PendingWorkflow.AdvancingRebirth -> runBootstrap = true
                 is PendingWorkflow.ConfirmingReset,
                 is PendingWorkflow.RetryingPurge,
@@ -449,75 +653,83 @@ internal class DefaultAppSessionComponent private constructor(
                     persistenceStatus = true
                     preferences = true
                 }
-                is PendingWorkflow.SelectingCoreShape,
-                is PendingWorkflow.TogglingMute,
-                is PendingWorkflow.StartingRun,
-                is PendingWorkflow.PausingForOverlay,
-                is PendingWorkflow.ApplyingSettings,
-                is PendingWorkflow.PropagatingMute,
-                is PendingWorkflow.StartingRebirthRun,
-                is PendingWorkflow.ExitingRun,
-                null,
-                -> Unit
+                else -> Unit
             }
-            is SessionControlPulse.ProfileCommandRejectedBeforeAcceptance,
-            is SessionControlPulse.GameplayCommandCompleted,
-            is SessionControlPulse.GameplayCommandRejectedBeforeAcceptance,
-            -> Unit
+            is AppSessionNucleusPulse.ControlPulse -> Unit
         }
 
         return AppSessionContext(
-            runBootstrap = if (runBootstrap) profilePort.query(ProfileQuery.GetRunBootstrap) else null,
-            preferences = if (preferences) profilePort.query(ProfileQuery.GetPreferences) else null,
-            rebirthProgress = if (rebirthProgress) {
-                profilePort.query(ProfileQuery.GetRebirthProgress)
-            } else {
-                null
-            },
-            persistenceStatus = if (persistenceStatus) {
-                profilePort.query(ProfileQuery.GetPersistenceStatus)
-            } else {
-                null
-            },
-            gameplayStatus = if (gameplayStatus) {
-                gameplayFeature.activeRun()?.query(GameplayQuery.GetRunStatus)
-            } else {
-                null
-            },
+            runBootstrap = if (runBootstrap) readRunBootstrap() else null,
+            preferences = if (preferences) readPreferences() else null,
+            rebirthProgress = if (rebirthProgress) readRebirthProgress() else null,
+            persistenceStatus = if (persistenceStatus) readPersistenceStatus() else null,
+            gameplayStatus = if (gameplayStatus) readGameplayStatus(state) else null,
         )
     }
 
-    private fun enqueueCompletion(pulse: SessionControlPulse, causalDepth: Int) {
-        requireSessionCausalDepth(causalDepth)
-        check(
-            completions.tryAddLast(SessionWorkItem(pulse, causalDepth)),
-        ) { "Pre-reserved Session completion could not be retained" }
+    private fun readRunBootstrap(): RunBootstrapProjection =
+        profileRoute.query(ProfileQuery.GetRunBootstrap).also(::validateProfileProjection)
+
+    private fun readPreferences(): PreferencesProjection =
+        profileRoute.query(ProfileQuery.GetPreferences).also(::validateProfileProjection)
+
+    private fun readRebirthProgress(): RebirthProgressProjection =
+        profileRoute.query(ProfileQuery.GetRebirthProgress).also(::validateProfileProjection)
+
+    private fun readPersistenceStatus(): PersistenceStatusProjection =
+        profileRoute.query(ProfileQuery.GetPersistenceStatus).also(::validateProfileProjection)
+
+    private fun validateProfileProjection(projection: kinetickk.ball.profile.api.ProfileProjection) {
+        check(projection.instanceId == profileRoute.instanceId) {
+            "Profile projection came from the wrong instance"
+        }
+    }
+
+    private fun readGameplayStatus(state: AppSessionState) =
+        checkNotNull(gameplaySessionHost.activeRun()) {
+            "Session retained an active RunId without a bound GameplayRun"
+        }.let { run ->
+            check(run.instanceId.runId == state.activeRunId) {
+                "Session active GameplayRun identity mismatch"
+            }
+            run.query(GameplayQuery.GetRunStatus).also { projection ->
+                check(projection.instanceId == run.instanceId) {
+                    "Gameplay status projection came from the wrong run"
+                }
+            }
+        }
+
+    private fun allocateLocalCausalScope(): Long {
+        check(nextLocalCausalScope < Long.MAX_VALUE) { "Session local causal scope exhausted" }
+        return nextLocalCausalScope++
     }
 
     companion object {
         fun create(
-            configuration: SessionConfiguration,
-            profilePort: ProfilePort,
-            gameplayFeature: GameplayFeature,
+            profileRoute: SessionProfileRoute,
+            gameplaySessionHost: GameplaySessionHost,
             updateAudioPreferences: (PlayerPreferences) -> Unit,
             playMuteFeedback: () -> Unit,
             playRebirthAcceptedFeedback: () -> Unit,
         ): DefaultAppSessionComponent {
-            val persistence = profilePort.query(ProfileQuery.GetPersistenceStatus)
-            val preferences = profilePort.query(ProfileQuery.GetPreferences)
-            check(persistence.instanceId == profilePort.instanceId) {
-                "Session initial persistence projection has the wrong Profile identity"
+            check(profileRoute.instanceId == LOCAL_PROFILE_INSTANCE_ID) {
+                "AppSession must bind the application-lifetime local Profile"
             }
-            check(preferences.instanceId == profilePort.instanceId) {
-                "Session initial preferences projection has the wrong Profile identity"
+            val persistence = profileRoute.query(ProfileQuery.GetPersistenceStatus)
+            val preferences = profileRoute.query(ProfileQuery.GetPreferences)
+            check(persistence.instanceId == profileRoute.instanceId) {
+                "Session construction bootstrap came from the wrong Profile"
+            }
+            check(preferences.instanceId == profileRoute.instanceId) {
+                "Session construction preferences came from the wrong Profile"
             }
             check(preferences.revision == persistence.revision) {
-                "Session initial Profile projections do not share one revision"
+                "Session construction Profile projections do not share one revision"
             }
             return DefaultAppSessionComponent(
-                initialState = AppSessionState.initial(configuration, persistence),
-                profilePort = profilePort,
-                gameplayFeature = gameplayFeature,
+                initialState = AppSessionState.initial(persistence),
+                profileRoute = profileRoute,
+                gameplaySessionHost = gameplaySessionHost,
                 updateAudioPreferences = updateAudioPreferences,
                 playMuteFeedback = playMuteFeedback,
                 playRebirthAcceptedFeedback = playRebirthAcceptedFeedback,
@@ -532,8 +744,8 @@ internal fun <T> sessionCompletionDeque(): BoundedCompletionDeque<T> =
     BoundedCompletionDeque(SESSION_COMPLETION_CAPACITY)
 
 internal fun requireSessionCausalDepth(causalDepth: Int) {
-    check(causalDepth >= 0 && causalDepth < MAX_SESSION_CAUSAL_DEPTH) {
-        "Session causal depth exhausted before participant dispatch"
+    check(causalDepth in 0 until MAX_SESSION_CAUSAL_DEPTH) {
+        "Session causal depth exhausted before acceptance"
     }
 }
 
@@ -553,9 +765,91 @@ internal fun requireSessionCompletionCapacity(remainingCapacity: Int, requiredCo
 }
 
 private data class SessionWorkItem(
-    val pulse: SessionPulse,
+    val pulse: AppSessionNucleusPulse,
+    val causalScope: Long,
     val causalDepth: Int,
 )
+
+private data class ProfileRouteReservation(
+    val request: ProfileModuleCommandRequest,
+    val causalScope: Long,
+    val sourceDepth: Int,
+) {
+    fun commandSource(profileRoute: SessionProfileRoute): ProfileCommandSourceToken =
+        ProfileCommandSourceToken(
+            semanticHandle = request.semanticHandle,
+            targetInstance = profileRoute.instanceId,
+            causalScope = causalScope,
+            causalDepth = sourceDepth,
+        )
+}
+
+private data class GameplayRouteReservation(
+    val request: GameplayModuleCommandRequest,
+    val causalScope: Long,
+    val sourceDepth: Int,
+) {
+    fun commandSource(): GameplayCommandSourceToken = GameplayCommandSourceToken(
+        semanticHandle = request.semanticHandle,
+        targetInstance = request.targetInstance,
+        causalScope = causalScope,
+        causalDepth = sourceDepth,
+    )
+}
+
+private val ProfileModuleCommand.effectiveIdentity: ProfileEffectiveProtocolIdentity
+    get() = when (this) {
+        is ProfileModuleCommand.SelectCoreShape -> ProfileEffectiveProtocolIdentity.SESSION_CORE_SHAPE
+        ProfileModuleCommand.ToggleMute -> ProfileEffectiveProtocolIdentity.SESSION_MUTE
+        ProfileModuleCommand.AdvanceRebirth -> ProfileEffectiveProtocolIdentity.SESSION_REBIRTH
+        ProfileModuleCommand.ConfirmLegacyReset -> ProfileEffectiveProtocolIdentity.SESSION_RESET_CONFIRM
+        ProfileModuleCommand.RetryLegacyPurge -> ProfileEffectiveProtocolIdentity.SESSION_RESET_RETRY
+        is ProfileModuleCommand.ApplyGameplayProgress ->
+            error("Gameplay progress is not a Session command mapping")
+    }
+
+private val ProfileModuleCommand.expectedResultOrdinal: Int
+    get() = when (this) {
+        is ProfileModuleCommand.SelectCoreShape,
+        ProfileModuleCommand.ToggleMute,
+        ProfileModuleCommand.AdvanceRebirth,
+        -> 1
+        ProfileModuleCommand.ConfirmLegacyReset,
+        ProfileModuleCommand.RetryLegacyPurge,
+        -> 0
+        is ProfileModuleCommand.ApplyGameplayProgress ->
+            error("Gameplay progress is not a Session command mapping")
+    }
+
+private fun ProfileModuleResult.matches(command: ProfileModuleCommand): Boolean = when (command) {
+    is ProfileModuleCommand.SelectCoreShape ->
+        this is ProfileModuleResult.CoreShapeSelected && shape == command.shape
+    ProfileModuleCommand.ToggleMute -> this is ProfileModuleResult.PreferencesChanged
+    ProfileModuleCommand.AdvanceRebirth -> this is ProfileModuleResult.RebirthAdvanced
+    ProfileModuleCommand.ConfirmLegacyReset ->
+        this == ProfileModuleResult.ResetCompleted ||
+            this is ProfileModuleResult.ResetWriteRejected ||
+            this is ProfileModuleResult.ResetWriteOutcomeUnknown ||
+            this is ProfileModuleResult.ResetNeedsAttention
+    ProfileModuleCommand.RetryLegacyPurge ->
+        this == ProfileModuleResult.ResetCompleted || this is ProfileModuleResult.ResetNeedsAttention
+    is ProfileModuleCommand.ApplyGameplayProgress -> false
+}
+
+private val GameplayModuleCommand.effectiveIdentity: GameplayEffectiveProtocolIdentity
+    get() = when (this) {
+        GameplayModuleCommand.StartRun -> GameplayEffectiveProtocolIdentity.SESSION_START
+        GameplayModuleCommand.PauseForOverlay -> GameplayEffectiveProtocolIdentity.SESSION_PAUSE
+        GameplayModuleCommand.ApplyPreferences -> GameplayEffectiveProtocolIdentity.SESSION_PREFERENCES
+        GameplayModuleCommand.ExitRun -> GameplayEffectiveProtocolIdentity.SESSION_EXIT
+    }
+
+private fun GameplayModuleResult.matches(command: GameplayModuleCommand): Boolean = when (command) {
+    GameplayModuleCommand.StartRun -> this == GameplayModuleResult.RunStarted
+    GameplayModuleCommand.PauseForOverlay -> this == GameplayModuleResult.OverlayPaused
+    GameplayModuleCommand.ApplyPreferences -> this == GameplayModuleResult.PreferencesApplied
+    GameplayModuleCommand.ExitRun -> this is GameplayModuleResult.RunExited
+}
 
 private val AppSessionOutput.dispatchOrder: Int
     get() = when (this) {
@@ -575,5 +869,3 @@ private val AppSessionOutput.isParticipantCommand: Boolean
 
 private const val SESSION_COMPLETION_CAPACITY: Int = 8
 private const val MAX_SESSION_CAUSAL_DEPTH: Int = 8
-private const val PARTICIPANT_REJECTED_COMPLETION_DEPTH: Int = 1
-private const val PARTICIPANT_ACCEPTED_COMPLETION_DEPTH: Int = 2

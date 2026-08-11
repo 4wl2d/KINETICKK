@@ -3,7 +3,6 @@
 
 package kinetickk.flow.session.api
 
-import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.RunId
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
@@ -15,23 +14,20 @@ sealed interface AppSessionQuery {
 data class AppShellProjection(
     val instanceId: AppSessionInstanceId,
     val revision: SessionRevision,
+    val routeRevision: SessionRevision,
     val base: AppDestination,
     val overlay: AppDestination?,
     val activeRunId: RunId?,
-    /** Authoritative phase from the last Gameplay status/result observed by Session. */
-    val gameplayPhase: GameplayRunPhase?,
+    val rebirthEligible: Boolean,
     val pendingWorkflow: SessionWorkflowPhase?,
     val resetLifecycle: SessionResetLifecycle,
     val rebirthConfirmationArmed: Boolean,
-    val workflowFailure: SessionWorkflowFailure?,
+    val workflowFailure: SessionWorkflowFailureCode?,
 ) {
     init {
         require(base.isBaseDestination()) { "Only Home and Gameplay may be base destinations" }
         require(overlay == null || overlay.isOverlayDestination()) {
             "Only feature routes may be Session overlays"
-        }
-        require((activeRunId == null) == (gameplayPhase == null)) {
-            "An observed Gameplay phase must belong to the active RunId"
         }
         require(base != AppDestination.Gameplay || activeRunId != null) {
             "Gameplay base requires an active GameplayRun"
@@ -39,7 +35,7 @@ data class AppShellProjection(
     }
 
     val routeToken: SessionRouteToken
-        get() = SessionRouteToken.from(revision)
+        get() = SessionRouteToken.from(routeRevision)
 
     val active: AppDestination
         get() = overlay ?: base
@@ -49,11 +45,9 @@ data class AppShellProjection(
 
     val normalInputEnabled: Boolean
         get() = resetLifecycle == SessionResetLifecycle.READY && pendingWorkflow == null
-
-    val rebirthEligible: Boolean
-        get() = base == AppDestination.Home || gameplayPhase == GameplayRunPhase.VICTORY
 }
 
+/** Local Interaction/query facade. Participant command authority is bound separately by Impl. */
 interface AppSessionPort {
     val instanceId: AppSessionInstanceId
 

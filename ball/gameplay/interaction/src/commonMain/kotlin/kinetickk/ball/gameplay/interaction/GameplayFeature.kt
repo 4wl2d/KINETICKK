@@ -4,21 +4,24 @@
 package kinetickk.ball.gameplay.interaction
 
 import androidx.compose.runtime.Composable
-import kinetickk.ball.gameplay.api.GameplayCommandResult
-import kinetickk.ball.gameplay.api.GameplayPort
+import kinetickk.ball.gameplay.api.GameplayModuleResultDelivery
+import kinetickk.ball.gameplay.api.GameplayPresentationPort
+import kinetickk.ball.gameplay.api.GameplaySessionRunPort
 import kinetickk.ball.gameplay.api.RunId
-import kinetickk.ball.profile.api.ProfileCommandResult
 
-/** Interaction host for the single currently active GameplayRun. */
-interface GameplayFeature {
+/** AppSession-only lifecycle and command-route host. */
+interface GameplaySessionHost {
     fun createRun(
         runId: RunId,
-        commandResultSink: (GameplayCommandResult.Accepted) -> Unit,
-    ): GameplayPort
+        commandResultSink: (GameplayModuleResultDelivery) -> Unit,
+    ): GameplaySessionRunPort
 
-    fun activeRun(): GameplayPort?
+    fun activeRun(): GameplaySessionRunPort?
+}
 
-    fun receiveProfileCommandResult(result: ProfileCommandResult.Accepted)
+/** Presentation-only host; neither inter-Ball ingress is representable. */
+interface GameplayPresentation {
+    fun activePresentation(): GameplayPresentationPort?
 
     @Composable
     fun Content(

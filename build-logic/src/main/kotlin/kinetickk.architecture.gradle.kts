@@ -42,6 +42,8 @@ val architectureSources = rootProject.fileTree(rootProject.projectDir) {
     include("foundation/**/src/*Test/**/*.kt")
     include("resource/**/src/*Main/**/*.kt")
     include("resource/**/src/*Test/**/*.kt")
+    include("build-logic/src/main/kotlin/kinetickk/gradle/pokeball/CumulativeFanoutPolicy.kt")
+    include("build-logic/src/test/kotlin/kinetickk/gradle/pokeball/PokeballArchitectureVerifierTest.kt")
     exclude("**/build/**", "**/.gradle/**")
 }
 

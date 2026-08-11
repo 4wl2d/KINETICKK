@@ -34,11 +34,11 @@ class DefaultAudioServiceTest {
             requests = listOf(HURT_REQUEST, DASH_REQUEST, PICKUP_REQUEST, UI_CLICK_REQUEST),
         )
 
-        assertEquals(listOf(76f, 185f, 710f, 110f), player.tones.map { it.frequency })
-        assertEquals(ToneWave.TRIANGLE.ordinal, player.tones.last().wave)
+        assertEquals(listOf(76f, 185f, 710f, 110f), player.tones.map { it.frequencyHz })
+        assertEquals(ToneWave.TRIANGLE, player.tones.last().wave)
 
         repeat(4) { service.advance(realDeltaSeconds = 0.1f, requests = emptyList()) }
-        assertEquals(146.83f, player.tones.last().frequency)
+        assertEquals(146.83f, player.tones.last().frequencyHz)
     }
 
     @Test
@@ -107,11 +107,11 @@ class DefaultAudioServiceTest {
         val exact = listOf(HURT_REQUEST, DASH_REQUEST, PICKUP_REQUEST)
 
         service.advance(realDeltaSeconds = 0.016f, requests = exact)
-        assertEquals(exact.map(ToneRequest::frequencyHz), player.tones.map(RecordedTone::frequency))
+        assertEquals(exact.map(ToneRequest::frequencyHz), player.tones.map(ToneRequest::frequencyHz))
 
         player.tones.clear()
         service.advance(realDeltaSeconds = 0.016f, requests = exact + UI_CLICK_REQUEST)
-        assertEquals(exact.map(ToneRequest::frequencyHz), player.tones.map(RecordedTone::frequency))
+        assertEquals(exact.map(ToneRequest::frequencyHz), player.tones.map(ToneRequest::frequencyHz))
     }
 
     @Test
@@ -185,7 +185,7 @@ class DefaultAudioServiceTest {
 
         service.updatePreferences(AudioPreferences(soundEnabled = false, musicEnabled = true, masterVolume = 1f))
         service.advance(0.016f, listOf(HURT_REQUEST))
-        assertEquals(listOf(110f), player.tones.map { it.frequency })
+        assertEquals(listOf(110f), player.tones.map { it.frequencyHz })
     }
 
     @Test
@@ -210,15 +210,8 @@ private val DASH_REQUEST = ToneRequest(185f, 0.11f, 0.23f, ToneWave.SAW)
 private val PICKUP_REQUEST = ToneRequest(710f, 0.055f, 0.13f, ToneWave.SINE)
 private val HURT_REQUEST = ToneRequest(76f, 0.13f, 0.22f, ToneWave.SQUARE)
 
-private data class RecordedTone(
-    val frequency: Float,
-    val duration: Float,
-    val volume: Float,
-    val wave: Int,
-)
-
-private class RecordingTonePlayer : NumericTonePlayer {
-    val tones = mutableListOf<RecordedTone>()
+private class RecordingTonePlayer : TonePlaybackCapability {
+    val tones = mutableListOf<ToneRequest>()
     var unlockCalls = 0
     var closeCalls = 0
 
@@ -226,8 +219,8 @@ private class RecordingTonePlayer : NumericTonePlayer {
         unlockCalls++
     }
 
-    override fun play(frequency: Float, durationSeconds: Float, volume: Float, wave: Int) {
-        tones += RecordedTone(frequency, durationSeconds, volume, wave)
+    override fun play(request: ToneRequest) {
+        tones += request
     }
 
     override fun close() {
@@ -235,10 +228,9 @@ private class RecordingTonePlayer : NumericTonePlayer {
     }
 }
 
-private object ThrowingTonePlayer : NumericTonePlayer {
+private object ThrowingTonePlayer : TonePlaybackCapability {
     override fun unlock(): Unit = error("unlock failure")
-    override fun play(frequency: Float, durationSeconds: Float, volume: Float, wave: Int): Unit =
-        error("play failure")
+    override fun play(request: ToneRequest): Unit = error("play failure")
 
     override fun close(): Unit = error("close failure")
 }

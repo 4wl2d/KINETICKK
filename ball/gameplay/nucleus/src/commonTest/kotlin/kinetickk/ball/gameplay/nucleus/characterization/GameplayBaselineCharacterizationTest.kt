@@ -4,11 +4,15 @@
 package kinetickk.ball.gameplay.nucleus.characterization
 
 import kinetickk.ball.gameplay.api.BrakeSource
+import kinetickk.ball.gameplay.api.GameplayCommandIssuerProvenance
+import kinetickk.ball.gameplay.api.GameplayCommandSource
+import kinetickk.ball.gameplay.api.GameplayCommandSourceToken
+import kinetickk.ball.gameplay.api.GameplayEffectiveProtocolIdentity
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
-import kinetickk.ball.gameplay.api.GameplayQuery
+import kinetickk.ball.gameplay.api.GameplayModuleCommand
+import kinetickk.ball.gameplay.api.GameplayModuleCommandPulse
 import kinetickk.ball.gameplay.api.GameplayRevision
-import kinetickk.ball.gameplay.api.GameplaySessionPulse
-import kinetickk.ball.gameplay.api.RunConfiguration
+import kinetickk.ball.gameplay.api.GameplaySemanticHandle
 import kinetickk.ball.gameplay.api.RunId
 import kinetickk.ball.gameplay.nucleus.GameplayAcceptedFrame
 import kinetickk.ball.gameplay.nucleus.GameplayContext
@@ -20,13 +24,13 @@ import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerProfile
-import kinetickk.ball.gameplay.api.GameplayCommand
-import kinetickk.ball.gameplay.api.GameplayCommandAdmission
-import kinetickk.ball.gameplay.api.GameplayCommandRef
-import kinetickk.ball.gameplay.api.GameplayCommandSource
-import kinetickk.ball.gameplay.api.EnemyType
+import kinetickk.ball.gameplay.nucleus.GameplayNucleusPulse
+import kinetickk.ball.gameplay.nucleus.GameplayStartContext
+import kinetickk.ball.gameplay.nucleus.GameplayStartInputs
+import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
+import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.model.Pickup
-import kinetickk.ball.gameplay.api.PickupType
+import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.TrailPoint
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
@@ -55,25 +59,25 @@ class GameplayBaselineCharacterizationTest {
     fun seededIntentTraceHasStableCheckpoints() {
         var state = startCharacterizedRun(seed = 0x4B1D, initialMatter = 17)
         val actions = listOf(
-            GameplayInteractionPulse.ViewportChanged(width = 960f, height = 540f, density = 1.25f),
-            GameplayInteractionPulse.PointerMoved(x = 820f, y = 135f),
-            GameplayInteractionPulse.FrameElapsed(1f / 60f),
+            GameplayInteractionPulse.ViewportChanged.fromValidated(960f, 540f, 1.25f),
+            GameplayInteractionPulse.PointerMoved.fromValidated(820f, 135f),
+            GameplayInteractionPulse.FrameElapsed.fromValidated(1f / 60f),
             GameplayInteractionPulse.DashRequested,
-            GameplayInteractionPulse.FrameElapsed(1f / 30f),
+            GameplayInteractionPulse.FrameElapsed.fromValidated(1f / 30f),
             GameplayInteractionPulse.BrakeChanged(BrakeSource.KEYBOARD, active = true),
-            GameplayInteractionPulse.FrameElapsed(0.05f),
-            GameplayInteractionPulse.PointerMoved(x = 180f, y = 430f),
+            GameplayInteractionPulse.FrameElapsed.fromValidated(0.05f),
+            GameplayInteractionPulse.PointerMoved.fromValidated(180f, 430f),
             GameplayInteractionPulse.BrakeChanged(BrakeSource.KEYBOARD, active = false),
-            GameplayInteractionPulse.FrameElapsed(0.1f),
-            GameplayInteractionPulse.FrameElapsed(0.075f),
-            GameplayInteractionPulse.FrameElapsed(0.1f),
-            GameplayInteractionPulse.FrameElapsed(0.1f),
-            GameplayInteractionPulse.FrameElapsed(0.1f),
+            GameplayInteractionPulse.FrameElapsed.fromValidated(0.1f),
+            GameplayInteractionPulse.FrameElapsed.fromValidated(0.075f),
+            GameplayInteractionPulse.FrameElapsed.fromValidated(0.1f),
+            GameplayInteractionPulse.FrameElapsed.fromValidated(0.1f),
+            GameplayInteractionPulse.FrameElapsed.fromValidated(0.1f),
         )
 
         val checkpoints = actions.mapNotNull { action ->
             val frame = assertIs<GameplayDecision.Accepted>(
-                GameplayNucleus.decide(state, action),
+                GameplayNucleus.decide(state, GameplayNucleusPulse.Intent(action)),
             ).frame
             state = frame.nextState
             if (action is GameplayInteractionPulse.FrameElapsed) frame.toTraceCheckpoint() else null
@@ -339,7 +343,7 @@ private data class TraceCheckpoint(
 )
 
 private fun GameplayAcceptedFrame.toTraceCheckpoint(): TraceCheckpoint {
-    val model = renderProjection.renderModel!!
+    val model = renderSnapshot.renderModel!!
     return TraceCheckpoint(
         revision = nextState.revision.value,
         elapsedSteps = (model.elapsed / MutableGameState.FIXED_STEP).roundToInt(),
@@ -371,29 +375,34 @@ private fun GameplayAcceptedFrame.toTraceCheckpoint(): TraceCheckpoint {
     )
 }
 
-private fun kinetickk.ball.gameplay.api.EnemyProjection.traceToken(): String =
+private fun EnemyProjection.traceToken(): String =
     "$id:${type.name}:${x.centi()}:${y.centi()}:${vx.centi()}:${vy.centi()}:${hp.centi()}"
 
 private fun startCharacterizedRun(seed: Int, initialMatter: Long): GameplayState {
     val profile = PlayerProfile(
         economy = PlayerEconomy(initialMatter, initialMatter),
     ).toGameplaySnapshot()
-    val initial = GameplayState.initial(RunId(0))
-    val pulse = GameplaySessionPulse.StartRun(
-        RunConfiguration(canonicalGameplayContent, profile, seed),
-    )
-    val ref = GameplayCommandRef(
-        GameplayCommandSource.LocalSession,
-        initial.instanceId,
+    val initial = GameplayState.initial(RunId(0), canonicalGameplayContent)
+    val handle = GameplaySemanticHandle(
+        sourceInstance = GameplayCommandSource.LocalSession,
         sourceRevision = 0,
-        ordinal = 0,
+        sourceOrdinal = 0,
     )
-    val command = GameplayCommand(ref, pulse)
+    val pulse = GameplayModuleCommandPulse(
+        commandSource = GameplayCommandSourceToken(handle, initial.instanceId, 1, 0),
+        effectiveProtocolIdentity = GameplayEffectiveProtocolIdentity.SESSION_START,
+        command = GameplayModuleCommand.StartRun,
+        issuerProvenance = GameplayCommandIssuerProvenance.LOCAL_SESSION_STATIC_BINDING,
+    )
     return assertIs<GameplayDecision.Accepted>(
         GameplayNucleus.decide(
             initial,
-            pulse,
-            GameplayContext(command, GameplayCommandAdmission(ref)),
+            GameplayNucleusPulse.ModuleCommand(pulse),
+            GameplayContext(
+                start = GameplayStartContext.Ready(
+                    GameplayStartInputs(canonicalGameplayContent, profile, seed),
+                ),
+            ),
         ),
     ).frame.nextState
 }

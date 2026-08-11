@@ -47,7 +47,10 @@ jobs:
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "17.0.20+8"
+
+      - name: Verify JDK
+        run: java -version
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@4733eaac7c1b0da527e4206b7671e0061de1ce37 # v6
@@ -83,7 +86,10 @@ jobs:
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "17.0.20+8"
+
+      - name: Verify JDK
+        run: java -version
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@4733eaac7c1b0da527e4206b7671e0061de1ce37 # v6

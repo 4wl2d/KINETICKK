@@ -3,42 +3,38 @@
 
 package kinetickk.flow.session.nucleus
 
-import kinetickk.ball.gameplay.api.GameplayCommand
-import kinetickk.ball.gameplay.api.GameplayCommandOutcome
-import kinetickk.ball.gameplay.api.GameplayCommandRef
+import kinetickk.ball.gameplay.api.GameplayCommandIssuerProvenance
 import kinetickk.ball.gameplay.api.GameplayCommandSource
-import kinetickk.ball.gameplay.api.GameplayExitProfileOutcome
+import kinetickk.ball.gameplay.api.GameplayEffectiveProtocolIdentity
 import kinetickk.ball.gameplay.api.GameplayInstanceId
+import kinetickk.ball.gameplay.api.GameplayModuleCommand
+import kinetickk.ball.gameplay.api.GameplayModuleCommandRequest
+import kinetickk.ball.gameplay.api.GameplayModuleResult
 import kinetickk.ball.gameplay.api.GameplayRunPhase
-import kinetickk.ball.gameplay.api.GameplaySessionPulse
-import kinetickk.ball.gameplay.api.RunConfiguration
+import kinetickk.ball.gameplay.api.GameplayRunStatusProjection
+import kinetickk.ball.gameplay.api.GameplaySemanticHandle
 import kinetickk.ball.gameplay.api.RunId
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.PersistenceStatusProjection
-import kinetickk.ball.profile.api.PreferencesProjection
-import kinetickk.ball.profile.api.ProfileCommand
-import kinetickk.ball.profile.api.ProfileCommandOutcome
-import kinetickk.ball.profile.api.ProfileCommandRef
+import kinetickk.ball.profile.api.PlayerPreferences
+import kinetickk.ball.profile.api.ProfileCommandIssuerProvenance
 import kinetickk.ball.profile.api.ProfileCommandSource
-import kinetickk.ball.profile.api.ProfilePulse
-import kinetickk.ball.profile.api.ProfileQuery
+import kinetickk.ball.profile.api.ProfileEffectiveProtocolIdentity
+import kinetickk.ball.profile.api.ProfileModuleCommand
+import kinetickk.ball.profile.api.ProfileModuleCommandRequest
+import kinetickk.ball.profile.api.ProfileModuleResult
+import kinetickk.ball.profile.api.ProfileResetStatus
 import kinetickk.ball.profile.api.ProfileRunBootstrapResult
-import kinetickk.ball.profile.api.RebirthProgressProjection
-import kinetickk.ball.profile.api.RunBootstrapProjection
+import kinetickk.ball.profile.api.ProfileSemanticHandle
 import kinetickk.flow.session.api.AppDestination
 import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.flow.session.api.AppShellProjection
-import kinetickk.flow.session.api.SessionContextField
-import kinetickk.flow.session.api.SessionContextReason
-import kinetickk.flow.session.api.SessionControlPulse
 import kinetickk.flow.session.api.SessionInteractionPulse
-import kinetickk.flow.session.api.SessionParticipantResultRejection
-import kinetickk.flow.session.api.SessionPulse
 import kinetickk.flow.session.api.SessionRejection
 import kinetickk.flow.session.api.SessionResetLifecycle
 import kinetickk.flow.session.api.SessionRevision
 import kinetickk.flow.session.api.SessionShortcut
-import kinetickk.flow.session.api.SessionWorkflowFailure
+import kinetickk.flow.session.api.SessionWorkflowFailureCode
 import kinetickk.flow.session.api.SessionWorkflowPhase
 import kinetickk.flow.session.api.isOverlayDestination
 import kinetickk.foundation.collections.ImmutableList
@@ -48,72 +44,14 @@ import kinetickk.foundation.collections.immutableListOf
 object AppSessionNucleus {
     fun decide(
         state: AppSessionState,
-        pulse: SessionPulse,
+        pulse: AppSessionNucleusPulse,
         context: AppSessionContext = AppSessionContext.Empty,
-    ): AppSessionDecision {
-        if (state.revision.value == Long.MAX_VALUE) {
-            return rejected(SessionRejection.RevisionExhausted)
-        }
-        if (pulse is SessionInteractionPulse) {
-            if (state.pendingWorkflow != null) {
-                return rejected(SessionRejection.ParticipantCommandPending)
-            }
-            if (
-                state.resetLifecycle != SessionResetLifecycle.READY &&
-                pulse != SessionInteractionPulse.ResetCancelled &&
-                pulse != SessionInteractionPulse.ResetConfirmed &&
-                pulse != SessionInteractionPulse.ResetRetryRequested
-            ) {
-                return rejected(SessionRejection.ResetBlocksInput)
-            }
-        }
-
-        return when (pulse) {
-            SessionInteractionPulse.StartRunRequested -> startRun(
-                state,
-                context,
-                RunStartReason.START,
-            )
-            SessionInteractionPulse.RestartRunRequested -> startRun(
-                state,
-                context,
-                RunStartReason.RESTART,
-            )
-            SessionInteractionPulse.ExitRunRequested -> exitRun(state, context)
-            is SessionInteractionPulse.OpenOverlay -> openOverlay(
-                state,
-                pulse.destination,
-                context,
-            )
-            SessionInteractionPulse.CloseOverlay -> closeOverlay(state, context)
-            is SessionInteractionPulse.ShortcutObserved -> shortcut(
-                state,
-                pulse.shortcut,
-                context,
-            )
-            SessionInteractionPulse.ToggleMuteRequested -> toggleMute(state)
-            is SessionInteractionPulse.SelectCoreShapeRequested -> selectCoreShape(
-                state,
-                pulse,
-            )
-            SessionInteractionPulse.RebirthRequested -> rebirth(state, context)
-            SessionInteractionPulse.ResetCancelled -> cancelReset(state)
-            SessionInteractionPulse.ResetConfirmed -> confirmReset(state, context)
-            SessionInteractionPulse.ResetRetryRequested -> retryReset(state, context)
-            is SessionControlPulse.ProfileCommandCompleted -> completeProfileCommand(
-                state,
-                pulse,
-                context,
-            )
-            is SessionControlPulse.ProfileCommandRejectedBeforeAcceptance ->
-                rejectProfileCommandBeforeAcceptance(state, pulse)
-            is SessionControlPulse.GameplayCommandCompleted -> completeGameplayCommand(
-                state,
-                pulse,
-            )
-            is SessionControlPulse.GameplayCommandRejectedBeforeAcceptance ->
-                rejectGameplayCommandBeforeAcceptance(state, pulse)
-        }
+    ): AppSessionDecision = when (pulse) {
+        is AppSessionNucleusPulse.Intent -> decideInteraction(state, pulse.intent, context)
+        is ProfileModuleResultPulse -> completeProfileCommand(state, pulse, context)
+        is GameplayModuleResultPulse -> completeGameplayCommand(state, pulse)
+        is ProfileCommandRejectedBeforeAcceptance -> rejectProfileCommandBeforeAcceptance(state, pulse)
+        is GameplayCommandRejectedBeforeAcceptance -> rejectGameplayCommandBeforeAcceptance(state, pulse)
     }
 
     fun query(
@@ -123,46 +61,57 @@ object AppSessionNucleus {
         AppSessionQuery.GetShell -> state.toShellProjection()
     }
 
+    private fun decideInteraction(
+        state: AppSessionState,
+        intent: SessionInteractionPulse,
+        context: AppSessionContext,
+    ): AppSessionDecision {
+        if (state.pendingWorkflow != null) {
+            return rejected(SessionRejection.ParticipantCommandPending)
+        }
+        if (
+            state.resetLifecycle != SessionResetLifecycle.READY &&
+            intent != SessionInteractionPulse.ResetCancelled &&
+            intent != SessionInteractionPulse.ResetConfirmed &&
+            intent != SessionInteractionPulse.ResetRetryRequested
+        ) {
+            return rejected(SessionRejection.ResetBlocksInput)
+        }
+        return when (intent) {
+            SessionInteractionPulse.StartRunRequested -> startRun(state, context, RunStartReason.START)
+            SessionInteractionPulse.RestartRunRequested -> startRun(state, context, RunStartReason.RESTART)
+            SessionInteractionPulse.ExitRunRequested -> exitRun(state, context)
+            is SessionInteractionPulse.OpenOverlay -> openOverlay(state, intent.destination, context)
+            SessionInteractionPulse.CloseOverlay -> closeOverlay(state, context)
+            is SessionInteractionPulse.ShortcutObserved -> shortcut(state, intent.shortcut, context)
+            SessionInteractionPulse.ToggleMuteRequested -> toggleMute(state)
+            is SessionInteractionPulse.SelectCoreShapeRequested -> selectCoreShape(state, intent.shape)
+            SessionInteractionPulse.RebirthRequested -> rebirth(state, context)
+            SessionInteractionPulse.ResetCancelled -> cancelReset(state)
+            SessionInteractionPulse.ResetConfirmed -> confirmReset(state, context)
+            SessionInteractionPulse.ResetRetryRequested -> retryReset(state, context)
+        }
+    }
+
     private fun startRun(
         state: AppSessionState,
         context: AppSessionContext,
         reason: RunStartReason,
     ): AppSessionDecision {
-        val bootstrap = context.requireRunBootstrap() ?: return context.invalidRunBootstrap()
-        val ready = bootstrap.result as? ProfileRunBootstrapResult.Ready
-            ?: return rejected(
-                if (reason == RunStartReason.RESTART) {
-                    SessionRejection.RestartUnavailable
-                } else {
-                    SessionRejection.StartUnavailable
-                },
-            )
-        if (state.overlay != null) {
-            return rejected(
-                if (reason == RunStartReason.RESTART) {
-                    SessionRejection.RestartUnavailable
-                } else {
-                    SessionRejection.StartUnavailable
-                },
-            )
+        val bootstrap = checkNotNull(context.runBootstrap) {
+            "Impl must supply the validated Profile run bootstrap read"
         }
-
-        val status = state.requireGameplayStatusIfActive(context)
-            ?: if (state.activeRunId != null) return context.invalidGameplayStatus(state) else null
+        if (bootstrap.result !is ProfileRunBootstrapResult.Ready || state.overlay != null) {
+            return rejected(reason.startUnavailableReason)
+        }
+        val status = state.gameplayStatusIfActive(context)
         val reservation = when (reason) {
             RunStartReason.START -> {
                 if (state.base != AppDestination.Home) {
                     return rejected(SessionRejection.StartUnavailable)
                 }
-                if (
-                    status?.phase == GameplayRunPhase.CREATED &&
-                    !status.profileCommandPending
-                ) {
-                    RunReservation(
-                        runId = status.instanceId.runId,
-                        nextRunId = state.nextRunId,
-                        ensure = false,
-                    )
+                if (status?.phase == GameplayRunPhase.CREATED && !status.profileCommandPending) {
+                    RunReservation(status.instanceId.runId, state.nextRunId, ensure = false)
                 } else {
                     if (status != null && !status.phase.canBeReplaced()) {
                         return rejected(SessionRejection.StartUnavailable)
@@ -184,19 +133,12 @@ object AppSessionNucleus {
         }
 
         val revision = state.nextRevision()
-        if (!state.hasRevisionBudget(2)) {
-            return rejected(SessionRejection.RevisionExhausted)
-        }
-        val issued = state.issueGameplayCommand(
-            revision,
-            reservation.runId,
-            GameplaySessionPulse.StartRun(
-                RunConfiguration(
-                    content = state.content,
-                    profile = ready.snapshot,
-                ),
-            ),
-        ) ?: return rejected(SessionRejection.GameplayCommandOrdinalExhausted)
+        val request = gameplayRequest(
+            revision = revision,
+            sourceOrdinal = if (reservation.ensure) 1 else 0,
+            runId = reservation.runId,
+            command = GameplayModuleCommand.StartRun,
+        )
         val next = state.copy(
             revision = revision,
             activeRunId = reservation.runId,
@@ -204,23 +146,21 @@ object AppSessionNucleus {
             pendingWorkflow = PendingWorkflow.StartingRun(
                 reason = reason,
                 runId = reservation.runId,
-                participant = PendingParticipantCommand.Gameplay(issued.command),
+                participant = PendingParticipantCommand.Gameplay(request),
             ),
             rebirthConfirmation = RebirthConfirmation.Disarmed,
             lastFailure = null,
             nextRunId = reservation.nextRunId,
-            nextGameplayCommandOrdinal = issued.nextOrdinal,
         )
-        val send = AppSessionOutput.SendGameplayCommand(issued.command)
-        val outputs = if (reservation.ensure) {
-            immutableListOf(
-                AppSessionOutput.EnsureGameplayRun(reservation.runId),
-                send,
-            )
-        } else {
-            immutableListOf(send)
-        }
-        return accepted(next, outputs)
+        val send = AppSessionOutput.SendGameplayCommand(request)
+        return accepted(
+            next,
+            if (reservation.ensure) {
+                immutableListOf(AppSessionOutput.EnsureGameplayRun(reservation.runId), send)
+            } else {
+                immutableListOf(send)
+            },
+        )
     }
 
     private fun openOverlay(
@@ -231,20 +171,17 @@ object AppSessionNucleus {
         if (!destination.isOverlayDestination()) {
             return rejected(SessionRejection.OverlayUnavailable(destination))
         }
-        val status = state.requireGameplayStatusIfActive(context)
-            ?: if (state.activeRunId != null) return context.invalidGameplayStatus(state) else null
-
+        val status = state.gameplayStatusIfActive(context)
         if (state.overlay == AppDestination.Settings && destination != AppDestination.Settings) {
             return finishSettings(
-                state = state,
-                context = context,
-                status = status,
-                continuation = SettingsContinuation.Open(destination),
+                state,
+                context,
+                status,
+                SettingsContinuation.Open(destination),
             )
         }
         if (state.base == AppDestination.Gameplay) {
-            val phase = status?.phase
-                ?: return context.invalidGameplayStatus(state)
+            val phase = checkNotNull(status).phase
             when (phase) {
                 GameplayRunPhase.CHOICE ->
                     return rejected(SessionRejection.OverlayUnavailable(destination))
@@ -254,27 +191,24 @@ object AppSessionNucleus {
                     return rejected(SessionRejection.OverlayUnavailable(destination))
                 }
                 GameplayRunPhase.RUNNING -> {
-                    if (!state.hasRevisionBudget(2)) {
-                        return rejected(SessionRejection.RevisionExhausted)
-                    }
                     val revision = state.nextRevision()
-                    val issued = state.issueGameplayCommand(
+                    val request = gameplayRequest(
                         revision,
-                        status.instanceId.runId,
-                        GameplaySessionPulse.PauseForOverlay,
-                    ) ?: return rejected(SessionRejection.GameplayCommandOrdinalExhausted)
+                        sourceOrdinal = 0,
+                        runId = status.instanceId.runId,
+                        command = GameplayModuleCommand.PauseForOverlay,
+                    )
                     return accepted(
                         state.copy(
                             revision = revision,
-                            gameplayPhase = status.phase,
+                            gameplayPhase = phase,
                             pendingWorkflow = PendingWorkflow.PausingForOverlay(
                                 destination,
-                                PendingParticipantCommand.Gameplay(issued.command),
+                                PendingParticipantCommand.Gameplay(request),
                             ),
                             lastFailure = null,
-                            nextGameplayCommandOrdinal = issued.nextOrdinal,
                         ),
-                        immutableListOf(AppSessionOutput.SendGameplayCommand(issued.command)),
+                        immutableListOf(AppSessionOutput.SendGameplayCommand(request)),
                     )
                 }
                 GameplayRunPhase.CREATED,
@@ -284,10 +218,14 @@ object AppSessionNucleus {
             }
         }
 
-        val revision = state.nextRevision()
         return accepted(
             state.copy(
-                revision = revision,
+                revision = state.nextRevision(),
+                routeRevision = if (state.overlay != destination) {
+                    state.nextRevision()
+                } else {
+                    state.routeRevision
+                },
                 overlay = destination,
                 gameplayPhase = status?.phase ?: state.gameplayPhase,
                 rebirthConfirmation = RebirthConfirmation.Disarmed,
@@ -301,20 +239,14 @@ object AppSessionNucleus {
         context: AppSessionContext,
     ): AppSessionDecision {
         val overlay = state.overlay ?: return rejected(SessionRejection.CloseUnavailable)
-        val status = state.requireGameplayStatusIfActive(context)
-            ?: if (state.activeRunId != null) return context.invalidGameplayStatus(state) else null
+        val status = state.gameplayStatusIfActive(context)
         if (overlay == AppDestination.Settings) {
-            return finishSettings(
-                state = state,
-                context = context,
-                status = status,
-                continuation = SettingsContinuation.Close,
-            )
+            return finishSettings(state, context, status, SettingsContinuation.Close)
         }
-        val revision = state.nextRevision()
         return accepted(
             state.copy(
-                revision = revision,
+                revision = state.nextRevision(),
+                routeRevision = state.nextRevision(),
                 overlay = null,
                 gameplayPhase = status?.phase ?: state.gameplayPhase,
                 rebirthConfirmation = RebirthConfirmation.Disarmed,
@@ -326,47 +258,48 @@ object AppSessionNucleus {
     private fun finishSettings(
         state: AppSessionState,
         context: AppSessionContext,
-        status: kinetickk.ball.gameplay.api.GameplayRunStatusProjection?,
+        status: GameplayRunStatusProjection?,
         continuation: SettingsContinuation,
     ): AppSessionDecision {
-        val preferences = context.requirePreferences()
-            ?: return context.invalidPreferences()
-        if (status != null && status.phase.acceptsPreferenceUpdate() && !state.hasRevisionBudget(2)) {
-            return rejected(SessionRejection.RevisionExhausted)
-        }
+        val preferences = checkNotNull(context.preferences) {
+            "Impl must supply the validated Profile preferences read"
+        }.preferences
         val revision = state.nextRevision()
         if (status != null && status.phase.acceptsPreferenceUpdate()) {
-            val issued = state.issueGameplayCommand(
+            val request = gameplayRequest(
                 revision,
-                status.instanceId.runId,
-                GameplaySessionPulse.ApplyPreferences(preferences.preferences),
-            ) ?: return rejected(SessionRejection.GameplayCommandOrdinalExhausted)
+                sourceOrdinal = 0,
+                runId = status.instanceId.runId,
+                command = GameplayModuleCommand.ApplyPreferences,
+            )
             return accepted(
                 state.copy(
                     revision = revision,
                     gameplayPhase = status.phase,
                     pendingWorkflow = PendingWorkflow.ApplyingSettings(
-                        preferences = preferences.preferences,
-                        continuation = continuation,
-                        participant = PendingParticipantCommand.Gameplay(issued.command),
+                        preferences,
+                        continuation,
+                        PendingParticipantCommand.Gameplay(request),
                     ),
                     lastFailure = null,
-                    nextGameplayCommandOrdinal = issued.nextOrdinal,
                 ),
-                immutableListOf(AppSessionOutput.SendGameplayCommand(issued.command)),
+                immutableListOf(AppSessionOutput.SendGameplayCommand(request)),
             )
         }
         return accepted(
             state.copy(
                 revision = revision,
+                routeRevision = if (state.overlay != continuation.overlayAfterCompletion) {
+                    revision
+                } else {
+                    state.routeRevision
+                },
                 overlay = continuation.overlayAfterCompletion,
                 gameplayPhase = status?.phase ?: state.gameplayPhase,
                 rebirthConfirmation = RebirthConfirmation.Disarmed,
                 lastFailure = null,
             ),
-            immutableListOf(
-                AppSessionOutput.SynchronizeAudioPreferences(preferences.preferences),
-            ),
+            immutableListOf(AppSessionOutput.SynchronizeAudioPreferences(preferences)),
         )
     }
 
@@ -394,56 +327,43 @@ object AppSessionNucleus {
     }
 
     private fun toggleMute(state: AppSessionState): AppSessionDecision {
-        val propagatesToGameplay =
-            state.activeRunId != null && state.gameplayPhase?.acceptsPreferenceUpdate() == true
-        if (!state.hasRevisionBudget(if (propagatesToGameplay) 3 else 2)) {
-            return rejected(SessionRejection.RevisionExhausted)
-        }
-        if (propagatesToGameplay && state.nextGameplayCommandOrdinal == null) {
-            return rejected(SessionRejection.GameplayCommandOrdinalExhausted)
-        }
         val revision = state.nextRevision()
-        val issued = state.issueProfileCommand(revision, ProfilePulse.ToggleMute)
-            ?: return rejected(SessionRejection.ProfileCommandOrdinalExhausted)
+        val request = profileRequest(revision, 0, ProfileModuleCommand.ToggleMute)
         return accepted(
             state.copy(
                 revision = revision,
                 pendingWorkflow = PendingWorkflow.TogglingMute(
-                    PendingParticipantCommand.Profile(issued.command),
+                    PendingParticipantCommand.Profile(request),
                 ),
                 lastFailure = null,
-                nextProfileCommandOrdinal = issued.nextOrdinal,
             ),
-            immutableListOf(AppSessionOutput.SendProfileCommand(issued.command)),
+            immutableListOf(AppSessionOutput.SendProfileCommand(request)),
         )
     }
 
     private fun selectCoreShape(
         state: AppSessionState,
-        pulse: SessionInteractionPulse.SelectCoreShapeRequested,
+        shape: kinetickk.ball.content.api.CoreShape,
     ): AppSessionDecision {
         if (state.base != AppDestination.Home || state.overlay != null) {
             return rejected(SessionRejection.CoreShapeSelectionUnavailable)
         }
-        if (!state.hasRevisionBudget(2)) {
-            return rejected(SessionRejection.RevisionExhausted)
-        }
         val revision = state.nextRevision()
-        val issued = state.issueProfileCommand(
+        val request = profileRequest(
             revision,
-            ProfilePulse.SelectCoreShape(pulse.shape),
-        ) ?: return rejected(SessionRejection.ProfileCommandOrdinalExhausted)
+            0,
+            ProfileModuleCommand.SelectCoreShape(shape),
+        )
         return accepted(
             state.copy(
                 revision = revision,
                 pendingWorkflow = PendingWorkflow.SelectingCoreShape(
-                    pulse.shape,
-                    PendingParticipantCommand.Profile(issued.command),
+                    shape,
+                    PendingParticipantCommand.Profile(request),
                 ),
                 lastFailure = null,
-                nextProfileCommandOrdinal = issued.nextOrdinal,
             ),
-            immutableListOf(AppSessionOutput.SendProfileCommand(issued.command)),
+            immutableListOf(AppSessionOutput.SendProfileCommand(request)),
         )
     }
 
@@ -457,27 +377,22 @@ object AppSessionNucleus {
         ) {
             return rejected(SessionRejection.RebirthUnavailable)
         }
-        val projection = context.requireRebirthProgress()
-            ?: return context.invalidRebirthProgress()
-        if (!projection.canAdvance) {
-            return rejected(SessionRejection.RebirthUnavailable)
+        val projection = checkNotNull(context.rebirthProgress) {
+            "Impl must supply the validated Profile rebirth read"
         }
+        if (!projection.canAdvance) return rejected(SessionRejection.RebirthUnavailable)
         return when (val confirmation = state.rebirthConfirmation) {
-            RebirthConfirmation.Disarmed -> {
-                val revision = state.nextRevision()
-                accepted(
-                    state.copy(
-                        revision = revision,
-                        rebirthConfirmation = RebirthConfirmation.Armed(
-                            profileRevision = projection.revision,
-                            progress = projection.snapshot.progress,
-                        ),
-                        lastFailure = null,
+            RebirthConfirmation.Disarmed -> accepted(
+                state.copy(
+                    revision = state.nextRevision(),
+                    rebirthConfirmation = RebirthConfirmation.Armed(
+                        projection.revision,
+                        projection.snapshot.progress,
                     ),
-                )
-            }
+                    lastFailure = null,
+                ),
+            )
             is RebirthConfirmation.Armed -> {
-                // Mute may advance Profile revision while the same Rebirth progress stays armed.
                 if (
                     projection.revision.value < confirmation.profileRevision.value ||
                     projection.snapshot.progress != confirmation.progress
@@ -487,26 +402,18 @@ object AppSessionNucleus {
                 if (state.reusableCreatedRunId() == null && state.nextRunId == null) {
                     return rejected(SessionRejection.RunIdExhausted)
                 }
-                if (state.nextGameplayCommandOrdinal == null) {
-                    return rejected(SessionRejection.GameplayCommandOrdinalExhausted)
-                }
-                if (!state.hasRevisionBudget(3)) {
-                    return rejected(SessionRejection.RevisionExhausted)
-                }
                 val revision = state.nextRevision()
-                val issued = state.issueProfileCommand(revision, ProfilePulse.AdvanceRebirth)
-                    ?: return rejected(SessionRejection.ProfileCommandOrdinalExhausted)
+                val request = profileRequest(revision, 0, ProfileModuleCommand.AdvanceRebirth)
                 accepted(
                     state.copy(
                         revision = revision,
                         pendingWorkflow = PendingWorkflow.AdvancingRebirth(
-                            PendingParticipantCommand.Profile(issued.command),
+                            PendingParticipantCommand.Profile(request),
                         ),
                         rebirthConfirmation = RebirthConfirmation.Disarmed,
                         lastFailure = null,
-                        nextProfileCommandOrdinal = issued.nextOrdinal,
                     ),
-                    immutableListOf(AppSessionOutput.SendProfileCommand(issued.command)),
+                    immutableListOf(AppSessionOutput.SendProfileCommand(request)),
                 )
             }
         }
@@ -519,31 +426,25 @@ object AppSessionNucleus {
         if (state.base != AppDestination.Gameplay || state.overlay != null) {
             return rejected(SessionRejection.ExitUnavailable)
         }
-        val status = state.requireGameplayStatusIfActive(context)
-            ?: return context.invalidGameplayStatus(state)
-        if (!status.phase.canExit()) {
-            return rejected(SessionRejection.ExitUnavailable)
-        }
-        if (!state.hasRevisionBudget(2)) {
-            return rejected(SessionRejection.RevisionExhausted)
-        }
+        val status = checkNotNull(state.gameplayStatusIfActive(context))
+        if (!status.phase.canExit()) return rejected(SessionRejection.ExitUnavailable)
         val revision = state.nextRevision()
-        val issued = state.issueGameplayCommand(
+        val request = gameplayRequest(
             revision,
-            status.instanceId.runId,
-            GameplaySessionPulse.ExitRun,
-        ) ?: return rejected(SessionRejection.GameplayCommandOrdinalExhausted)
+            sourceOrdinal = 0,
+            runId = status.instanceId.runId,
+            command = GameplayModuleCommand.ExitRun,
+        )
         return accepted(
             state.copy(
                 revision = revision,
                 gameplayPhase = status.phase,
                 pendingWorkflow = PendingWorkflow.ExitingRun(
-                    PendingParticipantCommand.Gameplay(issued.command),
+                    PendingParticipantCommand.Gameplay(request),
                 ),
                 lastFailure = null,
-                nextGameplayCommandOrdinal = issued.nextOrdinal,
             ),
-            immutableListOf(AppSessionOutput.SendGameplayCommand(issued.command)),
+            immutableListOf(AppSessionOutput.SendGameplayCommand(request)),
         )
     }
 
@@ -561,28 +462,24 @@ object AppSessionNucleus {
         if (state.resetLifecycle != SessionResetLifecycle.CONFIRMATION_REQUIRED) {
             return rejected(SessionRejection.ResetActionUnavailable)
         }
-        val persistence = context.requirePersistenceStatus()
-            ?: return context.invalidPersistenceStatus()
+        val persistence = checkNotNull(context.persistenceStatus) {
+            "Impl must supply the validated Profile persistence read"
+        }
         if (persistence.toSessionResetLifecycle() != SessionResetLifecycle.CONFIRMATION_REQUIRED) {
             return rejected(SessionRejection.ResetActionUnavailable)
         }
-        if (!state.hasRevisionBudget(2)) {
-            return rejected(SessionRejection.RevisionExhausted)
-        }
         val revision = state.nextRevision()
-        val issued = state.issueProfileCommand(revision, ProfilePulse.ConfirmLegacyReset)
-            ?: return rejected(SessionRejection.ProfileCommandOrdinalExhausted)
+        val request = profileRequest(revision, 0, ProfileModuleCommand.ConfirmLegacyReset)
         return accepted(
             state.copy(
                 revision = revision,
                 pendingWorkflow = PendingWorkflow.ConfirmingReset(
-                    PendingParticipantCommand.Profile(issued.command),
+                    PendingParticipantCommand.Profile(request),
                 ),
                 resetLifecycle = SessionResetLifecycle.RESET_IN_PROGRESS,
                 lastFailure = null,
-                nextProfileCommandOrdinal = issued.nextOrdinal,
             ),
-            immutableListOf(AppSessionOutput.SendProfileCommand(issued.command)),
+            immutableListOf(AppSessionOutput.SendProfileCommand(request)),
         )
     }
 
@@ -593,49 +490,46 @@ object AppSessionNucleus {
         if (state.resetLifecycle != SessionResetLifecycle.PURGE_NEEDS_ATTENTION) {
             return rejected(SessionRejection.ResetActionUnavailable)
         }
-        val persistence = context.requirePersistenceStatus()
-            ?: return context.invalidPersistenceStatus()
+        val persistence = checkNotNull(context.persistenceStatus) {
+            "Impl must supply the validated Profile persistence read"
+        }
         if (persistence.toSessionResetLifecycle() != SessionResetLifecycle.PURGE_NEEDS_ATTENTION) {
             return rejected(SessionRejection.ResetActionUnavailable)
         }
-        if (!state.hasRevisionBudget(2)) {
-            return rejected(SessionRejection.RevisionExhausted)
-        }
         val revision = state.nextRevision()
-        val issued = state.issueProfileCommand(revision, ProfilePulse.RetryLegacyPurge)
-            ?: return rejected(SessionRejection.ProfileCommandOrdinalExhausted)
+        val request = profileRequest(revision, 0, ProfileModuleCommand.RetryLegacyPurge)
         return accepted(
             state.copy(
                 revision = revision,
                 pendingWorkflow = PendingWorkflow.RetryingPurge(
-                    PendingParticipantCommand.Profile(issued.command),
+                    PendingParticipantCommand.Profile(request),
                 ),
                 resetLifecycle = SessionResetLifecycle.RESET_IN_PROGRESS,
                 lastFailure = null,
-                nextProfileCommandOrdinal = issued.nextOrdinal,
             ),
-            immutableListOf(AppSessionOutput.SendProfileCommand(issued.command)),
+            immutableListOf(AppSessionOutput.SendProfileCommand(request)),
         )
     }
 
     private fun completeProfileCommand(
         state: AppSessionState,
-        pulse: SessionControlPulse.ProfileCommandCompleted,
+        pulse: ProfileModuleResultPulse,
         context: AppSessionContext,
     ): AppSessionDecision {
-        val pending = state.pendingWorkflow
-            ?: return unexpected(SessionParticipantResultRejection.NO_COMMAND_PENDING)
-        val participant = pending.participant as? PendingParticipantCommand.Profile
-            ?: return unexpected(SessionParticipantResultRejection.PARTICIPANT_MISMATCH)
-        if (pulse.result.commandRef != participant.command.ref) {
-            return unexpected(SessionParticipantResultRejection.COMMAND_REF_MISMATCH)
+        val pending = checkNotNull(state.pendingWorkflow) {
+            "Trusted Profile result arrived without a pending Session command"
         }
+        val participant = checkNotNull(pending.participant as? PendingParticipantCommand.Profile) {
+            "Trusted Profile result contradicted the pending participant"
+        }
+        requireProfileCorrelation(participant.request, pulse)
         return when (pending) {
             is PendingWorkflow.SelectingCoreShape -> {
-                val outcome = pulse.result.outcome as? ProfileCommandOutcome.CoreShapeSelected
-                    ?: return unexpected(SessionParticipantResultRejection.OUTCOME_MISMATCH)
-                if (outcome.shape != pending.shape) {
-                    return unexpected(SessionParticipantResultRejection.OUTCOME_MISMATCH)
+                val result = checkNotNull(pulse.result as? ProfileModuleResult.CoreShapeSelected) {
+                    "Validated Profile result contradicted core-shape mapping"
+                }
+                check(result.shape == pending.shape) {
+                    "Validated Profile core-shape result changed the requested shape"
                 }
                 accepted(
                     state.copy(
@@ -645,53 +539,41 @@ object AppSessionNucleus {
                     ),
                 )
             }
-            is PendingWorkflow.TogglingMute -> completeMuteProfileResult(
-                state,
-                pulse.result.outcome,
-            )
-            is PendingWorkflow.AdvancingRebirth -> completeRebirthProfileResult(
-                state,
-                pulse.result.outcome,
-                context,
-            )
+            is PendingWorkflow.TogglingMute -> completeMuteProfileResult(state, pulse.result)
+            is PendingWorkflow.AdvancingRebirth -> completeRebirthProfileResult(state, pulse.result, context)
             is PendingWorkflow.ConfirmingReset,
             is PendingWorkflow.RetryingPurge,
-            -> completeResetProfileResult(state, pulse.result.outcome, context)
-            is PendingWorkflow.StartingRun,
-            is PendingWorkflow.PausingForOverlay,
-            is PendingWorkflow.ApplyingSettings,
-            is PendingWorkflow.PropagatingMute,
-            is PendingWorkflow.StartingRebirthRun,
-            is PendingWorkflow.ExitingRun,
-            -> unexpected(SessionParticipantResultRejection.PARTICIPANT_MISMATCH)
+            -> completeResetProfileResult(state, pulse.result, context)
+            else -> error("Trusted Profile result contradicted the pending workflow")
         }
     }
 
     private fun completeMuteProfileResult(
         state: AppSessionState,
-        outcome: ProfileCommandOutcome,
+        result: ProfileModuleResult,
     ): AppSessionDecision {
-        val preferences = (outcome as? ProfileCommandOutcome.PreferencesChanged)?.preferences
-            ?: return unexpected(SessionParticipantResultRejection.OUTCOME_MISMATCH)
+        val preferences = checkNotNull(
+            (result as? ProfileModuleResult.PreferencesChanged)?.preferences,
+        ) { "Validated Profile result contradicted mute mapping" }
         val revision = state.nextRevision()
         if (state.activeRunId != null && state.gameplayPhase?.acceptsPreferenceUpdate() == true) {
-            val issued = state.issueGameplayCommand(
+            val request = gameplayRequest(
                 revision,
-                state.activeRunId,
-                GameplaySessionPulse.ApplyPreferences(preferences),
-            ) ?: return rejected(SessionRejection.GameplayCommandOrdinalExhausted)
+                sourceOrdinal = 0,
+                runId = state.activeRunId,
+                command = GameplayModuleCommand.ApplyPreferences,
+            )
             return accepted(
                 state.copy(
                     revision = revision,
                     pendingWorkflow = PendingWorkflow.PropagatingMute(
                         preferences,
-                        PendingParticipantCommand.Gameplay(issued.command),
+                        PendingParticipantCommand.Gameplay(request),
                     ),
                     lastFailure = null,
-                    nextGameplayCommandOrdinal = issued.nextOrdinal,
                 ),
                 immutableListOf(
-                    AppSessionOutput.SendGameplayCommand(issued.command),
+                    AppSessionOutput.SendGameplayCommand(request),
                     AppSessionOutput.SynchronizeAudioPreferences(preferences),
                     AppSessionOutput.PlayMuteFeedback,
                 ),
@@ -712,108 +594,91 @@ object AppSessionNucleus {
 
     private fun completeRebirthProfileResult(
         state: AppSessionState,
-        outcome: ProfileCommandOutcome,
+        result: ProfileModuleResult,
         context: AppSessionContext,
     ): AppSessionDecision {
-        val advanced = outcome as? ProfileCommandOutcome.RebirthAdvanced
-            ?: return unexpected(SessionParticipantResultRejection.OUTCOME_MISMATCH)
-        val bootstrap = context.requireRunBootstrap()
-            ?: return context.invalidRunBootstrap()
-        val ready = bootstrap.result as? ProfileRunBootstrapResult.Ready
-            ?: return unexpected(SessionParticipantResultRejection.OUTCOME_MISMATCH)
-        if (ready.snapshot.rebirthProgress != advanced.progress) {
-            return unexpected(SessionParticipantResultRejection.OUTCOME_MISMATCH)
+        val advanced = checkNotNull(result as? ProfileModuleResult.RebirthAdvanced) {
+            "Validated Profile result contradicted rebirth mapping"
+        }
+        val ready = checkNotNull(
+            checkNotNull(context.runBootstrap).result as? ProfileRunBootstrapResult.Ready,
+        ) { "Validated rebirth result requires a ready Profile bootstrap" }
+        check(ready.snapshot.rebirthProgress == advanced.progress) {
+            "Profile bootstrap contradicted the accepted rebirth result"
         }
         val reusableRunId = state.reusableCreatedRunId()
         val reservation = if (reusableRunId != null) {
-            RunReservation(
-                runId = reusableRunId,
-                nextRunId = state.nextRunId,
-                ensure = false,
-            )
+            RunReservation(reusableRunId, state.nextRunId, ensure = false)
         } else {
-            state.reserveRun() ?: return rejected(SessionRejection.RunIdExhausted)
+            checkNotNull(state.reserveRun()) { "RunId capacity was not reserved before rebirth" }
         }
         val revision = state.nextRevision()
-        val issued = state.issueGameplayCommand(
+        val request = gameplayRequest(
             revision,
-            reservation.runId,
-            GameplaySessionPulse.StartRun(
-                RunConfiguration(state.content, ready.snapshot),
-            ),
-        ) ?: return rejected(SessionRejection.GameplayCommandOrdinalExhausted)
+            sourceOrdinal = if (reservation.ensure) 1 else 0,
+            runId = reservation.runId,
+            command = GameplayModuleCommand.StartRun,
+        )
         val next = state.copy(
             revision = revision,
             activeRunId = reservation.runId,
             gameplayPhase = GameplayRunPhase.CREATED,
             pendingWorkflow = PendingWorkflow.StartingRebirthRun(
                 reservation.runId,
-                PendingParticipantCommand.Gameplay(issued.command),
+                PendingParticipantCommand.Gameplay(request),
             ),
             rebirthConfirmation = RebirthConfirmation.Disarmed,
             lastFailure = null,
             nextRunId = reservation.nextRunId,
-            nextGameplayCommandOrdinal = issued.nextOrdinal,
         )
-        val send = AppSessionOutput.SendGameplayCommand(issued.command)
-        val outputs = if (reservation.ensure) {
-            immutableListOf(
-                AppSessionOutput.EnsureGameplayRun(reservation.runId),
-                send,
-                AppSessionOutput.PlayRebirthAcceptedFeedback,
-            )
-        } else {
-            immutableListOf(
-                send,
-                AppSessionOutput.PlayRebirthAcceptedFeedback,
-            )
-        }
-        return accepted(next, outputs)
+        val send = AppSessionOutput.SendGameplayCommand(request)
+        return accepted(
+            next,
+            if (reservation.ensure) {
+                immutableListOf(
+                    AppSessionOutput.EnsureGameplayRun(reservation.runId),
+                    send,
+                    AppSessionOutput.PlayRebirthAcceptedFeedback,
+                )
+            } else {
+                immutableListOf(send, AppSessionOutput.PlayRebirthAcceptedFeedback)
+            },
+        )
     }
 
     private fun completeResetProfileResult(
         state: AppSessionState,
-        outcome: ProfileCommandOutcome,
+        result: ProfileModuleResult,
         context: AppSessionContext,
     ): AppSessionDecision {
-        val persistence = context.requirePersistenceStatus()
-            ?: return context.invalidPersistenceStatus()
-        val preferences = context.requirePreferences()
-            ?: return context.invalidPreferences()
+        val persistence = checkNotNull(context.persistenceStatus) {
+            "Impl must supply the validated Profile persistence read"
+        }
+        val preferences = checkNotNull(context.preferences) {
+            "Impl must supply the validated Profile preferences read"
+        }.preferences
         val lifecycle = persistence.toSessionResetLifecycle()
-        val failure = when (outcome) {
-            ProfileCommandOutcome.ResetCompleted -> {
-                if (lifecycle != SessionResetLifecycle.READY) {
-                    return unexpected(SessionParticipantResultRejection.OUTCOME_MISMATCH)
-                }
+        val failure = when (result) {
+            ProfileModuleResult.ResetCompleted -> {
+                check(lifecycle == SessionResetLifecycle.READY)
                 null
             }
-            is ProfileCommandOutcome.ResetWriteRejected -> {
-                if (lifecycle != SessionResetLifecycle.CONFIRMATION_REQUIRED) {
-                    return unexpected(SessionParticipantResultRejection.OUTCOME_MISMATCH)
-                }
-                SessionWorkflowFailure.ResetWriteRejected(outcome.reason)
+            is ProfileModuleResult.ResetWriteRejected -> {
+                check(lifecycle == SessionResetLifecycle.CONFIRMATION_REQUIRED)
+                SessionWorkflowFailureCode.RESET_WRITE_REJECTED
             }
-            is ProfileCommandOutcome.ResetWriteOutcomeUnknown -> {
-                if (lifecycle != SessionResetLifecycle.CONFIRMATION_REQUIRED) {
-                    return unexpected(SessionParticipantResultRejection.OUTCOME_MISMATCH)
-                }
-                SessionWorkflowFailure.ResetWriteOutcomeUnknown(outcome.reason)
+            is ProfileModuleResult.ResetWriteOutcomeUnknown -> {
+                check(lifecycle == SessionResetLifecycle.CONFIRMATION_REQUIRED)
+                SessionWorkflowFailureCode.RESET_WRITE_OUTCOME_UNKNOWN
             }
-            is ProfileCommandOutcome.ResetNeedsAttention -> {
-                if (
-                    lifecycle != SessionResetLifecycle.PURGE_NEEDS_ATTENTION ||
-                    persistence.reset != outcome.status
-                ) {
-                    return unexpected(SessionParticipantResultRejection.OUTCOME_MISMATCH)
-                }
-                SessionWorkflowFailure.ResetNeedsAttention(outcome.status)
+            is ProfileModuleResult.ResetNeedsAttention -> {
+                check(
+                    lifecycle == SessionResetLifecycle.PURGE_NEEDS_ATTENTION &&
+                        persistence.reset == result.status,
+                )
+                SessionWorkflowFailureCode.RESET_NEEDS_ATTENTION
             }
-            is ProfileCommandOutcome.CoreShapeSelected,
-            is ProfileCommandOutcome.PreferencesChanged,
-            is ProfileCommandOutcome.RebirthAdvanced,
-            ProfileCommandOutcome.GameplayProgressApplied,
-            -> return unexpected(SessionParticipantResultRejection.OUTCOME_MISMATCH)
+            else -> error("Validated Profile result contradicted reset mapping")
         }
         return accepted(
             state.copy(
@@ -822,26 +687,134 @@ object AppSessionNucleus {
                 resetLifecycle = lifecycle,
                 lastFailure = failure,
             ),
-            immutableListOf(
-                AppSessionOutput.SynchronizeAudioPreferences(preferences.preferences),
-            ),
+            immutableListOf(AppSessionOutput.SynchronizeAudioPreferences(preferences)),
         )
+    }
+
+    private fun completeGameplayCommand(
+        state: AppSessionState,
+        pulse: GameplayModuleResultPulse,
+    ): AppSessionDecision {
+        val pending = checkNotNull(state.pendingWorkflow) {
+            "Trusted Gameplay result arrived without a pending Session command"
+        }
+        val participant = checkNotNull(pending.participant as? PendingParticipantCommand.Gameplay) {
+            "Trusted Gameplay result contradicted the pending participant"
+        }
+        requireGameplayCorrelation(participant.request, pulse)
+        return when (pending) {
+            is PendingWorkflow.StartingRun,
+            is PendingWorkflow.StartingRebirthRun,
+            -> {
+                check(pulse.result == GameplayModuleResult.RunStarted) {
+                    "Validated Gameplay result contradicted start mapping"
+                }
+                accepted(
+                    state.copy(
+                        revision = state.nextRevision(),
+                        routeRevision = state.nextRevision(),
+                        base = AppDestination.Gameplay,
+                        overlay = null,
+                        gameplayPhase = GameplayRunPhase.RUNNING,
+                        pendingWorkflow = null,
+                        rebirthConfirmation = RebirthConfirmation.Disarmed,
+                        lastFailure = null,
+                    ),
+                )
+            }
+            is PendingWorkflow.PausingForOverlay -> {
+                check(pulse.result == GameplayModuleResult.OverlayPaused) {
+                    "Validated Gameplay result contradicted pause mapping"
+                }
+                accepted(
+                    state.copy(
+                        revision = state.nextRevision(),
+                        routeRevision = state.nextRevision(),
+                        overlay = pending.destination,
+                        gameplayPhase = GameplayRunPhase.PAUSED,
+                        pendingWorkflow = null,
+                        rebirthConfirmation = RebirthConfirmation.Disarmed,
+                        lastFailure = null,
+                    ),
+                )
+            }
+            is PendingWorkflow.ApplyingSettings -> {
+                check(pulse.result == GameplayModuleResult.PreferencesApplied) {
+                    "Validated Gameplay result contradicted preferences mapping"
+                }
+                accepted(
+                    state.copy(
+                        revision = state.nextRevision(),
+                        routeRevision = state.nextRevision(),
+                        overlay = pending.continuation.overlayAfterCompletion,
+                        pendingWorkflow = null,
+                        rebirthConfirmation = RebirthConfirmation.Disarmed,
+                        lastFailure = null,
+                    ),
+                    immutableListOf(
+                        AppSessionOutput.SynchronizeAudioPreferences(pending.preferences),
+                    ),
+                )
+            }
+            is PendingWorkflow.PropagatingMute -> {
+                check(pulse.result == GameplayModuleResult.PreferencesApplied) {
+                    "Validated Gameplay result contradicted mute propagation mapping"
+                }
+                accepted(
+                    state.copy(
+                        revision = state.nextRevision(),
+                        pendingWorkflow = null,
+                        lastFailure = null,
+                    ),
+                )
+            }
+            is PendingWorkflow.ExitingRun -> completeExitResult(state, pulse.result)
+            else -> error("Trusted Gameplay result contradicted the pending workflow")
+        }
+    }
+
+    private fun completeExitResult(
+        state: AppSessionState,
+        result: GameplayModuleResult,
+    ): AppSessionDecision {
+        val exited = checkNotNull(result as? GameplayModuleResult.RunExited) {
+            "Validated Gameplay result contradicted exit mapping"
+        }
+        val revision = state.nextRevision()
+        return when (exited.progress) {
+            kinetickk.ball.gameplay.api.GameplayExitProgressResult.NoProgress,
+            kinetickk.ball.gameplay.api.GameplayExitProgressResult.Applied,
+            -> accepted(
+            state.copy(
+                revision = revision,
+                base = AppDestination.Home,
+                routeRevision = revision,
+                overlay = null,
+                    gameplayPhase = GameplayRunPhase.EXITED,
+                    pendingWorkflow = null,
+                    rebirthConfirmation = RebirthConfirmation.Disarmed,
+                    lastFailure = null,
+                ),
+            )
+            kinetickk.ball.gameplay.api.GameplayExitProgressResult.NotApplied -> accepted(
+                state.copy(
+                    revision = revision,
+                    gameplayPhase = GameplayRunPhase.EXITED,
+                    pendingWorkflow = null,
+                    rebirthConfirmation = RebirthConfirmation.Disarmed,
+                    lastFailure = SessionWorkflowFailureCode.EXIT_PROGRESS_NOT_APPLIED,
+                ),
+            )
+        }
     }
 
     private fun rejectProfileCommandBeforeAcceptance(
         state: AppSessionState,
-        pulse: SessionControlPulse.ProfileCommandRejectedBeforeAcceptance,
+        pulse: ProfileCommandRejectedBeforeAcceptance,
     ): AppSessionDecision {
-        val pending = state.pendingWorkflow
-            ?: return unexpected(SessionParticipantResultRejection.NO_COMMAND_PENDING)
-        val participant = pending.participant as? PendingParticipantCommand.Profile
-            ?: return unexpected(SessionParticipantResultRejection.PARTICIPANT_MISMATCH)
-        if (pulse.commandRef != participant.command.ref) {
-            return unexpected(SessionParticipantResultRejection.COMMAND_REF_MISMATCH)
-        }
-        if (pulse.rejection.instanceId != pulse.commandRef.targetInstance) {
-            return unexpected(SessionParticipantResultRejection.TARGET_INSTANCE_MISMATCH)
-        }
+        val pending = checkNotNull(state.pendingWorkflow)
+        val participant = checkNotNull(pending.participant as? PendingParticipantCommand.Profile)
+        requireProfileRefusalCorrelation(participant.request, pulse)
         val resetLifecycle = when (pending) {
             is PendingWorkflow.ConfirmingReset -> SessionResetLifecycle.CONFIRMATION_REQUIRED
             is PendingWorkflow.RetryingPurge -> SessionResetLifecycle.PURGE_NEEDS_ATTENTION
@@ -862,178 +835,41 @@ object AppSessionNucleus {
                 } else {
                     state.rebirthConfirmation
                 },
-                lastFailure = SessionWorkflowFailure.ProfileCommandRejected(
-                    commandRef = pulse.commandRef,
-                    observedRevision = pulse.rejection.observedRevision,
-                    reason = pulse.rejection.reason,
-                ),
+                lastFailure = SessionWorkflowFailureCode.PROFILE_COMMAND_REFUSED,
             ),
             outputs,
         )
     }
 
-    private fun completeGameplayCommand(
-        state: AppSessionState,
-        pulse: SessionControlPulse.GameplayCommandCompleted,
-    ): AppSessionDecision {
-        val pending = state.pendingWorkflow
-            ?: return unexpected(SessionParticipantResultRejection.NO_COMMAND_PENDING)
-        val participant = pending.participant as? PendingParticipantCommand.Gameplay
-            ?: return unexpected(SessionParticipantResultRejection.PARTICIPANT_MISMATCH)
-        if (pulse.result.commandRef != participant.command.ref) {
-            return unexpected(SessionParticipantResultRejection.COMMAND_REF_MISMATCH)
-        }
-        return when (pending) {
-            is PendingWorkflow.StartingRun,
-            is PendingWorkflow.StartingRebirthRun,
-            -> {
-                if (pulse.result.outcome != GameplayCommandOutcome.RunStarted) {
-                    return unexpected(SessionParticipantResultRejection.OUTCOME_MISMATCH)
-                }
-                accepted(
-                    state.copy(
-                        revision = state.nextRevision(),
-                        base = AppDestination.Gameplay,
-                        overlay = null,
-                        gameplayPhase = GameplayRunPhase.RUNNING,
-                        pendingWorkflow = null,
-                        rebirthConfirmation = RebirthConfirmation.Disarmed,
-                        lastFailure = null,
-                    ),
-                )
-            }
-            is PendingWorkflow.PausingForOverlay -> {
-                if (pulse.result.outcome != GameplayCommandOutcome.OverlayPaused) {
-                    return unexpected(SessionParticipantResultRejection.OUTCOME_MISMATCH)
-                }
-                accepted(
-                    state.copy(
-                        revision = state.nextRevision(),
-                        overlay = pending.destination,
-                        gameplayPhase = GameplayRunPhase.PAUSED,
-                        pendingWorkflow = null,
-                        rebirthConfirmation = RebirthConfirmation.Disarmed,
-                        lastFailure = null,
-                    ),
-                )
-            }
-            is PendingWorkflow.ApplyingSettings -> {
-                val outcome = pulse.result.outcome as? GameplayCommandOutcome.PreferencesApplied
-                    ?: return unexpected(SessionParticipantResultRejection.OUTCOME_MISMATCH)
-                if (outcome.preferences != pending.preferences) {
-                    return unexpected(SessionParticipantResultRejection.OUTCOME_MISMATCH)
-                }
-                accepted(
-                    state.copy(
-                        revision = state.nextRevision(),
-                        overlay = pending.continuation.overlayAfterCompletion,
-                        pendingWorkflow = null,
-                        rebirthConfirmation = RebirthConfirmation.Disarmed,
-                        lastFailure = null,
-                    ),
-                    immutableListOf(
-                        AppSessionOutput.SynchronizeAudioPreferences(pending.preferences),
-                    ),
-                )
-            }
-            is PendingWorkflow.PropagatingMute -> {
-                val outcome = pulse.result.outcome as? GameplayCommandOutcome.PreferencesApplied
-                    ?: return unexpected(SessionParticipantResultRejection.OUTCOME_MISMATCH)
-                if (outcome.preferences != pending.preferences) {
-                    return unexpected(SessionParticipantResultRejection.OUTCOME_MISMATCH)
-                }
-                accepted(
-                    state.copy(
-                        revision = state.nextRevision(),
-                        pendingWorkflow = null,
-                        lastFailure = null,
-                    ),
-                )
-            }
-            is PendingWorkflow.ExitingRun -> completeExitResult(state, pulse.result.outcome)
-            is PendingWorkflow.SelectingCoreShape,
-            is PendingWorkflow.TogglingMute,
-            is PendingWorkflow.AdvancingRebirth,
-            is PendingWorkflow.ConfirmingReset,
-            is PendingWorkflow.RetryingPurge,
-            -> unexpected(SessionParticipantResultRejection.PARTICIPANT_MISMATCH)
-        }
-    }
-
-    private fun completeExitResult(
-        state: AppSessionState,
-        outcome: GameplayCommandOutcome,
-    ): AppSessionDecision {
-        val exited = outcome as? GameplayCommandOutcome.RunExited
-            ?: return unexpected(SessionParticipantResultRejection.OUTCOME_MISMATCH)
-        val revision = state.nextRevision()
-        return when (val profile = exited.profile) {
-            GameplayExitProfileOutcome.NoProgress,
-            GameplayExitProfileOutcome.ProgressApplied,
-            -> accepted(
-                state.copy(
-                    revision = revision,
-                    base = AppDestination.Home,
-                    overlay = null,
-                    gameplayPhase = GameplayRunPhase.EXITED,
-                    pendingWorkflow = null,
-                    rebirthConfirmation = RebirthConfirmation.Disarmed,
-                    lastFailure = null,
-                ),
-            )
-            is GameplayExitProfileOutcome.ProgressRejected -> accepted(
-                state.copy(
-                    revision = revision,
-                    gameplayPhase = GameplayRunPhase.EXITED,
-                    pendingWorkflow = null,
-                    rebirthConfirmation = RebirthConfirmation.Disarmed,
-                    lastFailure = SessionWorkflowFailure.ExitProgressRejected(profile),
-                ),
-            )
-        }
-    }
-
     private fun rejectGameplayCommandBeforeAcceptance(
         state: AppSessionState,
-        pulse: SessionControlPulse.GameplayCommandRejectedBeforeAcceptance,
+        pulse: GameplayCommandRejectedBeforeAcceptance,
     ): AppSessionDecision {
-        val pending = state.pendingWorkflow
-            ?: return unexpected(SessionParticipantResultRejection.NO_COMMAND_PENDING)
-        val participant = pending.participant as? PendingParticipantCommand.Gameplay
-            ?: return unexpected(SessionParticipantResultRejection.PARTICIPANT_MISMATCH)
-        if (pulse.commandRef != participant.command.ref) {
-            return unexpected(SessionParticipantResultRejection.COMMAND_REF_MISMATCH)
-        }
-        if (pulse.rejection.instanceId != pulse.commandRef.targetInstance) {
-            return unexpected(SessionParticipantResultRejection.TARGET_INSTANCE_MISMATCH)
-        }
+        val pending = checkNotNull(state.pendingWorkflow)
+        val participant = checkNotNull(pending.participant as? PendingParticipantCommand.Gameplay)
+        requireGameplayRefusalCorrelation(participant.request, pulse)
         val failedStart = pending is PendingWorkflow.StartingRun ||
             pending is PendingWorkflow.StartingRebirthRun
         return accepted(
             state.copy(
                 revision = state.nextRevision(),
+                routeRevision = if (
+                    failedStart &&
+                    (state.base != AppDestination.Home || state.overlay != null)
+                ) {
+                    state.nextRevision()
+                } else {
+                    state.routeRevision
+                },
                 base = if (failedStart) AppDestination.Home else state.base,
                 overlay = if (failedStart) null else state.overlay,
                 gameplayPhase = if (failedStart) GameplayRunPhase.CREATED else state.gameplayPhase,
                 pendingWorkflow = null,
-                lastFailure = SessionWorkflowFailure.GameplayCommandRejected(
-                    pulse.commandRef,
-                    pulse.rejection,
-                ),
+                lastFailure = SessionWorkflowFailureCode.GAMEPLAY_COMMAND_REFUSED,
             ),
         )
     }
 }
-
-private data class IssuedProfileCommand(
-    val command: ProfileCommand,
-    val nextOrdinal: Int?,
-)
-
-private data class IssuedGameplayCommand(
-    val command: GameplayCommand,
-    val nextOrdinal: Int?,
-)
 
 private data class RunReservation(
     val runId: RunId,
@@ -1041,45 +877,99 @@ private data class RunReservation(
     val ensure: Boolean = true,
 )
 
-private fun AppSessionState.nextRevision(): SessionRevision =
-    SessionRevision(revision.value + 1L)
-
-private fun AppSessionState.hasRevisionBudget(acceptedFrames: Int): Boolean =
-    revision.value <= Long.MAX_VALUE - acceptedFrames.toLong()
-
-private fun AppSessionState.issueProfileCommand(
+private fun profileRequest(
     revision: SessionRevision,
-    pulse: ProfilePulse.Business,
-): IssuedProfileCommand? {
-    val ordinal = nextProfileCommandOrdinal ?: return null
-    val ref = ProfileCommandRef(
+    sourceOrdinal: Int,
+    command: ProfileModuleCommand,
+): ProfileModuleCommandRequest {
+    val handle = ProfileSemanticHandle(
         sourceInstance = ProfileCommandSource.LocalSession,
-        targetInstance = LOCAL_PROFILE_INSTANCE_ID,
         sourceRevision = revision.value,
-        ordinal = ordinal,
+        sourceOrdinal = sourceOrdinal,
     )
-    return IssuedProfileCommand(
-        command = ProfileCommand(ref, pulse),
-        nextOrdinal = ordinal.nextOrdinal(),
+    return ProfileModuleCommandRequest(
+        semanticHandle = handle,
+        sourceOrdinal = sourceOrdinal,
+        targetInstance = LOCAL_PROFILE_INSTANCE_ID,
+        command = command,
     )
 }
 
-private fun AppSessionState.issueGameplayCommand(
+private fun gameplayRequest(
     revision: SessionRevision,
+    sourceOrdinal: Int,
     runId: RunId,
-    pulse: GameplaySessionPulse,
-): IssuedGameplayCommand? {
-    val ordinal = nextGameplayCommandOrdinal ?: return null
-    val ref = GameplayCommandRef(
+    command: GameplayModuleCommand,
+): GameplayModuleCommandRequest {
+    val handle = GameplaySemanticHandle(
         sourceInstance = GameplayCommandSource.LocalSession,
-        targetInstance = GameplayInstanceId(runId),
         sourceRevision = revision.value,
-        ordinal = ordinal,
+        sourceOrdinal = sourceOrdinal,
     )
-    return IssuedGameplayCommand(
-        command = GameplayCommand(ref, pulse),
-        nextOrdinal = ordinal.nextOrdinal(),
+    return GameplayModuleCommandRequest(
+        semanticHandle = handle,
+        sourceOrdinal = sourceOrdinal,
+        targetInstance = GameplayInstanceId(runId),
+        command = command,
     )
+}
+
+private fun requireProfileCorrelation(
+    request: ProfileModuleCommandRequest,
+    pulse: ProfileModuleResultPulse,
+) {
+    // Impl has already verified the full target evidence. Nucleus retains only the semantic
+    // correlation and closed mapping needed to interpret the accepted workflow result.
+    check(pulse.commandSource.semanticHandle == request.semanticHandle)
+    check(pulse.effectiveProtocolIdentity == request.command.effectiveIdentity)
+}
+
+private fun requireGameplayCorrelation(
+    request: GameplayModuleCommandRequest,
+    pulse: GameplayModuleResultPulse,
+) {
+    // Raw source/target/revision/ordinal/provenance/causal evidence is an Impl concern.
+    check(pulse.commandSource.semanticHandle == request.semanticHandle)
+    check(pulse.effectiveProtocolIdentity == request.command.effectiveIdentity)
+}
+
+private fun requireProfileRefusalCorrelation(
+    request: ProfileModuleCommandRequest,
+    pulse: ProfileCommandRejectedBeforeAcceptance,
+) {
+    check(pulse.commandSource.semanticHandle == request.semanticHandle)
+    check(pulse.effectiveProtocolIdentity == request.command.effectiveIdentity)
+}
+
+private fun requireGameplayRefusalCorrelation(
+    request: GameplayModuleCommandRequest,
+    pulse: GameplayCommandRejectedBeforeAcceptance,
+) {
+    check(pulse.commandSource.semanticHandle == request.semanticHandle)
+    check(pulse.effectiveProtocolIdentity == request.command.effectiveIdentity)
+}
+
+private val ProfileModuleCommand.effectiveIdentity: ProfileEffectiveProtocolIdentity
+    get() = when (this) {
+        is ProfileModuleCommand.SelectCoreShape -> ProfileEffectiveProtocolIdentity.SESSION_CORE_SHAPE
+        ProfileModuleCommand.ToggleMute -> ProfileEffectiveProtocolIdentity.SESSION_MUTE
+        ProfileModuleCommand.AdvanceRebirth -> ProfileEffectiveProtocolIdentity.SESSION_REBIRTH
+        ProfileModuleCommand.ConfirmLegacyReset -> ProfileEffectiveProtocolIdentity.SESSION_RESET_CONFIRM
+        ProfileModuleCommand.RetryLegacyPurge -> ProfileEffectiveProtocolIdentity.SESSION_RESET_RETRY
+        is ProfileModuleCommand.ApplyGameplayProgress -> error("Gameplay progress is not a Session mapping")
+    }
+
+private val GameplayModuleCommand.effectiveIdentity: GameplayEffectiveProtocolIdentity
+    get() = when (this) {
+        GameplayModuleCommand.StartRun -> GameplayEffectiveProtocolIdentity.SESSION_START
+        GameplayModuleCommand.PauseForOverlay -> GameplayEffectiveProtocolIdentity.SESSION_PAUSE
+        GameplayModuleCommand.ApplyPreferences -> GameplayEffectiveProtocolIdentity.SESSION_PREFERENCES
+        GameplayModuleCommand.ExitRun -> GameplayEffectiveProtocolIdentity.SESSION_EXIT
+    }
+
+private fun AppSessionState.nextRevision(): SessionRevision {
+    check(revision.value < Long.MAX_VALUE) { "Session revision exhausted before acceptance" }
+    return SessionRevision(revision.value + 1L)
 }
 
 private fun AppSessionState.reserveRun(): RunReservation? {
@@ -1091,68 +981,15 @@ private fun AppSessionState.reserveRun(): RunReservation? {
 private fun AppSessionState.reusableCreatedRunId(): RunId? =
     activeRunId?.takeIf { gameplayPhase == GameplayRunPhase.CREATED }
 
-private fun Int.nextOrdinal(): Int? = if (this == Int.MAX_VALUE) null else this + 1
-
-private fun AppSessionState.requireGameplayStatusIfActive(
+private fun AppSessionState.gameplayStatusIfActive(
     context: AppSessionContext,
-): kinetickk.ball.gameplay.api.GameplayRunStatusProjection? {
-    val runId = activeRunId ?: return null
-    val status = context.gameplayStatus ?: return null
-    return status.takeIf { it.instanceId.runId == runId }
+): GameplayRunStatusProjection? = if (activeRunId == null) {
+    null
+} else {
+    checkNotNull(context.gameplayStatus) {
+        "Impl must supply the validated active Gameplay status read"
+    }
 }
-
-private fun AppSessionContext.requireRunBootstrap(): RunBootstrapProjection? =
-    runBootstrap?.takeIf { it.instanceId == LOCAL_PROFILE_INSTANCE_ID }
-
-private fun AppSessionContext.requirePreferences(): PreferencesProjection? =
-    preferences?.takeIf { it.instanceId == LOCAL_PROFILE_INSTANCE_ID }
-
-private fun AppSessionContext.requireRebirthProgress(): RebirthProgressProjection? =
-    rebirthProgress?.takeIf { it.instanceId == LOCAL_PROFILE_INSTANCE_ID }
-
-private fun AppSessionContext.requirePersistenceStatus(): PersistenceStatusProjection? =
-    persistenceStatus?.takeIf { it.instanceId == LOCAL_PROFILE_INSTANCE_ID }
-
-private fun AppSessionContext.invalidRunBootstrap(): AppSessionDecision = rejected(
-    SessionRejection.InvalidContext(
-        SessionContextField.RUN_BOOTSTRAP,
-        if (runBootstrap == null) SessionContextReason.MISSING else SessionContextReason.WRONG_INSTANCE,
-    ),
-)
-
-private fun AppSessionContext.invalidPreferences(): AppSessionDecision = rejected(
-    SessionRejection.InvalidContext(
-        SessionContextField.PREFERENCES,
-        if (preferences == null) SessionContextReason.MISSING else SessionContextReason.WRONG_INSTANCE,
-    ),
-)
-
-private fun AppSessionContext.invalidRebirthProgress(): AppSessionDecision = rejected(
-    SessionRejection.InvalidContext(
-        SessionContextField.REBIRTH_PROGRESS,
-        if (rebirthProgress == null) SessionContextReason.MISSING else SessionContextReason.WRONG_INSTANCE,
-    ),
-)
-
-private fun AppSessionContext.invalidPersistenceStatus(): AppSessionDecision = rejected(
-    SessionRejection.InvalidContext(
-        SessionContextField.PERSISTENCE_STATUS,
-        if (persistenceStatus == null) SessionContextReason.MISSING else SessionContextReason.WRONG_INSTANCE,
-    ),
-)
-
-private fun AppSessionContext.invalidGameplayStatus(
-    state: AppSessionState,
-): AppSessionDecision = rejected(
-    SessionRejection.InvalidContext(
-        SessionContextField.GAMEPLAY_STATUS,
-        when {
-            gameplayStatus == null -> SessionContextReason.MISSING
-            gameplayStatus.instanceId.runId != state.activeRunId -> SessionContextReason.WRONG_RUN
-            else -> SessionContextReason.WRONG_INSTANCE
-        },
-    ),
-)
 
 private fun GameplayRunPhase.canBeReplaced(): Boolean = when (this) {
     GameplayRunPhase.GAME_OVER,
@@ -1180,6 +1017,13 @@ private fun GameplayRunPhase.acceptsPreferenceUpdate(): Boolean = when (this) {
 
 private fun GameplayRunPhase.canExit(): Boolean = acceptsPreferenceUpdate()
 
+private val RunStartReason.startUnavailableReason: SessionRejection
+    get() = if (this == RunStartReason.RESTART) {
+        SessionRejection.RestartUnavailable
+    } else {
+        SessionRejection.StartUnavailable
+    }
+
 private val SettingsContinuation.overlayAfterCompletion: AppDestination?
     get() = when (this) {
         SettingsContinuation.Close -> null
@@ -1189,10 +1033,11 @@ private val SettingsContinuation.overlayAfterCompletion: AppDestination?
 private fun AppSessionState.toShellProjection(): AppShellProjection = AppShellProjection(
     instanceId = instanceId,
     revision = revision,
+    routeRevision = routeRevision,
     base = base,
     overlay = overlay,
     activeRunId = activeRunId,
-    gameplayPhase = gameplayPhase,
+    rebirthEligible = base == AppDestination.Home || gameplayPhase == GameplayRunPhase.VICTORY,
     pendingWorkflow = pendingWorkflow?.toProjection(),
     resetLifecycle = resetLifecycle,
     rebirthConfirmationArmed = rebirthConfirmation is RebirthConfirmation.Armed,
@@ -1230,6 +1075,3 @@ private fun accepted(
 
 private fun rejected(reason: SessionRejection): AppSessionDecision =
     AppSessionDecision.Rejected(reason)
-
-private fun unexpected(reason: SessionParticipantResultRejection): AppSessionDecision =
-    rejected(SessionRejection.UnexpectedParticipantResult(reason))

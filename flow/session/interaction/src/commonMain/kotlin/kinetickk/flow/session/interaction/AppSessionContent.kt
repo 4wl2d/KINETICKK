@@ -20,7 +20,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import kinetickk.ball.gameplay.api.GameplayQuery
-import kinetickk.ball.gameplay.interaction.GameplayFeature
+import kinetickk.ball.gameplay.interaction.GameplayPresentation
 import kinetickk.ball.profile.interaction.armory.api.ArmoryFeature
 import kinetickk.ball.profile.interaction.lab.api.LabFeature
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthFeature
@@ -45,7 +45,7 @@ import kinetickk.flow.session.interaction.reset.api.ResetModalRenderModel
 fun AppSessionContent(
     sessionPort: AppSessionPort,
     audioExecutor: SessionAudioExecutor,
-    gameplayFeature: GameplayFeature,
+    gameplayPresentation: GameplayPresentation,
     homeFeature: HomeFeature,
     settingsFeature: SettingsFeature,
     labFeature: LabFeature,
@@ -89,7 +89,7 @@ fun AppSessionContent(
                 inputEnabled = normalInputEnabled && shellValue.overlay == null,
                 onOutput = { output -> dispatch(output.toSessionPulse()) },
             )
-            AppDestination.Gameplay -> gameplayFeature.Content(
+            AppDestination.Gameplay -> gameplayPresentation.Content(
                 inputEnabled = normalInputEnabled && shellValue.overlay == null,
                 onOutput = { output -> dispatch(output.toSessionPulse()) },
             )
@@ -112,7 +112,7 @@ fun AppSessionContent(
                 onOutput = { output -> dispatch(output.toSessionPulse()) },
             )
             AppDestination.Armory -> armoryFeature.Content(
-                activeRunWeapon = activeGameplayWeapon(shellValue, gameplayFeature),
+                activeRunWeapon = activeGameplayWeapon(shellValue, gameplayPresentation),
                 onOutput = { output -> dispatch(output.toSessionPulse()) },
             )
             AppDestination.Rebirth -> rebirthFeature.Content(
@@ -122,7 +122,7 @@ fun AppSessionContent(
                 onOutput = { output -> dispatch(output.toSessionPulse()) },
             )
             AppDestination.Codex -> codexFeature.Content(
-                runStacks = currentRunStacks(shellValue, gameplayFeature),
+                runStacks = currentRunStacks(shellValue, gameplayPresentation),
                 onOutput = { output -> dispatch(output.toSessionPulse()) },
             )
             AppDestination.Home,
@@ -140,19 +140,19 @@ fun AppSessionContent(
 
 internal fun activeGameplayWeapon(
     shell: AppShellProjection,
-    gameplayFeature: GameplayFeature,
+    gameplayPresentation: GameplayPresentation,
 ) = if (shell.base == AppDestination.Gameplay) {
-    gameplayFeature.activeRun()?.query(GameplayQuery.GetActiveWeapon)?.weapon
+    gameplayPresentation.activePresentation()?.query(GameplayQuery.GetActiveWeapon)?.weapon
 } else {
     null
 }
 
 internal fun currentRunStacks(
     shell: AppShellProjection,
-    gameplayFeature: GameplayFeature,
+    gameplayPresentation: GameplayPresentation,
 ): CodexRunStacks = if (shell.base == AppDestination.Gameplay) {
     CodexRunStacks(
-        gameplayFeature.activeRun()
+        gameplayPresentation.activePresentation()
             ?.query(GameplayQuery.GetCodexStacks)
             ?.itemStacks
             ?: kinetickk.foundation.collections.immutableListOf(),

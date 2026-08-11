@@ -3,7 +3,7 @@
 
 package kinetickk.ball.gameplay.nucleus.model
 
-import kinetickk.ball.gameplay.api.EnemyType
+import kinetickk.ball.gameplay.nucleus.render.EnemyType
 
 import kotlin.math.max
 

@@ -8,6 +8,7 @@ import kinetickk.ball.profile.api.ProfileLegacyKeys
 import kinetickk.ball.profile.api.ProfileLegacyPurgeResult
 import kinetickk.ball.profile.api.ProfileV4WriteResult
 import kotlinx.browser.localStorage
+import org.w3c.dom.Storage
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -17,14 +18,14 @@ class PlatformProfileStorageWebTest {
     @Test
     fun isolatedBrowserKeysUseExactCapabilitiesAndPreserveUnrelatedData() {
         val prefix = "kinetickk_profile_resource_test_${Random.nextLong()}"
-        val keys = WebProfileStorageKeys(
+        val keys = IsolatedWebKeys(
             snapshotV4 = "${prefix}_v4",
             legacyProgressV2 = "${prefix}_v2",
             legacyMatter = "${prefix}_matter",
         )
         val unrelated = "${prefix}_unrelated"
         try {
-            val resource = createWebProfileResource(localStorage, keys)
+            val resource = createProfileResource(IsolatedWebPersistence(localStorage, keys))
             assertEquals(
                 ProfileBootstrapResourceResult.Observed(
                     snapshot = null,
@@ -53,4 +54,27 @@ class PlatformProfileStorageWebTest {
             }
         }
     }
+}
+
+private data class IsolatedWebKeys(
+    val snapshotV4: String,
+    val legacyProgressV2: String,
+    val legacyMatter: String,
+)
+
+private class IsolatedWebPersistence(
+    private val storage: Storage,
+    private val keys: IsolatedWebKeys,
+) : ExactProfilePersistence {
+    override fun readV4(): String? = storage.getItem(keys.snapshotV4)
+
+    override fun writeV4(payload: String) = storage.setItem(keys.snapshotV4, payload)
+
+    override fun readLegacyProgressV2(): String? = storage.getItem(keys.legacyProgressV2)
+
+    override fun readLegacyMatter(): String? = storage.getItem(keys.legacyMatter)
+
+    override fun removeLegacyProgressV2() = storage.removeItem(keys.legacyProgressV2)
+
+    override fun removeLegacyMatter() = storage.removeItem(keys.legacyMatter)
 }

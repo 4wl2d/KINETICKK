@@ -128,11 +128,11 @@ Pokeball architecture verification requires an immutable checkout of
 
 | Path | Responsibility |
 |---|---|
-| `app/shared` | Thin Application Assembly: constructs fixed bindings, transports Profile results by source identity, owns provider lifecycle, and delegates the shell to AppSession |
+| `app/shared` | Thin Application Assembly: constructs fixed bindings and exact platform storage/audio brokers, transports Profile results by source identity, owns provider lifecycle, and delegates the shell to AppSession |
 | `app/desktop` | Thin JVM/desktop host and native packaging; depends only on `app/shared` |
 | `app/web` | Thin Wasm browser host and production web bundle; depends only on `app/shared` |
 | `foundation/common`, `foundation/design` | Shared mechanical collections, random utilities, Canvas tokens, text, geometry, and UI primitives |
-| `resource/audio/api`, `resource/audio/impl` | Bounded audio Resource contract and Desktop/Wasm provider implementations |
+| `resource/audio/api`, `resource/audio/impl` | Bounded audio Resource contract and capability-driven mechanical service; platform authority stays in private `app/shared` brokers |
 | `ball/content/api`, `ball/content/impl` | Stable content types and the immutable Content authority role |
 | `ball/profile/api`, `ball/profile/nucleus`, `ball/profile/resource`, `ball/profile/interaction`, `ball/profile/impl` | Profile protocols, pure decisions, persistence edge, Settings/Lab/Armory/Rebirth UI, and the accepting component |
 | `ball/gameplay/api`, `ball/gameplay/nucleus`, `ball/gameplay/interaction`, `ball/gameplay/impl` | Run protocols, deterministic simulation, Canvas/input interaction, and accepted-effect execution |

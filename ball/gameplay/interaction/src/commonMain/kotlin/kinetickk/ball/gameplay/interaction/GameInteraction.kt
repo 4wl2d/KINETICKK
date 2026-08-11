@@ -31,10 +31,8 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.rememberTextMeasurer
 import kinetickk.ball.gameplay.api.BrakeSource
-import kinetickk.ball.gameplay.api.GamePhase
 import kinetickk.ball.gameplay.api.GameplayAcceptance
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
-import kinetickk.ball.gameplay.api.GameplayQuery
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.ball.gameplay.interaction.canvas.drawGameplay
 import kinetickk.ball.gameplay.interaction.input.GameInteractionValidator
@@ -43,6 +41,7 @@ import kinetickk.ball.gameplay.interaction.input.InteractionValidationResult
 import kinetickk.ball.gameplay.interaction.input.ValidationFailure
 import kinetickk.ball.gameplay.interaction.input.isHudControlPosition
 import kinetickk.ball.gameplay.interaction.input.resolveGameplayPress
+import kinetickk.ball.gameplay.nucleus.render.GamePhase
 
 internal const val MAX_GAMEPLAY_PRESENTATION_DELTA_SECONDS: Float = 0.1f
 
@@ -60,7 +59,7 @@ fun GameplayContent(
     val density = LocalDensity.current.density
     val interactionValidator = remember(component) { GameInteractionValidator() }
     var renderModelValue by remember(component) {
-        mutableStateOf(requireNotNull(component.query(GameplayQuery.GetRender).renderModel))
+        mutableStateOf(requireNotNull(component.renderSnapshot().renderModel))
     }
     var visualFxProjectionValue by remember(component) {
         mutableStateOf(component.visualFxSnapshot())
@@ -70,9 +69,7 @@ fun GameplayContent(
     fun dispatch(pulse: GameplayInteractionPulse) {
         when (component.accept(pulse)) {
             is GameplayAcceptance.Accepted -> {
-                renderModelValue = requireNotNull(
-                    component.query(GameplayQuery.GetRender).renderModel,
-                )
+                renderModelValue = requireNotNull(component.renderSnapshot().renderModel)
                 visualFxProjectionValue = component.visualFxSnapshot()
             }
             is GameplayAcceptance.Rejected -> Unit
@@ -163,16 +160,16 @@ fun GameplayContent(
                         dispatch(GameplayInteractionPulse.ChoicesRerolled)
                     }
                     Key.One -> keyDown(event.type) {
-                        dispatch(GameplayInteractionPulse.ChoiceSelected(0))
+                        dispatchValidated(interactionValidator.choiceSelected(0))
                     }
                     Key.Two -> keyDown(event.type) {
-                        dispatch(GameplayInteractionPulse.ChoiceSelected(1))
+                        dispatchValidated(interactionValidator.choiceSelected(1))
                     }
                     Key.Three -> keyDown(event.type) {
-                        dispatch(GameplayInteractionPulse.ChoiceSelected(2))
+                        dispatchValidated(interactionValidator.choiceSelected(2))
                     }
                     Key.Four -> keyDown(event.type) {
-                        dispatch(GameplayInteractionPulse.ChoiceSelected(3))
+                        dispatchValidated(interactionValidator.choiceSelected(3))
                     }
                     Key.Enter -> keyDown(event.type) {
                         when (renderModelValue.phase) {
@@ -205,9 +202,7 @@ fun GameplayContent(
                         val event = awaitPointerEvent(PointerEventPass.Main)
                         val position = event.changes.firstOrNull()?.position
                         val pressed = event.changes.any { it.pressed }
-                        val currentRenderModel = requireNotNull(
-                            component.query(GameplayQuery.GetRender).renderModel,
-                        )
+                        val currentRenderModel = requireNotNull(component.renderSnapshot().renderModel)
                         val validatedMove = position?.let { pointerPosition ->
                             when (
                                 val result = interactionValidator.pointerMoved(

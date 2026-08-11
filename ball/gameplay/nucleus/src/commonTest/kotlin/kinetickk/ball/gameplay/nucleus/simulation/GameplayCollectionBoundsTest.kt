@@ -3,14 +3,11 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.gameplay.api.ChoiceOption
-import kinetickk.ball.gameplay.api.ChoiceType
-import kinetickk.ball.gameplay.api.GamePhase
-import kinetickk.ball.gameplay.api.GameplayInputField
-import kinetickk.ball.gameplay.api.GameplayInputReason
+import kinetickk.ball.content.api.GameplayContentSnapshot
+import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
+import kinetickk.ball.gameplay.api.GameplayPointerAxis
 import kinetickk.ball.gameplay.api.GameplayRejection
-import kinetickk.ball.gameplay.api.WeaponNodeType
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.WeaponNode
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
@@ -18,7 +15,12 @@ import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.reducer.EngineState
 import kinetickk.ball.gameplay.nucleus.reducer.GameReducer
 import kinetickk.ball.gameplay.nucleus.reducer.GameReductionResult
+import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
+import kinetickk.ball.gameplay.nucleus.render.ChoiceType
+import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
+import kinetickk.foundation.collections.toImmutableList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -105,164 +107,88 @@ class GameplayCollectionBoundsTest {
         val reducer = GameReducer()
 
         assertIs<GameReductionResult.Accepted>(
-            reducer.reduce(EngineState(state), GameplayInteractionPulse.ChoiceSelected(3)),
-        )
-
-        val rejected = assertIs<GameReductionResult.Rejected>(
-            reducer.reduce(EngineState(state), GameplayInteractionPulse.ChoiceSelected(4)),
-        )
-        assertEquals(
-            GameplayRejection.InvalidInput(
-                GameplayInputField.CHOICE_INDEX,
-                GameplayInputReason.ABOVE_MAXIMUM,
+            reducer.reduce(
+                EngineState(state),
+                GameplayInteractionPulse.ChoiceSelected.fromValidated(3),
             ),
-            rejected.reason,
         )
+        assertFailsWith<IllegalArgumentException> {
+            GameplayInteractionPulse.ChoiceSelected.fromValidated(4)
+        }
     }
 
     @Test
-    fun authoritativeIngressAcceptsExactBoundsAndRejectsNextRepresentableValues() {
+    fun validatedFactoriesOwnFixedBoundsAndReducerOwnsPointerMembership() {
         val state = newState(seed = 908)
         val reducer = GameReducer()
 
         assertIs<GameReductionResult.Accepted>(
-            reducer.reduce(EngineState(state), GameplayInteractionPulse.FrameElapsed(0f)),
+            reducer.reduce(
+                EngineState(state),
+                GameplayInteractionPulse.FrameElapsed.fromValidated(0f),
+            ),
         )
         assertIs<GameReductionResult.Accepted>(
-            reducer.reduce(EngineState(state), GameplayInteractionPulse.FrameElapsed(1f)),
+            reducer.reduce(
+                EngineState(state),
+                GameplayInteractionPulse.FrameElapsed.fromValidated(1f),
+            ),
         )
-        assertInvalidInput(
-            reducer,
-            state,
-            GameplayInteractionPulse.FrameElapsed(-Float.MIN_VALUE),
-            GameplayInputField.FRAME_DELTA_SECONDS,
-            GameplayInputReason.BELOW_MINIMUM,
-        )
-        assertInvalidInput(
-            reducer,
-            state,
-            GameplayInteractionPulse.FrameElapsed(Float.fromBits(1f.toBits() + 1)),
-            GameplayInputField.FRAME_DELTA_SECONDS,
-            GameplayInputReason.ABOVE_MAXIMUM,
-        )
+        assertFailsWith<IllegalArgumentException> {
+            GameplayInteractionPulse.FrameElapsed.fromValidated(-Float.MIN_VALUE)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            GameplayInteractionPulse.FrameElapsed.fromValidated(Float.fromBits(1f.toBits() + 1))
+        }
 
         assertIs<GameReductionResult.Accepted>(
             reducer.reduce(
                 EngineState(state),
-                GameplayInteractionPulse.ViewportChanged(1f, 1f, 0.5f),
+                GameplayInteractionPulse.ViewportChanged.fromValidated(1f, 1f, 0.5f),
             ),
         )
         assertIs<GameReductionResult.Accepted>(
             reducer.reduce(
                 EngineState(state),
-                GameplayInteractionPulse.ViewportChanged(32_768f, 32_768f, 8f),
+                GameplayInteractionPulse.ViewportChanged.fromValidated(32_768f, 32_768f, 8f),
             ),
         )
-        assertInvalidInput(
-            reducer,
-            state,
-            GameplayInteractionPulse.ViewportChanged(
+        assertFailsWith<IllegalArgumentException> {
+            GameplayInteractionPulse.ViewportChanged.fromValidated(
                 Float.fromBits(1f.toBits() - 1),
                 1f,
                 0.5f,
-            ),
-            GameplayInputField.VIEWPORT_WIDTH,
-            GameplayInputReason.BELOW_MINIMUM,
-        )
-        assertInvalidInput(
-            reducer,
-            state,
-            GameplayInteractionPulse.ViewportChanged(
-                1f,
-                Float.fromBits(1f.toBits() - 1),
-                0.5f,
-            ),
-            GameplayInputField.VIEWPORT_HEIGHT,
-            GameplayInputReason.BELOW_MINIMUM,
-        )
-        assertInvalidInput(
-            reducer,
-            state,
-            GameplayInteractionPulse.ViewportChanged(1f, 1f, Float.fromBits(0.5f.toBits() - 1)),
-            GameplayInputField.DENSITY,
-            GameplayInputReason.BELOW_MINIMUM,
-        )
-        assertInvalidInput(
-            reducer,
-            state,
-            GameplayInteractionPulse.ViewportChanged(
-                Float.fromBits(32_768f.toBits() + 1),
-                32_768f,
-                8f,
-            ),
-            GameplayInputField.VIEWPORT_WIDTH,
-            GameplayInputReason.ABOVE_MAXIMUM,
-        )
-        assertInvalidInput(
-            reducer,
-            state,
-            GameplayInteractionPulse.ViewportChanged(
-                32_768f,
-                Float.fromBits(32_768f.toBits() + 1),
-                8f,
-            ),
-            GameplayInputField.VIEWPORT_HEIGHT,
-            GameplayInputReason.ABOVE_MAXIMUM,
-        )
-        assertInvalidInput(
-            reducer,
-            state,
-            GameplayInteractionPulse.ViewportChanged(32_768f, 32_768f, Float.fromBits(8f.toBits() + 1)),
-            GameplayInputField.DENSITY,
-            GameplayInputReason.ABOVE_MAXIMUM,
-        )
+            )
+        }
 
         assertIs<GameReductionResult.Accepted>(
             reducer.reduce(
                 EngineState(state),
-                GameplayInteractionPulse.PointerMoved(0f, 0f),
+                GameplayInteractionPulse.PointerMoved.fromValidated(0f, 0f),
             ),
         )
         assertIs<GameReductionResult.Accepted>(
             reducer.reduce(
                 EngineState(state),
-                GameplayInteractionPulse.PointerMoved(state.screenWidth, state.screenHeight),
+                GameplayInteractionPulse.PointerMoved.fromValidated(
+                    state.screenWidth,
+                    state.screenHeight,
+                ),
             ),
         )
-        assertInvalidInput(
-            reducer,
-            state,
-            GameplayInteractionPulse.PointerMoved(-Float.MIN_VALUE, 0f),
-            GameplayInputField.POINTER_X,
-            GameplayInputReason.BELOW_MINIMUM,
-        )
-        assertInvalidInput(
-            reducer,
-            state,
-            GameplayInteractionPulse.PointerMoved(0f, -Float.MIN_VALUE),
-            GameplayInputField.POINTER_Y,
-            GameplayInputReason.BELOW_MINIMUM,
-        )
-        assertInvalidInput(
-            reducer,
-            state,
-            GameplayInteractionPulse.PointerMoved(
-                Float.fromBits(state.screenWidth.toBits() + 1),
-                state.screenHeight,
+        val rejected = assertIs<GameReductionResult.Rejected>(
+            reducer.reduce(
+                EngineState(state),
+                GameplayInteractionPulse.PointerMoved.fromValidated(-Float.MIN_VALUE, 0f),
             ),
-            GameplayInputField.POINTER_X,
-            GameplayInputReason.ABOVE_MAXIMUM,
         )
-        assertInvalidInput(
-            reducer,
-            state,
-            GameplayInteractionPulse.PointerMoved(
-                state.screenWidth,
-                Float.fromBits(state.screenHeight.toBits() + 1),
-            ),
-            GameplayInputField.POINTER_Y,
-            GameplayInputReason.ABOVE_MAXIMUM,
+        assertEquals(
+            GameplayRejection.PointerOutsideViewport(GameplayPointerAxis.HORIZONTAL),
+            rejected.reason,
         )
+        assertFailsWith<IllegalArgumentException> {
+            GameplayInteractionPulse.PointerMoved.fromValidated(Float.NaN, 0f)
+        }
     }
 
     @Test
@@ -287,24 +213,92 @@ class GameplayCollectionBoundsTest {
     }
 
     @Test
-    fun rewardChoiceGeneratorsSelectThreeFromLargerCandidatePools() {
-        val itemState = newState(seed = 910).apply { lifetimeMatter = 4_000L }
-        assertTrue(itemState.content.items.size > MAX_GENERATED_REWARD_CHOICES)
-        itemState.buildItemChoices()
-        assertEquals(MAX_GENERATED_REWARD_CHOICES, itemState.choices.size)
+    fun rewardChoiceGeneratorsAcceptThreeCandidatesAndDeferFirstNPlusOne() {
+        listOf(MAX_GENERATED_REWARD_CHOICES, MAX_GENERATED_REWARD_CHOICES + 1)
+            .forEachIndexed { index, candidateCount ->
+                val itemContent = canonicalGameplayContent.copy(
+                    items = canonicalGameplayContent.items.take(candidateCount).toImmutableList(),
+                )
+                val itemState = newState(seed = 910 + index, content = itemContent).apply {
+                    lifetimeMatter = 4_000L
+                }
+                itemState.buildItemChoices()
+                val selectedItemIds = itemState.choices.mapNotNull { choice -> choice.itemId }.toSet()
+                assertEquals(MAX_GENERATED_REWARD_CHOICES, selectedItemIds.size)
+                assertEquals(
+                    candidateCount - MAX_GENERATED_REWARD_CHOICES,
+                    itemContent.items.count { item -> item.id !in selectedItemIds },
+                )
 
-        val weaponState = newState(seed = 911)
-        assertTrue(
-            weaponState.content.weapons.count { definition -> definition.id != weaponState.weapon } >
-                MAX_GENERATED_REWARD_CHOICES,
+                val currentWeapon = canonicalGameplayContent.weapon(WeaponId.FLUX_WAKE)
+                val weaponCandidates = canonicalGameplayContent.weapons
+                    .filter { definition -> definition.id != currentWeapon.id }
+                    .take(candidateCount)
+                val weaponContent = canonicalGameplayContent.copy(
+                    weapons = (listOf(currentWeapon) + weaponCandidates).toImmutableList(),
+                )
+                val weaponState = newState(seed = 912 + index, content = weaponContent)
+                weaponState.buildWeaponChoices()
+                val selectedWeaponIds = weaponState.choices.mapNotNull { choice -> choice.weaponId }.toSet()
+                assertEquals(MAX_GENERATED_REWARD_CHOICES, selectedWeaponIds.size)
+                assertEquals(
+                    candidateCount - MAX_GENERATED_REWARD_CHOICES,
+                    weaponCandidates.count { weapon -> weapon.id !in selectedWeaponIds },
+                )
+
+                val relicContent = canonicalGameplayContent.copy(
+                    relics = canonicalGameplayContent.relics.take(candidateCount).toImmutableList(),
+                )
+                val relicState = newState(seed = 914 + index, content = relicContent)
+                relicState.buildRelicChoices()
+                val selectedRelicIds = relicState.choices.mapNotNull { choice -> choice.relicId }.toSet()
+                assertEquals(MAX_GENERATED_REWARD_CHOICES, selectedRelicIds.size)
+                assertEquals(
+                    candidateCount - MAX_GENERATED_REWARD_CHOICES,
+                    relicContent.relics.count { relic -> relic.id !in selectedRelicIds },
+                )
+            }
+    }
+
+    @Test
+    fun relicChainWorkAcceptsFiveAndRejectsSixthIteration() {
+        val exact = newState(seed = 916)
+        val exactOrigin = exact.addEnemyForTesting(x = 0f, y = 0f)
+        val exactTargets = List(exact.content.relicPolicy.maxRank + 1) { index ->
+            exact.addEnemyForTesting(x = (index + 1) * 10f, y = 0f, hp = 100f)
+        }
+
+        exact.chainRelicDamage(
+            origin = exactOrigin,
+            count = exact.content.relicPolicy.maxRank,
+            range = 100f,
+            damage = 10f,
         )
-        weaponState.buildWeaponChoices()
-        assertEquals(MAX_GENERATED_REWARD_CHOICES, weaponState.choices.size)
 
-        val relicState = newState(seed = 912)
-        assertTrue(relicState.content.relics.size > MAX_GENERATED_REWARD_CHOICES)
-        relicState.buildRelicChoices()
-        assertEquals(MAX_GENERATED_REWARD_CHOICES, relicState.choices.size)
+        assertTrue(exactTargets.take(exact.content.relicPolicy.maxRank).all { target -> target.hp < target.maxHp })
+        assertEquals(exactTargets.last().maxHp, exactTargets.last().hp)
+        assertEquals(
+            exact.content.relicPolicy.maxRank,
+            exact.takeVisualFxCues().count { cue -> cue is VisualFxCue.WeaponArcAdded },
+        )
+
+        val overflow = newState(seed = 917)
+        val overflowOrigin = overflow.addEnemyForTesting(x = 0f, y = 0f)
+        val overflowTargets = List(overflow.content.relicPolicy.maxRank + 1) { index ->
+            overflow.addEnemyForTesting(x = (index + 1) * 10f, y = 0f, hp = 100f)
+        }
+        val before = overflowTargets.map { target -> target.hp }
+
+        assertFailsWith<IllegalArgumentException> {
+            overflow.chainRelicDamage(
+                origin = overflowOrigin,
+                count = overflow.content.relicPolicy.maxRank + 1,
+                range = 100f,
+                damage = 10f,
+            )
+        }
+        assertEquals(before, overflowTargets.map { target -> target.hp })
+        assertTrue(overflow.takeVisualFxCues().isEmpty())
     }
 
     @Test
@@ -356,8 +350,11 @@ class GameplayCollectionBoundsTest {
         assertTrue(projectile.hasRecordedEnemyHit(firstOverflowId))
     }
 
-    private fun newState(seed: Int) = MutableGameState(
-        content = canonicalGameplayContent,
+    private fun newState(
+        seed: Int,
+        content: GameplayContentSnapshot = canonicalGameplayContent,
+    ) = MutableGameState(
+        content = content,
         seed = seed,
         initialMatter = 0,
     )
@@ -378,19 +375,6 @@ class GameplayCollectionBoundsTest {
         tag = "TEST",
         itemId = canonicalGameplayContent.items.first().id,
     )
-
-    private fun assertInvalidInput(
-        reducer: GameReducer,
-        state: MutableGameState,
-        pulse: GameplayInteractionPulse,
-        field: GameplayInputField,
-        reason: GameplayInputReason,
-    ) {
-        val rejected = assertIs<GameReductionResult.Rejected>(
-            reducer.reduce(EngineState(state), pulse),
-        )
-        assertEquals(GameplayRejection.InvalidInput(field, reason), rejected.reason)
-    }
 
     private companion object {
         const val TRAIL_SAMPLE_DISTANCE = 22f

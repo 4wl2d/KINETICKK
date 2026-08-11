@@ -8,6 +8,7 @@ import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
 
 import kinetickk.ball.gameplay.api.*
+import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.model.*
 import kotlin.math.max
 import kotlin.math.min
@@ -200,6 +201,9 @@ internal fun MutableGameState.nearestOtherEnemy(x: Float, y: Float, excludedId: 
     .minByOrNull { distanceSquared(x, y, it.x, it.y) }
 
 internal fun MutableGameState.chainRelicDamage(origin: Enemy, count: Int, range: Float, damage: Float) {
+    require(count in 0..content.relicPolicy.maxRank) {
+        "Relic chain work must remain within the captured Relic rank bound"
+    }
     val used = mutableSetOf(origin.id)
     var fromX = origin.x
     var fromY = origin.y

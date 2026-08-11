@@ -11,8 +11,6 @@ import kinetickk.ball.profile.api.LoadoutProjection
 import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PreferencesProjection
 import kinetickk.ball.profile.api.ProfileAcceptance
-import kinetickk.ball.profile.api.ProfileCommand
-import kinetickk.ball.profile.api.ProfileCommandAdmission
 import kinetickk.ball.profile.api.ProfilePort
 import kinetickk.ball.profile.api.ProfilePulse
 import kinetickk.ball.profile.api.ProfileQuery
@@ -158,11 +156,6 @@ private object UnusedProfilePort : ProfilePort {
     override val instanceId = LOCAL_PROFILE_INSTANCE_ID
 
     override fun accept(pulse: ProfilePulse.Business): ProfileAcceptance = error("unused")
-
-    override fun accept(
-        command: ProfileCommand,
-        admission: ProfileCommandAdmission,
-    ): ProfileAcceptance = error("unused")
 
     override fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection = error("unused")
     override fun query(query: ProfileQuery.GetPreferences): PreferencesProjection = error("unused")
