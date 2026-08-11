@@ -6,6 +6,7 @@ package kinetickk.resource.audio.impl
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
 import kinetickk.resource.audio.api.ToneRequest
+import kinetickk.resource.audio.api.ToneRequestLimits
 import kinetickk.resource.audio.api.ToneWave
 
 class DefaultAudioService internal constructor(
@@ -25,8 +26,12 @@ class DefaultAudioService internal constructor(
     override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) {
         if (closed) return
         val volume = preferences.masterVolume.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0f
-        if (preferences.soundEnabled && volume > 0f && requests.size <= MAX_ACCEPTED_REQUESTS) {
-            selectToneRequests(requests, MAX_REQUESTS_PER_FRAME).forEach { request ->
+        if (
+            preferences.soundEnabled &&
+            volume > 0f &&
+            requests.size <= MAX_ACCEPTED_EFFECT_REQUESTS_PER_ADVANCE
+        ) {
+            selectToneRequests(requests, MAX_SELECTED_EFFECT_REQUESTS_PER_ADVANCE).forEach { request ->
                 platform.playSafely(request.copy(gain = request.gain * volume))
             }
         }
@@ -35,8 +40,7 @@ class DefaultAudioService internal constructor(
             musicClock = 0f
             return
         }
-        val boundedDelta = realDeltaSeconds.takeIf { it.isFinite() }?.coerceIn(0f, 0.1f) ?: 0f
-        musicClock -= boundedDelta
+        musicClock -= selectMusicAdvanceDeltaSeconds(realDeltaSeconds)
         if (musicClock <= 0f) {
             musicClock += MUSIC_STEP_SECONDS
             val frequency = MUSIC_NOTES[musicStep % MUSIC_NOTES.size]
@@ -64,12 +68,20 @@ class DefaultAudioService internal constructor(
     }
 
     private companion object {
-        const val MAX_ACCEPTED_REQUESTS = 32
-        const val MAX_REQUESTS_PER_FRAME = 3
+        const val MAX_ACCEPTED_EFFECT_REQUESTS_PER_ADVANCE = 32
+        const val MAX_SELECTED_EFFECT_REQUESTS_PER_ADVANCE = 3
         const val MUSIC_STEP_SECONDS = 0.32f
         val MUSIC_NOTES = floatArrayOf(110f, 146.83f, 164.81f, 220f, 196f, 164.81f, 146.83f, 123.47f)
     }
 }
+
+internal const val MAX_MUSIC_ADVANCE_DELTA_SECONDS: Float = 0.1f
+
+internal fun selectMusicAdvanceDeltaSeconds(realDeltaSeconds: Float): Float =
+    realDeltaSeconds
+        .takeIf { it.isFinite() }
+        ?.coerceIn(0f, MAX_MUSIC_ADVANCE_DELTA_SECONDS)
+        ?: 0f
 
 internal fun selectToneRequests(requests: List<ToneRequest>, limit: Int): List<ToneRequest> = requests
     .distinct()
@@ -106,8 +118,13 @@ internal fun isToneRequestAllowed(
     durationSeconds: Float,
     gain: Float,
     wave: Int,
-): Boolean = frequencyHz.isFinite() && frequencyHz in 20f..20_000f &&
-    durationSeconds.isFinite() && durationSeconds in 0.001f..1f &&
-    gain.isFinite() && gain in 0f..1f && wave in ToneWave.entries.indices
+): Boolean = frequencyHz.isFinite() &&
+    frequencyHz >= ToneRequestLimits.MIN_FREQUENCY_HZ &&
+    frequencyHz <= ToneRequestLimits.MAX_FREQUENCY_HZ &&
+    durationSeconds.isFinite() &&
+    durationSeconds >= ToneRequestLimits.MIN_DURATION_SECONDS &&
+    durationSeconds <= ToneRequestLimits.MAX_DURATION_SECONDS &&
+    gain.isFinite() && gain in ToneRequestLimits.MIN_GAIN..ToneRequestLimits.MAX_GAIN &&
+    wave in ToneWave.entries.indices
 
 internal expect fun createPlatformTonePlayer(): NumericTonePlayer

@@ -37,7 +37,6 @@ import kinetickk.flow.session.interaction.codex.api.CodexOutput
 import kinetickk.flow.session.interaction.codex.api.CodexRenderModel
 import kinetickk.flow.session.interaction.codex.api.CodexRunStacks
 import kinetickk.resource.audio.api.AudioService
-import kotlin.math.min
 
 class DefaultCodexFeature(
     private val profilePort: ProfilePort,
@@ -101,15 +100,13 @@ private fun DrawScope.drawCodex(
     val contentWidth = bounds.width - d(50f)
     val columnWidth = contentWidth * 0.5f
     val rowHeight = (bounds.height - d(146f)) / 5f
-    val start = page.coerceIn(0, maxPage) * CODEX_PAGE_SIZE
-    engine.items.subList(start.coerceAtMost(engine.items.size), min(start + CODEX_PAGE_SIZE, engine.items.size))
-        .forEachIndexed { index, item ->
-            val column = index % 2
-            val row = index / 2
-            val x = bounds.left + d(25f) + column * columnWidth
-            val y = contentTop + row * rowHeight
-            drawCodexItem(engine, textMeasurer, item, x, y, columnWidth - d(10f), rowHeight - d(8f))
-        }
+    codexPageSlice(engine.items, page).forEachIndexed { index, item ->
+        val column = index % 2
+        val row = index / 2
+        val x = bounds.left + d(25f) + column * columnWidth
+        val y = contentTop + row * rowHeight
+        drawCodexItem(engine, textMeasurer, item, x, y, columnWidth - d(10f), rowHeight - d(8f))
+    }
     drawPagedFooter(textMeasurer, bounds, page.coerceIn(0, maxPage), maxPage, Magenta)
 }
 

@@ -96,7 +96,9 @@ class DefaultArmoryFeature(
             var previousFrame = withFrameNanos { it }
             while (true) {
                 val frame = withFrameNanos { it }
-                renderTimeSecondsValue += ((frame - previousFrame) / 1_000_000_000f).coerceAtMost(0.1f)
+                renderTimeSecondsValue += selectArmoryPresentationFrameDeltaSeconds(
+                    (frame - previousFrame) / 1_000_000_000f,
+                )
                 previousFrame = frame
             }
         }
@@ -152,23 +154,26 @@ private fun DrawScope.drawArmory(
     val startX = (size.width - total) * 0.5f
     val cardTop = bounds.top + d(118f)
     val cardBottom = bounds.bottom - d(85f)
-    val start = page.coerceIn(0, maxPage) * ARMORY_PAGE_SIZE
-    weapons.subList(start, min(start + ARMORY_PAGE_SIZE, weapons.size))
-        .forEachIndexed { index, definition ->
-            drawWeaponCard(
-                engine = engine,
-                textMeasurer = textMeasurer,
-                definition = definition,
-                weaponMasteryProgressionLabel = weaponMasteryProgressionLabel,
-                x = startX + index * (cardWidth + gap),
-                y = cardTop,
-                width = cardWidth,
-                height = cardBottom - cardTop,
-                renderTime = renderTime,
-            )
-        }
+    armoryPageSlice(weapons, page).forEachIndexed { index, definition ->
+        drawWeaponCard(
+            engine = engine,
+            textMeasurer = textMeasurer,
+            definition = definition,
+            weaponMasteryProgressionLabel = weaponMasteryProgressionLabel,
+            x = startX + index * (cardWidth + gap),
+            y = cardTop,
+            width = cardWidth,
+            height = cardBottom - cardTop,
+            renderTime = renderTime,
+        )
+    }
     drawPagedFooter(textMeasurer, bounds, page.coerceIn(0, maxPage), maxPage, Cyan)
 }
+
+internal const val MAX_ARMORY_PRESENTATION_FRAME_DELTA_SECONDS: Float = 0.1f
+
+internal fun selectArmoryPresentationFrameDeltaSeconds(frameDeltaSeconds: Float): Float =
+    frameDeltaSeconds.coerceAtMost(MAX_ARMORY_PRESENTATION_FRAME_DELTA_SECONDS)
 
 private fun DrawScope.drawWeaponCard(
     engine: ArmoryRenderModel,

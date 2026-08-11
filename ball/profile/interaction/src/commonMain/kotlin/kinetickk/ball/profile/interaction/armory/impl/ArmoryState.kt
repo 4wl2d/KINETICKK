@@ -13,6 +13,12 @@ import kinetickk.foundation.collections.ImmutableList
 
 internal const val ARMORY_PAGE_SIZE = 3
 
+internal fun <T> armoryPageSlice(items: List<T>, page: Int): List<T> {
+    val maxPage = if (items.isEmpty()) 0 else (items.size - 1) / ARMORY_PAGE_SIZE
+    val start = page.coerceIn(0, maxPage) * ARMORY_PAGE_SIZE
+    return items.subList(start.coerceAtMost(items.size), minOf(start + ARMORY_PAGE_SIZE, items.size))
+}
+
 internal sealed interface ArmoryAction {
     data object Back : ArmoryAction
     data object PreviousPage : ArmoryAction

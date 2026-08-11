@@ -319,7 +319,7 @@ class AppSessionNucleusTest {
 
     @Test
     fun settingsCloseQueriesPreferencesThenWaitsForExactGameplayPropagation() {
-        val preferences = PlayerPreferences(textScale = 1.5f, simulationSpeed = 1.75f)
+        val preferences = PlayerPreferences(textScale = 1.5f, simulationSpeed = 1.6f)
         val state = gameplayState(GameplayRunPhase.PAUSED).copy(overlay = AppDestination.Settings)
         val applying = AppSessionNucleus.decide(
             state,
@@ -1291,6 +1291,34 @@ class AppSessionNucleusTest {
                 immutableListOf(send, ensure),
             )
         }
+        assertFailsWith<IllegalArgumentException> {
+            AppSessionAcceptedFrame(
+                start.nextState,
+                start.shellProjection,
+                immutableListOf(send, send),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            AppSessionAcceptedFrame(
+                start.nextState,
+                start.shellProjection,
+                immutableListOf(ensure, ensure, send),
+            )
+        }
+    }
+
+    @Test
+    fun pendingWorkflowAcceptsOneParticipantCommandAndRejectsTheSecond() {
+        val first = startFrame()
+        assertIs<PendingWorkflow.StartingRun>(first.nextState.pendingWorkflow)
+
+        val second = AppSessionNucleus.decide(
+            first.nextState,
+            SessionInteractionPulse.StartRunRequested,
+            AppSessionContext(runBootstrap = runBootstrap()),
+        )
+
+        assertEquals(SessionRejection.ParticipantCommandPending, second.rejection())
     }
 }
 

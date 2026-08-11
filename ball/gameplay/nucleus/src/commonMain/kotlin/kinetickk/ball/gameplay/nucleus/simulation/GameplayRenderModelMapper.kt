@@ -153,50 +153,6 @@ internal fun MutableGameState.toRenderModel(): GameplayRenderModel = GameplayRen
     relicRanks = relicRanks.asIterable().toImmutableList(),
 )
 
-internal fun MutableGameState.boundedCollectionSizes(): List<Int> = buildList {
-    add(enemies.size)
-    add(projectiles.size)
-    add(pickups.size)
-    add(trail.size)
-    add(weaponNodes.size)
-    add(weaponOrbitals.size)
-    add(choices.size)
-    add(equippedRelics.size)
-    add(unlockedWeaponSet.size)
-    add(discoveredItemIds.size)
-    add(delayedRelicHits.size)
-    add(itemStacks.size)
-    add(familyStacks.size)
-    add(metaRanks.size)
-    add(relicRanks.size)
-    add(relicCooldowns.size)
-    add(relicCounters.size)
-    add(relicProcCounts.size)
-    add(agonyMutationCounts.size)
-    projectiles.forEach { projectile -> add(projectile.hitEnemyIds.size) }
-}
-
-internal fun MutableGameState.domainCollectionLimits(): List<DomainCollectionLimit> = listOf(
-    DomainCollectionLimit("enemies", enemies.size, content.rebirth.maxActiveEnemies),
-    DomainCollectionLimit("projectiles", projectiles.size, MutableGameState.MAX_PROJECTILES),
-    DomainCollectionLimit("pickups", pickups.size, MutableGameState.MAX_PICKUPS),
-    DomainCollectionLimit("trail", trail.size, MutableGameState.MAX_TRAIL_POINTS),
-    DomainCollectionLimit("delayedRelicHits", delayedRelicHits.size, MutableGameState.MAX_DELAYED_RELIC_HITS),
-)
-
-internal fun MutableGameState.estimatedStateBytes(): Long =
-    8_192L +
-        enemies.size * 512L +
-        projectiles.size * 256L +
-        pickups.size * 96L +
-        trail.size * 32L +
-        weaponNodes.size * 56L +
-        weaponOrbitals.size * 40L +
-        choices.size * 512L +
-        discoveredItemIds.size * 16L +
-        delayedRelicHits.size * 48L +
-        projectiles.sumOf { projectile -> projectile.hitEnemyIds.size.toLong() * 16L }
-
 /**
  * Produces an isolated reducer candidate. Committed instances are never mutated again;
  * all mutation happens on this private copy during reduction.
@@ -363,9 +319,7 @@ internal fun MutableGameState.copyForReduction(): MutableGameState {
         )
     })
     target.projectiles.clear()
-    target.projectiles.addAll(projectiles.map { projectile ->
-        projectile.copy(hitEnemyIds = projectile.hitEnemyIds.toMutableSet())
-    })
+    target.projectiles.addAll(projectiles.map(Projectile::isolatedCopy))
     target.pickups.clear()
     target.pickups.addAll(pickups.map(Pickup::copy))
     target.trail.clear()

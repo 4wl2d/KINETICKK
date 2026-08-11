@@ -3,7 +3,16 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.content.api.*
+import kinetickk.ball.content.api.EquippedRelic
+import kinetickk.ball.content.api.ItemDefinition
+import kinetickk.ball.content.api.ItemEffect
+import kinetickk.ball.content.api.ItemModifier
+import kinetickk.ball.content.api.ItemRarity
+import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.RelicAspect
+import kinetickk.ball.content.api.RelicDefinition
+import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.WeaponId
 
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.model.*
@@ -15,6 +24,7 @@ import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 
+internal const val MAX_GENERATED_REWARD_CHOICES: Int = 3
 
 internal fun MutableGameState.openItemChoice() {
     activeChoiceType = ChoiceType.ITEM
@@ -29,7 +39,7 @@ internal fun MutableGameState.buildItemChoices() {
     val unlocked = content.items.filter { it.unlockLevel <= catalogLevel }
     val eligible = unlocked.filter { itemStacks[it.id] < it.maxStacks }
     val selected = mutableListOf<ItemDefinition>()
-    repeat(3) {
+    repeat(MAX_GENERATED_REWARD_CHOICES) {
         val preferred = eligible.filter { candidate -> selected.none { it.id == candidate.id } }
         val available = preferred.ifEmpty { unlocked.filter { candidate -> selected.none { it.id == candidate.id } } }
         if (available.isEmpty()) return@repeat
@@ -97,7 +107,10 @@ internal fun MutableGameState.openWeaponChoice() {
 }
 
 internal fun MutableGameState.buildWeaponChoices() {
-    val pool = content.weapons.filter { it.id != weapon }.shuffled(gameplayRandom).take(3)
+    val pool = content.weapons
+        .filter { it.id != weapon }
+        .shuffled(gameplayRandom)
+        .take(MAX_GENERATED_REWARD_CHOICES)
     choices = pool.map {
         ChoiceOption(
             type = ChoiceType.WEAPON,
@@ -118,7 +131,7 @@ internal fun MutableGameState.openRelicChoice() {
 
 internal fun MutableGameState.buildRelicChoices() {
     val selected = mutableListOf<RelicDefinition>()
-    repeat(3) {
+    repeat(MAX_GENERATED_REWARD_CHOICES) {
         val excluded = selected.mapTo(mutableSetOf()) { it.id }
         val sovereignChance = (0.08f + luck.coerceIn(0f, 2f) * 0.01f).coerceAtMost(0.10f)
         val preferredAspect = if (gameplayRandom.nextFloat() < sovereignChance) {
@@ -432,7 +445,7 @@ internal fun MutableGameState.takeSoundCues(): List<GameplayAudioCue> {
 internal fun MutableGameState.takeVisualFxCues(): List<VisualFxCue> = visualFxCues.drain()
 
 internal fun MutableGameState.emitSound(cue: GameplayAudioCue) {
-    if (soundCues.size < 32) soundCues += cue
+    if (soundCues.size < MutableGameState.MAX_GAMEPLAY_SOUND_CUES) soundCues += cue
 }
 
 internal fun MutableGameState.emitVisualFx(cue: VisualFxCue) {

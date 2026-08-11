@@ -8,6 +8,7 @@ import kinetickk.ball.content.api.*
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.simulation.*
+import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.math.abs
 import kotlin.math.sqrt
 import kotlin.test.assertEquals
@@ -186,6 +187,29 @@ class TotemEnemySystemsTest {
             assertEquals(175f, speed, 0.01f)
             assertTrue(offsetX * fragment.vx + offsetY * fragment.vy > 0f)
         }
+    }
+
+    @Test
+    fun splitterFragmentsAcceptTheDynamicEnemyCapAndRejectTheNextCandidate() {
+        val content = canonicalGameplayContent.copy(
+            rebirth = canonicalGameplayContent.rebirth.copy(maxActiveEnemies = 3),
+        )
+        val engine = MutableGameState(content = content, seed = 207, initialMatter = 0).also { state ->
+            state.startRun()
+            state.enemies.clear()
+        }
+        val splitter = engine.addEnemyForTesting(0f, 0f, type = EnemyType.SPLITTER).also { enemy ->
+            enemy.dead = true
+        }
+        val retained = engine.addEnemyForTesting(40f, 0f)
+        val retainedIds = engine.enemies.map(Enemy::id)
+
+        engine.spawnSplitterFragments(splitter)
+
+        assertEquals(content.rebirth.maxActiveEnemies, engine.enemies.size)
+        assertEquals(retainedIds, engine.enemies.take(retainedIds.size).map(Enemy::id))
+        assertTrue(retained in engine.enemies)
+        assertEquals(1, engine.enemies.count { enemy -> enemy.id !in retainedIds })
     }
 
     @Test

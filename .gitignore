@@ -5,6 +5,7 @@ build/
 out/
 kotlin-js-store/
 node_modules/
+output/playwright/
 
 # IDEs and editors
 .idea/

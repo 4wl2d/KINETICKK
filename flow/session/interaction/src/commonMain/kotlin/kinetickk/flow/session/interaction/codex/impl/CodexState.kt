@@ -11,6 +11,12 @@ import kinetickk.foundation.collections.ImmutableList
 
 internal const val CODEX_PAGE_SIZE = 10
 
+internal fun <T> codexPageSlice(items: List<T>, page: Int): List<T> {
+    val maxPage = if (items.isEmpty()) 0 else (items.size - 1) / CODEX_PAGE_SIZE
+    val start = page.coerceIn(0, maxPage) * CODEX_PAGE_SIZE
+    return items.subList(start.coerceAtMost(items.size), minOf(start + CODEX_PAGE_SIZE, items.size))
+}
+
 internal sealed interface CodexAction {
     data object Back : CodexAction
     data object PreviousPage : CodexAction

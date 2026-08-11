@@ -47,6 +47,28 @@ class RelicSystemTest {
     }
 
     @Test
+    fun meldRelicAcceptsRankFiveAndSalvagesTheFirstRankSixCandidate() {
+        val engine = runningEngine(seed = 202)
+        val relic = RelicId.KINETIC_FLYWHEEL
+        engine.acquireRelicForTesting(relic)
+        repeat(engine.content.relicPolicy.maxRank - 2) {
+            engine.meldRelic(slot = 0)
+        }
+
+        engine.meldRelic(slot = 0)
+
+        assertEquals(engine.content.relicPolicy.maxRank, engine.relicRank(relic))
+        val exactRankState = engine.equippedRelics
+        val matterBeforeOverflow = engine.runMatter
+
+        engine.meldRelic(slot = 0)
+
+        assertEquals(exactRankState, engine.equippedRelics)
+        assertEquals(engine.content.relicPolicy.maxRank, engine.relicRank(relic))
+        assertEquals(matterBeforeOverflow + 8L, engine.runMatter)
+    }
+
+    @Test
     fun fullMatrixMeldRequiresAnExplicitTargetAndOnlyRanksThatSlot() {
         val engine = fullRelicEngine(seed = 202)
         val before = engine.equippedRelics

@@ -38,9 +38,10 @@
 
 The cursor or touch point is both a magnetic target and a lethal singularity. Pull it away from the Core to build speed, turn that momentum into impact damage, and never let the Core touch the singularity.
 
-The same shared application composition, vertical features, gameplay simulation,
-content catalogs, profile codec, and tests run across desktop (macOS, Windows,
-and Linux) and modern browsers through WebAssembly.
+The same shared application composition, Pokeball authorities, deterministic
+gameplay simulation, content catalog, strict profile resource, and tests run
+across desktop (macOS, Windows, and Linux) and modern browsers through
+WebAssembly.
 
 The repository is published as a working learning example for Kotlin
 Multiplatform, Compose Canvas rendering, deterministic simulation, progression
@@ -49,9 +50,9 @@ whole game locally, experiment with it, and contribute changes under the GPL.
 
 ## At a glance
 
-| 400 items | 12 weapons | 40 Relics | 9 enemy archetypes | 7 vertical features |
+| 400 items | 12 weapons | 40 Relics | 9 enemy archetypes | 7 application routes |
 |:---:|:---:|:---:|:---:|:---:|
-| Deterministic catalog | Movement-reactive | Six aspects | Architect included | 26 leaf modules |
+| Deterministic catalog | Movement-reactive | Six aspects | Architect included | 22 leaf modules |
 
 ## How to play
 
@@ -99,11 +100,19 @@ The optimized bundle is written to `app/web/build/dist/wasmJs/productionExecutab
 
 ### Verification and packaging
 
+Pokeball architecture verification requires an immutable checkout of
+`4wl2d/Pokeball` at commit
+`de9ef7384795680c836d5e6c2c9b394286058670`. Supply it with
+`-PpokeballSnapshotDir=/absolute/path` or `POKEBALL_SNAPSHOT_DIR`; a sibling
+`../Pokeball` checkout is the local default.
+
 | Goal | Command |
 |---|---|
 | Run desktop tests | `./gradlew desktopTest` |
+| Verify the module graph and Pokeball architecture/claim prerequisites | `./gradlew verifyArchitecture verifyPokeballArchitecture verifyPokeballConformance` |
+| Compile and run isolated Wasm browser tests | `CHROME_BIN=/path/to/chrome ./gradlew compileTestKotlinWasmJs wasmJsBrowserTest` |
 | Build the production web bundle | `./gradlew wasmJsBrowserDistribution` |
-| Verify architecture, tests, Wasm compilation, and the web bundle | `./gradlew verifyArchitecture desktopTest compileTestKotlinWasmJs wasmJsBrowserDistribution` |
+| Run the complete local gate | `./gradlew verifyArchitecture verifyPokeballArchitecture verifyPokeballConformance desktopTest compileTestKotlinWasmJs wasmJsBrowserTest wasmJsBrowserDistribution` |
 | List every available task | `./gradlew tasks` |
 
 ## Systems
@@ -119,7 +128,7 @@ The optimized bundle is written to `app/web/build/dist/wasmJs/productionExecutab
 
 | Path | Responsibility |
 |---|---|
-| `app/shared` | Application composition root: navigation, back stack, global shortcuts, audio lifecycle, and preservation of the active gameplay session beneath overlay features |
+| `app/shared` | Thin Application Assembly: constructs fixed bindings, transports Profile results by source identity, owns provider lifecycle, and delegates the shell to AppSession |
 | `app/desktop` | Thin JVM/desktop host and native packaging; depends only on `app/shared` |
 | `app/web` | Thin Wasm browser host and production web bundle; depends only on `app/shared` |
 | `foundation/common`, `foundation/design` | Shared mechanical collections, random utilities, Canvas tokens, text, geometry, and UI primitives |
@@ -128,15 +137,15 @@ The optimized bundle is written to `app/web/build/dist/wasmJs/productionExecutab
 | `ball/profile/api`, `ball/profile/nucleus`, `ball/profile/resource`, `ball/profile/interaction`, `ball/profile/impl` | Profile protocols, pure decisions, persistence edge, Settings/Lab/Armory/Rebirth UI, and the accepting component |
 | `ball/gameplay/api`, `ball/gameplay/nucleus`, `ball/gameplay/interaction`, `ball/gameplay/impl` | Run protocols, deterministic simulation, Canvas/input interaction, and accepted-effect execution |
 | `flow/session/api`, `flow/session/nucleus`, `flow/session/interaction`, `flow/session/impl` | Session protocols, navigation/workflow decisions, Home/Codex interaction, and orchestration role |
-| `build-logic` | Gradle conventions plus `verifyArchitecture` dependency-boundary enforcement |
+| `build-logic` | Gradle conventions plus deterministic module, ownership, route, bound, snapshot, manifest-drift, and conformance verification |
 
 The graph has exactly 22 leaf modules. Ball APIs and Nuclei are separate from
 Compose Interaction and provider-facing Resource roles; Desktop and Web depend
-only on `app/shared`. During the staged migration, `app/shared` remains the
-construction host while Session orchestration moves behind its declared Flow
-protocol. The build rejects legacy `core:*` and `feature:*` modules and
-dependencies, `impl → impl` edges, unexpected graph endpoints, and production
-sources in the root project.
+only on `app/shared`. AppSession owns navigation and cross-authority workflow;
+`app/shared` is static construction and transport only. The build rejects
+legacy `core:*` and `feature:*` modules and dependencies, invalid role imports,
+unexpected graph endpoints, manifest drift, and any mismatch in the pinned
+external Pokeball snapshot.
 
 ## Contributing
 

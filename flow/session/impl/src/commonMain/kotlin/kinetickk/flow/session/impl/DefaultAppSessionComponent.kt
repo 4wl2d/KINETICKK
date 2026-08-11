@@ -54,7 +54,7 @@ internal class DefaultAppSessionComponent private constructor(
 ) : AppSessionComponent {
     private val dispatchGuard = InlineDispatchGuard()
     private val completions =
-        BoundedCompletionDeque<SessionWorkItem>(SESSION_COMPLETION_CAPACITY)
+        sessionCompletionDeque<SessionWorkItem>()
     private var committedState: AppSessionState = initialState
     private var profileDispatchSourceDepth: Int? = null
     private var gameplayDispatchSourceDepth: Int? = null
@@ -189,21 +189,12 @@ internal class DefaultAppSessionComponent private constructor(
         }) { "Session outputs are not in ensure -> participant -> feedback order" }
 
         val participantOutputs = frame.outputs.filter { output -> output.isParticipantCommand }
-        check(participantOutputs.size <= 1) {
-            "A Session decision may issue at most one participant command"
-        }
         val ensureOutputs = frame.outputs.filterIsInstance<AppSessionOutput.EnsureGameplayRun>()
-        check(ensureOutputs.size <= 1) {
-            "A Session decision may ensure at most one GameplayRun"
-        }
+        requireSessionOutputFanoutBounds(participantOutputs.size, ensureOutputs.size)
 
         participantOutputs.singleOrNull()?.let { output ->
-            check(item.causalDepth + PARTICIPANT_ACCEPTED_COMPLETION_DEPTH < MAX_SESSION_CAUSAL_DEPTH) {
-                "Session causal depth exhausted before participant dispatch"
-            }
-            check(completions.remainingCapacity >= 1) {
-                "Session completion capacity exhausted before acceptance"
-            }
+            requireSessionCausalDepth(item.causalDepth + PARTICIPANT_ACCEPTED_COMPLETION_DEPTH)
+            requireSessionCompletionCapacity(completions.remainingCapacity, requiredCompletions = 1)
             when (output) {
                 is AppSessionOutput.SendProfileCommand -> preflightProfileCommand(next, output.command)
                 is AppSessionOutput.SendGameplayCommand -> preflightGameplayCommand(
@@ -497,7 +488,7 @@ internal class DefaultAppSessionComponent private constructor(
     }
 
     private fun enqueueCompletion(pulse: SessionControlPulse, causalDepth: Int) {
-        check(causalDepth < MAX_SESSION_CAUSAL_DEPTH)
+        requireSessionCausalDepth(causalDepth)
         check(
             completions.tryAddLast(SessionWorkItem(pulse, causalDepth)),
         ) { "Pre-reserved Session completion could not be retained" }
@@ -534,6 +525,30 @@ internal class DefaultAppSessionComponent private constructor(
                 updateAudioPreferences(preferences.preferences)
             }
         }
+    }
+}
+
+internal fun <T> sessionCompletionDeque(): BoundedCompletionDeque<T> =
+    BoundedCompletionDeque(SESSION_COMPLETION_CAPACITY)
+
+internal fun requireSessionCausalDepth(causalDepth: Int) {
+    check(causalDepth >= 0 && causalDepth < MAX_SESSION_CAUSAL_DEPTH) {
+        "Session causal depth exhausted before participant dispatch"
+    }
+}
+
+internal fun requireSessionOutputFanoutBounds(participantCount: Int, ensureCount: Int) {
+    check(participantCount in 0..1) {
+        "A Session decision may issue at most one participant command"
+    }
+    check(ensureCount in 0..1) {
+        "A Session decision may ensure at most one GameplayRun"
+    }
+}
+
+internal fun requireSessionCompletionCapacity(remainingCapacity: Int, requiredCompletions: Int) {
+    check(requiredCompletions >= 0 && remainingCapacity >= requiredCompletions) {
+        "Session completion capacity exhausted before acceptance"
     }
 }
 

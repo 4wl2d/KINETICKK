@@ -54,6 +54,7 @@ import kinetickk.ball.profile.api.RebirthProfileSnapshot
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.RebirthProgressProjection
 import kinetickk.ball.profile.api.RunBootstrapProjection
+import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kotlin.math.abs
@@ -175,12 +176,12 @@ object ProfileNucleus {
                 masterVolume = stepPercentage(current.masterVolume, adjustment.direction, 0f, 1f),
             )
             is ProfilePreferenceAdjustment.StepSimulationSpeed -> {
-                val currentIndex = SIMULATION_SPEEDS.indices.minByOrNull { index ->
-                    abs(SIMULATION_SPEEDS[index] - current.simulationSpeed)
+                val currentIndex = SIMULATION_SPEED_OPTIONS.indices.minByOrNull { index ->
+                    abs(SIMULATION_SPEED_OPTIONS[index] - current.simulationSpeed)
                 } ?: DEFAULT_SIMULATION_SPEED_INDEX
                 current.copy(
-                    simulationSpeed = SIMULATION_SPEEDS[
-                        (currentIndex + adjustment.direction.delta).coerceIn(SIMULATION_SPEEDS.indices)
+                    simulationSpeed = SIMULATION_SPEED_OPTIONS[
+                        (currentIndex + adjustment.direction.delta).coerceIn(SIMULATION_SPEED_OPTIONS.indices)
                     ],
                 )
             }
@@ -895,7 +896,7 @@ object ProfileNucleus {
             !preferences.simulationSpeed.isFinite() ||
             !preferences.textScale.isFinite() ||
             preferences != preferences.normalized() ||
-            preferences.simulationSpeed !in SIMULATION_SPEEDS ||
+            preferences.simulationSpeed !in SIMULATION_SPEED_OPTIONS ||
             preferences.damageNumberTierThreshold !in DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
         ) return false
         if (profile.economy.matter < 0L || profile.economy.lifetimeMatter < profile.economy.matter) {
@@ -1028,6 +1029,5 @@ private fun stepPercentage(
 private fun saturatedAdd(left: Long, right: Long): Long =
     if (Long.MAX_VALUE - left < right) Long.MAX_VALUE else left + right
 
-private val SIMULATION_SPEEDS = listOf(0.75f, 1f, 1.15f, 1.35f, 1.6f, 2f)
 private const val DEFAULT_SIMULATION_SPEED_INDEX: Int = 2
 private const val DEFAULT_DAMAGE_THRESHOLD_INDEX: Int = 2

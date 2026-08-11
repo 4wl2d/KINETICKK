@@ -44,7 +44,7 @@ internal class DefaultProfileComponent(
     private val commandResultSink: (ProfileCommandResult.Accepted) -> Unit = {},
 ) : ProfilePort {
     private val dispatchGuard = InlineDispatchGuard()
-    private val completions = BoundedCompletionDeque<ProfileWorkItem>(PROFILE_COMPLETION_CAPACITY)
+    private val completions = profileCompletionDeque<ProfileWorkItem>()
     private var committedState: ProfileState = ProfileState.initial(policy)
 
     override val instanceId: ProfileInstanceId
@@ -174,16 +174,10 @@ internal class DefaultProfileComponent(
         val synchronousCompletions = frame.outputs.count { output ->
             output is ProfileOutput.PersistV4Snapshot || output is ProfileOutput.PurgeLegacy
         }
-        check(synchronousCompletions <= 1) {
-            "A Profile Decision may issue at most one synchronous Resource effect"
-        }
+        requireProfileSynchronousResourceEffectBound(synchronousCompletions)
         if (synchronousCompletions > 0) {
-            check(item.causalDepth + 1 < MAX_PROFILE_CAUSAL_DEPTH) {
-                "Profile causal depth exhausted before acceptance"
-            }
-            check(completions.remainingCapacity >= synchronousCompletions) {
-                "Profile completion capacity exhausted before acceptance"
-            }
+            requireProfileCausalDepth(item.causalDepth + 1)
+            requireProfileCompletionCapacity(completions.remainingCapacity, synchronousCompletions)
         }
 
         frame.outputs.forEachIndexed { index, output ->
@@ -242,12 +236,33 @@ internal class DefaultProfileComponent(
     }
 
     private fun enqueueCompletion(pulse: ProfilePulse.ResourceResult, causalDepth: Int) {
-        check(causalDepth < MAX_PROFILE_CAUSAL_DEPTH)
+        requireProfileCausalDepth(causalDepth)
         check(
             completions.tryAddLast(
                 ProfileWorkItem(pulse, ProfileContext.Local, causalDepth),
             ),
         ) { "Pre-reserved Profile completion could not be retained" }
+    }
+}
+
+internal fun <T> profileCompletionDeque(): BoundedCompletionDeque<T> =
+    BoundedCompletionDeque(PROFILE_COMPLETION_CAPACITY)
+
+internal fun requireProfileCausalDepth(causalDepth: Int) {
+    check(causalDepth >= 0 && causalDepth < MAX_PROFILE_CAUSAL_DEPTH) {
+        "Profile causal depth exhausted before acceptance"
+    }
+}
+
+internal fun requireProfileSynchronousResourceEffectBound(effectCount: Int) {
+    check(effectCount in 0..1) {
+        "A Profile Decision may issue at most one synchronous Resource effect"
+    }
+}
+
+internal fun requireProfileCompletionCapacity(remainingCapacity: Int, requiredCompletions: Int) {
+    check(requiredCompletions >= 0 && remainingCapacity >= requiredCompletions) {
+        "Profile completion capacity exhausted before acceptance"
     }
 }
 

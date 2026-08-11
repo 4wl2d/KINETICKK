@@ -23,6 +23,7 @@ import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileV4Rejection
 import kinetickk.ball.profile.api.ProfileV4Snapshot
 import kinetickk.ball.profile.api.RebirthProgress
+import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.decodeFromString
@@ -323,9 +324,9 @@ private fun validateProfile(profile: PlayerProfile) {
     rejectUnless(
         preferences.masterVolume.isFinite() && preferences.masterVolume in 0f..1f &&
             preferences.simulationSpeed.isFinite() && preferences.simulationSpeed in 0.75f..2f &&
+            preferences.simulationSpeed in SIMULATION_SPEED_OPTIONS &&
             preferences.textScale.isFinite() && preferences.textScale in 1f..1.75f &&
-            preferences.damageNumberTierThreshold in
-            DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS.first()..DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS.last(),
+            preferences.damageNumberTierThreshold in DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS,
         ProfileV4Rejection.VALUE_OUT_OF_RANGE,
     )
     rejectUnless(

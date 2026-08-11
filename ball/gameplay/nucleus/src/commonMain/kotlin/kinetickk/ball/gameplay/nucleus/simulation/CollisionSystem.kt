@@ -3,7 +3,8 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.content.api.*
+import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.WeaponId
 
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.model.*
@@ -163,13 +164,17 @@ internal fun MutableGameState.resolveProjectileHits() {
         }
     }
 
+    val liveEnemyIds = enemies.asSequence()
+        .filter { enemy -> !enemy.dead }
+        .mapTo(mutableSetOf(), Enemy::id)
     val friendlyIterator = projectiles.iterator()
     while (friendlyIterator.hasNext()) {
         val projectile = friendlyIterator.next()
         if (projectile.hostile) continue
+        projectile.retainLiveEnemyHits(liveEnemyIds)
         var consumed = false
         for (enemy in enemies) {
-            if (enemy.id in projectile.hitEnemyIds || enemy.dead) continue
+            if (projectile.hasRecordedEnemyHit(enemy.id) || enemy.dead) continue
             val hitRadius = projectile.radius + enemy.radius
             val hit = segmentCircleIntersects(
                 projectile.previousX - enemy.previousX,
@@ -181,7 +186,7 @@ internal fun MutableGameState.resolveProjectileHits() {
                 hitRadius,
             )
             if (hit) {
-                projectile.hitEnemyIds += enemy.id
+                if (!projectile.tryRecordEnemyHit(enemy.id)) continue
                 val sourceWeapon = projectile.sourceWeapon
                 if (sourceWeapon != null) {
                     dealWeaponDamage(enemy, projectile.damage, canCrit = true, sourceWeapon = sourceWeapon)
@@ -206,7 +211,7 @@ internal fun MutableGameState.resolveProjectileHits() {
 
 internal fun MutableGameState.redirectPrismRelay(projectile: Projectile) {
     val target = enemies.asSequence()
-        .filter { !it.dead && it.id !in projectile.hitEnemyIds }
+        .filter { !it.dead && !projectile.hasRecordedEnemyHit(it.id) }
         .filter { distanceSquared(projectile.x, projectile.y, it.x, it.y) <= square(720f) }
         .minByOrNull { distanceSquared(projectile.x, projectile.y, it.x, it.y) }
         ?: return

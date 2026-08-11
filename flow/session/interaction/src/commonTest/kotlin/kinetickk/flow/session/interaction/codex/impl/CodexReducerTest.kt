@@ -17,6 +17,16 @@ import kotlin.test.assertTrue
 
 class CodexReducerTest {
     @Test
+    fun pageSliceReturnsTenForExactAndFirstNPlusOneInputs() {
+        val exact = (0 until CODEX_PAGE_SIZE).toList()
+        val firstNPlusOne = exact + CODEX_PAGE_SIZE
+
+        assertEquals(exact, codexPageSlice(exact, page = 0))
+        assertEquals(exact, codexPageSlice(firstNPlusOne, page = 0))
+        assertEquals(listOf(CODEX_PAGE_SIZE), codexPageSlice(firstNPlusOne, page = 1))
+    }
+
+    @Test
     fun modelCombinesProfileDiscoveryWithShellRunStacks() {
         val reducer = CodexReducer(testItems())
         val stacks = MutableList(400) { 0 }.also { it[2] = 4 }

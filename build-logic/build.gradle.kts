@@ -9,4 +9,9 @@ dependencies {
     implementation(libs.kotlin.gradle.plugin)
     implementation(libs.kotlin.compose.compiler.gradle.plugin)
     implementation(libs.compose.gradle.plugin)
+    testImplementation(kotlin("test-junit5"))
+}
+
+tasks.test {
+    useJUnitPlatform()
 }

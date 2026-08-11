@@ -130,7 +130,7 @@ internal class GameReducer {
                     GameplayInputField.CHOICE_INDEX,
                     GameplayInputReason.BELOW_MINIMUM,
                 )
-                intent.index > 3 -> GameplayRejection.InvalidInput(
+                intent.index >= MutableGameState.MAX_CHOICES -> GameplayRejection.InvalidInput(
                     GameplayInputField.CHOICE_INDEX,
                     GameplayInputReason.ABOVE_MAXIMUM,
                 )

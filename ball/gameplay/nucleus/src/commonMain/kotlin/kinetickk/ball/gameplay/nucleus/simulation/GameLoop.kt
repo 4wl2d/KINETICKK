@@ -3,7 +3,7 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.content.api.*
+import kinetickk.ball.content.api.RelicId
 
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.model.*
@@ -25,16 +25,42 @@ internal fun MutableGameState.update(rawDelta: Float) {
         accumulator = 0f
         return
     }
-    val scaledDelta = rawDelta.coerceIn(0f, 0.1f) * settings.simulationSpeed
-    accumulator = min(0.3f, accumulator + scaledDelta)
+    accumulator = nextSimulationAccumulator(
+        currentAccumulator = accumulator,
+        rawDeltaSeconds = rawDelta,
+        simulationSpeed = settings.simulationSpeed,
+    )
+    consumeFixedStepBudget()
+}
+
+internal fun nextSimulationAccumulator(
+    currentAccumulator: Float,
+    rawDeltaSeconds: Float,
+    simulationSpeed: Float,
+): Float = min(
+    MAX_SIMULATION_ACCUMULATOR_SECONDS,
+    currentAccumulator +
+        rawDeltaSeconds.coerceIn(0f, MAX_SIMULATION_RAW_DELTA_SECONDS) * simulationSpeed,
+)
+
+/** Executes the already-admitted accumulator while retaining the first step beyond the frame cap. */
+internal fun MutableGameState.consumeFixedStepBudget() {
     var steps = 0
-    while (accumulator >= MutableGameState.FIXED_STEP && phase == GamePhase.RUNNING && steps < 48) {
+    while (
+        accumulator >= MutableGameState.FIXED_STEP &&
+        phase == GamePhase.RUNNING &&
+        steps < MAX_FIXED_STEPS_PER_FRAME
+    ) {
         simulateStep(MutableGameState.FIXED_STEP)
         accumulator -= MutableGameState.FIXED_STEP
         steps++
     }
     lastTransitionSteps = steps
 }
+
+internal const val MAX_FIXED_STEPS_PER_FRAME: Int = 48
+internal const val MAX_SIMULATION_RAW_DELTA_SECONDS: Float = 0.1f
+internal const val MAX_SIMULATION_ACCUMULATOR_SECONDS: Float = 0.3f
 
 internal fun MutableGameState.simulateStep(delta: Float) {
     elapsed += delta

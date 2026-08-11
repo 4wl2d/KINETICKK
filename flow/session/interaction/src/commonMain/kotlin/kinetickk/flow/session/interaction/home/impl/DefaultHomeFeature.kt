@@ -84,7 +84,9 @@ class DefaultHomeFeature(
             var previousFrame = withFrameNanos { it }
             while (true) {
                 val frame = withFrameNanos { it }
-                renderTimeSecondsValue += ((frame - previousFrame) / 1_000_000_000f).coerceAtMost(0.1f)
+                renderTimeSecondsValue += selectHomePresentationFrameDeltaSeconds(
+                    (frame - previousFrame) / 1_000_000_000f,
+                )
                 previousFrame = frame
             }
         }
@@ -108,6 +110,11 @@ class DefaultHomeFeature(
         }
     }
 }
+
+internal const val MAX_HOME_PRESENTATION_FRAME_DELTA_SECONDS: Float = 0.1f
+
+internal fun selectHomePresentationFrameDeltaSeconds(frameDeltaSeconds: Float): Float =
+    frameDeltaSeconds.coerceAtMost(MAX_HOME_PRESENTATION_FRAME_DELTA_SECONDS)
 
 private val MenuNavLabels = listOf("LAB [L]", "ARMORY [A]", "REBIRTH [B]", "CODEX [C]", "SETTINGS [S]")
 

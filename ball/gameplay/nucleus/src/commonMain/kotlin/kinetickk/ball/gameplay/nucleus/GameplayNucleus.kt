@@ -29,7 +29,6 @@ import kinetickk.ball.gameplay.nucleus.reducer.EngineState
 import kinetickk.ball.gameplay.nucleus.reducer.GameReducer
 import kinetickk.ball.gameplay.nucleus.reducer.GameReductionResult
 import kinetickk.ball.gameplay.nucleus.reducer.initialEngineState
-import kinetickk.ball.gameplay.nucleus.simulation.MutableGameState
 import kinetickk.ball.gameplay.nucleus.simulation.startRun
 import kinetickk.ball.gameplay.nucleus.simulation.takeSoundCues
 import kinetickk.ball.gameplay.nucleus.simulation.takeVisualFxCues
@@ -42,6 +41,7 @@ import kinetickk.ball.profile.api.ProfileCommandRef
 import kinetickk.ball.profile.api.ProfileCommandSource
 import kinetickk.ball.profile.api.ProfilePulse
 import kinetickk.ball.profile.api.ProfileRevision
+import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
@@ -469,7 +469,7 @@ object GameplayNucleus {
             preferences.simulationSpeed.isFinite() &&
             preferences.textScale.isFinite() &&
             preferences == preferences.normalized() &&
-            preferences.simulationSpeed in MutableGameState.SIMULATION_SPEEDS &&
+            preferences.simulationSpeed in SIMULATION_SPEED_OPTIONS &&
             preferences.damageNumberTierThreshold in DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 
     private fun reduce(

@@ -24,29 +24,139 @@ class InteractionFxReducerTest {
     }
 
     @Test
-    fun everyVisualCollectionHasAnExactFiniteCap() {
+    fun particlesAcceptSevenHundredAndRejectSevenHundredFirst() {
         val reducer = InteractionFxReducer(seed = 48)
         reducer.apply(
-            buildList {
-                repeat(160) { index ->
-                    add(VisualFxCue.ShockwaveAdded(index.toFloat(), 0f, 1f, 10f, 1))
-                    add(VisualFxCue.DamageNumberAdded(0f, index.toFloat(), index.toLong(), false))
-                    add(VisualFxCue.WeaponArcAdded(0f, 0f, index.toFloat(), 1f, 10f))
-                }
-                add(VisualFxCue.Burst(0f, 0f, 2_000, 1, ParticleDensity.HIGH))
-            },
+            listOf(
+                VisualFxCue.Burst(
+                    x = 0f,
+                    y = 0f,
+                    requestedCount = InteractionFxLimits.MAX_PARTICLES,
+                    colorIndex = 1,
+                    density = ParticleDensity.NORMAL,
+                ),
+            ),
+        )
+        val accepted = reducer.snapshot().particles
+
+        reducer.apply(
+            listOf(VisualFxCue.Burst(1f, 1f, 1, 2, ParticleDensity.NORMAL)),
         )
 
-        val snapshot = reducer.snapshot()
-        assertEquals(700, snapshot.particles.size)
-        assertEquals(48, snapshot.shockwaves.size)
-        assertEquals(140, snapshot.damageNumbers.size)
-        assertEquals(128, snapshot.weaponArcs.size)
+        assertEquals(InteractionFxLimits.MAX_PARTICLES, accepted.size)
+        assertEquals(accepted, reducer.snapshot().particles)
+    }
+
+    @Test
+    fun directionalParticlesAcceptSevenHundredAndRejectSevenHundredFirst() {
+        val reducer = InteractionFxReducer(seed = 49)
+        reducer.apply(
+            listOf(
+                VisualFxCue.DirectionalBurst(
+                    x = 0f,
+                    y = 0f,
+                    requestedCount = InteractionFxLimits.MAX_PARTICLES,
+                    colorIndex = 1,
+                    directionX = 1f,
+                    directionY = 0f,
+                    density = ParticleDensity.NORMAL,
+                ),
+            ),
+        )
+        val accepted = reducer.snapshot().particles
+
+        reducer.apply(
+            listOf(
+                VisualFxCue.DirectionalBurst(
+                    x = 1f,
+                    y = 1f,
+                    requestedCount = 1,
+                    colorIndex = 2,
+                    directionX = 1f,
+                    directionY = 0f,
+                    density = ParticleDensity.NORMAL,
+                ),
+            ),
+        )
+
+        assertEquals(InteractionFxLimits.MAX_PARTICLES, accepted.size)
+        assertEquals(accepted, reducer.snapshot().particles)
+    }
+
+    @Test
+    fun motionEchoesAcceptThirtySixAndTrimOldestOnThirtySeventh() {
+        val reducer = InteractionFxReducer(seed = 50)
+        repeat(InteractionFxLimits.MAX_MOTION_ECHOES) { index ->
+            reducer.apply(listOf(motionSample(index)))
+        }
+
+        val accepted = reducer.snapshot().motionEchoes
+        assertEquals(InteractionFxLimits.MAX_MOTION_ECHOES, accepted.size)
+        assertEquals(0f, accepted.first().x)
+
+        reducer.apply(listOf(motionSample(InteractionFxLimits.MAX_MOTION_ECHOES)))
+
+        val overflow = reducer.snapshot().motionEchoes
+        assertEquals(InteractionFxLimits.MAX_MOTION_ECHOES, overflow.size)
+        assertEquals(1f, overflow.first().x)
+        assertEquals(InteractionFxLimits.MAX_MOTION_ECHOES.toFloat(), overflow.last().x)
+    }
+
+    @Test
+    fun shockwavesAcceptFortyEightAndTrimOldestOnFortyNinth() {
+        val reducer = InteractionFxReducer(seed = 51)
+        repeat(InteractionFxLimits.MAX_SHOCKWAVES) { index ->
+            reducer.apply(listOf(shockwave(index)))
+        }
+
+        val accepted = reducer.snapshot().shockwaves
+        assertEquals(InteractionFxLimits.MAX_SHOCKWAVES, accepted.size)
+        assertEquals(0f, accepted.first().x)
+
+        reducer.apply(listOf(shockwave(InteractionFxLimits.MAX_SHOCKWAVES)))
+
+        val overflow = reducer.snapshot().shockwaves
+        assertEquals(InteractionFxLimits.MAX_SHOCKWAVES, overflow.size)
+        assertEquals(1f, overflow.first().x)
+        assertEquals(InteractionFxLimits.MAX_SHOCKWAVES.toFloat(), overflow.last().x)
+    }
+
+    @Test
+    fun damageNumbersAcceptOneHundredFortyAndRejectOneHundredFortyFirst() {
+        val reducer = InteractionFxReducer(seed = 52)
+        repeat(InteractionFxLimits.MAX_DAMAGE_NUMBERS) { index ->
+            reducer.apply(listOf(damageNumber(index)))
+        }
+        val accepted = reducer.snapshot().damageNumbers
+
+        reducer.apply(listOf(damageNumber(InteractionFxLimits.MAX_DAMAGE_NUMBERS)))
+
+        assertEquals(InteractionFxLimits.MAX_DAMAGE_NUMBERS, accepted.size)
+        assertEquals(accepted, reducer.snapshot().damageNumbers)
+    }
+
+    @Test
+    fun weaponArcsAcceptOneHundredTwentyEightAndTrimOldestOnOneHundredTwentyNinth() {
+        val reducer = InteractionFxReducer(seed = 53)
+        repeat(InteractionFxLimits.MAX_WEAPON_ARCS) { index ->
+            reducer.apply(listOf(weaponArc(index)))
+        }
+
+        val accepted = reducer.snapshot().weaponArcs
+        assertEquals(InteractionFxLimits.MAX_WEAPON_ARCS, accepted.size)
+        assertEquals(0f, accepted.first().toX)
+
+        reducer.apply(listOf(weaponArc(InteractionFxLimits.MAX_WEAPON_ARCS)))
+
+        val overflow = reducer.snapshot().weaponArcs
+        assertEquals(InteractionFxLimits.MAX_WEAPON_ARCS, overflow.size)
+        assertEquals(1f, overflow.first().toX)
+        assertEquals(InteractionFxLimits.MAX_WEAPON_ARCS.toFloat(), overflow.last().toX)
     }
 
     @Test
     fun motionEchoesAndCueOrderingPreserveTheirFiniteLifecycle() {
-        val reducer = InteractionFxReducer(seed = 50)
+        val reducer = InteractionFxReducer(seed = 54)
         repeat(100) { index ->
             reducer.apply(
                 listOf(
@@ -76,7 +186,7 @@ class InteractionFxReducerTest {
 
     @Test
     fun clearAndWorldRebaseFollowDeclaredPresentationPolicy() {
-        val reducer = InteractionFxReducer(seed = 49)
+        val reducer = InteractionFxReducer(seed = 55)
         reducer.apply(
             listOf(
                 VisualFxCue.Burst(100f, 200f, 1, 1, ParticleDensity.NORMAL),
@@ -110,5 +220,36 @@ class InteractionFxReducerTest {
         shockwaves.size,
         damageNumbers.size,
         weaponArcs.size,
+    )
+
+    private fun motionSample(index: Int) = VisualFxCue.MotionSample(
+        deltaSeconds = 0.02f,
+        previousCoreX = index.toFloat(),
+        previousCoreY = 0f,
+        speed = 2_000f,
+        dashPhaseTime = 0.1f,
+    )
+
+    private fun shockwave(index: Int) = VisualFxCue.ShockwaveAdded(
+        x = index.toFloat(),
+        y = 0f,
+        life = 10f,
+        maxRadius = 10f,
+        colorIndex = 1,
+    )
+
+    private fun damageNumber(index: Int) = VisualFxCue.DamageNumberAdded(
+        x = index.toFloat(),
+        y = 0f,
+        amount = index.toLong(),
+        critical = false,
+    )
+
+    private fun weaponArc(index: Int) = VisualFxCue.WeaponArcAdded(
+        fromX = 0f,
+        fromY = 0f,
+        toX = index.toFloat(),
+        toY = 1f,
+        life = 10f,
     )
 }

@@ -24,6 +24,20 @@ import kotlin.test.assertTrue
 
 class HomeReducerTest {
     @Test
+    fun presentationClockAcceptsMaximumAndClampsNextRepresentableDelta() {
+        val nextRepresentable = Float.fromBits(MAX_HOME_PRESENTATION_FRAME_DELTA_SECONDS.toBits() + 1)
+
+        assertEquals(
+            MAX_HOME_PRESENTATION_FRAME_DELTA_SECONDS,
+            selectHomePresentationFrameDeltaSeconds(MAX_HOME_PRESENTATION_FRAME_DELTA_SECONDS),
+        )
+        assertEquals(
+            MAX_HOME_PRESENTATION_FRAME_DELTA_SECONDS,
+            selectHomePresentationFrameDeltaSeconds(nextRepresentable),
+        )
+    }
+
+    @Test
     fun modelMapsOnlyTheAuthoritativeHomeProjection() {
         val projection = homeProjection(
             economy = PlayerEconomy(matter = 81, lifetimeMatter = 120),

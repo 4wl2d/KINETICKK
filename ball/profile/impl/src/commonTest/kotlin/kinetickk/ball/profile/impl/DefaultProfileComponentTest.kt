@@ -565,6 +565,33 @@ class DefaultProfileComponentTest {
         assertEquals(ProfileBootstrapStatus.Ready, status.bootstrap)
         assertEquals(ProfileResetStatus.NotRequired(legacyResetConfirmed = true), status.reset)
     }
+
+    @Test
+    fun deployedCompletionQueueAcceptsEightAndRefusesNinthWithoutTruncation() {
+        val completions = profileCompletionDeque<Int>()
+
+        repeat(8) { value -> assertTrue(completions.tryAddLast(value)) }
+
+        assertEquals(8, completions.size)
+        assertFalse(completions.tryAddLast(8))
+        assertEquals((0 until 8).toList(), List(8) { completions.removeFirstOrNull() })
+    }
+
+    @Test
+    fun acceptorCausalDepthAndResourceEffectBoundsAcceptNAndRefuseNPlusOne() {
+        repeat(8, ::requireProfileCausalDepth)
+        assertFailsWith<IllegalStateException> { requireProfileCausalDepth(8) }
+
+        requireProfileSynchronousResourceEffectBound(1)
+        assertFailsWith<IllegalStateException> {
+            requireProfileSynchronousResourceEffectBound(2)
+        }
+
+        requireProfileCompletionCapacity(remainingCapacity = 1, requiredCompletions = 1)
+        assertFailsWith<IllegalStateException> {
+            requireProfileCompletionCapacity(remainingCapacity = 0, requiredCompletions = 1)
+        }
+    }
 }
 
 private data class BootstrapCase(

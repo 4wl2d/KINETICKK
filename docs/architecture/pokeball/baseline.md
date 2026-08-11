@@ -76,8 +76,9 @@ snapshots instead of reaching global catalog objects.
 
 All sixteen existing semantic cues keep their frequency, duration, gain, and
 wave mapping. The music sequence and `0.32s` step remain unchanged. At most 32
-accepted cue requests and 3 executed sound requests are allowed per frame;
-invalid tone requests and provider faults remain contained.
+caller cue requests are accepted and 3 caller sound requests are selected per
+advance; the independent internal music tone is separate. Invalid tone
+requests and provider faults remain contained.
 
 ## Intentional delta
 

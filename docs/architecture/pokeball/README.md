@@ -5,8 +5,9 @@
 
 This directory records the project-owned decisions and evidence for the full
 KINETICKK migration to Pokeball Core `1.4.0-draft`. Typed Kotlin source remains
-the authority for protocols and behavior. A generated `resolved-manifest.json`
-will be a checked projection, not a second source of truth.
+the authority for protocols and behavior. The generated
+[`resolved-manifest.json`](resolved-manifest.json) is a checked projection, not
+a second source of truth.
 
 The record is split by ownership:
 
@@ -17,7 +18,20 @@ The record is split by ownership:
 - `assembly.md` owns the finite cross-authority graph and route bindings.
 - `applicability.md` records triggered Core concerns, exclusions, and the
   absence-proof scopes that may be used only by the final conformance claim.
+- `browser-qa.md` defines the isolated production-Wasm rendered smoke and its
+  relationship to the automated Chromium suite.
+- `resolved-manifest.json` deterministically projects modules, compile and
+  direct-control edges, Application Surfaces, routes, and selected bounds.
 
 The Pokeball Core and Agent Pack are deliberately not copied into this
 repository. Verification consumes the exact external immutable snapshot named
-in `baseline.md` and fails closed if its commit or digests differ.
+in `baseline.md` and fails closed if its commit or digests differ. Supply that
+checkout through `-PpokeballSnapshotDir=/absolute/path`, through
+`POKEBALL_SNAPSHOT_DIR`, or as sibling `../Pokeball`, in that precedence order.
+
+`verifyPokeballConformance` has two explicit modes. Before a claim record
+exists, it verifies prerequisites and reports that no formal claim has been
+issued. Once `conformance-record.md` exists, it validates the docs-only
+attestation commit, its implementation-freeze parent and tree digest, the
+closed review-gate inventory, environment and evidence records, and the exact
+TriggerAbsenceProof set.

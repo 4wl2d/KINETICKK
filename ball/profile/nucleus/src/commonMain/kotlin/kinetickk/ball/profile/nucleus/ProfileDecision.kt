@@ -37,7 +37,13 @@ sealed interface ProfileDecision {
 data class ProfileAcceptedFrame(
     val nextState: ProfileState,
     val outputs: ImmutableList<ProfileOutput>,
-)
+) {
+    init {
+        require(outputs.size <= MAX_PROFILE_OUTPUTS_PER_DECISION) {
+            "Profile semantic output limit exceeded"
+        }
+    }
+}
 
 sealed interface ProfileOutput {
     data class PersistV4Snapshot(

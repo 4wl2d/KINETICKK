@@ -15,6 +15,14 @@ import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.sin
 
+internal object InteractionFxLimits {
+    const val MAX_PARTICLES = 700
+    const val MAX_MOTION_ECHOES = 36
+    const val MAX_SHOCKWAVES = 48
+    const val MAX_DAMAGE_NUMBERS = 140
+    const val MAX_WEAPON_ARCS = 128
+}
+
 /**
  * Interaction-owned reducer for drop-eligible visual state.
  *
@@ -76,14 +84,6 @@ class InteractionFxReducer(seed: Int) {
         }.toImmutableList(),
     )
 
-    fun boundedCollectionSizes(): List<Int> = listOf(
-        particles.size,
-        motionEchoes.size,
-        shockwaves.size,
-        damageNumbers.size,
-        weaponArcs.size,
-    )
-
     private fun apply(cue: VisualFxCue) {
         when (cue) {
             VisualFxCue.ClearAll -> clearAll()
@@ -95,16 +95,16 @@ class InteractionFxReducer(seed: Int) {
             is VisualFxCue.DirectionalBurst -> directionalBurst(cue)
             is VisualFxCue.ShockwaveAdded -> {
                 shockwaves += Shockwave(cue.x, cue.y, cue.life, cue.life, cue.maxRadius, cue.colorIndex)
-                trimFront(shockwaves, MAX_SHOCKWAVES)
+                trimFront(shockwaves, InteractionFxLimits.MAX_SHOCKWAVES)
             }
             is VisualFxCue.DamageNumberAdded -> {
-                if (damageNumbers.size < MAX_DAMAGE_NUMBERS) {
+                if (damageNumbers.size < InteractionFxLimits.MAX_DAMAGE_NUMBERS) {
                     damageNumbers += DamageNumber(cue.x, cue.y, cue.amount, cue.critical)
                 }
             }
             is VisualFxCue.WeaponArcAdded -> {
                 weaponArcs += WeaponArc(cue.fromX, cue.fromY, cue.toX, cue.toY, cue.life)
-                trimFront(weaponArcs, MAX_WEAPON_ARCS)
+                trimFront(weaponArcs, InteractionFxLimits.MAX_WEAPON_ARCS)
             }
             is VisualFxCue.WorldRebased -> {
                 particles.forEach { value ->
@@ -147,7 +147,7 @@ class InteractionFxReducer(seed: Int) {
             maxLife,
             dashIntensity,
         )
-        trimFront(motionEchoes, MAX_MOTION_ECHOES)
+        trimFront(motionEchoes, InteractionFxLimits.MAX_MOTION_ECHOES)
     }
 
     private fun advanceEffects(delta: Float) {
@@ -177,7 +177,7 @@ class InteractionFxReducer(seed: Int) {
 
     private fun burst(cue: VisualFxCue.Burst) {
         repeat(particleCount(cue.requestedCount, cue.density)) {
-            if (particles.size >= MAX_PARTICLES) return@repeat
+            if (particles.size >= InteractionFxLimits.MAX_PARTICLES) return@repeat
             val angle = random.nextFloat() * TAU
             val speed = 35f + random.nextFloat() * 185f
             val life = 0.25f + random.nextFloat() * 0.55f
@@ -197,7 +197,7 @@ class InteractionFxReducer(seed: Int) {
     private fun directionalBurst(cue: VisualFxCue.DirectionalBurst) {
         val baseAngle = atan2(cue.directionY, cue.directionX)
         repeat(particleCount(cue.requestedCount, cue.density)) {
-            if (particles.size >= MAX_PARTICLES) return@repeat
+            if (particles.size >= InteractionFxLimits.MAX_PARTICLES) return@repeat
             val angle = baseAngle + (random.nextFloat() - 0.5f) * 1.15f
             val speed = 90f + random.nextFloat() * 310f
             val life = 0.22f + random.nextFloat() * 0.42f
@@ -276,10 +276,5 @@ class InteractionFxReducer(seed: Int) {
     private companion object {
         const val FX_SEED_MASK = 0x5EED_C0DE
         const val TAU = 6.283185307179586f
-        const val MAX_PARTICLES = 700
-        const val MAX_MOTION_ECHOES = 36
-        const val MAX_SHOCKWAVES = 48
-        const val MAX_DAMAGE_NUMBERS = 140
-        const val MAX_WEAPON_ARCS = 128
     }
 }

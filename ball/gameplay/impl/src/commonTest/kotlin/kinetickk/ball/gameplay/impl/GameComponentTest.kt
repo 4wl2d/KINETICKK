@@ -494,6 +494,33 @@ class GameComponentTest {
         assertTrue(replacementFailure.message.orEmpty().contains("pending Profile command"))
         assertSame(second, feature.activeRun())
     }
+
+    @Test
+    fun deployedCompletionQueueAcceptsEightAndRefusesNinthWithoutTruncation() {
+        val completions = gameplayCompletionDeque<Int>()
+
+        repeat(8) { value -> assertTrue(completions.tryAddLast(value)) }
+
+        assertEquals(8, completions.size)
+        assertFalse(completions.tryAddLast(8))
+        assertEquals((0 until 8).toList(), List(8) { completions.removeFirstOrNull() })
+    }
+
+    @Test
+    fun acceptorCausalDepthAndProfileOutputFanoutAcceptNAndRefuseNPlusOne() {
+        repeat(8, ::requireGameplayCausalDepth)
+        assertFailsWith<IllegalStateException> { requireGameplayCausalDepth(8) }
+
+        requireGameplayProfileOutputFanoutBound(profileCommandCount = 1)
+        assertFailsWith<IllegalStateException> {
+            requireGameplayProfileOutputFanoutBound(profileCommandCount = 2)
+        }
+
+        requireGameplayCompletionCapacity(remainingCapacity = 1, requiredCompletions = 1)
+        assertFailsWith<IllegalStateException> {
+            requireGameplayCompletionCapacity(remainingCapacity = 0, requiredCompletions = 1)
+        }
+    }
 }
 
 private fun component(

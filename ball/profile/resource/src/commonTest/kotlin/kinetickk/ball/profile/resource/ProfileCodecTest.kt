@@ -8,6 +8,7 @@ import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
 import kinetickk.ball.profile.api.LabProgress
@@ -19,6 +20,7 @@ import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.ProfileV4Rejection
 import kinetickk.ball.profile.api.RebirthProgress
+import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -37,13 +39,13 @@ class ProfileCodecTest {
     }
 
     @Test
-    fun representativeProfileRoundTripsWithCanonicalRecordsAndCollections() {
+    fun schemaMaximumUnlockedWeaponsLabRanksAndDiscoveriesRoundTripWithoutLoss() {
         val profile = PlayerProfile(
             preferences = PlayerPreferences(
                 soundEnabled = false,
                 musicEnabled = true,
                 masterVolume = 0.5f,
-                simulationSpeed = 1.5f,
+                simulationSpeed = 1.6f,
                 textScale = 1.4f,
                 screenShake = false,
                 particleDensity = ParticleDensity.HIGH,
@@ -70,6 +72,9 @@ class ProfileCodecTest {
         )
 
         assertEquals(snapshot, decoded.snapshot)
+        assertEquals(ContentBounds.MAX_WEAPONS, decoded.snapshot.profile.loadout.unlockedWeapons.size)
+        assertEquals(ContentBounds.MAX_META_UPGRADES, decoded.snapshot.profile.labProgress.ranks.size)
+        assertEquals(ContentBounds.MAX_ITEMS, decoded.snapshot.profile.collection.discoveredItemIds.size)
         assertEquals(
             WeaponId.entries.map(WeaponId::name).sorted(),
             encoded.extractStringArray("unlockedWeaponIds"),
@@ -187,6 +192,27 @@ class ProfileCodecTest {
     }
 
     @Test
+    fun encodedByteLimitAcceptsExactlyNAndRejectsFirstNPlusOne() {
+        val basePayload = requireEncoded(testV4Snapshot())
+        val baseVersion = "test-content"
+        val envelopeBytesWithoutVersion =
+            basePayload.encodeToByteArray().size - baseVersion.encodeToByteArray().size
+        val exactVersionBytes = MAX_PROFILE_PAYLOAD_BYTES - envelopeBytesWithoutVersion
+
+        val exact = assertIs<ProfileV4EncodeResult.Encoded>(
+            ProfileV4Codec.encode(
+                testV4Snapshot(contentVersion = ContentVersion("x".repeat(exactVersionBytes))),
+            ),
+        ).payload
+
+        assertEquals(MAX_PROFILE_PAYLOAD_BYTES, exact.encodeToByteArray().size)
+        assertEncodeRejection(
+            ProfileV4Rejection.PAYLOAD_TOO_LARGE,
+            testV4Snapshot(contentVersion = ContentVersion("x".repeat(exactVersionBytes + 1))),
+        )
+    }
+
+    @Test
     fun outboundProfileIsValidatedWithoutClampingOrFallback() {
         val invalidRange = testV4Snapshot(
             PlayerProfile(preferences = PlayerPreferences(masterVolume = 2f)),
@@ -202,9 +228,6 @@ class ProfileCodecTest {
         val invalidCollection = testV4Snapshot(
             PlayerProfile(collection = PlayerCollection(setOf(-1))),
         )
-        val collectionOverGlobalCap = testV4Snapshot(
-            PlayerProfile(collection = PlayerCollection((0..ContentBounds.MAX_ITEMS).toSet())),
-        )
         val incompleteRanks = testV4Snapshot(
             PlayerProfile(labProgress = LabProgress(List(MetaUpgradeId.entries.size - 1) { 0 })),
         )
@@ -215,9 +238,76 @@ class ProfileCodecTest {
         assertEncodeRejection(ProfileV4Rejection.VALUE_OUT_OF_RANGE, invalidRange)
         assertEncodeRejection(ProfileV4Rejection.INCONSISTENT_PROFILE, inconsistentLoadout)
         assertEncodeRejection(ProfileV4Rejection.VALUE_OUT_OF_RANGE, invalidCollection)
-        assertEncodeRejection(ProfileV4Rejection.VALUE_OUT_OF_RANGE, collectionOverGlobalCap)
         assertEncodeRejection(ProfileV4Rejection.INCONSISTENT_PROFILE, incompleteRanks)
         assertEncodeRejection(ProfileV4Rejection.PAYLOAD_TOO_LARGE, oversizedEnvelope)
+    }
+
+    @Test
+    fun preferenceConfigurationAcceptsExactMaximaAndRejectsAdjacentOverflowOrNonMembers() {
+        val exact = PlayerPreferences(
+            masterVolume = 1f,
+            simulationSpeed = SIMULATION_SPEED_OPTIONS.last(),
+            textScale = 1.75f,
+            damageNumberTierThreshold = DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS.last(),
+        )
+        val exactSnapshot = testV4Snapshot(PlayerProfile(preferences = exact))
+
+        assertEquals(
+            exactSnapshot,
+            assertIs<ProfileV4DecodeResult.Decoded>(
+                ProfileV4Codec.decode(requireEncoded(exactSnapshot)),
+            ).snapshot,
+        )
+
+        val invalidPreferences = listOf(
+            exact.copy(masterVolume = Float.fromBits(1f.toBits() + 1)),
+            exact.copy(simulationSpeed = Float.fromBits(SIMULATION_SPEED_OPTIONS.last().toBits() + 1)),
+            exact.copy(textScale = Float.fromBits(1.75f.toBits() + 1)),
+            exact.copy(simulationSpeed = Float.fromBits(1f.toBits() + 1)),
+            exact.copy(
+                damageNumberTierThreshold = DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS.first() + 1,
+            ),
+        )
+
+        invalidPreferences.forEach { preferences ->
+            assertEncodeRejection(
+                ProfileV4Rejection.VALUE_OUT_OF_RANGE,
+                testV4Snapshot(PlayerProfile(preferences = preferences)),
+            )
+        }
+    }
+
+    @Test
+    fun preferenceIngressAcceptsMembersAndRejectsAdjacentInRangeNonMembers() {
+        assertIs<ProfileV4DecodeResult.Decoded>(ProfileV4Codec.decode(DEFAULT_V4_GOLDEN))
+
+        val adjacentSimulationSpeed = DEFAULT_V4_GOLDEN.replace(
+            "\"simulationSpeedPercent\":115",
+            "\"simulationSpeedPercent\":116",
+        )
+        val adjacentTierThreshold = DEFAULT_V4_GOLDEN.replace(
+            "\"damageNumberTierThreshold\":50",
+            "\"damageNumberTierThreshold\":51",
+        )
+
+        assertEquals(ProfileV4Rejection.VALUE_OUT_OF_RANGE, decodeRejection(adjacentSimulationSpeed))
+        assertEquals(ProfileV4Rejection.VALUE_OUT_OF_RANGE, decodeRejection(adjacentTierThreshold))
+    }
+
+    @Test
+    fun outboundLabRanksAndDiscoveriesRejectFirstNPlusOne() {
+        assertEncodeRejection(
+            ProfileV4Rejection.INCONSISTENT_PROFILE,
+            testV4Snapshot(
+                PlayerProfile(labProgress = LabProgress(List(MetaUpgradeId.entries.size + 1) { 0 })),
+            ),
+        )
+        assertEncodeRejection(
+            ProfileV4Rejection.VALUE_OUT_OF_RANGE,
+            testV4Snapshot(
+                PlayerProfile(collection = PlayerCollection((0..ContentBounds.MAX_ITEMS).toSet())),
+            ),
+        )
     }
 
     @Test
@@ -226,7 +316,7 @@ class ProfileCodecTest {
             PlayerProfile(
                 preferences = PlayerPreferences(
                     masterVolume = 0.555f,
-                    simulationSpeed = 1.255f,
+                    simulationSpeed = 1.35f,
                     textScale = 1.424f,
                 ),
             ),
@@ -237,7 +327,7 @@ class ProfileCodecTest {
         ).snapshot
 
         assertEquals(0.56f, decoded.profile.preferences.masterVolume)
-        assertEquals(1.26f, decoded.profile.preferences.simulationSpeed)
+        assertEquals(1.35f, decoded.profile.preferences.simulationSpeed)
         assertEquals(1.42f, decoded.profile.preferences.textScale)
     }
 

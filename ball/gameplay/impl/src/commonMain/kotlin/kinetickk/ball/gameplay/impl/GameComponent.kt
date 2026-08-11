@@ -45,8 +45,7 @@ internal class GameComponent private constructor(
     private val commandResultSink: (GameplayCommandResult.Accepted) -> Unit,
 ) : GameplayInteractionPort {
     private val dispatchGuard = InlineDispatchGuard()
-    private val completions =
-        BoundedCompletionDeque<GameplayWorkItem>(GAMEPLAY_COMPLETION_CAPACITY)
+    private val completions = gameplayCompletionDeque<GameplayWorkItem>()
     private var committedState: GameplayState = initialState
     private var interactionFxReducer: InteractionFxReducer? = null
     private var profileDispatchSourceDepth: Int? = null
@@ -204,19 +203,13 @@ internal class GameComponent private constructor(
         }) { "Gameplay outputs are not in FX -> Profile -> Audio -> result order" }
 
         val profileOutputs = frame.outputs.filterIsInstance<GameplayOutput.SendProfileCommand>()
-        check(profileOutputs.size <= 1) {
-            "A Gameplay decision may issue at most one Profile command"
-        }
+        requireGameplayProfileOutputFanoutBound(profileOutputs.size)
         if (profileOutputs.isNotEmpty()) {
             check(before.pendingProfileCommand == null) {
                 "Gameplay cannot issue a second Profile command while one is pending"
             }
-            check(item.causalDepth + PROFILE_ACCEPTED_COMPLETION_DEPTH < MAX_GAMEPLAY_CAUSAL_DEPTH) {
-                "Gameplay causal depth exhausted before Profile dispatch"
-            }
-            check(completions.remainingCapacity >= 1) {
-                "Gameplay completion capacity exhausted before acceptance"
-            }
+            requireGameplayCausalDepth(item.causalDepth + PROFILE_ACCEPTED_COMPLETION_DEPTH)
+            requireGameplayCompletionCapacity(completions.remainingCapacity, requiredCompletions = 1)
             val pending = checkNotNull(next.pendingProfileCommand)
             check(profileOutputs.single().command == pending.command)
             check(pending.command.ref.sourceRevision == next.revision.value)
@@ -312,7 +305,7 @@ internal class GameComponent private constructor(
         pulse: GameplayControlPulse,
         causalDepth: Int,
     ) {
-        check(causalDepth < MAX_GAMEPLAY_CAUSAL_DEPTH)
+        requireGameplayCausalDepth(causalDepth)
         check(
             completions.tryAddLast(
                 GameplayWorkItem(pulse, GameplayContext.Local, causalDepth),
@@ -332,6 +325,27 @@ internal class GameComponent private constructor(
             audioExecutor = audioExecutor,
             commandResultSink = commandResultSink,
         )
+    }
+}
+
+internal fun <T> gameplayCompletionDeque(): BoundedCompletionDeque<T> =
+    BoundedCompletionDeque(GAMEPLAY_COMPLETION_CAPACITY)
+
+internal fun requireGameplayCausalDepth(causalDepth: Int) {
+    check(causalDepth >= 0 && causalDepth < MAX_GAMEPLAY_CAUSAL_DEPTH) {
+        "Gameplay causal depth exhausted before Profile dispatch"
+    }
+}
+
+internal fun requireGameplayProfileOutputFanoutBound(profileCommandCount: Int) {
+    check(profileCommandCount in 0..1) {
+        "A Gameplay decision may issue at most one Profile command"
+    }
+}
+
+internal fun requireGameplayCompletionCapacity(remainingCapacity: Int, requiredCompletions: Int) {
+    check(requiredCompletions >= 0 && remainingCapacity >= requiredCompletions) {
+        "Gameplay completion capacity exhausted before acceptance"
     }
 }
 

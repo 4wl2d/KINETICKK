@@ -23,7 +23,6 @@ kotlin {
             implementation(projects.ball.gameplay.interaction)
             implementation(projects.ball.gameplay.impl)
             implementation(projects.flow.session.api)
-            implementation(projects.flow.session.nucleus)
             implementation(projects.flow.session.interaction)
             implementation(projects.flow.session.impl)
         }

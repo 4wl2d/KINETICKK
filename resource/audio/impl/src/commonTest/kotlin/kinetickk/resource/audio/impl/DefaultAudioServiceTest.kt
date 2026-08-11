@@ -5,6 +5,7 @@ package kinetickk.resource.audio.impl
 
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.ToneRequest
+import kinetickk.resource.audio.api.ToneRequestLimits
 import kinetickk.resource.audio.api.ToneWave
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -41,6 +42,20 @@ class DefaultAudioServiceTest {
     }
 
     @Test
+    fun musicAdvanceDeltaAcceptsMaximumAndClampsNextRepresentableValue() {
+        val nextRepresentable = Float.fromBits(MAX_MUSIC_ADVANCE_DELTA_SECONDS.toBits() + 1)
+
+        assertEquals(
+            MAX_MUSIC_ADVANCE_DELTA_SECONDS,
+            selectMusicAdvanceDeltaSeconds(MAX_MUSIC_ADVANCE_DELTA_SECONDS),
+        )
+        assertEquals(
+            MAX_MUSIC_ADVANCE_DELTA_SECONDS,
+            selectMusicAdvanceDeltaSeconds(nextRepresentable),
+        )
+    }
+
+    @Test
     fun capabilityFailuresDoNotEscapeAndRequestConstructionRejectsInvalidValues() {
         val service = DefaultAudioService(ThrowingTonePlayer)
 
@@ -61,7 +76,7 @@ class DefaultAudioServiceTest {
     }
 
     @Test
-    fun mechanicalResourceEnforcesTheAcceptedAndExecutedBounds() {
+    fun callerEffectIngressAcceptsThirtyTwoAndRejectsThirtyThird() {
         val player = RecordingTonePlayer()
         val service = DefaultAudioService(player)
         service.updatePreferences(AudioPreferences(musicEnabled = false))
@@ -82,6 +97,81 @@ class DefaultAudioServiceTest {
             },
         )
         assertTrue(player.tones.isEmpty())
+    }
+
+    @Test
+    fun callerEffectRequestSelectionAcceptsThreeAndDropsFourth() {
+        val player = RecordingTonePlayer()
+        val service = DefaultAudioService(player)
+        service.updatePreferences(AudioPreferences(musicEnabled = false))
+        val exact = listOf(HURT_REQUEST, DASH_REQUEST, PICKUP_REQUEST)
+
+        service.advance(realDeltaSeconds = 0.016f, requests = exact)
+        assertEquals(exact.map(ToneRequest::frequencyHz), player.tones.map(RecordedTone::frequency))
+
+        player.tones.clear()
+        service.advance(realDeltaSeconds = 0.016f, requests = exact + UI_CLICK_REQUEST)
+        assertEquals(exact.map(ToneRequest::frequencyHz), player.tones.map(RecordedTone::frequency))
+    }
+
+    @Test
+    fun toneRequestIngressAcceptsInclusiveBoundsAndRejectsNextRepresentableValues() {
+        ToneRequest(
+            ToneRequestLimits.MIN_FREQUENCY_HZ,
+            ToneRequestLimits.MIN_DURATION_SECONDS,
+            ToneRequestLimits.MIN_GAIN,
+            ToneWave.SINE,
+        )
+        ToneRequest(
+            ToneRequestLimits.MAX_FREQUENCY_HZ,
+            ToneRequestLimits.MAX_DURATION_SECONDS,
+            ToneRequestLimits.MAX_GAIN,
+            ToneWave.TRIANGLE,
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            ToneRequest(
+                Float.fromBits(ToneRequestLimits.MIN_FREQUENCY_HZ.toBits() - 1),
+                0.1f,
+                0.5f,
+                ToneWave.SINE,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            ToneRequest(
+                Float.fromBits(ToneRequestLimits.MAX_FREQUENCY_HZ.toBits() + 1),
+                0.1f,
+                0.5f,
+                ToneWave.SINE,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            ToneRequest(
+                440f,
+                Float.fromBits(ToneRequestLimits.MIN_DURATION_SECONDS.toBits() - 1),
+                0.5f,
+                ToneWave.SINE,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            ToneRequest(
+                440f,
+                Float.fromBits(ToneRequestLimits.MAX_DURATION_SECONDS.toBits() + 1),
+                0.5f,
+                ToneWave.SINE,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            ToneRequest(440f, 0.1f, -Float.MIN_VALUE, ToneWave.SINE)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            ToneRequest(
+                440f,
+                0.1f,
+                Float.fromBits(ToneRequestLimits.MAX_GAIN.toBits() + 1),
+                ToneWave.SINE,
+            )
+        }
     }
 
     @Test

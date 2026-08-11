@@ -9,13 +9,17 @@ import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.ball.profile.api.CollectionProjection
+import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.GameplayProgressUpdate
 import kinetickk.ball.profile.api.HomeProgressProjection
+import kinetickk.ball.profile.api.LabProgress
 import kinetickk.ball.profile.api.LabProgressProjection
 import kinetickk.ball.profile.api.LoadoutProjection
 import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
+import kinetickk.ball.profile.api.PlayerLoadout
+import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.PreferenceAdjustmentDirection
 import kinetickk.ball.profile.api.PreferencesProjection
@@ -48,9 +52,11 @@ import kinetickk.ball.profile.api.ProfileV4WriteResult
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.RebirthProgressProjection
 import kinetickk.ball.profile.api.RunBootstrapProjection
+import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
@@ -236,6 +242,32 @@ class ProfileNucleusTest {
     }
 
     @Test
+    fun gameplayDiscoveryIngressAcceptsItemCountAndRejectsFirstNPlusOne() {
+        val state = readyState()
+        val exact = (0 until TestProfilePolicy.itemCount).toSet()
+
+        val accepted = ProfileNucleus.decide(
+            state,
+            ProfilePulse.ApplyGameplayProgress(GameplayProgressUpdate(discoveredItemIds = exact)),
+        ).acceptedFrame()
+
+        assertEquals(exact, accepted.nextState.profile.collection.discoveredItemIds)
+
+        val overflow = (0..TestProfilePolicy.itemCount).toSet()
+        assertEquals(
+            ProfileRejection.InvalidGameplayProgress(
+                kinetickk.ball.profile.api.ProfileGameplayProgressRejection.TooManyDiscoveries,
+            ),
+            ProfileNucleus.decide(
+                state,
+                ProfilePulse.ApplyGameplayProgress(
+                    GameplayProgressUpdate(discoveredItemIds = overflow),
+                ),
+            ).rejection(),
+        )
+    }
+
+    @Test
     fun commandsEnforceClosedSourceKindsAndOrderPersistBeforeCompletion() {
         val state = readyState()
         val pulse = ProfilePulse.ToggleMute
@@ -294,6 +326,27 @@ class ProfileNucleusTest {
                 ProfileContext(command, ProfileCommandAdmission(command.ref.copy(ordinal = 8))),
             ).rejection(),
         )
+    }
+
+    @Test
+    fun profileAcceptedFrameAcceptsTwoAndRejectsThirdOutput() {
+        val state = readyState()
+        val pulse = ProfilePulse.ToggleMute
+        val command = sessionCommand(pulse)
+        val frame = ProfileNucleus.decide(
+            state,
+            pulse,
+            ProfileContext(command, ProfileCommandAdmission(command.ref)),
+        ).acceptedFrame()
+
+        ProfileAcceptedFrame(frame.nextState, frame.outputs)
+
+        assertFailsWith<IllegalArgumentException> {
+            ProfileAcceptedFrame(
+                frame.nextState,
+                (frame.outputs + frame.outputs.first()).toImmutableList(),
+            )
+        }
     }
 
     @Test
@@ -454,6 +507,75 @@ class ProfileNucleusTest {
         ).acceptedFrame()
         assertIs<ProfileResetStatus.ConfirmationRequired>(malformed.nextState.reset)
         assertTrue(malformed.outputs.isEmpty())
+    }
+
+    @Test
+    fun bootstrapRetainsSchemaMaximumUnlockedWeaponsLabRanksAndDiscoveries() {
+        val base = defaultPlayerProfile(TestProfilePolicy)
+        val exactRanks = TestProfilePolicy.metaUpgrades.map { it.maxRanks }
+        val exactDiscoveries = (0 until TestProfilePolicy.itemCount).toSet()
+        val profile = base.copy(
+            loadout = PlayerLoadout(
+                coreShape = base.loadout.coreShape,
+                selectedWeapon = base.loadout.selectedWeapon,
+                unlockedWeapons = WeaponId.entries.toSet(),
+            ),
+            labProgress = LabProgress(exactRanks),
+            collection = PlayerCollection(exactDiscoveries),
+        )
+
+        val loaded = bootstrapProfile(profile)
+
+        assertEquals(ProfileBootstrapStatus.Ready, loaded.nextState.bootstrap)
+        assertEquals(TestProfilePolicy.weapons.size, loaded.nextState.profile.loadout.unlockedWeapons.size)
+        assertEquals(TestProfilePolicy.metaUpgrades.size, loaded.nextState.profile.labProgress.ranks.size)
+        assertEquals(TestProfilePolicy.itemCount, loaded.nextState.profile.collection.discoveredItemIds.size)
+        assertEquals(WeaponId.entries.toSet(), loaded.nextState.profile.loadout.unlockedWeapons)
+        assertEquals(exactRanks, loaded.nextState.profile.labProgress.ranks)
+        assertEquals(exactDiscoveries, loaded.nextState.profile.collection.discoveredItemIds)
+    }
+
+    @Test
+    fun bootstrapRejectsFirstExtraLabRankRankOverflowAndFirstExtraDiscovery() {
+        val base = defaultPlayerProfile(TestProfilePolicy)
+        val exactRanks = TestProfilePolicy.metaUpgrades.map { it.maxRanks }
+        val firstRankOverflow = exactRanks.mapIndexed { index, rank ->
+            if (index == 0) rank + 1 else rank
+        }
+        val incompatibleProfiles = listOf(
+            base.copy(labProgress = LabProgress(exactRanks + 0)),
+            base.copy(labProgress = LabProgress(firstRankOverflow)),
+            base.copy(collection = PlayerCollection((0..TestProfilePolicy.itemCount).toSet())),
+        )
+
+        incompatibleProfiles.forEach(::assertBootstrapIncompatible)
+    }
+
+    @Test
+    fun bootstrapPreferencesAcceptExactMaximaAndRejectOverflowOrOutOfSchemaValues() {
+        val base = defaultPlayerProfile(TestProfilePolicy)
+        val exact = PlayerPreferences(
+            masterVolume = 1f,
+            simulationSpeed = SIMULATION_SPEED_OPTIONS.last(),
+            textScale = 1.75f,
+            damageNumberTierThreshold = DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS.last(),
+        )
+
+        assertEquals(exact, bootstrapProfile(base.copy(preferences = exact)).nextState.profile.preferences)
+
+        val incompatiblePreferences = listOf(
+            exact.copy(masterVolume = Float.fromBits(1f.toBits() + 1)),
+            exact.copy(simulationSpeed = Float.fromBits(SIMULATION_SPEED_OPTIONS.last().toBits() + 1)),
+            exact.copy(textScale = Float.fromBits(1.75f.toBits() + 1)),
+            exact.copy(simulationSpeed = Float.fromBits(1f.toBits() + 1)),
+            exact.copy(
+                damageNumberTierThreshold = DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS.first() + 1,
+            ),
+        )
+
+        incompatiblePreferences.forEach { preferences ->
+            assertBootstrapIncompatible(base.copy(preferences = preferences))
+        }
     }
 
     @Test
@@ -686,6 +808,29 @@ class ProfileNucleusTest {
         bootstrap = ProfileBootstrapStatus.Ready,
         reset = ProfileResetStatus.NotRequired(legacyResetConfirmed = false),
     )
+
+    private fun bootstrapProfile(profile: PlayerProfile): ProfileAcceptedFrame =
+        ProfileNucleus.decide(
+            ProfileState.initial(TestProfilePolicy),
+            ProfilePulse.BootstrapCompleted(
+                ProfileBootstrapResourceResult.Observed(
+                    snapshot = ProfileV4Snapshot(
+                        contentVersion = TestProfilePolicy.version,
+                        revision = ProfileRevision.ZERO,
+                        legacyResetConfirmed = false,
+                        profile = profile,
+                    ),
+                    legacyKeys = ProfileLegacyKeys.NONE,
+                ),
+            ),
+        ).acceptedFrame()
+
+    private fun assertBootstrapIncompatible(profile: PlayerProfile) {
+        val frame = bootstrapProfile(profile)
+        assertIs<ProfileResetStatus.ConfirmationRequired>(frame.nextState.reset)
+        assertEquals(defaultPlayerProfile(TestProfilePolicy), frame.nextState.profile)
+        assertTrue(frame.outputs.isEmpty())
+    }
 
     private fun legacyBlockedState(keys: ProfileLegacyKeys): ProfileState =
         ProfileNucleus.decide(

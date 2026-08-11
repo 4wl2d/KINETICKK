@@ -551,6 +551,36 @@ class DefaultAppSessionComponentTest {
         assertNull(shell(rig).pendingWorkflow)
         assertEquals(kinetickk.flow.session.api.SessionResetLifecycle.READY, shell(rig).resetLifecycle)
     }
+
+    @Test
+    fun deployedCompletionQueueAcceptsEightAndRefusesNinthWithoutTruncation() {
+        val completions = sessionCompletionDeque<Int>()
+
+        repeat(8) { value -> assertTrue(completions.tryAddLast(value)) }
+
+        assertEquals(8, completions.size)
+        assertFalse(completions.tryAddLast(8))
+        assertEquals((0 until 8).toList(), List(8) { completions.removeFirstOrNull() })
+    }
+
+    @Test
+    fun acceptorCausalDepthAndOutputFanoutAcceptNAndRefuseNPlusOne() {
+        repeat(8, ::requireSessionCausalDepth)
+        assertFailsWith<IllegalStateException> { requireSessionCausalDepth(8) }
+
+        requireSessionOutputFanoutBounds(participantCount = 1, ensureCount = 1)
+        assertFailsWith<IllegalStateException> {
+            requireSessionOutputFanoutBounds(participantCount = 2, ensureCount = 1)
+        }
+        assertFailsWith<IllegalStateException> {
+            requireSessionOutputFanoutBounds(participantCount = 1, ensureCount = 2)
+        }
+
+        requireSessionCompletionCapacity(remainingCapacity = 1, requiredCompletions = 1)
+        assertFailsWith<IllegalStateException> {
+            requireSessionCompletionCapacity(remainingCapacity = 0, requiredCompletions = 1)
+        }
+    }
 }
 
 private fun shell(rig: AppSessionTestRig) = rig.component.query(AppSessionQuery.GetShell)

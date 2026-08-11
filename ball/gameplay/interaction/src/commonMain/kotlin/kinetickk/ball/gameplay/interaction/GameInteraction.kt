@@ -44,6 +44,11 @@ import kinetickk.ball.gameplay.interaction.input.ValidationFailure
 import kinetickk.ball.gameplay.interaction.input.isHudControlPosition
 import kinetickk.ball.gameplay.interaction.input.resolveGameplayPress
 
+internal const val MAX_GAMEPLAY_PRESENTATION_DELTA_SECONDS: Float = 0.1f
+
+internal fun selectGameplayPresentationDelta(realDeltaSeconds: Float): Float =
+    realDeltaSeconds.coerceAtMost(MAX_GAMEPLAY_PRESENTATION_DELTA_SECONDS)
+
 @Composable
 fun GameplayContent(
     component: GameplayInteractionPort,
@@ -103,7 +108,9 @@ fun GameplayContent(
             previousFrame = frame
             when (val result = interactionValidator.frameElapsed(delta)) {
                 is InteractionValidationResult.Valid -> {
-                    renderTimeSecondsValue += result.intent.realDeltaSeconds.coerceAtMost(0.1f)
+                    renderTimeSecondsValue += selectGameplayPresentationDelta(
+                        result.intent.realDeltaSeconds,
+                    )
                     dispatch(result.intent)
                 }
                 is InteractionValidationResult.Invalid -> reportInvalidInteractionInput(result.failure)

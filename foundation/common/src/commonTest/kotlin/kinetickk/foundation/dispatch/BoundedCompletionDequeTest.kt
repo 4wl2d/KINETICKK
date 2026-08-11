@@ -11,6 +11,17 @@ import kotlin.test.assertTrue
 
 class BoundedCompletionDequeTest {
     @Test
+    fun architectureDepthAcceptsEightAndRefusesNinthWithoutTruncating() {
+        val deque = BoundedCompletionDeque<Int>(capacity = 8)
+
+        repeat(8) { value -> assertTrue(deque.tryAddLast(value)) }
+
+        assertEquals(8, deque.size)
+        assertFalse(deque.tryAddLast(8))
+        assertEquals((0 until 8).toList(), List(8) { deque.removeFirstOrNull() })
+    }
+
+    @Test
     fun acceptsExactlyNAndRefusesFirstNPlusOneWithoutTruncating() {
         val deque = BoundedCompletionDeque<Int>(capacity = 3)
 

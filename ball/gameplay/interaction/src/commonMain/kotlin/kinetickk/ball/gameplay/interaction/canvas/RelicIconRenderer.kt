@@ -5,8 +5,6 @@ package kinetickk.ball.gameplay.interaction.canvas
 
 import kinetickk.foundation.design.*
 
-import kinetickk.ball.content.api.*
-
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color

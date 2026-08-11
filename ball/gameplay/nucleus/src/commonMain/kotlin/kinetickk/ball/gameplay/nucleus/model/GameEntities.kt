@@ -6,10 +6,8 @@ package kinetickk.ball.gameplay.nucleus.model
 import kinetickk.ball.gameplay.api.EnemyType
 import kinetickk.ball.gameplay.api.PickupType
 import kinetickk.ball.gameplay.api.WeaponNodeType
-
-import kinetickk.ball.content.api.*
-
-
+import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.WeaponId
 
 internal data class Enemy(
     val id: Int,
@@ -49,8 +47,35 @@ internal data class Projectile(
     val sourceWeapon: WeaponId? = null,
     var previousX: Float = x,
     var previousY: Float = y,
-    val hitEnemyIds: MutableSet<Int> = mutableSetOf(),
-)
+    private val recordedHitEnemyIds: MutableSet<Int> = mutableSetOf(),
+) {
+    init {
+        require(recordedHitEnemyIds.size <= MAX_HIT_ENEMY_IDS) {
+            "projectile hit history cannot exceed $MAX_HIT_ENEMY_IDS entries"
+        }
+    }
+
+    fun tryRecordEnemyHit(enemyId: Int): Boolean {
+        if (enemyId in recordedHitEnemyIds) return true
+        if (recordedHitEnemyIds.size >= MAX_HIT_ENEMY_IDS) return false
+        recordedHitEnemyIds += enemyId
+        return true
+    }
+
+    fun hasRecordedEnemyHit(enemyId: Int): Boolean = enemyId in recordedHitEnemyIds
+
+    fun retainLiveEnemyHits(liveEnemyIds: Set<Int>) {
+        recordedHitEnemyIds.retainAll(liveEnemyIds)
+    }
+
+    fun isolatedCopy(): Projectile = copy(
+        recordedHitEnemyIds = recordedHitEnemyIds.toMutableSet(),
+    )
+
+    companion object {
+        const val MAX_HIT_ENEMY_IDS = 120
+    }
+}
 
 internal data class Pickup(
     val type: PickupType,
@@ -95,10 +120,4 @@ internal data class DelayedRelicHit(
     val enemyId: Int,
     var delay: Float,
     val damage: Float,
-)
-
-internal data class DomainCollectionLimit(
-    val name: String,
-    val size: Int,
-    val maximum: Int,
 )

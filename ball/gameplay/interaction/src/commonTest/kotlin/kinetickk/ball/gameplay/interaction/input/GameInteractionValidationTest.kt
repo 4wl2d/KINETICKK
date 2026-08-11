@@ -4,6 +4,8 @@
 package kinetickk.ball.gameplay.interaction.input
 
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
+import kinetickk.ball.gameplay.interaction.MAX_GAMEPLAY_PRESENTATION_DELTA_SECONDS
+import kinetickk.ball.gameplay.interaction.selectGameplayPresentationDelta
 import kinetickk.ball.gameplay.interaction.input.GameInteractionValidator
 import kinetickk.ball.gameplay.interaction.input.InteractionIngressLimits
 import kinetickk.ball.gameplay.interaction.input.InteractionInputField
@@ -16,6 +18,20 @@ import kotlin.test.assertTrue
 import kotlin.test.Test
 
 class GameInteractionValidationTest {
+    @Test
+    fun presentationDeltaAcceptsPointOneAndClampsFirstNPlusOne() {
+        assertEquals(
+            MAX_GAMEPLAY_PRESENTATION_DELTA_SECONDS,
+            selectGameplayPresentationDelta(MAX_GAMEPLAY_PRESENTATION_DELTA_SECONDS),
+        )
+        assertEquals(
+            MAX_GAMEPLAY_PRESENTATION_DELTA_SECONDS,
+            selectGameplayPresentationDelta(
+                Float.fromBits(MAX_GAMEPLAY_PRESENTATION_DELTA_SECONDS.toBits() + 1),
+            ),
+        )
+    }
+
     @Test
     fun frameDeltaAcceptsExactBoundsAndRejectsTheNextRepresentableValues() {
         val validator = GameInteractionValidator()

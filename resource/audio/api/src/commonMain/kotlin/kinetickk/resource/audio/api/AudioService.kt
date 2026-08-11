@@ -10,6 +10,15 @@ enum class ToneWave {
     TRIANGLE,
 }
 
+object ToneRequestLimits {
+    const val MIN_FREQUENCY_HZ: Float = 20f
+    const val MAX_FREQUENCY_HZ: Float = 20_000f
+    const val MIN_DURATION_SECONDS: Float = 0.001f
+    const val MAX_DURATION_SECONDS: Float = 1f
+    const val MIN_GAIN: Float = 0f
+    const val MAX_GAIN: Float = 1f
+}
+
 /** Validated mechanical work accepted by the platform audio resource. */
 data class ToneRequest(
     val frequencyHz: Float,
@@ -18,13 +27,21 @@ data class ToneRequest(
     val wave: ToneWave,
 ) {
     init {
-        require(frequencyHz.isFinite() && frequencyHz in 20f..20_000f) {
+        require(
+            frequencyHz.isFinite() &&
+                frequencyHz >= ToneRequestLimits.MIN_FREQUENCY_HZ &&
+                frequencyHz <= ToneRequestLimits.MAX_FREQUENCY_HZ,
+        ) {
             "Tone frequency must be finite and between 20 and 20,000 Hz"
         }
-        require(durationSeconds.isFinite() && durationSeconds in 0.001f..1f) {
+        require(
+            durationSeconds.isFinite() &&
+                durationSeconds >= ToneRequestLimits.MIN_DURATION_SECONDS &&
+                durationSeconds <= ToneRequestLimits.MAX_DURATION_SECONDS,
+        ) {
             "Tone duration must be finite and between 0.001 and 1 second"
         }
-        require(gain.isFinite() && gain in 0f..1f) {
+        require(gain.isFinite() && gain in ToneRequestLimits.MIN_GAIN..ToneRequestLimits.MAX_GAIN) {
             "Tone gain must be finite and between 0 and 1"
         }
     }

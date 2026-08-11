@@ -3,7 +3,9 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.content.api.*
+import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.WeaponMastery
 
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.model.*
@@ -47,9 +49,18 @@ internal fun MutableGameState.updateWeapons(delta: Float) {
         WeaponId.GRAVITY_MINES -> {
             if (weaponClock <= 0f && (braking || speed > 220f)) {
                 weaponClock = cooldown(if (braking) 0.72f else 1.15f)
-                if (weaponNodes.count { it.type == WeaponNodeType.GRAVITY_MINE } < 8) {
-                    val mineLife = 0.75f + agonyRank * 0.04f
-                    weaponNodes += WeaponNode(WeaponNodeType.GRAVITY_MINE, coreX, coreY, mineLife, mineLife, 96f + agonyRank * 12f)
+                val mineLife = 0.75f + agonyRank * 0.04f
+                if (tryAddWeaponNode(
+                        WeaponNode(
+                            WeaponNodeType.GRAVITY_MINE,
+                            coreX,
+                            coreY,
+                            mineLife,
+                            mineLife,
+                            96f + agonyRank * 12f,
+                        ),
+                    )
+                ) {
                     if (agonyRank > 0) agonyMutationCounts[WeaponId.GRAVITY_MINES.ordinal]++
                     emitSound(GameplayAudioCue.WEAPON_LIGHT)
                 }
@@ -130,7 +141,7 @@ internal fun MutableGameState.sampleFluxTrail() {
     if (distance <= 0f) return
     var sampleDistance = 22f - trailDistanceCarry
     var samples = 0
-    while (sampleDistance <= distance && samples < 32) {
+    while (sampleDistance <= distance && samples < MutableGameState.MAX_TRAIL_SAMPLES_PER_UPDATE) {
         val amount = sampleDistance / distance
         trail += TrailPoint(lerp(trailLastX, coreX, amount), lerp(trailLastY, coreY, amount))
         sampleDistance += 22f
@@ -143,7 +154,16 @@ internal fun MutableGameState.sampleFluxTrail() {
     if (relicRank(RelicId.AGONY_SCEPTER) > 0) agonyMutationCounts[WeaponId.FLUX_WAKE.ordinal]++
 }
 
-internal fun MutableGameState.ensureOrbitals(count: Int, orbitRadius: Float, hitRadius: Float, delta: Float, angularSpeed: Float) {
+internal fun MutableGameState.ensureOrbitals(
+    count: Int,
+    orbitRadius: Float,
+    hitRadius: Float,
+    delta: Float,
+    angularSpeed: Float,
+) {
+    require(count in 0..MutableGameState.MAX_WEAPON_ORBITALS) {
+        "weapon orbital count cannot exceed ${MutableGameState.MAX_WEAPON_ORBITALS}"
+    }
     if (weaponOrbitals.size != count || weaponOrbitals.any { it.radius != hitRadius }) {
         weaponOrbitals.clear()
         repeat(count) { weaponOrbitals += WeaponOrbital(it, coreX, coreY, hitRadius) }
@@ -153,6 +173,12 @@ internal fun MutableGameState.ensureOrbitals(count: Int, orbitRadius: Float, hit
         orbital.x = coreX + cos(angle) * orbitRadius
         orbital.y = coreY + sin(angle) * orbitRadius
     }
+}
+
+internal fun MutableGameState.tryAddWeaponNode(node: WeaponNode): Boolean {
+    if (weaponNodes.size >= MutableGameState.MAX_WEAPON_NODES) return false
+    weaponNodes += node
+    return true
 }
 
 internal fun MutableGameState.updateWeaponNodes(delta: Float) {
@@ -187,7 +213,7 @@ internal fun MutableGameState.fireArcCoil(baseDamage: Float) {
     val targets = enemies.asSequence()
         .filter { !it.dead && it.hp > 0f && distanceSquared(coreX, coreY, it.x, it.y) <= 560f * 560f }
         .sortedBy { distanceSquared(coreX, coreY, it.x, it.y) }
-        .take(min(6, 3 + weaponLevel / 3))
+        .take(min(MAX_ARC_COIL_TARGETS, 3 + weaponLevel / 3))
         .toList()
     var fromX = coreX
     var fromY = coreY
@@ -205,6 +231,8 @@ internal fun MutableGameState.fireArcCoil(baseDamage: Float) {
         agonyMutationCounts[WeaponId.ARC_COIL.ordinal]++
     }
 }
+
+internal const val MAX_ARC_COIL_TARGETS: Int = 6
 
 internal fun MutableGameState.fireSingularitySpear(damage: Float) {
     val angle = movementAngle()

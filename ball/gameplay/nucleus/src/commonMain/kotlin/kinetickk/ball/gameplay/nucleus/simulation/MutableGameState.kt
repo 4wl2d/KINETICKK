@@ -3,7 +3,15 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.content.api.*
+import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.EquippedRelic
+import kinetickk.ball.content.api.GameplayContentSnapshot
+import kinetickk.ball.content.api.ItemDefinition
+import kinetickk.ball.content.api.RebirthProfile
+import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.WeaponDefinition
+import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.WeaponMastery
 
 import kinetickk.foundation.random.CloneableXorWowRandom
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
@@ -34,8 +42,11 @@ internal class MutableGameState(
         const val MAX_PICKUPS = 420
         const val MAX_TRAIL_POINTS = 110
         const val MAX_DELAYED_RELIC_HITS = 256
-
-        val SIMULATION_SPEEDS = listOf(0.75f, 1f, 1.15f, 1.35f, 1.6f, 2f)
+        const val MAX_GAMEPLAY_SOUND_CUES = 32
+        const val MAX_WEAPON_NODES = 8
+        const val MAX_WEAPON_ORBITALS = 8
+        const val MAX_CHOICES = 4
+        const val MAX_TRAIL_SAMPLES_PER_UPDATE = 32
     }
 
     internal var gameplayRandom = CloneableXorWowRandom(seed)
@@ -281,7 +292,12 @@ internal class MutableGameState(
     val weaponNodes = mutableListOf<WeaponNode>()
     val weaponOrbitals = mutableListOf<WeaponOrbital>()
     var choices: List<ChoiceOption> = emptyList()
-        internal set
+        internal set(value) {
+            require(value.size <= MAX_CHOICES) {
+                "choices cannot exceed $MAX_CHOICES entries"
+            }
+            field = value
+        }
 
     val speed: Float get() = length(velocityX, velocityY)
     internal val threatElapsed: Float get() = elapsed + rebirthProfile.threatTimeOffsetSeconds

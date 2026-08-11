@@ -61,7 +61,7 @@ itself and are not misreported as KINETICKK certification.
 Only after a frozen implementation commit and all local/browser gates pass may
 the next docs-only commit say:
 
-> KINETICKK at implementation commit `<sha>` conforms within the declared scope
+> KINETICKK on implementation SHA `<sha>` conforms within the declared scope
 > to Pokeball Core 1.4.0-draft at `de9ef7384795680c836d5e6c2c9b394286058670`.
 
 This is a project self-attestation, not external certification. It does not

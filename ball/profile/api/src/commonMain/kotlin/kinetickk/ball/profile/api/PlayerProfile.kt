@@ -29,6 +29,8 @@ enum class DamageNumberFormat { COMPACT, FULL }
 
 const val DEFAULT_DAMAGE_NUMBER_TIER_THRESHOLD: Int = 50
 
+val SIMULATION_SPEED_OPTIONS: ImmutableList<Float> = immutableListOf(0.75f, 1f, 1.15f, 1.35f, 1.6f, 2f)
+
 val DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS: ImmutableList<Int> = immutableListOf(
     10,
     25,

@@ -17,6 +17,30 @@ import kotlin.test.assertIs
 
 class ArmoryReducerTest {
     @Test
+    fun pageSliceReturnsThreeForExactAndFirstNPlusOneInputs() {
+        val exact = (0 until ARMORY_PAGE_SIZE).toList()
+        val firstNPlusOne = exact + ARMORY_PAGE_SIZE
+
+        assertEquals(exact, armoryPageSlice(exact, page = 0))
+        assertEquals(exact, armoryPageSlice(firstNPlusOne, page = 0))
+        assertEquals(listOf(ARMORY_PAGE_SIZE), armoryPageSlice(firstNPlusOne, page = 1))
+    }
+
+    @Test
+    fun presentationClockAcceptsMaximumAndClampsNextRepresentableDelta() {
+        val nextRepresentable = Float.fromBits(MAX_ARMORY_PRESENTATION_FRAME_DELTA_SECONDS.toBits() + 1)
+
+        assertEquals(
+            MAX_ARMORY_PRESENTATION_FRAME_DELTA_SECONDS,
+            selectArmoryPresentationFrameDeltaSeconds(MAX_ARMORY_PRESENTATION_FRAME_DELTA_SECONDS),
+        )
+        assertEquals(
+            MAX_ARMORY_PRESENTATION_FRAME_DELTA_SECONDS,
+            selectArmoryPresentationFrameDeltaSeconds(nextRepresentable),
+        )
+    }
+
+    @Test
     fun paginationIsLocalAndClamped() {
         val reducer = ArmoryReducer(TestWeapons)
 
