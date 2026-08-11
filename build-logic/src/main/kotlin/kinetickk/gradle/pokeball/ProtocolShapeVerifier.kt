@@ -800,7 +800,7 @@ private fun acceptedFrameDeclaredTypeAliases(text: String, typeName: String): Li
     return typeAliasDeclarations(code).map(Pair<String, String>::first).filter(aliases::contains)
 }
 
-private fun typeAliasDeclarations(code: String): List<Pair<String, String>> =
+internal fun typeAliasDeclarations(code: String): List<Pair<String, String>> =
     Regex("\\btypealias\\s+($KOTLIN_IDENTIFIER_PATTERN)").findAll(code).filterNot { declaration ->
         code.isInsideBacktickIdentifier(declaration.range.first)
     }.mapNotNull { declaration ->
@@ -855,7 +855,7 @@ private fun typeAliasTarget(code: String, startIndex: Int): String? {
     return code.substring(start).trim().ifEmpty { null }
 }
 
-private fun directTypeName(type: String): String? {
+internal fun directTypeName(type: String): String? {
     val trimmed = normalizeDirectTypeText(type)
     if (hasTopLevelArrow(trimmed)) return null
     val rawType = trimmed.substring(0, firstGenericOpen(trimmed)).trim()
@@ -1205,7 +1205,7 @@ private fun typeDeclarationBody(text: String, declaration: String): String? {
     return code.substring(open + 1, close)
 }
 
-private fun String.maskKotlinNonCode(): String {
+internal fun String.maskKotlinNonCode(): String {
     val output = StringBuilder(length)
     var index = 0
     var blockCommentDepth = 0

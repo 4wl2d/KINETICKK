@@ -215,12 +215,13 @@ internal class DefaultProfileComponent(
 
         var rootAcceptance: ProfileAcceptance? = null
         var root = true
+        var deferredFault: Throwable? = null
         while (!completions.isEmpty) {
             val item = checkNotNull(completions.removeFirstOrNull())
             val before = committedState
             when (val decision = ProfileNucleus.decide(before, item.pulse)) {
                 is ProfileDecision.Rejected -> {
-                    check(root) { "A trusted Profile Resource completion was rejected: ${decision.reason}" }
+                    check(root) { "A trusted Profile Resource completion was rejected: " + decision.reason }
                     rootAcceptance = ProfileAcceptance.Rejected(
                         instanceId = before.instanceId,
                         observedRevision = before.revision,
@@ -236,11 +237,19 @@ internal class DefaultProfileComponent(
                             revision = committedState.revision,
                         )
                     }
-                    decision.frame.outputs.forEach { output -> execute(output, item) }
+                    for (output in decision.frame.outputs) {
+                        try {
+                            this.execute(output, item)
+                        } catch (failure: Throwable) {
+                            if (deferredFault == null) deferredFault = failure
+                        }
+                    }
                 }
             }
             root = false
         }
+        val failure = deferredFault
+        if (failure != null) throw failure
         check(activeCommandRoute == null)
         checkNotNull(rootAcceptance)
     }
@@ -261,13 +270,14 @@ internal class DefaultProfileComponent(
 
             var acceptedTargetRevision: ProfileRevision? = null
             var root = true
+            var deferredFault: Throwable? = null
             while (!completions.isEmpty) {
                 val item = checkNotNull(completions.removeFirstOrNull())
                 val before = committedState
                 when (val decision = ProfileNucleus.decide(before, item.pulse)) {
                     is ProfileDecision.Rejected -> {
                         check(root) {
-                            "A trusted Profile Resource completion was rejected: ${decision.reason}"
+                            "A trusted Profile Resource completion was rejected: " + decision.reason
                         }
                         activeCommandRoute = null
                         return@dispatch refused(
@@ -288,12 +298,20 @@ internal class DefaultProfileComponent(
                         preflight(before, item, decision.frame)
                         committedState = decision.frame.nextState
                         if (root) acceptedTargetRevision = committedState.revision
-                        decision.frame.outputs.forEach { output -> execute(output, item) }
+                        for (output in decision.frame.outputs) {
+                            try {
+                                this.execute(output, item)
+                            } catch (failure: Throwable) {
+                                if (deferredFault == null) deferredFault = failure
+                            }
+                        }
                     }
                 }
                 root = false
             }
 
+            val failure = deferredFault
+            if (failure != null) throw failure
             check(activeCommandRoute == null) {
                 "Accepted inline Profile command completed without its one-shot result"
             }

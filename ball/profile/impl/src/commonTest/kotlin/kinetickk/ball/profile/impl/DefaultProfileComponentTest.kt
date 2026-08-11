@@ -543,27 +543,36 @@ class DefaultProfileComponentTest {
     }
 
     @Test
-    fun resourceProgrammingFaultAfterPublicationPropagatesWithoutFakeCompletion() {
+    fun resourceProgrammingFaultAfterPublicationDrainsAcceptedResultThenRethrowsFirstFault() {
         val resource = RecordingProfileResource().apply {
             writeBehavior = { error("resource programming fault") }
         }
         val deliveries = mutableListOf<ProfileModuleResultDelivery>()
         val component = testProfileComponent(resource, commandResultSink = deliveries::add)
+        val request = request(
+            component,
+            ProfileModuleCommand.ToggleMute,
+            sourceRevision = 25L,
+        )
 
-        assertFailsWith<IllegalStateException> {
+        val failure = assertFailsWith<IllegalStateException> {
             component.acceptTestCommand(
-                request(
-                    component,
-                    ProfileModuleCommand.ToggleMute,
-                    sourceRevision = 25L,
-                ),
+                request,
                 causalScope = 75L,
                 causalDepth = 0,
             )
         }
 
+        assertEquals("resource programming fault", failure.message)
         assertEquals(1, resource.writes.size)
-        assertTrue(deliveries.isEmpty())
+        val delivery = deliveries.single()
+        assertEquals(request.semanticHandle, delivery.commandSource.semanticHandle)
+        assertEquals(ProfileRevision(2L), delivery.resultSource.targetRevision)
+        assertEquals(1, delivery.resultSource.sourceOrdinal)
+        assertEquals(
+            PlayerPreferences(soundEnabled = false, musicEnabled = false),
+            assertIs<ProfileModuleResult.PreferencesChanged>(delivery.result).preferences,
+        )
         assertFalse(component.query(ProfileQuery.GetPreferences).preferences.soundEnabled)
         assertFalse(component.query(ProfileQuery.GetPreferences).preferences.musicEnabled)
         assertEquals(
@@ -572,6 +581,60 @@ class DefaultProfileComponentTest {
                 component.query(ProfileQuery.GetPersistenceStatus).persistence,
             ).effectRef,
         )
+    }
+
+    @Test
+    fun commandResultSinkFaultDrainsQueuedResourceFactBeforeRethrowAndNextDispatch() {
+        val resource = RecordingProfileResource()
+        val deliveries = mutableListOf<ProfileModuleResultDelivery>()
+        val component = testProfileComponent(resource) { delivery ->
+            deliveries += delivery
+            if (deliveries.size == 1) error("command result sink programming fault")
+        }
+        val firstRequest = request(
+            component,
+            ProfileModuleCommand.ToggleMute,
+            sourceRevision = 26L,
+        )
+
+        val failure = assertFailsWith<IllegalStateException> {
+            component.acceptTestCommand(
+                firstRequest,
+                causalScope = 76L,
+                causalDepth = 0,
+            )
+        }
+
+        assertEquals("command result sink programming fault", failure.message)
+        assertEquals(1, resource.writes.size)
+        assertEquals(firstRequest.semanticHandle, deliveries.single().commandSource.semanticHandle)
+        assertEquals(
+            ProfilePersistenceStatus.Persisted(ProfileRevision(2L)),
+            component.query(ProfileQuery.GetPersistenceStatus).persistence,
+        )
+        assertEquals(ProfileRevision(3L), component.query(ProfileQuery.GetPreferences).revision)
+
+        val secondRequest = request(
+            component,
+            ProfileModuleCommand.ToggleMute,
+            sourceRevision = 27L,
+        )
+        assertIs<ProfileCommandIngressResult.Accepted>(
+            component.acceptTestCommand(
+                secondRequest,
+                causalScope = 77L,
+                causalDepth = 0,
+            ),
+        )
+
+        assertEquals(2, resource.writes.size)
+        assertEquals(2, deliveries.size)
+        assertEquals(secondRequest.semanticHandle, deliveries.last().commandSource.semanticHandle)
+        assertEquals(
+            ProfilePersistenceStatus.Persisted(ProfileRevision(4L)),
+            component.query(ProfileQuery.GetPersistenceStatus).persistence,
+        )
+        assertEquals(ProfileRevision(5L), component.query(ProfileQuery.GetPreferences).revision)
     }
 
     @Test

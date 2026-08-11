@@ -21,6 +21,13 @@ private const val PROFILE_COMPONENT_PATH =
     "ball/profile/impl/src/commonMain/kotlin/kinetickk/ball/profile/impl/ProfileComponentFactory.kt"
 private const val PROFILE_COMPONENT_IMPL_PATH =
     "ball/profile/impl/src/commonMain/kotlin/kinetickk/ball/profile/impl/DefaultProfileComponent.kt"
+/**
+ * Fail-closed proof for the accepted-output critical path. The digest covers the whole
+ * comment-stripped, whitespace-canonical source so imports, literals, helper bodies, and name
+ * resolution cannot drift around the structural dispatch checks without explicit re-review.
+ */
+private const val CANONICAL_PROFILE_COMPONENT_SEMANTIC_DIGEST =
+    "d7c533766c44ade756069fc354c7bc607b3b7c74504d52cf8d0f1d4c5ec6306f"
 private const val GAMEPLAY_COMPONENT_PATH =
     "ball/gameplay/impl/src/commonMain/kotlin/kinetickk/ball/gameplay/impl/GameplayCompositionComponent.kt"
 private const val GAMEPLAY_COMPONENT_IMPL_PATH =
@@ -436,24 +443,62 @@ internal fun platformCapabilityBoundaryViolations(
 /** Enforces Core §6.13 fault-stage separation at audited production boundaries. */
 internal fun resourceFaultStageViolations(
     sources: Collection<SourceDocument>,
+): List<String> = resourceFaultStageViolations(sources, requireCanonicalProfileDispatches = true)
+
+internal fun resourceFaultStageFixtureViolations(
+    sources: Collection<SourceDocument>,
+): List<String> = resourceFaultStageViolations(sources, requireCanonicalProfileDispatches = false)
+
+private fun resourceFaultStageViolations(
+    sources: Collection<SourceDocument>,
+    requireCanonicalProfileDispatches: Boolean,
 ): List<String> = buildList {
     sources.asSequence()
         .filter { source ->
             source.relativePath.endsWith(".kt") &&
-                Regex("/src/[^/]+Main/").containsMatchIn(source.relativePath)
+                source.relativePath.substringAfter("/src/", missingDelimiterValue = "")
+                    .substringBefore('/')
+                    .let { sourceSet -> sourceSet == "main" || sourceSet.endsWith("Main") }
         }
         .forEach { source ->
             val code = source.text.withoutKotlinComments()
+            val kotlinCode = source.text.maskKotlinNonCode()
+            val structuralCode = kotlinCode.maskEscapedIdentifierBodies()
             val auditedResourceBoundary =
                 source.relativePath in profileResourceFaultBoundaryPaths ||
                     source.relativePath.isAuditedResourceBoundaryPath()
-            broadRuntimeFaultCatchBlocks(code).forEach { caught ->
+            val protectedBoundary =
+                auditedResourceBoundary ||
+                    source.relativePath in platformBrokerPaths
+            val parsedCatches = kotlinCatchBlocks(kotlinCode)
+            if (typedCatchSignatureCount(code, kotlinCode) != parsedCatches.size) {
+                add(
+                    "Core §6.13 fault-stage violation in ${source.relativePath}: every Kotlin catch " +
+                        "at an audited boundary must use an explicit unescaped parameter and type",
+                )
+            }
+            runtimeFaultAliasViolations(kotlinCode).forEach { alias ->
+                add(
+                    "Core §6.13 fault-stage violation in ${source.relativePath}: broad runtime " +
+                        "fault type alias `$alias` is forbidden at production boundaries",
+                )
+            }
+            if (source.relativePath == PROFILE_COMPONENT_IMPL_PATH) {
+                profileDeferredOutputDrainViolations(
+                    code = structuralCode,
+                    rawCode = code,
+                    requireCanonicalFunctions = requireCanonicalProfileDispatches,
+                ).forEach(::add)
+            }
+            broadRuntimeFaultCatchBlocks(kotlinCode).forEach { caught ->
                 val evidence = semanticProviderEvidenceConstruction.find(caught.body)?.groupValues?.get(1)
-                val protectedBoundary =
-                    auditedResourceBoundary ||
-                        source.relativePath in platformBrokerPaths
-                val rethrowsSameFault = caught.parameter != "_" &&
-                    Regex("\\bthrow\\s+${Regex.escape(caught.parameter)}\\b").containsMatchIn(caught.body)
+                val requiresDeferredDrain = source.relativePath == PROFILE_COMPONENT_IMPL_PATH &&
+                    enclosingAcceptedOutputBatch(structuralCode, caught.declarationStart) != null
+                val rethrowsSameFault = caught.parameter != "_" && if (requiresDeferredDrain) {
+                    preservesDeferredFaultUntilRethrow(structuralCode, code, caught)
+                } else {
+                    directlyRethrowsCaughtFault(caught)
+                }
                 if (evidence != null || protectedBoundary && !rethrowsSameFault) {
                     val reason = if (evidence == null) {
                         "swallows or reclassifies the runtime fault"
@@ -475,7 +520,7 @@ internal fun resourceFaultStageViolations(
                 )
             }
             if (source.relativePath == WEB_PLATFORM_BROKER_PATH) {
-                kotlinCatchBlocks(code)
+                parsedCatches
                     .filter { caught -> caught.type.substringAfterLast('.') == "JsException" }
                     .forEach { caught ->
                         val rethrowsSameFault = caught.parameter != "_" &&
@@ -505,7 +550,7 @@ internal fun resourceFaultStageViolations(
             if (source.relativePath == DESKTOP_PLATFORM_BROKER_PATH &&
                 "ProfilePersistenceMutationResult" in code
             ) {
-                val knownPreExecutionCatches = kotlinCatchBlocks(code).filter { caught ->
+                val knownPreExecutionCatches = parsedCatches.filter { caught ->
                     caught.type.substringAfterLast('.') == "IllegalArgumentException"
                 }
                 if (knownPreExecutionCatches.isEmpty()) {
@@ -1675,6 +1720,9 @@ private data class KotlinCatchBlock(
     val type: String,
     val body: String,
     val line: Int,
+    val declarationStart: Int,
+    val bodyStart: Int,
+    val bodyEnd: Int,
 )
 
 private fun kotlinCatchBlocks(code: String): List<KotlinCatchBlock> =
@@ -1686,6 +1734,9 @@ private fun kotlinCatchBlocks(code: String): List<KotlinCatchBlock> =
             type = match.groupValues[2],
             body = code.substring(open + 1, close),
             line = code.substring(0, match.range.first).count { character -> character == '\n' } + 1,
+            declarationStart = match.range.first,
+            bodyStart = open + 1,
+            bodyEnd = close,
         )
     }.toList()
 
@@ -1693,6 +1744,609 @@ private fun broadRuntimeFaultCatchBlocks(code: String): List<KotlinCatchBlock> =
     kotlinCatchBlocks(code).filter { caught ->
         caught.type.substringAfterLast('.') in broadRuntimeFaultTypes
     }
+
+private fun directlyRethrowsCaughtFault(caught: KotlinCatchBlock): Boolean =
+    Regex("""\s*throw\s+${Regex.escape(caught.parameter)}\s*;?\s*""").matches(caught.body)
+
+private fun typedCatchSignatureCount(rawCode: String, maskedCode: String): Int {
+    val catchDeclaration = Regex("""\bcatch\s*\(""")
+    val visible = catchDeclaration.findAll(maskedCode).count { declaration ->
+        val open = maskedCode.indexOf('(', declaration.range.first)
+        val close = closingDelimiter(maskedCode, open, '(', ')') ?: return@count true
+        ':' in maskedCode.substring(open + 1, close)
+    }
+    val hidden = catchDeclaration.findAll(rawCode).count { declaration ->
+        if (maskedCode.regionMatches(declaration.range.first, "catch", 0, "catch".length)) {
+            return@count false
+        }
+        val open = rawCode.indexOf('(', declaration.range.first)
+        val close = closingDelimiterIgnoringQuotedText(rawCode, open, '(', ')')
+            ?: return@count true
+        ':' in rawCode.substring(open + 1, close)
+    }
+    return visible + hidden
+}
+
+private fun runtimeFaultAliasViolations(code: String): List<String> {
+    val identifier = "(?:`[^`]+`|[A-Za-z_][A-Za-z0-9_]*)"
+    val qualifiedIdentifier = "$identifier(?:\\s*\\.\\s*$identifier)*"
+    val importAliases = Regex(
+        "(?m)\\bimport\\s+($qualifiedIdentifier)\\s+as\\s+($identifier)\\s*(?=;|$)",
+    ).findAll(code).mapNotNull { match ->
+        match.groupValues[2].takeIf {
+            directTypeName(match.groupValues[1]) in broadRuntimeFaultTypes
+        }
+    }
+    val typeAliases = typeAliasDeclarations(code).asSequence()
+        .filter { (_, target) -> directTypeName(target) in broadRuntimeFaultTypes }
+        .map(Pair<String, String>::first)
+    return (importAliases + typeAliases).map { alias -> alias.removeSurrounding("`") }.toList()
+}
+
+private fun profileDeferredOutputDrainViolations(
+    code: String,
+    rawCode: String,
+    requireCanonicalFunctions: Boolean,
+): List<String> = buildList {
+    if (requireCanonicalFunctions) {
+        val actualDigest = canonicalCodeDigest(rawCode)
+        if (actualDigest != CANONICAL_PROFILE_COMPONENT_SEMANTIC_DIGEST) {
+            add(
+                "Core §6.13 fault-stage violation in $PROFILE_COMPONENT_IMPL_PATH: " +
+                    "Profile component semantic source changed; expected " +
+                    "$CANONICAL_PROFILE_COMPONENT_SEMANTIC_DIGEST but found $actualDigest",
+            )
+        }
+    }
+    val exactCanonicalFileInventory = !requireCanonicalFunctions ||
+        (Regex("""\bexecute\b""").findAll(code).count() == 3 &&
+            Regex("""\bdecision\.frame\b""").findAll(code).count() == 7)
+    setOf("dispatchLocal", "dispatchCommand").forEach { functionName ->
+        val functions = functionBlocks(code).filter { function -> function.name == functionName }
+        if (functions.isEmpty()) {
+            if (requireCanonicalFunctions) {
+                add(
+                    "Core §6.13 fault-stage violation in $PROFILE_COMPONENT_IMPL_PATH: " +
+                        "Profile `$functionName` canonical accepted-output drain is missing",
+                )
+            }
+            return@forEach
+        }
+        val function = functions.singleOrNull()
+        if (function == null) {
+            add(
+                "Core §6.13 fault-stage violation in $PROFILE_COMPONENT_IMPL_PATH: " +
+                    "Profile `$functionName` must have one canonical accepted-output drain",
+            )
+            return@forEach
+        }
+        val batches = acceptedOutputBatches(code).filter { batch ->
+            batch.open in (function.open + 1) until function.close && batch.close < function.close
+        }
+        val batch = batches.singleOrNull()
+        val drain = batch?.let { acceptedBatch ->
+            enclosingCompletionDrain(code, acceptedBatch.open)
+        }
+        val acceptedBranchOpen = batch?.let { acceptedBatch ->
+            drain?.let { completionDrain ->
+                nearestEnclosingCurlyOpen(code, completionDrain.open, acceptedBatch.open)
+            }
+        }
+        val acceptedBranchClose = acceptedBranchOpen?.let { open ->
+            closingDelimiter(code, open, '{', '}')
+        }
+        val directlyInsideAcceptedBranch = acceptedBranchOpen?.let { open ->
+            Regex("""is\s+ProfileDecision\.Accepted\s*->\s*\{\s*$""")
+                .containsMatchIn(code.substring(drain!!.open + 1, open + 1))
+        } == true
+        val unconditionallyExecutedBatch = batch != null && acceptedBranchOpen != null &&
+            !isOwnedByUnbracedControl(code, batch.declarationStart, acceptedBranchOpen + 1)
+        val catches = batch?.let { acceptedBatch ->
+            broadRuntimeFaultCatchBlocks(code).filter { caught ->
+                caught.declarationStart in (acceptedBatch.open + 1) until acceptedBatch.close
+            }
+        }.orEmpty()
+        val executeCalls = Regex("""\bexecute\s*\(""").findAll(code, function.open + 1)
+            .takeWhile { match -> match.range.first < function.close }
+            .count()
+        val executeIdentifiers = Regex("""\bexecute\b""").findAll(code, function.open + 1)
+            .takeWhile { match -> match.range.first < function.close }
+            .count()
+        val acceptedOutputReferences = Regex("""\bdecision\.frame\.outputs\b""")
+            .findAll(code, function.open + 1)
+            .takeWhile { match -> match.range.first < function.close }
+            .count()
+        val decisionFrameReferences = Regex("""\bdecision\.frame\b""")
+            .findAll(code, function.open + 1)
+            .takeWhile { match -> match.range.first < function.close }
+            .count()
+        val exactProductionReferences = !requireCanonicalFunctions || when (functionName) {
+            "dispatchLocal" -> executeIdentifiers == 1 && decisionFrameReferences == 3
+            "dispatchCommand" -> executeIdentifiers == 1 && decisionFrameReferences == 4
+            else -> false
+        }
+        val exactAcceptedBranch = !requireCanonicalFunctions ||
+            (batch != null && acceptedBranchOpen != null && acceptedBranchClose != null &&
+                exactProfileAcceptedBranchPrelude(
+                    functionName,
+                    code.substring(acceptedBranchOpen + 1, batch.declarationStart),
+                ) &&
+                code.substring(batch.close + 1, acceptedBranchClose).isBlank())
+        if (batch == null || drain == null ||
+            curlyDepthBetween(code, drain.open + 1, batch.open) != 2 ||
+            !directlyInsideAcceptedBranch ||
+            !unconditionallyExecutedBatch ||
+            executeCalls != 1 ||
+            executeIdentifiers != 1 ||
+            acceptedOutputReferences != 1 ||
+            !exactProductionReferences ||
+            !exactCanonicalFileInventory ||
+            !exactAcceptedBranch ||
+            catches.size != 1 ||
+            !preservesDeferredFaultUntilRethrow(code, rawCode, catches.single())
+        ) {
+            add(
+                "Core §6.13 fault-stage violation in $PROFILE_COMPONENT_IMPL_PATH: " +
+                    "Profile `$functionName` must preserve the first runtime fault until its " +
+                    "canonical accepted-output/completion drain finishes",
+            )
+        }
+    }
+}
+
+private fun canonicalCodeDigest(code: String): String {
+    val canonical = code.replace(Regex("""\s+"""), " ").trim()
+    return java.security.MessageDigest.getInstance("SHA-256")
+        .digest(canonical.encodeToByteArray())
+        .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+}
+
+internal fun exactProfileAcceptedBranchPrelude(functionName: String, code: String): Boolean {
+    val preflightAndCommit =
+        """preflight\s*\(\s*before\s*,\s*item\s*,\s*decision\.frame\s*\)\s*""" +
+            """committedState\s*=\s*decision\.frame\.nextState\s*"""
+    val pattern = when (functionName) {
+        "dispatchLocal" ->
+            preflightAndCommit +
+                """if\s*\(\s*root\s*\)\s*\{\s*""" +
+                """rootAcceptance\s*=\s*ProfileAcceptance\.Accepted\s*\(\s*""" +
+                """instanceId\s*=\s*committedState\.instanceId\s*,\s*""" +
+                """revision\s*=\s*committedState\.revision\s*,\s*\)\s*\}\s*"""
+        "dispatchCommand" ->
+            """if\s*\(\s*root\s*&&\s*deepestReservedLevel\s*\(\s*item\s*,\s*""" +
+                """decision\.frame\s*\)\s*>=\s*MAX_PROFILE_CAUSAL_DEPTH\s*\)\s*\{\s*""" +
+                """activeCommandRoute\s*=\s*null\s*""" +
+                """return@dispatch\s+refused\s*\(\s*""" +
+                """commandSource\s*=\s*pulse\.commandSource\s*,\s*""" +
+                """effectiveProtocolIdentity\s*=\s*pulse\.effectiveProtocolIdentity\s*,\s*""" +
+                """response\s*=\s*causalBudgetFailure\s*\(\s*pulse\.commandSource\s*\)\s*,\s*""" +
+                """\)\s*\}\s*""" +
+                preflightAndCommit +
+                """if\s*\(\s*root\s*\)\s*acceptedTargetRevision\s*=\s*""" +
+                """committedState\.revision\s*"""
+        else -> return false
+    }
+    return Regex("""\s*(?:$pattern)""").matches(code)
+}
+
+private fun preservesDeferredFaultUntilRethrow(
+    code: String,
+    rawCode: String,
+    caught: KotlinCatchBlock,
+): Boolean {
+    val parameter = caught.parameter.takeUnless { it == "_" } ?: return false
+    val assignment = Regex(
+        """\s*if\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*==\s*null\s*\)\s*""" +
+            """\1\s*=\s*${Regex.escape(parameter)}\s*;?\s*""",
+    ).matchEntire(caught.body) ?: return false
+    val deferred = assignment.groupValues[1]
+    val function = enclosingFunctionBlock(code, caught.declarationStart) ?: return false
+    if (function.name !in setOf("dispatchLocal", "dispatchCommand")) return false
+    val declaration = Regex(
+        """\bvar\s+${Regex.escape(deferred)}\s*:\s*(?:kotlin\.)?Throwable\s*\?\s*=\s*null\b""",
+    )
+    val declarations = declaration.findAll(code, function.open + 1)
+        .takeWhile { match -> match.range.first < function.close }
+        .toList()
+    if (declarations.size != 1 ||
+        curlyDepthBetween(code, function.open + 1, declarations.single().range.first) != 0
+    ) {
+        return false
+    }
+
+    val rethrows = Regex(
+        """\bval\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*${Regex.escape(deferred)}\s*""" +
+            """if\s*\(\s*\1\s*!=\s*null\s*\)\s*throw\s+\1\b""",
+    ).findAll(code, caught.bodyEnd)
+        .takeWhile { match -> match.range.first < function.close }
+        .toList()
+    if (rethrows.size != 1) return false
+    val rethrow = rethrows.single()
+    if (curlyDepthBetween(code, function.open + 1, rethrow.range.first) != 0) return false
+
+    val drain = enclosingCompletionDrain(code, caught.declarationStart) ?: return false
+    val outputBatch = enclosingAcceptedOutputBatch(code, caught.declarationStart) ?: return false
+    val drainBody = code.substring(drain.open + 1, drain.close)
+    val rawFunctionBody = rawCode.substring(function.open + 1, function.close)
+    val removals = Regex(
+        """\bval\s+item\s*=\s*checkNotNull\s*\(\s*completions\.removeFirstOrNull\s*""" +
+            """\(\s*\)\s*\)""",
+    ).findAll(code, drain.open + 1)
+        .takeWhile { match -> match.range.first < drain.close }
+        .toList()
+    val decisions = Regex(
+        """\bwhen\s*\(\s*val\s+decision\s*=\s*ProfileNucleus\.decide\s*""" +
+            """\(\s*before\s*,\s*item\.pulse\s*\)\s*\)\s*\{""",
+    ).findAll(code, drain.open + 1)
+        .takeWhile { match -> match.range.first < drain.close }
+        .toList()
+    val exactOutputBatch = Regex(
+        """\s*try\s*\{\s*this\.execute\s*\(\s*output\s*,\s*item\s*\)\s*\}\s*""" +
+            """catch\s*\(\s*${Regex.escape(parameter)}\s*:\s*Throwable\s*\)\s*\{\s*""" +
+            """if\s*\(\s*${Regex.escape(deferred)}\s*==\s*null\s*\)\s*""" +
+            """${Regex.escape(deferred)}\s*=\s*${Regex.escape(parameter)}\s*\}\s*""",
+    ).matches(code.substring(outputBatch.open + 1, outputBatch.close))
+    val remainingDrain = code.substring(caught.bodyEnd, drain.close)
+    val removalToOutput = removals.singleOrNull()?.let { removal ->
+        code.substring(removal.range.last + 1, outputBatch.open)
+    }.orEmpty()
+    val removalToDecision = if (removals.size == 1 && decisions.size == 1) {
+        code.substring(removals.single().range.last + 1, decisions.single().range.first)
+    } else {
+        ""
+    }
+    val hasExactAdmissionReturns = hasExactDispatchAdmissionReturns(
+        code = code,
+        drain = drain,
+        functionName = function.name,
+        admissionCode = removalToOutput,
+        admissionStart = removals.singleOrNull()?.range?.last?.plus(1) ?: 0,
+    )
+    if (drain.queue != "completions" ||
+        isOwnedByUnbracedControl(code, drain.declarationStart, function.open + 1) ||
+        outputBatch.open !in (drain.open + 1) until drain.close ||
+        outputBatch.close >= drain.close ||
+        drain.close >= rethrow.range.first ||
+        code.substring(drain.close + 1, rethrow.range.first).isNotBlank() ||
+        removals.size != 1 ||
+        decisions.size != 1 ||
+        code.substring(drain.open + 1, removals.single().range.first).isNotBlank() ||
+        removals.single().range.first >= outputBatch.open ||
+        curlyDepthBetween(code, drain.open + 1, removals.single().range.first) != 0 ||
+        decisions.single().range.first >= outputBatch.open ||
+        curlyDepthBetween(code, drain.open + 1, decisions.single().range.first) != 0 ||
+        !Regex("""\s*val\s+before\s*=\s*committedState\s*""").matches(removalToDecision) ||
+        Regex("""\bcompletions\.removeFirstOrNull\s*\(""").findAll(drainBody).count() != 1 ||
+        '$' in rawFunctionBody ||
+        Regex("""\b${Regex.escape(deferred)}\b""")
+            .findAll(code, function.open + 1)
+            .takeWhile { match -> match.range.first < function.close }
+            .count() != 4 ||
+        Regex(
+            """\b(?:throw|break|continue|""" +
+                """error\s*\(|TODO\s*\()""",
+        ).containsMatchIn(removalToOutput) ||
+        !hasExactAdmissionReturns ||
+        !exactOutputBatch ||
+        !Regex("""(?:\s*\}\s*)+root\s*=\s*false\s*""").matches(remainingDrain)
+    ) {
+        return false
+    }
+    val beforeRethrow = code.substring(caught.bodyEnd, rethrow.range.first)
+    if (Regex("""\breturn(?:@[A-Za-z_][A-Za-z0-9_]*)?\b""").containsMatchIn(beforeRethrow)) {
+        return false
+    }
+
+    val assignments = Regex(
+        """(?<![=!<>])\b${Regex.escape(deferred)}\s*=(?!=)""",
+    ).findAll(code, function.open + 1).takeWhile { match -> match.range.first < function.close }.toList()
+    val catches = broadRuntimeFaultCatchBlocks(code).filter { other ->
+        other.declarationStart in (function.open + 1) until function.close
+    }
+    return assignments.isNotEmpty() && assignments.all { write ->
+        catches.any { other ->
+            write.range.first in other.bodyStart until other.bodyEnd &&
+                Regex(
+                    """\s*if\s*\(\s*${Regex.escape(deferred)}\s*==\s*null\s*\)\s*""" +
+                        """${Regex.escape(deferred)}\s*=\s*${Regex.escape(other.parameter)}\s*;?\s*""",
+                ).matches(other.body)
+        }
+    }
+}
+
+private fun hasExactDispatchAdmissionReturns(
+    code: String,
+    drain: CompletionDrainBlock,
+    functionName: String?,
+    admissionCode: String,
+    admissionStart: Int,
+): Boolean {
+    val returns = Regex("""\breturn(?:@[A-Za-z_][A-Za-z0-9_]*)?\b""")
+        .findAll(admissionCode)
+        .map { match ->
+            val absoluteStart = admissionStart + match.range.first
+            match to absoluteStart
+        }
+        .toList()
+    if (functionName == "dispatchLocal") return returns.isEmpty()
+    if (functionName != "dispatchCommand" || returns.size != 2) return false
+
+    val branches = returns.mapNotNull { (_, absoluteStart) ->
+        if (!Regex("""return@dispatch\s+refused\s*\(""").matchesAt(code, absoluteStart)) {
+            return@mapNotNull null
+        }
+        val open = nearestEnclosingCurlyOpen(code, drain.open, absoluteStart)
+            ?: return@mapNotNull null
+        if (curlyDepthBetween(code, open + 1, absoluteStart) != 0) return@mapNotNull null
+        val close = closingDelimiter(code, open, '{', '}') ?: return@mapNotNull null
+        val prefix = code.substring(drain.open + 1, open + 1)
+        val beforeReturn = code.substring(open + 1, absoluteStart)
+        val body = code.substring(open + 1, close)
+        val routeClear = Regex("""activeCommandRoute\s*=\s*null\s*$""")
+            .find(beforeReturn) ?: return@mapNotNull null
+        val beforeRouteClear = beforeReturn.substring(0, routeClear.range.first)
+        when {
+            Regex("""is\s+ProfileDecision\.Rejected\s*->\s*\{\s*$""")
+                .containsMatchIn(prefix) &&
+                Regex(
+                    """\s*check\s*\(\s*root\s*\)\s*\{\s*\+\s*decision\.reason\s*\}\s*""",
+                ).matches(beforeRouteClear) &&
+                "ProfileCommandBoundaryResponse.DecisionRejected" in body -> "rejected"
+            Regex(
+                """if\s*\(\s*root\s*&&\s*deepestReservedLevel\s*\(\s*item\s*,\s*""" +
+                    """decision\.frame\s*\)\s*>=\s*MAX_PROFILE_CAUSAL_DEPTH\s*\)\s*\{\s*$""",
+            ).containsMatchIn(prefix) && beforeRouteClear.isBlank() &&
+                "causalBudgetFailure" in body -> "causal-budget"
+            else -> null
+        }
+    }
+    return branches.toSet() == setOf("rejected", "causal-budget")
+}
+
+private fun nearestEnclosingCurlyOpen(code: String, start: Int, position: Int): Int? {
+    val stack = ArrayDeque<Int>()
+    for (index in start until position) {
+        when (code[index]) {
+            '{' -> stack.addLast(index)
+            '}' -> if (stack.isNotEmpty()) stack.removeLast()
+        }
+    }
+    return stack.lastOrNull()
+}
+
+private fun String.maskEscapedIdentifierBodies(): String = buildString(length) {
+    var inside = false
+    this@maskEscapedIdentifierBodies.forEach { character ->
+        when {
+            character == '`' -> {
+                append(' ')
+                inside = !inside
+            }
+            inside -> append(if (character == '\n') '\n' else ' ')
+            else -> append(character)
+        }
+    }
+}
+
+private fun closingDelimiterIgnoringQuotedText(
+    text: String,
+    open: Int,
+    opening: Char,
+    closing: Char,
+): Int? {
+    var depth = 0
+    var index = open
+    var quote: Char? = null
+    var tripleQuoted = false
+    var escaped = false
+    var backticked = false
+    while (index < text.length) {
+        val character = text[index]
+        when {
+            backticked -> if (character == '`') backticked = false
+            character == '`' && quote == null -> backticked = true
+            quote != null && tripleQuoted &&
+                text.substring(index, minOf(text.length, index + 3)) == "\"\"\"" -> {
+                quote = null
+                tripleQuoted = false
+                index += 2
+            }
+            quote != null && !tripleQuoted && escaped -> escaped = false
+            quote != null && !tripleQuoted && character == '\\' -> escaped = true
+            quote != null && !tripleQuoted && character == quote -> quote = null
+            quote == null && text.substring(index, minOf(text.length, index + 3)) == "\"\"\"" -> {
+                quote = '"'
+                tripleQuoted = true
+                index += 2
+            }
+            quote == null && (character == '"' || character == '\'') -> quote = character
+            quote == null && character == opening -> depth += 1
+            quote == null && character == closing -> {
+                depth -= 1
+                if (depth == 0) return index
+            }
+        }
+        index += 1
+    }
+    return null
+}
+
+private data class FunctionBlock(
+    val open: Int,
+    val close: Int,
+    val name: String? = null,
+    val declarationStart: Int = open,
+)
+
+private data class CompletionDrainBlock(
+    val queue: String,
+    val open: Int,
+    val close: Int,
+    val declarationStart: Int,
+)
+
+private fun enclosingFunctionBlock(code: String, position: Int): FunctionBlock? {
+    return functionBlocks(code)
+        .filter { function -> position in (function.open + 1) until function.close }
+        .maxByOrNull(FunctionBlock::open)
+}
+
+private fun functionBlocks(code: String): List<FunctionBlock> {
+    val declarations = Regex("""\bfun\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(""")
+        .findAll(code)
+        .toList()
+    return declarations.mapIndexedNotNull { index, declaration ->
+        val nextDeclaration = declarations.getOrNull(index + 1)?.range?.first ?: code.length
+        val open = code.indexOf('{', declaration.range.last + 1).takeIf { it >= 0 }
+            ?: return@mapIndexedNotNull null
+        if (open >= nextDeclaration) return@mapIndexedNotNull null
+        val close = closingDelimiter(code, open, '{', '}') ?: return@mapIndexedNotNull null
+        FunctionBlock(open, close, declaration.groupValues[1], declaration.range.first)
+    }
+}
+
+private fun enclosingCompletionDrain(code: String, position: Int): CompletionDrainBlock? =
+    Regex(
+        """\bwhile\s*\(\s*!\s*([A-Za-z_][A-Za-z0-9_]*)\.isEmpty\s*\)\s*\{""",
+    ).findAll(code).mapNotNull { declaration ->
+        val open = declaration.range.last
+        val close = closingDelimiter(code, open, '{', '}') ?: return@mapNotNull null
+        CompletionDrainBlock(declaration.groupValues[1], open, close, declaration.range.first)
+            .takeIf { position in (open + 1) until close }
+    }.maxByOrNull(CompletionDrainBlock::open)
+
+private fun enclosingAcceptedOutputBatch(code: String, position: Int): FunctionBlock? =
+    acceptedOutputBatches(code).filter { batch ->
+        position in (batch.open + 1) until batch.close
+    }.maxByOrNull(FunctionBlock::open)
+
+private fun acceptedOutputBatches(code: String): List<FunctionBlock> =
+    Regex(
+        """\bfor\s*\(\s*output\s+in\s+decision\.frame\.outputs\s*\)\s*\{""",
+    ).findAll(code).mapNotNull { declaration ->
+        val open = declaration.range.last
+        val close = closingDelimiter(code, open, '{', '}') ?: return@mapNotNull null
+        FunctionBlock(open, close, declarationStart = declaration.range.first)
+    }.toList()
+
+private fun isOwnedByUnbracedControl(code: String, statementStart: Int, lowerBound: Int): Boolean {
+    var index = statementStart - 1
+    while (index >= lowerBound && code[index].isWhitespace()) index -= 1
+    while (index >= lowerBound) {
+        when {
+            code[index] == '@' -> {
+                index -= 1
+                while (index >= lowerBound &&
+                    (code[index].isLetterOrDigit() || code[index] == '_')
+                ) {
+                    index -= 1
+                }
+            }
+            else -> {
+                val annotationStart = annotationStartEndingAt(code, index, lowerBound) ?: break
+                index = annotationStart - 1
+            }
+        }
+        while (index >= lowerBound && code[index].isWhitespace()) index -= 1
+    }
+    val tail = index
+    if (index >= lowerBound && (code[index].isLetterOrDigit() || code[index] == '_')) {
+        val end = index + 1
+        while (index >= lowerBound && (code[index].isLetterOrDigit() || code[index] == '_')) index -= 1
+        if (code.substring(index + 1, end) == "else") return true
+        index = tail
+    }
+    if (index < lowerBound || code[index] != ')') return false
+    var depth = 0
+    var open = -1
+    while (index >= lowerBound) {
+        when (code[index]) {
+            ')' -> depth += 1
+            '(' -> {
+                depth -= 1
+                if (depth == 0) {
+                    open = index
+                    break
+                }
+            }
+        }
+        index -= 1
+    }
+    if (open < 0) return true
+    index = open - 1
+    while (index >= lowerBound && code[index].isWhitespace()) index -= 1
+    val end = index + 1
+    while (index >= lowerBound && (code[index].isLetterOrDigit() || code[index] == '_')) index -= 1
+    return code.substring(index + 1, end) in setOf("if", "while", "for", "when")
+}
+
+private fun annotationStartEndingAt(code: String, endInclusive: Int, lowerBound: Int): Int? {
+    var index = endInclusive
+    if (code[index] == ')') {
+        index = matchingOpenDelimiter(code, index, '(', ')', lowerBound) ?: return null
+        index -= 1
+        while (index >= lowerBound && code[index].isWhitespace()) index -= 1
+    } else if (code[index] == ']') {
+        index = matchingOpenDelimiter(code, index, '[', ']', lowerBound) ?: return null
+        index -= 1
+        while (index >= lowerBound && code[index].isWhitespace()) index -= 1
+        return index.takeIf { it >= lowerBound && code[it] == '@' }
+    }
+
+    if (index >= lowerBound && code[index] == '@') return index
+    while (index >= lowerBound) {
+        if (!(code[index].isLetterOrDigit() || code[index] == '_')) return null
+        while (index >= lowerBound &&
+            (code[index].isLetterOrDigit() || code[index] == '_')
+        ) {
+            index -= 1
+        }
+        while (index >= lowerBound && code[index].isWhitespace()) index -= 1
+        when {
+            index >= lowerBound && code[index] == '.' -> {
+                index -= 1
+                while (index >= lowerBound && code[index].isWhitespace()) index -= 1
+            }
+            index >= lowerBound && code[index] == ':' -> {
+                index -= 1
+                while (index >= lowerBound && code[index].isWhitespace()) index -= 1
+            }
+            else -> return index.takeIf { it >= lowerBound && code[it] == '@' }
+        }
+    }
+    return null
+}
+
+private fun matchingOpenDelimiter(
+    code: String,
+    close: Int,
+    opening: Char,
+    closing: Char,
+    lowerBound: Int,
+): Int? {
+    var depth = 0
+    for (index in close downTo lowerBound) {
+        when (code[index]) {
+            closing -> depth += 1
+            opening -> {
+                depth -= 1
+                if (depth == 0) return index
+            }
+        }
+    }
+    return null
+}
+
+private fun curlyDepthBetween(code: String, start: Int, endExclusive: Int): Int {
+    var depth = 0
+    for (index in start until endExclusive) {
+        when (code[index]) {
+            '{' -> depth += 1
+            '}' -> depth -= 1
+        }
+    }
+    return depth
+}
 
 private fun knownPreExecutionMutationBranches(code: String): List<String> {
     val marker = "ProfileProviderMutationResult.FAILED_BEFORE_EXECUTION"
