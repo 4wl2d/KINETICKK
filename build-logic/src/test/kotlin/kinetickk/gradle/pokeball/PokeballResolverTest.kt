@@ -92,6 +92,10 @@ class PokeballResolverTest {
         assertFalse(source("app/shared/src/commonTest/kotlin/fixture/Test.kt").isProductionKotlinSource())
         assertFalse(source("app/desktop/build/generated/src/main/kotlin/fixture/Main.kt").isProductionKotlinSource())
         assertFalse(source("app/desktop/generated/src/main/kotlin/fixture/Main.kt").isProductionKotlinSource())
+        assertFalse(
+            source("build-logic/src/main/kotlin/kinetickk/gradle/pokeball/Policy.kt")
+                .isProductionKotlinSource(),
+        )
         assertFalse(source("app/desktop/src/main/kotlin/fixture/NotKotlin.java").isProductionKotlinSource())
     }
 

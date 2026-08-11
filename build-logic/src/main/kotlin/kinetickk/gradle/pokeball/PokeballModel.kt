@@ -37,6 +37,9 @@ internal data class SourceDocument(
 internal fun SourceDocument.isProductionKotlinSource(): Boolean {
     if (!relativePath.endsWith(".kt")) return false
     val pathSegments = relativePath.split('/')
+    if (pathSegments.firstOrNull() !in setOf("app", "ball", "flow", "foundation", "resource")) {
+        return false
+    }
     val sourceRootIndex = pathSegments.indexOf("src")
     if (sourceRootIndex <= 0) return false
     if (pathSegments.take(sourceRootIndex).any { it == "build" || it == ".gradle" || it == "generated" }) {
