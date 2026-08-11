@@ -166,6 +166,27 @@ private val platformBrokerPaths = setOf(
     WEB_PLATFORM_BROKER_PATH,
 )
 
+private val profileResourceFaultBoundaryPaths = setOf(
+    PROFILE_RESOURCE_PATH,
+    PROFILE_COMPONENT_IMPL_PATH,
+)
+
+private fun String.isAuditedResourceBoundaryPath(): Boolean =
+    contains("/resource/src/") ||
+        startsWith("resource/") && contains("/impl/src/")
+
+private val kotlinCatchBlock = Regex(
+    "\\bcatch\\s*\\(\\s*([_A-Za-z][_A-Za-z0-9]*)\\s*:\\s*" +
+        "([A-Za-z_][A-Za-z0-9_.]*)" +
+        "\\s*\\)\\s*\\{",
+)
+
+private val broadRuntimeFaultTypes = setOf("Throwable", "Exception", "RuntimeException", "Error")
+
+private val semanticProviderEvidenceConstruction = Regex(
+    "\\b(?:[A-Za-z_][A-Za-z0-9_]*\\.)*(ResourceFailure|OutcomeUnknown)\\s*\\(",
+)
+
 private val broadPlatformAuthorityTokens = setOf(
     "java.util.prefs.Preferences",
     "org.w3c.dom.Storage",
@@ -192,6 +213,20 @@ private val exactPersistenceOperations = setOf(
     "readLegacyMatter",
     "removeLegacyProgressV2",
     "removeLegacyMatter",
+)
+
+private val kotlinControlKeywords = setOf(
+    "catch",
+    "do",
+    "else",
+    "finally",
+    "for",
+    "if",
+    "return",
+    "throw",
+    "try",
+    "when",
+    "while",
 )
 
 private val exactProfilePersistenceConstants = linkedMapOf(
@@ -245,12 +280,19 @@ internal fun platformCapabilityBoundaryViolations(
         PROFILE_RESOURCE_PATH,
         listOf(
             "interface ExactProfilePersistence",
-            "fun readV4(): String?",
-            "fun writeV4(payload: String)",
-            "fun readLegacyProgressV2(): String?",
-            "fun readLegacyMatter(): String?",
-            "fun removeLegacyProgressV2()",
-            "fun removeLegacyMatter()",
+            "fun readV4(): ProfileProviderReadResult",
+            "fun writeV4(payload: String): ProfileProviderMutationResult",
+            "fun readLegacyProgressV2(): ProfileProviderReadResult",
+            "fun readLegacyMatter(): ProfileProviderReadResult",
+            "fun removeLegacyProgressV2(): ProfileProviderMutationResult",
+            "fun removeLegacyMatter(): ProfileProviderMutationResult",
+            "sealed interface ProfileProviderReadResult",
+            "data class Observed(val payload: String?) : ProfileProviderReadResult",
+            "data object Failed : ProfileProviderReadResult",
+            "enum class ProfileProviderMutationResult",
+            "COMPLETED",
+            "FAILED_BEFORE_EXECUTION",
+            "POSSIBLE_EXECUTION",
             "fun createProfileResource(",
             "persistence: ExactProfilePersistence",
             "private class FixedKeyProfileResource",
@@ -260,12 +302,19 @@ internal fun platformCapabilityBoundaryViolations(
         PROFILE_FACTORY_PATH,
         listOf(
             "interface ProfilePersistenceCapability",
-            "fun readV4(): String?",
-            "fun writeV4(payload: String)",
-            "fun readLegacyProgressV2(): String?",
-            "fun readLegacyMatter(): String?",
-            "fun removeLegacyProgressV2()",
-            "fun removeLegacyMatter()",
+            "fun readV4(): ProfilePersistenceReadResult",
+            "fun writeV4(payload: String): ProfilePersistenceMutationResult",
+            "fun readLegacyProgressV2(): ProfilePersistenceReadResult",
+            "fun readLegacyMatter(): ProfilePersistenceReadResult",
+            "fun removeLegacyProgressV2(): ProfilePersistenceMutationResult",
+            "fun removeLegacyMatter(): ProfilePersistenceMutationResult",
+            "sealed interface ProfilePersistenceReadResult",
+            "data class Observed(val payload: String?) : ProfilePersistenceReadResult",
+            "data object Failed : ProfilePersistenceReadResult",
+            "enum class ProfilePersistenceMutationResult",
+            "COMPLETED",
+            "FAILED_BEFORE_EXECUTION",
+            "POSSIBLE_EXECUTION",
             "private class ProfilePersistenceAdapter",
             ") : ExactProfilePersistence",
         ),
@@ -305,13 +354,15 @@ internal fun platformCapabilityBoundaryViolations(
         listOf(
             "actual fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability",
             "actual fun createPlatformTonePlaybackCapability(): TonePlaybackCapability",
-            "private data class WebProfilePersistenceKeys",
-            "storage = { localStorage }",
-            "keys = WEB_PROFILE_PERSISTENCE_KEYS",
-            "private val WEB_PROFILE_PERSISTENCE_KEYS",
-            "snapshotV4 = ProfilePersistenceContract.WEB_SNAPSHOT_V4",
-            "legacyProgressV2 = ProfilePersistenceContract.WEB_LEGACY_PROGRESS_V2",
-            "legacyMatter = ProfilePersistenceContract.WEB_LEGACY_MATTER",
+            "WebProfilePersistenceCapability()",
+            "private external interface WebStorageReadCall : JsAny",
+            "webStorageRead(ProfilePersistenceContract.WEB_SNAPSHOT_V4).toPersistenceResult()",
+            "webStorageWrite(ProfilePersistenceContract.WEB_SNAPSHOT_V4, payload)",
+            "webStorageRead(ProfilePersistenceContract.WEB_LEGACY_PROGRESS_V2).toPersistenceResult()",
+            "webStorageRead(ProfilePersistenceContract.WEB_LEGACY_MATTER).toPersistenceResult()",
+            "webStorageRemove(ProfilePersistenceContract.WEB_LEGACY_PROGRESS_V2)",
+            "webStorageRemove(ProfilePersistenceContract.WEB_LEGACY_MATTER)",
+            "const exactStorage = globalThis.localStorage;",
             "private var context: JsAny? = null",
             "private class WebProfilePersistenceCapability",
             "private class WebTonePlaybackCapability",
@@ -350,8 +401,25 @@ internal fun platformCapabilityBoundaryViolations(
             expectedOperations = setOf("unlock", "play", "close"),
         ),
     )
+    addAll(
+        exactEnumEntriesViolations(
+            path = PROFILE_FACTORY_PATH,
+            code = codeByPath[PROFILE_FACTORY_PATH],
+            declaration = "enum class ProfilePersistenceMutationResult",
+            expectedEntries = listOf("COMPLETED", "FAILED_BEFORE_EXECUTION", "POSSIBLE_EXECUTION"),
+        ),
+    )
+    addAll(
+        exactEnumEntriesViolations(
+            path = PROFILE_RESOURCE_PATH,
+            code = codeByPath[PROFILE_RESOURCE_PATH],
+            declaration = "enum class ProfileProviderMutationResult",
+            expectedEntries = listOf("COMPLETED", "FAILED_BEFORE_EXECUTION", "POSSIBLE_EXECUTION"),
+        ),
+    )
     addAll(platformFactoryCallsiteViolations(production, codeByPath))
     addAll(closedCapabilityTypeInventoryViolations(production, codeByPath))
+    addAll(desktopPersistenceSeamCallsiteViolations(production, codeByPath))
 
     production.filter { source ->
         source.relativePath.startsWith("ball/profile/resource/") ||
@@ -362,6 +430,351 @@ internal fun platformCapabilityBoundaryViolations(
             .forEach { token ->
                 add("Resource may not acquire a platform capability via `$token`: ${source.relativePath}")
             }
+    }
+}.distinct().sorted()
+
+/** Enforces Core §6.13 fault-stage separation at audited production boundaries. */
+internal fun resourceFaultStageViolations(
+    sources: Collection<SourceDocument>,
+): List<String> = buildList {
+    sources.asSequence()
+        .filter { source ->
+            source.relativePath.endsWith(".kt") &&
+                Regex("/src/[^/]+Main/").containsMatchIn(source.relativePath)
+        }
+        .forEach { source ->
+            val code = source.text.withoutKotlinComments()
+            val auditedResourceBoundary =
+                source.relativePath in profileResourceFaultBoundaryPaths ||
+                    source.relativePath.isAuditedResourceBoundaryPath()
+            broadRuntimeFaultCatchBlocks(code).forEach { caught ->
+                val evidence = semanticProviderEvidenceConstruction.find(caught.body)?.groupValues?.get(1)
+                val protectedBoundary =
+                    auditedResourceBoundary ||
+                        source.relativePath in platformBrokerPaths
+                val rethrowsSameFault = caught.parameter != "_" &&
+                    Regex("\\bthrow\\s+${Regex.escape(caught.parameter)}\\b").containsMatchIn(caught.body)
+                if (evidence != null || protectedBoundary && !rethrowsSameFault) {
+                    val reason = if (evidence == null) {
+                        "swallows or reclassifies the runtime fault"
+                    } else {
+                        "constructs semantic provider evidence `$evidence`"
+                    }
+                    add(
+                        "Core §6.13 fault-stage violation at ${source.relativePath}:${caught.line}: " +
+                            "broad `${caught.type}` catch $reason; use explicit closed provider outcomes " +
+                            "at the platform capability boundary and rethrow programming faults",
+                    )
+                }
+            }
+            if (auditedResourceBoundary && Regex("\\brunCatching\\s*\\{").containsMatchIn(code)) {
+                add(
+                    "Core §6.13 fault-stage violation in ${source.relativePath}: `runCatching` " +
+                        "implicitly catches every runtime fault at an audited Resource boundary; " +
+                        "consume explicit closed provider outcomes instead",
+                )
+            }
+            if (source.relativePath == WEB_PLATFORM_BROKER_PATH) {
+                kotlinCatchBlocks(code)
+                    .filter { caught -> caught.type.substringAfterLast('.') == "JsException" }
+                    .forEach { caught ->
+                        val rethrowsSameFault = caught.parameter != "_" &&
+                            Regex("\\bthrow\\s+${Regex.escape(caught.parameter)}\\b")
+                                .containsMatchIn(caught.body)
+                        val typedReadFailure = "ProfilePersistenceReadResult.Failed" in caught.body
+                        val typedMutationFailure =
+                            "ProfilePersistenceMutationResult." in caught.body
+                        val classifiesRead = caught.parameter != "_" &&
+                            "isWebStorageReadFailure(${caught.parameter}.thrownValue)" in caught.body
+                        val classifiesMutation = caught.parameter != "_" &&
+                            "isWebStorageMutationFailure(${caught.parameter}.thrownValue)" in caught.body
+                        if (!rethrowsSameFault || typedReadFailure && !classifiesRead ||
+                            typedMutationFailure && !classifiesMutation
+                        ) {
+                            add(
+                                "Core §6.13 fault-stage violation at ${source.relativePath}:${caught.line}: " +
+                                    "`JsException` must classify the exact DOM storage failure and rethrow " +
+                                    "all other JavaScript/programming faults",
+                            )
+                        }
+                    }
+                if ("webStorageRead" in code || "globalThis.localStorage" in code) {
+                    addAll(webInlineStorageFaultStageViolations(code))
+                }
+            }
+            if (source.relativePath == DESKTOP_PLATFORM_BROKER_PATH &&
+                "ProfilePersistenceMutationResult" in code
+            ) {
+                val knownPreExecutionCatches = kotlinCatchBlocks(code).filter { caught ->
+                    caught.type.substringAfterLast('.') == "IllegalArgumentException"
+                }
+                if (knownPreExecutionCatches.isEmpty()) {
+                    add(
+                        "Core §6.13 fault-stage violation in ${source.relativePath}: desktop persistence " +
+                            "must classify `IllegalArgumentException` as known before execution",
+                    )
+                }
+                knownPreExecutionCatches.forEach { caught ->
+                    if ("ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION" !in caught.body ||
+                        "ProfilePersistenceMutationResult.POSSIBLE_EXECUTION" in caught.body
+                    ) {
+                        add(
+                            "Core §6.13 fault-stage violation at ${source.relativePath}:${caught.line}: " +
+                                "`IllegalArgumentException` is known before provider execution and must map " +
+                                "only to `FAILED_BEFORE_EXECUTION`",
+                        )
+                    }
+                }
+            }
+            if (source.relativePath == PROFILE_RESOURCE_PATH) {
+                knownPreExecutionMutationBranches(code).forEach { branch ->
+                    if ("OutcomeUnknown" in branch || "writeOutcomeUnknown" in branch) {
+                        add(
+                            "Core §6.13 fault-stage violation in ${source.relativePath}: " +
+                                "`FAILED_BEFORE_EXECUTION` cannot map to `OutcomeUnknown`",
+                        )
+                    }
+                }
+            }
+        }
+}.distinct().sorted()
+
+/** Keeps Core §9.13 live Audio projection faults on runtime-fault policy at every deployed layer. */
+internal fun audioRuntimeFaultStageViolations(
+    sources: Collection<SourceDocument>,
+): List<String> = buildList {
+    val production = sources.filter { source ->
+        source.relativePath.endsWith(".kt") &&
+            Regex("/src/[^/]+Main/").containsMatchIn(source.relativePath)
+    }
+    val codeByPath = production.associate { source ->
+        source.relativePath to source.text.withoutKotlinComments()
+    }
+    val requiredPaths = listOf(
+        AUDIO_RESOURCE_PATH,
+        GAMEPLAY_RUN_IMPL_PATH,
+        DESKTOP_PLATFORM_BROKER_PATH,
+        WEB_PLATFORM_BROKER_PATH,
+    )
+    requiredPaths.filterNot(codeByPath::containsKey).forEach { path ->
+        add("Core §9.13 Audio live-Projection fault-stage source is missing $path")
+    }
+
+    val forbiddenSemanticAudioType = Regex(
+        "\\b(?:Audio|Tone|Playback)[A-Za-z0-9_]*(?:Fact|Result|Status)\\b|" +
+            "\\b(?:Fact|Result|Status)[A-Za-z0-9_]*(?:Audio|Tone|Playback)\\b",
+    )
+    production.forEach { source ->
+        forbiddenSemanticAudioType.findAll(source.text.withoutKotlinComments())
+            .map { match -> match.value }
+            .distinct()
+            .forEach { typeName ->
+                add(
+                    "Core §9.13 Audio is a live mechanical Projection and may not introduce " +
+                        "typed Fact/result/status `$typeName` in ${source.relativePath}",
+                )
+            }
+    }
+
+    fun verifyDirectScope(path: String, label: String, scope: String?, requiredTokens: List<String>) {
+        if (scope == null) {
+            add("Core §9.13 Audio live-Projection fault-stage scope `$label` is missing in $path")
+            return
+        }
+        val normalized = scope.squashWhitespace()
+        requiredTokens.filterNot(normalized::contains).forEach { token ->
+            add(
+                "Core §9.13 Audio live-Projection fault-stage scope `$label` in $path " +
+                    "is missing direct call `$token`",
+            )
+        }
+        if (Regex("\\brunCatching\\s*\\{").containsMatchIn(scope)) {
+            add(
+                "Core §9.13 Audio live-Projection fault-stage violation in $path `$label`: `runCatching` " +
+                    "must not swallow synchronous runtime/provider faults",
+            )
+        }
+        kotlinCatchBlocks(scope).forEach { caught ->
+            add(
+                "Core §9.13 Audio live-Projection fault-stage violation at $path:${caught.line} `$label`: " +
+                    "synchronous `${caught.type}` catch must not replace runtime-fault propagation",
+            )
+        }
+    }
+
+    codeByPath[AUDIO_RESOURCE_PATH]?.let { code ->
+        verifyDirectScope(
+            AUDIO_RESOURCE_PATH,
+            "Audio Resource capability calls",
+            code,
+            listOf(
+                "if (!closed) platform.unlock()",
+                "platform.close()",
+                "platform.playIfAllowed(request.copy(gain = request.gain * volume))",
+                "play(request)",
+            ),
+        )
+    }
+
+    codeByPath[GAMEPLAY_RUN_IMPL_PATH]?.let { code ->
+        verifyDirectScope(
+            GAMEPLAY_RUN_IMPL_PATH,
+            "Gameplay output audio branches",
+            sameIndentFunctionSlice(code, "private fun execute(output: GameplayOutput"),
+            listOf(
+                "is GameplayOutput.AdvanceAudio -> " +
+                    "audioExecutor.advance(output.realDeltaSeconds, output.cues)",
+                "GameplayOutput.EnsureAudioUnlocked -> audioExecutor.ensureUnlocked()",
+            ),
+        )
+    }
+
+    codeByPath[DESKTOP_PLATFORM_BROKER_PATH]?.let { code ->
+        verifyDirectScope(
+            DESKTOP_PLATFORM_BROKER_PATH,
+            "Desktop Tone submission/synthesis/close",
+            declarationBodyForCapability(code, "private class DesktopTonePlaybackCapability"),
+            listOf(
+                "executor.execute { synthesize(request) }",
+                "executor.shutdownNow()",
+                "AudioSystem.getSourceDataLine(format).use { line ->",
+                "line.write(bytes, 0, bytes.size)",
+            ),
+        )
+    }
+
+    codeByPath[WEB_PLATFORM_BROKER_PATH]?.let { code ->
+        verifyDirectScope(
+            WEB_PLATFORM_BROKER_PATH,
+            "Web Tone Kotlin wrappers",
+            declarationBodyForCapability(code, "private class WebTonePlaybackCapability"),
+            listOf(
+                "context = unlockWebAudio(context)",
+                "context = playWebTone(",
+                "closeWebAudio(context)",
+                "context = null",
+            ),
+        )
+        val helperNames = listOf("unlockWebAudio", "playWebTone", "closeWebAudio")
+        val helperBodies = helperNames.associateWith { name ->
+            sameIndentFunctionSlice(code, "private fun $name")
+        }
+        helperBodies.forEach { (name, body) ->
+            if (body == null) {
+                add("Core §9.13 Web Audio helper `$name` is missing in $WEB_PLATFORM_BROKER_PATH")
+            } else if (Regex("(?<!\\.)\\bcatch\\s*(?:\\([^)]*\\))?\\s*\\{").containsMatchIn(body)) {
+                add(
+                    "Core §9.13 Web Audio helper `$name` must let synchronous JavaScript faults " +
+                        "propagate; only detached Promise rejection sinks are allowed",
+                )
+            }
+        }
+        val requiredHelperTokens = mapOf(
+            "unlockWebAudio" to listOf(
+                "const context = current || new AudioContext();",
+                "const resume = context.resume();",
+                "resume.catch(() => undefined);",
+            ),
+            "playWebTone" to listOf(
+                "const context = current || new AudioContext();",
+                "const resume = context.resume();",
+                "const oscillator = context.createOscillator();",
+                "const gain = context.createGain();",
+                "oscillator.connect(gain);",
+                "gain.connect(context.destination);",
+                "oscillator.start();",
+                "oscillator.stop(context.currentTime + duration + 0.015);",
+                "resume.catch(() => undefined);",
+            ),
+            "closeWebAudio" to listOf(
+                "const close = current.close();",
+                "close.catch(() => undefined);",
+            ),
+        )
+        requiredHelperTokens.forEach { (name, tokens) ->
+            val helper = helperBodies[name].orEmpty()
+            tokens.filterNot(helper::contains).forEach { token ->
+                add(
+                    "Core §9.13 Web Audio helper `$name` is missing exact synchronous-call or " +
+                        "Promise-sink token `$token`",
+                )
+            }
+        }
+        val helperText = helperBodies.values.filterNotNull().joinToString("\n")
+        val promiseSink = ".catch(() => undefined);"
+        val sinkCount = helperText.windowed(promiseSink.length).count { candidate -> candidate == promiseSink }
+        if (sinkCount != 3 ||
+            "resume.catch(() => undefined);" !in helperText ||
+            "close.catch(() => undefined);" !in helperText
+        ) {
+            add(
+                "Web Audio detached resume/close Promise rejections must use exactly three " +
+                    "mechanical best-effort sinks; found $sinkCount",
+            )
+        }
+    }
+
+    val evidenceByPath = sources.associate { source -> source.relativePath to source.text }
+    audioRuntimeFaultEvidenceAnchors.forEach { anchor ->
+        val evidence = evidenceByPath[anchor.path]
+        if (evidence == null) {
+            add("Core §9.13 Audio live-Projection evidence is missing ${anchor.path}")
+        } else {
+            anchor.tokens.filterNot(evidence::contains).forEach { token ->
+                add("Core §9.13 Audio live-Projection evidence ${anchor.path} is missing `$token`")
+            }
+        }
+    }
+}.distinct().sorted()
+
+private val audioRuntimeFaultEvidenceAnchors = listOf(
+    BoundAnchor(
+        path = "resource/audio/impl/src/commonTest/kotlin/kinetickk/resource/audio/impl/DefaultAudioServiceTest.kt",
+        tokens = listOf("capabilityFaultsPropagateForUnlockPlayAndCloseWithoutInventingClosedState"),
+    ),
+    BoundAnchor(
+        path = "ball/gameplay/impl/src/commonTest/kotlin/kinetickk/ball/gameplay/impl/GameComponentTest.kt",
+        tokens = listOf("audioFaultsPropagateAfterAcceptedFramesCommitAndDrainExactResults"),
+    ),
+    BoundAnchor(
+        path = "app/shared/src/desktopTest/kotlin/kinetickk/app/shared/PlatformCapabilitiesDesktopTest.kt",
+        tokens = listOf(
+            "audioBrokerIsInstanceOwnedAndCloseIsIdempotent",
+            "workerAndDiscardOldestQueueEnforceOneAndTwentyFour",
+            "synthesisBufferAcceptsMaximumDurationAndRejectsNext",
+        ),
+    ),
+    BoundAnchor(
+        path = "app/shared/src/wasmJsTest/kotlin/kinetickk/app/shared/PlatformCapabilitiesWebTest.kt",
+        tokens = listOf("webAudioSynchronousProviderFaultsPropagateWithoutFabricatingClosedState"),
+    ),
+)
+
+internal fun audioProjectionPolicyViolations(
+    policy: String,
+    applicability: String,
+): List<String> = buildList {
+    listOf(
+        "Core §9.13 live mechanical Projection",
+        "Audio produces no typed Fact, result, or status",
+        "Synchronous Audio Resource and platform calls propagate under runtime-fault policy",
+        "a synthesis fault escapes that `Runnable` to the runtime",
+        "no caller-propagation claim",
+        "`.catch(() => undefined)`",
+        "post-acceptance mechanical projection loss",
+        "synchronous JavaScript invocation and graph faults still propagate",
+    ).filterNot(policy::contains).forEach { token ->
+        add("Core §9.13 Audio projection policy is missing exact contract `$token`")
+    }
+    listOf(
+        "live mechanical Audio Projection (Core §9.13)",
+        "no typed Audio Fact/result/status",
+        "Desktop worker faults escape the detached `Runnable` to runtime",
+        "Web native `resume()`/`close()` Promise rejections",
+        "`.catch(() => undefined)`",
+        "Synchronous JavaScript invocation/graph faults propagate",
+    ).filterNot(applicability::contains).forEach { token ->
+        add("Core §9.13 Audio applicability inventory is missing exact contract `$token`")
     }
 }.distinct().sorted()
 
@@ -448,10 +861,15 @@ private fun platformBrokerSourceViolations(path: String, code: String): List<Str
         }
     }
 
-    listOf("clear", "removeNode", "keys", "childrenNames", "systemRoot").forEach { operation ->
+    listOf("clear", "removeNode", "childrenNames", "systemRoot").forEach { operation ->
         if (Regex("(?:\\.|\\bPreferences\\.)\\s*${Regex.escape(operation)}\\s*\\(").containsMatchIn(code)) {
             add("Broad platform operation `$operation` is forbidden in the exact app broker: $path")
         }
+    }
+    if (path != DESKTOP_PLATFORM_BROKER_PATH &&
+        Regex("(?:\\.|\\bPreferences\\.)\\s*keys\\s*\\(").containsMatchIn(code)
+    ) {
+        add("Broad platform operation `keys` is forbidden in the exact app broker: $path")
     }
 
     when (path) {
@@ -462,7 +880,7 @@ private fun platformBrokerSourceViolations(path: String, code: String): List<Str
 }
 
 private fun desktopBrokerSourceViolations(code: String): List<String> = buildList {
-    requireWordCount(code, "Preferences", 5, DESKTOP_PLATFORM_BROKER_PATH, this)
+    requireWordCount(code, "Preferences", 6, DESKTOP_PLATFORM_BROKER_PATH, this)
     requireWordCount(code, "AudioSystem", 2, DESKTOP_PLATFORM_BROKER_PATH, this)
     requireWordCount(code, "ThreadPoolExecutor", 3, DESKTOP_PLATFORM_BROKER_PATH, this)
     requireRegexCount(
@@ -536,30 +954,57 @@ private fun desktopBrokerSourceViolations(code: String): List<String> = buildLis
             code = code,
             declaration = "private class DesktopProfilePersistenceCapability",
             allowedCalls = exactPersistenceOperations +
-                setOf("profileNode", "legacyNode", "get", "put", "remove", "flush", "apply"),
+                setOf(
+                    "profileNode",
+                    "legacyNode",
+                    "desktopProfileReadCall",
+                    "desktopProfileMutationCall",
+                    "desktopProfilePayloadAdmission",
+                    "let",
+                    "get",
+                    "put",
+                    "remove",
+                ),
             exactCallCounts = mapOf(
                 "profileNode" to 2,
                 "legacyNode" to 4,
+                "desktopProfileReadCall" to 3,
+                "desktopProfileMutationCall" to 3,
+                "desktopProfilePayloadAdmission" to 1,
+                "let" to 1,
                 "get" to 3,
                 "put" to 1,
                 "remove" to 2,
-                "flush" to 3,
-                "apply" to 3,
             ),
             exactIdentifierCounts = mapOf(
                 "profileNode" to 2,
                 "legacyNode" to 4,
+                "keys" to 3,
+                "flush" to 6,
             ),
             requiredExpressions = listOf(
-                "profileNode().get(ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, null)",
-                "put(ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, payload)",
-                "legacyNode().get(ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2, null)",
-                "legacyNode().get(ProfilePersistenceContract.DESKTOP_LEGACY_MATTER, null)",
-                "remove(ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2)",
-                "remove(ProfilePersistenceContract.DESKTOP_LEGACY_MATTER)",
+                "desktopProfilePayloadAdmission(payload.length)?.let { return it }",
+                "exactKey = ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, " +
+                    "loadKeyNames = node::keys, loadExactValue = { " +
+                    "node.get(ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, null) },",
+                "exactKey = ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2, " +
+                    "loadKeyNames = node::keys, loadExactValue = { " +
+                    "node.get(ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2, null) },",
+                "exactKey = ProfilePersistenceContract.DESKTOP_LEGACY_MATTER, " +
+                    "loadKeyNames = node::keys, loadExactValue = { " +
+                    "node.get(ProfilePersistenceContract.DESKTOP_LEGACY_MATTER, null) },",
+                "mutate = { node.put(ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, payload) }, " +
+                    "flush = node::flush,",
+                "mutate = { node.remove(ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2) }, " +
+                    "flush = node::flush,",
+                "mutate = { node.remove(ProfilePersistenceContract.DESKTOP_LEGACY_MATTER) }, " +
+                    "flush = node::flush,",
             ),
         ),
     )
+    addAll(desktopExactReadHelperViolations(code))
+    addAll(desktopMutationStageViolations(code))
+    addAll(desktopValueAdmissionViolations(code))
     val audioBody = declarationBodyForCapability(code, "private class DesktopTonePlaybackCapability")
     if (audioBody == null) {
         add("Private desktop audio broker is missing")
@@ -572,11 +1017,158 @@ private fun desktopBrokerSourceViolations(code: String): List<String> = buildLis
     }
 }
 
+private fun desktopExactReadHelperViolations(code: String): List<String> = buildList {
+    val declaration = "internal fun desktopProfileReadCall"
+    val declarationIndex = code.indexOf(declaration)
+    if (declarationIndex < 0) {
+        add("Narrow Desktop profile read seam is missing")
+        return@buildList
+    }
+    val nextDeclaration = Regex(
+        "(?m)^(?:private|internal|public)\\s+(?:class|object|interface|fun|val|var)\\b",
+    ).find(code, declarationIndex + declaration.length)?.range?.first ?: code.length
+    val body = code.substring(declarationIndex, nextDeclaration)
+    listOf(
+        "exactKey: String",
+        "loadKeyNames: () -> Array<String>",
+        "loadExactValue: () -> String?",
+        "): ProfilePersistenceReadResult",
+        "val storedKeys = try",
+        "loadKeyNames()",
+        "desktopPreferenceKeyCountAdmission(storedKeys.size)",
+        "storedKeys.any { storedKey -> storedKey == exactKey }",
+        "loadExactValue()",
+        "ProfilePersistenceReadResult.Observed(null)",
+        "ProfilePersistenceReadResult.Failed",
+    ).filterNot(code::contains).forEach { token ->
+        add("Narrow Desktop profile read seam is missing `$token`")
+    }
+    val keysIndex = body.indexOf("loadKeyNames()")
+    val admissionIndex = body.indexOf("desktopPreferenceKeyCountAdmission(storedKeys.size)")
+    val iterationIndex = body.indexOf("storedKeys.any { storedKey -> storedKey == exactKey }")
+    val loadExactValueIndex = body.indexOf("loadExactValue()")
+    if (keysIndex < 0 || admissionIndex <= keysIndex || iterationIndex <= admissionIndex) {
+        add(
+            "Desktop preference key results must be admitted immediately after callback acquisition " +
+                "and before project-owned membership iteration",
+        )
+    }
+    if (loadExactValueIndex <= iterationIndex) {
+        add("Desktop exact value load must occur only after admitted exact-key membership")
+    }
+    val allKeyReferences = Regex("\\bnode::keys\\b").findAll(code).count()
+    if (allKeyReferences != 3 || "node::keys" in body) {
+        add(
+            "Desktop Preferences key enumeration must enter only through the three private fixed-key " +
+                "broker bindings; found $allKeyReferences `node::keys` references",
+        )
+    }
+    val directKeyCalls = Regex("\\.keys\\s*\\(").findAll(code).count()
+    if (directKeyCalls != 0) {
+        add(
+            "Direct Desktop Preferences `keys()` calls are forbidden outside the three " +
+                "private fixed-key callback bindings; found $directKeyCalls",
+        )
+    }
+    if (Regex("\\breturn\\s+(?:loadKeyNames|storedKeys)\\b").containsMatchIn(body)) {
+        add("Desktop preference key enumeration may not escape the narrow read seam")
+    }
+    val catches = kotlinCatchBlocks(body)
+    val expectedCatchCounts = mapOf(
+        "BackingStoreException" to 1,
+        "SecurityException" to 2,
+        "IllegalStateException" to 2,
+    )
+    val actualCatchCounts = catches.groupingBy { caught -> caught.type.substringAfterLast('.') }.eachCount()
+    if (actualCatchCounts != expectedCatchCounts) {
+        add(
+            "Desktop narrow read seam catch inventory must be exactly " +
+                "${expectedCatchCounts.toSortedMap()}; found ${actualCatchCounts.toSortedMap()}",
+        )
+    }
+    catches.filter { caught -> "ProfilePersistenceReadResult.Failed" !in caught.body }
+        .forEach { caught ->
+            add("Desktop narrow read seam `${caught.type}` catch must return only the closed Failed outcome")
+        }
+}
+
+private fun desktopMutationStageViolations(code: String): List<String> = buildList {
+    val body = topLevelDeclarationSlice(code, "internal fun desktopProfileMutationCall")
+    if (body == null) {
+        add("Narrow Desktop profile mutation seam is missing")
+        return@buildList
+    }
+    listOf(
+        "mutate: () -> Unit",
+        "flush: () -> Unit",
+        "mutate()",
+        "flush()",
+        "ProfilePersistenceMutationResult.COMPLETED",
+        "ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION",
+        "ProfilePersistenceMutationResult.POSSIBLE_EXECUTION",
+    ).filterNot(body::contains).forEach { token ->
+        add("Narrow Desktop profile mutation seam is missing `$token`")
+    }
+    val mutateIndex = body.indexOf("mutate()")
+    val flushIndex = body.indexOf("flush()")
+    val completedIndex = body.indexOf("ProfilePersistenceMutationResult.COMPLETED")
+    if (mutateIndex < 0 || flushIndex <= mutateIndex || completedIndex <= flushIndex) {
+        add("Desktop mutation seam must mutate, then flush, then report COMPLETED")
+    }
+    val catches = kotlinCatchBlocks(body)
+    val expectedCatchCounts = mapOf(
+        "IllegalStateException" to 1,
+        "IllegalArgumentException" to 1,
+        "BackingStoreException" to 1,
+    )
+    val actualCatchCounts = catches.groupingBy { caught -> caught.type.substringAfterLast('.') }.eachCount()
+    if (actualCatchCounts != expectedCatchCounts) {
+        add(
+            "Desktop mutation seam catch inventory must be exactly " +
+                "${expectedCatchCounts.toSortedMap()}; found ${actualCatchCounts.toSortedMap()}",
+        )
+    }
+    catches.forEach { caught ->
+        val expectedOutcome = when (caught.type.substringAfterLast('.')) {
+            "BackingStoreException" -> "ProfilePersistenceMutationResult.POSSIBLE_EXECUTION"
+            else -> "ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION"
+        }
+        if (expectedOutcome !in caught.body) {
+            add("Desktop mutation seam `${caught.type}` catch must return only `$expectedOutcome`")
+        }
+    }
+}
+
+private fun desktopValueAdmissionViolations(code: String): List<String> = buildList {
+    listOf(
+        "internal fun desktopProfilePayloadAdmission(valueLength: Int): " +
+            "ProfilePersistenceMutationResult?",
+        "require(valueLength >= 0)",
+        "valueLength <= Preferences.MAX_VALUE_LENGTH",
+        "ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION",
+        "desktopProfilePayloadAdmission(payload.length)?.let { return it }",
+    ).filterNot(code::contains).forEach { token ->
+        add("Desktop profile value admission is missing `$token`")
+    }
+    val brokerBody = declarationBodyForCapability(code, "private class DesktopProfilePersistenceCapability")
+    val writeBody = brokerBody?.let { body -> memberFunctionSlice(body, "writeV4") }
+    if (writeBody == null ||
+        writeBody.indexOf("desktopProfilePayloadAdmission(payload.length)") !in
+        0 until writeBody.indexOf("profileNode()")
+    ) {
+        add("Desktop value length must be admitted before profile-node/provider acquisition")
+    }
+}
+
 private fun webBrokerSourceViolations(code: String): List<String> = buildList {
-    requireWordCount(code, "localStorage", 2, WEB_PLATFORM_BROKER_PATH, this)
-    requireWordCount(code, "Storage", 2, WEB_PLATFORM_BROKER_PATH, this)
-    requireWordCount(code, "JsAny", 7, WEB_PLATFORM_BROKER_PATH, this)
-    requireWordCount(code, "globalThis", 4, WEB_PLATFORM_BROKER_PATH, this)
+    requireWordCount(code, "localStorage", 3, WEB_PLATFORM_BROKER_PATH, this)
+    requireWordCount(code, "JsAny", 8, WEB_PLATFORM_BROKER_PATH, this)
+    requireWordCount(code, "globalThis", 7, WEB_PLATFORM_BROKER_PATH, this)
+    listOf("kotlinx.browser.localStorage", "org.w3c.dom.Storage", "WebProfilePersistenceKeys")
+        .filter(code::contains)
+        .forEach { token ->
+            add("Web persistence broker may not inject arbitrary storage/key authority via `$token`")
+        }
     if ("request.wave.ordinal" in code ||
         Regex("\\[[^]]*(?:sine|square|sawtooth|triangle)[^]]*]\\s*\\[\\s*wave\\s*]")
             .containsMatchIn(code)
@@ -585,17 +1177,9 @@ private fun webBrokerSourceViolations(code: String): List<String> = buildList {
     }
     requireRegexCount(
         code,
-        Regex("storage\\s*=\\s*\\{\\s*localStorage\\s*}"),
-        1,
-        "fixed web storage acquisition",
-        WEB_PLATFORM_BROKER_PATH,
-        this,
-    )
-    requireRegexCount(
-        code,
         Regex(
             "actual\\s+fun\\s+createPlatformProfilePersistenceCapability\\s*\\(\\s*\\)\\s*:\\s*" +
-                "ProfilePersistenceCapability\\s*=\\s*WebProfilePersistenceCapability\\s*\\(",
+                "ProfilePersistenceCapability\\s*=\\s*WebProfilePersistenceCapability\\s*\\(\\s*\\)",
         ),
         1,
         "direct web profile broker construction",
@@ -621,12 +1205,21 @@ private fun webBrokerSourceViolations(code: String): List<String> = buildList {
         WEB_PLATFORM_BROKER_PATH,
         this,
     )
-    val allowedGlobalRead =
+    val storageGlobalRead = "const exactStorage = globalThis.localStorage;"
+    val audioGlobalRead =
         "const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;"
     val globalLines = code.lineSequence().filter { "globalThis" in it }.map(String::trim).toList()
-    if (globalLines != listOf(allowedGlobalRead, allowedGlobalRead)) {
+    val expectedGlobalLines = listOf(
+        storageGlobalRead,
+        storageGlobalRead,
+        storageGlobalRead,
+        audioGlobalRead,
+        audioGlobalRead,
+    )
+    if (globalLines != expectedGlobalLines) {
         add(
-            "Web broker globalThis access must be exactly two private AudioContext constructor reads; " +
+            "Web broker globalThis access must be exactly three private fixed-key localStorage " +
+                "acquisitions plus two private AudioContext constructor reads; " +
                 "found ${globalLines.joinToString()}",
         )
     }
@@ -642,42 +1235,46 @@ private fun webBrokerSourceViolations(code: String): List<String> = buildList {
     ) {
         add("Web AudioContext authority must be one private instance field and never a top-level/object cache")
     }
-    val keyFields = primaryConstructorPropertyNames(code, "WebProfilePersistenceKeys")
-    if (keyFields != listOf("snapshotV4", "legacyProgressV2", "legacyMatter")) {
-        add(
-            "Web profile persistence key inventory must be exactly snapshotV4, legacyProgressV2, " +
-                "legacyMatter; found ${keyFields.joinToString()}",
-        )
-    }
-    if ("private data class WebProfilePersistenceKeys" !in code) {
-        add("Web profile persistence keys must be a private immutable production inventory")
+    if ("private class WebProfilePersistenceCapability : ProfilePersistenceCapability" !in code) {
+        add("Web profile persistence broker must be private and retain no injected Storage/key handle")
     }
     addAll(
         closedPersistenceBrokerViolations(
             path = WEB_PLATFORM_BROKER_PATH,
             code = code,
             declaration = "private class WebProfilePersistenceCapability",
-            allowedCalls = exactPersistenceOperations + setOf("storage", "getItem", "setItem", "removeItem"),
+            allowedCalls = exactPersistenceOperations + setOf(
+                "readWebProfileV4",
+                "writeWebProfileV4",
+                "readWebLegacyProgressV2",
+                "readWebLegacyMatter",
+                "removeWebLegacyProgressV2",
+                "removeWebLegacyMatter",
+            ),
             exactCallCounts = mapOf(
-                "storage" to 6,
-                "getItem" to 3,
-                "setItem" to 1,
-                "removeItem" to 2,
+                "readWebProfileV4" to 1,
+                "writeWebProfileV4" to 1,
+                "readWebLegacyProgressV2" to 1,
+                "readWebLegacyMatter" to 1,
+                "removeWebLegacyProgressV2" to 1,
+                "removeWebLegacyMatter" to 1,
             ),
-            exactIdentifierCounts = mapOf(
-                "storage" to 6,
-                "keys" to 6,
-            ),
+            exactIdentifierCounts = emptyMap(),
             requiredExpressions = listOf(
-                "storage().getItem(keys.snapshotV4)",
-                "storage().setItem(keys.snapshotV4, payload)",
-                "storage().getItem(keys.legacyProgressV2)",
-                "storage().getItem(keys.legacyMatter)",
-                "storage().removeItem(keys.legacyProgressV2)",
-                "storage().removeItem(keys.legacyMatter)",
+                "override fun readV4(): ProfilePersistenceReadResult = readWebProfileV4()",
+                "override fun writeV4(payload: String): ProfilePersistenceMutationResult = " +
+                    "writeWebProfileV4(payload)",
+                "override fun readLegacyProgressV2(): ProfilePersistenceReadResult = " +
+                    "readWebLegacyProgressV2()",
+                "override fun readLegacyMatter(): ProfilePersistenceReadResult = readWebLegacyMatter()",
+                "override fun removeLegacyProgressV2(): ProfilePersistenceMutationResult = " +
+                    "removeWebLegacyProgressV2()",
+                "override fun removeLegacyMatter(): ProfilePersistenceMutationResult = " +
+                    "removeWebLegacyMatter()",
             ),
         ),
     )
+    addAll(webExactPersistenceHelperViolations(code))
     val audioBody = declarationBodyForCapability(code, "private class WebTonePlaybackCapability")
     if (audioBody == null) {
         add("Private web audio broker is missing")
@@ -686,6 +1283,60 @@ private fun webBrokerSourceViolations(code: String): List<String> = buildList {
         if (Regex("\\bthis\\b").containsMatchIn(audioBody)) {
             add("Web audio broker may not publish its capability instance via `this`")
         }
+    }
+}
+
+private fun webExactPersistenceHelperViolations(code: String): List<String> = buildList {
+    val normalizedCode = code.squashWhitespace()
+    listOf(
+        "private external interface WebStorageReadCall : JsAny",
+        "webStorageRead(ProfilePersistenceContract.WEB_SNAPSHOT_V4).toPersistenceResult()",
+        "webStorageWrite(ProfilePersistenceContract.WEB_SNAPSHOT_V4, payload)" +
+            ".toPersistenceMutationResult()",
+        "webStorageRead(ProfilePersistenceContract.WEB_LEGACY_PROGRESS_V2).toPersistenceResult()",
+        "webStorageRead(ProfilePersistenceContract.WEB_LEGACY_MATTER).toPersistenceResult()",
+        "webStorageRemove(ProfilePersistenceContract.WEB_LEGACY_PROGRESS_V2)" +
+            ".toPersistenceMutationResult()",
+        "webStorageRemove(ProfilePersistenceContract.WEB_LEGACY_MATTER)" +
+            ".toPersistenceMutationResult()",
+        "WEB_STORAGE_OBSERVED -> ProfilePersistenceReadResult.Observed(payload)",
+        "WEB_STORAGE_FAILED_BEFORE_EXECUTION -> ProfilePersistenceReadResult.Failed",
+        "WEB_STORAGE_COMPLETED -> ProfilePersistenceMutationResult.COMPLETED",
+        "WEB_STORAGE_FAILED_BEFORE_EXECUTION -> " +
+            "ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION",
+        "else -> error(\"Web Storage read returned an unknown provider status\")",
+        "else -> error(\"Web Storage mutation returned an unknown provider status\")",
+        "private fun webStorageRead(key: String): WebStorageReadCall = js(",
+        "private fun webStorageWrite(key: String, payload: String): String = js(",
+        "private fun webStorageRemove(key: String): String = js(",
+        "exactStorage.getItem(key)",
+        "exactStorage.setItem(key, payload)",
+        "exactStorage.removeItem(key)",
+    ).filterNot(normalizedCode::contains).forEach { token ->
+        add("Private fixed-key Web persistence helpers are missing `$token`")
+    }
+    mapOf(
+        "webStorageRead" to 4,
+        "webStorageWrite" to 2,
+        "webStorageRemove" to 3,
+    ).forEach { (call, expected) ->
+        val actual = Regex("\\b${Regex.escape(call)}\\s*\\(").findAll(code).count()
+        if (actual != expected) {
+            add("Private Web persistence helper `$call` must occur exactly $expected times; found $actual")
+        }
+    }
+    mapOf(
+        "exactStorage.getItem(key)" to 1,
+        "exactStorage.setItem(key, payload)" to 1,
+        "exactStorage.removeItem(key)" to 1,
+    ).forEach { (operation, expected) ->
+        val actual = code.windowed(operation.length).count { candidate -> candidate == operation }
+        if (actual != expected) {
+            add("Private Web persistence operation `$operation` must occur exactly $expected times; found $actual")
+        }
+    }
+    if ("ProfilePersistenceMutationResult.POSSIBLE_EXECUTION" in code) {
+        add("Synchronous Web Storage broker may not invent a possible-execution provider status")
     }
 }
 
@@ -713,10 +1364,16 @@ private fun closedPersistenceBrokerViolations(
                 "found ${methods.joinToString()}",
         )
     }
-    val calls = Regex("\\b([A-Za-z_][A-Za-z0-9_]*)\\s*(?:\\(|\\{)")
+    val parenthesizedCalls = Regex("\\b([A-Za-z_][A-Za-z0-9_]*)\\s*\\(")
+        .findAll(body)
+        .map { match -> match.groupValues[1] }
+        .filterNot(kotlinControlKeywords::contains)
+        .toList()
+    val trailingLambdaCalls = Regex("\\.([A-Za-z_][A-Za-z0-9_]*)\\s*\\{")
         .findAll(body)
         .map { match -> match.groupValues[1] }
         .toList()
+    val calls = parenthesizedCalls + trailingLambdaCalls
     val unexpectedCalls = calls.toSet() - allowedCalls
     if (unexpectedCalls.isNotEmpty()) {
         add("Persistence broker $path contains non-contract calls: ${unexpectedCalls.sorted().joinToString()}")
@@ -790,6 +1447,33 @@ private fun exactInterfaceOperationViolations(
     }
 }
 
+private fun exactEnumEntriesViolations(
+    path: String,
+    code: String?,
+    declaration: String,
+    expectedEntries: List<String>,
+): List<String> = buildList {
+    if (code == null) {
+        add("Closed provider result `$declaration` is missing $path")
+        return@buildList
+    }
+    val body = declarationBodyForCapability(code, declaration)
+    if (body == null) {
+        add("Closed provider result `$declaration` is missing in $path")
+        return@buildList
+    }
+    val actual = Regex("\\b[A-Z][A-Z0-9_]*\\b")
+        .findAll(body.substringBefore(';'))
+        .map { match -> match.value }
+        .toList()
+    if (actual != expectedEntries) {
+        add(
+            "Closed provider result `$declaration` in $path must contain exactly " +
+                "${expectedEntries.joinToString()}; found ${actual.joinToString()}",
+        )
+    }
+}
+
 private fun platformFactoryCallsiteViolations(
     production: List<SourceDocument>,
     codeByPath: Map<String, String>,
@@ -822,6 +1506,33 @@ private fun platformFactoryCallsiteViolations(
         "DefaultAudioService( createPlatformTonePlaybackCapability(), )",
     ).filterNot(assembly::contains).forEach { binding ->
         add("Static Assembly is missing exact platform capability binding `$binding`")
+    }
+}
+
+private fun desktopPersistenceSeamCallsiteViolations(
+    production: List<SourceDocument>,
+    codeByPath: Map<String, String>,
+): List<String> = buildList {
+    val expectedCalls = mapOf(
+        "desktopProfileReadCall" to 3,
+        "desktopProfileMutationCall" to 3,
+        "desktopPreferenceKeyCountAdmission" to 1,
+        "desktopProfilePayloadAdmission" to 1,
+    )
+    expectedCalls.forEach { (seam, expectedInBroker) ->
+        production.forEach { source ->
+            val code = codeByPath.getValue(source.relativePath)
+            val calls = Regex("\\b${Regex.escape(seam)}\\s*\\(").findAll(code).count()
+            val declarations = Regex("\\bfun\\s+${Regex.escape(seam)}\\s*\\(").findAll(code).count()
+            val actual = calls - declarations
+            val expected = if (source.relativePath == DESKTOP_PLATFORM_BROKER_PATH) expectedInBroker else 0
+            if (actual != expected) {
+                add(
+                    "Desktop persistence seam `$seam` must have exactly $expected production calls in " +
+                        "${source.relativePath}; found $actual",
+                )
+            }
+        }
     }
 }
 
@@ -935,6 +1646,141 @@ private fun declarationBodyForCapability(code: String, declaration: String): Str
     if (open < 0) return null
     val close = closingDelimiter(code, open, '{', '}') ?: return null
     return code.substring(open + 1, close)
+}
+
+private fun memberFunctionSlice(body: String, functionName: String): String? {
+    val declaration = Regex("\\boverride\\s+fun\\s+${Regex.escape(functionName)}\\s*\\(").find(body)
+        ?: return null
+    val next = Regex("\\boverride\\s+fun\\s+[A-Za-z_][A-Za-z0-9_]*\\s*\\(")
+        .find(body, declaration.range.last + 1)
+        ?.range
+        ?.first ?: body.length
+    return body.substring(declaration.range.first, next)
+}
+
+private fun sameIndentFunctionSlice(code: String, declaration: String): String? {
+    val start = code.indexOf(declaration)
+    if (start < 0) return null
+    val lineStart = code.lastIndexOf('\n', start).let { index -> if (index < 0) 0 else index + 1 }
+    val indent = code.substring(lineStart, start).takeWhile(Char::isWhitespace)
+    val next = Regex(
+        "(?m)^${Regex.escape(indent)}(?:private|internal|public|override)\\s+" +
+            "(?:actual\\s+)?fun\\s+",
+    ).find(code, start + declaration.length)?.range?.first ?: code.length
+    return code.substring(start, next)
+}
+
+private data class KotlinCatchBlock(
+    val parameter: String,
+    val type: String,
+    val body: String,
+    val line: Int,
+)
+
+private fun kotlinCatchBlocks(code: String): List<KotlinCatchBlock> =
+    kotlinCatchBlock.findAll(code).mapNotNull { match ->
+        val open = match.range.last
+        val close = closingDelimiter(code, open, '{', '}') ?: return@mapNotNull null
+        KotlinCatchBlock(
+            parameter = match.groupValues[1],
+            type = match.groupValues[2],
+            body = code.substring(open + 1, close),
+            line = code.substring(0, match.range.first).count { character -> character == '\n' } + 1,
+        )
+    }.toList()
+
+private fun broadRuntimeFaultCatchBlocks(code: String): List<KotlinCatchBlock> =
+    kotlinCatchBlocks(code).filter { caught ->
+        caught.type.substringAfterLast('.') in broadRuntimeFaultTypes
+    }
+
+private fun knownPreExecutionMutationBranches(code: String): List<String> {
+    val marker = "ProfileProviderMutationResult.FAILED_BEFORE_EXECUTION"
+    return Regex("${Regex.escape(marker)}\\s*->").findAll(code).map { match ->
+        val branchStart = match.range.last + 1
+        val contentStart = code.indexOfFirstFrom(branchStart) { character -> !character.isWhitespace() }
+        if (contentStart < 0) {
+            ""
+        } else if (code[contentStart] == '{') {
+            val close = closingDelimiter(code, contentStart, '{', '}') ?: code.lastIndex
+            code.substring(contentStart + 1, close)
+        } else {
+            code.substring(contentStart, code.indexOf('\n', contentStart).let { end ->
+                if (end < 0) code.length else end
+            })
+        }
+    }.toList()
+}
+
+private fun webInlineStorageFaultStageViolations(code: String): List<String> = buildList {
+    val expectedFailureNames = linkedMapOf(
+        "webStorageRead" to listOf("SecurityError"),
+        "webStorageWrite" to listOf("SecurityError", "QuotaExceededError"),
+        "webStorageRemove" to listOf("SecurityError"),
+    )
+    expectedFailureNames.forEach { (functionName, expectedNames) ->
+        val body = topLevelDeclarationSlice(code, "private fun $functionName")
+        if (body == null) {
+            add("Core §6.13 Web fault-stage violation: private `$functionName` helper is missing")
+            return@forEach
+        }
+        listOf(
+            "try {",
+            "catch (failure) {",
+            "typeof DOMException !== 'undefined'",
+            "failure instanceof DOMException",
+            "return 'failed-before-execution'",
+            "throw failure;",
+        ).filterNot { token ->
+            token in body ||
+                token == "return 'failed-before-execution'" &&
+                "return { status: 'failed-before-execution', payload: null };" in body
+        }.forEach { token ->
+            add("Core §6.13 Web fault-stage violation: `$functionName` is missing `$token`")
+        }
+        val actualNames = Regex("failure\\.name\\s*===\\s*'([^']+)'")
+            .findAll(body)
+            .map { match -> match.groupValues[1] }
+            .toList()
+        if (actualNames != expectedNames) {
+            add(
+                "Core §6.13 Web fault-stage violation: `$functionName` must classify exactly " +
+                    "${expectedNames.joinToString()}; found ${actualNames.joinToString()}",
+            )
+        }
+        val classifierIndex = body.lastIndexOf("failure.name ===")
+        val rethrowIndex = body.indexOf("throw failure;")
+        if (classifierIndex < 0 || rethrowIndex <= classifierIndex) {
+            add(
+                "Core §6.13 Web fault-stage violation: `$functionName` must rethrow every " +
+                    "unclassified JavaScript/programming fault after exact DOM classification",
+            )
+        }
+        val catchCount = Regex("\\bcatch\\s*\\(failure\\)\\s*\\{").findAll(body).count()
+        if (catchCount != 1) {
+            add(
+                "Core §6.13 Web fault-stage violation: `$functionName` must contain exactly one " +
+                    "classified provider catch; found $catchCount",
+            )
+        }
+    }
+}
+
+private fun topLevelDeclarationSlice(code: String, declaration: String): String? {
+    val start = code.indexOf(declaration)
+    if (start < 0) return null
+    val next = Regex(
+        "(?m)^(?:private|internal|public)\\s+(?:actual\\s+)?" +
+            "(?:class|object|interface|external\\s+interface|fun|const\\s+val|val|var)\\b",
+    ).find(code, start + declaration.length)?.range?.first ?: code.length
+    return code.substring(start, next)
+}
+
+private fun String.indexOfFirstFrom(startIndex: Int, predicate: (Char) -> Boolean): Int {
+    for (index in startIndex until length) {
+        if (predicate(this[index])) return index
+    }
+    return -1
 }
 
 private fun closingDelimiter(text: String, open: Int, opening: Char, closing: Char): Int? {

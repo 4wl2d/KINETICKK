@@ -477,6 +477,14 @@ class AppSessionNucleusTest {
                 SessionWorkflowFailureCode.RESET_WRITE_REJECTED,
             ),
             Triple(
+                ProfileModuleResult.ResetWriteResourceFailure(
+                    kinetickk.ball.profile.api.ProfileWriteFailure
+                        .PROVIDER_WRITE_FAILED_BEFORE_EXECUTION,
+                ),
+                confirmationPersistence(),
+                SessionWorkflowFailureCode.RESET_WRITE_RESOURCE_FAILURE,
+            ),
+            Triple(
                 ProfileModuleResult.ResetWriteOutcomeUnknown(
                     kinetickk.ball.profile.api.ProfileWriteOutcomeUnknownReason
                         .PROVIDER_WRITE_MAY_HAVE_EXECUTED,
@@ -493,10 +501,11 @@ class AppSessionNucleusTest {
             ),
         )
 
-        cases.forEachIndexed { index, (result, persistence, expected) ->
-            val initialPersistence = if (index == 2) needsAttentionPersistence() else confirmationPersistence()
+        cases.forEach { (result, persistence, expected) ->
+            val retry = result is ProfileModuleResult.ResetNeedsAttention
+            val initialPersistence = if (retry) needsAttentionPersistence() else confirmationPersistence()
             val state = initialState(initialPersistence)
-            val intent = if (index == 2) {
+            val intent = if (retry) {
                 SessionInteractionPulse.ResetRetryRequested
             } else {
                 SessionInteractionPulse.ResetConfirmed
@@ -516,6 +525,63 @@ class AppSessionNucleusTest {
                 ),
             ).accepted()
             assertEquals(expected, completed.nextState.lastFailure)
+        }
+    }
+
+    @Test
+    fun resetWriteFailureRetriesRequireOneExplicitPulseAndCreateOneNewSemanticCommand() {
+        val failures = listOf<ProfileModuleResult>(
+            ProfileModuleResult.ResetWriteRejected(ProfileV4Rejection.INCONSISTENT_PROFILE),
+            ProfileModuleResult.ResetWriteResourceFailure(
+                kinetickk.ball.profile.api.ProfileWriteFailure
+                    .PROVIDER_WRITE_FAILED_BEFORE_EXECUTION,
+            ),
+            ProfileModuleResult.ResetWriteOutcomeUnknown(
+                kinetickk.ball.profile.api.ProfileWriteOutcomeUnknownReason
+                    .PROVIDER_WRITE_MAY_HAVE_EXECUTED,
+            ),
+        )
+
+        failures.forEach { failure ->
+            val persistence = confirmationPersistence()
+            val first = decide(
+                initialState(persistence),
+                SessionInteractionPulse.ResetConfirmed,
+                AppSessionContext(persistenceStatus = persistence),
+            ).accepted()
+            val firstSend = assertIs<AppSessionOutput.SendProfileCommand>(first.outputs.single())
+            assertEquals(ProfileModuleCommand.ConfirmLegacyReset, firstSend.request.command)
+
+            val completed = AppSessionNucleus.decide(
+                first.nextState,
+                profileResult(firstSend.request, failure),
+                AppSessionContext(
+                    persistenceStatus = persistence,
+                    preferences = preferencesProjection(PlayerPreferences()),
+                ),
+            ).accepted()
+            assertEquals(SessionResetLifecycle.CONFIRMATION_REQUIRED, completed.nextState.resetLifecycle)
+            assertNull(completed.nextState.pendingWorkflow)
+            assertIs<AppSessionOutput.SynchronizeAudioPreferences>(completed.outputs.single())
+
+            val retried = decide(
+                completed.nextState,
+                SessionInteractionPulse.ResetConfirmed,
+                AppSessionContext(persistenceStatus = persistence),
+            ).accepted()
+            val retrySend = assertIs<AppSessionOutput.SendProfileCommand>(retried.outputs.single())
+            assertEquals(ProfileModuleCommand.ConfirmLegacyReset, retrySend.request.command)
+            assertEquals(0, retrySend.request.sourceOrdinal)
+            assertFalse(
+                firstSend.request.semanticHandle == retrySend.request.semanticHandle,
+                "A manual semantic retry must not resend the prior accepted command identity",
+            )
+            assertEquals(
+                retried.nextState.revision.value,
+                retrySend.request.semanticHandle.sourceRevision,
+            )
+            assertEquals(SessionResetLifecycle.RESET_IN_PROGRESS, retried.nextState.resetLifecycle)
+            assertNull(retried.nextState.lastFailure)
         }
     }
 

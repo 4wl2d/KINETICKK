@@ -18,13 +18,23 @@ effectiveProfile=Inline+Transient+InProcess+Standard+Static
 contentMutationPath=NONE
 semanticRetry=PRESENT
 semanticRetryAnchor=Core §9.9 / PBA-24
-semanticRetryPulse=SessionInteractionPulse.ResetRetryRequested
+semanticRetryFamilies=legacy-purge|reset-write
 semanticRetryPrimaryOwner=AppSession
 semanticRetryTarget=Profile
-semanticRetryCommand=ProfileModuleCommand.RetryLegacyPurge
 semanticRetryAttemptsPerPulse=1
 semanticRetryDisabledLayers=transport|executor|SDK/provider|reconciliation
-semanticRetryEvidence=flow/session/nucleus/src/commonTest/kotlin/kinetickk/flow/session/nucleus/AppSessionNucleusTest.kt|ball/profile/nucleus/src/commonTest/kotlin/kinetickk/ball/profile/nucleus/ProfileNucleusTest.kt|ball/profile/impl/src/commonTest/kotlin/kinetickk/ball/profile/impl/DefaultProfileComponentTest.kt
+semanticRetrySameIdentityResend=DISABLED
+semanticRetryLegacyPurgePulse=SessionInteractionPulse.ResetRetryRequested
+semanticRetryLegacyPurgeCommand=ProfileModuleCommand.RetryLegacyPurge
+semanticRetryLegacyPurgeEvidence=flow/session/nucleus/src/commonTest/kotlin/kinetickk/flow/session/nucleus/AppSessionNucleusTest.kt|ball/profile/nucleus/src/commonTest/kotlin/kinetickk/ball/profile/nucleus/ProfileNucleusTest.kt|ball/profile/impl/src/commonTest/kotlin/kinetickk/ball/profile/impl/DefaultProfileComponentTest.kt
+semanticRetryResetWritePulse=SessionInteractionPulse.ResetConfirmed
+semanticRetryResetWriteCommand=ProfileModuleCommand.ConfirmLegacyReset
+semanticRetryResetWriteFailureResults=ProfileModuleResult.ResetWriteRejected|ProfileModuleResult.ResetWriteResourceFailure|ProfileModuleResult.ResetWriteOutcomeUnknown
+semanticRetryResetWriteReturnLifecycle=SessionResetLifecycle.CONFIRMATION_REQUIRED
+semanticRetryResetWriteFreshIdentity=semanticHandle|effectRef|sourceRevision
+semanticRetryResetWriteResourceInvocationsPerPulse=1
+semanticRetryResetWriteProviderMutationCallsPerPulse=0..1
+semanticRetryResetWriteEvidence=flow/session/nucleus/src/commonTest/kotlin/kinetickk/flow/session/nucleus/AppSessionNucleusTest.kt|ball/profile/impl/src/commonTest/kotlin/kinetickk/ball/profile/impl/DefaultProfileComponentTest.kt|ball/profile/nucleus/src/commonTest/kotlin/kinetickk/ball/profile/nucleus/ProfileNucleusTest.kt|ball/profile/resource/src/commonTest/kotlin/kinetickk/ball/profile/resource/ProfileStorageTest.kt
 -->
 
 This document selects only values and mechanisms that Pokeball Core leaves to
@@ -118,6 +128,8 @@ trusted Impl boundary.
 | Profile simulation speed / damage-tier threshold | exact declared option sets | API declarations consumed by Profile Nucleus, Gameplay Nucleus, and Resource validation |
 | Profile Gameplay discoveries per Pulse | captured `itemCount` (at most 400) | Profile validates count and every stable item ID before acceptance |
 | Profile v4 UTF-8 payload | 65536 bytes | Profile Resource before decode and after encode |
+| Desktop Preferences value length | 8192 UTF-16 code units | exact platform broker refuses 8193 before provider execution |
+| Desktop Preferences key names admitted per exact node read | 64 | exact platform broker refuses 65 before project-owned membership iteration |
 
 ### Mechanically derived and schema-closed collections
 
@@ -201,30 +213,76 @@ The v4 JSON boundary is strict:
   State/Context-dependent compatibility and reset decisions remain Profile
   Nucleus policy.
 
+The 65536-byte v4 codec bound protects JSON representation ingress and encoded
+output; it does not promise that every valid payload fits every physical
+provider. Desktop Preferences separately admits at most 8192 UTF-16 code units.
+Its exact read helper admits at most 64 key names returned from the private target
+node before project-owned membership iteration. The JDK/provider necessarily
+enumerates and allocates that returned key array before this project gate; that
+external provider work is outside semantic-delivery scope and is not claimed to
+be bounded here.
+The exact broker classifies an 8193-unit value before invocation as
+`FAILED_BEFORE_EXECUTION`, which becomes a known write `ResourceFailure`, not
+`OutcomeUnknown`, and never rolls back the already accepted Profile frame.
+
 Desktop writes only node `kinetickk/profile`, key `snapshot_v4`; Web writes only
 `kinetickk_profile_v4`. Legacy discovery/purge is limited to Desktop node
 `kinetickk/progression` keys `progress_v2` and `kinetickk_matter`, and Web keys
 `kinetickk_progress_v2` and `kinetickk_matter`.
 
 Reset ordering is write-default-v4, observe success, then purge only the exact
-legacy keys. Failure or uncertainty preserves legacy data. A user
-`SessionInteractionPulse.ResetRetryRequested` is the present semantic retry for
-legacy-purge failure under Core §9.9 / PBA-24. AppSession is the single primary
-retry owner: when its visible reset state permits retry, each explicit user Pulse
-issues exactly one `ProfileModuleCommand.RetryLegacyPurge`. Profile is the target
-and executes at most one purge attempt for that accepted command, then records
-the closed result; it is not a co-primary retry policy owner. Transport,
-executor, SDK/provider, and reconciliation retries are disabled. There is no
-blind or automatic retry, so the cumulative attempt bound is exactly one purge
-attempt per explicit user Pulse.
+legacy keys. Failure or uncertainty preserves legacy data. Core §9.9 / PBA-24
+applies to two explicit user-owned semantic retry families, both coordinated
+only by AppSession and targeted at Profile.
+
+For legacy-purge failure, one
+`SessionInteractionPulse.ResetRetryRequested` issues exactly one
+`ProfileModuleCommand.RetryLegacyPurge`, and Profile performs at most one purge
+attempt for that accepted command.
+
+For `ResetWriteRejected`, `ResetWriteResourceFailure`, or
+`ResetWriteOutcomeUnknown`, the reset returns to
+`SessionResetLifecycle.CONFIRMATION_REQUIRED` and emits no automatic command. A
+later explicit `SessionInteractionPulse.ResetConfirmed` authorizes one
+superseding write to the same fixed v4 key through exactly one new
+`ProfileModuleCommand.ConfirmLegacyReset` and one Profile Resource write
+invocation. A local encode rejection produces `ResetWriteRejected` before the
+provider, so that invocation makes zero provider mutation calls; otherwise it
+makes at most one provider mutation call. The
+accepted command has a fresh semantic handle, effect reference, and source
+revision; it is not same-identity redelivery. Rejection and ResourceFailure are
+known not to have executed. OutcomeUnknown may have committed, and the later
+confirmation does not falsely resolve that prior ambiguity; if it succeeds, its
+newer snapshot is established before legacy purge. `ProfilePersistenceStatus`
+describes the latest attempt.
+
+Profile is not a co-primary retry-policy owner. Transport, executor,
+SDK/provider, and reconciliation retries are disabled. Neither family is
+automatic, blind, transparent, idempotent, or a reconciliation attempt. The
+cumulative semantic attempt bound is one Profile Resource invocation per
+explicit user Pulse, with the separate provider mutation bound above.
 
 ## Capability and failure policy
 
 Resources receive the minimum explicit bounded capability: exact-key read,
 write, and remove functions or bounded tone playback. No Ball receives ambient
 Preferences, `localStorage`, filesystem, browser, or audio-provider authority.
-Provider exceptions are quarantined into closed facts. Programming/invariant
-faults are not converted into business rejections.
+The platform broker classifies only explicit provider failures into closed
+technical read/mutation outcomes. A known failure before mutation stays
+`ResourceFailure` (or a known-present legacy key for purge); possible execution
+alone becomes `OutcomeUnknown`. Every unclassified exception, programming fault,
+invariant fault, and allocation failure follows runtime-fault policy and is not
+converted into provider evidence, a business rejection, or an accepted result.
+
+Under Core §9.13 live mechanical Projection, Audio produces no typed Fact, result, or status.
+Synchronous Audio Resource and platform calls propagate under runtime-fault policy. That rule
+includes synchronous Web `AudioContext` invocation and graph construction calls. Desktop synthesis
+runs inside a detached executor `Runnable`; a synthesis fault escapes that `Runnable` to the runtime.
+This is a worker-runtime escape with no caller-propagation claim.
+
+Web native `resume()` and `close()` Promise rejections are explicitly observed and consumed only by
+`.catch(() => undefined)` as non-semantic post-acceptance mechanical projection loss. Those sinks do
+not catch synchronous failures: synchronous JavaScript invocation and graph faults still propagate.
 
 All rejection, validation, admission, resource-result, and participant-result
 reasons are closed variants. Open field/reason strings are prohibited.

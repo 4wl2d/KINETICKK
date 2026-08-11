@@ -67,24 +67,30 @@ private class IsolatedDesktopPersistence(
     private val profileNode: Preferences,
     private val legacyNode: Preferences,
 ) : ExactProfilePersistence {
-    override fun readV4(): String? = profileNode.get(SNAPSHOT_V4, null)
+    override fun readV4(): ProfileProviderReadResult =
+        ProfileProviderReadResult.Observed(profileNode.get(SNAPSHOT_V4, null))
 
-    override fun writeV4(payload: String) {
+    override fun writeV4(payload: String): ProfileProviderMutationResult {
         profileNode.put(SNAPSHOT_V4, payload)
         profileNode.flush()
+        return ProfileProviderMutationResult.COMPLETED
     }
 
-    override fun readLegacyProgressV2(): String? = legacyNode.get(LEGACY_PROGRESS_V2, null)
+    override fun readLegacyProgressV2(): ProfileProviderReadResult =
+        ProfileProviderReadResult.Observed(legacyNode.get(LEGACY_PROGRESS_V2, null))
 
-    override fun readLegacyMatter(): String? = legacyNode.get(LEGACY_MATTER, null)
+    override fun readLegacyMatter(): ProfileProviderReadResult =
+        ProfileProviderReadResult.Observed(legacyNode.get(LEGACY_MATTER, null))
 
-    override fun removeLegacyProgressV2() {
+    override fun removeLegacyProgressV2(): ProfileProviderMutationResult {
         legacyNode.remove(LEGACY_PROGRESS_V2)
         legacyNode.flush()
+        return ProfileProviderMutationResult.COMPLETED
     }
 
-    override fun removeLegacyMatter() {
+    override fun removeLegacyMatter(): ProfileProviderMutationResult {
         legacyNode.remove(LEGACY_MATTER)
         legacyNode.flush()
+        return ProfileProviderMutationResult.COMPLETED
     }
 }

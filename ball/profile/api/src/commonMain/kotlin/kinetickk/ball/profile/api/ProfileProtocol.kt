@@ -145,6 +145,7 @@ sealed interface ProfileModuleResult {
     data object GameplayProgressApplied : ProfileModuleResult
     data object ResetCompleted : ProfileModuleResult
     data class ResetWriteRejected(val reason: ProfileV4Rejection) : ProfileModuleResult
+    data class ResetWriteResourceFailure(val reason: ProfileWriteFailure) : ProfileModuleResult
     data class ResetWriteOutcomeUnknown(
         val reason: ProfileWriteOutcomeUnknownReason,
     ) : ProfileModuleResult
@@ -293,6 +294,11 @@ sealed interface ProfilePersistenceStatus {
     data class Rejected(
         val snapshotRevision: ProfileRevision,
         val reason: ProfileV4Rejection,
+    ) : ProfilePersistenceStatus
+
+    data class ResourceFailure(
+        val snapshotRevision: ProfileRevision,
+        val reason: ProfileWriteFailure,
     ) : ProfilePersistenceStatus
 
     data class OutcomeUnknown(

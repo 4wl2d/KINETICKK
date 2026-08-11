@@ -51,6 +51,7 @@ import kinetickk.ball.profile.api.ProfileV4Rejection
 import kinetickk.ball.profile.api.ProfileV4Snapshot
 import kinetickk.ball.profile.api.ProfileV4WriteResult
 import kinetickk.ball.profile.api.ProfileWriteOutcomeUnknownReason
+import kinetickk.ball.profile.api.ProfileWriteFailure
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.RebirthProgressProjection
 import kinetickk.ball.profile.api.RunBootstrapProjection
@@ -447,6 +448,19 @@ class ProfileNucleusTest {
         assertIs<ProfilePersistenceStatus.OutcomeUnknown>(unknown.nextState.persistence)
         assertTrue(unknown.outputs.isEmpty())
 
+        val failedBeforeExecution = ProfileNucleus.decide(
+            mutation.nextState,
+            ProfileNucleusPulse.V4WriteCompleted(
+                persist.effectRef,
+                ProfileV4WriteResult.ResourceFailure(
+                    ProfileWriteFailure.PROVIDER_WRITE_FAILED_BEFORE_EXECUTION,
+                ),
+            ),
+        ).acceptedFrame()
+        assertEquals(acceptedProfile, failedBeforeExecution.nextState.profile)
+        assertIs<ProfilePersistenceStatus.ResourceFailure>(failedBeforeExecution.nextState.persistence)
+        assertTrue(failedBeforeExecution.outputs.isEmpty())
+
         assertFailsWith<IllegalStateException> {
             ProfileNucleus.decide(
                 mutation.nextState,
@@ -538,8 +552,27 @@ class ProfileNucleusTest {
     }
 
     @Test
-    fun unknownWriteAndKnownReadOrUnknownPurgeStayBlockedWithoutRetry() {
+    fun knownAndUnknownWriteOrPurgeFailuresStayBlockedWithoutRetry() {
         val blocked = legacyBlockedState(ProfileLegacyKeys.ALL)
+        val failedConfirmation = decideCommand(
+            blocked,
+            ProfileModuleCommand.ConfirmLegacyReset,
+        ).acceptedFrame()
+        val failedWrite = assertIs<ProfileOutput.PersistV4Snapshot>(failedConfirmation.outputs.single())
+        val failedBeforeExecution = ProfileNucleus.decide(
+            failedConfirmation.nextState,
+            ProfileNucleusPulse.V4WriteCompleted(
+                failedWrite.effectRef,
+                ProfileV4WriteResult.ResourceFailure(
+                    ProfileWriteFailure.PROVIDER_WRITE_FAILED_BEFORE_EXECUTION,
+                ),
+            ),
+        ).acceptedFrame()
+        assertIs<ProfilePersistenceStatus.ResourceFailure>(failedBeforeExecution.nextState.persistence)
+        assertIs<ProfileModuleResult.ResetWriteResourceFailure>(
+            assertIs<ProfileOutput.CompleteCommand>(failedBeforeExecution.outputs.single()).result.result,
+        )
+
         val confirmed = decideCommand(
             blocked,
             ProfileModuleCommand.ConfirmLegacyReset,
@@ -589,6 +622,77 @@ class ProfileNucleusTest {
             assertTrue(attention.outputs.none { it is ProfileOutput.PurgeLegacy })
             assertIs<ProfileModuleResult.ResetNeedsAttention>(
                 assertIs<ProfileOutput.CompleteCommand>(attention.outputs.single()).result.result,
+            )
+        }
+    }
+
+    @Test
+    fun resetWriteFailureRetryRequiresExplicitNewCommandAndFreshEffectRef() {
+        listOf<ProfileV4WriteResult>(
+            ProfileV4WriteResult.Rejected(ProfileV4Rejection.INCONSISTENT_PROFILE),
+            ProfileV4WriteResult.ResourceFailure(
+                ProfileWriteFailure.PROVIDER_WRITE_FAILED_BEFORE_EXECUTION,
+            ),
+            ProfileV4WriteResult.OutcomeUnknown(
+                ProfileWriteOutcomeUnknownReason.PROVIDER_WRITE_MAY_HAVE_EXECUTED,
+            ),
+        ).forEachIndexed { index, failure ->
+            val firstPulse = sessionPulse(
+                ProfileModuleCommand.ConfirmLegacyReset,
+                sourceRevision = 40L + index * 2L,
+            )
+            val first = ProfileNucleus.decide(
+                legacyBlockedState(ProfileLegacyKeys.ALL),
+                ProfileNucleusPulse.ModuleCommand(firstPulse),
+            ).acceptedFrame()
+            val firstWrite = assertIs<ProfileOutput.PersistV4Snapshot>(first.outputs.single())
+
+            val failed = ProfileNucleus.decide(
+                first.nextState,
+                ProfileNucleusPulse.V4WriteCompleted(firstWrite.effectRef, failure),
+            ).acceptedFrame()
+
+            assertIs<ProfileResetStatus.ConfirmationRequired>(failed.nextState.reset)
+            assertTrue(failed.outputs.none { output -> output is ProfileOutput.PersistV4Snapshot })
+            assertTrue(failed.outputs.none { output -> output is ProfileOutput.PurgeLegacy })
+            val completion = assertIs<ProfileOutput.CompleteCommand>(failed.outputs.single())
+            when (failure) {
+                is ProfileV4WriteResult.Rejected -> assertEquals(
+                    ProfileModuleResult.ResetWriteRejected(failure.reason),
+                    completion.result.result,
+                )
+                is ProfileV4WriteResult.ResourceFailure -> assertEquals(
+                    ProfileModuleResult.ResetWriteResourceFailure(failure.reason),
+                    completion.result.result,
+                )
+                is ProfileV4WriteResult.OutcomeUnknown -> assertEquals(
+                    ProfileModuleResult.ResetWriteOutcomeUnknown(failure.reason),
+                    completion.result.result,
+                )
+                is ProfileV4WriteResult.Written -> error("Not a failure case")
+            }
+
+            val retryPulse = sessionPulse(
+                ProfileModuleCommand.ConfirmLegacyReset,
+                sourceRevision = firstPulse.commandSource.sourceRevision + 1L,
+            )
+            assertNotEquals(
+                firstPulse.commandSource.semanticHandle,
+                retryPulse.commandSource.semanticHandle,
+            )
+            val retry = ProfileNucleus.decide(
+                failed.nextState,
+                ProfileNucleusPulse.ModuleCommand(retryPulse),
+            ).acceptedFrame()
+            val retryWrite = assertIs<ProfileOutput.PersistV4Snapshot>(retry.outputs.single())
+            assertNotEquals(firstWrite.effectRef, retryWrite.effectRef)
+            assertEquals(retry.nextState.revision, retryWrite.effectRef.sourceRevision)
+            assertEquals(retry.nextState.revision, retryWrite.snapshot.revision)
+            assertEquals(0, retryWrite.effectRef.ordinal)
+            val writing = assertIs<ProfileResetStatus.WritingFreshV4>(retry.nextState.reset)
+            assertEquals(
+                retryPulse.commandSource.semanticHandle,
+                writing.completion.commandSource.semanticHandle,
             )
         }
     }

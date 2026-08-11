@@ -169,6 +169,8 @@ internal const val PROFILE_QUERY_PATH =
     "ball/profile/api/src/commonMain/kotlin/kinetickk/ball/profile/api/ProfileQueries.kt"
 internal const val PROFILE_IDENTITY_PATH =
     "ball/profile/api/src/commonMain/kotlin/kinetickk/ball/profile/api/ProfileIdentity.kt"
+private const val PROFILE_RESOURCE_PROTOCOL_PATH =
+    "ball/profile/api/src/commonMain/kotlin/kinetickk/ball/profile/api/ProfileResourceProtocol.kt"
 internal const val GAMEPLAY_PROTOCOL_PATH =
     "ball/gameplay/api/src/commonMain/kotlin/kinetickk/ball/gameplay/api/GameplayProtocol.kt"
 internal const val GAMEPLAY_QUERY_PATH =
@@ -376,6 +378,7 @@ internal val commandRouteProjections = listOf(
         "ProfileCommandRejectedBeforeAcceptance", SESSION_NUCLEUS_PATH,
         listOf(
             "ProfileModuleResult.ResetWriteRejected",
+            "ProfileModuleResult.ResetWriteResourceFailure",
             "ProfileModuleResult.ResetWriteOutcomeUnknown",
             "ProfileModuleResult.ResetNeedsAttention",
         ),
@@ -498,6 +501,27 @@ internal val canonicalProtocolDataClassShapes = listOf(
             CanonicalFieldShape("command", "ProfileModuleCommand"),
             CanonicalFieldShape("issuerProvenance", "ProfileCommandIssuerProvenance"),
         ),
+    ),
+    CanonicalDataClassShape(
+        PROFILE_PROTOCOL_PATH,
+        "ResetWriteResourceFailure",
+        listOf(CanonicalFieldShape("reason", "ProfileWriteFailure")),
+        withinDeclaration = "sealed interface ProfileModuleResult",
+    ),
+    CanonicalDataClassShape(
+        PROFILE_RESOURCE_PROTOCOL_PATH,
+        "ResourceFailure",
+        listOf(CanonicalFieldShape("reason", "ProfileWriteFailure")),
+        withinDeclaration = "sealed interface ProfileV4WriteResult",
+    ),
+    CanonicalDataClassShape(
+        PROFILE_PROTOCOL_PATH,
+        "ResourceFailure",
+        listOf(
+            CanonicalFieldShape("snapshotRevision", "ProfileRevision"),
+            CanonicalFieldShape("reason", "ProfileWriteFailure"),
+        ),
+        withinDeclaration = "sealed interface ProfilePersistenceStatus",
     ),
     CanonicalDataClassShape(
         PROFILE_PROTOCOL_PATH,
@@ -716,6 +740,11 @@ internal val canonicalProtocolEnumInventories = listOf(
         listOf("LOCAL_PROFILE_STATIC_BINDING"),
     ),
     CanonicalEnumInventory(
+        PROFILE_RESOURCE_PROTOCOL_PATH,
+        "ProfileWriteFailure",
+        listOf("PROVIDER_WRITE_FAILED_BEFORE_EXECUTION"),
+    ),
+    CanonicalEnumInventory(
         GAMEPLAY_IDENTITY_PATH,
         "GameplayEffectiveProtocolIdentity",
         listOf("SESSION_START", "SESSION_PAUSE", "SESSION_PREFERENCES", "SESSION_EXIT"),
@@ -767,9 +796,16 @@ internal val canonicalClosedProtocolInventories = listOf(
             "GameplayProgressApplied",
             "ResetCompleted",
             "ResetWriteRejected",
+            "ResetWriteResourceFailure",
             "ResetWriteOutcomeUnknown",
             "ResetNeedsAttention",
         ),
+    ),
+    ClosedDirectSubtypeInventory(
+        PROFILE_RESOURCE_PROTOCOL_PATH,
+        "sealed interface ProfileV4WriteResult",
+        "ProfileV4WriteResult",
+        setOf("Written", "Rejected", "ResourceFailure", "OutcomeUnknown"),
     ),
     ClosedDirectSubtypeInventory(
         GAMEPLAY_PROTOCOL_PATH,
@@ -2402,6 +2438,33 @@ internal val expectedBounds = listOf(
             "fun decode(payload: String): ProfileV4DecodeResult {\n        when (payload.utf8Validation())",
             "private fun String.utf8Validation(): Utf8Validation",
             "if (byteCount > MAX_PROFILE_PAYLOAD_BYTES - encodedBytes) return Utf8Validation.TooLarge",
+        ),
+    ),
+    BoundProjection(
+        "profile.desktop-preferences-value-length", "8192 UTF-16 code units",
+        DESKTOP_AUDIO_PATH,
+        "desktopProfilePayloadAdmission(payload.length)?.let { return it }",
+        DESKTOP_AUDIO_TEST_PATH,
+        "desktopPreferencesValueLengthAccepts8192AndRejects8193BeforeExecution",
+        additionalRequiredTokens = listOf(
+            "internal fun desktopProfilePayloadAdmission(valueLength: Int): " +
+                "ProfilePersistenceMutationResult?",
+            "valueLength <= Preferences.MAX_VALUE_LENGTH",
+            "ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION",
+        ),
+    ),
+    BoundProjection(
+        "profile.desktop-preferences-keys-per-node", "64",
+        DESKTOP_AUDIO_PATH,
+        "MAX_DESKTOP_PREFERENCE_KEYS_PER_NODE: Int = 64",
+        DESKTOP_AUDIO_TEST_PATH,
+        "desktopPreferenceKeyCountAccepts64AndRejects65BeforeIteration",
+        additionalRequiredTokens = listOf(
+            "desktopPreferenceKeyCountAdmission(storedKeys.size)",
+            "loadKeyNames = node::keys",
+            "val storedKeys = try",
+            "loadKeyNames()",
+            "storedKeys.any { storedKey -> storedKey == exactKey }",
         ),
     ),
 ).also { bounds -> requireUniqueKeys("expectedBounds", bounds, BoundProjection::id) }

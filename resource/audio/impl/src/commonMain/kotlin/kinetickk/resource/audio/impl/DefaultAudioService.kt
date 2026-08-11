@@ -30,7 +30,7 @@ class DefaultAudioService(
             requests.size <= MAX_ACCEPTED_EFFECT_REQUESTS_PER_ADVANCE
         ) {
             selectToneRequests(requests, MAX_SELECTED_EFFECT_REQUESTS_PER_ADVANCE).forEach { request ->
-                platform.playSafely(request.copy(gain = request.gain * volume))
+                platform.playIfAllowed(request.copy(gain = request.gain * volume))
             }
         }
 
@@ -43,7 +43,7 @@ class DefaultAudioService(
             musicClock += MUSIC_STEP_SECONDS
             val frequency = MUSIC_NOTES[musicStep % MUSIC_NOTES.size]
             val accent = if (musicStep % 8 == 0) 1.35f else 1f
-            platform.playSafely(
+            platform.playIfAllowed(
                 ToneRequest(
                     frequencyHz = frequency,
                     durationSeconds = 0.18f,
@@ -56,13 +56,13 @@ class DefaultAudioService(
     }
 
     override fun ensureUnlocked() {
-        if (!closed) runCatching { platform.unlock() }
+        if (!closed) platform.unlock()
     }
 
     override fun close() {
         if (closed) return
+        platform.close()
         closed = true
-        runCatching { platform.close() }
     }
 
     private companion object {
@@ -94,9 +94,9 @@ interface TonePlaybackCapability {
     fun close()
 }
 
-private fun TonePlaybackCapability.playSafely(request: ToneRequest) {
+private fun TonePlaybackCapability.playIfAllowed(request: ToneRequest) {
     if (!isToneRequestAllowed(request)) return
-    runCatching { play(request) }
+    play(request)
 }
 
 internal fun isToneRequestAllowed(request: ToneRequest): Boolean =

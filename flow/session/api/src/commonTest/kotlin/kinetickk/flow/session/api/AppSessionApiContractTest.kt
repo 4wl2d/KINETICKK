@@ -105,7 +105,18 @@ class AppSessionApiContractTest {
 
         assertEquals(12, interactions.size)
         assertIs<SessionInteractionPulse.SelectCoreShapeRequested>(interactions[7])
-        assertEquals(6, SessionWorkflowFailureCode.entries.size)
+        assertEquals(
+            setOf(
+                SessionWorkflowFailureCode.PROFILE_COMMAND_REFUSED,
+                SessionWorkflowFailureCode.GAMEPLAY_COMMAND_REFUSED,
+                SessionWorkflowFailureCode.EXIT_PROGRESS_NOT_APPLIED,
+                SessionWorkflowFailureCode.RESET_WRITE_REJECTED,
+                SessionWorkflowFailureCode.RESET_WRITE_RESOURCE_FAILURE,
+                SessionWorkflowFailureCode.RESET_WRITE_OUTCOME_UNKNOWN,
+                SessionWorkflowFailureCode.RESET_NEEDS_ATTENTION,
+            ),
+            SessionWorkflowFailureCode.entries.toSet(),
+        )
     }
 }
 

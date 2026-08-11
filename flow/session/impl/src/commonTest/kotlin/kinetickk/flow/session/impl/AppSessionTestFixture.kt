@@ -263,6 +263,7 @@ internal class FakeSessionProfileRoute(
                 )
             }
             is ProfileModuleResult.ResetWriteOutcomeUnknown,
+            is ProfileModuleResult.ResetWriteResourceFailure,
             is ProfileModuleResult.ResetWriteRejected,
             ProfileModuleResult.GameplayProgressApplied,
             -> Unit

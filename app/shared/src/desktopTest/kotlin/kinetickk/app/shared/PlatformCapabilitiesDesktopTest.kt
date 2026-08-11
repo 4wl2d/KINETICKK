@@ -9,26 +9,28 @@ import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
+import java.util.prefs.BackingStoreException
 import java.util.prefs.Preferences
 import kinetickk.ball.profile.impl.ProfilePersistenceCapability
 import kinetickk.ball.profile.impl.ProfilePersistenceContract
-import kinetickk.resource.audio.api.ToneRequest
-import kinetickk.resource.audio.api.ToneWave
+import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
+import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotSame
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class PlatformCapabilitiesDesktopTest {
     @Test
-    fun audioBrokerIsInstanceOwnedAndAcceptsOnlyTypedToneRequests() {
+    fun audioBrokerIsInstanceOwnedAndCloseIsIdempotent() {
         val first = createPlatformTonePlaybackCapability()
         val second = createPlatformTonePlaybackCapability()
         assertNotSame(first, second)
 
-        first.play(ToneRequest(440f, 0.001f, 0f, ToneWave.SINE))
+        first.close()
         first.close()
         second.close()
     }
@@ -48,20 +50,196 @@ class PlatformCapabilitiesDesktopTest {
             legacyNode.put("unrelated", "preserve-me")
             legacyNode.flush()
 
-            capability.writeV4("strict-v4-payload")
-            assertEquals("strict-v4-payload", capability.readV4())
+            assertEquals(
+                ProfilePersistenceMutationResult.COMPLETED,
+                capability.writeV4("strict-v4-payload"),
+            )
+            assertEquals(
+                ProfilePersistenceReadResult.Observed("strict-v4-payload"),
+                capability.readV4(),
+            )
             assertNull(legacyNode.get(ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, null))
-            assertEquals("legacy", capability.readLegacyProgressV2())
-            assertEquals("1", capability.readLegacyMatter())
+            assertEquals(
+                ProfilePersistenceReadResult.Observed("legacy"),
+                capability.readLegacyProgressV2(),
+            )
+            assertEquals(ProfilePersistenceReadResult.Observed("1"), capability.readLegacyMatter())
 
-            capability.removeLegacyProgressV2()
-            capability.removeLegacyMatter()
+            assertEquals(
+                ProfilePersistenceMutationResult.COMPLETED,
+                capability.removeLegacyProgressV2(),
+            )
+            assertEquals(ProfilePersistenceMutationResult.COMPLETED, capability.removeLegacyMatter())
             assertNull(legacyNode.get(ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2, null))
             assertNull(legacyNode.get(ProfilePersistenceContract.DESKTOP_LEGACY_MATTER, null))
             assertEquals("preserve-me", legacyNode.get("unrelated", null))
         } finally {
             testRoot.removeNode()
             testParent.flush()
+        }
+    }
+
+    @Test
+    fun desktopPreferencesValueLengthAccepts8192AndRejects8193BeforeExecution() {
+        assertEquals(8_192, Preferences.MAX_VALUE_LENGTH)
+        assertNull(desktopProfilePayloadAdmission(Preferences.MAX_VALUE_LENGTH))
+        assertEquals(
+            ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION,
+            desktopProfilePayloadAdmission(Preferences.MAX_VALUE_LENGTH + 1),
+        )
+    }
+
+    @Test
+    fun desktopPreferenceKeyCountAccepts64AndRejects65BeforeIteration() {
+        assertEquals(64, MAX_DESKTOP_PREFERENCE_KEYS_PER_NODE)
+        assertNull(desktopPreferenceKeyCountAdmission(MAX_DESKTOP_PREFERENCE_KEYS_PER_NODE))
+        assertEquals(
+            ProfilePersistenceReadResult.Failed,
+            desktopPreferenceKeyCountAdmission(MAX_DESKTOP_PREFERENCE_KEYS_PER_NODE + 1),
+        )
+
+        val exactKey = ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4
+        val acceptedNames = Array(MAX_DESKTOP_PREFERENCE_KEYS_PER_NODE) { index ->
+            if (index == MAX_DESKTOP_PREFERENCE_KEYS_PER_NODE - 1) exactKey else "unrelated-$index"
+        }
+        var acceptedExactReads = 0
+        assertEquals(
+            ProfilePersistenceReadResult.Observed("payload"),
+            desktopProfileReadCall(
+                exactKey = exactKey,
+                loadKeyNames = { acceptedNames },
+                loadExactValue = {
+                    acceptedExactReads += 1
+                    "payload"
+                },
+            ),
+        )
+        assertEquals(1, acceptedExactReads)
+
+        var refusedExactReads = 0
+        assertEquals(
+            ProfilePersistenceReadResult.Failed,
+            desktopProfileReadCall(
+                exactKey = exactKey,
+                loadKeyNames = {
+                    Array(MAX_DESKTOP_PREFERENCE_KEYS_PER_NODE + 1) { exactKey }
+                },
+                loadExactValue = {
+                    refusedExactReads += 1
+                    "unreachable"
+                },
+            ),
+        )
+        assertEquals(0, refusedExactReads)
+    }
+
+    @Test
+    fun desktopReadStageClassifiesOnlyDocumentedProviderFailures() {
+        val exactKey = ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4
+        listOf<Throwable>(
+            BackingStoreException("unavailable"),
+            SecurityException("denied"),
+            IllegalStateException("removed"),
+        ).forEach { failure ->
+            assertEquals(
+                ProfilePersistenceReadResult.Failed,
+                desktopProfileReadCall(
+                    exactKey = exactKey,
+                    loadKeyNames = { throw failure },
+                    loadExactValue = { error("exact value must not be read") },
+                ),
+            )
+        }
+
+        var exactReadAttempted = false
+        assertEquals(
+            ProfilePersistenceReadResult.Observed(null),
+            desktopProfileReadCall(
+                exactKey = exactKey,
+                loadKeyNames = { arrayOf("unrelated") },
+                loadExactValue = {
+                    exactReadAttempted = true
+                    "unreachable"
+                },
+            ),
+        )
+        assertFalse(exactReadAttempted)
+
+        listOf<Throwable>(
+            SecurityException("denied"),
+            IllegalStateException("removed"),
+        ).forEach { failure ->
+            assertEquals(
+                ProfilePersistenceReadResult.Failed,
+                desktopProfileReadCall(
+                    exactKey = exactKey,
+                    loadKeyNames = { arrayOf(exactKey) },
+                    loadExactValue = { throw failure },
+                ),
+            )
+        }
+        assertEquals(
+            ProfilePersistenceReadResult.Failed,
+            desktopProfileReadCall(
+                exactKey = exactKey,
+                loadKeyNames = { arrayOf(exactKey) },
+                loadExactValue = { null },
+            ),
+        )
+        assertFailsWith<IllegalArgumentException> {
+            desktopProfileReadCall(
+                exactKey = exactKey,
+                loadKeyNames = { throw IllegalArgumentException("programming fault") },
+                loadExactValue = { null },
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            desktopProfileReadCall(
+                exactKey = exactKey,
+                loadKeyNames = { arrayOf(exactKey) },
+                loadExactValue = { throw IllegalArgumentException("programming fault") },
+            )
+        }
+    }
+
+    @Test
+    fun desktopMutationStageSeparatesBeforeExecutionPossibleExecutionAndProgrammingFaults() {
+        listOf<Throwable>(
+            IllegalArgumentException("invalid provider input"),
+            IllegalStateException("removed before mutation"),
+        ).forEach { failure ->
+            var flushed = false
+            assertEquals(
+                ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION,
+                desktopProfileMutationCall(
+                    mutate = { throw failure },
+                    flush = { flushed = true },
+                ),
+            )
+            assertFalse(flushed)
+        }
+
+        var mutated = false
+        assertEquals(
+            ProfilePersistenceMutationResult.POSSIBLE_EXECUTION,
+            desktopProfileMutationCall(
+                mutate = { mutated = true },
+                flush = { throw BackingStoreException("ambiguous flush") },
+            ),
+        )
+        assertTrue(mutated)
+
+        assertFailsWith<SecurityException> {
+            desktopProfileMutationCall(
+                mutate = { throw SecurityException("unclassified mutation fault") },
+                flush = {},
+            )
+        }
+        assertFailsWith<IllegalStateException> {
+            desktopProfileMutationCall(
+                mutate = {},
+                flush = { throw IllegalStateException("unclassified post-mutation fault") },
+            )
         }
     }
 
@@ -121,34 +299,41 @@ private class TestDesktopProfilePersistenceCapability(
     private val profileNode: Preferences,
     private val legacyNode: Preferences,
 ) : ProfilePersistenceCapability {
-    override fun readV4(): String? =
-        profileNode.get(ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, null)
+    override fun readV4(): ProfilePersistenceReadResult =
+        ProfilePersistenceReadResult.Observed(profileNode.get(ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, null))
 
-    override fun writeV4(payload: String) {
+    override fun writeV4(payload: String): ProfilePersistenceMutationResult {
         profileNode.apply {
             put(ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, payload)
             flush()
         }
+        return ProfilePersistenceMutationResult.COMPLETED
     }
 
-    override fun readLegacyProgressV2(): String? =
-        legacyNode.get(ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2, null)
+    override fun readLegacyProgressV2(): ProfilePersistenceReadResult =
+        ProfilePersistenceReadResult.Observed(
+            legacyNode.get(ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2, null),
+        )
 
-    override fun readLegacyMatter(): String? =
-        legacyNode.get(ProfilePersistenceContract.DESKTOP_LEGACY_MATTER, null)
+    override fun readLegacyMatter(): ProfilePersistenceReadResult =
+        ProfilePersistenceReadResult.Observed(
+            legacyNode.get(ProfilePersistenceContract.DESKTOP_LEGACY_MATTER, null),
+        )
 
-    override fun removeLegacyProgressV2() {
+    override fun removeLegacyProgressV2(): ProfilePersistenceMutationResult {
         legacyNode.apply {
             remove(ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2)
             flush()
         }
+        return ProfilePersistenceMutationResult.COMPLETED
     }
 
-    override fun removeLegacyMatter() {
+    override fun removeLegacyMatter(): ProfilePersistenceMutationResult {
         legacyNode.apply {
             remove(ProfilePersistenceContract.DESKTOP_LEGACY_MATTER)
             flush()
         }
+        return ProfilePersistenceMutationResult.COMPLETED
     }
 }
 

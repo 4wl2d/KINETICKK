@@ -38,17 +38,13 @@ class PlatformCapabilityBoundaryVerifierTest {
                 )
                 """.trimIndent()
         }
-        val arbitraryWebOriginAndKeys = mutate(WEB_PATH) { source ->
-            source.replace(
-                "private data class WebProfilePersistenceKeys",
-                "internal data class WebProfilePersistenceKeys",
-            ) + "\n" +
+        val arbitraryWebOrigin = mutate(WEB_PATH) { source ->
+            source + "\n" +
                 """
 
                 internal fun mintCapability(
                     storage: Storage,
-                    keys: WebProfilePersistenceKeys,
-                ): ProfilePersistenceCapability = WebProfilePersistenceCapability({ storage }, keys)
+                ): ProfilePersistenceCapability = WebProfilePersistenceCapability()
                 """.trimIndent()
         }
 
@@ -56,8 +52,7 @@ class PlatformCapabilityBoundaryVerifierTest {
         assertViolation(outsideViolations, "java.util.prefs.Preferences")
         assertViolation(outsideViolations, "javax.sound.sampled.AudioSystem")
         assertViolation(platformCapabilityBoundaryViolations(arbitraryDesktopNodes), "Broad platform handle")
-        assertViolation(platformCapabilityBoundaryViolations(arbitraryWebOriginAndKeys), "private immutable")
-        assertViolation(platformCapabilityBoundaryViolations(arbitraryWebOriginAndKeys), "Broad platform handle")
+        assertViolation(platformCapabilityBoundaryViolations(arbitraryWebOrigin), "Broad platform handle")
     }
 
     @Test
@@ -92,20 +87,98 @@ class PlatformCapabilityBoundaryVerifierTest {
         }
         val bulkClear = mutate(WEB_PATH) { source ->
             source.replace(
-                "storage().removeItem(keys.legacyMatter)",
-                "storage().clear()",
+                "exactStorage.removeItem(key);",
+                "exactStorage.clear();",
             )
         }
         val extraNarrowOperation = mutate(PROFILE_FACTORY_PATH_FIXTURE) { source ->
             source.replace(
-                "fun removeLegacyMatter()",
-                "fun removeLegacyMatter()\n    fun clearAll()",
+                "fun removeLegacyMatter(): ProfilePersistenceMutationResult",
+                "fun removeLegacyMatter(): ProfilePersistenceMutationResult\n    fun clearAll()",
             )
         }
 
         assertViolation(platformCapabilityBoundaryViolations(changedPhysicalKey), "Physical profile persistence constants")
         assertViolation(platformCapabilityBoundaryViolations(bulkClear), "Broad platform operation `clear`")
         assertViolation(platformCapabilityBoundaryViolations(extraNarrowOperation), "must expose exactly")
+    }
+
+    @Test
+    fun mutationOutcomeInventoriesAreClosedAndRetainKnownPreExecutionFailure() {
+        val missingCapabilityOutcome = mutate(PROFILE_FACTORY_PATH_FIXTURE) { source ->
+            source.replace("    FAILED_BEFORE_EXECUTION,\n", "")
+        }
+        val missingProviderOutcome = mutate(PROFILE_RESOURCE_PATH_FIXTURE) { source ->
+            source.replace("    FAILED_BEFORE_EXECUTION,\n", "")
+        }
+
+        assertViolation(
+            platformCapabilityBoundaryViolations(missingCapabilityOutcome),
+            "ProfilePersistenceMutationResult",
+        )
+        assertViolation(
+            platformCapabilityBoundaryViolations(missingProviderOutcome),
+            "ProfileProviderMutationResult",
+        )
+    }
+
+    @Test
+    fun desktopKeyEnumerationIsBoundedInsideOnlyTheExactReadHelper() {
+        val extraEnumeration = mutate(DESKTOP_PATH) { source ->
+            source + "\nprivate fun leakedKeys(node: Preferences): Array<String> = node.keys()"
+        }
+        val movedAdmissionAfterIteration = mutate(DESKTOP_PATH) { source ->
+            source.replace(
+                "desktopPreferenceKeyCountAdmission(storedKeys.size)?.let { return it }\n" +
+                    "    val keyIsPresent = storedKeys.any { storedKey -> storedKey == exactKey }",
+                "val keyIsPresent = storedKeys.any { storedKey -> storedKey == exactKey }\n" +
+                    "    desktopPreferenceKeyCountAdmission(storedKeys.size)?.let { return it }",
+            )
+        }
+
+        assertViolation(
+            platformCapabilityBoundaryViolations(extraEnumeration),
+            "Direct Desktop Preferences `keys()` calls",
+        )
+        assertViolation(
+            platformCapabilityBoundaryViolations(movedAdmissionAfterIteration),
+            "before project-owned membership iteration",
+        )
+    }
+
+    @Test
+    fun desktopCallbackSeamsRemainStageExactAndHaveNoOtherProductionCallers() {
+        val collapsedFlushFailure = mutate(DESKTOP_PATH) { source ->
+            source.replace(
+                "} catch (_: BackingStoreException) {\n" +
+                    "        ProfilePersistenceMutationResult.POSSIBLE_EXECUTION",
+                "} catch (_: BackingStoreException) {\n" +
+                    "        ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION",
+            )
+        }
+        val movedValueAdmission = mutate(DESKTOP_PATH) { source ->
+            source.replace(
+                "desktopProfilePayloadAdmission(payload.length)?.let { return it }",
+                "profileNode().also { desktopProfilePayloadAdmission(payload.length) }",
+            )
+        }
+        val extraProductionCaller = SourceDocument(
+            "app/shared/src/desktopMain/kotlin/fixture/ExtraPersistenceSeamCaller.kt",
+            "fun extra() = desktopProfileReadCall(exactKey, loadKeys, loadValue)",
+        )
+
+        assertViolation(
+            platformCapabilityBoundaryViolations(collapsedFlushFailure),
+            "BackingStoreException",
+        )
+        assertViolation(
+            platformCapabilityBoundaryViolations(movedValueAdmission),
+            "before profile-node/provider acquisition",
+        )
+        assertViolation(
+            platformCapabilityBoundaryViolations(validCapabilitySources() + extraProductionCaller),
+            "must have exactly 0 production calls",
+        )
     }
 
     @Test
@@ -187,13 +260,24 @@ class PlatformCapabilityBoundaryVerifierTest {
         SourceDocument(
             PROFILE_RESOURCE_PATH_FIXTURE,
             """
+                sealed interface ProfileProviderReadResult {
+                    data class Observed(val payload: String?) : ProfileProviderReadResult
+                    data object Failed : ProfileProviderReadResult
+                }
+
+                enum class ProfileProviderMutationResult {
+                    COMPLETED,
+                    FAILED_BEFORE_EXECUTION,
+                    POSSIBLE_EXECUTION,
+                }
+
                 interface ExactProfilePersistence {
-                    fun readV4(): String?
-                    fun writeV4(payload: String)
-                    fun readLegacyProgressV2(): String?
-                    fun readLegacyMatter(): String?
-                    fun removeLegacyProgressV2()
-                    fun removeLegacyMatter()
+                    fun readV4(): ProfileProviderReadResult
+                    fun writeV4(payload: String): ProfileProviderMutationResult
+                    fun readLegacyProgressV2(): ProfileProviderReadResult
+                    fun readLegacyMatter(): ProfileProviderReadResult
+                    fun removeLegacyProgressV2(): ProfileProviderMutationResult
+                    fun removeLegacyMatter(): ProfileProviderMutationResult
                 }
 
                 fun createProfileResource(
@@ -208,13 +292,24 @@ class PlatformCapabilityBoundaryVerifierTest {
         SourceDocument(
             PROFILE_FACTORY_PATH_FIXTURE,
             """
+                sealed interface ProfilePersistenceReadResult {
+                    data class Observed(val payload: String?) : ProfilePersistenceReadResult
+                    data object Failed : ProfilePersistenceReadResult
+                }
+
+                enum class ProfilePersistenceMutationResult {
+                    COMPLETED,
+                    FAILED_BEFORE_EXECUTION,
+                    POSSIBLE_EXECUTION,
+                }
+
                 interface ProfilePersistenceCapability {
-                    fun readV4(): String?
-                    fun writeV4(payload: String)
-                    fun readLegacyProgressV2(): String?
-                    fun readLegacyMatter(): String?
-                    fun removeLegacyProgressV2()
-                    fun removeLegacyMatter()
+                    fun readV4(): ProfilePersistenceReadResult
+                    fun writeV4(payload: String): ProfilePersistenceMutationResult
+                    fun readLegacyProgressV2(): ProfilePersistenceReadResult
+                    fun readLegacyMatter(): ProfilePersistenceReadResult
+                    fun removeLegacyProgressV2(): ProfilePersistenceMutationResult
+                    fun removeLegacyMatter(): ProfilePersistenceMutationResult
                 }
 
                 fun createProfileComponent(persistence: ProfilePersistenceCapability) = persistence
@@ -248,7 +343,7 @@ class PlatformCapabilityBoundaryVerifierTest {
                     private val platform: TonePlaybackCapability,
                 )
 
-                private fun TonePlaybackCapability.playSafely(request: ToneRequest) = play(request)
+                private fun TonePlaybackCapability.playIfAllowed(request: ToneRequest) = play(request)
             """.trimIndent(),
         ),
         SourceDocument(
@@ -280,6 +375,8 @@ class PlatformCapabilityBoundaryVerifierTest {
             import java.util.prefs.Preferences
             import javax.sound.sampled.AudioSystem
             import kinetickk.ball.profile.impl.ProfilePersistenceCapability
+            import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
+            import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
             import kinetickk.resource.audio.impl.TonePlaybackCapability
 
             internal actual fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability =
@@ -296,34 +393,170 @@ class PlatformCapabilityBoundaryVerifierTest {
                 private val profileNode: () -> Preferences,
                 private val legacyNode: () -> Preferences,
             ) : ProfilePersistenceCapability {
-                override fun readV4(): String? =
-                    profileNode().get(ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, null)
-
-                override fun writeV4(payload: String) {
-                    profileNode().apply {
-                        put(ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, payload)
-                        flush()
+                override fun readV4(): ProfilePersistenceReadResult {
+                    val node = try {
+                        profileNode()
+                    } catch (_: SecurityException) {
+                        return ProfilePersistenceReadResult.Failed
+                    } catch (_: IllegalStateException) {
+                        return ProfilePersistenceReadResult.Failed
                     }
+                    return desktopProfileReadCall(
+                        exactKey = ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4,
+                        loadKeyNames = node::keys,
+                        loadExactValue = {
+                            node.get(ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, null)
+                        },
+                    )
                 }
 
-                override fun readLegacyProgressV2(): String? =
-                    legacyNode().get(ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2, null)
-
-                override fun readLegacyMatter(): String? =
-                    legacyNode().get(ProfilePersistenceContract.DESKTOP_LEGACY_MATTER, null)
-
-                override fun removeLegacyProgressV2() {
-                    legacyNode().apply {
-                        remove(ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2)
-                        flush()
+                override fun writeV4(payload: String): ProfilePersistenceMutationResult {
+                    desktopProfilePayloadAdmission(payload.length)?.let { return it }
+                    val node = try {
+                        profileNode()
+                    } catch (_: SecurityException) {
+                        return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
+                    } catch (_: IllegalStateException) {
+                        return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
                     }
+                    return desktopProfileMutationCall(
+                        mutate = {
+                            node.put(ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, payload)
+                        },
+                        flush = node::flush,
+                    )
                 }
 
-                override fun removeLegacyMatter() {
-                    legacyNode().apply {
-                        remove(ProfilePersistenceContract.DESKTOP_LEGACY_MATTER)
-                        flush()
+                override fun readLegacyProgressV2(): ProfilePersistenceReadResult {
+                    val node = try {
+                        legacyNode()
+                    } catch (_: SecurityException) {
+                        return ProfilePersistenceReadResult.Failed
+                    } catch (_: IllegalStateException) {
+                        return ProfilePersistenceReadResult.Failed
                     }
+                    return desktopProfileReadCall(
+                        exactKey = ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2,
+                        loadKeyNames = node::keys,
+                        loadExactValue = {
+                            node.get(ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2, null)
+                        },
+                    )
+                }
+
+                override fun readLegacyMatter(): ProfilePersistenceReadResult {
+                    val node = try {
+                        legacyNode()
+                    } catch (_: SecurityException) {
+                        return ProfilePersistenceReadResult.Failed
+                    } catch (_: IllegalStateException) {
+                        return ProfilePersistenceReadResult.Failed
+                    }
+                    return desktopProfileReadCall(
+                        exactKey = ProfilePersistenceContract.DESKTOP_LEGACY_MATTER,
+                        loadKeyNames = node::keys,
+                        loadExactValue = {
+                            node.get(ProfilePersistenceContract.DESKTOP_LEGACY_MATTER, null)
+                        },
+                    )
+                }
+
+                override fun removeLegacyProgressV2(): ProfilePersistenceMutationResult {
+                    val node = try {
+                        legacyNode()
+                    } catch (_: SecurityException) {
+                        return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
+                    } catch (_: IllegalStateException) {
+                        return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
+                    }
+                    return desktopProfileMutationCall(
+                        mutate = {
+                            node.remove(ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2)
+                        },
+                        flush = node::flush,
+                    )
+                }
+
+                override fun removeLegacyMatter(): ProfilePersistenceMutationResult {
+                    val node = try {
+                        legacyNode()
+                    } catch (_: SecurityException) {
+                        return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
+                    } catch (_: IllegalStateException) {
+                        return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
+                    }
+                    return desktopProfileMutationCall(
+                        mutate = {
+                            node.remove(ProfilePersistenceContract.DESKTOP_LEGACY_MATTER)
+                        },
+                        flush = node::flush,
+                    )
+                }
+            }
+
+            internal fun desktopProfileReadCall(
+                exactKey: String,
+                loadKeyNames: () -> Array<String>,
+                loadExactValue: () -> String?,
+            ): ProfilePersistenceReadResult {
+                val storedKeys = try {
+                    loadKeyNames()
+                } catch (_: BackingStoreException) {
+                    return ProfilePersistenceReadResult.Failed
+                } catch (_: SecurityException) {
+                    return ProfilePersistenceReadResult.Failed
+                } catch (_: IllegalStateException) {
+                    return ProfilePersistenceReadResult.Failed
+                }
+                desktopPreferenceKeyCountAdmission(storedKeys.size)?.let { return it }
+                val keyIsPresent = storedKeys.any { storedKey -> storedKey == exactKey }
+                if (!keyIsPresent) {
+                    return ProfilePersistenceReadResult.Observed(null)
+                }
+                val payload = try {
+                    loadExactValue()
+                } catch (_: SecurityException) {
+                    return ProfilePersistenceReadResult.Failed
+                } catch (_: IllegalStateException) {
+                    return ProfilePersistenceReadResult.Failed
+                }
+                return if (payload == null) {
+                    ProfilePersistenceReadResult.Failed
+                } else {
+                    ProfilePersistenceReadResult.Observed(payload)
+                }
+            }
+
+            internal fun desktopProfileMutationCall(
+                mutate: () -> Unit,
+                flush: () -> Unit,
+            ): ProfilePersistenceMutationResult {
+                try {
+                    mutate()
+                } catch (_: IllegalStateException) {
+                    return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
+                } catch (_: IllegalArgumentException) {
+                    return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
+                }
+                return try {
+                    flush()
+                    ProfilePersistenceMutationResult.COMPLETED
+                } catch (_: BackingStoreException) {
+                    ProfilePersistenceMutationResult.POSSIBLE_EXECUTION
+                }
+            }
+
+            internal const val MAX_DESKTOP_PREFERENCE_KEYS_PER_NODE: Int = 64
+
+            internal fun desktopPreferenceKeyCountAdmission(keyCount: Int): ProfilePersistenceReadResult? =
+                if (keyCount <= MAX_DESKTOP_PREFERENCE_KEYS_PER_NODE) null else ProfilePersistenceReadResult.Failed
+
+            internal fun desktopProfilePayloadAdmission(valueLength: Int): ProfilePersistenceMutationResult? {
+                require(valueLength >= 0)
+                return if (valueLength <= Preferences.MAX_VALUE_LENGTH) {
+                    null
+                } else {
+                    ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
                 }
             }
 
@@ -359,54 +592,121 @@ class PlatformCapabilityBoundaryVerifierTest {
 
     private fun webBrokerFixture(): String =
         """
-            import kotlinx.browser.localStorage
-            import org.w3c.dom.Storage
             import kotlin.js.JsAny
             import kinetickk.ball.profile.impl.ProfilePersistenceCapability
+            import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
+            import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
             import kinetickk.resource.audio.impl.TonePlaybackCapability
 
             internal actual fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability =
-                WebProfilePersistenceCapability(
-                    storage = { localStorage },
-                    keys = WEB_PROFILE_PERSISTENCE_KEYS,
-                )
+                WebProfilePersistenceCapability()
 
-            private data class WebProfilePersistenceKeys(
-                val snapshotV4: String,
-                val legacyProgressV2: String,
-                val legacyMatter: String,
-            )
-
-            private val WEB_PROFILE_PERSISTENCE_KEYS = WebProfilePersistenceKeys(
-                snapshotV4 = ProfilePersistenceContract.WEB_SNAPSHOT_V4,
-                legacyProgressV2 = ProfilePersistenceContract.WEB_LEGACY_PROGRESS_V2,
-                legacyMatter = ProfilePersistenceContract.WEB_LEGACY_MATTER,
-            )
-
-            private class WebProfilePersistenceCapability(
-                private val storage: () -> Storage,
-                private val keys: WebProfilePersistenceKeys,
-            ) : ProfilePersistenceCapability {
-                override fun readV4(): String? = storage().getItem(keys.snapshotV4)
-
-                override fun writeV4(payload: String) {
-                    storage().setItem(keys.snapshotV4, payload)
-                }
-
-                override fun readLegacyProgressV2(): String? =
-                    storage().getItem(keys.legacyProgressV2)
-
-                override fun readLegacyMatter(): String? =
-                    storage().getItem(keys.legacyMatter)
-
-                override fun removeLegacyProgressV2() {
-                    storage().removeItem(keys.legacyProgressV2)
-                }
-
-                override fun removeLegacyMatter() {
-                    storage().removeItem(keys.legacyMatter)
-                }
+            private class WebProfilePersistenceCapability : ProfilePersistenceCapability {
+                override fun readV4(): ProfilePersistenceReadResult = readWebProfileV4()
+                override fun writeV4(payload: String): ProfilePersistenceMutationResult =
+                    writeWebProfileV4(payload)
+                override fun readLegacyProgressV2(): ProfilePersistenceReadResult = readWebLegacyProgressV2()
+                override fun readLegacyMatter(): ProfilePersistenceReadResult = readWebLegacyMatter()
+                override fun removeLegacyProgressV2(): ProfilePersistenceMutationResult =
+                    removeWebLegacyProgressV2()
+                override fun removeLegacyMatter(): ProfilePersistenceMutationResult = removeWebLegacyMatter()
             }
+
+            private external interface WebStorageReadCall : JsAny {
+                val status: String
+                val payload: String?
+            }
+
+            private fun readWebProfileV4(): ProfilePersistenceReadResult =
+                webStorageRead(ProfilePersistenceContract.WEB_SNAPSHOT_V4).toPersistenceResult()
+
+            private fun readWebLegacyProgressV2(): ProfilePersistenceReadResult =
+                webStorageRead(ProfilePersistenceContract.WEB_LEGACY_PROGRESS_V2).toPersistenceResult()
+
+            private fun readWebLegacyMatter(): ProfilePersistenceReadResult =
+                webStorageRead(ProfilePersistenceContract.WEB_LEGACY_MATTER).toPersistenceResult()
+
+            private fun writeWebProfileV4(payload: String): ProfilePersistenceMutationResult =
+                webStorageWrite(ProfilePersistenceContract.WEB_SNAPSHOT_V4, payload).toPersistenceMutationResult()
+
+            private fun removeWebLegacyProgressV2(): ProfilePersistenceMutationResult =
+                webStorageRemove(ProfilePersistenceContract.WEB_LEGACY_PROGRESS_V2).toPersistenceMutationResult()
+
+            private fun removeWebLegacyMatter(): ProfilePersistenceMutationResult =
+                webStorageRemove(ProfilePersistenceContract.WEB_LEGACY_MATTER).toPersistenceMutationResult()
+
+            private fun WebStorageReadCall.toPersistenceResult(): ProfilePersistenceReadResult = when (status) {
+                WEB_STORAGE_OBSERVED -> ProfilePersistenceReadResult.Observed(payload)
+                WEB_STORAGE_FAILED_BEFORE_EXECUTION -> ProfilePersistenceReadResult.Failed
+                else -> error("Web Storage read returned an unknown provider status")
+            }
+
+            private fun String.toPersistenceMutationResult(): ProfilePersistenceMutationResult = when (this) {
+                WEB_STORAGE_COMPLETED -> ProfilePersistenceMutationResult.COMPLETED
+                WEB_STORAGE_FAILED_BEFORE_EXECUTION ->
+                    ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
+                else -> error("Web Storage mutation returned an unknown provider status")
+            }
+
+            private fun webStorageRead(key: String): WebStorageReadCall = js(
+                ${"\"\"\""}{
+                    try {
+                        const exactStorage = globalThis.localStorage;
+                        return { status: 'observed', payload: exactStorage.getItem(key) };
+                    } catch (failure) {
+                        if (
+                            typeof DOMException !== 'undefined' &&
+                            failure instanceof DOMException &&
+                            failure.name === 'SecurityError'
+                        ) {
+                            return { status: 'failed-before-execution', payload: null };
+                        }
+                        throw failure;
+                    }
+                }${"\"\"\""},
+            )
+
+            private fun webStorageWrite(key: String, payload: String): String = js(
+                ${"\"\"\""}{
+                    try {
+                        const exactStorage = globalThis.localStorage;
+                        exactStorage.setItem(key, payload);
+                        return 'completed';
+                    } catch (failure) {
+                        if (
+                            typeof DOMException !== 'undefined' &&
+                            failure instanceof DOMException &&
+                            (failure.name === 'SecurityError' || failure.name === 'QuotaExceededError')
+                        ) {
+                            return 'failed-before-execution';
+                        }
+                        throw failure;
+                    }
+                }${"\"\"\""},
+            )
+
+            private fun webStorageRemove(key: String): String = js(
+                ${"\"\"\""}{
+                    try {
+                        const exactStorage = globalThis.localStorage;
+                        exactStorage.removeItem(key);
+                        return 'completed';
+                    } catch (failure) {
+                        if (
+                            typeof DOMException !== 'undefined' &&
+                            failure instanceof DOMException &&
+                            failure.name === 'SecurityError'
+                        ) {
+                            return 'failed-before-execution';
+                        }
+                        throw failure;
+                    }
+                }${"\"\"\""},
+            )
+
+            private const val WEB_STORAGE_OBSERVED: String = "observed"
+            private const val WEB_STORAGE_COMPLETED: String = "completed"
+            private const val WEB_STORAGE_FAILED_BEFORE_EXECUTION: String = "failed-before-execution"
 
             internal actual fun createPlatformTonePlaybackCapability(): TonePlaybackCapability =
                 WebTonePlaybackCapability()

@@ -578,6 +578,25 @@ object ProfileNucleus {
                     reset.completionOutput(ProfileModuleResult.ResetWriteRejected(result.reason)),
                 )
             }
+            is ProfileV4WriteResult.ResourceFailure -> {
+                val nextState = state.copy(
+                    revision = revision,
+                    bootstrap = ProfileBootstrapStatus.Blocked(
+                        ProfileBootstrapBlockReason.ResetRequired(reset.reason),
+                    ),
+                    reset = ProfileResetStatus.ConfirmationRequired(reset.reason, reset.legacyKeys),
+                    persistence = ProfilePersistenceStatus.ResourceFailure(
+                        pending.snapshotRevision,
+                        result.reason,
+                    ),
+                )
+                accepted(
+                    nextState,
+                    reset.completionOutput(
+                        ProfileModuleResult.ResetWriteResourceFailure(result.reason),
+                    ),
+                )
+            }
             is ProfileV4WriteResult.OutcomeUnknown -> {
                 val nextState = state.copy(
                     revision = revision,
@@ -713,6 +732,8 @@ object ProfileNucleus {
         }
         is ProfileV4WriteResult.Rejected ->
             ProfilePersistenceStatus.Rejected(pending.snapshotRevision, reason)
+        is ProfileV4WriteResult.ResourceFailure ->
+            ProfilePersistenceStatus.ResourceFailure(pending.snapshotRevision, reason)
         is ProfileV4WriteResult.OutcomeUnknown ->
             ProfilePersistenceStatus.OutcomeUnknown(pending.snapshotRevision, reason)
     }

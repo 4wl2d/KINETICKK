@@ -6,11 +6,14 @@ package kinetickk.app.shared
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
+import java.util.prefs.BackingStoreException
 import java.util.prefs.Preferences
 import javax.sound.sampled.AudioFormat
 import javax.sound.sampled.AudioSystem
 import kinetickk.ball.profile.impl.ProfilePersistenceCapability
 import kinetickk.ball.profile.impl.ProfilePersistenceContract
+import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
+import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
 import kinetickk.resource.audio.api.ToneRequest
 import kinetickk.resource.audio.api.ToneRequestLimits
 import kinetickk.resource.audio.api.ToneWave
@@ -34,34 +37,177 @@ private class DesktopProfilePersistenceCapability(
     private val profileNode: () -> Preferences,
     private val legacyNode: () -> Preferences,
 ) : ProfilePersistenceCapability {
-    override fun readV4(): String? =
-        profileNode().get(ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, null)
-
-    override fun writeV4(payload: String) {
-        profileNode().apply {
-            put(ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, payload)
-            flush()
+    override fun readV4(): ProfilePersistenceReadResult {
+        val node = try {
+            profileNode()
+        } catch (_: SecurityException) {
+            return ProfilePersistenceReadResult.Failed
+        } catch (_: IllegalStateException) {
+            return ProfilePersistenceReadResult.Failed
         }
+        return desktopProfileReadCall(
+            exactKey = ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4,
+            loadKeyNames = node::keys,
+            loadExactValue = {
+                node.get(ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, null)
+            },
+        )
     }
 
-    override fun readLegacyProgressV2(): String? =
-        legacyNode().get(ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2, null)
-
-    override fun readLegacyMatter(): String? =
-        legacyNode().get(ProfilePersistenceContract.DESKTOP_LEGACY_MATTER, null)
-
-    override fun removeLegacyProgressV2() {
-        legacyNode().apply {
-            remove(ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2)
-            flush()
+    override fun writeV4(payload: String): ProfilePersistenceMutationResult {
+        desktopProfilePayloadAdmission(payload.length)?.let { return it }
+        val node = try {
+            profileNode()
+        } catch (_: SecurityException) {
+            return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
+        } catch (_: IllegalStateException) {
+            return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
         }
+        return desktopProfileMutationCall(
+            mutate = {
+                node.put(ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, payload)
+            },
+            flush = node::flush,
+        )
     }
 
-    override fun removeLegacyMatter() {
-        legacyNode().apply {
-            remove(ProfilePersistenceContract.DESKTOP_LEGACY_MATTER)
-            flush()
+    override fun readLegacyProgressV2(): ProfilePersistenceReadResult {
+        val node = try {
+            legacyNode()
+        } catch (_: SecurityException) {
+            return ProfilePersistenceReadResult.Failed
+        } catch (_: IllegalStateException) {
+            return ProfilePersistenceReadResult.Failed
         }
+        return desktopProfileReadCall(
+            exactKey = ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2,
+            loadKeyNames = node::keys,
+            loadExactValue = {
+                node.get(ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2, null)
+            },
+        )
+    }
+
+    override fun readLegacyMatter(): ProfilePersistenceReadResult {
+        val node = try {
+            legacyNode()
+        } catch (_: SecurityException) {
+            return ProfilePersistenceReadResult.Failed
+        } catch (_: IllegalStateException) {
+            return ProfilePersistenceReadResult.Failed
+        }
+        return desktopProfileReadCall(
+            exactKey = ProfilePersistenceContract.DESKTOP_LEGACY_MATTER,
+            loadKeyNames = node::keys,
+            loadExactValue = {
+                node.get(ProfilePersistenceContract.DESKTOP_LEGACY_MATTER, null)
+            },
+        )
+    }
+
+    override fun removeLegacyProgressV2(): ProfilePersistenceMutationResult {
+        val node = try {
+            legacyNode()
+        } catch (_: SecurityException) {
+            return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
+        } catch (_: IllegalStateException) {
+            return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
+        }
+        return desktopProfileMutationCall(
+            mutate = {
+                node.remove(ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2)
+            },
+            flush = node::flush,
+        )
+    }
+
+    override fun removeLegacyMatter(): ProfilePersistenceMutationResult {
+        val node = try {
+            legacyNode()
+        } catch (_: SecurityException) {
+            return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
+        } catch (_: IllegalStateException) {
+            return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
+        }
+        return desktopProfileMutationCall(
+            mutate = {
+                node.remove(ProfilePersistenceContract.DESKTOP_LEGACY_MATTER)
+            },
+            flush = node::flush,
+        )
+    }
+}
+
+internal fun desktopProfileReadCall(
+    exactKey: String,
+    loadKeyNames: () -> Array<String>,
+    loadExactValue: () -> String?,
+): ProfilePersistenceReadResult {
+    val storedKeys = try {
+        loadKeyNames()
+    } catch (_: BackingStoreException) {
+        return ProfilePersistenceReadResult.Failed
+    } catch (_: SecurityException) {
+        return ProfilePersistenceReadResult.Failed
+    } catch (_: IllegalStateException) {
+        return ProfilePersistenceReadResult.Failed
+    }
+    desktopPreferenceKeyCountAdmission(storedKeys.size)?.let { return it }
+    val keyIsPresent = storedKeys.any { storedKey -> storedKey == exactKey }
+    if (!keyIsPresent) {
+        return ProfilePersistenceReadResult.Observed(null)
+    }
+    val payload = try {
+        loadExactValue()
+    } catch (_: SecurityException) {
+        return ProfilePersistenceReadResult.Failed
+    } catch (_: IllegalStateException) {
+        return ProfilePersistenceReadResult.Failed
+    }
+    return if (payload == null) {
+        ProfilePersistenceReadResult.Failed
+    } else {
+        ProfilePersistenceReadResult.Observed(payload)
+    }
+}
+
+internal fun desktopProfileMutationCall(
+    mutate: () -> Unit,
+    flush: () -> Unit,
+): ProfilePersistenceMutationResult {
+    try {
+        mutate()
+    } catch (_: IllegalStateException) {
+        return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
+    } catch (_: IllegalArgumentException) {
+        return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
+    }
+    return try {
+        flush()
+        ProfilePersistenceMutationResult.COMPLETED
+    } catch (_: BackingStoreException) {
+        ProfilePersistenceMutationResult.POSSIBLE_EXECUTION
+    }
+}
+
+internal const val MAX_DESKTOP_PREFERENCE_KEYS_PER_NODE: Int = 64
+
+internal fun desktopPreferenceKeyCountAdmission(keyCount: Int): ProfilePersistenceReadResult? {
+    require(keyCount >= 0) { "Desktop preference key count must be non-negative" }
+    return if (keyCount <= MAX_DESKTOP_PREFERENCE_KEYS_PER_NODE) {
+        null
+    } else {
+        ProfilePersistenceReadResult.Failed
+    }
+}
+
+/** Pure pre-provider admission for the Preferences value-size boundary. */
+internal fun desktopProfilePayloadAdmission(valueLength: Int): ProfilePersistenceMutationResult? {
+    require(valueLength >= 0) { "Profile persistence payload length must be non-negative" }
+    return if (valueLength <= Preferences.MAX_VALUE_LENGTH) {
+        null
+    } else {
+        ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
     }
 }
 
@@ -115,15 +261,13 @@ private class DesktopTonePlaybackCapability : TonePlaybackCapability {
 
     override fun play(request: ToneRequest) {
         if (executor.isShutdown) return
-        runCatching {
-            executor.execute {
-                runCatching { synthesize(request) }
-            }
+        executor.execute {
+            synthesize(request)
         }
     }
 
     override fun close() {
-        runCatching { executor.shutdownNow() }
+        executor.shutdownNow()
     }
 
     private fun synthesize(request: ToneRequest) {

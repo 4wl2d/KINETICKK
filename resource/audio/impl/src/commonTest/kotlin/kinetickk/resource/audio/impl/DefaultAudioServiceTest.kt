@@ -56,13 +56,29 @@ class DefaultAudioServiceTest {
     }
 
     @Test
-    fun capabilityFailuresDoNotEscapeAndRequestConstructionRejectsInvalidValues() {
-        val service = DefaultAudioService(ThrowingTonePlayer)
+    fun capabilityFaultsPropagateForUnlockPlayAndCloseWithoutInventingClosedState() {
+        val unlockPlayer = FaultingTonePlayer(ToneOperation.UNLOCK)
+        val unlockService = DefaultAudioService(unlockPlayer)
+        assertFailsWith<ToneCapabilityFault> { unlockService.ensureUnlocked() }
+        assertEquals(1, unlockPlayer.unlockCalls)
 
-        service.ensureUnlocked()
-        service.advance(0.016f, listOf(HURT_REQUEST))
-        service.close()
+        val playPlayer = FaultingTonePlayer(ToneOperation.PLAY)
+        val playService = DefaultAudioService(playPlayer)
+        playService.updatePreferences(AudioPreferences(musicEnabled = false))
+        assertFailsWith<ToneCapabilityFault> {
+            playService.advance(0.016f, listOf(HURT_REQUEST))
+        }
+        assertEquals(1, playPlayer.playCalls)
 
+        val closePlayer = FaultingTonePlayer(ToneOperation.CLOSE)
+        val closeService = DefaultAudioService(closePlayer)
+        assertFailsWith<ToneCapabilityFault> { closeService.close() }
+        assertFailsWith<ToneCapabilityFault> { closeService.close() }
+        assertEquals(2, closePlayer.closeCalls)
+    }
+
+    @Test
+    fun requestConstructionRejectsInvalidValues() {
         assertTrue(isToneRequestAllowed(HURT_REQUEST))
         assertFailsWith<IllegalArgumentException> {
             ToneRequest(Float.NaN, 0.1f, 0.5f, ToneWave.SINE)
@@ -228,9 +244,33 @@ private class RecordingTonePlayer : TonePlaybackCapability {
     }
 }
 
-private object ThrowingTonePlayer : TonePlaybackCapability {
-    override fun unlock(): Unit = error("unlock failure")
-    override fun play(request: ToneRequest): Unit = error("play failure")
-
-    override fun close(): Unit = error("close failure")
+private enum class ToneOperation {
+    UNLOCK,
+    PLAY,
+    CLOSE,
 }
+
+private class FaultingTonePlayer(
+    private val faultingOperation: ToneOperation,
+) : TonePlaybackCapability {
+    var unlockCalls = 0
+    var playCalls = 0
+    var closeCalls = 0
+
+    override fun unlock() {
+        unlockCalls++
+        if (faultingOperation == ToneOperation.UNLOCK) throw ToneCapabilityFault()
+    }
+
+    override fun play(request: ToneRequest) {
+        playCalls++
+        if (faultingOperation == ToneOperation.PLAY) throw ToneCapabilityFault()
+    }
+
+    override fun close() {
+        closeCalls++
+        if (faultingOperation == ToneOperation.CLOSE) throw ToneCapabilityFault()
+    }
+}
+
+private class ToneCapabilityFault : RuntimeException()

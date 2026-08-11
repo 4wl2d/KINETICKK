@@ -469,12 +469,10 @@ internal class GameComponent private constructor(
             is GameplayOutput.EmitVisualFx ->
                 checkNotNull(interactionFxReducer).apply(output.cues)
             is GameplayOutput.SendProfileCommand -> executeProfileCommand(output, item)
-            is GameplayOutput.AdvanceAudio -> runCatching {
+            is GameplayOutput.AdvanceAudio ->
                 audioExecutor.advance(output.realDeltaSeconds, output.cues)
-            }
-            GameplayOutput.EnsureAudioUnlocked -> runCatching {
+            GameplayOutput.EnsureAudioUnlocked ->
                 audioExecutor.ensureUnlocked()
-            }
             is GameplayOutput.CompleteCommand -> dispatchCommandResult(output.result, item)
         }
     }

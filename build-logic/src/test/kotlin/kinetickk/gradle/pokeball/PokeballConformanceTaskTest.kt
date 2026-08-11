@@ -61,8 +61,9 @@ class PokeballConformanceTaskTest {
         val policy = validAuditPolicy()
         val applicability = validApplicability()
         val evidence = validSemanticRetryEvidence()
-        assertEquals(12, parseStrictAuditPolicy(policy).size)
-        assertTrue(auditPolicyViolations(policy, applicability, evidence).isEmpty())
+        assertEquals(22, parseStrictAuditPolicy(policy).size)
+        val violations = auditPolicyViolations(policy, applicability, evidence)
+        assertTrue(violations.isEmpty(), violations.joinToString("\n"))
 
         listOf(
             policy.replace(
@@ -89,14 +90,21 @@ class PokeballConformanceTaskTest {
             ) to "effectiveProfile must be exactly",
             policy.replace("semanticRetry=PRESENT", "semanticRetry=ABSENT") to
                 "semanticRetry must be exactly",
+            policy.replace(
+                "semanticRetryFamilies=legacy-purge|reset-write",
+                "semanticRetryFamilies=legacy-purge",
+            ) to "semanticRetryFamilies must be exactly",
             policy.replace("semanticRetryPrimaryOwner=AppSession", "semanticRetryPrimaryOwner=Profile") to
                 "semanticRetryPrimaryOwner must be exactly",
             policy.replace("semanticRetryAttemptsPerPulse=1", "semanticRetryAttemptsPerPulse=2") to
                 "semanticRetryAttemptsPerPulse must be exactly",
         )
         mutations.forEach { (changed, expectedMessage) ->
-            val violations = auditPolicyViolations(changed, applicability, evidence)
-            assertTrue(violations.any { expectedMessage in it }, "Missing `$expectedMessage` in $violations")
+            val mutationViolations = auditPolicyViolations(changed, applicability, evidence)
+            assertTrue(
+                mutationViolations.any { expectedMessage in it },
+                "Missing `$expectedMessage` in $mutationViolations",
+            )
         }
 
         assertTrue(
@@ -163,16 +171,15 @@ class PokeballConformanceTaskTest {
     @Test
     fun strictAttestationValidatesCommittedBoundaryDigestsAndAllProofFields() {
         val fixture = strictFixture()
-        assertTrue(
-            validateStrictAttestation(
+        val violations = validateStrictAttestation(
                 root = fixture.root,
                 head = fixture.head,
                 recordText = fixture.recordText,
                 proofBytes = fixture.proofBytes,
                 metadata = fixture.metadata,
                 proofs = fixture.proofs,
-            ).isEmpty(),
-        )
+            )
+        assertTrue(violations.isEmpty(), violations.joinToString("\n"))
 
         val schemaViolations = fixture.validate(metadata = fixture.metadata + ("schemaVersion" to "2"))
         assertTrue(schemaViolations.any { "schemaVersion must be exactly 1" in it })
@@ -463,13 +470,23 @@ class PokeballConformanceTaskTest {
         contentMutationPath=NONE
         semanticRetry=PRESENT
         semanticRetryAnchor=Core §9.9 / PBA-24
-        semanticRetryPulse=SessionInteractionPulse.ResetRetryRequested
-        semanticRetryCommand=ProfileModuleCommand.RetryLegacyPurge
+        semanticRetryFamilies=legacy-purge|reset-write
         semanticRetryPrimaryOwner=AppSession
         semanticRetryTarget=Profile
         semanticRetryAttemptsPerPulse=1
         semanticRetryDisabledLayers=transport|executor|SDK/provider|reconciliation
-        semanticRetryEvidence=${semanticRetryEvidenceAnchors.joinToString("|") { it.path }}
+        semanticRetrySameIdentityResend=DISABLED
+        semanticRetryLegacyPurgePulse=SessionInteractionPulse.ResetRetryRequested
+        semanticRetryLegacyPurgeCommand=ProfileModuleCommand.RetryLegacyPurge
+        semanticRetryLegacyPurgeEvidence=${legacyPurgeSemanticRetryEvidenceAnchors.joinToString("|") { it.path }}
+        semanticRetryResetWritePulse=SessionInteractionPulse.ResetConfirmed
+        semanticRetryResetWriteCommand=ProfileModuleCommand.ConfirmLegacyReset
+        semanticRetryResetWriteFailureResults=ProfileModuleResult.ResetWriteRejected|ProfileModuleResult.ResetWriteResourceFailure|ProfileModuleResult.ResetWriteOutcomeUnknown
+        semanticRetryResetWriteReturnLifecycle=SessionResetLifecycle.CONFIRMATION_REQUIRED
+        semanticRetryResetWriteFreshIdentity=semanticHandle|effectRef|sourceRevision
+        semanticRetryResetWriteResourceInvocationsPerPulse=1
+        semanticRetryResetWriteProviderMutationCallsPerPulse=0..1
+        semanticRetryResetWriteEvidence=${resetWriteSemanticRetryEvidenceAnchors.joinToString("|") { it.path }}
         -->
     """.trimIndent() + "\n"
 
@@ -480,7 +497,7 @@ class PokeballConformanceTaskTest {
 
         | Concern | Why it is present | Required construction/evidence |
         |---|---|---|
-        | explicit user semantic retry | `SessionInteractionPulse.ResetRetryRequested` issues `ProfileModuleCommand.RetryLegacyPurge`; primary owner `AppSession`, target `Profile`, under `PBA-24` | one purge attempt per explicit user Pulse |
+        | explicit user semantic retry | under `PBA-24`, primary owner `AppSession` targets `Profile`: `SessionInteractionPulse.ResetRetryRequested` issues `ProfileModuleCommand.RetryLegacyPurge`; after `ProfileModuleResult.ResetWriteRejected`, `ProfileModuleResult.ResetWriteResourceFailure`, or `ProfileModuleResult.ResetWriteOutcomeUnknown`, `SessionInteractionPulse.ResetConfirmed` issues `ProfileModuleCommand.ConfirmLegacyReset` with a fresh semantic handle and no same-identity resend | one purge or reset-write attempt per explicit user Pulse; one Profile Resource write invocation per explicit user Pulse; zero provider mutation calls on local encode rejection, otherwise at most one provider mutation call |
 
         ## Absent trigger scopes
 
@@ -490,8 +507,8 @@ class PokeballConformanceTaskTest {
     """.trimIndent() + "\n"
 
     private fun validSemanticRetryEvidence(): Map<String, String> =
-        semanticRetryEvidenceAnchors.associate { anchor ->
-            anchor.path to anchor.tokens.joinToString("\n", postfix = "\n")
+        semanticRetryEvidenceAnchors.groupBy(AuditEvidenceAnchor::path).mapValues { (_, anchors) ->
+            anchors.flatMap(AuditEvidenceAnchor::tokens).joinToString("\n", postfix = "\n")
         }
 
     private fun createGitRepository(): Path = createTempDirectory("pokeball-conformance-test-").also { root ->

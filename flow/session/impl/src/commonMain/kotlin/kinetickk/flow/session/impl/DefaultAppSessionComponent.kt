@@ -461,6 +461,7 @@ internal class DefaultAppSessionComponent private constructor(
             }
             ProfileModuleCommand.ConfirmLegacyReset -> when (delivery.result) {
                 is ProfileModuleResult.ResetWriteRejected,
+                is ProfileModuleResult.ResetWriteResourceFailure,
                 is ProfileModuleResult.ResetWriteOutcomeUnknown,
                 -> {
                     check(revisionDelta == 1L)
@@ -829,6 +830,7 @@ private fun ProfileModuleResult.matches(command: ProfileModuleCommand): Boolean 
     ProfileModuleCommand.ConfirmLegacyReset ->
         this == ProfileModuleResult.ResetCompleted ||
             this is ProfileModuleResult.ResetWriteRejected ||
+            this is ProfileModuleResult.ResetWriteResourceFailure ||
             this is ProfileModuleResult.ResetWriteOutcomeUnknown ||
             this is ProfileModuleResult.ResetNeedsAttention
     ProfileModuleCommand.RetryLegacyPurge ->

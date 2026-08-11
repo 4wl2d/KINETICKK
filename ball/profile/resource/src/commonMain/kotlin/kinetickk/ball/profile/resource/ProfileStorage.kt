@@ -12,6 +12,7 @@ import kinetickk.ball.profile.api.ProfileReadFailure
 import kinetickk.ball.profile.api.ProfileV4Snapshot
 import kinetickk.ball.profile.api.ProfileV4WriteResult
 import kinetickk.ball.profile.api.ProfileWriteOutcomeUnknownReason
+import kinetickk.ball.profile.api.ProfileWriteFailure
 
 /** Minimal synchronous port exposed to the Profile acceptor. */
 interface ProfileResource {
@@ -29,17 +30,31 @@ interface ProfileResource {
  * deliberately absent. The app platform broker is the only place that may hold those powers.
  */
 interface ExactProfilePersistence {
-    fun readV4(): String?
+    fun readV4(): ProfileProviderReadResult
 
-    fun writeV4(payload: String)
+    fun writeV4(payload: String): ProfileProviderMutationResult
 
-    fun readLegacyProgressV2(): String?
+    fun readLegacyProgressV2(): ProfileProviderReadResult
 
-    fun readLegacyMatter(): String?
+    fun readLegacyMatter(): ProfileProviderReadResult
 
-    fun removeLegacyProgressV2()
+    fun removeLegacyProgressV2(): ProfileProviderMutationResult
 
-    fun removeLegacyMatter()
+    fun removeLegacyMatter(): ProfileProviderMutationResult
+}
+
+/** Closed evidence returned by the exact persistence provider for a non-mutating read. */
+sealed interface ProfileProviderReadResult {
+    data class Observed(val payload: String?) : ProfileProviderReadResult
+
+    data object Failed : ProfileProviderReadResult
+}
+
+/** Closed evidence returned by the exact persistence provider for a possibly mutating call. */
+enum class ProfileProviderMutationResult {
+    COMPLETED,
+    FAILED_BEFORE_EXECUTION,
+    POSSIBLE_EXECUTION,
 }
 
 fun createProfileResource(
@@ -50,19 +65,22 @@ private class FixedKeyProfileResource(
     private val provider: ExactProfilePersistence,
 ) : ProfileResource {
     override fun readBootstrap(): ProfileBootstrapResourceResult {
-        val payload: String?
-        val legacyKeys: ProfileLegacyKeys
-        try {
-            payload = provider.readV4()
-            legacyKeys = ProfileLegacyKeys(
-                progressV2 = provider.readLegacyProgressV2() != null,
-                matter = provider.readLegacyMatter() != null,
-            )
-        } catch (_: Throwable) {
-            return ProfileBootstrapResourceResult.ResourceFailure(
-                ProfileReadFailure.PROVIDER_READ_FAILED,
-            )
+        val payload = when (val result = provider.readV4()) {
+            is ProfileProviderReadResult.Observed -> result.payload
+            ProfileProviderReadResult.Failed -> return bootstrapReadFailure()
         }
+        val legacyProgressV2 = when (val result = provider.readLegacyProgressV2()) {
+            is ProfileProviderReadResult.Observed -> result.payload
+            ProfileProviderReadResult.Failed -> return bootstrapReadFailure()
+        }
+        val legacyMatter = when (val result = provider.readLegacyMatter()) {
+            is ProfileProviderReadResult.Observed -> result.payload
+            ProfileProviderReadResult.Failed -> return bootstrapReadFailure()
+        }
+        val legacyKeys = ProfileLegacyKeys(
+            progressV2 = legacyProgressV2 != null,
+            matter = legacyMatter != null,
+        )
 
         if (payload == null) {
             return ProfileBootstrapResourceResult.Observed(
@@ -90,29 +108,31 @@ private class FixedKeyProfileResource(
             }
         }
 
-        return try {
-            provider.writeV4(payload)
-            if (provider.readV4() == payload) {
-                ProfileV4WriteResult.Written(snapshot.revision)
-            } else {
-                ProfileV4WriteResult.OutcomeUnknown(
-                    ProfileWriteOutcomeUnknownReason.PROVIDER_WRITE_MAY_HAVE_EXECUTED,
+        when (provider.writeV4(payload)) {
+            ProfileProviderMutationResult.COMPLETED -> Unit
+            ProfileProviderMutationResult.FAILED_BEFORE_EXECUTION -> {
+                return ProfileV4WriteResult.ResourceFailure(
+                    ProfileWriteFailure.PROVIDER_WRITE_FAILED_BEFORE_EXECUTION,
                 )
             }
-        } catch (_: Throwable) {
-            ProfileV4WriteResult.OutcomeUnknown(
-                ProfileWriteOutcomeUnknownReason.PROVIDER_WRITE_MAY_HAVE_EXECUTED,
-            )
+            ProfileProviderMutationResult.POSSIBLE_EXECUTION -> return writeOutcomeUnknown()
+        }
+        return when (val readBack = provider.readV4()) {
+            is ProfileProviderReadResult.Observed -> {
+                if (readBack.payload == payload) {
+                    ProfileV4WriteResult.Written(snapshot.revision)
+                } else {
+                    writeOutcomeUnknown()
+                }
+            }
+            ProfileProviderReadResult.Failed -> writeOutcomeUnknown()
         }
     }
 
     override fun purgeLegacy(): ProfileLegacyPurgeResult {
-        val guardPayload = try {
-            provider.readV4()
-        } catch (_: Throwable) {
-            return ProfileLegacyPurgeResult.ResourceFailure(
-                ProfileReadFailure.PROVIDER_READ_FAILED,
-            )
+        val guardPayload = when (val result = provider.readV4()) {
+            is ProfileProviderReadResult.Observed -> result.payload
+            ProfileProviderReadResult.Failed -> return purgeReadFailure()
         }
         val guard = guardPayload?.let(ProfileV4Codec::decode)
         if (
@@ -124,11 +144,22 @@ private class FixedKeyProfileResource(
             )
         }
 
+        val progressV2WasPresent = when (val result = provider.readLegacyProgressV2()) {
+            is ProfileProviderReadResult.Observed -> result.payload != null
+            ProfileProviderReadResult.Failed -> return purgeReadFailure()
+        }
+        val matterWasPresent = when (val result = provider.readLegacyMatter()) {
+            is ProfileProviderReadResult.Observed -> result.payload != null
+            ProfileProviderReadResult.Failed -> return purgeReadFailure()
+        }
+
         val progressV2 = purgeKey(
+            wasPresent = progressV2WasPresent,
             remove = provider::removeLegacyProgressV2,
             read = provider::readLegacyProgressV2,
         )
         val matter = purgeKey(
+            wasPresent = matterWasPresent,
             remove = provider::removeLegacyMatter,
             read = provider::readLegacyMatter,
         )
@@ -152,20 +183,35 @@ private class FixedKeyProfileResource(
     }
 
     private fun purgeKey(
-        remove: () -> Unit,
-        read: () -> String?,
+        wasPresent: Boolean,
+        remove: () -> ProfileProviderMutationResult,
+        read: () -> ProfileProviderReadResult,
     ): PurgeKeyObservation {
-        try {
-            remove()
-        } catch (_: Throwable) {
-            return PurgeKeyObservation.Unknown
+        if (!wasPresent) return PurgeKeyObservation.Absent
+        when (remove()) {
+            ProfileProviderMutationResult.COMPLETED -> Unit
+            ProfileProviderMutationResult.FAILED_BEFORE_EXECUTION -> return PurgeKeyObservation.Present
+            ProfileProviderMutationResult.POSSIBLE_EXECUTION -> return PurgeKeyObservation.Unknown
         }
-        return try {
-            if (read() == null) PurgeKeyObservation.Absent else PurgeKeyObservation.Present
-        } catch (_: Throwable) {
-            PurgeKeyObservation.Unknown
+        return when (val result = read()) {
+            is ProfileProviderReadResult.Observed -> {
+                if (result.payload == null) PurgeKeyObservation.Absent else PurgeKeyObservation.Present
+            }
+            ProfileProviderReadResult.Failed -> PurgeKeyObservation.Unknown
         }
     }
+
+    private fun bootstrapReadFailure(): ProfileBootstrapResourceResult.ResourceFailure =
+        ProfileBootstrapResourceResult.ResourceFailure(ProfileReadFailure.PROVIDER_READ_FAILED)
+
+    private fun purgeReadFailure(): ProfileLegacyPurgeResult.ResourceFailure =
+        ProfileLegacyPurgeResult.ResourceFailure(ProfileReadFailure.PROVIDER_READ_FAILED)
+
+    private fun writeOutcomeUnknown(): ProfileV4WriteResult.OutcomeUnknown =
+        ProfileV4WriteResult.OutcomeUnknown(
+            ProfileWriteOutcomeUnknownReason.PROVIDER_WRITE_MAY_HAVE_EXECUTED,
+        )
+
 }
 
 private enum class PurgeKeyObservation { Absent, Present, Unknown }

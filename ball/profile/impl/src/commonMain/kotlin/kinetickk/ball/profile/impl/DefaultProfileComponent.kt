@@ -22,7 +22,6 @@ import kinetickk.ball.profile.api.ProfileCommandSourceToken
 import kinetickk.ball.profile.api.ProfileCommandValidationFailureReason
 import kinetickk.ball.profile.api.ProfileEffectiveProtocolIdentity
 import kinetickk.ball.profile.api.ProfileInstanceId
-import kinetickk.ball.profile.api.ProfileLegacyKeys
 import kinetickk.ball.profile.api.ProfileLegacyPurgeResult
 import kinetickk.ball.profile.api.ProfileModuleCommand
 import kinetickk.ball.profile.api.ProfileModuleCommandPulse
@@ -32,16 +31,13 @@ import kinetickk.ball.profile.api.ProfileModuleResultDelivery
 import kinetickk.ball.profile.api.ProfileModuleResultOutput
 import kinetickk.ball.profile.api.ProfilePersistenceStatus
 import kinetickk.ball.profile.api.ProfilePulse
-import kinetickk.ball.profile.api.ProfilePurgeOutcomeUnknownReason
 import kinetickk.ball.profile.api.ProfileQuery
-import kinetickk.ball.profile.api.ProfileReadFailure
 import kinetickk.ball.profile.api.ProfileResultIssuerProvenance
 import kinetickk.ball.profile.api.ProfileResultSourceToken
 import kinetickk.ball.profile.api.ProfileResetStatus
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileTargetBoundaryProvenance
 import kinetickk.ball.profile.api.ProfileV4WriteResult
-import kinetickk.ball.profile.api.ProfileWriteOutcomeUnknownReason
 import kinetickk.ball.profile.api.RebirthProgressProjection
 import kinetickk.ball.profile.api.RunBootstrapProjection
 import kinetickk.ball.profile.nucleus.MAX_PROFILE_OUTPUTS_PER_DECISION
@@ -367,13 +363,7 @@ internal class DefaultProfileComponent(
     private fun execute(output: ProfileOutput, item: ProfileWorkItem) {
         when (output) {
             is ProfileOutput.PersistV4Snapshot -> {
-                val result = try {
-                    resource.writeV4(output.snapshot)
-                } catch (_: Throwable) {
-                    ProfileV4WriteResult.OutcomeUnknown(
-                        ProfileWriteOutcomeUnknownReason.PROVIDER_WRITE_MAY_HAVE_EXECUTED,
-                    )
-                }
+                val result = resource.writeV4(output.snapshot)
                 validateWriteCompletion(output, result)
                 enqueueCompletion(
                     pulse = ProfileNucleusPulse.V4WriteCompleted(output.effectRef, result),
@@ -382,15 +372,7 @@ internal class DefaultProfileComponent(
                 )
             }
             is ProfileOutput.PurgeLegacy -> {
-                val result = try {
-                    resource.purgeLegacy()
-                } catch (_: Throwable) {
-                    ProfileLegacyPurgeResult.OutcomeUnknown(
-                        remaining = ProfileLegacyKeys.NONE,
-                        unknown = ProfileLegacyKeys.ALL,
-                        reason = ProfilePurgeOutcomeUnknownReason.PROVIDER_PURGE_MAY_HAVE_EXECUTED,
-                    )
-                }
+                val result = resource.purgeLegacy()
                 validatePurgeCompletion(output, result)
                 enqueueCompletion(
                     pulse = ProfileNucleusPulse.LegacyPurgeCompleted(output.effectRef, result),
@@ -615,6 +597,7 @@ internal fun profileResultMatches(
     ProfileEffectiveProtocolIdentity.SESSION_RESET_CONFIRM ->
         result == ProfileModuleResult.ResetCompleted ||
         result is ProfileModuleResult.ResetWriteRejected ||
+        result is ProfileModuleResult.ResetWriteResourceFailure ||
         result is ProfileModuleResult.ResetWriteOutcomeUnknown ||
         result is ProfileModuleResult.ResetNeedsAttention
     ProfileEffectiveProtocolIdentity.SESSION_RESET_RETRY ->
@@ -660,11 +643,7 @@ internal fun hasProfileCommandRevisionCapacity(
 }
 
 private fun readConstructionBootstrap(resource: ProfileResource): ProfileBootstrapResourceResult =
-    try {
-        resource.readBootstrap()
-    } catch (_: Throwable) {
-        ProfileBootstrapResourceResult.ResourceFailure(ProfileReadFailure.PROVIDER_READ_FAILED)
-    }
+    resource.readBootstrap()
 
 private data class ProfileWorkItem(
     val pulse: ProfileNucleusPulse,

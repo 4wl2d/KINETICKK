@@ -34,6 +34,14 @@ internal fun resolveArchitectureViolations(
     addGraphViolations(edges, sources)
     addPackageAndImportViolations(sources)
     addAll(platformCapabilityBoundaryViolations(sources))
+    addAll(resourceFaultStageViolations(sources))
+    addAll(audioRuntimeFaultStageViolations(sources))
+    addAll(
+        audioProjectionPolicyViolations(
+            policy = architectureRecords["policy.md"].orEmpty(),
+            applicability = architectureRecords["applicability.md"].orEmpty(),
+        ),
+    )
     addApplicationSurfaceViolations(sources)
     addAll(exactDataClassShapeViolations(sourceByPath, canonicalProtocolDataClassShapes))
     addAll(exactEnumInventoryViolations(sourceByPath, canonicalProtocolEnumInventories))
@@ -1177,6 +1185,8 @@ internal val requiredPolicyBoundRows = listOf(
     "| Profile simulation speed / damage-tier threshold | exact declared option sets |",
     "| Profile Gameplay discoveries per Pulse | captured `itemCount` (at most 400) |",
     "| Profile v4 UTF-8 payload | 65536 bytes |",
+    "| Desktop Preferences value length | 8192 UTF-16 code units |",
+    "| Desktop Preferences key names admitted per exact node read | 64 |",
 )
 
 private fun MutableList<String>.addBoundViolations(

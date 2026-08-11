@@ -5,57 +5,129 @@ package kinetickk.app.shared
 
 import kinetickk.ball.profile.impl.ProfilePersistenceCapability
 import kinetickk.ball.profile.impl.ProfilePersistenceContract
+import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
+import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
 import kinetickk.resource.audio.api.ToneRequest
 import kinetickk.resource.audio.api.ToneWave
 import kinetickk.resource.audio.impl.TonePlaybackCapability
-import kotlinx.browser.localStorage
-import org.w3c.dom.Storage
 import kotlin.js.ExperimentalWasmJsInterop
 import kotlin.js.JsAny
 
 internal actual fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability =
-    WebProfilePersistenceCapability(
-        storage = { localStorage },
-        keys = WEB_PROFILE_PERSISTENCE_KEYS,
-    )
+    WebProfilePersistenceCapability()
 
-private data class WebProfilePersistenceKeys(
-    val snapshotV4: String,
-    val legacyProgressV2: String,
-    val legacyMatter: String,
-)
+private class WebProfilePersistenceCapability : ProfilePersistenceCapability {
+    override fun readV4(): ProfilePersistenceReadResult = readWebProfileV4()
 
-private val WEB_PROFILE_PERSISTENCE_KEYS = WebProfilePersistenceKeys(
-    snapshotV4 = ProfilePersistenceContract.WEB_SNAPSHOT_V4,
-    legacyProgressV2 = ProfilePersistenceContract.WEB_LEGACY_PROGRESS_V2,
-    legacyMatter = ProfilePersistenceContract.WEB_LEGACY_MATTER,
-)
+    override fun writeV4(payload: String): ProfilePersistenceMutationResult = writeWebProfileV4(payload)
 
-private class WebProfilePersistenceCapability(
-    private val storage: () -> Storage,
-    private val keys: WebProfilePersistenceKeys,
-) : ProfilePersistenceCapability {
-    override fun readV4(): String? =
-        storage().getItem(keys.snapshotV4)
+    override fun readLegacyProgressV2(): ProfilePersistenceReadResult = readWebLegacyProgressV2()
 
-    override fun writeV4(payload: String) {
-        storage().setItem(keys.snapshotV4, payload)
-    }
+    override fun readLegacyMatter(): ProfilePersistenceReadResult = readWebLegacyMatter()
 
-    override fun readLegacyProgressV2(): String? =
-        storage().getItem(keys.legacyProgressV2)
+    override fun removeLegacyProgressV2(): ProfilePersistenceMutationResult = removeWebLegacyProgressV2()
 
-    override fun readLegacyMatter(): String? =
-        storage().getItem(keys.legacyMatter)
-
-    override fun removeLegacyProgressV2() {
-        storage().removeItem(keys.legacyProgressV2)
-    }
-
-    override fun removeLegacyMatter() {
-        storage().removeItem(keys.legacyMatter)
-    }
+    override fun removeLegacyMatter(): ProfilePersistenceMutationResult = removeWebLegacyMatter()
 }
+
+@OptIn(ExperimentalWasmJsInterop::class)
+private external interface WebStorageReadCall : JsAny {
+    val status: String
+    val payload: String?
+}
+
+private fun readWebProfileV4(): ProfilePersistenceReadResult =
+    webStorageRead(ProfilePersistenceContract.WEB_SNAPSHOT_V4).toPersistenceResult()
+
+private fun readWebLegacyProgressV2(): ProfilePersistenceReadResult =
+    webStorageRead(ProfilePersistenceContract.WEB_LEGACY_PROGRESS_V2).toPersistenceResult()
+
+private fun readWebLegacyMatter(): ProfilePersistenceReadResult =
+    webStorageRead(ProfilePersistenceContract.WEB_LEGACY_MATTER).toPersistenceResult()
+
+private fun writeWebProfileV4(payload: String): ProfilePersistenceMutationResult =
+    webStorageWrite(ProfilePersistenceContract.WEB_SNAPSHOT_V4, payload).toPersistenceMutationResult()
+
+private fun removeWebLegacyProgressV2(): ProfilePersistenceMutationResult =
+    webStorageRemove(ProfilePersistenceContract.WEB_LEGACY_PROGRESS_V2).toPersistenceMutationResult()
+
+private fun removeWebLegacyMatter(): ProfilePersistenceMutationResult =
+    webStorageRemove(ProfilePersistenceContract.WEB_LEGACY_MATTER).toPersistenceMutationResult()
+
+private fun WebStorageReadCall.toPersistenceResult(): ProfilePersistenceReadResult = when (status) {
+    WEB_STORAGE_OBSERVED -> ProfilePersistenceReadResult.Observed(payload)
+    WEB_STORAGE_FAILED_BEFORE_EXECUTION -> ProfilePersistenceReadResult.Failed
+    else -> error("Web Storage read returned an unknown provider status")
+}
+
+private fun String.toPersistenceMutationResult(): ProfilePersistenceMutationResult = when (this) {
+    WEB_STORAGE_COMPLETED -> ProfilePersistenceMutationResult.COMPLETED
+    WEB_STORAGE_FAILED_BEFORE_EXECUTION -> ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
+    else -> error("Web Storage mutation returned an unknown provider status")
+}
+
+@OptIn(ExperimentalWasmJsInterop::class)
+private fun webStorageRead(key: String): WebStorageReadCall = js(
+    """{
+        try {
+            const exactStorage = globalThis.localStorage;
+            return { status: 'observed', payload: exactStorage.getItem(key) };
+        } catch (failure) {
+            if (
+                typeof DOMException !== 'undefined' &&
+                failure instanceof DOMException &&
+                failure.name === 'SecurityError'
+            ) {
+                return { status: 'failed-before-execution', payload: null };
+            }
+            throw failure;
+        }
+    }""",
+)
+
+@OptIn(ExperimentalWasmJsInterop::class)
+private fun webStorageWrite(key: String, payload: String): String = js(
+    """{
+        try {
+            const exactStorage = globalThis.localStorage;
+            exactStorage.setItem(key, payload);
+            return 'completed';
+        } catch (failure) {
+            if (
+                typeof DOMException !== 'undefined' &&
+                failure instanceof DOMException &&
+                (failure.name === 'SecurityError' || failure.name === 'QuotaExceededError')
+            ) {
+                return 'failed-before-execution';
+            }
+            throw failure;
+        }
+    }""",
+)
+
+@OptIn(ExperimentalWasmJsInterop::class)
+private fun webStorageRemove(key: String): String = js(
+    """{
+        try {
+            const exactStorage = globalThis.localStorage;
+            exactStorage.removeItem(key);
+            return 'completed';
+        } catch (failure) {
+            if (
+                typeof DOMException !== 'undefined' &&
+                failure instanceof DOMException &&
+                failure.name === 'SecurityError'
+            ) {
+                return 'failed-before-execution';
+            }
+            throw failure;
+        }
+    }""",
+)
+
+private const val WEB_STORAGE_OBSERVED: String = "observed"
+private const val WEB_STORAGE_COMPLETED: String = "completed"
+private const val WEB_STORAGE_FAILED_BEFORE_EXECUTION: String = "failed-before-execution"
 
 internal actual fun createPlatformTonePlaybackCapability(): TonePlaybackCapability =
     WebTonePlaybackCapability()
@@ -66,23 +138,21 @@ private class WebTonePlaybackCapability : TonePlaybackCapability {
     private var context: JsAny? = null
 
     override fun unlock() {
-        runCatching { context = unlockWebAudio(context) }
+        context = unlockWebAudio(context)
     }
 
     override fun play(request: ToneRequest) {
-        runCatching {
-            context = playWebTone(
-                context,
-                request.frequencyHz.toDouble(),
-                request.durationSeconds.toDouble(),
-                request.gain.toDouble(),
-                webToneWaveValue(request.wave),
-            )
-        }
+        context = playWebTone(
+            context,
+            request.frequencyHz.toDouble(),
+            request.durationSeconds.toDouble(),
+            request.gain.toDouble(),
+            webToneWaveValue(request.wave),
+        )
     }
 
     override fun close() {
-        runCatching { closeWebAudio(context) }
+        closeWebAudio(context)
         context = null
     }
 }
@@ -100,7 +170,10 @@ private fun unlockWebAudio(current: JsAny?): JsAny? = js(
         const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
         if (!AudioContext) return null;
         const context = current || new AudioContext();
-        if (context.state === 'suspended') context.resume();
+        if (context.state === 'suspended') {
+            const resume = context.resume();
+            if (resume && typeof resume.catch === 'function') resume.catch(() => undefined);
+        }
         return context;
     }""",
 )
@@ -117,7 +190,10 @@ private fun playWebTone(
         const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
         if (!AudioContext) return null;
         const context = current || new AudioContext();
-        if (context.state === 'suspended') context.resume();
+        if (context.state === 'suspended') {
+            const resume = context.resume();
+            if (resume && typeof resume.catch === 'function') resume.catch(() => undefined);
+        }
         const oscillator = context.createOscillator();
         const gain = context.createGain();
         oscillator.type = wave;
@@ -136,6 +212,9 @@ private fun playWebTone(
 @OptIn(ExperimentalWasmJsInterop::class)
 private fun closeWebAudio(current: JsAny?): Unit = js(
     """{
-        if (current) current.close();
+        if (current) {
+            const close = current.close();
+            if (close && typeof close.catch === 'function') close.catch(() => undefined);
+        }
     }""",
 )

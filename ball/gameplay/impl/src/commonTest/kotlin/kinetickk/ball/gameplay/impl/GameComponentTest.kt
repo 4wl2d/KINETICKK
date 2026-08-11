@@ -481,21 +481,42 @@ class GameComponentTest {
     }
 
     @Test
-    fun audioFailureDoesNotRollBackAnAcceptedInteractionFrame() {
-        val audio = RecordingGameplayAudioExecutor(throwOnEveryCall = true)
-        val component = component(audio = audio)
-        component.start()
+    fun audioFaultsPropagateAfterAcceptedFramesCommitAndDrainExactResults() {
+        val unlockAudio = RecordingGameplayAudioExecutor()
+        val unlockResults = mutableListOf<GameplayModuleResultDelivery>()
+        val unlockComponent = component(
+            audio = unlockAudio,
+            commandResultSink = unlockResults::add,
+        )
+        unlockComponent.start()
+        unlockAudio.throwOnUnlock = true
 
-        val frame = assertIs<GameplayAcceptance.Accepted>(
-            component.accept(GameplayInteractionPulse.FrameElapsed.fromValidated(0.1f)),
+        assertFailsWith<AudioResourceFault> {
+            unlockComponent.accept(GameplayInteractionPulse.UserGestureObserved)
+        }
+        val started = unlockComponent.query(GameplayQuery.GetRunStatus)
+        assertEquals(GameplayRevision(2), started.revision)
+        assertEquals(GameplayRunPhase.RUNNING, started.phase)
+        assertEquals(1, unlockAudio.unlockCount)
+        assertEquals(GameplayModuleResult.RunStarted, unlockResults.single().result)
+
+        val frameAudio = RecordingGameplayAudioExecutor()
+        val frameResults = mutableListOf<GameplayModuleResultDelivery>()
+        val frameComponent = component(
+            audio = frameAudio,
+            commandResultSink = frameResults::add,
         )
-        assertEquals(frame.revision, component.query(GameplayQuery.GetRunStatus).revision)
-        val gesture = assertIs<GameplayAcceptance.Accepted>(
-            component.accept(GameplayInteractionPulse.UserGestureObserved),
-        )
-        assertEquals(gesture.revision, component.query(GameplayQuery.GetRunStatus).revision)
-        assertEquals(1, audio.frames.size)
-        assertEquals(1, audio.unlockCount)
+        frameComponent.start()
+        frameAudio.throwOnAdvance = true
+
+        assertFailsWith<AudioResourceFault> {
+            frameComponent.accept(GameplayInteractionPulse.FrameElapsed.fromValidated(0.1f))
+        }
+        val advanced = frameComponent.query(GameplayQuery.GetRunStatus)
+        assertEquals(GameplayRevision(2), advanced.revision)
+        assertEquals(GameplayRunPhase.RUNNING, advanced.phase)
+        assertEquals(1, frameAudio.frames.size)
+        assertEquals(listOf(GameplayModuleResult.RunStarted), frameResults.map { it.result })
     }
 
     @Test
@@ -709,19 +730,20 @@ private fun gameplayFeature(profile: TestProfilePort): DefaultGameplayFeature =
     )
 
 private class RecordingGameplayAudioExecutor(
-    private val throwOnEveryCall: Boolean = false,
+    var throwOnAdvance: Boolean = false,
+    var throwOnUnlock: Boolean = false,
 ) : GameplayAudioExecutor {
     val frames = mutableListOf<Pair<Float, List<GameplayAudioCue>>>()
     var unlockCount = 0
 
     override fun advance(realDeltaSeconds: Float, cues: ImmutableList<GameplayAudioCue>) {
         frames += realDeltaSeconds to cues.toList()
-        if (throwOnEveryCall) throw AudioResourceFault()
+        if (throwOnAdvance) throw AudioResourceFault()
     }
 
     override fun ensureUnlocked() {
         unlockCount++
-        if (throwOnEveryCall) throw AudioResourceFault()
+        if (throwOnUnlock) throw AudioResourceFault()
     }
 }
 

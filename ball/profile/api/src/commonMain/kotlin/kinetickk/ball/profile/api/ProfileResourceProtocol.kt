@@ -57,6 +57,10 @@ enum class ProfileWriteOutcomeUnknownReason {
     PROVIDER_WRITE_MAY_HAVE_EXECUTED,
 }
 
+enum class ProfileWriteFailure {
+    PROVIDER_WRITE_FAILED_BEFORE_EXECUTION,
+}
+
 enum class ProfilePurgeOutcomeUnknownReason {
     PROVIDER_PURGE_MAY_HAVE_EXECUTED,
 }
@@ -85,6 +89,10 @@ sealed interface ProfileV4WriteResult {
 
     data class Rejected(
         val reason: ProfileV4Rejection,
+    ) : ProfileV4WriteResult
+
+    data class ResourceFailure(
+        val reason: ProfileWriteFailure,
     ) : ProfileV4WriteResult
 
     data class OutcomeUnknown(

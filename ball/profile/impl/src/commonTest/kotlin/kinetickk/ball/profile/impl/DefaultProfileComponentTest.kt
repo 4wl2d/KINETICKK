@@ -41,6 +41,7 @@ import kinetickk.ball.profile.api.ProfileV4Rejection
 import kinetickk.ball.profile.api.ProfileV4WritePurpose
 import kinetickk.ball.profile.api.ProfileV4WriteResult
 import kinetickk.ball.profile.api.ProfileWriteOutcomeUnknownReason
+import kinetickk.ball.profile.api.ProfileWriteFailure
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -68,6 +69,14 @@ class DefaultProfileComponentTest {
             profileResultMatches(
                 ProfileEffectiveProtocolIdentity.SESSION_RESET_RETRY,
                 ProfileModuleResult.ResetCompleted,
+            ),
+        )
+        assertTrue(
+            profileResultMatches(
+                ProfileEffectiveProtocolIdentity.SESSION_RESET_CONFIRM,
+                ProfileModuleResult.ResetWriteResourceFailure(
+                    ProfileWriteFailure.PROVIDER_WRITE_FAILED_BEFORE_EXECUTION,
+                ),
             ),
         )
         assertTrue(
@@ -217,17 +226,10 @@ class DefaultProfileComponentTest {
         }
 
         val throwingResource = RecordingProfileResource().apply {
-            readBehavior = { error("provider read") }
+            readBehavior = { error("resource programming fault") }
         }
-        val throwingComponent = testProfileComponent(throwingResource)
-        assertEquals(
-            ProfileBootstrapStatus.Blocked(
-                ProfileBootstrapBlockReason.ResourceFailure(
-                    ProfileReadFailure.PROVIDER_READ_FAILED,
-                ),
-            ),
-            throwingComponent.query(ProfileQuery.GetPersistenceStatus).bootstrap,
-        )
+        assertFailsWith<IllegalStateException> { testProfileComponent(throwingResource) }
+        assertEquals(1, throwingResource.readCount)
         assertTrue(throwingResource.writes.isEmpty())
     }
 
@@ -287,6 +289,9 @@ class DefaultProfileComponentTest {
     fun rejectedAndUnknownWritesDoNotRollbackOrBlindlyRetryAcceptedMutation() {
         listOf<ProfileV4WriteResult>(
             ProfileV4WriteResult.Rejected(ProfileV4Rejection.VALUE_OUT_OF_RANGE),
+            ProfileV4WriteResult.ResourceFailure(
+                ProfileWriteFailure.PROVIDER_WRITE_FAILED_BEFORE_EXECUTION,
+            ),
             ProfileV4WriteResult.OutcomeUnknown(
                 ProfileWriteOutcomeUnknownReason.PROVIDER_WRITE_MAY_HAVE_EXECUTED,
             ),
@@ -304,6 +309,10 @@ class DefaultProfileComponentTest {
             when (writeResult) {
                 is ProfileV4WriteResult.Rejected -> assertEquals(
                     ProfilePersistenceStatus.Rejected(ProfileRevision(2L), writeResult.reason),
+                    component.query(ProfileQuery.GetPersistenceStatus).persistence,
+                )
+                is ProfileV4WriteResult.ResourceFailure -> assertEquals(
+                    ProfilePersistenceStatus.ResourceFailure(ProfileRevision(2L), writeResult.reason),
                     component.query(ProfileQuery.GetPersistenceStatus).persistence,
                 )
                 is ProfileV4WriteResult.OutcomeUnknown -> assertEquals(
@@ -534,6 +543,38 @@ class DefaultProfileComponentTest {
     }
 
     @Test
+    fun resourceProgrammingFaultAfterPublicationPropagatesWithoutFakeCompletion() {
+        val resource = RecordingProfileResource().apply {
+            writeBehavior = { error("resource programming fault") }
+        }
+        val deliveries = mutableListOf<ProfileModuleResultDelivery>()
+        val component = testProfileComponent(resource, commandResultSink = deliveries::add)
+
+        assertFailsWith<IllegalStateException> {
+            component.acceptTestCommand(
+                request(
+                    component,
+                    ProfileModuleCommand.ToggleMute,
+                    sourceRevision = 25L,
+                ),
+                causalScope = 75L,
+                causalDepth = 0,
+            )
+        }
+
+        assertEquals(1, resource.writes.size)
+        assertTrue(deliveries.isEmpty())
+        assertFalse(component.query(ProfileQuery.GetPreferences).preferences.soundEnabled)
+        assertFalse(component.query(ProfileQuery.GetPreferences).preferences.musicEnabled)
+        assertEquals(
+            ProfileEffectRef(ProfileRevision(2L), ordinal = 0),
+            assertIs<ProfilePersistenceStatus.Pending>(
+                component.query(ProfileQuery.GetPersistenceStatus).persistence,
+            ).effectRef,
+        )
+    }
+
+    @Test
     fun resetRequiredConstructionWaitsForAnExplicitCommandWithoutEffects() {
         val resource = RecordingProfileResource(
             ProfileBootstrapResourceResult.Observed(null, ProfileLegacyKeys.ALL),
@@ -604,9 +645,63 @@ class DefaultProfileComponentTest {
     }
 
     @Test
+    fun acceptedResetPurgeProgrammingFaultPropagatesWithoutFakeCompletionOrResult() {
+        val resource = RecordingProfileResource(
+            ProfileBootstrapResourceResult.Observed(null, ProfileLegacyKeys.ALL),
+        ).apply {
+            purgeBehavior = { error("resource purge programming fault") }
+        }
+        val deliveries = mutableListOf<ProfileModuleResultDelivery>()
+        val component = testProfileComponent(resource, commandResultSink = deliveries::add)
+        resource.events.clear()
+
+        assertFailsWith<IllegalStateException> {
+            component.acceptTestCommand(
+                request(
+                    component,
+                    ProfileModuleCommand.ConfirmLegacyReset,
+                    sourceRevision = 35L,
+                ),
+                causalScope = 85L,
+                causalDepth = 0,
+            )
+        }
+
+        assertEquals(listOf("write", "purge"), resource.events)
+        assertEquals(1, resource.writes.size)
+        assertEquals(1, resource.purgeCount)
+        assertTrue(deliveries.isEmpty())
+        val status = component.query(ProfileQuery.GetPersistenceStatus)
+        assertEquals(
+            ProfileBootstrapStatus.Blocked(ProfileBootstrapBlockReason.ResetInProgress),
+            status.bootstrap,
+        )
+        assertEquals(
+            ProfilePersistenceStatus.Persisted(ProfileRevision(2L)),
+            status.persistence,
+        )
+        val reset = assertIs<ProfileResetStatus.PurgingLegacy>(status.reset)
+        assertEquals(ProfileEffectRef(ProfileRevision(3L), ordinal = 0), reset.effectRef)
+        assertEquals(ProfileLegacyKeys.ALL, reset.legacyKeys)
+        assertEquals(
+            ProfileSemanticHandle(
+                sourceInstance = ProfileCommandSource.LocalSession,
+                sourceRevision = 35L,
+                sourceOrdinal = 0,
+            ),
+            reset.completion.commandSource.semanticHandle,
+        )
+        assertEquals(85L, reset.completion.commandSource.causalScope)
+        assertEquals(0, reset.completion.commandSource.causalDepth)
+    }
+
+    @Test
     fun rejectedOrUnknownResetWritePreservesLegacyAndNeverPurges() {
         listOf<ProfileV4WriteResult>(
             ProfileV4WriteResult.Rejected(ProfileV4Rejection.INCONSISTENT_PROFILE),
+            ProfileV4WriteResult.ResourceFailure(
+                ProfileWriteFailure.PROVIDER_WRITE_FAILED_BEFORE_EXECUTION,
+            ),
             ProfileV4WriteResult.OutcomeUnknown(
                 ProfileWriteOutcomeUnknownReason.PROVIDER_WRITE_MAY_HAVE_EXECUTED,
             ),
@@ -637,6 +732,11 @@ class DefaultProfileComponentTest {
             when (result) {
                 is ProfileV4WriteResult.Rejected ->
                     assertEquals(ProfileModuleResult.ResetWriteRejected(result.reason), deliveries.single().result)
+                is ProfileV4WriteResult.ResourceFailure ->
+                    assertEquals(
+                        ProfileModuleResult.ResetWriteResourceFailure(result.reason),
+                        deliveries.single().result,
+                    )
                 is ProfileV4WriteResult.OutcomeUnknown ->
                     assertEquals(
                         ProfileModuleResult.ResetWriteOutcomeUnknown(result.reason),
@@ -644,6 +744,98 @@ class DefaultProfileComponentTest {
                     )
                 is ProfileV4WriteResult.Written -> error("Not a failure case")
             }
+        }
+    }
+
+    @Test
+    fun resetWriteFailureRetryRequiresExplicitNewCommandAndOneFreshWritePerCommand() {
+        listOf<ProfileV4WriteResult>(
+            ProfileV4WriteResult.Rejected(ProfileV4Rejection.INCONSISTENT_PROFILE),
+            ProfileV4WriteResult.ResourceFailure(
+                ProfileWriteFailure.PROVIDER_WRITE_FAILED_BEFORE_EXECUTION,
+            ),
+            ProfileV4WriteResult.OutcomeUnknown(
+                ProfileWriteOutcomeUnknownReason.PROVIDER_WRITE_MAY_HAVE_EXECUTED,
+            ),
+        ).forEachIndexed { index, firstResult ->
+            val resource = RecordingProfileResource(
+                ProfileBootstrapResourceResult.Observed(null, ProfileLegacyKeys.ALL),
+            )
+            resource.writeBehavior = { snapshot ->
+                if (resource.writes.size == 1) {
+                    firstResult
+                } else {
+                    ProfileV4WriteResult.Written(snapshot.revision)
+                }
+            }
+            val deliveries = mutableListOf<ProfileModuleResultDelivery>()
+            val component = testProfileComponent(resource, commandResultSink = deliveries::add)
+            val firstRequest = request(
+                component,
+                ProfileModuleCommand.ConfirmLegacyReset,
+                sourceRevision = 80L + index * 2L,
+            )
+
+            assertIs<ProfileCommandIngressResult.Accepted>(
+                component.acceptTestCommand(
+                    firstRequest,
+                    causalScope = 120L + index,
+                    causalDepth = 0,
+                ),
+            )
+
+            assertEquals(1, resource.writes.size)
+            assertEquals(0, resource.purgeCount)
+            assertEquals(1, deliveries.size)
+            when (firstResult) {
+                is ProfileV4WriteResult.Rejected -> assertEquals(
+                    ProfileModuleResult.ResetWriteRejected(firstResult.reason),
+                    deliveries.single().result,
+                )
+                is ProfileV4WriteResult.ResourceFailure -> assertEquals(
+                    ProfileModuleResult.ResetWriteResourceFailure(firstResult.reason),
+                    deliveries.single().result,
+                )
+                is ProfileV4WriteResult.OutcomeUnknown -> assertEquals(
+                    ProfileModuleResult.ResetWriteOutcomeUnknown(firstResult.reason),
+                    deliveries.single().result,
+                )
+                is ProfileV4WriteResult.Written -> error("Not a failure case")
+            }
+            assertIs<ProfileResetStatus.ConfirmationRequired>(
+                component.query(ProfileQuery.GetPersistenceStatus).reset,
+            )
+            repeat(3) { component.query(ProfileQuery.GetPersistenceStatus) }
+            assertEquals(1, resource.writes.size, "write failure must not retry automatically")
+            assertEquals(1, deliveries.size, "write failure must not fabricate another result")
+
+            val retryRequest = request(
+                component,
+                ProfileModuleCommand.ConfirmLegacyReset,
+                sourceRevision = firstRequest.semanticHandle.sourceRevision + 1L,
+            )
+            assertFalse(firstRequest.semanticHandle == retryRequest.semanticHandle)
+            assertIs<ProfileCommandIngressResult.Accepted>(
+                component.acceptTestCommand(
+                    retryRequest,
+                    causalScope = 130L + index,
+                    causalDepth = 0,
+                ),
+            )
+
+            assertEquals(
+                listOf(ProfileRevision(2L), ProfileRevision(4L)),
+                resource.writes.map { snapshot -> snapshot.revision },
+            )
+            assertEquals(1, resource.purgeCount)
+            assertEquals(2, deliveries.size)
+            assertEquals(firstRequest.semanticHandle, deliveries.first().commandSource.semanticHandle)
+            assertEquals(retryRequest.semanticHandle, deliveries.last().commandSource.semanticHandle)
+            assertEquals(ProfileModuleResult.ResetCompleted, deliveries.last().result)
+            assertEquals(
+                ProfileBootstrapStatus.Ready,
+                component.query(ProfileQuery.GetPersistenceStatus).bootstrap,
+            )
         }
     }
 
@@ -789,27 +981,32 @@ private class RecordingPersistenceCapability : ProfilePersistenceCapability {
     var removeLegacyProgressV2Count: Int = 0
     var removeLegacyMatterCount: Int = 0
 
-    override fun readV4(): String? {
+    override fun readV4(): ProfilePersistenceReadResult {
         readV4Count += 1
-        return v4
+        return ProfilePersistenceReadResult.Observed(v4)
     }
 
-    override fun writeV4(payload: String) {
+    override fun writeV4(payload: String): ProfilePersistenceMutationResult {
         writeV4Count += 1
         v4 = payload
+        return ProfilePersistenceMutationResult.COMPLETED
     }
 
-    override fun readLegacyProgressV2(): String? = legacyProgressV2
+    override fun readLegacyProgressV2(): ProfilePersistenceReadResult =
+        ProfilePersistenceReadResult.Observed(legacyProgressV2)
 
-    override fun readLegacyMatter(): String? = legacyMatter
+    override fun readLegacyMatter(): ProfilePersistenceReadResult =
+        ProfilePersistenceReadResult.Observed(legacyMatter)
 
-    override fun removeLegacyProgressV2() {
+    override fun removeLegacyProgressV2(): ProfilePersistenceMutationResult {
         removeLegacyProgressV2Count += 1
         legacyProgressV2 = null
+        return ProfilePersistenceMutationResult.COMPLETED
     }
 
-    override fun removeLegacyMatter() {
+    override fun removeLegacyMatter(): ProfilePersistenceMutationResult {
         removeLegacyMatterCount += 1
         legacyMatter = null
+        return ProfilePersistenceMutationResult.COMPLETED
     }
 }

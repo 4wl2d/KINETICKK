@@ -667,6 +667,10 @@ object AppSessionNucleus {
                 check(lifecycle == SessionResetLifecycle.CONFIRMATION_REQUIRED)
                 SessionWorkflowFailureCode.RESET_WRITE_REJECTED
             }
+            is ProfileModuleResult.ResetWriteResourceFailure -> {
+                check(lifecycle == SessionResetLifecycle.CONFIRMATION_REQUIRED)
+                SessionWorkflowFailureCode.RESET_WRITE_RESOURCE_FAILURE
+            }
             is ProfileModuleResult.ResetWriteOutcomeUnknown -> {
                 check(lifecycle == SessionResetLifecycle.CONFIRMATION_REQUIRED)
                 SessionWorkflowFailureCode.RESET_WRITE_OUTCOME_UNKNOWN

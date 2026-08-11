@@ -15,13 +15,20 @@ trigger.
 | cross-authority reads | Session, Gameplay, and Profile consume exactly 14 target-owned snapshot routes | target-owned query/result pairs, source-bound query views, explicit freshness, Assembly bindings, non-atomic multi-read disclosure |
 | same-stack commands and results | Session coordinates Profile/Gameplay; Gameplay reports progress to Profile through exactly 10 command/result routes | target-owned `ModuleCommand`/`ModuleResult` mappings, semantic-handle correlation, Nucleus-private result Pulses, flattened refusal carriers, depth reservation, completion deque |
 | Flow composition | Session owns lifecycle, ordering, branching, recovery, and terminal navigation | one coordinator, two `FlowParticipation` rows, finite routes, one pending command |
-| external Resource effects | local persistence and tone playback | minimum exact-key/tone capabilities, commit-before-dispatch, closed facts, fault containment |
-| raw trust/representation edge | persisted JSON and platform provider data are untrusted | 65536-byte precheck, strict decoding, provenance quarantine, validation/business-stage tests |
+| external persistence Resource effects | local profile persistence | minimum exact-key capability, commit-before-dispatch, closed provider outcomes/Facts, exact failure-before-execution versus possible-execution classification, and runtime-fault propagation |
+| live mechanical Audio Projection (Core §9.13) | accepted Gameplay outputs project bounded tones through Resource/platform mechanics | minimum tone capability, commit-before-dispatch, no typed Audio Fact/result/status, and exact runtime-fault/projection-loss split |
+| raw trust/representation edge | persisted JSON and platform provider data are untrusted | independent 65536-byte codec gate before decode, Desktop 8192-code-unit value gate before write, and 64-key returned-inventory admission before project-owned membership iteration; strict decoding, provenance quarantine, and validation/business-stage tests; no bound is claimed for provider enumeration/allocation |
 | persistent schema change | save format changes incompatibly to v4 | explicit detection, no v2/v3 import, reset/quarantine lifecycle, write-before-purge and restart tests |
-| explicit user semantic retry | after a legacy-purge failure, `SessionInteractionPulse.ResetRetryRequested` is present under `PBA-24`; primary owner `AppSession` issues exactly one `ProfileModuleCommand.RetryLegacyPurge` to target `Profile` | one purge attempt per explicit user Pulse; Profile returns one closed result; transport, executor, SDK/provider, and reconciliation retries disabled; no blind/automatic retry; cumulative attempts exactly one per Pulse |
+| explicit user semantic retry | under `PBA-24`, primary owner `AppSession` targets `Profile` through two families: `SessionInteractionPulse.ResetRetryRequested` issues one `ProfileModuleCommand.RetryLegacyPurge`; after `ProfileModuleResult.ResetWriteRejected`, `ProfileModuleResult.ResetWriteResourceFailure`, or `ProfileModuleResult.ResetWriteOutcomeUnknown`, a later `SessionInteractionPulse.ResetConfirmed` authorizes one superseding `ProfileModuleCommand.ConfirmLegacyReset` | one purge or reset-write attempt per explicit user Pulse; reset-write uses a fresh semantic handle/effect reference/source revision with no same-identity resend and exactly one Profile Resource write invocation per explicit user Pulse; zero provider mutation calls on local encode rejection, otherwise at most one provider mutation call; prior OutcomeUnknown ambiguity remains historical and a successful later write establishes the newer snapshot before purge; transport, executor, SDK/provider, and reconciliation retries disabled |
 | finite variable dimensions | catalog, simulation, output, audio, causal, and workflow collections exist | exact `N/N+1`, no truncation or partial acceptance, static graph counts |
 | shared Foundation | two or more Balls share immutable collections, PRNG, dispatch guard, or completion deque | project scan proving mechanical-only exports and no mutable business meaning/communication |
 | explicit conformance claim | the final docs-only commit self-attests one implementation freeze | frozen Core/pack/source/environment/policy/Assembly, RG-01..RG-10 evidence, exact non-guarantees |
+
+For that Audio row, synchronous Resource/platform calls propagate.
+Synchronous JavaScript invocation/graph faults propagate.
+Desktop worker faults escape the detached `Runnable` to runtime; this is not caller propagation.
+Web native `resume()`/`close()` Promise rejections alone are explicitly observed and consumed by
+`.catch(() => undefined)` as non-semantic post-acceptance projection loss.
 
 ## Absent trigger scopes
 

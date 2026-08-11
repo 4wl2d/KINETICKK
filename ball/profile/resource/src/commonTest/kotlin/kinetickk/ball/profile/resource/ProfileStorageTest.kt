@@ -12,8 +12,10 @@ import kinetickk.ball.profile.api.ProfileReadFailure
 import kinetickk.ball.profile.api.ProfileV4Rejection
 import kinetickk.ball.profile.api.ProfileV4WriteResult
 import kinetickk.ball.profile.api.ProfileWriteOutcomeUnknownReason
+import kinetickk.ball.profile.api.ProfileWriteFailure
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class ProfileStorageTest {
     @Test
@@ -68,9 +70,9 @@ class ProfileStorageTest {
     }
 
     @Test
-    fun everyProviderReadExceptionIsAConfirmedNondestructiveResourceFailure() {
+    fun typedProviderReadFailureIsAConfirmedNondestructiveResourceFailure() {
         listOf("readV4", "readLegacyProgressV2", "readLegacyMatter").forEach { operation ->
-            val provider = RecordingStorageProvider(throwOn = setOf(operation))
+            val provider = RecordingStorageProvider(failedReads = setOf(operation))
 
             assertEquals(
                 ProfileBootstrapResourceResult.ResourceFailure(
@@ -81,6 +83,29 @@ class ProfileStorageTest {
             )
             assertEquals(emptyList(), provider.operations.filter(String::startsWithWriteOrRemove))
         }
+    }
+
+    @Test
+    fun providerProgrammingFaultPropagatesWithoutFabricatedResourceEvidence() {
+        val provider = RecordingStorageProvider(programmingFaultOn = setOf("readV4"))
+
+        assertFailsWith<IllegalStateException> {
+            resource(provider).readBootstrap()
+        }
+        assertEquals(listOf("readV4"), provider.operations)
+        assertEquals(emptyList(), provider.operations.filter(String::startsWithWriteOrRemove))
+    }
+
+    @Test
+    fun providerWriteProgrammingFaultPropagatesWithoutFabricatedWriteEvidence() {
+        val snapshot = testV4Snapshot(revision = 9L)
+        val provider = RecordingStorageProvider(programmingFaultOn = setOf("writeV4"))
+
+        assertFailsWith<IllegalStateException> {
+            resource(provider).writeV4(snapshot)
+        }
+        assertEquals(listOf("writeV4"), provider.operations)
+        assertEquals(null, provider.v4)
     }
 
     @Test
@@ -115,12 +140,12 @@ class ProfileStorageTest {
     }
 
     @Test
-    fun writeExceptionOrUnconfirmedReadBackIsOutcomeUnknownWithoutLegacyMutation() {
+    fun typedPossibleWriteExecutionOrUnconfirmedReadBackIsOutcomeUnknownWithoutLegacyMutation() {
         val snapshot = testV4Snapshot(revision = 12L)
-        val throwing = RecordingStorageProvider(throwOn = setOf("writeV4"))
+        val possibleExecution = RecordingStorageProvider(possibleMutations = setOf("writeV4"))
         val ignored = RecordingStorageProvider(ignoreV4Writes = true)
 
-        listOf(throwing, ignored).forEach { provider ->
+        listOf(possibleExecution, ignored).forEach { provider ->
             assertEquals(
                 ProfileV4WriteResult.OutcomeUnknown(
                     ProfileWriteOutcomeUnknownReason.PROVIDER_WRITE_MAY_HAVE_EXECUTED,
@@ -129,6 +154,21 @@ class ProfileStorageTest {
             )
             assertEquals(emptyList(), provider.operations.filter(String::startsWithRemove))
         }
+    }
+
+    @Test
+    fun typedWriteFailureBeforeExecutionIsKnownResourceFailure() {
+        val snapshot = testV4Snapshot(revision = 13L)
+        val provider = RecordingStorageProvider(failedBeforeMutations = setOf("writeV4"))
+
+        assertEquals(
+            ProfileV4WriteResult.ResourceFailure(
+                ProfileWriteFailure.PROVIDER_WRITE_FAILED_BEFORE_EXECUTION,
+            ),
+            resource(provider).writeV4(snapshot),
+        )
+        assertEquals(listOf("writeV4"), provider.operations)
+        assertEquals(null, provider.v4)
     }
 
     @Test
@@ -164,6 +204,8 @@ class ProfileStorageTest {
         assertEquals(
             listOf(
                 "readV4",
+                "readLegacyProgressV2",
+                "readLegacyMatter",
                 "removeLegacyProgressV2",
                 "readLegacyProgressV2",
                 "removeLegacyMatter",
@@ -190,10 +232,10 @@ class ProfileStorageTest {
     }
 
     @Test
-    fun purgeReportsUnknownAndKnownRemainingKeysWithoutThrowing() {
+    fun typedPossiblePurgeExecutionReportsUnknownAndKnownRemainingKeys() {
         val provider = confirmedProvider(
             retainProgressV2 = true,
-            throwOn = setOf("removeLegacyMatter"),
+            possibleMutations = setOf("removeLegacyMatter"),
         )
 
         assertEquals(
@@ -207,8 +249,36 @@ class ProfileStorageTest {
     }
 
     @Test
+    fun mixedPurgeFailureBeforeExecutionRetainsExactKnownAndUnknownKeyEvidence() {
+        val knownPartial = confirmedProvider(
+            failedBeforeMutations = setOf("removeLegacyMatter"),
+        )
+        assertEquals(
+            ProfileLegacyPurgeResult.Partial(
+                ProfileLegacyKeys(progressV2 = false, matter = true),
+            ),
+            resource(knownPartial).purgeLegacy(),
+        )
+        assertEquals(null, knownPartial.legacyProgressV2)
+        assertEquals("1", knownPartial.legacyMatter)
+
+        val mixedUnknown = confirmedProvider(
+            possibleMutations = setOf("removeLegacyProgressV2"),
+            failedBeforeMutations = setOf("removeLegacyMatter"),
+        )
+        assertEquals(
+            ProfileLegacyPurgeResult.OutcomeUnknown(
+                remaining = ProfileLegacyKeys(progressV2 = false, matter = true),
+                unknown = ProfileLegacyKeys(progressV2 = true, matter = false),
+                reason = ProfilePurgeOutcomeUnknownReason.PROVIDER_PURGE_MAY_HAVE_EXECUTED,
+            ),
+            resource(mixedUnknown).purgeLegacy(),
+        )
+    }
+
+    @Test
     fun purgeGuardReadFailureIsKnownNondestructiveAndAttemptsNoRemoval() {
-        val provider = confirmedProvider(throwOn = setOf("readV4"))
+        val provider = confirmedProvider(failedReads = setOf("readV4"))
 
         assertEquals(
             ProfileLegacyPurgeResult.ResourceFailure(
@@ -221,18 +291,62 @@ class ProfileStorageTest {
         assertEquals("1", provider.legacyMatter)
     }
 
+    @Test
+    fun purgePreReadsBothLegacyKeysBeforeAnyRemoval() {
+        listOf("readLegacyProgressV2", "readLegacyMatter").forEach { failedRead ->
+            val provider = confirmedProvider(failedReads = setOf(failedRead))
+
+            assertEquals(
+                ProfileLegacyPurgeResult.ResourceFailure(ProfileReadFailure.PROVIDER_READ_FAILED),
+                resource(provider).purgeLegacy(),
+                failedRead,
+            )
+            assertEquals(emptyList(), provider.operations.filter(String::startsWithRemove))
+            assertEquals("legacy", provider.legacyProgressV2)
+            assertEquals("1", provider.legacyMatter)
+        }
+    }
+
+    @Test
+    fun providerPurgeProgrammingFaultPropagatesWithoutFabricatedPurgeEvidence() {
+        val provider = confirmedProvider(
+            programmingFaultOn = setOf("removeLegacyProgressV2"),
+        )
+
+        assertFailsWith<IllegalStateException> {
+            resource(provider).purgeLegacy()
+        }
+        assertEquals(
+            listOf(
+                "readV4",
+                "readLegacyProgressV2",
+                "readLegacyMatter",
+                "removeLegacyProgressV2",
+            ),
+            provider.operations,
+        )
+        assertEquals("legacy", provider.legacyProgressV2)
+        assertEquals("1", provider.legacyMatter)
+    }
+
     private fun resource(provider: ExactProfilePersistence): ProfileResource =
         createProfileResource(provider)
 
     private fun confirmedProvider(
         retainProgressV2: Boolean = false,
-        throwOn: Set<String> = emptySet(),
+        failedReads: Set<String> = emptySet(),
+        possibleMutations: Set<String> = emptySet(),
+        failedBeforeMutations: Set<String> = emptySet(),
+        programmingFaultOn: Set<String> = emptySet(),
     ): RecordingStorageProvider = RecordingStorageProvider(
         v4 = requireEncoded(testV4Snapshot(legacyResetConfirmed = true)),
         legacyProgressV2 = "legacy",
         legacyMatter = "1",
         retainProgressV2 = retainProgressV2,
-        throwOn = throwOn,
+        failedReads = failedReads,
+        possibleMutations = possibleMutations,
+        failedBeforeMutations = failedBeforeMutations,
+        programmingFaultOn = programmingFaultOn,
     )
 }
 
@@ -243,40 +357,53 @@ private class RecordingStorageProvider(
     private val retainProgressV2: Boolean = false,
     private val retainMatter: Boolean = false,
     private val ignoreV4Writes: Boolean = false,
-    private val throwOn: Set<String> = emptySet(),
+    private val failedReads: Set<String> = emptySet(),
+    private val possibleMutations: Set<String> = emptySet(),
+    private val failedBeforeMutations: Set<String> = emptySet(),
+    private val programmingFaultOn: Set<String> = emptySet(),
 ) : ExactProfilePersistence {
     val operations = mutableListOf<String>()
 
-    override fun readV4(): String? = operation("readV4") { v4 }
+    override fun readV4(): ProfileProviderReadResult = readOperation("readV4") { v4 }
 
-    override fun writeV4(payload: String) {
-        operation("writeV4") {
+    override fun writeV4(payload: String): ProfileProviderMutationResult =
+        mutationOperation("writeV4") {
             if (!ignoreV4Writes) v4 = payload
         }
-    }
 
-    override fun readLegacyProgressV2(): String? =
-        operation("readLegacyProgressV2") { legacyProgressV2 }
+    override fun readLegacyProgressV2(): ProfileProviderReadResult =
+        readOperation("readLegacyProgressV2") { legacyProgressV2 }
 
-    override fun readLegacyMatter(): String? =
-        operation("readLegacyMatter") { legacyMatter }
+    override fun readLegacyMatter(): ProfileProviderReadResult =
+        readOperation("readLegacyMatter") { legacyMatter }
 
-    override fun removeLegacyProgressV2() {
-        operation("removeLegacyProgressV2") {
+    override fun removeLegacyProgressV2(): ProfileProviderMutationResult =
+        mutationOperation("removeLegacyProgressV2") {
             if (!retainProgressV2) legacyProgressV2 = null
         }
-    }
 
-    override fun removeLegacyMatter() {
-        operation("removeLegacyMatter") {
+    override fun removeLegacyMatter(): ProfileProviderMutationResult =
+        mutationOperation("removeLegacyMatter") {
             if (!retainMatter) legacyMatter = null
+        }
+
+    private inline fun readOperation(name: String, block: () -> String?): ProfileProviderReadResult {
+        operations += name
+        if (name in programmingFaultOn) error("private provider programming fault")
+        return if (name in failedReads) {
+            ProfileProviderReadResult.Failed
+        } else {
+            ProfileProviderReadResult.Observed(block())
         }
     }
 
-    private inline fun <T> operation(name: String, block: () -> T): T {
+    private inline fun mutationOperation(name: String, block: () -> Unit): ProfileProviderMutationResult {
         operations += name
-        if (name in throwOn) error("private provider detail")
-        return block()
+        if (name in programmingFaultOn) error("private provider programming fault")
+        if (name in failedBeforeMutations) return ProfileProviderMutationResult.FAILED_BEFORE_EXECUTION
+        if (name in possibleMutations) return ProfileProviderMutationResult.POSSIBLE_EXECUTION
+        block()
+        return ProfileProviderMutationResult.COMPLETED
     }
 }
 

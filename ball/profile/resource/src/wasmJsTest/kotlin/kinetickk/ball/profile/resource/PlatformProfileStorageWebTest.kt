@@ -66,15 +66,27 @@ private class IsolatedWebPersistence(
     private val storage: Storage,
     private val keys: IsolatedWebKeys,
 ) : ExactProfilePersistence {
-    override fun readV4(): String? = storage.getItem(keys.snapshotV4)
+    override fun readV4(): ProfileProviderReadResult =
+        ProfileProviderReadResult.Observed(storage.getItem(keys.snapshotV4))
 
-    override fun writeV4(payload: String) = storage.setItem(keys.snapshotV4, payload)
+    override fun writeV4(payload: String): ProfileProviderMutationResult {
+        storage.setItem(keys.snapshotV4, payload)
+        return ProfileProviderMutationResult.COMPLETED
+    }
 
-    override fun readLegacyProgressV2(): String? = storage.getItem(keys.legacyProgressV2)
+    override fun readLegacyProgressV2(): ProfileProviderReadResult =
+        ProfileProviderReadResult.Observed(storage.getItem(keys.legacyProgressV2))
 
-    override fun readLegacyMatter(): String? = storage.getItem(keys.legacyMatter)
+    override fun readLegacyMatter(): ProfileProviderReadResult =
+        ProfileProviderReadResult.Observed(storage.getItem(keys.legacyMatter))
 
-    override fun removeLegacyProgressV2() = storage.removeItem(keys.legacyProgressV2)
+    override fun removeLegacyProgressV2(): ProfileProviderMutationResult {
+        storage.removeItem(keys.legacyProgressV2)
+        return ProfileProviderMutationResult.COMPLETED
+    }
 
-    override fun removeLegacyMatter() = storage.removeItem(keys.legacyMatter)
+    override fun removeLegacyMatter(): ProfileProviderMutationResult {
+        storage.removeItem(keys.legacyMatter)
+        return ProfileProviderMutationResult.COMPLETED
+    }
 }
