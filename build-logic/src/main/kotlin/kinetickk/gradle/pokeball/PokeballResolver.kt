@@ -1251,7 +1251,7 @@ internal val requiredPolicyBoundRows = listOf(
     "| Gameplay Profile-command outputs per accepted Decision | 1 |",
     "| Session participant-command / ensure-run outputs per accepted Decision | 1 / 1 |",
     "| Session participant commands at one time | 1 |",
-    "| cross-authority read / command-result routes | 14 / 10 |",
+    "| cross-authority read / command-result routes | 14 / 8 |",
     "| Profile / Gameplay / Session completion deque capacity | 8 / 8 / 8 |",
     "| Session participant authorities | 2 |",
     "| same-stack causal depth | 8 |",
@@ -1291,7 +1291,7 @@ internal val requiredPolicyBoundRows = listOf(
     "| Profile master volume / text scale | `0..1` / `1..1.75` |",
     "| Profile simulation speed / damage-tier threshold | exact declared option sets |",
     "| Profile Gameplay discoveries per Pulse | captured `itemCount` (at most 400) |",
-    "| Profile v4 UTF-8 payload | 65536 bytes |",
+    "| Profile snapshot UTF-8 payload | 65536 bytes |",
     "| Desktop Preferences value length | 8192 UTF-16 code units |",
     "| Desktop Preferences key names admitted per exact node read | 64 |",
 )
@@ -1325,12 +1325,12 @@ private fun MutableList<String>.addRecordViolations(records: Map<String, String>
         add("Command route inventory drift: expected ${expectedCommandRoutes.joinToString()}, found ${commands.joinToString()}")
     }
     if ("repository has exactly fourteen typed read routes" !in assembly ||
-        "AppSession has exactly nine command/result route" !in assembly ||
-        "repository has ten" !in assembly
+        "AppSession has exactly seven command/result route" !in assembly ||
+        "repository has eight" !in assembly
     ) {
         add(
-            "Assembly must resolve fourteen repository reads, nine AppSession command mappings, " +
-                "and ten repository command mappings",
+            "Assembly must resolve fourteen repository reads, seven AppSession command mappings, " +
+                "and eight repository command mappings",
         )
     }
 

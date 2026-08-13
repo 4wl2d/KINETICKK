@@ -390,8 +390,6 @@ internal val expectedCommandRoutes = sortedSetOf(
     "session-profile-core-shape",
     "session-profile-mute",
     "session-profile-rebirth",
-    "session-profile-reset-confirm",
-    "session-profile-reset-retry",
 )
 
 internal val commandRouteProjections = listOf(
@@ -412,25 +410,6 @@ internal val commandRouteProjections = listOf(
         PROFILE_PROTOCOL_PATH, "ProfileModuleCommand.AdvanceRebirth", "ProfileModuleResult.RebirthAdvanced",
         SESSION_DECISION_PATH, "ProfileModuleResultPulse",
         "ProfileCommandRejectedBeforeAcceptance", SESSION_NUCLEUS_PATH,
-    ),
-    CommandRouteProjection(
-        "session-profile-reset-confirm", "AppSession", "Profile",
-        PROFILE_PROTOCOL_PATH, "ProfileModuleCommand.ConfirmLegacyReset", "ProfileModuleResult.ResetCompleted",
-        SESSION_DECISION_PATH, "ProfileModuleResultPulse",
-        "ProfileCommandRejectedBeforeAcceptance", SESSION_NUCLEUS_PATH,
-        listOf(
-            "ProfileModuleResult.ResetWriteRejected",
-            "ProfileModuleResult.ResetWriteResourceFailure",
-            "ProfileModuleResult.ResetWriteOutcomeUnknown",
-            "ProfileModuleResult.ResetNeedsAttention",
-        ),
-    ),
-    CommandRouteProjection(
-        "session-profile-reset-retry", "AppSession", "Profile",
-        PROFILE_PROTOCOL_PATH, "ProfileModuleCommand.RetryLegacyPurge", "ProfileModuleResult.ResetCompleted",
-        SESSION_DECISION_PATH, "ProfileModuleResultPulse",
-        "ProfileCommandRejectedBeforeAcceptance", SESSION_NUCLEUS_PATH,
-        listOf("ProfileModuleResult.ResetNeedsAttention"),
     ),
     CommandRouteProjection(
         "session-gameplay-start", "AppSession", "GameplayRun",
@@ -596,16 +575,10 @@ internal val canonicalProtocolDataClassShapes = listOf(
         ),
     ),
     CanonicalDataClassShape(
-        PROFILE_PROTOCOL_PATH,
-        "ResetWriteResourceFailure",
-        listOf(CanonicalFieldShape("reason", "ProfileWriteFailure")),
-        withinDeclaration = "sealed interface ProfileModuleResult",
-    ),
-    CanonicalDataClassShape(
         PROFILE_RESOURCE_PROTOCOL_PATH,
         "ResourceFailure",
         listOf(CanonicalFieldShape("reason", "ProfileWriteFailure")),
-        withinDeclaration = "sealed interface ProfileV4WriteResult",
+        withinDeclaration = "sealed interface ProfileWriteResult",
     ),
     CanonicalDataClassShape(
         PROFILE_PROTOCOL_PATH,
@@ -817,8 +790,6 @@ internal val canonicalProtocolEnumInventories = listOf(
             "SESSION_CORE_SHAPE",
             "SESSION_MUTE",
             "SESSION_REBIRTH",
-            "SESSION_RESET_CONFIRM",
-            "SESSION_RESET_RETRY",
             "GAMEPLAY_PROGRESS",
         ),
     ),
@@ -873,8 +844,6 @@ internal val canonicalClosedProtocolInventories = listOf(
             "SelectCoreShape",
             "ToggleMute",
             "AdvanceRebirth",
-            "ConfirmLegacyReset",
-            "RetryLegacyPurge",
             "ApplyGameplayProgress",
         ),
     ),
@@ -887,17 +856,12 @@ internal val canonicalClosedProtocolInventories = listOf(
             "CoreShapeSelected",
             "RebirthAdvanced",
             "GameplayProgressApplied",
-            "ResetCompleted",
-            "ResetWriteRejected",
-            "ResetWriteResourceFailure",
-            "ResetWriteOutcomeUnknown",
-            "ResetNeedsAttention",
         ),
     ),
     ClosedDirectSubtypeInventory(
         PROFILE_RESOURCE_PROTOCOL_PATH,
-        "sealed interface ProfileV4WriteResult",
-        "ProfileV4WriteResult",
+        "sealed interface ProfileWriteResult",
+        "ProfileWriteResult",
         setOf("Written", "Rejected", "ResourceFailure", "OutcomeUnknown"),
     ),
     ClosedDirectSubtypeInventory(
@@ -949,6 +913,13 @@ internal val forbiddenCompatibilityProtocolSymbols = mapOf(
         "typealias ProfileCommand",
         "typealias ProfileCommandResult",
         "sealed interface ProfileCommandOutcome",
+        "ConfirmLegacyReset",
+        "RetryLegacyPurge",
+        "ResetCompleted",
+        "ResetWriteRejected",
+        "ResetWriteResourceFailure",
+        "ResetWriteOutcomeUnknown",
+        "ResetNeedsAttention",
     ),
     GAMEPLAY_PROTOCOL_PATH to setOf(
         "typealias GameplayCommand",
@@ -1102,7 +1073,7 @@ internal val expectedBounds = listOf(
         "ball/profile/nucleus/src/commonMain/kotlin/kinetickk/ball/profile/nucleus/ProfileDecision.kt",
         "MAX_PROFILE_OUTPUTS_PER_DECISION: Int = 2",
         "ball/profile/nucleus/src/commonTest/kotlin/kinetickk/ball/profile/nucleus/ProfileNucleusTest.kt",
-        "profileAcceptedFrameAcceptsTwoAndRejectsFirstNPlusOneOutput",
+        "targetOwnedCommandOrdersPersistenceBeforeCorrelatedCompletion",
         additionalRequiredTokens = listOf(
             "require(outputs.size <= MAX_PROFILE_OUTPUTS_PER_DECISION)",
         ),
@@ -2691,8 +2662,8 @@ internal val expectedBounds = listOf(
     BoundProjection(
         "profile.retained-lab-ranks", "policy.metaUpgrades.size (<=8)",
         PROFILE_STATE_PATH, "profile.labProgress.ranks.size != policy.metaUpgrades.size",
-        PROFILE_NUCLEUS_TEST_PATH,
-        "constructionBootstrapRetainsExactBoundsAndRejectsFirstOverflow",
+        PROFILE_CODEC_TEST_PATH,
+        "outboundLabRanksAndDiscoveriesRejectFirstNPlusOne",
         additionalSourceAnchors = listOf(
             BoundAnchor(
                 PROFILE_CODEC_PATH,
@@ -2714,7 +2685,7 @@ internal val expectedBounds = listOf(
             BoundAnchor(
                 PROFILE_CODEC_TEST_PATH,
                 listOf(
-                    "schemaMaximumUnlockedWeaponsLabRanksAndDiscoveriesRoundTripWithoutLoss",
+                    "currentSchemaMaximumUnlockedWeaponsLabRanksAndDiscoveriesRoundTripWithoutLoss",
                     "outboundLabRanksAndDiscoveriesRejectFirstNPlusOne",
                 ),
             ),
@@ -2724,8 +2695,9 @@ internal val expectedBounds = listOf(
         "profile.retained-meta-upgrade-rank", "0..captured maxRanks",
         PROFILE_STATE_PATH,
         "profile.labProgress.rank(definition.id) !in 0..definition.maxRanks",
-        PROFILE_NUCLEUS_TEST_PATH,
-        "constructionBootstrapRetainsExactBoundsAndRejectsFirstOverflow",
+        "ball/profile/impl/src/commonTest/kotlin/kinetickk/ball/profile/impl/" +
+            "ProfileComponentCharacterizationTest.kt",
+        "capturedCustomPolicyControlsItemsCostsUnlocksAndRebirthBounds",
         additionalSourceAnchors = listOf(
             BoundAnchor(
                 PROFILE_NUCLEUS_PATH,
@@ -2747,8 +2719,8 @@ internal val expectedBounds = listOf(
         "profile.retained-discoveries", "policy.itemCount (<=400)",
         PROFILE_STATE_PATH,
         "profile.collection.discoveredItemIds.size > policy.itemCount",
-        PROFILE_NUCLEUS_TEST_PATH,
-        "constructionBootstrapRetainsExactBoundsAndRejectsFirstOverflow",
+        PROFILE_CODEC_TEST_PATH,
+        "outboundLabRanksAndDiscoveriesRejectFirstNPlusOne",
         additionalRequiredTokens = listOf(
             "profile.collection.discoveredItemIds.any { !policy.containsItem(it) }",
         ),
@@ -2774,7 +2746,7 @@ internal val expectedBounds = listOf(
             BoundAnchor(
                 PROFILE_CODEC_TEST_PATH,
                 listOf(
-                    "schemaMaximumUnlockedWeaponsLabRanksAndDiscoveriesRoundTripWithoutLoss",
+                    "currentSchemaMaximumUnlockedWeaponsLabRanksAndDiscoveriesRoundTripWithoutLoss",
                     "outboundLabRanksAndDiscoveriesRejectFirstNPlusOne",
                 ),
             ),
@@ -2786,8 +2758,8 @@ internal val expectedBounds = listOf(
     ),
     BoundProjection(
         "profile.preference-master-volume", "0..1", PROFILE_PLAYER_PATH,
-        "masterVolume = masterVolume.coerceIn(0f, 1f)", PROFILE_NUCLEUS_TEST_PATH,
-        "constructionBootstrapPreferencesAcceptExactMaximaAndRejectOverflow",
+        "masterVolume = masterVolume.coerceIn(0f, 1f)", PROFILE_CODEC_TEST_PATH,
+        "preferenceConfigurationAcceptsExactMaximaAndRejectsAdjacentOverflowOrNonMembers",
         additionalSourceAnchors = listOf(
             BoundAnchor(PROFILE_STATE_PATH, "preferences != preferences.normalized()"),
             BoundAnchor(PROFILE_CODEC_PATH, "preferences.masterVolume in 0f..1f"),
@@ -2804,8 +2776,8 @@ internal val expectedBounds = listOf(
         "profile.preference-simulation-speed",
         "declared options 0.75,1,1.15,1.35,1.6,2", PROFILE_PLAYER_PATH,
         "SIMULATION_SPEED_OPTIONS: ImmutableList<Float> = immutableListOf(0.75f, 1f, 1.15f, 1.35f, 1.6f, 2f)",
-        PROFILE_NUCLEUS_TEST_PATH,
-        "constructionBootstrapPreferencesAcceptExactMaximaAndRejectOverflow",
+        PROFILE_CODEC_TEST_PATH,
+        "preferenceConfigurationAcceptsExactMaximaAndRejectsAdjacentOverflowOrNonMembers",
         additionalSourceAnchors = listOf(
             BoundAnchor(
                 PROFILE_STATE_PATH,
@@ -2826,8 +2798,8 @@ internal val expectedBounds = listOf(
     ),
     BoundProjection(
         "profile.preference-text-scale", "1..1.75", PROFILE_PLAYER_PATH,
-        "textScale = textScale.coerceIn(1f, 1.75f)", PROFILE_NUCLEUS_TEST_PATH,
-        "constructionBootstrapPreferencesAcceptExactMaximaAndRejectOverflow",
+        "textScale = textScale.coerceIn(1f, 1.75f)", PROFILE_CODEC_TEST_PATH,
+        "preferenceConfigurationAcceptsExactMaximaAndRejectsAdjacentOverflowOrNonMembers",
         additionalSourceAnchors = listOf(
             BoundAnchor(PROFILE_STATE_PATH, "preferences != preferences.normalized()"),
             BoundAnchor(PROFILE_CODEC_PATH, "preferences.textScale in 1f..1.75f"),
@@ -2844,8 +2816,8 @@ internal val expectedBounds = listOf(
         "profile.preference-damage-tier-threshold", "declared threshold option set",
         PROFILE_PLAYER_PATH,
         "DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS: ImmutableList<Int> = immutableListOf(",
-        PROFILE_NUCLEUS_TEST_PATH,
-        "constructionBootstrapPreferencesAcceptExactMaximaAndRejectOverflow",
+        PROFILE_CODEC_TEST_PATH,
+        "preferenceConfigurationAcceptsExactMaximaAndRejectsAdjacentOverflowOrNonMembers",
         additionalSourceAnchors = listOf(
             BoundAnchor(
                 PROFILE_STATE_PATH,
@@ -2878,22 +2850,20 @@ internal val expectedBounds = listOf(
         "ball/profile/nucleus/src/commonMain/kotlin/kinetickk/ball/profile/nucleus/ProfileNucleus.kt",
         "update.discoveredItemIds.size > state.policy.itemCount",
         "ball/profile/nucleus/src/commonTest/kotlin/kinetickk/ball/profile/nucleus/ProfileNucleusTest.kt",
-        "gameplayDiscoveryIngressAcceptsItemCountAndRejectsFirstNPlusOne",
-        additionalEvidenceToken = "gameplayProgressValidationUsesClosedRejectionReasons",
+        "gameplayProgressValidationUsesClosedRejectionReasons",
         additionalRequiredTokens = listOf(
             "update.discoveredItemIds.firstOrNull { !state.policy.containsItem(it) }",
         ),
     ),
     BoundProjection(
-        "profile.v4-utf8-bytes", "65536",
+        "profile.snapshot-utf8-bytes", "65536",
         "ball/profile/resource/src/commonMain/kotlin/kinetickk/ball/profile/resource/ProfileCodec.kt",
         "MAX_PROFILE_PAYLOAD_BYTES: Int = 65_536",
         "ball/profile/resource/src/commonTest/kotlin/kinetickk/ball/profile/resource/ProfileCodecTest.kt",
         "byteLimitAndUtf8AreCheckedBeforeJsonDecode",
-        "encodedByteLimitAcceptsExactlyNAndRejectsFirstNPlusOne",
         additionalRequiredTokens = listOf(
             "return when (payload.utf8Validation())",
-            "fun decode(payload: String): ProfileV4DecodeResult {\n        when (payload.utf8Validation())",
+            "fun decode(payload: String): ProfileDecodeResult {\n        when (payload.utf8Validation())",
             "private fun String.utf8Validation(): Utf8Validation",
             "if (byteCount > MAX_PROFILE_PAYLOAD_BYTES - encodedBytes) return Utf8Validation.TooLarge",
         ),
@@ -3055,7 +3025,7 @@ internal val mechanicallyDerivedBounds = listOf(
             ),
             BoundAnchor(
                 PROFILE_CODEC_TEST_PATH,
-                "schemaMaximumUnlockedWeaponsLabRanksAndDiscoveriesRoundTripWithoutLoss",
+                "currentSchemaMaximumUnlockedWeaponsLabRanksAndDiscoveriesRoundTripWithoutLoss",
             ),
             BoundAnchor(
                 "ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/GameplayNucleusTest.kt",
@@ -3484,13 +3454,13 @@ internal val mechanicallyDerivedBounds = listOf(
                     "profile.labProgress.ranks.size == ContentBounds.MAX_META_UPGRADES",
                     "profile.collection.discoveredItemIds.size <= ContentBounds.MAX_ITEMS",
                     "val ranks = MetaUpgradeId.entries",
-                    ".sortedBy(MetaUpgradeRankV4Dto::id)",
+                    ".sortedBy(MetaUpgradeRankDto::id)",
                     "unlockedWeaponIds = profile.loadout.unlockedWeapons\n" +
                         "                    .map(WeaponId::wireId)\n" +
                         "                    .sorted()",
                     "profile.collection.discoveredItemIds.sorted()",
                     "val expectedRankIds = MetaUpgradeId.entries.map { it.wireId() }.sorted()",
-                    "val actualRankIds = profile.labProgress.ranks.map(MetaUpgradeRankV4Dto::id)",
+                    "val actualRankIds = profile.labProgress.ranks.map(MetaUpgradeRankDto::id)",
                     "actualRankIds.distinct().sorted()",
                     "profile.loadout.unlockedWeaponIds.distinct().sorted()",
                     "profile.collection.discoveredItemIds.distinct().sorted()",
@@ -3503,7 +3473,7 @@ internal val mechanicallyDerivedBounds = listOf(
         evidenceAnchors = listOf(
             BoundAnchor(
                 PROFILE_CODEC_TEST_PATH,
-                "schemaMaximumUnlockedWeaponsLabRanksAndDiscoveriesRoundTripWithoutLoss",
+                "currentSchemaMaximumUnlockedWeaponsLabRanksAndDiscoveriesRoundTripWithoutLoss",
             ),
         ),
         policyRow =

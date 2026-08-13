@@ -31,22 +31,13 @@ class ResourceFaultStageVerifierTest {
                                 ProfileBootstrapResourceResult.ResourceFailure(PROVIDER_READ_FAILED)
                         }
 
-                    fun mapWrite(result: ProfileProviderMutationResult): ProfileV4WriteResult =
+                    fun mapWrite(result: ProfileProviderMutationResult): ProfileWriteResult =
                         when (result) {
                             ProfileProviderMutationResult.COMPLETED -> written()
                             ProfileProviderMutationResult.FAILED_BEFORE_EXECUTION ->
-                                ProfileV4WriteResult.ResourceFailure(PROVIDER_WRITE_FAILED_BEFORE_EXECUTION)
+                                ProfileWriteResult.ResourceFailure(PROVIDER_WRITE_FAILED_BEFORE_EXECUTION)
                             ProfileProviderMutationResult.POSSIBLE_EXECUTION ->
-                                ProfileV4WriteResult.OutcomeUnknown(PROVIDER_WRITE_MAY_HAVE_EXECUTED)
-                        }
-
-                    fun mapPurge(result: ProfileProviderMutationResult): ProfileLegacyPurgeResult =
-                        when (result) {
-                            ProfileProviderMutationResult.COMPLETED -> ProfileLegacyPurgeResult.Purged
-                            ProfileProviderMutationResult.FAILED_BEFORE_EXECUTION ->
-                                ProfileLegacyPurgeResult.Partial(knownPresentKeys)
-                            ProfileProviderMutationResult.POSSIBLE_EXECUTION ->
-                                ProfileLegacyPurgeResult.OutcomeUnknown(remaining, unknown, reason)
+                                ProfileWriteResult.OutcomeUnknown(PROVIDER_WRITE_MAY_HAVE_EXECUTED)
                         }
                 """.trimIndent(),
             ),
@@ -129,10 +120,10 @@ class ResourceFaultStageVerifierTest {
         val source = SourceDocument(
             PROFILE_IMPL_PATH,
             """
-                fun execute(): ProfileV4WriteResult = try {
-                    resource.writeV4(snapshot)
+                fun execute(): ProfileWriteResult = try {
+                    resource.writeSnapshot(snapshot)
                 } catch (_: Throwable) {
-                    ProfileV4WriteResult.OutcomeUnknown(PROVIDER_WRITE_MAY_HAVE_EXECUTED)
+                    ProfileWriteResult.OutcomeUnknown(PROVIDER_WRITE_MAY_HAVE_EXECUTED)
                 }
             """.trimIndent(),
         )
@@ -231,12 +222,12 @@ class ResourceFaultStageVerifierTest {
         val resource = SourceDocument(
             PROFILE_RESOURCE_PATH,
             """
-                fun map(result: ProfileProviderMutationResult): ProfileV4WriteResult = when (result) {
+                fun map(result: ProfileProviderMutationResult): ProfileWriteResult = when (result) {
                     ProfileProviderMutationResult.COMPLETED -> written()
                     ProfileProviderMutationResult.FAILED_BEFORE_EXECUTION ->
-                        ProfileV4WriteResult.OutcomeUnknown(PROVIDER_WRITE_MAY_HAVE_EXECUTED)
+                        ProfileWriteResult.OutcomeUnknown(PROVIDER_WRITE_MAY_HAVE_EXECUTED)
                     ProfileProviderMutationResult.POSSIBLE_EXECUTION ->
-                        ProfileV4WriteResult.OutcomeUnknown(PROVIDER_WRITE_MAY_HAVE_EXECUTED)
+                        ProfileWriteResult.OutcomeUnknown(PROVIDER_WRITE_MAY_HAVE_EXECUTED)
                 }
             """.trimIndent(),
         )
@@ -838,7 +829,7 @@ class ResourceFaultStageVerifierTest {
                     fun dispatch() = try {
                         target.accept()
                     } catch (_: ProviderFault) {
-                        ProfileV4WriteResult.ResourceFailure(PROVIDER_FAILED)
+                        ProfileWriteResult.ResourceFailure(PROVIDER_FAILED)
                     }
                 """.trimIndent(),
             ),
@@ -851,7 +842,7 @@ class ResourceFaultStageVerifierTest {
                     fun dispatch() = try {
                         target.accept()
                     } catch (_: ProviderFault) {
-                        ProfileV4WriteResult.ResourceFailure(PROVIDER_FAILED)
+                        ProfileWriteResult.ResourceFailure(PROVIDER_FAILED)
                     }
                 """.trimIndent(),
             ),
@@ -863,7 +854,7 @@ class ResourceFaultStageVerifierTest {
                     fun dispatch() = try {
                         target.accept()
                     } catch (_: ProviderFault) {
-                        ProfileV4WriteResult.ResourceFailure(PROVIDER_FAILED)
+                        ProfileWriteResult.ResourceFailure(PROVIDER_FAILED)
                     }
                 """.trimIndent(),
             ),
@@ -875,7 +866,7 @@ class ResourceFaultStageVerifierTest {
                     fun dispatch() = try {
                         target.accept()
                     } catch (_: ProviderFault) {
-                        ProfileV4WriteResult.ResourceFailure(PROVIDER_FAILED)
+                        ProfileWriteResult.ResourceFailure(PROVIDER_FAILED)
                     }
                 """.trimIndent(),
             ),
@@ -929,7 +920,7 @@ class ResourceFaultStageVerifierTest {
                     fun dispatch() = try {
                         target.accept()
                     } catch (_: ProviderFault) {
-                        ProfileV4WriteResult.ResourceFailure(PROVIDER_FAILED)
+                        ProfileWriteResult.ResourceFailure(PROVIDER_FAILED)
                     }
                 """.trimIndent(),
             ),

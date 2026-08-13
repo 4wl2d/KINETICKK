@@ -31,10 +31,8 @@ class PlatformCapabilityBoundaryVerifierTest {
 
                 internal fun mintCapability(
                     profileNode: Preferences,
-                    legacyNode: Preferences,
                 ): ProfilePersistenceCapability = DesktopProfilePersistenceCapability(
                     profileNode = { profileNode },
-                    legacyNode = { legacyNode },
                 )
                 """.trimIndent()
         }
@@ -104,18 +102,18 @@ class PlatformCapabilityBoundaryVerifierTest {
     @Test
     fun arbitraryKeysBulkOperationsAndExtraCapabilityOperationsFail() {
         val changedPhysicalKey = mutate(PROFILE_FACTORY_PATH_FIXTURE) { source ->
-            source.replace("kinetickk_profile_v4", "caller_selected_profile")
+            source.replace("kinetickk_profile", "caller_selected_profile")
         }
         val bulkClear = mutate(WEB_PATH) { source ->
             source.replace(
-                "exactStorage.removeItem(key);",
+                "exactStorage.setItem(key, payload);",
                 "exactStorage.clear();",
             )
         }
         val extraNarrowOperation = mutate(PROFILE_FACTORY_PATH_FIXTURE) { source ->
             source.replace(
-                "fun removeLegacyMatter(): ProfilePersistenceMutationResult",
-                "fun removeLegacyMatter(): ProfilePersistenceMutationResult\n    fun clearAll()",
+                "fun writeSnapshot(payload: String): ProfilePersistenceMutationResult",
+                "fun writeSnapshot(payload: String): ProfilePersistenceMutationResult\n    fun clearAll()",
             )
         }
 
@@ -293,12 +291,8 @@ class PlatformCapabilityBoundaryVerifierTest {
                 }
 
                 interface ExactProfilePersistence {
-                    fun readV4(): ProfileProviderReadResult
-                    fun writeV4(payload: String): ProfileProviderMutationResult
-                    fun readLegacyProgressV2(): ProfileProviderReadResult
-                    fun readLegacyMatter(): ProfileProviderReadResult
-                    fun removeLegacyProgressV2(): ProfileProviderMutationResult
-                    fun removeLegacyMatter(): ProfileProviderMutationResult
+                    fun readSnapshot(): ProfileProviderReadResult
+                    fun writeSnapshot(payload: String): ProfileProviderMutationResult
                 }
 
                 fun createProfileResource(
@@ -325,25 +319,16 @@ class PlatformCapabilityBoundaryVerifierTest {
                 }
 
                 interface ProfilePersistenceCapability {
-                    fun readV4(): ProfilePersistenceReadResult
-                    fun writeV4(payload: String): ProfilePersistenceMutationResult
-                    fun readLegacyProgressV2(): ProfilePersistenceReadResult
-                    fun readLegacyMatter(): ProfilePersistenceReadResult
-                    fun removeLegacyProgressV2(): ProfilePersistenceMutationResult
-                    fun removeLegacyMatter(): ProfilePersistenceMutationResult
+                    fun readSnapshot(): ProfilePersistenceReadResult
+                    fun writeSnapshot(payload: String): ProfilePersistenceMutationResult
                 }
 
                 fun createProfileComponent(persistence: ProfilePersistenceCapability) = persistence
 
                 object ProfilePersistenceContract {
                     const val DESKTOP_PROFILE_NODE: String = "kinetickk/profile"
-                    const val DESKTOP_SNAPSHOT_V4: String = "snapshot_v4"
-                    const val DESKTOP_LEGACY_NODE: String = "kinetickk/progression"
-                    const val DESKTOP_LEGACY_PROGRESS_V2: String = "progress_v2"
-                    const val DESKTOP_LEGACY_MATTER: String = "kinetickk_matter"
-                    const val WEB_SNAPSHOT_V4: String = "kinetickk_profile_v4"
-                    const val WEB_LEGACY_PROGRESS_V2: String = "kinetickk_progress_v2"
-                    const val WEB_LEGACY_MATTER: String = "kinetickk_matter"
+                    const val DESKTOP_SNAPSHOT: String = "snapshot"
+                    const val WEB_SNAPSHOT: String = "kinetickk_profile"
                 }
 
                 private class ProfilePersistenceAdapter(
@@ -406,16 +391,12 @@ class PlatformCapabilityBoundaryVerifierTest {
                     profileNode = {
                         Preferences.userRoot().node(ProfilePersistenceContract.DESKTOP_PROFILE_NODE)
                     },
-                    legacyNode = {
-                        Preferences.userRoot().node(ProfilePersistenceContract.DESKTOP_LEGACY_NODE)
-                    },
                 )
 
             private class DesktopProfilePersistenceCapability(
                 private val profileNode: () -> Preferences,
-                private val legacyNode: () -> Preferences,
             ) : ProfilePersistenceCapability {
-                override fun readV4(): ProfilePersistenceReadResult {
+                override fun readSnapshot(): ProfilePersistenceReadResult {
                     val node = try {
                         profileNode()
                     } catch (_: SecurityException) {
@@ -424,15 +405,15 @@ class PlatformCapabilityBoundaryVerifierTest {
                         return ProfilePersistenceReadResult.Failed
                     }
                     return desktopProfileReadCall(
-                        exactKey = ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4,
+                        exactKey = ProfilePersistenceContract.DESKTOP_SNAPSHOT,
                         loadKeyNames = node::keys,
                         loadExactValue = {
-                            node.get(ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, null)
+                            node.get(ProfilePersistenceContract.DESKTOP_SNAPSHOT, null)
                         },
                     )
                 }
 
-                override fun writeV4(payload: String): ProfilePersistenceMutationResult {
+                override fun writeSnapshot(payload: String): ProfilePersistenceMutationResult {
                     desktopProfilePayloadAdmission(payload.length)?.let { return it }
                     val node = try {
                         profileNode()
@@ -443,77 +424,12 @@ class PlatformCapabilityBoundaryVerifierTest {
                     }
                     return desktopProfileMutationCall(
                         mutate = {
-                            node.put(ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, payload)
+                            node.put(ProfilePersistenceContract.DESKTOP_SNAPSHOT, payload)
                         },
                         flush = node::flush,
                     )
                 }
 
-                override fun readLegacyProgressV2(): ProfilePersistenceReadResult {
-                    val node = try {
-                        legacyNode()
-                    } catch (_: SecurityException) {
-                        return ProfilePersistenceReadResult.Failed
-                    } catch (_: IllegalStateException) {
-                        return ProfilePersistenceReadResult.Failed
-                    }
-                    return desktopProfileReadCall(
-                        exactKey = ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2,
-                        loadKeyNames = node::keys,
-                        loadExactValue = {
-                            node.get(ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2, null)
-                        },
-                    )
-                }
-
-                override fun readLegacyMatter(): ProfilePersistenceReadResult {
-                    val node = try {
-                        legacyNode()
-                    } catch (_: SecurityException) {
-                        return ProfilePersistenceReadResult.Failed
-                    } catch (_: IllegalStateException) {
-                        return ProfilePersistenceReadResult.Failed
-                    }
-                    return desktopProfileReadCall(
-                        exactKey = ProfilePersistenceContract.DESKTOP_LEGACY_MATTER,
-                        loadKeyNames = node::keys,
-                        loadExactValue = {
-                            node.get(ProfilePersistenceContract.DESKTOP_LEGACY_MATTER, null)
-                        },
-                    )
-                }
-
-                override fun removeLegacyProgressV2(): ProfilePersistenceMutationResult {
-                    val node = try {
-                        legacyNode()
-                    } catch (_: SecurityException) {
-                        return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
-                    } catch (_: IllegalStateException) {
-                        return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
-                    }
-                    return desktopProfileMutationCall(
-                        mutate = {
-                            node.remove(ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2)
-                        },
-                        flush = node::flush,
-                    )
-                }
-
-                override fun removeLegacyMatter(): ProfilePersistenceMutationResult {
-                    val node = try {
-                        legacyNode()
-                    } catch (_: SecurityException) {
-                        return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
-                    } catch (_: IllegalStateException) {
-                        return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
-                    }
-                    return desktopProfileMutationCall(
-                        mutate = {
-                            node.remove(ProfilePersistenceContract.DESKTOP_LEGACY_MATTER)
-                        },
-                        flush = node::flush,
-                    )
-                }
             }
 
             internal fun desktopProfileReadCall(
@@ -622,40 +538,23 @@ class PlatformCapabilityBoundaryVerifierTest {
             import kinetickk.resource.audio.impl.TonePlaybackCapability
 
             private const val ANDROID_PROFILE_PREFERENCES = "kinetickk.profile"
-            private const val ANDROID_LEGACY_PREFERENCES = "kinetickk.progression"
-            private const val ANDROID_SNAPSHOT_V4 = "snapshot_v4"
-            private const val ANDROID_LEGACY_PROGRESS_V2 = "progress_v2"
-            private const val ANDROID_LEGACY_MATTER = "kinetickk_matter"
+            private const val ANDROID_SNAPSHOT = "snapshot"
 
             internal actual fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability {
                 val context = AndroidApplicationContext.requireContext()
                 return AndroidProfilePersistenceCapability(
                     profile = context.getSharedPreferences(ANDROID_PROFILE_PREFERENCES, Context.MODE_PRIVATE),
-                    legacy = context.getSharedPreferences(ANDROID_LEGACY_PREFERENCES, Context.MODE_PRIVATE),
                 )
             }
 
             private class AndroidProfilePersistenceCapability(
                 private val profile: SharedPreferences,
-                private val legacy: SharedPreferences,
             ) : ProfilePersistenceCapability {
-                override fun readV4(): ProfilePersistenceReadResult =
-                    androidProfileReadCall(profile, ANDROID_SNAPSHOT_V4)
-                override fun writeV4(payload: String): ProfilePersistenceMutationResult =
+                override fun readSnapshot(): ProfilePersistenceReadResult =
+                    androidProfileReadCall(profile, ANDROID_SNAPSHOT)
+                override fun writeSnapshot(payload: String): ProfilePersistenceMutationResult =
                     androidProfileMutationCall {
-                        profile.edit().putString(ANDROID_SNAPSHOT_V4, payload)
-                    }
-                override fun readLegacyProgressV2(): ProfilePersistenceReadResult =
-                    androidProfileReadCall(legacy, ANDROID_LEGACY_PROGRESS_V2)
-                override fun readLegacyMatter(): ProfilePersistenceReadResult =
-                    androidProfileReadCall(legacy, ANDROID_LEGACY_MATTER)
-                override fun removeLegacyProgressV2(): ProfilePersistenceMutationResult =
-                    androidProfileMutationCall {
-                        legacy.edit().remove(ANDROID_LEGACY_PROGRESS_V2)
-                    }
-                override fun removeLegacyMatter(): ProfilePersistenceMutationResult =
-                    androidProfileMutationCall {
-                        legacy.edit().remove(ANDROID_LEGACY_MATTER)
+                        profile.edit().putString(ANDROID_SNAPSHOT, payload)
                     }
             }
 
@@ -751,14 +650,9 @@ class PlatformCapabilityBoundaryVerifierTest {
                 WebProfilePersistenceCapability()
 
             private class WebProfilePersistenceCapability : ProfilePersistenceCapability {
-                override fun readV4(): ProfilePersistenceReadResult = readWebProfileV4()
-                override fun writeV4(payload: String): ProfilePersistenceMutationResult =
-                    writeWebProfileV4(payload)
-                override fun readLegacyProgressV2(): ProfilePersistenceReadResult = readWebLegacyProgressV2()
-                override fun readLegacyMatter(): ProfilePersistenceReadResult = readWebLegacyMatter()
-                override fun removeLegacyProgressV2(): ProfilePersistenceMutationResult =
-                    removeWebLegacyProgressV2()
-                override fun removeLegacyMatter(): ProfilePersistenceMutationResult = removeWebLegacyMatter()
+                override fun readSnapshot(): ProfilePersistenceReadResult = readWebProfileSnapshot()
+                override fun writeSnapshot(payload: String): ProfilePersistenceMutationResult =
+                    writeWebProfileSnapshot(payload)
             }
 
             private external interface WebStorageReadCall : JsAny {
@@ -766,23 +660,11 @@ class PlatformCapabilityBoundaryVerifierTest {
                 val payload: String?
             }
 
-            private fun readWebProfileV4(): ProfilePersistenceReadResult =
-                webStorageRead(ProfilePersistenceContract.WEB_SNAPSHOT_V4).toPersistenceResult()
+            private fun readWebProfileSnapshot(): ProfilePersistenceReadResult =
+                webStorageRead(ProfilePersistenceContract.WEB_SNAPSHOT).toPersistenceResult()
 
-            private fun readWebLegacyProgressV2(): ProfilePersistenceReadResult =
-                webStorageRead(ProfilePersistenceContract.WEB_LEGACY_PROGRESS_V2).toPersistenceResult()
-
-            private fun readWebLegacyMatter(): ProfilePersistenceReadResult =
-                webStorageRead(ProfilePersistenceContract.WEB_LEGACY_MATTER).toPersistenceResult()
-
-            private fun writeWebProfileV4(payload: String): ProfilePersistenceMutationResult =
-                webStorageWrite(ProfilePersistenceContract.WEB_SNAPSHOT_V4, payload).toPersistenceMutationResult()
-
-            private fun removeWebLegacyProgressV2(): ProfilePersistenceMutationResult =
-                webStorageRemove(ProfilePersistenceContract.WEB_LEGACY_PROGRESS_V2).toPersistenceMutationResult()
-
-            private fun removeWebLegacyMatter(): ProfilePersistenceMutationResult =
-                webStorageRemove(ProfilePersistenceContract.WEB_LEGACY_MATTER).toPersistenceMutationResult()
+            private fun writeWebProfileSnapshot(payload: String): ProfilePersistenceMutationResult =
+                webStorageWrite(ProfilePersistenceContract.WEB_SNAPSHOT, payload).toPersistenceMutationResult()
 
             private fun WebStorageReadCall.toPersistenceResult(): ProfilePersistenceReadResult = when (status) {
                 WEB_STORAGE_OBSERVED -> ProfilePersistenceReadResult.Observed(payload)
@@ -826,25 +708,6 @@ class PlatformCapabilityBoundaryVerifierTest {
                             typeof DOMException !== 'undefined' &&
                             failure instanceof DOMException &&
                             (failure.name === 'SecurityError' || failure.name === 'QuotaExceededError')
-                        ) {
-                            return 'failed-before-execution';
-                        }
-                        throw failure;
-                    }
-                }${"\"\"\""},
-            )
-
-            private fun webStorageRemove(key: String): String = js(
-                ${"\"\"\""}{
-                    try {
-                        const exactStorage = globalThis.localStorage;
-                        exactStorage.removeItem(key);
-                        return 'completed';
-                    } catch (failure) {
-                        if (
-                            typeof DOMException !== 'undefined' &&
-                            failure instanceof DOMException &&
-                            failure.name === 'SecurityError'
                         ) {
                             return 'failed-before-execution';
                         }

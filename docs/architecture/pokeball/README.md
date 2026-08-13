@@ -9,6 +9,13 @@ the authority for protocols and behavior. The generated
 [`resolved-manifest.json`](resolved-manifest.json) is a checked projection, not
 a second source of truth.
 
+Before KINETICKK `1.0.0`, persisted Profile data has one current schema, not a
+version family. The authoritative value is `ProfileSnapshot`; its Profile data
+is the `ProfileSnapshot.profile` field, and persistence is accessed only through
+`readSnapshot`/`writeSnapshot`. Platform composition owns the one
+physical storage authority for that value. Historical keys and payload shapes
+are outside the supported contract: they are neither read nor removed.
+
 The record is split by ownership:
 
 - `baseline.md` freezes the starting behavior, source provenance, and allowed
@@ -41,3 +48,8 @@ issued. Once `conformance-record.md` exists, it validates the docs-only
 attestation commit, its implementation-freeze parent and tree digest, the
 closed review-gate inventory, environment and evidence records, and the exact
 TriggerAbsenceProof set.
+
+There is currently no conformance record. The previous freeze-bound
+self-attestation and its trigger-absence proofs were invalidated by the
+current-only persistence change and removed; a later claim requires a new
+implementation freeze and newly generated evidence.

@@ -28,16 +28,12 @@ internal actual fun createPlatformProfilePersistenceCapability(): ProfilePersist
         profileNode = {
             Preferences.userRoot().node(ProfilePersistenceContract.DESKTOP_PROFILE_NODE)
         },
-        legacyNode = {
-            Preferences.userRoot().node(ProfilePersistenceContract.DESKTOP_LEGACY_NODE)
-        },
     )
 
 private class DesktopProfilePersistenceCapability(
     private val profileNode: () -> Preferences,
-    private val legacyNode: () -> Preferences,
 ) : ProfilePersistenceCapability {
-    override fun readV4(): ProfilePersistenceReadResult {
+    override fun readSnapshot(): ProfilePersistenceReadResult {
         val node = try {
             profileNode()
         } catch (_: SecurityException) {
@@ -46,15 +42,15 @@ private class DesktopProfilePersistenceCapability(
             return ProfilePersistenceReadResult.Failed
         }
         return desktopProfileReadCall(
-            exactKey = ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4,
+            exactKey = ProfilePersistenceContract.DESKTOP_SNAPSHOT,
             loadKeyNames = node::keys,
             loadExactValue = {
-                node.get(ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, null)
+                node.get(ProfilePersistenceContract.DESKTOP_SNAPSHOT, null)
             },
         )
     }
 
-    override fun writeV4(payload: String): ProfilePersistenceMutationResult {
+    override fun writeSnapshot(payload: String): ProfilePersistenceMutationResult {
         desktopProfilePayloadAdmission(payload.length)?.let { return it }
         val node = try {
             profileNode()
@@ -65,73 +61,7 @@ private class DesktopProfilePersistenceCapability(
         }
         return desktopProfileMutationCall(
             mutate = {
-                node.put(ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, payload)
-            },
-            flush = node::flush,
-        )
-    }
-
-    override fun readLegacyProgressV2(): ProfilePersistenceReadResult {
-        val node = try {
-            legacyNode()
-        } catch (_: SecurityException) {
-            return ProfilePersistenceReadResult.Failed
-        } catch (_: IllegalStateException) {
-            return ProfilePersistenceReadResult.Failed
-        }
-        return desktopProfileReadCall(
-            exactKey = ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2,
-            loadKeyNames = node::keys,
-            loadExactValue = {
-                node.get(ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2, null)
-            },
-        )
-    }
-
-    override fun readLegacyMatter(): ProfilePersistenceReadResult {
-        val node = try {
-            legacyNode()
-        } catch (_: SecurityException) {
-            return ProfilePersistenceReadResult.Failed
-        } catch (_: IllegalStateException) {
-            return ProfilePersistenceReadResult.Failed
-        }
-        return desktopProfileReadCall(
-            exactKey = ProfilePersistenceContract.DESKTOP_LEGACY_MATTER,
-            loadKeyNames = node::keys,
-            loadExactValue = {
-                node.get(ProfilePersistenceContract.DESKTOP_LEGACY_MATTER, null)
-            },
-        )
-    }
-
-    override fun removeLegacyProgressV2(): ProfilePersistenceMutationResult {
-        val node = try {
-            legacyNode()
-        } catch (_: SecurityException) {
-            return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
-        } catch (_: IllegalStateException) {
-            return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
-        }
-        return desktopProfileMutationCall(
-            mutate = {
-                node.remove(ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2)
-            },
-            flush = node::flush,
-        )
-    }
-
-    override fun removeLegacyMatter(): ProfilePersistenceMutationResult {
-        val node = try {
-            legacyNode()
-        } catch (_: SecurityException) {
-            return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
-        } catch (_: IllegalStateException) {
-            return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
-        }
-        return desktopProfileMutationCall(
-            mutate = {
-                node.remove(ProfilePersistenceContract.DESKTOP_LEGACY_MATTER)
+                node.put(ProfilePersistenceContract.DESKTOP_SNAPSHOT, payload)
             },
             flush = node::flush,
         )

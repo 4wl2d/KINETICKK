@@ -34,21 +34,16 @@ import kinetickk.ball.profile.api.ProfileBootstrapStatus
 import kinetickk.ball.profile.api.ProfileCommandBoundaryResponse
 import kinetickk.ball.profile.api.ProfileCommandSourceToken
 import kinetickk.ball.profile.api.ProfileEffectiveProtocolIdentity
-import kinetickk.ball.profile.api.ProfileLegacyKeys
-import kinetickk.ball.profile.api.ProfileLegacyPurgeResult
 import kinetickk.ball.profile.api.ProfileModuleCommand
 import kinetickk.ball.profile.api.ProfileModuleCommandRequest
 import kinetickk.ball.profile.api.ProfileModuleResult
 import kinetickk.ball.profile.api.ProfilePersistenceStatus
 import kinetickk.ball.profile.api.ProfileRejection
-import kinetickk.ball.profile.api.ProfileResetReason
-import kinetickk.ball.profile.api.ProfileResetStatus
 import kinetickk.ball.profile.api.ProfileResultIssuerProvenance
 import kinetickk.ball.profile.api.ProfileResultSourceToken
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileRunBootstrapResult
 import kinetickk.ball.profile.api.ProfileTargetBoundaryProvenance
-import kinetickk.ball.profile.api.ProfileV4Rejection
 import kinetickk.ball.profile.api.RebirthProfileSnapshot
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.RebirthProgressProjection
@@ -56,9 +51,10 @@ import kinetickk.ball.profile.api.RunBootstrapProjection
 import kinetickk.flow.session.api.AppDestination
 import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.flow.session.api.SessionInteractionPulse
+import kinetickk.flow.session.api.SessionLifecycle
 import kinetickk.flow.session.api.SessionRejection
-import kinetickk.flow.session.api.SessionResetLifecycle
 import kinetickk.flow.session.api.SessionRevision
+import kinetickk.flow.session.api.SessionShortcut
 import kinetickk.flow.session.api.SessionWorkflowFailureCode
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
@@ -438,198 +434,25 @@ class AppSessionNucleusTest {
     }
 
     @Test
-    fun resetCancelAdvancesOnlySessionRevisionAndKeepsEveryResetModalBlocking() {
-        val blockingLifecycles = SessionResetLifecycle.entries.filterNot {
-            it == SessionResetLifecycle.READY
-        }
-
-        blockingLifecycles.forEach { lifecycle ->
-            val state = initialState().copy(
-                revision = SessionRevision(12L),
-                routeRevision = SessionRevision(7L),
-                overlay = AppDestination.Settings,
-                resetLifecycle = lifecycle,
-                lastFailure = SessionWorkflowFailureCode.RESET_NEEDS_ATTENTION,
-            )
-
-            val cancelled = decide(state, SessionInteractionPulse.ResetCancelled).accepted()
-
-            assertEquals(
-                state.copy(revision = SessionRevision(13L)),
-                cancelled.nextState,
-                "Cancel must retain the complete blocking Session context for $lifecycle",
-            )
-            assertTrue(
-                cancelled.outputs.isEmpty(),
-                "Cancel must not invoke Profile, Gameplay, storage, or another participant for $lifecycle",
-            )
-            assertEquals(lifecycle, cancelled.nextState.toShell().resetLifecycle)
-            assertFalse(cancelled.nextState.toShell().normalInputEnabled)
-        }
-    }
-
-    @Test
-    fun resetConfirmationMapsExactResultAndSynchronizesFreshPreferences() {
-        val state = initialState(confirmationPersistence())
-        val requested = decide(
-            state,
-            SessionInteractionPulse.ResetConfirmed,
-            AppSessionContext(persistenceStatus = confirmationPersistence()),
-        ).accepted()
-        val send = assertIs<AppSessionOutput.SendProfileCommand>(requested.outputs.single())
-        assertEquals(ProfileModuleCommand.ConfirmLegacyReset, send.request.command)
-        assertEquals(SessionResetLifecycle.RESET_IN_PROGRESS, requested.nextState.resetLifecycle)
-
-        val preferences = PlayerPreferences(textScale = 1.5f)
-        val completed = AppSessionNucleus.decide(
-            requested.nextState,
-            profileResult(send.request, ProfileModuleResult.ResetCompleted),
-            AppSessionContext(
-                persistenceStatus = readyPersistence(),
-                preferences = preferencesProjection(preferences),
-            ),
-        ).accepted()
-        assertEquals(SessionResetLifecycle.READY, completed.nextState.resetLifecycle)
-        assertNull(completed.nextState.lastFailure)
-        assertEquals(
-            AppSessionOutput.SynchronizeAudioPreferences(preferences),
-            completed.outputs.single(),
-        )
-    }
-
-    @Test
-    fun resetFailureMatrixUsesOnlyNarrowSessionFailureCodes() {
-        val cases = listOf(
-            Triple(
-                ProfileModuleResult.ResetWriteRejected(ProfileV4Rejection.INCONSISTENT_PROFILE),
-                confirmationPersistence(),
-                SessionWorkflowFailureCode.RESET_WRITE_REJECTED,
-            ),
-            Triple(
-                ProfileModuleResult.ResetWriteResourceFailure(
-                    kinetickk.ball.profile.api.ProfileWriteFailure
-                        .PROVIDER_WRITE_FAILED_BEFORE_EXECUTION,
-                ),
-                confirmationPersistence(),
-                SessionWorkflowFailureCode.RESET_WRITE_RESOURCE_FAILURE,
-            ),
-            Triple(
-                ProfileModuleResult.ResetWriteOutcomeUnknown(
-                    kinetickk.ball.profile.api.ProfileWriteOutcomeUnknownReason
-                        .PROVIDER_WRITE_MAY_HAVE_EXECUTED,
-                ),
-                confirmationPersistence(),
-                SessionWorkflowFailureCode.RESET_WRITE_OUTCOME_UNKNOWN,
-            ),
-            Triple(
-                ProfileModuleResult.ResetNeedsAttention(
-                    assertIs<ProfileResetStatus.NeedsAttention>(needsAttentionPersistence().reset),
-                ),
-                needsAttentionPersistence(),
-                SessionWorkflowFailureCode.RESET_NEEDS_ATTENTION,
-            ),
+    fun unavailableBootstrapBlocksEveryInteractionWithoutChangingSessionState() {
+        val state = initialState(unavailablePersistence())
+        val interactions = listOf(
+            SessionInteractionPulse.StartRunRequested,
+            SessionInteractionPulse.RestartRunRequested,
+            SessionInteractionPulse.ExitRunRequested,
+            SessionInteractionPulse.OpenOverlay(AppDestination.Settings),
+            SessionInteractionPulse.CloseOverlay,
+            SessionInteractionPulse.ShortcutObserved(SessionShortcut.MUTE),
+            SessionInteractionPulse.ToggleMuteRequested,
+            SessionInteractionPulse.SelectCoreShapeRequested(CoreShape.PRISM),
+            SessionInteractionPulse.RebirthRequested,
         )
 
-        cases.forEach { (result, persistence, expected) ->
-            val retry = result is ProfileModuleResult.ResetNeedsAttention
-            val initialPersistence = if (retry) needsAttentionPersistence() else confirmationPersistence()
-            val state = initialState(initialPersistence)
-            val intent = if (retry) {
-                SessionInteractionPulse.ResetRetryRequested
-            } else {
-                SessionInteractionPulse.ResetConfirmed
-            }
-            val requested = decide(
-                state,
-                intent,
-                AppSessionContext(persistenceStatus = initialPersistence),
-            ).accepted()
-            val send = assertIs<AppSessionOutput.SendProfileCommand>(requested.outputs.single())
-            val completed = AppSessionNucleus.decide(
-                requested.nextState,
-                profileResult(send.request, result),
-                AppSessionContext(
-                    persistenceStatus = persistence,
-                    preferences = preferencesProjection(PlayerPreferences()),
-                ),
-            ).accepted()
-            assertEquals(expected, completed.nextState.lastFailure)
+        interactions.forEach { interaction ->
+            assertEquals(SessionRejection.BootstrapUnavailable, decide(state, interaction).rejection())
         }
-    }
-
-    @Test
-    fun resetWriteFailureRetriesRequireOneExplicitPulseAndCreateOneNewSemanticCommand() {
-        val failures = listOf<ProfileModuleResult>(
-            ProfileModuleResult.ResetWriteRejected(ProfileV4Rejection.INCONSISTENT_PROFILE),
-            ProfileModuleResult.ResetWriteResourceFailure(
-                kinetickk.ball.profile.api.ProfileWriteFailure
-                    .PROVIDER_WRITE_FAILED_BEFORE_EXECUTION,
-            ),
-            ProfileModuleResult.ResetWriteOutcomeUnknown(
-                kinetickk.ball.profile.api.ProfileWriteOutcomeUnknownReason
-                    .PROVIDER_WRITE_MAY_HAVE_EXECUTED,
-            ),
-        )
-
-        failures.forEach { failure ->
-            val persistence = confirmationPersistence()
-            val first = decide(
-                initialState(persistence),
-                SessionInteractionPulse.ResetConfirmed,
-                AppSessionContext(persistenceStatus = persistence),
-            ).accepted()
-            val firstSend = assertIs<AppSessionOutput.SendProfileCommand>(first.outputs.single())
-            assertEquals(ProfileModuleCommand.ConfirmLegacyReset, firstSend.request.command)
-
-            val completed = AppSessionNucleus.decide(
-                first.nextState,
-                profileResult(firstSend.request, failure),
-                AppSessionContext(
-                    persistenceStatus = persistence,
-                    preferences = preferencesProjection(PlayerPreferences()),
-                ),
-            ).accepted()
-            assertEquals(SessionResetLifecycle.CONFIRMATION_REQUIRED, completed.nextState.resetLifecycle)
-            assertNull(completed.nextState.pendingWorkflow)
-            assertIs<AppSessionOutput.SynchronizeAudioPreferences>(completed.outputs.single())
-
-            val retried = decide(
-                completed.nextState,
-                SessionInteractionPulse.ResetConfirmed,
-                AppSessionContext(persistenceStatus = persistence),
-            ).accepted()
-            val retrySend = assertIs<AppSessionOutput.SendProfileCommand>(retried.outputs.single())
-            assertEquals(ProfileModuleCommand.ConfirmLegacyReset, retrySend.request.command)
-            assertEquals(0, retrySend.request.sourceOrdinal)
-            assertFalse(
-                firstSend.request.semanticHandle == retrySend.request.semanticHandle,
-                "A manual semantic retry must not resend the prior accepted command identity",
-            )
-            assertEquals(
-                retried.nextState.revision.value,
-                retrySend.request.semanticHandle.sourceRevision,
-            )
-            assertEquals(SessionResetLifecycle.RESET_IN_PROGRESS, retried.nextState.resetLifecycle)
-            assertNull(retried.nextState.lastFailure)
-        }
-    }
-
-    @Test
-    fun oneExplicitResetRetryPulseIssuesExactlyOnePurgeCommand() {
-        val state = initialState(needsAttentionPersistence())
-        assertEquals(0L, state.revision.value)
-        assertNull(state.pendingWorkflow, "local partial result must not auto-retry")
-
-        val retry = decide(
-            state,
-            SessionInteractionPulse.ResetRetryRequested,
-            AppSessionContext(persistenceStatus = needsAttentionPersistence()),
-        ).accepted()
-
-        val send = assertIs<AppSessionOutput.SendProfileCommand>(retry.outputs.single())
-        assertEquals(ProfileModuleCommand.RetryLegacyPurge, send.request.command)
-        assertEquals(0, send.request.sourceOrdinal)
-        assertEquals(retry.nextState.revision.value, send.request.semanticHandle.sourceRevision)
+        assertEquals(SessionLifecycle.BOOTSTRAP_UNAVAILABLE, state.lifecycle)
+        assertFalse(state.toShell().normalInputEnabled)
     }
 
     @Test
@@ -716,17 +539,6 @@ class AppSessionNucleusTest {
             profileResult(advanceRequest, ProfileModuleResult.RebirthAdvanced(advanced)),
             AppSessionContext(runBootstrap = runBootstrap(rebirthProgress = advanced)),
         ).accepted()
-        val confirming = decide(
-            initialState(confirmationPersistence()),
-            SessionInteractionPulse.ResetConfirmed,
-            AppSessionContext(persistenceStatus = confirmationPersistence()),
-        ).accepted()
-        val retrying = decide(
-            initialState(needsAttentionPersistence()),
-            SessionInteractionPulse.ResetRetryRequested,
-            AppSessionContext(persistenceStatus = needsAttentionPersistence()),
-        ).accepted()
-
         val frames = listOf(
             startFrame(),
             pausing,
@@ -737,11 +549,9 @@ class AppSessionNucleusTest {
             advancing,
             startingRebirth,
             exitFrame(),
-            confirming,
-            retrying,
         )
-        assertEquals(11, frames.size)
-        assertEquals(11, frames.map { it.nextState.pendingWorkflow!!::class }.toSet().size)
+        assertEquals(9, frames.size)
+        assertEquals(9, frames.map { it.nextState.pendingWorkflow!!::class }.toSet().size)
 
         frames.forEach { frame ->
             val participant = checkNotNull(frame.nextState.pendingWorkflow).participant
@@ -1062,8 +872,6 @@ private val ProfileModuleCommand.effectiveIdentity: ProfileEffectiveProtocolIden
         is ProfileModuleCommand.SelectCoreShape -> ProfileEffectiveProtocolIdentity.SESSION_CORE_SHAPE
         ProfileModuleCommand.ToggleMute -> ProfileEffectiveProtocolIdentity.SESSION_MUTE
         ProfileModuleCommand.AdvanceRebirth -> ProfileEffectiveProtocolIdentity.SESSION_REBIRTH
-        ProfileModuleCommand.ConfirmLegacyReset -> ProfileEffectiveProtocolIdentity.SESSION_RESET_CONFIRM
-        ProfileModuleCommand.RetryLegacyPurge -> ProfileEffectiveProtocolIdentity.SESSION_RESET_RETRY
         is ProfileModuleCommand.ApplyGameplayProgress -> error("Not a Session mapping")
     }
 
@@ -1120,35 +928,16 @@ private fun readyPersistence(): PersistenceStatusProjection = PersistenceStatusP
     instanceId = LOCAL_PROFILE_INSTANCE_ID,
     revision = ProfileRevision(1L),
     bootstrap = ProfileBootstrapStatus.Ready,
-    reset = ProfileResetStatus.NotRequired(legacyResetConfirmed = false),
     persistence = ProfilePersistenceStatus.Persisted(ProfileRevision(1L)),
 )
 
-private fun confirmationPersistence(): PersistenceStatusProjection = PersistenceStatusProjection(
+private fun unavailablePersistence(): PersistenceStatusProjection = PersistenceStatusProjection(
     instanceId = LOCAL_PROFILE_INSTANCE_ID,
     revision = ProfileRevision(1L),
     bootstrap = ProfileBootstrapStatus.Blocked(
-        ProfileBootstrapBlockReason.ResetRequired(ProfileResetReason.LegacyDataDetected),
-    ),
-    reset = ProfileResetStatus.ConfirmationRequired(
-        ProfileResetReason.LegacyDataDetected,
-        ProfileLegacyKeys.ALL,
+        ProfileBootstrapBlockReason.ResourceFailure(
+            kinetickk.ball.profile.api.ProfileReadFailure.PROVIDER_READ_FAILED,
+        ),
     ),
     persistence = ProfilePersistenceStatus.NotAttempted,
 )
-
-private fun needsAttentionPersistence(): PersistenceStatusProjection {
-    val purgeResult = ProfileLegacyPurgeResult.Partial(ProfileLegacyKeys.ALL)
-    return PersistenceStatusProjection(
-        instanceId = LOCAL_PROFILE_INSTANCE_ID,
-        revision = ProfileRevision(6L),
-        bootstrap = ProfileBootstrapStatus.Blocked(
-            ProfileBootstrapBlockReason.ResetNeedsAttention(purgeResult),
-        ),
-        reset = ProfileResetStatus.NeedsAttention(
-            legacyKeys = ProfileLegacyKeys.ALL,
-            result = purgeResult,
-        ),
-        persistence = ProfilePersistenceStatus.NotAttempted,
-    )
-}

@@ -19,12 +19,10 @@ import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.PreferenceAdjustmentDirection
 import kinetickk.ball.profile.api.ProfileAcceptance
-import kinetickk.ball.profile.api.ProfileBootstrapResourceResult
 import kinetickk.ball.profile.api.ProfileCommandBoundaryResponse
 import kinetickk.ball.profile.api.ProfileCommandIngressResult
 import kinetickk.ball.profile.api.ProfileCommandSource
 import kinetickk.ball.profile.api.ProfileGameplayProgressRejection
-import kinetickk.ball.profile.api.ProfileLegacyKeys
 import kinetickk.ball.profile.api.ProfileModuleCommand
 import kinetickk.ball.profile.api.ProfileModuleCommandRequest
 import kinetickk.ball.profile.api.ProfilePreferenceAdjustment
@@ -33,6 +31,7 @@ import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.api.ProfileRejection
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileSemanticHandle
+import kinetickk.ball.profile.api.ProfileSnapshotReadResult
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.test.Test
@@ -297,7 +296,6 @@ class ProfileComponentCharacterizationTest {
             assertEquals(before, component.stateSnapshot())
             assertEquals(beforeProfile, queriedProfile(component))
             assertTrue(resource.writes.isEmpty())
-            assertEquals(0, resource.purgeCount)
         }
     }
 
@@ -410,9 +408,8 @@ private fun loadedResource(
     profile: PlayerProfile,
     revision: Long = 10L,
 ): RecordingProfileResource = RecordingProfileResource(
-    ProfileBootstrapResourceResult.Observed(
-        snapshot = v4Snapshot(profile = profile, revision = revision),
-        legacyKeys = ProfileLegacyKeys.NONE,
+    ProfileSnapshotReadResult.Observed(
+        snapshot = profileSnapshot(profile = profile, revision = revision),
     ),
 )
 

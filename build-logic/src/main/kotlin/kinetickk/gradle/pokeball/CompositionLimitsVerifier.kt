@@ -29,7 +29,7 @@ private const val PROFILE_COMPONENT_IMPL_PATH =
  * resolution cannot drift around the structural dispatch checks without explicit re-review.
  */
 private const val CANONICAL_PROFILE_COMPONENT_SEMANTIC_DIGEST =
-    "d7c533766c44ade756069fc354c7bc607b3b7c74504d52cf8d0f1d4c5ec6306f"
+    "c163a82a5ea8662f509b6af11dce00733cd5814df4b2d2681d8d2a322fc2feff"
 private const val GAMEPLAY_COMPONENT_PATH =
     "ball/gameplay/impl/src/commonMain/kotlin/kinetickk/ball/gameplay/impl/GameplayCompositionComponent.kt"
 private const val GAMEPLAY_COMPONENT_IMPL_PATH =
@@ -221,12 +221,8 @@ private val broadBrokerSignatureTypes = setOf(
 )
 
 private val exactPersistenceOperations = setOf(
-    "readV4",
-    "writeV4",
-    "readLegacyProgressV2",
-    "readLegacyMatter",
-    "removeLegacyProgressV2",
-    "removeLegacyMatter",
+    "readSnapshot",
+    "writeSnapshot",
 )
 
 private val kotlinControlKeywords = setOf(
@@ -245,13 +241,8 @@ private val kotlinControlKeywords = setOf(
 
 private val exactProfilePersistenceConstants = linkedMapOf(
     "DESKTOP_PROFILE_NODE" to "kinetickk/profile",
-    "DESKTOP_SNAPSHOT_V4" to "snapshot_v4",
-    "DESKTOP_LEGACY_NODE" to "kinetickk/progression",
-    "DESKTOP_LEGACY_PROGRESS_V2" to "progress_v2",
-    "DESKTOP_LEGACY_MATTER" to "kinetickk_matter",
-    "WEB_SNAPSHOT_V4" to "kinetickk_profile_v4",
-    "WEB_LEGACY_PROGRESS_V2" to "kinetickk_progress_v2",
-    "WEB_LEGACY_MATTER" to "kinetickk_matter",
+    "DESKTOP_SNAPSHOT" to "snapshot",
+    "WEB_SNAPSHOT" to "kinetickk_profile",
 )
 
 internal fun platformCapabilityBoundaryViolations(
@@ -291,12 +282,8 @@ internal fun platformCapabilityBoundaryViolations(
         PROFILE_RESOURCE_PATH,
         listOf(
             "interface ExactProfilePersistence",
-            "fun readV4(): ProfileProviderReadResult",
-            "fun writeV4(payload: String): ProfileProviderMutationResult",
-            "fun readLegacyProgressV2(): ProfileProviderReadResult",
-            "fun readLegacyMatter(): ProfileProviderReadResult",
-            "fun removeLegacyProgressV2(): ProfileProviderMutationResult",
-            "fun removeLegacyMatter(): ProfileProviderMutationResult",
+            "fun readSnapshot(): ProfileProviderReadResult",
+            "fun writeSnapshot(payload: String): ProfileProviderMutationResult",
             "sealed interface ProfileProviderReadResult",
             "data class Observed(val payload: String?) : ProfileProviderReadResult",
             "data object Failed : ProfileProviderReadResult",
@@ -313,12 +300,8 @@ internal fun platformCapabilityBoundaryViolations(
         PROFILE_FACTORY_PATH,
         listOf(
             "interface ProfilePersistenceCapability",
-            "fun readV4(): ProfilePersistenceReadResult",
-            "fun writeV4(payload: String): ProfilePersistenceMutationResult",
-            "fun readLegacyProgressV2(): ProfilePersistenceReadResult",
-            "fun readLegacyMatter(): ProfilePersistenceReadResult",
-            "fun removeLegacyProgressV2(): ProfilePersistenceMutationResult",
-            "fun removeLegacyMatter(): ProfilePersistenceMutationResult",
+            "fun readSnapshot(): ProfilePersistenceReadResult",
+            "fun writeSnapshot(payload: String): ProfilePersistenceMutationResult",
             "sealed interface ProfilePersistenceReadResult",
             "data class Observed(val payload: String?) : ProfilePersistenceReadResult",
             "data object Failed : ProfilePersistenceReadResult",
@@ -354,7 +337,6 @@ internal fun platformCapabilityBoundaryViolations(
             "actual fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability",
             "actual fun createPlatformTonePlaybackCapability(): TonePlaybackCapability",
             "Preferences.userRoot().node(ProfilePersistenceContract.DESKTOP_PROFILE_NODE)",
-            "Preferences.userRoot().node(ProfilePersistenceContract.DESKTOP_LEGACY_NODE)",
             "AudioSystem.getSourceDataLine(format).use { line ->",
             "private class DesktopProfilePersistenceCapability",
             "private class DesktopTonePlaybackCapability",
@@ -366,7 +348,6 @@ internal fun platformCapabilityBoundaryViolations(
             "actual fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability",
             "actual fun createPlatformTonePlaybackCapability(): TonePlaybackCapability",
             "context.getSharedPreferences(ANDROID_PROFILE_PREFERENCES, Context.MODE_PRIVATE)",
-            "context.getSharedPreferences(ANDROID_LEGACY_PREFERENCES, Context.MODE_PRIVATE)",
             "private class AndroidProfilePersistenceCapability",
             "private class AndroidTonePlaybackCapability",
             "executor.execute { synthesize(request) }",
@@ -382,12 +363,8 @@ internal fun platformCapabilityBoundaryViolations(
             "actual fun createPlatformTonePlaybackCapability(): TonePlaybackCapability",
             "WebProfilePersistenceCapability()",
             "private external interface WebStorageReadCall : JsAny",
-            "webStorageRead(ProfilePersistenceContract.WEB_SNAPSHOT_V4).toPersistenceResult()",
-            "webStorageWrite(ProfilePersistenceContract.WEB_SNAPSHOT_V4, payload)",
-            "webStorageRead(ProfilePersistenceContract.WEB_LEGACY_PROGRESS_V2).toPersistenceResult()",
-            "webStorageRead(ProfilePersistenceContract.WEB_LEGACY_MATTER).toPersistenceResult()",
-            "webStorageRemove(ProfilePersistenceContract.WEB_LEGACY_PROGRESS_V2)",
-            "webStorageRemove(ProfilePersistenceContract.WEB_LEGACY_MATTER)",
+            "webStorageRead(ProfilePersistenceContract.WEB_SNAPSHOT).toPersistenceResult()",
+            "webStorageWrite(ProfilePersistenceContract.WEB_SNAPSHOT, payload)",
             "const exactStorage = globalThis.localStorage;",
             "private var context: JsAny? = null",
             "private class WebProfilePersistenceCapability",
@@ -955,7 +932,7 @@ private fun platformBrokerSourceViolations(path: String, code: String): List<Str
 }
 
 private fun desktopBrokerSourceViolations(code: String): List<String> = buildList {
-    requireWordCount(code, "Preferences", 6, DESKTOP_PLATFORM_BROKER_PATH, this)
+    requireWordCount(code, "Preferences", 4, DESKTOP_PLATFORM_BROKER_PATH, this)
     requireWordCount(code, "AudioSystem", 2, DESKTOP_PLATFORM_BROKER_PATH, this)
     requireWordCount(code, "ThreadPoolExecutor", 3, DESKTOP_PLATFORM_BROKER_PATH, this)
     requireRegexCount(
@@ -993,17 +970,6 @@ private fun desktopBrokerSourceViolations(code: String): List<String> = buildLis
     )
     requireRegexCount(
         code,
-        Regex(
-            "Preferences\\.userRoot\\(\\)\\.node\\(\\s*" +
-                "ProfilePersistenceContract\\.DESKTOP_LEGACY_NODE\\s*\\)",
-        ),
-        1,
-        "fixed desktop legacy node acquisition",
-        DESKTOP_PLATFORM_BROKER_PATH,
-        this,
-    )
-    requireRegexCount(
-        code,
         Regex("AudioSystem\\.getSourceDataLine\\(format\\)\\.use\\s*\\{\\s*line\\s*->"),
         1,
         "private desktop audio-line acquisition",
@@ -1031,48 +997,33 @@ private fun desktopBrokerSourceViolations(code: String): List<String> = buildLis
             allowedCalls = exactPersistenceOperations +
                 setOf(
                     "profileNode",
-                    "legacyNode",
                     "desktopProfileReadCall",
                     "desktopProfileMutationCall",
                     "desktopProfilePayloadAdmission",
                     "let",
                     "get",
                     "put",
-                    "remove",
                 ),
             exactCallCounts = mapOf(
                 "profileNode" to 2,
-                "legacyNode" to 4,
-                "desktopProfileReadCall" to 3,
-                "desktopProfileMutationCall" to 3,
+                "desktopProfileReadCall" to 1,
+                "desktopProfileMutationCall" to 1,
                 "desktopProfilePayloadAdmission" to 1,
                 "let" to 1,
-                "get" to 3,
+                "get" to 1,
                 "put" to 1,
-                "remove" to 2,
             ),
             exactIdentifierCounts = mapOf(
                 "profileNode" to 2,
-                "legacyNode" to 4,
-                "keys" to 3,
-                "flush" to 6,
+                "keys" to 1,
+                "flush" to 2,
             ),
             requiredExpressions = listOf(
                 "desktopProfilePayloadAdmission(payload.length)?.let { return it }",
-                "exactKey = ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, " +
+                "exactKey = ProfilePersistenceContract.DESKTOP_SNAPSHOT, " +
                     "loadKeyNames = node::keys, loadExactValue = { " +
-                    "node.get(ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, null) },",
-                "exactKey = ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2, " +
-                    "loadKeyNames = node::keys, loadExactValue = { " +
-                    "node.get(ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2, null) },",
-                "exactKey = ProfilePersistenceContract.DESKTOP_LEGACY_MATTER, " +
-                    "loadKeyNames = node::keys, loadExactValue = { " +
-                    "node.get(ProfilePersistenceContract.DESKTOP_LEGACY_MATTER, null) },",
-                "mutate = { node.put(ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, payload) }, " +
-                    "flush = node::flush,",
-                "mutate = { node.remove(ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2) }, " +
-                    "flush = node::flush,",
-                "mutate = { node.remove(ProfilePersistenceContract.DESKTOP_LEGACY_MATTER) }, " +
+                    "node.get(ProfilePersistenceContract.DESKTOP_SNAPSHOT, null) },",
+                "mutate = { node.put(ProfilePersistenceContract.DESKTOP_SNAPSHOT, payload) }, " +
                     "flush = node::flush,",
             ),
         ),
@@ -1132,16 +1083,16 @@ private fun desktopExactReadHelperViolations(code: String): List<String> = build
         add("Desktop exact value load must occur only after admitted exact-key membership")
     }
     val allKeyReferences = Regex("\\bnode::keys\\b").findAll(code).count()
-    if (allKeyReferences != 3 || "node::keys" in body) {
+    if (allKeyReferences != 1 || "node::keys" in body) {
         add(
-            "Desktop Preferences key enumeration must enter only through the three private fixed-key " +
+            "Desktop Preferences key enumeration must enter only through the one private fixed-key " +
                 "broker bindings; found $allKeyReferences `node::keys` references",
         )
     }
     val directKeyCalls = Regex("\\.keys\\s*\\(").findAll(code).count()
     if (directKeyCalls != 0) {
         add(
-            "Direct Desktop Preferences `keys()` calls are forbidden outside the three " +
+            "Direct Desktop Preferences `keys()` calls are forbidden outside the one " +
                 "private fixed-key callback bindings; found $directKeyCalls",
         )
     }
@@ -1226,7 +1177,7 @@ private fun desktopValueAdmissionViolations(code: String): List<String> = buildL
         add("Desktop profile value admission is missing `$token`")
     }
     val brokerBody = declarationBodyForCapability(code, "private class DesktopProfilePersistenceCapability")
-    val writeBody = brokerBody?.let { body -> memberFunctionSlice(body, "writeV4") }
+    val writeBody = brokerBody?.let { body -> memberFunctionSlice(body, "writeSnapshot") }
     if (writeBody == null ||
         writeBody.indexOf("desktopProfilePayloadAdmission(payload.length)") !in
         0 until writeBody.indexOf("profileNode()")
@@ -1256,17 +1207,9 @@ private fun androidBrokerSourceViolations(code: String): List<String> = buildLis
     )
     requireRegexCount(
         code,
-        Regex("private\\s+const\\s+val\\s+ANDROID_LEGACY_PREFERENCES\\s*=\\s*\"kinetickk\\.progression\""),
-        1,
-        "fixed Android legacy preferences name",
-        ANDROID_PLATFORM_BROKER_PATH,
-        this,
-    )
-    requireRegexCount(
-        code,
         Regex("\\bgetSharedPreferences\\s*\\("),
-        2,
-        "two and only two Android SharedPreferences acquisitions",
+        1,
+        "one and only one Android SharedPreferences acquisition",
         ANDROID_PLATFORM_BROKER_PATH,
         this,
     )
@@ -1275,14 +1218,6 @@ private fun androidBrokerSourceViolations(code: String): List<String> = buildLis
         Regex("context\\.getSharedPreferences\\(ANDROID_PROFILE_PREFERENCES,\\s*Context\\.MODE_PRIVATE\\)"),
         1,
         "fixed Android profile SharedPreferences acquisition",
-        ANDROID_PLATFORM_BROKER_PATH,
-        this,
-    )
-    requireRegexCount(
-        code,
-        Regex("context\\.getSharedPreferences\\(ANDROID_LEGACY_PREFERENCES,\\s*Context\\.MODE_PRIVATE\\)"),
-        1,
-        "fixed Android legacy SharedPreferences acquisition",
         ANDROID_PLATFORM_BROKER_PATH,
         this,
     )
@@ -1315,31 +1250,25 @@ private fun androidBrokerSourceViolations(code: String): List<String> = buildLis
                 "androidProfileMutationCall",
                 "edit",
                 "putString",
-                "remove",
             ),
             exactCallCounts = mapOf(
-                "androidProfileReadCall" to 3,
+                "androidProfileReadCall" to 1,
                 "androidProfileMutationCall" to 0,
-                "edit" to 3,
+                "edit" to 1,
                 "putString" to 1,
-                "remove" to 2,
             ),
             exactIdentifierCounts = emptyMap(),
             requiredExpressions = listOf(
-                "androidProfileReadCall(profile, ANDROID_SNAPSHOT_V4)",
-                "profile.edit().putString(ANDROID_SNAPSHOT_V4, payload)",
-                "androidProfileReadCall(legacy, ANDROID_LEGACY_PROGRESS_V2)",
-                "androidProfileReadCall(legacy, ANDROID_LEGACY_MATTER)",
-                "legacy.edit().remove(ANDROID_LEGACY_PROGRESS_V2)",
-                "legacy.edit().remove(ANDROID_LEGACY_MATTER)",
+                "androidProfileReadCall(profile, ANDROID_SNAPSHOT)",
+                "profile.edit().putString(ANDROID_SNAPSHOT, payload)",
             ),
         ),
     )
     requireRegexCount(
         code,
         Regex("\\bandroidProfileMutationCall\\s*\\{"),
-        3,
-        "three exact Android persistence mutations",
+        1,
+        "one exact Android persistence mutation",
         ANDROID_PLATFORM_BROKER_PATH,
         this,
     )
@@ -1449,9 +1378,9 @@ private fun androidPersistenceHelperViolations(code: String): List<String> = bui
 }
 
 private fun webBrokerSourceViolations(code: String): List<String> = buildList {
-    requireWordCount(code, "localStorage", 3, WEB_PLATFORM_BROKER_PATH, this)
+    requireWordCount(code, "localStorage", 2, WEB_PLATFORM_BROKER_PATH, this)
     requireWordCount(code, "JsAny", 8, WEB_PLATFORM_BROKER_PATH, this)
-    requireWordCount(code, "globalThis", 7, WEB_PLATFORM_BROKER_PATH, this)
+    requireWordCount(code, "globalThis", 6, WEB_PLATFORM_BROKER_PATH, this)
     listOf("kotlinx.browser.localStorage", "org.w3c.dom.Storage", "WebProfilePersistenceKeys")
         .filter(code::contains)
         .forEach { token ->
@@ -1500,13 +1429,12 @@ private fun webBrokerSourceViolations(code: String): List<String> = buildList {
     val expectedGlobalLines = listOf(
         storageGlobalRead,
         storageGlobalRead,
-        storageGlobalRead,
         audioGlobalRead,
         audioGlobalRead,
     )
     if (globalLines != expectedGlobalLines) {
         add(
-            "Web broker globalThis access must be exactly three private fixed-key localStorage " +
+            "Web broker globalThis access must be exactly two private fixed-key localStorage " +
                 "acquisitions plus two private AudioContext constructor reads; " +
                 "found ${globalLines.joinToString()}",
         )
@@ -1532,33 +1460,18 @@ private fun webBrokerSourceViolations(code: String): List<String> = buildList {
             code = code,
             declaration = "private class WebProfilePersistenceCapability",
             allowedCalls = exactPersistenceOperations + setOf(
-                "readWebProfileV4",
-                "writeWebProfileV4",
-                "readWebLegacyProgressV2",
-                "readWebLegacyMatter",
-                "removeWebLegacyProgressV2",
-                "removeWebLegacyMatter",
+                "readWebProfileSnapshot",
+                "writeWebProfileSnapshot",
             ),
             exactCallCounts = mapOf(
-                "readWebProfileV4" to 1,
-                "writeWebProfileV4" to 1,
-                "readWebLegacyProgressV2" to 1,
-                "readWebLegacyMatter" to 1,
-                "removeWebLegacyProgressV2" to 1,
-                "removeWebLegacyMatter" to 1,
+                "readWebProfileSnapshot" to 1,
+                "writeWebProfileSnapshot" to 1,
             ),
             exactIdentifierCounts = emptyMap(),
             requiredExpressions = listOf(
-                "override fun readV4(): ProfilePersistenceReadResult = readWebProfileV4()",
-                "override fun writeV4(payload: String): ProfilePersistenceMutationResult = " +
-                    "writeWebProfileV4(payload)",
-                "override fun readLegacyProgressV2(): ProfilePersistenceReadResult = " +
-                    "readWebLegacyProgressV2()",
-                "override fun readLegacyMatter(): ProfilePersistenceReadResult = readWebLegacyMatter()",
-                "override fun removeLegacyProgressV2(): ProfilePersistenceMutationResult = " +
-                    "removeWebLegacyProgressV2()",
-                "override fun removeLegacyMatter(): ProfilePersistenceMutationResult = " +
-                    "removeWebLegacyMatter()",
+                "override fun readSnapshot(): ProfilePersistenceReadResult = readWebProfileSnapshot()",
+                "override fun writeSnapshot(payload: String): ProfilePersistenceMutationResult = " +
+                    "writeWebProfileSnapshot(payload)",
             ),
         ),
     )
@@ -1578,14 +1491,8 @@ private fun webExactPersistenceHelperViolations(code: String): List<String> = bu
     val normalizedCode = code.squashWhitespace()
     listOf(
         "private external interface WebStorageReadCall : JsAny",
-        "webStorageRead(ProfilePersistenceContract.WEB_SNAPSHOT_V4).toPersistenceResult()",
-        "webStorageWrite(ProfilePersistenceContract.WEB_SNAPSHOT_V4, payload)" +
-            ".toPersistenceMutationResult()",
-        "webStorageRead(ProfilePersistenceContract.WEB_LEGACY_PROGRESS_V2).toPersistenceResult()",
-        "webStorageRead(ProfilePersistenceContract.WEB_LEGACY_MATTER).toPersistenceResult()",
-        "webStorageRemove(ProfilePersistenceContract.WEB_LEGACY_PROGRESS_V2)" +
-            ".toPersistenceMutationResult()",
-        "webStorageRemove(ProfilePersistenceContract.WEB_LEGACY_MATTER)" +
+        "webStorageRead(ProfilePersistenceContract.WEB_SNAPSHOT).toPersistenceResult()",
+        "webStorageWrite(ProfilePersistenceContract.WEB_SNAPSHOT, payload)" +
             ".toPersistenceMutationResult()",
         "WEB_STORAGE_OBSERVED -> ProfilePersistenceReadResult.Observed(payload)",
         "WEB_STORAGE_FAILED_BEFORE_EXECUTION -> ProfilePersistenceReadResult.Failed",
@@ -1596,17 +1503,14 @@ private fun webExactPersistenceHelperViolations(code: String): List<String> = bu
         "else -> error(\"Web Storage mutation returned an unknown provider status\")",
         "private fun webStorageRead(key: String): WebStorageReadCall = js(",
         "private fun webStorageWrite(key: String, payload: String): String = js(",
-        "private fun webStorageRemove(key: String): String = js(",
         "exactStorage.getItem(key)",
         "exactStorage.setItem(key, payload)",
-        "exactStorage.removeItem(key)",
     ).filterNot(normalizedCode::contains).forEach { token ->
         add("Private fixed-key Web persistence helpers are missing `$token`")
     }
     mapOf(
-        "webStorageRead" to 4,
+        "webStorageRead" to 2,
         "webStorageWrite" to 2,
-        "webStorageRemove" to 3,
     ).forEach { (call, expected) ->
         val actual = Regex("\\b${Regex.escape(call)}\\s*\\(").findAll(code).count()
         if (actual != expected) {
@@ -1616,7 +1520,6 @@ private fun webExactPersistenceHelperViolations(code: String): List<String> = bu
     mapOf(
         "exactStorage.getItem(key)" to 1,
         "exactStorage.setItem(key, payload)" to 1,
-        "exactStorage.removeItem(key)" to 1,
     ).forEach { (operation, expected) ->
         val actual = code.windowed(operation.length).count { candidate -> candidate == operation }
         if (actual != expected) {
@@ -1803,8 +1706,8 @@ private fun desktopPersistenceSeamCallsiteViolations(
     codeByPath: Map<String, String>,
 ): List<String> = buildList {
     val expectedCalls = mapOf(
-        "desktopProfileReadCall" to 3,
-        "desktopProfileMutationCall" to 3,
+        "desktopProfileReadCall" to 1,
+        "desktopProfileMutationCall" to 1,
         "desktopPreferenceKeyCountAdmission" to 1,
         "desktopProfilePayloadAdmission" to 1,
     )
@@ -2616,7 +2519,6 @@ private fun webInlineStorageFaultStageViolations(code: String): List<String> = b
     val expectedFailureNames = linkedMapOf(
         "webStorageRead" to listOf("SecurityError"),
         "webStorageWrite" to listOf("SecurityError", "QuotaExceededError"),
-        "webStorageRemove" to listOf("SecurityError"),
     )
     expectedFailureNames.forEach { (functionName, expectedNames) ->
         val body = topLevelDeclarationSlice(code, "private fun $functionName")
@@ -2824,7 +2726,7 @@ internal fun compositionLimitViolations(
         "co-reachable branches",
         "converging",
         "Mutually exclusive alternatives",
-        "Retry or redelivery of the same source tuple",
+        "duplicate traversal record for the same source tuple",
         "independent root",
         "No asynchronous semantic handoff exists",
     ).filterNot(assembly::contains).forEach { token ->

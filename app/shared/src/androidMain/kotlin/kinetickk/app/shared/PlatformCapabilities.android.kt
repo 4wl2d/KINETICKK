@@ -24,45 +24,24 @@ import kotlin.math.min
 import kotlin.math.sin
 
 private const val ANDROID_PROFILE_PREFERENCES = "kinetickk.profile"
-private const val ANDROID_LEGACY_PREFERENCES = "kinetickk.progression"
-private const val ANDROID_SNAPSHOT_V4 = "snapshot_v4"
-private const val ANDROID_LEGACY_PROGRESS_V2 = "progress_v2"
-private const val ANDROID_LEGACY_MATTER = "kinetickk_matter"
+private const val ANDROID_SNAPSHOT = "snapshot"
 
 internal actual fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability {
     val context = AndroidApplicationContext.requireContext()
     return AndroidProfilePersistenceCapability(
         profile = context.getSharedPreferences(ANDROID_PROFILE_PREFERENCES, Context.MODE_PRIVATE),
-        legacy = context.getSharedPreferences(ANDROID_LEGACY_PREFERENCES, Context.MODE_PRIVATE),
     )
 }
 
 private class AndroidProfilePersistenceCapability(
     private val profile: SharedPreferences,
-    private val legacy: SharedPreferences,
 ) : ProfilePersistenceCapability {
-    override fun readV4(): ProfilePersistenceReadResult =
-        androidProfileReadCall(profile, ANDROID_SNAPSHOT_V4)
+    override fun readSnapshot(): ProfilePersistenceReadResult =
+        androidProfileReadCall(profile, ANDROID_SNAPSHOT)
 
-    override fun writeV4(payload: String): ProfilePersistenceMutationResult =
+    override fun writeSnapshot(payload: String): ProfilePersistenceMutationResult =
         androidProfileMutationCall {
-            profile.edit().putString(ANDROID_SNAPSHOT_V4, payload)
-        }
-
-    override fun readLegacyProgressV2(): ProfilePersistenceReadResult =
-        androidProfileReadCall(legacy, ANDROID_LEGACY_PROGRESS_V2)
-
-    override fun readLegacyMatter(): ProfilePersistenceReadResult =
-        androidProfileReadCall(legacy, ANDROID_LEGACY_MATTER)
-
-    override fun removeLegacyProgressV2(): ProfilePersistenceMutationResult =
-        androidProfileMutationCall {
-            legacy.edit().remove(ANDROID_LEGACY_PROGRESS_V2)
-        }
-
-    override fun removeLegacyMatter(): ProfilePersistenceMutationResult =
-        androidProfileMutationCall {
-            legacy.edit().remove(ANDROID_LEGACY_MATTER)
+            profile.edit().putString(ANDROID_SNAPSHOT, payload)
         }
 }
 

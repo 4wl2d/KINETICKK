@@ -11,6 +11,14 @@ import kotlin.test.assertTrue
 
 class ProfilePerformanceBenchmarkTest {
     @Test
+    fun suiteIdentityDeclaresTheHarnessContractWithoutVersioningTheSaveSchema() {
+        assertEquals(
+            "profile-persistence-current-schema-v2",
+            PROFILE_PERSISTENCE_BENCHMARK_SUITE_VERSION,
+        )
+    }
+
+    @Test
     fun suiteCoversCodecLimitsRejectionsAndInMemoryResourcePaths() {
         val scenarios = profileBenchmarkScenarios()
         val names = scenarios.map { scenario -> scenario.name }
@@ -22,12 +30,9 @@ class ProfilePerformanceBenchmarkTest {
                 "profile_encode_default",
                 "profile_decode_default",
                 "profile_roundtrip_default",
-                "profile_encode_logical_maximum",
-                "profile_decode_logical_maximum",
-                "profile_roundtrip_logical_maximum",
-                "profile_encode_maximum",
-                "profile_decode_maximum",
-                "profile_roundtrip_maximum",
+                "profile_encode_business_maximum",
+                "profile_decode_business_maximum",
+                "profile_roundtrip_business_maximum",
                 "profile_decode_malformed_rejection",
                 "profile_decode_oversize_rejection",
                 "profile_decode_unknown_field_rejection",
@@ -35,47 +40,29 @@ class ProfilePerformanceBenchmarkTest {
                 "profile_decode_invalid_utf8_rejection",
                 "profile_resource_read_empty",
                 "profile_resource_read_default",
-                "profile_resource_read_maximum",
+                "profile_resource_read_business_maximum",
                 "profile_resource_read_malformed_rejection",
                 "profile_resource_write_readback_default",
-                "profile_resource_write_readback_maximum",
+                "profile_resource_write_readback_business_maximum",
             ),
             names.toSet(),
         )
-
-        val boundaryNames = setOf(
-            "profile_encode_maximum",
-            "profile_decode_maximum",
-            "profile_roundtrip_maximum",
-        )
-        scenarios.filter { scenario -> scenario.name in boundaryNames }.forEach { scenario ->
-            assertEquals(
-                MAX_PROFILE_PAYLOAD_BYTES.toString(),
-                scenario.metadata["payloadBytes"],
-                scenario.name,
-            )
-            assertEquals(
-                "strict-v4-payload-boundary",
-                scenario.metadata["comparisonContract"],
-                scenario.name,
-            )
-        }
 
         val logicalNames = setOf(
             "profile_encode_default",
             "profile_decode_default",
             "profile_roundtrip_default",
-            "profile_encode_logical_maximum",
-            "profile_decode_logical_maximum",
-            "profile_roundtrip_logical_maximum",
+            "profile_encode_business_maximum",
+            "profile_decode_business_maximum",
+            "profile_roundtrip_business_maximum",
         )
         scenarios.filter { scenario -> scenario.name in logicalNames }.forEach { scenario ->
             assertEquals(
-                "branch-native-logical-profile",
+                "current-schema-logical-profile",
                 scenario.metadata["comparisonContract"],
                 scenario.name,
             )
-            assertEquals("strict-v4", scenario.metadata["wireFormat"], scenario.name)
+            assertEquals("strict-current", scenario.metadata["wireFormat"], scenario.name)
             assertTrue(
                 requireNotNull(scenario.metadata["payloadBytes"]).toInt() < MAX_PROFILE_PAYLOAD_BYTES,
                 scenario.name,

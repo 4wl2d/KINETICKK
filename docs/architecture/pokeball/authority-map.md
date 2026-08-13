@@ -12,9 +12,9 @@ ownership by itself.
 | Authority | Instance identity and lifetime | Sovereign or captured state | Sole writer / acceptance point |
 |---|---|---|---|
 | ContentCatalog | application lifetime; singleton typed authority | immutable catalog definitions, stable IDs, `ContentVersion`, policy and UI snapshots | Content bootstrap validates and publishes once; no runtime mutation protocol |
-| Profile | `kinetickk.local/Profile/local-player`; application lifetime | complete `PlayerProfile`, `ProfileRevision`, captured `ProfilePolicySnapshot`, bootstrap/reset/persistence status | Profile acceptor publishes one accepted Profile frame |
+| Profile | `kinetickk.local/Profile/local-player`; application lifetime | complete `PlayerProfile`, `ProfileRevision`, captured `ProfilePolicySnapshot`, bootstrap and persistence status | Profile acceptor publishes one accepted Profile frame |
 | GameplayRun | one monotonically allocated `RunId`; at most one active run | simulation and RNG, run phase, captured `GameplayContentSnapshot`, viewport/pointer/brake/preferences, revision, at most one pending Profile command | that run's Gameplay acceptor publishes one accepted Gameplay frame |
-| AppSession | `kinetickk.local/AppSession/local-session`; application lifetime | base destination, overlay, active `RunId`, projection revision, workflow phase, Rebirth confirmation, reset-modal lifecycle | Session acceptor publishes one accepted Session frame |
+| AppSession | `kinetickk.local/AppSession/local-session`; application lifetime | base destination, overlay, active `RunId`, projection revision, workflow phase, Rebirth confirmation, bootstrap availability | Session acceptor publishes one accepted Session frame |
 
 `ProfileRevision`, Gameplay revision, and Session projection revision retain
 their distinct owner meanings. Equality or derivation never transfers
@@ -33,19 +33,23 @@ fact or writing authority.
 | item, weapon, meta-upgrade, relic, and Rebirth definitions/policy | ContentCatalog | typed Content queries and captured immutable snapshots |
 | preferences and mute state | Profile | Profile queries; captured into Gameplay after accepted Session workflow |
 | economy, permanent Lab ranks, loadout, collection, Rebirth progress | Profile | target-owned Profile queries; Gameplay obtains run bootstrap and preferences only through `GameplayProfileRoute`, then captures the validated values in its accepted frame |
-| save bootstrap, v4 compatibility status, reset confirmation, persistence/purge outcome | Profile | Session receives typed Profile results/queries; Resource reports typed facts only |
+| current `ProfileSnapshot` bootstrap and persistence outcome | Profile | Resource exposes only `readSnapshot`/`writeSnapshot` and typed outcomes; Session reads bootstrap/persistence status |
 | live simulation, deterministic RNG, run matter, discoveries, active weapon, Codex stacks, run terminal result | GameplayRun | Gameplay queries and target-owned result to Session/Profile routes |
-| navigation, overlay policy, start/restart/exit ordering, settings propagation, Rebirth orchestration, reset modal | AppSession | Session projection consumed by Session Interaction |
+| navigation, overlay policy, start/restart/exit ordering, settings propagation, Rebirth orchestration, bootstrap-unavailable lifecycle | AppSession | Session projection consumed by Session Interaction |
 | UI page, focus, viewport gesture mechanics, animation clock, local visual FX | owning Interaction role | never consumed as hidden business input; a business-relevant value becomes a Pulse, Context field, or committed State |
 | cue-to-tone meaning | originating Ball's private audio executor | mechanical `ToneRequest` only crosses into Audio Resource |
 | tone validation and bounded playback request selection | Audio Resource | receives only typed `ToneRequest` and a narrow playback capability; no provider acquisition |
-| platform storage/audio provider acquisition and mechanical execution | instance-owned platform capability brokers / Execution-Gate mechanics bound by AppAssembly | Profile/Audio retain Resource operation semantics; Assembly selects and binds only, gains no effect/policy authority, and broad provider types never enter a Resource constructor |
+| platform storage/audio provider acquisition and mechanical execution | instance-owned platform capability brokers / Execution-Gate mechanics bound by AppAssembly | one platform broker is the sole physical storage authority for the current Profile key; Profile/Audio retain Resource operation semantics, Assembly selects and binds only, gains no effect/policy authority, and broad provider types never enter a Resource constructor |
 
 The closed platform bindings are actuals inside the `app:shared` KMP leaf:
 `androidMain` binds Android SharedPreferences/AudioTrack, `desktopMain` binds JVM providers, and
 `wasmJsMain` binds browser providers. The separate `app:android` leaf is a pure
 application/packaging host with exactly one production project edge to
 `app:shared`; it adds no authority, business fact, writer, or semantic route.
+For Profile persistence, those mutually exclusive platform bindings select
+exactly one current location: Android preferences `kinetickk.profile` key
+`snapshot`, Desktop node `kinetickk/profile` key `snapshot`, or Web key
+`kinetickk_profile`. No Ball or Flow can select another storage root or key.
 
 Home and Codex may combine independent Profile and Gameplay reads only in
 Session Interaction and must label the result non-atomic. Assembly never joins

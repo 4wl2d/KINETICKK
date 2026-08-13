@@ -3,7 +3,6 @@
 
 package kinetickk.ball.profile.resource
 
-import kinetickk.ball.content.api.ContentVersion
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MetaUpgradeId
@@ -12,7 +11,6 @@ import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
 import kinetickk.ball.profile.api.LabProgress
-import kinetickk.ball.profile.api.LocalPlayerId
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
@@ -20,8 +18,8 @@ import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.ProfileRevision
-import kinetickk.ball.profile.api.ProfileV4Rejection
-import kinetickk.ball.profile.api.ProfileV4Snapshot
+import kinetickk.ball.profile.api.ProfileSnapshot
+import kinetickk.ball.profile.api.ProfileSnapshotRejection
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kotlinx.serialization.Serializable
@@ -31,22 +29,20 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlin.math.roundToInt
 
-internal const val PROFILE_SCHEMA_VERSION: Int = 4
 internal const val MAX_PROFILE_PAYLOAD_BYTES: Int = 65_536
-internal val LOCAL_PROFILE_ID: String = LocalPlayerId.LOCAL_PLAYER.stableValue
 
-internal sealed interface ProfileV4EncodeResult {
-    data class Encoded(val payload: String) : ProfileV4EncodeResult
-    data class Rejected(val reason: ProfileV4Rejection) : ProfileV4EncodeResult
+internal sealed interface ProfileEncodeResult {
+    data class Encoded(val payload: String) : ProfileEncodeResult
+    data class Rejected(val reason: ProfileSnapshotRejection) : ProfileEncodeResult
 }
 
-internal sealed interface ProfileV4DecodeResult {
-    data class Decoded(val snapshot: ProfileV4Snapshot) : ProfileV4DecodeResult
-    data class Rejected(val reason: ProfileV4Rejection) : ProfileV4DecodeResult
+internal sealed interface ProfileDecodeResult {
+    data class Decoded(val snapshot: ProfileSnapshot) : ProfileDecodeResult
+    data class Rejected(val reason: ProfileSnapshotRejection) : ProfileDecodeResult
 }
 
-/** Strict, canonical save-v4 codec. It never imports or normalizes older formats. */
-internal object ProfileV4Codec {
+/** Strict, canonical codec for the only profile schema supported before 1.0.0. */
+internal object ProfileCodec {
     private val json = Json {
         encodeDefaults = true
         explicitNulls = true
@@ -57,86 +53,82 @@ internal object ProfileV4Codec {
         prettyPrint = false
     }
 
-    fun encode(snapshot: ProfileV4Snapshot): ProfileV4EncodeResult {
+    fun encode(snapshot: ProfileSnapshot): ProfileEncodeResult {
         val dto = try {
             snapshot.toDto()
         } catch (rejection: ProfileCodecRejection) {
-            return ProfileV4EncodeResult.Rejected(rejection.reason)
+            return ProfileEncodeResult.Rejected(rejection.reason)
         }
         val payload = try {
             json.encodeToString(dto)
         } catch (_: SerializationException) {
-            return ProfileV4EncodeResult.Rejected(ProfileV4Rejection.MALFORMED_JSON)
+            return ProfileEncodeResult.Rejected(ProfileSnapshotRejection.MALFORMED_JSON)
         } catch (_: IllegalArgumentException) {
-            return ProfileV4EncodeResult.Rejected(ProfileV4Rejection.MALFORMED_JSON)
+            return ProfileEncodeResult.Rejected(ProfileSnapshotRejection.MALFORMED_JSON)
         }
         return when (payload.utf8Validation()) {
-            Utf8Validation.Accepted -> ProfileV4EncodeResult.Encoded(payload)
-            Utf8Validation.TooLarge -> ProfileV4EncodeResult.Rejected(ProfileV4Rejection.PAYLOAD_TOO_LARGE)
-            Utf8Validation.Invalid -> ProfileV4EncodeResult.Rejected(ProfileV4Rejection.INVALID_UTF8)
+            Utf8Validation.Accepted -> ProfileEncodeResult.Encoded(payload)
+            Utf8Validation.TooLarge -> ProfileEncodeResult.Rejected(ProfileSnapshotRejection.PAYLOAD_TOO_LARGE)
+            Utf8Validation.Invalid -> ProfileEncodeResult.Rejected(ProfileSnapshotRejection.INVALID_UTF8)
         }
     }
 
-    fun decode(payload: String): ProfileV4DecodeResult {
+    fun decode(payload: String): ProfileDecodeResult {
         when (payload.utf8Validation()) {
             Utf8Validation.TooLarge -> {
-                return ProfileV4DecodeResult.Rejected(ProfileV4Rejection.PAYLOAD_TOO_LARGE)
+                return ProfileDecodeResult.Rejected(ProfileSnapshotRejection.PAYLOAD_TOO_LARGE)
             }
             Utf8Validation.Invalid -> {
-                return ProfileV4DecodeResult.Rejected(ProfileV4Rejection.INVALID_UTF8)
+                return ProfileDecodeResult.Rejected(ProfileSnapshotRejection.INVALID_UTF8)
             }
             Utf8Validation.Accepted -> Unit
         }
 
         val dto = try {
-            json.decodeFromString<ProfileEnvelopeV4Dto>(payload)
+            json.decodeFromString<ProfileSnapshotDto>(payload)
         } catch (_: SerializationException) {
-            return ProfileV4DecodeResult.Rejected(ProfileV4Rejection.MALFORMED_JSON)
+            return ProfileDecodeResult.Rejected(ProfileSnapshotRejection.MALFORMED_JSON)
         } catch (_: IllegalArgumentException) {
-            return ProfileV4DecodeResult.Rejected(ProfileV4Rejection.MALFORMED_JSON)
+            return ProfileDecodeResult.Rejected(ProfileSnapshotRejection.MALFORMED_JSON)
         }
 
         val canonicalPayload = try {
             json.encodeToString(dto)
         } catch (_: SerializationException) {
-            return ProfileV4DecodeResult.Rejected(ProfileV4Rejection.MALFORMED_JSON)
+            return ProfileDecodeResult.Rejected(ProfileSnapshotRejection.MALFORMED_JSON)
         } catch (_: IllegalArgumentException) {
-            return ProfileV4DecodeResult.Rejected(ProfileV4Rejection.MALFORMED_JSON)
+            return ProfileDecodeResult.Rejected(ProfileSnapshotRejection.MALFORMED_JSON)
         }
         if (canonicalPayload != payload) {
-            return ProfileV4DecodeResult.Rejected(ProfileV4Rejection.NON_CANONICAL_PAYLOAD)
+            return ProfileDecodeResult.Rejected(ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD)
         }
 
         return try {
-            ProfileV4DecodeResult.Decoded(dto.toSnapshot())
+            ProfileDecodeResult.Decoded(dto.toSnapshot())
         } catch (rejection: ProfileCodecRejection) {
-            ProfileV4DecodeResult.Rejected(rejection.reason)
+            ProfileDecodeResult.Rejected(rejection.reason)
         }
     }
 }
 
 @Serializable
-private data class ProfileEnvelopeV4Dto(
-    val schemaVersion: Int,
-    val profileId: String,
-    val contentVersion: String,
+private data class ProfileSnapshotDto(
     val revision: String,
-    val legacyResetConfirmed: Boolean,
-    val profile: PlayerProfileV4Dto,
+    val profile: PlayerProfileDto,
 )
 
 @Serializable
-private data class PlayerProfileV4Dto(
-    val preferences: PlayerPreferencesV4Dto,
-    val economy: PlayerEconomyV4Dto,
-    val loadout: PlayerLoadoutV4Dto,
-    val labProgress: LabProgressV4Dto,
-    val collection: PlayerCollectionV4Dto,
-    val rebirthProgress: RebirthProgressV4Dto,
+private data class PlayerProfileDto(
+    val preferences: PlayerPreferencesDto,
+    val economy: PlayerEconomyDto,
+    val loadout: PlayerLoadoutDto,
+    val labProgress: LabProgressDto,
+    val collection: PlayerCollectionDto,
+    val rebirthProgress: RebirthProgressDto,
 )
 
 @Serializable
-private data class PlayerPreferencesV4Dto(
+private data class PlayerPreferencesDto(
     val soundEnabled: Boolean,
     val musicEnabled: Boolean,
     val masterVolumePercent: Int,
@@ -151,63 +143,58 @@ private data class PlayerPreferencesV4Dto(
 )
 
 @Serializable
-private data class PlayerEconomyV4Dto(
+private data class PlayerEconomyDto(
     val matter: String,
     val lifetimeMatter: String,
 )
 
 @Serializable
-private data class PlayerLoadoutV4Dto(
+private data class PlayerLoadoutDto(
     val coreShapeId: String,
     val selectedWeaponId: String,
     val unlockedWeaponIds: List<String>,
 )
 
 @Serializable
-private data class LabProgressV4Dto(
-    val ranks: List<MetaUpgradeRankV4Dto>,
+private data class LabProgressDto(
+    val ranks: List<MetaUpgradeRankDto>,
 )
 
 @Serializable
-private data class MetaUpgradeRankV4Dto(
+private data class MetaUpgradeRankDto(
     val id: String,
     val rank: Int,
 )
 
 @Serializable
-private data class PlayerCollectionV4Dto(
+private data class PlayerCollectionDto(
     val discoveredItemIds: List<Int>,
 )
 
 @Serializable
-private data class RebirthProgressV4Dto(
+private data class RebirthProgressDto(
     val level: Int,
     val highestCleared: Int,
 )
 
-private fun ProfileV4Snapshot.toDto(): ProfileEnvelopeV4Dto {
+private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
     validateProfile(profile)
-    rejectUnless(contentVersion.value.isNotBlank(), ProfileV4Rejection.VALUE_OUT_OF_RANGE)
-    rejectUnless(revision.value >= 0L, ProfileV4Rejection.INVALID_DECIMAL)
+    rejectUnless(revision.value >= 0L, ProfileSnapshotRejection.INVALID_DECIMAL)
 
     val preferences = profile.preferences
     val ranks = MetaUpgradeId.entries
         .map { id ->
-            MetaUpgradeRankV4Dto(
+            MetaUpgradeRankDto(
                 id = id.wireId(),
                 rank = profile.labProgress.rank(id),
             )
         }
-        .sortedBy(MetaUpgradeRankV4Dto::id)
+        .sortedBy(MetaUpgradeRankDto::id)
 
-    return ProfileEnvelopeV4Dto(
-        schemaVersion = PROFILE_SCHEMA_VERSION,
-        profileId = LOCAL_PROFILE_ID,
-        contentVersion = contentVersion.value,
+    return ProfileSnapshotDto(
         revision = revision.value.toString(),
-        legacyResetConfirmed = legacyResetConfirmed,
-        profile = PlayerProfileV4Dto(
-            preferences = PlayerPreferencesV4Dto(
+        profile = PlayerProfileDto(
+            preferences = PlayerPreferencesDto(
                 soundEnabled = preferences.soundEnabled,
                 musicEnabled = preferences.musicEnabled,
                 masterVolumePercent = preferences.masterVolume.toPercent(),
@@ -220,22 +207,22 @@ private fun ProfileV4Snapshot.toDto(): ProfileEnvelopeV4Dto {
                 damageNumberFormatId = preferences.damageNumberFormat.wireId(),
                 damageNumberTierThreshold = preferences.damageNumberTierThreshold,
             ),
-            economy = PlayerEconomyV4Dto(
+            economy = PlayerEconomyDto(
                 matter = profile.economy.matter.toString(),
                 lifetimeMatter = profile.economy.lifetimeMatter.toString(),
             ),
-            loadout = PlayerLoadoutV4Dto(
+            loadout = PlayerLoadoutDto(
                 coreShapeId = profile.loadout.coreShape.wireId(),
                 selectedWeaponId = profile.loadout.selectedWeapon.wireId(),
                 unlockedWeaponIds = profile.loadout.unlockedWeapons
                     .map(WeaponId::wireId)
                     .sorted(),
             ),
-            labProgress = LabProgressV4Dto(ranks),
-            collection = PlayerCollectionV4Dto(
+            labProgress = LabProgressDto(ranks),
+            collection = PlayerCollectionDto(
                 profile.collection.discoveredItemIds.sorted(),
             ),
-            rebirthProgress = RebirthProgressV4Dto(
+            rebirthProgress = RebirthProgressDto(
                 level = profile.rebirthProgress.level,
                 highestCleared = profile.rebirthProgress.highestCleared,
             ),
@@ -243,31 +230,23 @@ private fun ProfileV4Snapshot.toDto(): ProfileEnvelopeV4Dto {
     )
 }
 
-private fun ProfileEnvelopeV4Dto.toSnapshot(): ProfileV4Snapshot {
-    rejectUnless(schemaVersion == PROFILE_SCHEMA_VERSION, ProfileV4Rejection.UNSUPPORTED_SCHEMA_VERSION)
-    rejectUnless(profileId == LOCAL_PROFILE_ID, ProfileV4Rejection.PROFILE_ID_MISMATCH)
-    rejectUnless(contentVersion.isNotBlank(), ProfileV4Rejection.VALUE_OUT_OF_RANGE)
+private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
     val revisionValue = revision.parseCanonicalNonNegativeLong()
-    val contentVersionValue = try {
-        ContentVersion(contentVersion)
-    } catch (_: IllegalArgumentException) {
-        reject(ProfileV4Rejection.VALUE_OUT_OF_RANGE)
-    }
 
     val expectedRankIds = MetaUpgradeId.entries.map { it.wireId() }.sorted()
-    val actualRankIds = profile.labProgress.ranks.map(MetaUpgradeRankV4Dto::id)
+    val actualRankIds = profile.labProgress.ranks.map(MetaUpgradeRankDto::id)
     rejectUnless(
         actualRankIds == actualRankIds.distinct().sorted() && actualRankIds == expectedRankIds,
-        ProfileV4Rejection.INVALID_ORDER_OR_DUPLICATE,
+        ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
     )
     rejectUnless(
         profile.loadout.unlockedWeaponIds == profile.loadout.unlockedWeaponIds.distinct().sorted(),
-        ProfileV4Rejection.INVALID_ORDER_OR_DUPLICATE,
+        ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
     )
     rejectUnless(
         profile.collection.discoveredItemIds ==
             profile.collection.discoveredItemIds.distinct().sorted(),
-        ProfileV4Rejection.INVALID_ORDER_OR_DUPLICATE,
+        ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
     )
 
     val metaRanks = MutableList(MetaUpgradeId.entries.size) { 0 }
@@ -308,13 +287,11 @@ private fun ProfileEnvelopeV4Dto.toSnapshot(): ProfileV4Snapshot {
     )
     validateProfile(decoded)
     profile.labProgress.ranks.forEach { record ->
-        rejectUnless(record.rank >= 0, ProfileV4Rejection.VALUE_OUT_OF_RANGE)
+        rejectUnless(record.rank >= 0, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
     }
 
-    return ProfileV4Snapshot(
-        contentVersion = contentVersionValue,
+    return ProfileSnapshot(
         revision = ProfileRevision(revisionValue),
-        legacyResetConfirmed = legacyResetConfirmed,
         profile = decoded,
     )
 }
@@ -327,56 +304,56 @@ private fun validateProfile(profile: PlayerProfile) {
             preferences.simulationSpeed in SIMULATION_SPEED_OPTIONS &&
             preferences.textScale.isFinite() && preferences.textScale in 1f..1.75f &&
             preferences.damageNumberTierThreshold in DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS,
-        ProfileV4Rejection.VALUE_OUT_OF_RANGE,
+        ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
     )
     rejectUnless(
         profile.economy.matter >= 0L &&
             profile.economy.lifetimeMatter >= profile.economy.matter,
-        ProfileV4Rejection.INCONSISTENT_PROFILE,
+        ProfileSnapshotRejection.INCONSISTENT_PROFILE,
     )
 
     rejectUnless(
         profile.loadout.unlockedWeapons.isNotEmpty() &&
             profile.loadout.unlockedWeapons.size <= ContentBounds.MAX_WEAPONS,
-        ProfileV4Rejection.VALUE_OUT_OF_RANGE,
+        ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
     )
     rejectUnless(
         profile.loadout.selectedWeapon in profile.loadout.unlockedWeapons,
-        ProfileV4Rejection.INCONSISTENT_PROFILE,
+        ProfileSnapshotRejection.INCONSISTENT_PROFILE,
     )
 
     rejectUnless(
         profile.labProgress.ranks.size == MetaUpgradeId.entries.size &&
             profile.labProgress.ranks.size == ContentBounds.MAX_META_UPGRADES,
-        ProfileV4Rejection.INCONSISTENT_PROFILE,
+        ProfileSnapshotRejection.INCONSISTENT_PROFILE,
     )
-    rejectUnless(profile.labProgress.ranks.all { it >= 0 }, ProfileV4Rejection.VALUE_OUT_OF_RANGE)
+    rejectUnless(profile.labProgress.ranks.all { it >= 0 }, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
 
     rejectUnless(
         profile.collection.discoveredItemIds.size <= ContentBounds.MAX_ITEMS &&
             profile.collection.discoveredItemIds.all { it >= 0 },
-        ProfileV4Rejection.VALUE_OUT_OF_RANGE,
+        ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
     )
     rejectUnless(
         profile.rebirthProgress.level in ContentBounds.MIN_REBIRTH_LEVEL..ContentBounds.MAX_REBIRTH_LEVEL &&
             profile.rebirthProgress.highestCleared in -1..profile.rebirthProgress.level,
-        ProfileV4Rejection.VALUE_OUT_OF_RANGE,
+        ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
     )
 }
 
 private fun Float.toPercent(): Int {
-    rejectUnless(isFinite(), ProfileV4Rejection.VALUE_OUT_OF_RANGE)
+    rejectUnless(isFinite(), ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
     return (this * 100f).roundToInt()
 }
 
 private fun String.parseCanonicalNonNegativeLong(): Long {
     if (isEmpty() || this != "0" && (first() == '0' || any { it !in '0'..'9' })) {
-        reject(ProfileV4Rejection.INVALID_DECIMAL)
+        reject(ProfileSnapshotRejection.INVALID_DECIMAL)
     }
     if (this == "0") return 0L
-    if (any { it !in '0'..'9' }) reject(ProfileV4Rejection.INVALID_DECIMAL)
-    val value = toLongOrNull() ?: reject(ProfileV4Rejection.INVALID_DECIMAL)
-    rejectUnless(value >= 0L && value.toString() == this, ProfileV4Rejection.INVALID_DECIMAL)
+    if (any { it !in '0'..'9' }) reject(ProfileSnapshotRejection.INVALID_DECIMAL)
+    val value = toLongOrNull() ?: reject(ProfileSnapshotRejection.INVALID_DECIMAL)
+    rejectUnless(value >= 0L && value.toString() == this, ProfileSnapshotRejection.INVALID_DECIMAL)
     return value
 }
 
@@ -390,7 +367,7 @@ private fun String.coreShape(): CoreShape = when (this) {
     "ORB" -> CoreShape.ORB
     "PRISM" -> CoreShape.PRISM
     "SHARD" -> CoreShape.SHARD
-    else -> reject(ProfileV4Rejection.INVALID_STABLE_ID)
+    else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
 }
 
 private fun WeaponId.wireId(): String = when (this) {
@@ -421,7 +398,7 @@ private fun String.weaponId(): WeaponId = when (this) {
     "ENTROPY_FIELD" -> WeaponId.ENTROPY_FIELD
     "SINGULARITY_SPEAR" -> WeaponId.SINGULARITY_SPEAR
     "PRISM_RELAY" -> WeaponId.PRISM_RELAY
-    else -> reject(ProfileV4Rejection.INVALID_STABLE_ID)
+    else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
 }
 
 private fun MetaUpgradeId.wireId(): String = when (this) {
@@ -444,7 +421,7 @@ private fun String.metaUpgradeId(): MetaUpgradeId = when (this) {
     "SALVAGE_PROTOCOL" -> MetaUpgradeId.SALVAGE_PROTOCOL
     "DATA_ARCHIVE" -> MetaUpgradeId.DATA_ARCHIVE
     "ARMORY_LICENSE" -> MetaUpgradeId.ARMORY_LICENSE
-    else -> reject(ProfileV4Rejection.INVALID_STABLE_ID)
+    else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
 }
 
 private fun ParticleDensity.wireId(): String = when (this) {
@@ -457,7 +434,7 @@ private fun String.particleDensity(): ParticleDensity = when (this) {
     "LOW" -> ParticleDensity.LOW
     "NORMAL" -> ParticleDensity.NORMAL
     "HIGH" -> ParticleDensity.HIGH
-    else -> reject(ProfileV4Rejection.INVALID_STABLE_ID)
+    else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
 }
 
 private fun DamageNumberSize.wireId(): String = when (this) {
@@ -472,7 +449,7 @@ private fun String.damageNumberSize(): DamageNumberSize = when (this) {
     "NORMAL" -> DamageNumberSize.NORMAL
     "LARGE" -> DamageNumberSize.LARGE
     "HUGE" -> DamageNumberSize.HUGE
-    else -> reject(ProfileV4Rejection.INVALID_STABLE_ID)
+    else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
 }
 
 private fun DamageNumberFormat.wireId(): String = when (this) {
@@ -483,16 +460,16 @@ private fun DamageNumberFormat.wireId(): String = when (this) {
 private fun String.damageNumberFormat(): DamageNumberFormat = when (this) {
     "COMPACT" -> DamageNumberFormat.COMPACT
     "FULL" -> DamageNumberFormat.FULL
-    else -> reject(ProfileV4Rejection.INVALID_STABLE_ID)
+    else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
 }
 
 private class ProfileCodecRejection(
-    val reason: ProfileV4Rejection,
+    val reason: ProfileSnapshotRejection,
 ) : RuntimeException()
 
-private fun reject(reason: ProfileV4Rejection): Nothing = throw ProfileCodecRejection(reason)
+private fun reject(reason: ProfileSnapshotRejection): Nothing = throw ProfileCodecRejection(reason)
 
-private fun rejectUnless(condition: Boolean, reason: ProfileV4Rejection) {
+private fun rejectUnless(condition: Boolean, reason: ProfileSnapshotRejection) {
     if (!condition) reject(reason)
 }
 

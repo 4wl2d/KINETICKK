@@ -3,7 +3,6 @@
 
 package kinetickk.ball.profile.resource
 
-import kinetickk.ball.content.api.ContentVersion
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MetaUpgradeId
@@ -18,7 +17,7 @@ import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PlayerProfile
-import kinetickk.ball.profile.api.ProfileV4Rejection
+import kinetickk.ball.profile.api.ProfileSnapshotRejection
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kotlin.test.Test
@@ -28,18 +27,18 @@ import kotlin.test.assertIs
 class ProfileCodecTest {
     @Test
     fun defaultProfileHasCanonicalGoldenAndRoundTrips() {
-        val snapshot = testV4Snapshot()
+        val snapshot = testSnapshot()
         val encoded = requireEncoded(snapshot)
 
-        assertEquals(DEFAULT_V4_GOLDEN, encoded)
+        assertEquals(DEFAULT_GOLDEN, encoded)
         assertEquals(
-            ProfileV4DecodeResult.Decoded(snapshot),
-            ProfileV4Codec.decode(encoded),
+            ProfileDecodeResult.Decoded(snapshot),
+            ProfileCodec.decode(encoded),
         )
     }
 
     @Test
-    fun schemaMaximumUnlockedWeaponsLabRanksAndDiscoveriesRoundTripWithoutLoss() {
+    fun currentSchemaMaximumUnlockedWeaponsLabRanksAndDiscoveriesRoundTripWithoutLoss() {
         val profile = PlayerProfile(
             preferences = PlayerPreferences(
                 soundEnabled = false,
@@ -64,11 +63,11 @@ class ProfileCodecTest {
             collection = PlayerCollection((0 until ContentBounds.MAX_ITEMS).reversed().toSet()),
             rebirthProgress = RebirthProgress(7, 6),
         )
-        val snapshot = testV4Snapshot(profile, revision = 42L, legacyResetConfirmed = true)
+        val snapshot = testSnapshot(profile, revision = 42L)
 
         val encoded = requireEncoded(snapshot)
-        val decoded = assertIs<ProfileV4DecodeResult.Decoded>(
-            ProfileV4Codec.decode(encoded),
+        val decoded = assertIs<ProfileDecodeResult.Decoded>(
+            ProfileCodec.decode(encoded),
         )
 
         assertEquals(snapshot, decoded.snapshot)
@@ -87,137 +86,92 @@ class ProfileCodecTest {
     }
 
     @Test
-    fun contentVersionIsRetainedForNucleusCompatibilityPolicy() {
-        val incompatible = testV4Snapshot(contentVersion = ContentVersion("future-content"))
-
-        val decoded = assertIs<ProfileV4DecodeResult.Decoded>(
-            ProfileV4Codec.decode(requireEncoded(incompatible)),
-        )
-
-        assertEquals(ContentVersion("future-content"), decoded.snapshot.contentVersion)
-    }
-
-    @Test
     fun unknownMissingAndNonCanonicalJsonAreRejectedStrictly() {
-        val unknown = DEFAULT_V4_GOLDEN.replace(
-            "\"schemaVersion\":4,",
-            "\"schemaVersion\":4,\"unknown\":0,",
+        val unknown = DEFAULT_GOLDEN.replace(
+            "\"revision\":\"0\",",
+            "\"revision\":\"0\",\"unknown\":0,",
         )
-        val missing = DEFAULT_V4_GOLDEN.replace("\"profileId\":\"local-player\",", "")
-        val missingNested = DEFAULT_V4_GOLDEN.replace("\"soundEnabled\":true,", "")
-        val reordered = DEFAULT_V4_GOLDEN.replace(
-            "\"schemaVersion\":4,\"profileId\":\"local-player\"",
-            "\"profileId\":\"local-player\",\"schemaVersion\":4",
-        )
+        val missing = DEFAULT_GOLDEN.replace("\"revision\":\"0\",", "")
+        val missingNested = DEFAULT_GOLDEN.replace("\"soundEnabled\":true,", "")
 
         listOf(unknown, missing, missingNested).forEach { payload ->
-            assertEquals(ProfileV4Rejection.MALFORMED_JSON, decodeRejection(payload))
+            assertEquals(ProfileSnapshotRejection.MALFORMED_JSON, decodeRejection(payload))
         }
-        listOf(reordered, "$DEFAULT_V4_GOLDEN\n").forEach { payload ->
-            assertEquals(ProfileV4Rejection.NON_CANONICAL_PAYLOAD, decodeRejection(payload))
+        listOf(" $DEFAULT_GOLDEN", "$DEFAULT_GOLDEN\n").forEach { payload ->
+            assertEquals(ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD, decodeRejection(payload))
         }
-    }
-
-    @Test
-    fun schemaAndProfileIdentityMustMatchExactly() {
-        val wrongSchema = DEFAULT_V4_GOLDEN.replace("\"schemaVersion\":4", "\"schemaVersion\":3")
-        val wrongProfile = DEFAULT_V4_GOLDEN.replace("\"local-player\"", "\"another-player\"")
-
-        assertEquals(ProfileV4Rejection.UNSUPPORTED_SCHEMA_VERSION, decodeRejection(wrongSchema))
-        assertEquals(ProfileV4Rejection.PROFILE_ID_MISMATCH, decodeRejection(wrongProfile))
     }
 
     @Test
     fun revisionAndEconomyUseCanonicalBoundedDecimalStrings() {
-        val maxSnapshot = testV4Snapshot(
+        val maxSnapshot = testSnapshot(
             profile = PlayerProfile(economy = PlayerEconomy(Long.MAX_VALUE, Long.MAX_VALUE)),
             revision = Long.MAX_VALUE,
         )
         assertEquals(
             maxSnapshot,
-            assertIs<ProfileV4DecodeResult.Decoded>(
-                ProfileV4Codec.decode(requireEncoded(maxSnapshot)),
+            assertIs<ProfileDecodeResult.Decoded>(
+                ProfileCodec.decode(requireEncoded(maxSnapshot)),
             ).snapshot,
         )
 
         listOf("", "00", "01", "+1", "-1", " 1", "1 ", "1.0", "1e1", "9223372036854775808")
             .forEach { invalid ->
-                val payload = DEFAULT_V4_GOLDEN.replace("\"revision\":\"0\"", "\"revision\":\"$invalid\"")
-                assertEquals(ProfileV4Rejection.INVALID_DECIMAL, decodeRejection(payload), invalid)
+                val payload = DEFAULT_GOLDEN.replace("\"revision\":\"0\"", "\"revision\":\"$invalid\"")
+                assertEquals(ProfileSnapshotRejection.INVALID_DECIMAL, decodeRejection(payload), invalid)
             }
-        val invalidMatter = DEFAULT_V4_GOLDEN.replace("\"matter\":\"0\"", "\"matter\":\"01\"")
-        assertEquals(ProfileV4Rejection.INVALID_DECIMAL, decodeRejection(invalidMatter))
+        val invalidMatter = DEFAULT_GOLDEN.replace("\"matter\":\"0\"", "\"matter\":\"01\"")
+        assertEquals(ProfileSnapshotRejection.INVALID_DECIMAL, decodeRejection(invalidMatter))
     }
 
     @Test
     fun stableIdsOrderingAndCrossFieldInvariantsAreStrict() {
-        val unknownWeapon = DEFAULT_V4_GOLDEN.replace(
+        val unknownWeapon = DEFAULT_GOLDEN.replace(
             "\"selectedWeaponId\":\"FLUX_WAKE\"",
             "\"selectedWeaponId\":\"UNKNOWN\"",
         )
-        val duplicateWeapon = DEFAULT_V4_GOLDEN.replace(
+        val duplicateWeapon = DEFAULT_GOLDEN.replace(
             "\"unlockedWeaponIds\":[\"FLUX_WAKE\"]",
             "\"unlockedWeaponIds\":[\"FLUX_WAKE\",\"FLUX_WAKE\"]",
         )
-        val selectedLocked = DEFAULT_V4_GOLDEN.replace(
+        val selectedLocked = DEFAULT_GOLDEN.replace(
             "\"selectedWeaponId\":\"FLUX_WAKE\"",
             "\"selectedWeaponId\":\"MORNINGSTAR\"",
         )
-        val policyUnknownDiscovery = DEFAULT_V4_GOLDEN.replace(
+        val policyUnknownDiscovery = DEFAULT_GOLDEN.replace(
             "\"discoveredItemIds\":[]",
             "\"discoveredItemIds\":[400]",
         )
-        val invalidEconomy = DEFAULT_V4_GOLDEN
+        val invalidEconomy = DEFAULT_GOLDEN
             .replace("\"matter\":\"0\"", "\"matter\":\"2\"")
             .replace("\"lifetimeMatter\":\"0\"", "\"lifetimeMatter\":\"1\"")
 
-        assertEquals(ProfileV4Rejection.INVALID_STABLE_ID, decodeRejection(unknownWeapon))
-        assertEquals(ProfileV4Rejection.INVALID_ORDER_OR_DUPLICATE, decodeRejection(duplicateWeapon))
-        assertEquals(ProfileV4Rejection.INCONSISTENT_PROFILE, decodeRejection(selectedLocked))
-        assertIs<ProfileV4DecodeResult.Decoded>(ProfileV4Codec.decode(policyUnknownDiscovery))
-        assertEquals(ProfileV4Rejection.INCONSISTENT_PROFILE, decodeRejection(invalidEconomy))
+        assertEquals(ProfileSnapshotRejection.INVALID_STABLE_ID, decodeRejection(unknownWeapon))
+        assertEquals(ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE, decodeRejection(duplicateWeapon))
+        assertEquals(ProfileSnapshotRejection.INCONSISTENT_PROFILE, decodeRejection(selectedLocked))
+        assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(policyUnknownDiscovery))
+        assertEquals(ProfileSnapshotRejection.INCONSISTENT_PROFILE, decodeRejection(invalidEconomy))
     }
 
     @Test
     fun byteLimitAndUtf8AreCheckedBeforeJsonDecode() {
         assertEquals(
-            ProfileV4Rejection.MALFORMED_JSON,
+            ProfileSnapshotRejection.MALFORMED_JSON,
             decodeRejection("x".repeat(MAX_PROFILE_PAYLOAD_BYTES)),
         )
         assertEquals(
-            ProfileV4Rejection.PAYLOAD_TOO_LARGE,
+            ProfileSnapshotRejection.PAYLOAD_TOO_LARGE,
             decodeRejection("x".repeat(MAX_PROFILE_PAYLOAD_BYTES + 1)),
         )
-        assertEquals(ProfileV4Rejection.INVALID_UTF8, decodeRejection("\uD800"))
-    }
-
-    @Test
-    fun encodedByteLimitAcceptsExactlyNAndRejectsFirstNPlusOne() {
-        val basePayload = requireEncoded(testV4Snapshot())
-        val baseVersion = "test-content"
-        val envelopeBytesWithoutVersion =
-            basePayload.encodeToByteArray().size - baseVersion.encodeToByteArray().size
-        val exactVersionBytes = MAX_PROFILE_PAYLOAD_BYTES - envelopeBytesWithoutVersion
-
-        val exact = assertIs<ProfileV4EncodeResult.Encoded>(
-            ProfileV4Codec.encode(
-                testV4Snapshot(contentVersion = ContentVersion("x".repeat(exactVersionBytes))),
-            ),
-        ).payload
-
-        assertEquals(MAX_PROFILE_PAYLOAD_BYTES, exact.encodeToByteArray().size)
-        assertEncodeRejection(
-            ProfileV4Rejection.PAYLOAD_TOO_LARGE,
-            testV4Snapshot(contentVersion = ContentVersion("x".repeat(exactVersionBytes + 1))),
-        )
+        assertEquals(ProfileSnapshotRejection.INVALID_UTF8, decodeRejection("\uD800"))
     }
 
     @Test
     fun outboundProfileIsValidatedWithoutClampingOrFallback() {
-        val invalidRange = testV4Snapshot(
+        val invalidRange = testSnapshot(
             PlayerProfile(preferences = PlayerPreferences(masterVolume = 2f)),
         )
-        val inconsistentLoadout = testV4Snapshot(
+        val inconsistentLoadout = testSnapshot(
             PlayerProfile(
                 loadout = PlayerLoadout(
                     selectedWeapon = WeaponId.MORNINGSTAR,
@@ -225,21 +179,16 @@ class ProfileCodecTest {
                 ),
             ),
         )
-        val invalidCollection = testV4Snapshot(
+        val invalidCollection = testSnapshot(
             PlayerProfile(collection = PlayerCollection(setOf(-1))),
         )
-        val incompleteRanks = testV4Snapshot(
+        val incompleteRanks = testSnapshot(
             PlayerProfile(labProgress = LabProgress(List(MetaUpgradeId.entries.size - 1) { 0 })),
         )
-        val oversizedEnvelope = testV4Snapshot(
-            contentVersion = ContentVersion("x".repeat(MAX_PROFILE_PAYLOAD_BYTES)),
-        )
-
-        assertEncodeRejection(ProfileV4Rejection.VALUE_OUT_OF_RANGE, invalidRange)
-        assertEncodeRejection(ProfileV4Rejection.INCONSISTENT_PROFILE, inconsistentLoadout)
-        assertEncodeRejection(ProfileV4Rejection.VALUE_OUT_OF_RANGE, invalidCollection)
-        assertEncodeRejection(ProfileV4Rejection.INCONSISTENT_PROFILE, incompleteRanks)
-        assertEncodeRejection(ProfileV4Rejection.PAYLOAD_TOO_LARGE, oversizedEnvelope)
+        assertEncodeRejection(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE, invalidRange)
+        assertEncodeRejection(ProfileSnapshotRejection.INCONSISTENT_PROFILE, inconsistentLoadout)
+        assertEncodeRejection(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE, invalidCollection)
+        assertEncodeRejection(ProfileSnapshotRejection.INCONSISTENT_PROFILE, incompleteRanks)
     }
 
     @Test
@@ -250,12 +199,12 @@ class ProfileCodecTest {
             textScale = 1.75f,
             damageNumberTierThreshold = DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS.last(),
         )
-        val exactSnapshot = testV4Snapshot(PlayerProfile(preferences = exact))
+        val exactSnapshot = testSnapshot(PlayerProfile(preferences = exact))
 
         assertEquals(
             exactSnapshot,
-            assertIs<ProfileV4DecodeResult.Decoded>(
-                ProfileV4Codec.decode(requireEncoded(exactSnapshot)),
+            assertIs<ProfileDecodeResult.Decoded>(
+                ProfileCodec.decode(requireEncoded(exactSnapshot)),
             ).snapshot,
         )
 
@@ -271,40 +220,40 @@ class ProfileCodecTest {
 
         invalidPreferences.forEach { preferences ->
             assertEncodeRejection(
-                ProfileV4Rejection.VALUE_OUT_OF_RANGE,
-                testV4Snapshot(PlayerProfile(preferences = preferences)),
+                ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+                testSnapshot(PlayerProfile(preferences = preferences)),
             )
         }
     }
 
     @Test
     fun preferenceIngressAcceptsMembersAndRejectsAdjacentInRangeNonMembers() {
-        assertIs<ProfileV4DecodeResult.Decoded>(ProfileV4Codec.decode(DEFAULT_V4_GOLDEN))
+        assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(DEFAULT_GOLDEN))
 
-        val adjacentSimulationSpeed = DEFAULT_V4_GOLDEN.replace(
+        val adjacentSimulationSpeed = DEFAULT_GOLDEN.replace(
             "\"simulationSpeedPercent\":115",
             "\"simulationSpeedPercent\":116",
         )
-        val adjacentTierThreshold = DEFAULT_V4_GOLDEN.replace(
+        val adjacentTierThreshold = DEFAULT_GOLDEN.replace(
             "\"damageNumberTierThreshold\":50",
             "\"damageNumberTierThreshold\":51",
         )
 
-        assertEquals(ProfileV4Rejection.VALUE_OUT_OF_RANGE, decodeRejection(adjacentSimulationSpeed))
-        assertEquals(ProfileV4Rejection.VALUE_OUT_OF_RANGE, decodeRejection(adjacentTierThreshold))
+        assertEquals(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE, decodeRejection(adjacentSimulationSpeed))
+        assertEquals(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE, decodeRejection(adjacentTierThreshold))
     }
 
     @Test
     fun outboundLabRanksAndDiscoveriesRejectFirstNPlusOne() {
         assertEncodeRejection(
-            ProfileV4Rejection.INCONSISTENT_PROFILE,
-            testV4Snapshot(
+            ProfileSnapshotRejection.INCONSISTENT_PROFILE,
+            testSnapshot(
                 PlayerProfile(labProgress = LabProgress(List(MetaUpgradeId.entries.size + 1) { 0 })),
             ),
         )
         assertEncodeRejection(
-            ProfileV4Rejection.VALUE_OUT_OF_RANGE,
-            testV4Snapshot(
+            ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+            testSnapshot(
                 PlayerProfile(collection = PlayerCollection((0..ContentBounds.MAX_ITEMS).toSet())),
             ),
         )
@@ -312,7 +261,7 @@ class ProfileCodecTest {
 
     @Test
     fun percentageFieldsPreserveTheExistingIntegerQuantization() {
-        val snapshot = testV4Snapshot(
+        val snapshot = testSnapshot(
             PlayerProfile(
                 preferences = PlayerPreferences(
                     masterVolume = 0.555f,
@@ -322,8 +271,8 @@ class ProfileCodecTest {
             ),
         )
 
-        val decoded = assertIs<ProfileV4DecodeResult.Decoded>(
-            ProfileV4Codec.decode(requireEncoded(snapshot)),
+        val decoded = assertIs<ProfileDecodeResult.Decoded>(
+            ProfileCodec.decode(requireEncoded(snapshot)),
         ).snapshot
 
         assertEquals(0.56f, decoded.profile.preferences.masterVolume)
@@ -331,19 +280,19 @@ class ProfileCodecTest {
         assertEquals(1.42f, decoded.profile.preferences.textScale)
     }
 
-    private fun decodeRejection(payload: String): ProfileV4Rejection =
-        assertIs<ProfileV4DecodeResult.Rejected>(
-            ProfileV4Codec.decode(payload),
+    private fun decodeRejection(payload: String): ProfileSnapshotRejection =
+        assertIs<ProfileDecodeResult.Rejected>(
+            ProfileCodec.decode(payload),
         ).reason
 
     private fun assertEncodeRejection(
-        expected: ProfileV4Rejection,
-        snapshot: kinetickk.ball.profile.api.ProfileV4Snapshot,
+        expected: ProfileSnapshotRejection,
+        snapshot: kinetickk.ball.profile.api.ProfileSnapshot,
     ) {
         assertEquals(
             expected,
-            assertIs<ProfileV4EncodeResult.Rejected>(
-                ProfileV4Codec.encode(snapshot),
+            assertIs<ProfileEncodeResult.Rejected>(
+                ProfileCodec.encode(snapshot),
             ).reason,
         )
     }
@@ -363,9 +312,8 @@ private fun String.extractIntArray(field: String): List<Int> {
 
 private val RANK_ID = Regex("\\{\\\"id\\\":\\\"([^\\\"]+)\\\",\\\"rank\\\":")
 
-private const val DEFAULT_V4_GOLDEN: String =
-    "{\"schemaVersion\":4,\"profileId\":\"local-player\",\"contentVersion\":\"test-content\"," +
-        "\"revision\":\"0\",\"legacyResetConfirmed\":false,\"profile\":{" +
+private const val DEFAULT_GOLDEN: String =
+    "{\"revision\":\"0\",\"profile\":{" +
         "\"preferences\":{\"soundEnabled\":true,\"musicEnabled\":true,\"masterVolumePercent\":65," +
         "\"simulationSpeedPercent\":115,\"textScalePercent\":125,\"screenShake\":true," +
         "\"particleDensityId\":\"NORMAL\",\"damageNumbers\":true,\"damageNumberSizeId\":\"NORMAL\"," +

@@ -52,6 +52,7 @@ import kinetickk.ball.profile.api.ProfileModuleResult
 import kinetickk.ball.profile.api.ProfileModuleResultDelivery
 import kinetickk.ball.profile.api.ProfilePulse
 import kinetickk.ball.profile.api.ProfileQuery
+import kinetickk.ball.profile.api.ProfileReadFailure
 import kinetickk.ball.profile.api.ProfileRejection
 import kinetickk.ball.profile.api.ProfileResultIssuerProvenance
 import kinetickk.ball.profile.api.ProfileResultSourceToken
@@ -333,7 +334,11 @@ class GameComponentTest {
         assertEquals(0, profile.bootstrapReadCount)
 
         profile.bootstrapResult = ProfileRunBootstrapResult.Unavailable(
-            ProfileBootstrapStatus.Blocked(ProfileBootstrapBlockReason.ResetInProgress),
+            ProfileBootstrapStatus.Blocked(
+                ProfileBootstrapBlockReason.ResourceFailure(
+                    ProfileReadFailure.PROVIDER_READ_FAILED,
+                ),
+            ),
         )
         val bootstrapRefusal = assertIs<GameplayCommandIngressResult.RejectedBeforeAcceptance>(
             component.acceptFromSession(exact, 5, 0),

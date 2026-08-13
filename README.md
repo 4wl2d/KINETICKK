@@ -200,7 +200,12 @@ own work.
 
 ## Status
 
-KINETICKK is a playable `0.1.0` prototype. APIs, balance, content, and saved-progress formats may change while the game is in active development.
+KINETICKK is a playable `0.1.0` prototype. Until the `1.0.0` release, the
+current local profile schema is the only supported schema: development builds
+do not migrate, import, or clean up saves written by earlier builds. An absent
+or incompatible current profile starts from the current defaults. APIs,
+balance, content, and saved-progress formats may change while the game is in
+active development.
 
 ## License
 

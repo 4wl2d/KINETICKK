@@ -14,7 +14,6 @@ import kinetickk.flow.session.api.SessionInteractionPulse
 import kinetickk.flow.session.api.SessionShortcut
 import kinetickk.flow.session.interaction.codex.api.CodexOutput
 import kinetickk.flow.session.interaction.home.api.HomeOutput
-import kinetickk.flow.session.interaction.reset.api.ResetModalOutput
 
 internal fun Key.toSessionShortcut(): SessionShortcut? = when (this) {
     Key.S -> SessionShortcut.SETTINGS
@@ -68,10 +67,4 @@ internal fun RebirthOutput.toSessionPulse(): SessionInteractionPulse = when (thi
 
 internal fun CodexOutput.toSessionPulse(): SessionInteractionPulse = when (this) {
     CodexOutput.Back -> SessionInteractionPulse.CloseOverlay
-}
-
-internal fun ResetModalOutput.toSessionPulse(): SessionInteractionPulse = when (this) {
-    ResetModalOutput.Cancel -> SessionInteractionPulse.ResetCancelled
-    ResetModalOutput.ConfirmDelete -> SessionInteractionPulse.ResetConfirmed
-    ResetModalOutput.RetryPurge -> SessionInteractionPulse.ResetRetryRequested
 }

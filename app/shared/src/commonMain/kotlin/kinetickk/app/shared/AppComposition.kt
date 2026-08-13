@@ -31,8 +31,8 @@ import kinetickk.flow.session.interaction.codex.api.CodexFeature
 import kinetickk.flow.session.interaction.codex.impl.DefaultCodexFeature
 import kinetickk.flow.session.interaction.home.api.HomeFeature
 import kinetickk.flow.session.interaction.home.impl.DefaultHomeFeature
-import kinetickk.flow.session.interaction.reset.api.ResetModalFeature
-import kinetickk.flow.session.interaction.reset.impl.DefaultResetModalFeature
+import kinetickk.flow.session.interaction.profile.api.ProfileUnavailableFeature
+import kinetickk.flow.session.interaction.profile.impl.DefaultProfileUnavailableFeature
 import kinetickk.resource.audio.api.AudioService
 import kinetickk.resource.audio.impl.DefaultAudioService
 import kinetickk.resource.audio.impl.TonePlaybackCapability
@@ -60,7 +60,7 @@ internal class AppCompositionOwner(
     armoryFeature: ArmoryFeature? = null,
     rebirthFeature: RebirthFeature? = null,
     codexFeature: CodexFeature? = null,
-    resetModalFeature: ResetModalFeature? = null,
+    profileUnavailableFeature: ProfileUnavailableFeature? = null,
 ) {
     private val profilePolicy = contentCatalog.profilePolicy()
     private val gameplayContent = contentCatalog.gameplayContent()
@@ -113,9 +113,8 @@ internal class AppCompositionOwner(
         uiCatalog = uiCatalog,
         audioService = this.audioService,
     )
-    private val resetModalFeature: ResetModalFeature = resetModalFeature ?: DefaultResetModalFeature(
-        this.audioService,
-    )
+    private val profileUnavailableFeature: ProfileUnavailableFeature =
+        profileUnavailableFeature ?: DefaultProfileUnavailableFeature()
     private val appSessionComponent: AppSessionComponent = appSessionComponent ?:
         createAppSessionComponent(
             profileRoute = this.profileComponent,
@@ -148,7 +147,7 @@ internal class AppCompositionOwner(
             armoryFeature = armoryFeature,
             rebirthFeature = rebirthFeature,
             codexFeature = codexFeature,
-            resetModalFeature = resetModalFeature,
+            profileUnavailableFeature = profileUnavailableFeature,
         )
     }
 

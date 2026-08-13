@@ -22,14 +22,12 @@ import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PlayerProfile
-import kinetickk.ball.profile.api.ProfileBootstrapResourceResult
-import kinetickk.ball.profile.api.ProfileLegacyKeys
-import kinetickk.ball.profile.api.ProfileLegacyPurgeResult
 import kinetickk.ball.profile.api.ProfileModuleResultDelivery
 import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.api.ProfileRevision
-import kinetickk.ball.profile.api.ProfileV4Snapshot
-import kinetickk.ball.profile.api.ProfileV4WriteResult
+import kinetickk.ball.profile.api.ProfileSnapshot
+import kinetickk.ball.profile.api.ProfileSnapshotReadResult
+import kinetickk.ball.profile.api.ProfileWriteResult
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.resource.ProfileResource
 import kinetickk.foundation.collections.toImmutableList
@@ -80,16 +78,11 @@ internal fun representativeProfile(policy: ProfilePolicySnapshot = TestProfilePo
         rebirthProgress = RebirthProgress(level = 2, highestCleared = 2),
     )
 
-internal fun v4Snapshot(
+internal fun profileSnapshot(
     profile: PlayerProfile = representativeProfile(),
     revision: Long = 10L,
-    legacyResetConfirmed: Boolean = false,
-    policy: ProfilePolicySnapshot = TestProfilePolicy,
-    contentVersion: ContentVersion = policy.version,
-): ProfileV4Snapshot = ProfileV4Snapshot(
-    contentVersion = contentVersion,
+): ProfileSnapshot = ProfileSnapshot(
     revision = ProfileRevision(revision),
-    legacyResetConfirmed = legacyResetConfirmed,
     profile = profile,
 )
 
@@ -142,45 +135,32 @@ internal fun assertProfileQueries(
 }
 
 internal class RecordingProfileResource(
-    var bootstrapResult: ProfileBootstrapResourceResult = ProfileBootstrapResourceResult.Observed(
-        snapshot = null,
-        legacyKeys = ProfileLegacyKeys.NONE,
-    ),
+    var snapshotReadResult: ProfileSnapshotReadResult = ProfileSnapshotReadResult.Observed(null),
 ) : ProfileResource {
-    var readBehavior: () -> ProfileBootstrapResourceResult = { bootstrapResult }
-    var writeBehavior: (ProfileV4Snapshot) -> ProfileV4WriteResult = { snapshot ->
-        ProfileV4WriteResult.Written(snapshot.revision)
+    var readBehavior: () -> ProfileSnapshotReadResult = { snapshotReadResult }
+    var writeBehavior: (ProfileSnapshot) -> ProfileWriteResult = { snapshot ->
+        ProfileWriteResult.Written(snapshot.revision)
     }
-    var purgeBehavior: () -> ProfileLegacyPurgeResult = { ProfileLegacyPurgeResult.Purged }
-    var beforeWrite: ((ProfileV4Snapshot) -> Unit)? = null
-    var beforePurge: (() -> Unit)? = null
+    var beforeWrite: ((ProfileSnapshot) -> Unit)? = null
 
     var readCount: Int = 0
         private set
-    val writes: MutableList<ProfileV4Snapshot> = mutableListOf()
-    var purgeCount: Int = 0
-        private set
+    val writes: MutableList<ProfileSnapshot> = mutableListOf()
     val events: MutableList<String> = mutableListOf()
 
-    override fun readBootstrap(): ProfileBootstrapResourceResult {
+    override fun readSnapshot(): ProfileSnapshotReadResult {
         readCount += 1
         events += "read"
         return readBehavior()
     }
 
-    override fun writeV4(snapshot: ProfileV4Snapshot): ProfileV4WriteResult {
+    override fun writeSnapshot(snapshot: ProfileSnapshot): ProfileWriteResult {
         writes += snapshot
         events += "write"
         beforeWrite?.invoke(snapshot)
         return writeBehavior(snapshot)
     }
 
-    override fun purgeLegacy(): ProfileLegacyPurgeResult {
-        purgeCount += 1
-        events += "purge"
-        beforePurge?.invoke()
-        return purgeBehavior()
-    }
 }
 
 private fun profilePolicyFixture(): ProfilePolicySnapshot = ProfilePolicySnapshot(

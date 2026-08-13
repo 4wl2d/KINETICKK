@@ -9,11 +9,9 @@ import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthOutput
 import kinetickk.flow.session.api.AppDestination
 import kinetickk.flow.session.api.SessionInteractionPulse
-import kinetickk.flow.session.api.SessionResetLifecycle
+import kinetickk.flow.session.api.SessionLifecycle
 import kinetickk.flow.session.api.SessionShortcut
 import kinetickk.flow.session.interaction.home.api.HomeOutput
-import kinetickk.flow.session.interaction.reset.api.ResetModalMode
-import kinetickk.flow.session.interaction.reset.api.ResetModalOutput
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -71,34 +69,11 @@ class AppSessionInputMappingTest {
             SessionInteractionPulse.RebirthRequested,
             RebirthOutput.ConfirmRequested.toSessionPulse(),
         )
-        assertEquals(
-            SessionInteractionPulse.ResetCancelled,
-            ResetModalOutput.Cancel.toSessionPulse(),
-        )
-        assertEquals(
-            SessionInteractionPulse.ResetConfirmed,
-            ResetModalOutput.ConfirmDelete.toSessionPulse(),
-        )
-        assertEquals(
-            SessionInteractionPulse.ResetRetryRequested,
-            ResetModalOutput.RetryPurge.toSessionPulse(),
-        )
     }
 
     @Test
-    fun everySessionResetLifecycleMapsToTheExistingModalInventory() {
-        assertNull(SessionResetLifecycle.READY.toResetModalRenderModelOrNull())
-        val expected = mapOf(
-            SessionResetLifecycle.CONFIRMATION_REQUIRED to
-                ResetModalMode.CONFIRMATION_REQUIRED,
-            SessionResetLifecycle.RESET_IN_PROGRESS to ResetModalMode.RESET_IN_PROGRESS,
-            SessionResetLifecycle.PURGE_NEEDS_ATTENTION to
-                ResetModalMode.PURGE_NEEDS_ATTENTION,
-            SessionResetLifecycle.BOOTSTRAP_UNAVAILABLE to
-                ResetModalMode.BOOTSTRAP_UNAVAILABLE,
-        )
-        expected.forEach { (lifecycle, mode) ->
-            assertEquals(mode, lifecycle.toResetModalRenderModelOrNull()?.mode)
-        }
+    fun onlyUnavailableBootstrapShowsTheBlockingProfileOverlay() {
+        assertEquals(false, SessionLifecycle.READY.showsProfileUnavailable())
+        assertEquals(true, SessionLifecycle.BOOTSTRAP_UNAVAILABLE.showsProfileUnavailable())
     }
 }

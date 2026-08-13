@@ -4,13 +4,12 @@
 package kinetickk.ball.profile.nucleus
 
 import kinetickk.ball.profile.api.ProfileEffectRef
-import kinetickk.ball.profile.api.ProfileLegacyPurgeResult
 import kinetickk.ball.profile.api.ProfileModuleCommandPulse
 import kinetickk.ball.profile.api.ProfileModuleResultOutput
 import kinetickk.ball.profile.api.ProfilePulse
 import kinetickk.ball.profile.api.ProfileRejection
-import kinetickk.ball.profile.api.ProfileV4Snapshot
-import kinetickk.ball.profile.api.ProfileV4WriteResult
+import kinetickk.ball.profile.api.ProfileSnapshot
+import kinetickk.ball.profile.api.ProfileWriteResult
 import kinetickk.foundation.collections.ImmutableList
 
 const val MAX_PROFILE_OUTPUTS_PER_DECISION: Int = 2
@@ -24,14 +23,9 @@ sealed interface ProfileNucleusPulse {
 
     sealed interface Fact : ProfileNucleusPulse
 
-    data class V4WriteCompleted(
+    data class WriteCompleted(
         val effectRef: ProfileEffectRef,
-        val result: ProfileV4WriteResult,
-    ) : Fact
-
-    data class LegacyPurgeCompleted(
-        val effectRef: ProfileEffectRef,
-        val result: ProfileLegacyPurgeResult,
+        val result: ProfileWriteResult,
     ) : Fact
 }
 
@@ -58,13 +52,9 @@ public data class ProfileAcceptedFrame(
 }
 
 sealed interface ProfileOutput {
-    data class PersistV4Snapshot(
+    data class PersistSnapshot(
         val effectRef: ProfileEffectRef,
-        val snapshot: ProfileV4Snapshot,
-    ) : ProfileOutput
-
-    data class PurgeLegacy(
-        val effectRef: ProfileEffectRef,
+        val snapshot: ProfileSnapshot,
     ) : ProfileOutput
 
     data class CompleteCommand(

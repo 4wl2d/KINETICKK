@@ -13,22 +13,27 @@ trigger.
 |---|---|---|
 | always-applicable boundary/state/decision laws | four semantic authorities mutate or publish owned facts | one writer, closed Pulse/query/output inventories, pure Nuclei, atomic accepted frames, reentrancy tests |
 | cross-authority reads | Session, Gameplay, and Profile consume exactly 14 target-owned snapshot routes | target-owned query/result pairs, source-bound query views, explicit freshness, Assembly bindings, non-atomic multi-read disclosure |
-| same-stack commands and results | Session coordinates Profile/Gameplay; Gameplay reports progress to Profile through exactly 10 command/result routes | target-owned `ModuleCommand`/`ModuleResult` mappings, semantic-handle correlation, Nucleus-private result Pulses, flattened refusal carriers, depth reservation, completion deque |
+| same-stack commands and results | Session coordinates Profile/Gameplay; Gameplay reports progress to Profile through exactly 8 command/result routes | target-owned `ModuleCommand`/`ModuleResult` mappings, semantic-handle correlation, Nucleus-private result Pulses, flattened refusal carriers, depth reservation, completion deque |
 | Flow composition | Session owns lifecycle, ordering, branching, recovery, and terminal navigation | one coordinator, two `FlowParticipation` rows, finite routes, one pending command |
-| external persistence Resource effects | local profile persistence | minimum exact-key capability, commit-before-dispatch, closed provider outcomes/Facts, exact failure-before-execution versus possible-execution classification, and runtime-fault propagation |
+| external persistence Resource effects | one current local `ProfileSnapshot` | minimum `readSnapshot`/`writeSnapshot` capability, one platform-owned exact key, commit-before-dispatch, closed provider outcomes/Facts, exact failure-before-execution versus possible-execution classification, and runtime-fault propagation |
 | live mechanical Audio Projection (Core §9.13) | accepted Gameplay outputs project bounded tones through Resource/platform mechanics | minimum tone capability, commit-before-dispatch, no typed Audio Fact/result/status, and exact runtime-fault/projection-loss split |
-| raw trust/representation edge | persisted JSON and platform provider data are untrusted | independent 65536-byte codec gate before decode, Desktop 8192-code-unit value gate before write, and 64-key returned-inventory admission before project-owned membership iteration; strict decoding, provenance quarantine, and validation/business-stage tests; no bound is claimed for provider enumeration/allocation |
-| persistent schema change | save format changes incompatibly to v4 | explicit detection, no v2/v3 import, reset/quarantine lifecycle, write-before-purge and restart tests |
-| explicit user semantic retry | under `PBA-24`, primary owner `AppSession` targets `Profile` through two families: `SessionInteractionPulse.ResetRetryRequested` issues one `ProfileModuleCommand.RetryLegacyPurge`; after `ProfileModuleResult.ResetWriteRejected`, `ProfileModuleResult.ResetWriteResourceFailure`, or `ProfileModuleResult.ResetWriteOutcomeUnknown`, a later `SessionInteractionPulse.ResetConfirmed` authorizes one superseding `ProfileModuleCommand.ConfirmLegacyReset` | one purge or reset-write attempt per explicit user Pulse; reset-write uses a fresh semantic handle/effect reference/source revision with no same-identity resend and exactly one Profile Resource write invocation per explicit user Pulse; zero provider mutation calls on local encode rejection, otherwise at most one provider mutation call; prior OutcomeUnknown ambiguity remains historical and a successful later write establishes the newer snapshot before purge; transport, executor, SDK/provider, and reconciliation retries disabled |
+| raw trust/representation edge | current persisted JSON and platform provider data are untrusted | independent 65536-byte codec gate before decode, Desktop 8192-code-unit value gate before write, and 64-key returned-inventory admission before project-owned membership iteration; strict decoding, provenance quarantine, and validation/business-stage tests; no bound is claimed for provider enumeration/allocation |
 | finite variable dimensions | catalog, simulation, output, audio, causal, and workflow collections exist | exact `N/N+1`, no truncation or partial acceptance, static graph counts |
 | shared Foundation | two or more Balls share immutable collections, PRNG, dispatch guard, or completion deque | project scan proving mechanical-only exports and no mutable business meaning/communication |
-| explicit conformance claim | the final docs-only commit self-attests one implementation freeze | frozen Core/pack/source/environment/policy/Assembly, RG-01..RG-10 evidence, exact non-guarantees |
 
 The finite physical graph has exactly 23 leaf modules. The separate
 `app:android` packaging host is mechanical AppAssembly infrastructure: its
 complete production project-dependency set is the single edge
 `implementation -> :app:shared`. That intra-AppAssembly packaging edge is not a
 business command, read route, output route, or additional authority.
+
+The product is pre-`1.0.0`, so persistence compatibility and migration are not
+active concerns. The current `ProfileSnapshot` shape is the entire supported
+contract. An absent, rejected, non-canonical, or policy-incompatible current
+payload constructs the default Profile. A provider read failure is different:
+it blocks Session bootstrap and renders the input-blocking Profile-unavailable
+UI. Keys outside the single platform-selected current key are not inspected and
+remain untouched.
 
 For that Audio row, synchronous Resource/platform calls propagate.
 Synchronous JavaScript invocation/graph faults propagate.
@@ -48,10 +53,10 @@ the absence.
 | actors, authentication, tenants, grants, secrets, privileged actions | local single-player inputs cannot vary Decision/read authorization; no credential or secret type/capability exists |
 | network, remote deployment, IPC, independently versioned endpoints | Android/Desktop/Web bind all authorities in one process and one build; no network client/server or remote route exists |
 | detached asynchronous semantic delivery | no actor/mailbox/coroutine queue/event bus carries a Pulse, command, result, output, or Fact; all semantic commands complete through the bounded same-stack deque. App platform-broker mechanical execution, including Android/Desktop tone playback, is outside this absence scope and may not acquire business meaning |
-| root idempotency or cancellation protocol | no root idempotency key/record and no cancellable operation exists; these inactive layers are not inferred from the present AppSession-owned semantic policy |
+| root idempotency or cancellation protocol | no root idempotency key/record and no cancellable operation exists |
 | dynamic registry or wildcard routing | all authorities, instances, queries, commands, results, and routes are closed typed/static sets |
 | process/security isolation | selected profile is `InProcess + Standard`; no containment or separate-principal claim is made |
-| durable outbox, event journal, status materializer, or operation-status query | state profile is Transient; persistence facts affect Profile reset/persistence state but do not provide delivery replay or accepted-operation status |
+| durable outbox, event journal, status materializer, or operation-status query | state profile is Transient; persistence facts affect Profile persistence state but do not provide delivery replay or accepted-operation status |
 
 If source introduces any listed semantic type, route, configuration, claim, or
 reachable behavior inside an absent scope, the absence is invalidated and the
@@ -62,7 +67,7 @@ not establish detached business delivery.
 ## Applicable package routes
 
 The migration uses the Agent Pack routes for design, protocol, bounds,
-composition/profiles, async-status command semantics, security/limits,
+composition/profiles, Resource outcome semantics, security/limits,
 manifest/Assembly, routine tests, and conformance gates. Catalog and Checkout
 remain examples only; no fixture value or guarantee is imported.
 

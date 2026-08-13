@@ -18,7 +18,6 @@ import kinetickk.ball.gameplay.api.GameplayQuery
 import kinetickk.ball.gameplay.api.GameplayResultIssuerProvenance
 import kinetickk.ball.gameplay.interaction.GameplaySessionHost
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
-import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PreferencesProjection
 import kinetickk.ball.profile.api.ProfileCommandAdmissionFailureReason
@@ -42,7 +41,7 @@ import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.flow.session.api.AppShellProjection
 import kinetickk.flow.session.api.SessionAcceptance
 import kinetickk.flow.session.api.SessionInteractionPulse
-import kinetickk.flow.session.api.SessionResetLifecycle
+import kinetickk.flow.session.api.SessionLifecycle
 import kinetickk.flow.session.api.SessionShortcut
 import kinetickk.flow.session.api.isOverlayDestination
 import kinetickk.flow.session.nucleus.AppSessionAcceptedFrame
@@ -464,28 +463,6 @@ internal class DefaultAppSessionComponent private constructor(
                 check(revisionDelta == 0L)
                 check(depthDelta == 1)
             }
-            ProfileModuleCommand.ConfirmLegacyReset -> when (delivery.result) {
-                is ProfileModuleResult.ResetWriteRejected,
-                is ProfileModuleResult.ResetWriteResourceFailure,
-                is ProfileModuleResult.ResetWriteOutcomeUnknown,
-                -> {
-                    check(revisionDelta == 1L)
-                    check(depthDelta == 2)
-                }
-                is ProfileModuleResult.ResetNeedsAttention -> {
-                    check(revisionDelta == 2L)
-                    check(depthDelta == 3)
-                }
-                ProfileModuleResult.ResetCompleted -> {
-                    check(revisionDelta in 1L..2L)
-                    check(depthDelta == revisionDelta.toInt() + 1)
-                }
-                else -> error("Profile reset result mapping changed")
-            }
-            ProfileModuleCommand.RetryLegacyPurge -> {
-                check(revisionDelta == 1L)
-                check(depthDelta == 2)
-            }
             is ProfileModuleCommand.ApplyGameplayProgress ->
                 error("Gameplay progress cannot enter Profile through Session")
         }
@@ -576,10 +553,7 @@ internal class DefaultAppSessionComponent private constructor(
     ): AppSessionContext {
         if (pulse is AppSessionNucleusPulse.Intent) {
             if (state.pendingWorkflow != null) return AppSessionContext.Empty
-            val resetAction = pulse.intent == SessionInteractionPulse.ResetCancelled ||
-                pulse.intent == SessionInteractionPulse.ResetConfirmed ||
-                pulse.intent == SessionInteractionPulse.ResetRetryRequested
-            if (state.resetLifecycle != SessionResetLifecycle.READY && !resetAction) {
+            if (state.lifecycle != SessionLifecycle.READY) {
                 return AppSessionContext.Empty
             }
         }
@@ -587,7 +561,6 @@ internal class DefaultAppSessionComponent private constructor(
         var runBootstrap = false
         var preferences = false
         var rebirthProgress = false
-        var persistenceStatus = false
         var gameplayStatus = false
 
         fun requestOpenOverlayContext(destination: AppDestination) {
@@ -638,27 +611,12 @@ internal class DefaultAppSessionComponent private constructor(
                         (state.base == AppDestination.Home ||
                             state.gameplayPhase == kinetickk.ball.gameplay.api.GameplayRunPhase.VICTORY)
                 }
-                SessionInteractionPulse.ResetConfirmed -> {
-                    persistenceStatus =
-                        state.resetLifecycle == SessionResetLifecycle.CONFIRMATION_REQUIRED
-                }
-                SessionInteractionPulse.ResetRetryRequested -> {
-                    persistenceStatus =
-                        state.resetLifecycle == SessionResetLifecycle.PURGE_NEEDS_ATTENTION
-                }
                 SessionInteractionPulse.ToggleMuteRequested,
                 is SessionInteractionPulse.SelectCoreShapeRequested,
-                SessionInteractionPulse.ResetCancelled,
                 -> Unit
             }
             is AppSessionNucleusPulse.ModuleResultPulse -> when (state.pendingWorkflow) {
                 is PendingWorkflow.AdvancingRebirth -> runBootstrap = true
-                is PendingWorkflow.ConfirmingReset,
-                is PendingWorkflow.RetryingPurge,
-                -> {
-                    persistenceStatus = true
-                    preferences = true
-                }
                 else -> Unit
             }
             is AppSessionNucleusPulse.ControlPulse -> Unit
@@ -668,7 +626,6 @@ internal class DefaultAppSessionComponent private constructor(
             runBootstrap = if (runBootstrap) readRunBootstrap() else null,
             preferences = if (preferences) readPreferences() else null,
             rebirthProgress = if (rebirthProgress) readRebirthProgress() else null,
-            persistenceStatus = if (persistenceStatus) readPersistenceStatus() else null,
             gameplayStatus = if (gameplayStatus) readGameplayStatus(state) else null,
         )
     }
@@ -681,9 +638,6 @@ internal class DefaultAppSessionComponent private constructor(
 
     private fun readRebirthProgress(): RebirthProgressProjection =
         profileRoute.query(ProfileQuery.GetRebirthProgress).also(::validateProfileProjection)
-
-    private fun readPersistenceStatus(): PersistenceStatusProjection =
-        profileRoute.query(ProfileQuery.GetPersistenceStatus).also(::validateProfileProjection)
 
     private fun validateProfileProjection(projection: kinetickk.ball.profile.api.ProfileProjection) {
         check(projection.instanceId == profileRoute.instanceId) {
@@ -808,8 +762,6 @@ private val ProfileModuleCommand.effectiveIdentity: ProfileEffectiveProtocolIden
         is ProfileModuleCommand.SelectCoreShape -> ProfileEffectiveProtocolIdentity.SESSION_CORE_SHAPE
         ProfileModuleCommand.ToggleMute -> ProfileEffectiveProtocolIdentity.SESSION_MUTE
         ProfileModuleCommand.AdvanceRebirth -> ProfileEffectiveProtocolIdentity.SESSION_REBIRTH
-        ProfileModuleCommand.ConfirmLegacyReset -> ProfileEffectiveProtocolIdentity.SESSION_RESET_CONFIRM
-        ProfileModuleCommand.RetryLegacyPurge -> ProfileEffectiveProtocolIdentity.SESSION_RESET_RETRY
         is ProfileModuleCommand.ApplyGameplayProgress ->
             error("Gameplay progress is not a Session command mapping")
     }
@@ -820,9 +772,6 @@ private val ProfileModuleCommand.expectedResultOrdinal: Int
         ProfileModuleCommand.ToggleMute,
         ProfileModuleCommand.AdvanceRebirth,
         -> 1
-        ProfileModuleCommand.ConfirmLegacyReset,
-        ProfileModuleCommand.RetryLegacyPurge,
-        -> 0
         is ProfileModuleCommand.ApplyGameplayProgress ->
             error("Gameplay progress is not a Session command mapping")
     }
@@ -832,14 +781,6 @@ private fun ProfileModuleResult.matches(command: ProfileModuleCommand): Boolean 
         this is ProfileModuleResult.CoreShapeSelected && shape == command.shape
     ProfileModuleCommand.ToggleMute -> this is ProfileModuleResult.PreferencesChanged
     ProfileModuleCommand.AdvanceRebirth -> this is ProfileModuleResult.RebirthAdvanced
-    ProfileModuleCommand.ConfirmLegacyReset ->
-        this == ProfileModuleResult.ResetCompleted ||
-            this is ProfileModuleResult.ResetWriteRejected ||
-            this is ProfileModuleResult.ResetWriteResourceFailure ||
-            this is ProfileModuleResult.ResetWriteOutcomeUnknown ||
-            this is ProfileModuleResult.ResetNeedsAttention
-    ProfileModuleCommand.RetryLegacyPurge ->
-        this == ProfileModuleResult.ResetCompleted || this is ProfileModuleResult.ResetNeedsAttention
     is ProfileModuleCommand.ApplyGameplayProgress -> false
 }
 

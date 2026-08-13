@@ -17,17 +17,10 @@ internal actual fun createPlatformProfilePersistenceCapability(): ProfilePersist
     WebProfilePersistenceCapability()
 
 private class WebProfilePersistenceCapability : ProfilePersistenceCapability {
-    override fun readV4(): ProfilePersistenceReadResult = readWebProfileV4()
+    override fun readSnapshot(): ProfilePersistenceReadResult = readWebProfileSnapshot()
 
-    override fun writeV4(payload: String): ProfilePersistenceMutationResult = writeWebProfileV4(payload)
-
-    override fun readLegacyProgressV2(): ProfilePersistenceReadResult = readWebLegacyProgressV2()
-
-    override fun readLegacyMatter(): ProfilePersistenceReadResult = readWebLegacyMatter()
-
-    override fun removeLegacyProgressV2(): ProfilePersistenceMutationResult = removeWebLegacyProgressV2()
-
-    override fun removeLegacyMatter(): ProfilePersistenceMutationResult = removeWebLegacyMatter()
+    override fun writeSnapshot(payload: String): ProfilePersistenceMutationResult =
+        writeWebProfileSnapshot(payload)
 }
 
 @OptIn(ExperimentalWasmJsInterop::class)
@@ -36,23 +29,11 @@ private external interface WebStorageReadCall : JsAny {
     val payload: String?
 }
 
-private fun readWebProfileV4(): ProfilePersistenceReadResult =
-    webStorageRead(ProfilePersistenceContract.WEB_SNAPSHOT_V4).toPersistenceResult()
+private fun readWebProfileSnapshot(): ProfilePersistenceReadResult =
+    webStorageRead(ProfilePersistenceContract.WEB_SNAPSHOT).toPersistenceResult()
 
-private fun readWebLegacyProgressV2(): ProfilePersistenceReadResult =
-    webStorageRead(ProfilePersistenceContract.WEB_LEGACY_PROGRESS_V2).toPersistenceResult()
-
-private fun readWebLegacyMatter(): ProfilePersistenceReadResult =
-    webStorageRead(ProfilePersistenceContract.WEB_LEGACY_MATTER).toPersistenceResult()
-
-private fun writeWebProfileV4(payload: String): ProfilePersistenceMutationResult =
-    webStorageWrite(ProfilePersistenceContract.WEB_SNAPSHOT_V4, payload).toPersistenceMutationResult()
-
-private fun removeWebLegacyProgressV2(): ProfilePersistenceMutationResult =
-    webStorageRemove(ProfilePersistenceContract.WEB_LEGACY_PROGRESS_V2).toPersistenceMutationResult()
-
-private fun removeWebLegacyMatter(): ProfilePersistenceMutationResult =
-    webStorageRemove(ProfilePersistenceContract.WEB_LEGACY_MATTER).toPersistenceMutationResult()
+private fun writeWebProfileSnapshot(payload: String): ProfilePersistenceMutationResult =
+    webStorageWrite(ProfilePersistenceContract.WEB_SNAPSHOT, payload).toPersistenceMutationResult()
 
 private fun WebStorageReadCall.toPersistenceResult(): ProfilePersistenceReadResult = when (status) {
     WEB_STORAGE_OBSERVED -> ProfilePersistenceReadResult.Observed(payload)
@@ -97,26 +78,6 @@ private fun webStorageWrite(key: String, payload: String): String = js(
                 typeof DOMException !== 'undefined' &&
                 failure instanceof DOMException &&
                 (failure.name === 'SecurityError' || failure.name === 'QuotaExceededError')
-            ) {
-                return 'failed-before-execution';
-            }
-            throw failure;
-        }
-    }""",
-)
-
-@OptIn(ExperimentalWasmJsInterop::class)
-private fun webStorageRemove(key: String): String = js(
-    """{
-        try {
-            const exactStorage = globalThis.localStorage;
-            exactStorage.removeItem(key);
-            return 'completed';
-        } catch (failure) {
-            if (
-                typeof DOMException !== 'undefined' &&
-                failure instanceof DOMException &&
-                failure.name === 'SecurityError'
             ) {
                 return 'failed-before-execution';
             }

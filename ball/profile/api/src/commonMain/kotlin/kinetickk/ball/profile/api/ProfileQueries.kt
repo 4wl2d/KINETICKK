@@ -98,7 +98,6 @@ data class PersistenceStatusProjection(
     override val instanceId: ProfileInstanceId,
     override val revision: ProfileRevision,
     val bootstrap: ProfileBootstrapStatus,
-    val reset: ProfileResetStatus,
     val persistence: ProfilePersistenceStatus,
 ) : ProfileProjection
 

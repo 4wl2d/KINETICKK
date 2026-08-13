@@ -3,7 +3,6 @@
 
 package kinetickk.ball.profile.api
 
-import kinetickk.ball.content.api.ContentVersion
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.WeaponId
@@ -65,8 +64,6 @@ sealed interface ProfileModuleCommand {
     data class SelectCoreShape(val shape: CoreShape) : ProfileModuleCommand
     data object ToggleMute : ProfileModuleCommand
     data object AdvanceRebirth : ProfileModuleCommand
-    data object ConfirmLegacyReset : ProfileModuleCommand
-    data object RetryLegacyPurge : ProfileModuleCommand
     data class ApplyGameplayProgress(val update: GameplayProgressUpdate) : ProfileModuleCommand
 }
 
@@ -107,8 +104,6 @@ enum class ProfileCommandValidationFailureReason {
 
 sealed interface ProfileRejection {
     data object BootstrapNotReady : ProfileRejection
-    data object ResetRequired : ProfileRejection
-    data object ResetInProgress : ProfileRejection
     data object NoChange : ProfileRejection
     data object InsufficientMatter : ProfileRejection
     data object MetaUpgradeMaxRank : ProfileRejection
@@ -137,19 +132,12 @@ sealed interface ProfileAcceptance {
     ) : ProfileAcceptance
 }
 
-/** Target-owned ModuleResult payload family for the six Profile mappings. */
+/** Target-owned ModuleResult payload family for the four Profile mappings. */
 sealed interface ProfileModuleResult {
     data class PreferencesChanged(val preferences: PlayerPreferences) : ProfileModuleResult
     data class CoreShapeSelected(val shape: CoreShape) : ProfileModuleResult
     data class RebirthAdvanced(val progress: RebirthProgress) : ProfileModuleResult
     data object GameplayProgressApplied : ProfileModuleResult
-    data object ResetCompleted : ProfileModuleResult
-    data class ResetWriteRejected(val reason: ProfileV4Rejection) : ProfileModuleResult
-    data class ResetWriteResourceFailure(val reason: ProfileWriteFailure) : ProfileModuleResult
-    data class ResetWriteOutcomeUnknown(
-        val reason: ProfileWriteOutcomeUnknownReason,
-    ) : ProfileModuleResult
-    data class ResetNeedsAttention(val status: ProfileResetStatus.NeedsAttention) : ProfileModuleResult
 }
 
 /** Canonical target output, created only inside an accepted Profile Decision. */
@@ -218,64 +206,13 @@ sealed interface ProfileCommandIngressResult {
     ) : ProfileCommandIngressResult
 }
 
-sealed interface ProfileResetReason {
-    data object LegacyDataDetected : ProfileResetReason
-    data class InvalidV4(val reason: ProfileV4Rejection) : ProfileResetReason
-    data class ContentVersionMismatch(
-        val expected: ContentVersion,
-        val observed: ContentVersion,
-    ) : ProfileResetReason
-    data object IncompatibleProfile : ProfileResetReason
-}
-
 sealed interface ProfileBootstrapBlockReason {
     data class ResourceFailure(val reason: ProfileReadFailure) : ProfileBootstrapBlockReason
-    data class ResetRequired(val reason: ProfileResetReason) : ProfileBootstrapBlockReason
-    data object ResetInProgress : ProfileBootstrapBlockReason
-    data class ResetNeedsAttention(val result: ProfileLegacyPurgeResult) : ProfileBootstrapBlockReason
 }
 
 sealed interface ProfileBootstrapStatus {
     data object Ready : ProfileBootstrapStatus
     data class Blocked(val reason: ProfileBootstrapBlockReason) : ProfileBootstrapStatus
-}
-
-data class ProfileResetCompletion(
-    val commandSource: ProfileCommandSourceToken,
-)
-
-sealed interface ProfileResetStatus {
-    data class NotRequired(
-        val legacyResetConfirmed: Boolean,
-    ) : ProfileResetStatus
-
-    data class ConfirmationRequired(
-        val reason: ProfileResetReason,
-        val legacyKeys: ProfileLegacyKeys,
-    ) : ProfileResetStatus
-
-    data class WritingFreshV4(
-        val completion: ProfileResetCompletion,
-        val reason: ProfileResetReason,
-        val effectRef: ProfileEffectRef,
-        val legacyKeys: ProfileLegacyKeys,
-    ) : ProfileResetStatus
-
-    data class PurgingLegacy(
-        val completion: ProfileResetCompletion,
-        val effectRef: ProfileEffectRef,
-        val legacyKeys: ProfileLegacyKeys,
-    ) : ProfileResetStatus
-
-    data class NeedsAttention(
-        val legacyKeys: ProfileLegacyKeys,
-        val result: ProfileLegacyPurgeResult,
-    ) : ProfileResetStatus
-}
-
-enum class ProfileV4WritePurpose {
-    MUTATION,
-    RESET_DEFAULT,
 }
 
 sealed interface ProfilePersistenceStatus {
@@ -284,7 +221,6 @@ sealed interface ProfilePersistenceStatus {
     data class Pending(
         val effectRef: ProfileEffectRef,
         val snapshotRevision: ProfileRevision,
-        val purpose: ProfileV4WritePurpose,
     ) : ProfilePersistenceStatus
 
     data class Persisted(
@@ -293,7 +229,7 @@ sealed interface ProfilePersistenceStatus {
 
     data class Rejected(
         val snapshotRevision: ProfileRevision,
-        val reason: ProfileV4Rejection,
+        val reason: ProfileSnapshotRejection,
     ) : ProfilePersistenceStatus
 
     data class ResourceFailure(

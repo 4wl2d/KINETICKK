@@ -21,19 +21,17 @@ import kinetickk.ball.profile.api.ProfileCommandBoundaryResponse
 import kinetickk.ball.profile.api.ProfileCommandIngressResult
 import kinetickk.ball.profile.api.ProfileCommandAdmissionFailureReason
 import kinetickk.ball.profile.api.ProfileCommandValidationFailureReason
-import kinetickk.ball.profile.api.ProfileLegacyKeys
-import kinetickk.ball.profile.api.ProfileLegacyPurgeResult
 import kinetickk.ball.profile.api.ProfileModuleCommand
 import kinetickk.ball.profile.api.ProfileModuleResult
+import kinetickk.ball.profile.api.ProfileReadFailure
 import kinetickk.ball.profile.api.ProfileRejection
-import kinetickk.ball.profile.api.ProfileResetReason
-import kinetickk.ball.profile.api.ProfileResetStatus
 import kinetickk.ball.profile.api.ProfileResultSourceToken
 import kinetickk.flow.session.api.AppDestination
 import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.flow.session.api.SessionAcceptance
 import kinetickk.flow.session.api.SessionInteractionPulse
-import kinetickk.flow.session.api.SessionResetLifecycle
+import kinetickk.flow.session.api.SessionLifecycle
+import kinetickk.flow.session.api.SessionRejection
 import kinetickk.flow.session.api.SessionRevision
 import kinetickk.flow.session.api.SessionWorkflowFailureCode
 import kinetickk.flow.session.api.SessionWorkflowPhase
@@ -214,37 +212,24 @@ class DefaultAppSessionComponentTest {
     }
 
     @Test
-    fun resetConfirmAndExplicitRetryEachIssueOneExactAttempt() {
-        val reason = ProfileResetReason.LegacyDataDetected
-        val confirmProfile = FakeSessionProfileRoute().apply {
-            bootstrap = ProfileBootstrapStatus.Blocked(ProfileBootstrapBlockReason.ResetRequired(reason))
-            reset = ProfileResetStatus.ConfirmationRequired(reason, ProfileLegacyKeys.ALL)
-        }
-        val confirmRig = AppSessionTestRig(profile = confirmProfile)
-
-        confirmRig.component.accept(SessionInteractionPulse.ResetConfirmed)
-
-        val confirm = confirmProfile.commands.single()
-        assertEquals(ProfileModuleCommand.ConfirmLegacyReset, confirm.request.command)
-        assertEquals(0, confirm.causalDepth)
-        assertEquals(2, confirmProfile.deliveries.single().resultSource.causalDepth)
-        assertEquals(SessionResetLifecycle.READY, shell(confirmRig).resetLifecycle)
-
-        val purgeResult = ProfileLegacyPurgeResult.Partial(ProfileLegacyKeys.ALL)
-        val retryProfile = FakeSessionProfileRoute().apply {
-            reset = ProfileResetStatus.NeedsAttention(ProfileLegacyKeys.ALL, purgeResult)
+    fun providerReadFailureKeepsSessionUnavailableWithoutIssuingParticipantCommands() {
+        val profile = FakeSessionProfileRoute().apply {
             bootstrap = ProfileBootstrapStatus.Blocked(
-                ProfileBootstrapBlockReason.ResetNeedsAttention(purgeResult),
+                ProfileBootstrapBlockReason.ResourceFailure(
+                    ProfileReadFailure.PROVIDER_READ_FAILED,
+                ),
             )
         }
-        val retryRig = AppSessionTestRig(profile = retryProfile)
+        val rig = AppSessionTestRig(profile = profile)
 
-        retryRig.component.accept(SessionInteractionPulse.ResetRetryRequested)
+        val acceptance = assertIs<SessionAcceptance.Rejected>(
+            rig.component.accept(SessionInteractionPulse.StartRunRequested),
+        )
 
-        assertEquals(1, retryProfile.commands.size)
-        assertEquals(ProfileModuleCommand.RetryLegacyPurge, retryProfile.commands.single().request.command)
-        assertEquals(2, retryProfile.deliveries.single().resultSource.causalDepth)
-        assertEquals(SessionResetLifecycle.READY, shell(retryRig).resetLifecycle)
+        assertEquals(SessionRejection.BootstrapUnavailable, acceptance.reason)
+        assertEquals(SessionLifecycle.BOOTSTRAP_UNAVAILABLE, shell(rig).lifecycle)
+        assertFalse(shell(rig).normalInputEnabled)
+        assertTrue(profile.commands.isEmpty())
     }
 
     @Test

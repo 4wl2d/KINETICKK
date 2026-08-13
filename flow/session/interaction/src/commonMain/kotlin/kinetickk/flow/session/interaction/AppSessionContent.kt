@@ -33,15 +33,13 @@ import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.flow.session.api.AppShellProjection
 import kinetickk.flow.session.api.SessionAcceptance
 import kinetickk.flow.session.api.SessionInteractionPulse
-import kinetickk.flow.session.api.SessionResetLifecycle
+import kinetickk.flow.session.api.SessionLifecycle
 import kinetickk.flow.session.api.SessionShortcut
 import kinetickk.flow.session.interaction.audio.SessionAudioExecutor
 import kinetickk.flow.session.interaction.codex.api.CodexFeature
 import kinetickk.flow.session.interaction.codex.api.CodexRunStacks
 import kinetickk.flow.session.interaction.home.api.HomeFeature
-import kinetickk.flow.session.interaction.reset.api.ResetModalFeature
-import kinetickk.flow.session.interaction.reset.api.ResetModalMode
-import kinetickk.flow.session.interaction.reset.api.ResetModalRenderModel
+import kinetickk.flow.session.interaction.profile.api.ProfileUnavailableFeature
 
 /** Renders the closed AppSession route projection and translates UI outputs into Session Pulses. */
 @Composable
@@ -55,7 +53,7 @@ fun AppSessionContent(
     armoryFeature: ArmoryFeature,
     rebirthFeature: RebirthFeature,
     codexFeature: CodexFeature,
-    resetModalFeature: ResetModalFeature,
+    profileUnavailableFeature: ProfileUnavailableFeature,
 ) {
     val focusRequester = remember(sessionPort) { FocusRequester() }
     var shellValue by remember(sessionPort) {
@@ -72,7 +70,6 @@ fun AppSessionContent(
         focusRequester.requestFocus()
     }
 
-    val resetModalModel = shellValue.resetLifecycle.toResetModalRenderModelOrNull()
     val normalInputEnabled = shellValue.normalInputEnabled
     Box(
         modifier = Modifier
@@ -143,13 +140,14 @@ fun AppSessionContent(
             -> error("Base destinations cannot be overlays")
         }
 
-        if (resetModalModel != null) {
-            resetModalFeature.Content(resetModalModel) { output ->
-                dispatch(output.toSessionPulse())
-            }
+        if (shellValue.lifecycle.showsProfileUnavailable()) {
+            profileUnavailableFeature.Content()
         }
     }
 }
+
+internal fun SessionLifecycle.showsProfileUnavailable(): Boolean =
+    this == SessionLifecycle.BOOTSTRAP_UNAVAILABLE
 
 internal fun activeGameplayWeapon(
     shell: AppShellProjection,
@@ -173,16 +171,3 @@ internal fun currentRunStacks(
 } else {
     CodexRunStacks()
 }
-
-internal fun SessionResetLifecycle.toResetModalRenderModelOrNull(): ResetModalRenderModel? =
-    when (this) {
-        SessionResetLifecycle.READY -> null
-        SessionResetLifecycle.CONFIRMATION_REQUIRED ->
-            ResetModalRenderModel(ResetModalMode.CONFIRMATION_REQUIRED)
-        SessionResetLifecycle.RESET_IN_PROGRESS ->
-            ResetModalRenderModel(ResetModalMode.RESET_IN_PROGRESS)
-        SessionResetLifecycle.PURGE_NEEDS_ATTENTION ->
-            ResetModalRenderModel(ResetModalMode.PURGE_NEEDS_ATTENTION)
-        SessionResetLifecycle.BOOTSTRAP_UNAVAILABLE ->
-            ResetModalRenderModel(ResetModalMode.BOOTSTRAP_UNAVAILABLE)
-    }

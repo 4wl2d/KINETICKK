@@ -1108,8 +1108,8 @@ class ProtocolShapeVerifierTest {
                     data class ResourceFailure(val reason: ProfileReadFailure) : ProfileBootstrapResourceResult
                 }
 
-                sealed interface ProfileV4WriteResult {
-                    data class ResourceFailure(val reason: ProfileWriteOutcomeUnknownReason) : ProfileV4WriteResult
+                sealed interface ProfileWriteResult {
+                    data class ResourceFailure(val reason: ProfileWriteOutcomeUnknownReason) : ProfileWriteResult
                 }
             """.trimIndent(),
         )
@@ -1121,7 +1121,7 @@ class ProtocolShapeVerifierTest {
         )
         assertTrue(exactDataClassShapeViolations(mapOf(path to source), listOf(shape)).isEmpty())
 
-        val wrongScope = shape.copy(withinDeclaration = "sealed interface ProfileV4WriteResult")
+        val wrongScope = shape.copy(withinDeclaration = "sealed interface ProfileWriteResult")
         assertTrue(
             exactDataClassShapeViolations(mapOf(path to source), listOf(wrongScope))
                 .any { "ProfileWriteOutcomeUnknownReason" in it },
@@ -1134,14 +1134,14 @@ class ProtocolShapeVerifierTest {
         val inventory = CanonicalEnumInventory(
             path = path,
             typeName = "ProfileEffectiveProtocolIdentity",
-            entries = listOf("SESSION_CORE_SHAPE", "SESSION_RESET_RETRY", "GAMEPLAY_PROGRESS"),
+            entries = listOf("SESSION_CORE_SHAPE", "SESSION_REBIRTH", "GAMEPLAY_PROGRESS"),
         )
         val valid = source(
             path,
             """
                 enum class ProfileEffectiveProtocolIdentity {
                     SESSION_CORE_SHAPE,
-                    SESSION_RESET_RETRY,
+                    SESSION_REBIRTH,
                     GAMEPLAY_PROGRESS,
                 }
             """.trimIndent(),
@@ -1321,7 +1321,7 @@ class ProtocolShapeVerifierTest {
         val invalid = valid.copy(
             text = valid.text.replace(
                 "}",
-                "    data object RetryLegacyPurge : ProfileIntent\n}",
+                "    data object UndeclaredProfileIntent : ProfileIntent\n}",
             ),
         )
         assertTrue(
@@ -1330,7 +1330,7 @@ class ProtocolShapeVerifierTest {
                 "sealed interface ProfileIntent",
                 "ProfileIntent",
                 expected,
-            ).any { "RetryLegacyPurge" in it },
+            ).any { "UndeclaredProfileIntent" in it },
         )
 
         val escapedDeclarationDecoy = invalid.copy(
@@ -1350,7 +1350,7 @@ class ProtocolShapeVerifierTest {
                 "sealed interface ProfileIntent",
                 "ProfileIntent",
                 expected,
-            ).any { "RetryLegacyPurge" in it },
+            ).any { "UndeclaredProfileIntent" in it },
         )
     }
 

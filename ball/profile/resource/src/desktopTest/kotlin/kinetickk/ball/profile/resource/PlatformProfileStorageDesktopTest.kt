@@ -5,17 +5,14 @@ package kinetickk.ball.profile.resource
 
 import java.util.UUID
 import java.util.prefs.Preferences
-import kinetickk.ball.profile.api.ProfileBootstrapResourceResult
-import kinetickk.ball.profile.api.ProfileLegacyKeys
-import kinetickk.ball.profile.api.ProfileLegacyPurgeResult
-import kinetickk.ball.profile.api.ProfileV4WriteResult
+import kinetickk.ball.profile.api.ProfileSnapshotReadResult
+import kinetickk.ball.profile.api.ProfileWriteResult
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 
 class PlatformProfileStorageDesktopTest {
     @Test
-    fun isolatedPreferencesNodesUseOnlyExactKeysAndPreserveUnrelatedData() {
+    fun isolatedPreferencesNodeUsesSnapshotAndLeavesLegacyStorageUntouched() {
         val testRoot = Preferences.userRoot().node(
             "kinetickk-test/profile-resource/${UUID.randomUUID()}",
         )
@@ -23,35 +20,24 @@ class PlatformProfileStorageDesktopTest {
         val profileNode = testRoot.node("profile")
         val legacyNode = testRoot.node("legacy")
         try {
-            val persistence = IsolatedDesktopPersistence(
-                profileNode = profileNode,
-                legacyNode = legacyNode,
-            )
-            val resource = createProfileResource(persistence)
-            assertEquals(
-                ProfileBootstrapResourceResult.Observed(
-                    snapshot = null,
-                    legacyKeys = ProfileLegacyKeys.NONE,
-                ),
-                resource.readBootstrap(),
-            )
-
-            legacyNode.put(LEGACY_PROGRESS_V2, "legacy")
+            legacyNode.put(LEGACY_PROGRESS, "legacy")
             legacyNode.put(LEGACY_MATTER, "1")
-            legacyNode.put("unrelated", "preserve-me")
             legacyNode.flush()
-            val confirmed = testV4Snapshot(revision = 5L, legacyResetConfirmed = true)
 
+            val resource = createProfileResource(IsolatedDesktopPersistence(profileNode))
             assertEquals(
-                ProfileV4WriteResult.Written(confirmed.revision),
-                resource.writeV4(confirmed),
+                ProfileSnapshotReadResult.Observed(snapshot = null),
+                resource.readSnapshot(),
             )
-            assertEquals(requireEncoded(confirmed), profileNode.get(SNAPSHOT_V4, null))
-            assertNull(legacyNode.get(SNAPSHOT_V4, null))
-            assertEquals(ProfileLegacyPurgeResult.Purged, resource.purgeLegacy())
-            assertNull(legacyNode.get(LEGACY_PROGRESS_V2, null))
-            assertNull(legacyNode.get(LEGACY_MATTER, null))
-            assertEquals("preserve-me", legacyNode.get("unrelated", null))
+
+            val snapshot = testSnapshot(revision = 5L)
+            assertEquals(
+                ProfileWriteResult.Written(snapshot.revision),
+                resource.writeSnapshot(snapshot),
+            )
+            assertEquals(requireEncoded(snapshot), profileNode.get(SNAPSHOT, null))
+            assertEquals("legacy", legacyNode.get(LEGACY_PROGRESS, null))
+            assertEquals("1", legacyNode.get(LEGACY_MATTER, null))
         } finally {
             testRoot.removeNode()
             testParent.flush()
@@ -59,38 +45,19 @@ class PlatformProfileStorageDesktopTest {
     }
 }
 
-private const val SNAPSHOT_V4 = "snapshot_v4"
-private const val LEGACY_PROGRESS_V2 = "progress_v2"
+private const val SNAPSHOT = "snapshot"
+private const val LEGACY_PROGRESS = "progress_v2"
 private const val LEGACY_MATTER = "kinetickk_matter"
 
 private class IsolatedDesktopPersistence(
     private val profileNode: Preferences,
-    private val legacyNode: Preferences,
 ) : ExactProfilePersistence {
-    override fun readV4(): ProfileProviderReadResult =
-        ProfileProviderReadResult.Observed(profileNode.get(SNAPSHOT_V4, null))
+    override fun readSnapshot(): ProfileProviderReadResult =
+        ProfileProviderReadResult.Observed(profileNode.get(SNAPSHOT, null))
 
-    override fun writeV4(payload: String): ProfileProviderMutationResult {
-        profileNode.put(SNAPSHOT_V4, payload)
+    override fun writeSnapshot(payload: String): ProfileProviderMutationResult {
+        profileNode.put(SNAPSHOT, payload)
         profileNode.flush()
-        return ProfileProviderMutationResult.COMPLETED
-    }
-
-    override fun readLegacyProgressV2(): ProfileProviderReadResult =
-        ProfileProviderReadResult.Observed(legacyNode.get(LEGACY_PROGRESS_V2, null))
-
-    override fun readLegacyMatter(): ProfileProviderReadResult =
-        ProfileProviderReadResult.Observed(legacyNode.get(LEGACY_MATTER, null))
-
-    override fun removeLegacyProgressV2(): ProfileProviderMutationResult {
-        legacyNode.remove(LEGACY_PROGRESS_V2)
-        legacyNode.flush()
-        return ProfileProviderMutationResult.COMPLETED
-    }
-
-    override fun removeLegacyMatter(): ProfileProviderMutationResult {
-        legacyNode.remove(LEGACY_MATTER)
-        legacyNode.flush()
         return ProfileProviderMutationResult.COMPLETED
     }
 }

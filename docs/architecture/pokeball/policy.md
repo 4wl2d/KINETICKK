@@ -16,25 +16,7 @@ in `authority-map.md`
 profileAuthorities=ContentCatalog|Profile|GameplayRun|AppSession
 effectiveProfile=Inline+Transient+InProcess+Standard+Static
 contentMutationPath=NONE
-semanticRetry=PRESENT
-semanticRetryAnchor=Core §9.9 / PBA-24
-semanticRetryFamilies=legacy-purge|reset-write
-semanticRetryPrimaryOwner=AppSession
-semanticRetryTarget=Profile
-semanticRetryAttemptsPerPulse=1
-semanticRetryDisabledLayers=transport|executor|SDK/provider|reconciliation
-semanticRetrySameIdentityResend=DISABLED
-semanticRetryLegacyPurgePulse=SessionInteractionPulse.ResetRetryRequested
-semanticRetryLegacyPurgeCommand=ProfileModuleCommand.RetryLegacyPurge
-semanticRetryLegacyPurgeEvidence=flow/session/nucleus/src/commonTest/kotlin/kinetickk/flow/session/nucleus/AppSessionNucleusTest.kt|ball/profile/nucleus/src/commonTest/kotlin/kinetickk/ball/profile/nucleus/ProfileNucleusTest.kt|ball/profile/impl/src/commonTest/kotlin/kinetickk/ball/profile/impl/DefaultProfileComponentTest.kt
-semanticRetryResetWritePulse=SessionInteractionPulse.ResetConfirmed
-semanticRetryResetWriteCommand=ProfileModuleCommand.ConfirmLegacyReset
-semanticRetryResetWriteFailureResults=ProfileModuleResult.ResetWriteRejected|ProfileModuleResult.ResetWriteResourceFailure|ProfileModuleResult.ResetWriteOutcomeUnknown
-semanticRetryResetWriteReturnLifecycle=SessionResetLifecycle.CONFIRMATION_REQUIRED
-semanticRetryResetWriteFreshIdentity=semanticHandle|effectRef|sourceRevision
-semanticRetryResetWriteResourceInvocationsPerPulse=1
-semanticRetryResetWriteProviderMutationCallsPerPulse=0..1
-semanticRetryResetWriteEvidence=flow/session/nucleus/src/commonTest/kotlin/kinetickk/flow/session/nucleus/AppSessionNucleusTest.kt|ball/profile/impl/src/commonTest/kotlin/kinetickk/ball/profile/impl/DefaultProfileComponentTest.kt|ball/profile/nucleus/src/commonTest/kotlin/kinetickk/ball/profile/nucleus/ProfileNucleusTest.kt|ball/profile/resource/src/commonTest/kotlin/kinetickk/ball/profile/resource/ProfileStorageTest.kt
+semanticRetry=ABSENT
 -->
 
 This document selects only values and mechanisms that Pokeball Core leaves to
@@ -112,7 +94,7 @@ trusted Impl boundary.
 | Session participant-command / ensure-run outputs per accepted Decision | 1 / 1 | Session accepted-frame and acceptor preflight |
 | Session participant commands at one time | 1 | Session State/Nucleus plus acceptor |
 | Session participant authorities | 2 | static `FlowParticipation`/Assembly validation |
-| cross-authority read / command-result routes | 14 / 10 | closed typed Assembly inventory and generated projection; AppSession owns 9 of the command/result routes |
+| cross-authority read / command-result routes | 14 / 8 | closed typed Assembly inventory and generated projection; AppSession owns 7 of the command/result routes |
 | rendered application routes | 7 | closed AppSession route protocol and Interaction mapping |
 | same-stack causal depth | 8 | three acceptor depth guards plus the source-derived acyclic direct-control graph |
 | cumulative fan-out per accepted root causal scope | 9840 | static closed-output/executor inventory and geometric proof; no runtime meter |
@@ -154,7 +136,7 @@ trusted Impl boundary.
 | Profile master volume / text scale | `0..1` / `1..1.75` | Profile and Gameplay normalized compatibility plus Resource ingress validation |
 | Profile simulation speed / damage-tier threshold | exact declared option sets | API declarations consumed by Profile Nucleus, Gameplay Nucleus, and Resource validation |
 | Profile Gameplay discoveries per Pulse | captured `itemCount` (at most 400) | Profile validates count and every stable item ID before acceptance |
-| Profile v4 UTF-8 payload | 65536 bytes | Profile Resource before decode and after encode |
+| Profile snapshot UTF-8 payload | 65536 bytes | Profile Resource before decode and after encode |
 | Desktop Preferences value length | 8192 UTF-16 code units | exact platform broker refuses 8193 before provider execution |
 | Desktop Preferences key names admitted per exact node read | 64 | exact platform broker refuses 65 before project-owned membership iteration |
 
@@ -234,8 +216,8 @@ consumer/executor per output. The static ceiling is
 accepted source tuple through one effective route to one consumer/executor.
 Terminal and all co-reachable branches count, including separate branches that
 converge on one authority. Mutually exclusive alternatives reserve their
-maximum. Exact retry/redelivery of the same tuple, route, and consumer adds
-nothing; a new accepted source tuple does. Each independent accepted root starts
+maximum. A duplicate traversal record for the same tuple, route, and consumer
+adds nothing to this static branch count; a new accepted source tuple does. Each independent accepted root starts
 a fresh scope. No asynchronous semantic handoff exists. No runtime fan-out meter
 is introduced: this is a static composition proof checked against the closed
 output/executor inventory and resolver fixtures.
@@ -249,7 +231,8 @@ measure, not a general Ball State-size claim.
 
 ## Persistence boundary
 
-The v4 JSON boundary is strict:
+Before KINETICKK `1.0.0`, there is one current Profile JSON boundary. It is
+strict:
 
 - unknown or missing required fields fail;
 - no leniency, coercion, special floats, `ignoreUnknownKeys`, or
@@ -257,13 +240,13 @@ The v4 JSON boundary is strict:
 - all economy `Long` values use canonical validated decimal strings;
 - stable IDs are explicit; maps become sorted record lists and collections are
   sorted; defaults are encoded;
-- `schemaVersion=4`, profile ID `local-player`, and content version
-  `kinetickk-content-1` are exact;
 - representation and closed-type validation occur before a bootstrap Pulse;
-  State/Context-dependent compatibility and reset decisions remain Profile
+  State/Context-dependent compatibility and default-selection decisions remain Profile
   Nucleus policy.
 
-The 65536-byte v4 codec bound protects JSON representation ingress and encoded
+The current payload is the canonical encoding of `ProfileSnapshot(revision,
+profile)`. It has no persisted schema-version discriminator, profile ID, or
+content-version field. The 65536-byte codec bound protects JSON representation ingress and encoded
 output; it does not promise that every valid payload fits every physical
 provider. Desktop Preferences separately admits at most 8192 UTF-16 code units.
 Its exact read helper admits at most 64 key names returned from the private target
@@ -275,51 +258,46 @@ The exact broker classifies an 8193-unit value before invocation as
 `FAILED_BEFORE_EXECUTION`, which becomes a known write `ResourceFailure`, not
 `OutcomeUnknown`, and never rolls back the already accepted Profile frame.
 
-Desktop writes only node `kinetickk/profile`, key `snapshot_v4`; Web writes only
-`kinetickk_profile_v4`. Legacy discovery/purge is limited to Desktop node
-`kinetickk/progression` keys `progress_v2` and `kinetickk_matter`, and Web keys
-`kinetickk_progress_v2` and `kinetickk_matter`.
+Platform composition is the sole physical storage authority and selects one
+current location per target: Android SharedPreferences `kinetickk.profile` key
+`snapshot`, Desktop Preferences node `kinetickk/profile` key `snapshot`, and Web
+local-storage key `kinetickk_profile`. The Resource, Ball, Flow, and
+Interactions cannot choose another root, node, or key.
 
-Reset ordering is write-default-v4, observe success, then purge only the exact
-legacy keys. Failure or uncertainty preserves legacy data. Core §9.9 / PBA-24
-applies to two explicit user-owned semantic retry families, both coordinated
-only by AppSession and targeted at Profile.
+There is no pre-`1.0.0` migration or backward-compatibility inventory. Keys
+outside the selected current key are never read, enumerated for compatibility,
+removed, or cleared. They remain untouched. `ProfileResource` and the injected
+platform capability expose only `readSnapshot` and `writeSnapshot`; no reset,
+purge, import, or bulk-clear operation exists.
 
-For legacy-purge failure, one
-`SessionInteractionPulse.ResetRetryRequested` issues exactly one
-`ProfileModuleCommand.RetryLegacyPurge`, and Profile performs at most one purge
-attempt for that accepted command.
+Desktop Preferences may mechanically return all key names in the selected node
+so the broker can prove whether exact key `snapshot` is present. That bounded
+name enumeration creates no compatibility inventory: non-current names do not
+select behavior, their values are not read, and they are not mutated.
 
-For `ResetWriteRejected`, `ResetWriteResourceFailure`, or
-`ResetWriteOutcomeUnknown`, the reset returns to
-`SessionResetLifecycle.CONFIRMATION_REQUIRED` and emits no automatic command. A
-later explicit `SessionInteractionPulse.ResetConfirmed` authorizes one
-superseding write to the same fixed v4 key through exactly one new
-`ProfileModuleCommand.ConfirmLegacyReset` and one Profile Resource write
-invocation. A local encode rejection produces `ResetWriteRejected` before the
-provider, so that invocation makes zero provider mutation calls; otherwise it
-makes at most one provider mutation call. The
-accepted command has a fresh semantic handle, effect reference, and source
-revision; it is not same-identity redelivery. Rejection and ResourceFailure are
-known not to have executed. OutcomeUnknown may have committed, and the later
-confirmation does not falsely resolve that prior ambiguity; if it succeeds, its
-newer snapshot is established before legacy purge. `ProfilePersistenceStatus`
-describes the latest attempt.
+An absent current value, strict codec rejection, revision exhaustion, or
+current-policy incompatibility constructs the default Profile with bootstrap
+ready. A provider read failure is not treated as incompatible data: it produces
+`ProfileBootstrapStatus.Blocked`, maps Session to
+`BOOTSTRAP_UNAVAILABLE`, and renders the input-blocking `PROFILE UNAVAILABLE`
+UI without mutating storage.
 
-Profile is not a co-primary retry-policy owner. Transport, executor,
-SDK/provider, and reconciliation retries are disabled. Neither family is
-automatic, blind, transparent, idempotent, or a reconciliation attempt. The
-cumulative semantic attempt bound is one Profile Resource invocation per
-explicit user Pulse, with the separate provider mutation bound above.
+There is no semantic retry route. Every accepted Profile mutation may emit one
+`ProfileOutput.PersistSnapshot`; the executor invokes `writeSnapshot` once and
+feeds the one typed completion back to Profile. A rejected outbound snapshot
+does not call the provider. A known provider failure before execution becomes
+`ResourceFailure`; possible execution or failed exact read-back becomes
+`OutcomeUnknown`. Neither result rolls back the accepted Profile frame or
+schedules another write.
 
 ## Capability and failure policy
 
-Resources receive the minimum explicit bounded capability: exact-key read,
-write, and remove functions or bounded tone playback. No Ball receives ambient
+Resources receive the minimum explicit bounded capability: exact-key snapshot
+read/write functions or bounded tone playback. No Ball receives ambient
 Preferences, `localStorage`, filesystem, browser, or audio-provider authority.
 The platform broker classifies only explicit provider failures into closed
 technical read/mutation outcomes. A known failure before mutation stays
-`ResourceFailure` (or a known-present legacy key for purge); possible execution
+`ResourceFailure`; possible execution
 alone becomes `OutcomeUnknown`. Every unclassified exception, programming fault,
 invariant fault, and allocation failure follows runtime-fault policy and is not
 converted into provider evidence, a business rejection, or an accepted result.

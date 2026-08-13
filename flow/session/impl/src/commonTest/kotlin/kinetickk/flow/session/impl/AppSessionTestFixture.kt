@@ -42,7 +42,6 @@ import kinetickk.ball.profile.api.ProfileModuleResult
 import kinetickk.ball.profile.api.ProfileModuleResultDelivery
 import kinetickk.ball.profile.api.ProfilePersistenceStatus
 import kinetickk.ball.profile.api.ProfileQuery
-import kinetickk.ball.profile.api.ProfileResetStatus
 import kinetickk.ball.profile.api.ProfileResultIssuerProvenance
 import kinetickk.ball.profile.api.ProfileResultSourceToken
 import kinetickk.ball.profile.api.ProfileRevision
@@ -98,7 +97,6 @@ internal class FakeSessionProfileRoute(
 
     var revision: ProfileRevision = ProfileRevision(1L)
     var bootstrap: ProfileBootstrapStatus = ProfileBootstrapStatus.Ready
-    var reset: ProfileResetStatus = ProfileResetStatus.NotRequired(false)
     var persistence: ProfilePersistenceStatus = ProfilePersistenceStatus.NotAttempted
     var projectionInstanceId = instanceId
     var resultSink: (ProfileModuleResultDelivery) -> Unit = {}
@@ -122,29 +120,19 @@ internal class FakeSessionProfileRoute(
     fun complete(
         call: ProfileCommandCall,
         result: ProfileModuleResult,
-        resetPathRevisionDelta: Long? = null,
         deliveryTransform: (ProfileModuleResultDelivery) -> ProfileModuleResultDelivery = { it },
     ): ProfileCommandIngressResult.Accepted {
         val acceptedRevision = ProfileRevision(revision.value + 1L)
-        val revisionDelta = resetPathRevisionDelta ?: when (call.request.command) {
-            ProfileModuleCommand.ConfirmLegacyReset,
-            ProfileModuleCommand.RetryLegacyPurge,
-            -> 1L
-            else -> 0L
-        }
-        revision = ProfileRevision(acceptedRevision.value + revisionDelta)
+        revision = acceptedRevision
         applyResult(result)
         val resultOrdinal = when (call.request.command) {
             is ProfileModuleCommand.SelectCoreShape,
             ProfileModuleCommand.ToggleMute,
             ProfileModuleCommand.AdvanceRebirth,
             -> 1
-            ProfileModuleCommand.ConfirmLegacyReset,
-            ProfileModuleCommand.RetryLegacyPurge,
-            -> 0
             is ProfileModuleCommand.ApplyGameplayProgress -> error("Not a Session command")
         }
-        val resultDepth = call.causalDepth + 1 + revisionDelta.toInt()
+        val resultDepth = call.causalDepth + 1
         val delivery = deliveryTransform(
             ProfileModuleResultDelivery(
                     commandSource = commandSource(call),
@@ -212,7 +200,7 @@ internal class FakeSessionProfileRoute(
 
     override fun query(query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection {
         queries += "persistenceStatus"
-        return PersistenceStatusProjection(projectionInstanceId, revision, bootstrap, reset, persistence)
+        return PersistenceStatusProjection(projectionInstanceId, revision, bootstrap, persistence)
     }
 
     private fun completeAutomatically(call: ProfileCommandCall): ProfileCommandIngressResult =
@@ -234,9 +222,6 @@ internal class FakeSessionProfileRoute(
                     profile.rebirthProgress.copy(level = profile.rebirthProgress.level + 1),
                 ),
             )
-            ProfileModuleCommand.ConfirmLegacyReset,
-            ProfileModuleCommand.RetryLegacyPurge,
-            -> complete(call, ProfileModuleResult.ResetCompleted)
             is ProfileModuleCommand.ApplyGameplayProgress -> error("Not a Session command")
         }
 
@@ -248,23 +233,6 @@ internal class FakeSessionProfileRoute(
                 profile = profile.copy(preferences = result.preferences)
             is ProfileModuleResult.RebirthAdvanced ->
                 profile = profile.copy(rebirthProgress = result.progress)
-            ProfileModuleResult.ResetCompleted -> {
-                profile = PlayerProfile()
-                bootstrap = ProfileBootstrapStatus.Ready
-                reset = ProfileResetStatus.NotRequired(legacyResetConfirmed = true)
-                persistence = ProfilePersistenceStatus.Persisted(revision)
-            }
-            is ProfileModuleResult.ResetNeedsAttention -> {
-                reset = result.status
-                bootstrap = ProfileBootstrapStatus.Blocked(
-                    kinetickk.ball.profile.api.ProfileBootstrapBlockReason.ResetNeedsAttention(
-                        result.status.result,
-                    ),
-                )
-            }
-            is ProfileModuleResult.ResetWriteOutcomeUnknown,
-            is ProfileModuleResult.ResetWriteResourceFailure,
-            is ProfileModuleResult.ResetWriteRejected,
             ProfileModuleResult.GameplayProgressApplied,
             -> Unit
         }
@@ -432,8 +400,6 @@ private val ProfileModuleCommand.effectiveIdentity: ProfileEffectiveProtocolIden
         is ProfileModuleCommand.SelectCoreShape -> ProfileEffectiveProtocolIdentity.SESSION_CORE_SHAPE
         ProfileModuleCommand.ToggleMute -> ProfileEffectiveProtocolIdentity.SESSION_MUTE
         ProfileModuleCommand.AdvanceRebirth -> ProfileEffectiveProtocolIdentity.SESSION_REBIRTH
-        ProfileModuleCommand.ConfirmLegacyReset -> ProfileEffectiveProtocolIdentity.SESSION_RESET_CONFIRM
-        ProfileModuleCommand.RetryLegacyPurge -> ProfileEffectiveProtocolIdentity.SESSION_RESET_RETRY
         is ProfileModuleCommand.ApplyGameplayProgress -> ProfileEffectiveProtocolIdentity.GAMEPLAY_PROGRESS
     }
 

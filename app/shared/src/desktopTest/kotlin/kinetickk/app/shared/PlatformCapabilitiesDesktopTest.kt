@@ -36,7 +36,7 @@ class PlatformCapabilitiesDesktopTest {
     }
 
     @Test
-    fun testPersistenceCapabilityUsesOnlyExactKeysAndPreservesUnrelatedData() {
+    fun persistenceCapabilityUsesOnlySnapshotAndPreservesUnrelatedData() {
         val testRoot = Preferences.userRoot().node(
             "kinetickk-test/app-platform-capability/${UUID.randomUUID()}",
         )
@@ -44,35 +44,25 @@ class PlatformCapabilitiesDesktopTest {
         val profileNode = testRoot.node("profile")
         val legacyNode = testRoot.node("legacy")
         try {
-            val capability = TestDesktopProfilePersistenceCapability(profileNode, legacyNode)
-            legacyNode.put(ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2, "legacy")
-            legacyNode.put(ProfilePersistenceContract.DESKTOP_LEGACY_MATTER, "1")
-            legacyNode.put("unrelated", "preserve-me")
+            val capability = TestDesktopProfilePersistenceCapability(profileNode)
+            profileNode.put("unrelated", "preserve-me")
+            profileNode.flush()
+            legacyNode.put("progress_v2", "legacy")
+            legacyNode.put("kinetickk_matter", "1")
             legacyNode.flush()
 
             assertEquals(
                 ProfilePersistenceMutationResult.COMPLETED,
-                capability.writeV4("strict-v4-payload"),
+                capability.writeSnapshot("strict-current-payload"),
             )
             assertEquals(
-                ProfilePersistenceReadResult.Observed("strict-v4-payload"),
-                capability.readV4(),
+                ProfilePersistenceReadResult.Observed("strict-current-payload"),
+                capability.readSnapshot(),
             )
-            assertNull(legacyNode.get(ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, null))
-            assertEquals(
-                ProfilePersistenceReadResult.Observed("legacy"),
-                capability.readLegacyProgressV2(),
-            )
-            assertEquals(ProfilePersistenceReadResult.Observed("1"), capability.readLegacyMatter())
-
-            assertEquals(
-                ProfilePersistenceMutationResult.COMPLETED,
-                capability.removeLegacyProgressV2(),
-            )
-            assertEquals(ProfilePersistenceMutationResult.COMPLETED, capability.removeLegacyMatter())
-            assertNull(legacyNode.get(ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2, null))
-            assertNull(legacyNode.get(ProfilePersistenceContract.DESKTOP_LEGACY_MATTER, null))
-            assertEquals("preserve-me", legacyNode.get("unrelated", null))
+            assertNull(legacyNode.get(ProfilePersistenceContract.DESKTOP_SNAPSHOT, null))
+            assertEquals("preserve-me", profileNode.get("unrelated", null))
+            assertEquals("legacy", legacyNode.get("progress_v2", null))
+            assertEquals("1", legacyNode.get("kinetickk_matter", null))
         } finally {
             testRoot.removeNode()
             testParent.flush()
@@ -98,7 +88,7 @@ class PlatformCapabilitiesDesktopTest {
             desktopPreferenceKeyCountAdmission(MAX_DESKTOP_PREFERENCE_KEYS_PER_NODE + 1),
         )
 
-        val exactKey = ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4
+        val exactKey = ProfilePersistenceContract.DESKTOP_SNAPSHOT
         val acceptedNames = Array(MAX_DESKTOP_PREFERENCE_KEYS_PER_NODE) { index ->
             if (index == MAX_DESKTOP_PREFERENCE_KEYS_PER_NODE - 1) exactKey else "unrelated-$index"
         }
@@ -135,7 +125,7 @@ class PlatformCapabilitiesDesktopTest {
 
     @Test
     fun desktopReadStageClassifiesOnlyDocumentedProviderFailures() {
-        val exactKey = ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4
+        val exactKey = ProfilePersistenceContract.DESKTOP_SNAPSHOT
         listOf<Throwable>(
             BackingStoreException("unavailable"),
             SecurityException("denied"),
@@ -297,44 +287,18 @@ class PlatformCapabilitiesDesktopTest {
 
 private class TestDesktopProfilePersistenceCapability(
     private val profileNode: Preferences,
-    private val legacyNode: Preferences,
 ) : ProfilePersistenceCapability {
-    override fun readV4(): ProfilePersistenceReadResult =
-        ProfilePersistenceReadResult.Observed(profileNode.get(ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, null))
+    override fun readSnapshot(): ProfilePersistenceReadResult =
+        ProfilePersistenceReadResult.Observed(profileNode.get(ProfilePersistenceContract.DESKTOP_SNAPSHOT, null))
 
-    override fun writeV4(payload: String): ProfilePersistenceMutationResult {
+    override fun writeSnapshot(payload: String): ProfilePersistenceMutationResult {
         profileNode.apply {
-            put(ProfilePersistenceContract.DESKTOP_SNAPSHOT_V4, payload)
+            put(ProfilePersistenceContract.DESKTOP_SNAPSHOT, payload)
             flush()
         }
         return ProfilePersistenceMutationResult.COMPLETED
     }
 
-    override fun readLegacyProgressV2(): ProfilePersistenceReadResult =
-        ProfilePersistenceReadResult.Observed(
-            legacyNode.get(ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2, null),
-        )
-
-    override fun readLegacyMatter(): ProfilePersistenceReadResult =
-        ProfilePersistenceReadResult.Observed(
-            legacyNode.get(ProfilePersistenceContract.DESKTOP_LEGACY_MATTER, null),
-        )
-
-    override fun removeLegacyProgressV2(): ProfilePersistenceMutationResult {
-        legacyNode.apply {
-            remove(ProfilePersistenceContract.DESKTOP_LEGACY_PROGRESS_V2)
-            flush()
-        }
-        return ProfilePersistenceMutationResult.COMPLETED
-    }
-
-    override fun removeLegacyMatter(): ProfilePersistenceMutationResult {
-        legacyNode.apply {
-            remove(ProfilePersistenceContract.DESKTOP_LEGACY_MATTER)
-            flush()
-        }
-        return ProfilePersistenceMutationResult.COMPLETED
-    }
 }
 
 private fun createTestDesktopAudioExecutor(): ThreadPoolExecutor = ThreadPoolExecutor(

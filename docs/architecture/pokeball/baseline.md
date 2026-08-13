@@ -49,12 +49,12 @@ Lab, Armory, Rebirth, Codex, mute, back, and contextual enter.
 The full `PlayerProfile` remains the canonical source for preferences, economy,
 loadout, Lab ranks, collection, and Rebirth progress. All accepted mutations
 publish their complete next value before persistence is attempted. Persistence
-failure or uncertainty never rolls an accepted value back and is never retried
-blindly. Rejections change neither state nor persistence.
+failure or uncertainty never rolls an accepted value back and does not cause an
+automatic new write. Rejections change neither state nor persistence.
 
 The frozen mutation matrix covers preference normalization, sound/music mute,
 Lab purchases, core-shape selection, weapon purchase/equip, Rebirth advance,
-gameplay-progress merge, bootstrap, and the legacy test-only replacement seam.
+gameplay-progress merge, bootstrap, and the test-only replacement seam.
 The target removes production arbitrary replacement but preserves validated
 bootstrap semantics.
 
@@ -83,13 +83,22 @@ failure-path observability is intentionally tightened as described below.
 
 ## Intentional delta
 
-Save v4 is the sole intentional persistent-data incompatibility. Existing v2/v3
-and legacy-matter values are detected but never imported. The application
-blocks on an explicit reset modal and deletes only the enumerated old keys after
-a default v4 snapshot is successfully written. Cancel deletes nothing. Failed
-or unknown write preserves legacy data; partial or unknown purge requires an
-explicit user retry. No Preferences node, storage area, or unrelated key is
-cleared.
+Until KINETICKK `1.0.0`, `ProfileSnapshot` is the sole persisted Profile schema
+and is treated as current rather than numbered. No migration or backward-
+compatibility path is supported. The Resource and platform capability expose
+only `readSnapshot` and `writeSnapshot`; there is no reset, import, quarantine,
+purge, or bulk-clear operation.
+
+Platform composition owns the only physical storage authority. Android uses
+SharedPreferences `kinetickk.profile` key `snapshot`; Desktop uses Preferences
+node `kinetickk/profile` key `snapshot`; Web uses local-storage key
+`kinetickk_profile`. All other keys are outside the application contract: they
+are ignored and remain untouched.
+
+An absent current value, a strict codec rejection, or a decoded snapshot that
+is incompatible with current Profile policy starts from defaults and leaves
+bootstrap ready. A provider read failure instead blocks Session bootstrap and
+shows the input-blocking `PROFILE UNAVAILABLE` UI; no local data is changed.
 
 Audio fault staging is a deliberate operational delta. Synchronous Resource,
 platform, and programming faults are no longer swallowed by best-effort

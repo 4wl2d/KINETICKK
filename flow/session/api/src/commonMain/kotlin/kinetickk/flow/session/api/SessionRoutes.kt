@@ -39,11 +39,8 @@ enum class SessionShortcut {
     ENTER,
 }
 
-enum class SessionResetLifecycle {
+enum class SessionLifecycle {
     READY,
-    CONFIRMATION_REQUIRED,
-    RESET_IN_PROGRESS,
-    PURGE_NEEDS_ATTENTION,
     BOOTSTRAP_UNAVAILABLE,
 }
 
@@ -59,6 +56,4 @@ enum class SessionWorkflowPhase {
     ADVANCING_REBIRTH,
     STARTING_REBIRTH_RUN,
     EXITING_RUN,
-    CONFIRMING_RESET,
-    RETRYING_PURGE,
 }

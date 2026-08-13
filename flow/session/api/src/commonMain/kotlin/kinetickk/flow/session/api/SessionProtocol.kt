@@ -18,16 +18,12 @@ sealed interface SessionInteractionPulse {
 
     /** The first accepted request arms confirmation; the second starts the participant workflow. */
     data object RebirthRequested : SessionInteractionPulse
-
-    data object ResetCancelled : SessionInteractionPulse
-    data object ResetConfirmed : SessionInteractionPulse
-    data object ResetRetryRequested : SessionInteractionPulse
 }
 
 sealed interface SessionRejection {
     data object RunIdExhausted : SessionRejection
     data object ParticipantCommandPending : SessionRejection
-    data object ResetBlocksInput : SessionRejection
+    data object BootstrapUnavailable : SessionRejection
     data object StartUnavailable : SessionRejection
     data object RestartUnavailable : SessionRejection
     data object ExitUnavailable : SessionRejection
@@ -35,7 +31,6 @@ sealed interface SessionRejection {
     data object ShortcutUnavailable : SessionRejection
     data object CoreShapeSelectionUnavailable : SessionRejection
     data object RebirthUnavailable : SessionRejection
-    data object ResetActionUnavailable : SessionRejection
 
     data class OverlayUnavailable(
         val destination: AppDestination,
@@ -62,8 +57,4 @@ enum class SessionWorkflowFailureCode {
     PROFILE_COMMAND_REFUSED,
     GAMEPLAY_COMMAND_REFUSED,
     EXIT_PROGRESS_NOT_APPLIED,
-    RESET_WRITE_REJECTED,
-    RESET_WRITE_RESOURCE_FAILURE,
-    RESET_WRITE_OUTCOME_UNKNOWN,
-    RESET_NEEDS_ATTENTION,
 }

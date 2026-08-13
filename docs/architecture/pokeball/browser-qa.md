@@ -16,49 +16,49 @@ repeatable automated browser gate.
   browser profile and a new loopback origin.
 - Never attach to an existing Chrome session, reuse its storage, or reuse a
   live app platform-storage broker.
-- After the isolated storage precondition is installed, drive application
+- After an isolated storage precondition is installed, drive application
   behavior only through visible keyboard and pointer input. No production test
   registry, global bridge, hidden route mutation, or direct component call is
   permitted.
 
 Local screenshots and browser traces are written beneath
-`output/playwright/freeze-<short-sha>/`, which is ignored by Git. The formal
-claim record names the exact freeze SHA, browser version, command result, and
-observed evidence; it does not treat these transient files as product source.
+`output/playwright/freeze-<short-sha>/`, which is ignored by Git. A future
+formal claim record must name its exact freeze SHA, browser version, command
+result, and observed evidence; transient files are not product source.
 
-### Isolated storage precondition
+## Isolated storage preconditions
 
-Reset evidence requires a controlled precondition that the product UI cannot
-create. Browser automation may use page evaluation only to prepare and inspect
-the fresh temporary profile on the loopback app origin:
+Browser automation may use page evaluation only to prepare and inspect the
+fresh temporary profile on the loopback origin:
 
-1. load the production app once, set only the declared legacy key
-   `kinetickk_progress_v2`, and reload;
-2. for the partial-purge scenario, wrap that isolated page's
-   `Storage.prototype.removeItem` so the first removal of exactly that key
-   throws `new DOMException("QA one-shot purge failure", "SecurityError")`
-   exactly once; a generic `Error` or another DOMException name is not a valid
-   fixture because unclassified faults propagate;
-3. after `RESET NEEDS ATTENTION` is observed, restore the original
-   `removeItem` method before Retry and never affect another origin;
-4. after setup, use visible Canvas input for Cancel, Confirm, and Retry; and
-5. inspect the same origin's storage after each step to prove Cancel retained
-   the key, Confirm wrote a valid v4 snapshot before the injected purge
-   failure, and Retry removed only the declared legacy key.
+1. current-value scenarios may set only `kinetickk_profile` before reload;
+2. incompatible-current scenarios set a malformed, non-canonical, or otherwise
+   rejected payload at that exact key and then prove the application reaches
+   Home with default Profile state;
+3. provider-read-failure scenarios wrap `Storage.prototype.getItem` so a read
+   of exactly `kinetickk_profile` throws
+   `new DOMException("QA profile read failure", "SecurityError")`, then prove
+   the blocking `PROFILE UNAVAILABLE` UI is rendered and consumes input;
+4. old-key isolation scenarios may set `kinetickk_progress_v2`,
+   `kinetickk_matter`, or another unrelated sentinel, then prove launch and
+   current-snapshot writes leave every sentinel byte-for-byte unchanged; and
+5. restore every temporary prototype wrapper before leaving the scenario and
+   never affect another origin.
 
 This setup is test-fixture preparation and observation, not a production
 control path. It must never reuse a developer profile, mutate a route, call a
-component, or install an application-visible test API.
+component, or install an application-visible test API. There is no production
+reset, purge, migration, or retry control to exercise.
 
 ## Rendered scenario inventory
 
 | Scenario | Visible evidence and storage assertion |
 |---|---|
-| fresh launch | Home renders and no reset modal is present |
-| legacy reset confirmation | an isolated legacy key blocks Home with `SAVE RESET REQUIRED` |
-| cancel | `CANCEL` leaves the confirmation modal blocking and deletes nothing |
-| write-before-purge failure | a one-shot isolated `SecurityError` purge failure leaves a valid default v4 snapshot and renders `RESET NEEDS ATTENTION` |
-| explicit retry | `RETRY PURGE` removes only the declared legacy key and returns to Home |
+| fresh launch | Home renders and no blocking UI is present |
+| valid current snapshot | `kinetickk_profile` is decoded as `ProfileSnapshot` and its state is visible |
+| incompatible current payload | Home renders with default Profile state; no old or unrelated key is changed |
+| provider read failure | `PROFILE UNAVAILABLE` blocks the app, pointer input is consumed, and storage is unchanged |
+| old-key isolation | old and unrelated sentinels are ignored and remain untouched across launch and a current Profile write |
 | seven routes | Home, Gameplay, Settings, Lab, Armory, Rebirth, and Codex each render through public keyboard/pointer input |
 | Gameplay lifecycle | start, pause, exit, and restart render the corresponding accepted Session/Gameplay state |
 | Settings retention | an accepted SFX preference remains visible after close and reopen |
@@ -66,7 +66,8 @@ component, or install an application-visible test API.
 Expected browser console noise is limited to an optional `favicon.ico` 404 and
 browser WebGL debug-renderer warnings. The application JavaScript and both Wasm
 assets must load with HTTP 200; an uncaught exception, failed application
-asset, blank Canvas, or unexpected modal is a failure.
+asset, blank Canvas, or unexpected blocking UI is a failure except in the
+declared provider-read-failure scenario.
 
 ## Repeatable browser gate
 
@@ -81,7 +82,7 @@ CHROME_BIN=/absolute/path/to/chrome ./gradlew \
 `BrowserRuntimeQaTest` exercises the seven-route and core Session lifecycle
 branches with isolated in-memory participants inside the Wasm test runtime.
 Profile Resource, Session component, and App platform-broker tests exercise the
-reset and storage branches in that same automated browser gate. The rendered
-smoke above joins those layers and proves that the production host, Canvas
-composition, visible input mapping, Session workflow, and browser storage
-binding are connected end to end.
+current snapshot, default fallback, blocked read, and old-key non-mutation
+branches in that same automated browser gate. The rendered smoke joins those
+layers and proves that the production host, Canvas composition, visible input
+mapping, Session workflow, and Web storage binding are connected end to end.

@@ -3,5 +3,5 @@
 
 package kinetickk.ball.content.api
 
-/** Persistent core identity; save v4 serializes explicit stable IDs instead of enum ordinals. */
+/** Persistent core identity; the current Profile snapshot stores stable IDs instead of enum ordinals. */
 enum class CoreShape { ORB, PRISM, SHARD }

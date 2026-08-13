@@ -50,7 +50,7 @@ class AppSessionApiContractTest {
             activeRunId = RunId(4L),
             rebirthEligible = true,
             pendingWorkflow = null,
-            resetLifecycle = SessionResetLifecycle.READY,
+            lifecycle = SessionLifecycle.READY,
             rebirthConfirmationArmed = true,
             workflowFailure = null,
         )
@@ -69,13 +69,13 @@ class AppSessionApiContractTest {
     }
 
     @Test
-    fun resetAndPendingWorkflowBothBlockNormalInput() {
+    fun unavailableBootstrapAndPendingWorkflowBothBlockNormalInput() {
         val ready = homeProjection()
 
         assertTrue(ready.normalInputEnabled)
         assertFalse(
             ready.copy(
-                resetLifecycle = SessionResetLifecycle.CONFIRMATION_REQUIRED,
+                lifecycle = SessionLifecycle.BOOTSTRAP_UNAVAILABLE,
             ).normalInputEnabled,
         )
         assertFalse(
@@ -98,22 +98,15 @@ class AppSessionApiContractTest {
             SessionInteractionPulse.ToggleMuteRequested,
             SessionInteractionPulse.SelectCoreShapeRequested(CoreShape.PRISM),
             SessionInteractionPulse.RebirthRequested,
-            SessionInteractionPulse.ResetCancelled,
-            SessionInteractionPulse.ResetConfirmed,
-            SessionInteractionPulse.ResetRetryRequested,
         )
 
-        assertEquals(12, interactions.size)
+        assertEquals(9, interactions.size)
         assertIs<SessionInteractionPulse.SelectCoreShapeRequested>(interactions[7])
         assertEquals(
             setOf(
                 SessionWorkflowFailureCode.PROFILE_COMMAND_REFUSED,
                 SessionWorkflowFailureCode.GAMEPLAY_COMMAND_REFUSED,
                 SessionWorkflowFailureCode.EXIT_PROGRESS_NOT_APPLIED,
-                SessionWorkflowFailureCode.RESET_WRITE_REJECTED,
-                SessionWorkflowFailureCode.RESET_WRITE_RESOURCE_FAILURE,
-                SessionWorkflowFailureCode.RESET_WRITE_OUTCOME_UNKNOWN,
-                SessionWorkflowFailureCode.RESET_NEEDS_ATTENTION,
             ),
             SessionWorkflowFailureCode.entries.toSet(),
         )
@@ -129,7 +122,7 @@ private fun homeProjection(): AppShellProjection = AppShellProjection(
     activeRunId = null,
     rebirthEligible = true,
     pendingWorkflow = null,
-    resetLifecycle = SessionResetLifecycle.READY,
+    lifecycle = SessionLifecycle.READY,
     rebirthConfirmationArmed = false,
     workflowFailure = null,
 )

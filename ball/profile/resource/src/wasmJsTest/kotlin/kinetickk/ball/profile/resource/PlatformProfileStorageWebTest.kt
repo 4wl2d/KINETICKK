@@ -3,90 +3,55 @@
 
 package kinetickk.ball.profile.resource
 
-import kinetickk.ball.profile.api.ProfileBootstrapResourceResult
-import kinetickk.ball.profile.api.ProfileLegacyKeys
-import kinetickk.ball.profile.api.ProfileLegacyPurgeResult
-import kinetickk.ball.profile.api.ProfileV4WriteResult
+import kinetickk.ball.profile.api.ProfileSnapshotReadResult
+import kinetickk.ball.profile.api.ProfileWriteResult
 import kotlinx.browser.localStorage
 import org.w3c.dom.Storage
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 
 class PlatformProfileStorageWebTest {
     @Test
-    fun isolatedBrowserKeysUseExactCapabilitiesAndPreserveUnrelatedData() {
+    fun isolatedBrowserKeyUsesCurrentSnapshotAndLeavesLegacyStorageUntouched() {
         val prefix = "kinetickk_profile_resource_test_${Random.nextLong()}"
-        val keys = IsolatedWebKeys(
-            snapshotV4 = "${prefix}_v4",
-            legacyProgressV2 = "${prefix}_v2",
-            legacyMatter = "${prefix}_matter",
-        )
-        val unrelated = "${prefix}_unrelated"
+        val snapshotKey = "${prefix}_profile"
+        val legacyProgressKey = "${prefix}_progress_v2"
+        val legacyMatterKey = "${prefix}_matter"
         try {
-            val resource = createProfileResource(IsolatedWebPersistence(localStorage, keys))
+            localStorage.setItem(legacyProgressKey, "legacy")
+            localStorage.setItem(legacyMatterKey, "1")
+            val resource = createProfileResource(
+                IsolatedWebPersistence(localStorage, snapshotKey),
+            )
             assertEquals(
-                ProfileBootstrapResourceResult.Observed(
-                    snapshot = null,
-                    legacyKeys = ProfileLegacyKeys.NONE,
-                ),
-                resource.readBootstrap(),
+                ProfileSnapshotReadResult.Observed(snapshot = null),
+                resource.readSnapshot(),
             )
 
-            localStorage.setItem(keys.legacyProgressV2, "legacy")
-            localStorage.setItem(keys.legacyMatter, "1")
-            localStorage.setItem(unrelated, "preserve-me")
-            val confirmed = testV4Snapshot(revision = 6L, legacyResetConfirmed = true)
-
+            val snapshot = testSnapshot(revision = 6L)
             assertEquals(
-                ProfileV4WriteResult.Written(confirmed.revision),
-                resource.writeV4(confirmed),
+                ProfileWriteResult.Written(snapshot.revision),
+                resource.writeSnapshot(snapshot),
             )
-            assertEquals(requireEncoded(confirmed), localStorage.getItem(keys.snapshotV4))
-            assertEquals(ProfileLegacyPurgeResult.Purged, resource.purgeLegacy())
-            assertNull(localStorage.getItem(keys.legacyProgressV2))
-            assertNull(localStorage.getItem(keys.legacyMatter))
-            assertEquals("preserve-me", localStorage.getItem(unrelated))
+            assertEquals(requireEncoded(snapshot), localStorage.getItem(snapshotKey))
+            assertEquals("legacy", localStorage.getItem(legacyProgressKey))
+            assertEquals("1", localStorage.getItem(legacyMatterKey))
         } finally {
-            listOf(keys.snapshotV4, keys.legacyProgressV2, keys.legacyMatter, unrelated).forEach {
-                localStorage.removeItem(it)
-            }
+            listOf(snapshotKey, legacyProgressKey, legacyMatterKey).forEach(localStorage::removeItem)
         }
     }
 }
 
-private data class IsolatedWebKeys(
-    val snapshotV4: String,
-    val legacyProgressV2: String,
-    val legacyMatter: String,
-)
-
 private class IsolatedWebPersistence(
     private val storage: Storage,
-    private val keys: IsolatedWebKeys,
+    private val snapshotKey: String,
 ) : ExactProfilePersistence {
-    override fun readV4(): ProfileProviderReadResult =
-        ProfileProviderReadResult.Observed(storage.getItem(keys.snapshotV4))
+    override fun readSnapshot(): ProfileProviderReadResult =
+        ProfileProviderReadResult.Observed(storage.getItem(snapshotKey))
 
-    override fun writeV4(payload: String): ProfileProviderMutationResult {
-        storage.setItem(keys.snapshotV4, payload)
-        return ProfileProviderMutationResult.COMPLETED
-    }
-
-    override fun readLegacyProgressV2(): ProfileProviderReadResult =
-        ProfileProviderReadResult.Observed(storage.getItem(keys.legacyProgressV2))
-
-    override fun readLegacyMatter(): ProfileProviderReadResult =
-        ProfileProviderReadResult.Observed(storage.getItem(keys.legacyMatter))
-
-    override fun removeLegacyProgressV2(): ProfileProviderMutationResult {
-        storage.removeItem(keys.legacyProgressV2)
-        return ProfileProviderMutationResult.COMPLETED
-    }
-
-    override fun removeLegacyMatter(): ProfileProviderMutationResult {
-        storage.removeItem(keys.legacyMatter)
+    override fun writeSnapshot(payload: String): ProfileProviderMutationResult {
+        storage.setItem(snapshotKey, payload)
         return ProfileProviderMutationResult.COMPLETED
     }
 }

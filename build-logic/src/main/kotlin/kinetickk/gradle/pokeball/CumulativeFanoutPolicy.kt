@@ -175,20 +175,12 @@ private const val SESSION_OUTPUT_EXECUTOR_PATH =
 
 internal val outputExecutorInventory = listOf(
     OutputExecutorProjection(
-        "ProfileOutput.PersistV4Snapshot",
-        "ProfileOutput.PersistV4Snapshot",
-        "profile-resource-write-v4",
-        "DefaultProfileComponent.execute -> ProfileResource.writeV4",
+        "ProfileOutput.PersistSnapshot",
+        "ProfileOutput.PersistSnapshot",
+        "profile-resource-write-snapshot",
+        "DefaultProfileComponent.execute -> ProfileResource.writeSnapshot",
         PROFILE_OUTPUT_EXECUTOR_PATH,
-        listOf("is ProfileOutput.PersistV4Snapshot", "resource.writeV4(output.snapshot)"),
-    ),
-    OutputExecutorProjection(
-        "ProfileOutput.PurgeLegacy",
-        "ProfileOutput.PurgeLegacy",
-        "profile-resource-purge-legacy",
-        "DefaultProfileComponent.execute -> ProfileResource.purgeLegacy",
-        PROFILE_OUTPUT_EXECUTOR_PATH,
-        listOf("is ProfileOutput.PurgeLegacy", "resource.purgeLegacy()"),
+        listOf("is ProfileOutput.PersistSnapshot", "resource.writeSnapshot(output.snapshot)"),
     ),
     OutputExecutorProjection(
         "ProfileOutput.CompleteCommand@app-session",

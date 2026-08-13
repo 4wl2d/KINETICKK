@@ -439,140 +439,13 @@ private val requiredAuditPolicyKeys = listOf(
     "effectiveProfile",
     "contentMutationPath",
     "semanticRetry",
-    "semanticRetryAnchor",
-    "semanticRetryFamilies",
-    "semanticRetryPrimaryOwner",
-    "semanticRetryTarget",
-    "semanticRetryAttemptsPerPulse",
-    "semanticRetryDisabledLayers",
-    "semanticRetrySameIdentityResend",
-    "semanticRetryLegacyPurgePulse",
-    "semanticRetryLegacyPurgeCommand",
-    "semanticRetryLegacyPurgeEvidence",
-    "semanticRetryResetWritePulse",
-    "semanticRetryResetWriteCommand",
-    "semanticRetryResetWriteFailureResults",
-    "semanticRetryResetWriteReturnLifecycle",
-    "semanticRetryResetWriteFreshIdentity",
-    "semanticRetryResetWriteResourceInvocationsPerPulse",
-    "semanticRetryResetWriteProviderMutationCallsPerPulse",
-    "semanticRetryResetWriteEvidence",
 )
 private val expectedAuditPolicy = linkedMapOf(
     "profileAuthorities" to "ContentCatalog|Profile|GameplayRun|AppSession",
     "effectiveProfile" to "Inline+Transient+InProcess+Standard+Static",
     "contentMutationPath" to "NONE",
-    "semanticRetry" to "PRESENT",
-    "semanticRetryAnchor" to "Core §9.9 / PBA-24",
-    "semanticRetryFamilies" to "legacy-purge|reset-write",
-    "semanticRetryPrimaryOwner" to "AppSession",
-    "semanticRetryTarget" to "Profile",
-    "semanticRetryAttemptsPerPulse" to "1",
-    "semanticRetryDisabledLayers" to "transport|executor|SDK/provider|reconciliation",
-    "semanticRetrySameIdentityResend" to "DISABLED",
-    "semanticRetryLegacyPurgePulse" to "SessionInteractionPulse.ResetRetryRequested",
-    "semanticRetryLegacyPurgeCommand" to "ProfileModuleCommand.RetryLegacyPurge",
-    "semanticRetryResetWritePulse" to "SessionInteractionPulse.ResetConfirmed",
-    "semanticRetryResetWriteCommand" to "ProfileModuleCommand.ConfirmLegacyReset",
-    "semanticRetryResetWriteFailureResults" to
-        "ProfileModuleResult.ResetWriteRejected|" +
-        "ProfileModuleResult.ResetWriteResourceFailure|" +
-        "ProfileModuleResult.ResetWriteOutcomeUnknown",
-    "semanticRetryResetWriteReturnLifecycle" to "SessionResetLifecycle.CONFIRMATION_REQUIRED",
-    "semanticRetryResetWriteFreshIdentity" to "semanticHandle|effectRef|sourceRevision",
-    "semanticRetryResetWriteResourceInvocationsPerPulse" to "1",
-    "semanticRetryResetWriteProviderMutationCallsPerPulse" to "0..1",
+    "semanticRetry" to "ABSENT",
 )
-
-internal data class AuditEvidenceAnchor(
-    val path: String,
-    val tokens: List<String>,
-)
-
-internal val legacyPurgeSemanticRetryEvidenceAnchors = listOf(
-    AuditEvidenceAnchor(
-        path = "flow/session/nucleus/src/commonTest/kotlin/kinetickk/flow/session/nucleus/AppSessionNucleusTest.kt",
-        tokens = listOf(
-            "SessionInteractionPulse.ResetRetryRequested",
-            "ProfileModuleCommand.RetryLegacyPurge",
-            "oneExplicitResetRetryPulseIssuesExactlyOnePurgeCommand",
-            "assertIs<AppSessionOutput.SendProfileCommand>(retry.outputs.single())",
-        ),
-    ),
-    AuditEvidenceAnchor(
-        path = "ball/profile/nucleus/src/commonTest/kotlin/kinetickk/ball/profile/nucleus/ProfileNucleusTest.kt",
-        tokens = listOf(
-            "local partial result must not auto-retry",
-            "ProfileModuleCommand.RetryLegacyPurge",
-            "assertIs<ProfileOutput.PurgeLegacy>(retry.outputs.single())",
-        ),
-    ),
-    AuditEvidenceAnchor(
-        path = "ball/profile/impl/src/commonTest/kotlin/kinetickk/ball/profile/impl/DefaultProfileComponentTest.kt",
-        tokens = listOf(
-            "ProfileModuleCommand.RetryLegacyPurge",
-            "assertEquals(1, resource.purgeCount)",
-        ),
-    ),
-)
-
-internal val resetWriteSemanticRetryEvidenceAnchors = listOf(
-    AuditEvidenceAnchor(
-        path = "flow/session/nucleus/src/commonTest/kotlin/kinetickk/flow/session/nucleus/" +
-            "AppSessionNucleusTest.kt",
-        tokens = listOf(
-            "resetWriteFailureRetriesRequireOneExplicitPulseAndCreateOneNewSemanticCommand",
-            "ProfileModuleResult.ResetWriteRejected",
-            "ProfileModuleResult.ResetWriteResourceFailure",
-            "ProfileModuleResult.ResetWriteOutcomeUnknown",
-            "SessionInteractionPulse.ResetConfirmed",
-            "ProfileModuleCommand.ConfirmLegacyReset",
-        ),
-    ),
-    AuditEvidenceAnchor(
-        path = "ball/profile/impl/src/commonTest/kotlin/kinetickk/ball/profile/impl/" +
-            "DefaultProfileComponentTest.kt",
-        tokens = listOf(
-            "resetWriteFailureRetryRequiresExplicitNewCommandAndOneFreshWritePerCommand",
-            "ProfileV4WriteResult.Rejected",
-            "ProfileV4WriteResult.ResourceFailure",
-            "ProfileV4WriteResult.OutcomeUnknown",
-            "ProfileModuleCommand.ConfirmLegacyReset",
-            "write failure must not retry automatically",
-            "listOf(ProfileRevision(2L), ProfileRevision(4L))",
-        ),
-    ),
-    AuditEvidenceAnchor(
-        path = "ball/profile/nucleus/src/commonTest/kotlin/kinetickk/ball/profile/nucleus/" +
-            "ProfileNucleusTest.kt",
-        tokens = listOf(
-            "resetWriteFailureRetryRequiresExplicitNewCommandAndFreshEffectRef",
-            "ProfileModuleCommand.ConfirmLegacyReset",
-            "assertTrue(failed.outputs.none { output -> output is ProfileOutput.PersistV4Snapshot })",
-            "assertTrue(failed.outputs.none { output -> output is ProfileOutput.PurgeLegacy })",
-            "assertNotEquals(firstWrite.effectRef, retryWrite.effectRef)",
-            "assertEquals(retry.nextState.revision, retryWrite.effectRef.sourceRevision)",
-        ),
-    ),
-    AuditEvidenceAnchor(
-        path = "ball/profile/resource/src/commonTest/kotlin/kinetickk/ball/profile/resource/" +
-            "ProfileStorageTest.kt",
-        tokens = listOf(
-            "invalidOutboundSnapshotIsRejectedBeforeProviderWrite",
-            "resource(provider).writeV4(invalid)",
-            "assertEquals(emptyList(), provider.operations)",
-            "writeV4WritesOnlyCanonicalPayloadAndRequiresExactReadBack",
-            "assertEquals(listOf(\"writeV4\", \"readV4\"), provider.operations)",
-        ),
-    ),
-)
-
-internal val semanticRetryEvidenceAnchors =
-    legacyPurgeSemanticRetryEvidenceAnchors + resetWriteSemanticRetryEvidenceAnchors
-private val expectedLegacyPurgeSemanticRetryEvidence =
-    legacyPurgeSemanticRetryEvidenceAnchors.joinToString("|") { it.path }
-private val expectedResetWriteSemanticRetryEvidence =
-    resetWriteSemanticRetryEvidenceAnchors.joinToString("|") { it.path }
 
 private val requiredConformanceMetadataKeys = buildList {
     add("schemaVersion")
@@ -810,7 +683,7 @@ internal fun parseStrictAuditPolicy(policy: String): Map<String, String> = parse
 internal fun auditPolicyViolations(
     policy: String,
     applicability: String,
-    evidenceByPath: Map<String, String>,
+    @Suppress("UNUSED_PARAMETER") evidenceByPath: Map<String, String>,
 ): List<String> = buildList {
     val auditPolicy = runCatching { parseStrictAuditPolicy(policy) }
         .getOrElse { failure ->
@@ -818,11 +691,7 @@ internal fun auditPolicyViolations(
             emptyMap()
     }
     if (auditPolicy.isNotEmpty()) {
-        val expectedPolicy = expectedAuditPolicy + mapOf(
-            "semanticRetryLegacyPurgeEvidence" to expectedLegacyPurgeSemanticRetryEvidence,
-            "semanticRetryResetWriteEvidence" to expectedResetWriteSemanticRetryEvidence,
-        )
-        expectedPolicy.forEach { (key, expected) ->
+        expectedAuditPolicy.forEach { (key, expected) ->
             val actual = auditPolicy.getValue(key)
             if (actual != expected) {
                 add("Pokeball audit policy $key must be exactly `$expected`; found `$actual`")
@@ -846,37 +715,11 @@ internal fun auditPolicyViolations(
         "`ProfileModuleResult.ResetWriteRejected`",
         "`ProfileModuleResult.ResetWriteResourceFailure`",
         "`ProfileModuleResult.ResetWriteOutcomeUnknown`",
-        "fresh semantic handle",
-        "no same-identity resend",
-        "one Profile Resource write invocation per explicit user Pulse",
-        "zero provider mutation calls on local encode rejection",
-        "otherwise at most one provider mutation call",
-        "primary owner `AppSession`",
-        "targets `Profile`",
-        "one purge or reset-write attempt per explicit user Pulse",
         "`PBA-24`",
-    ).filterNot(presentTriggers::contains).forEach { token ->
-        add("Applicability present-trigger inventory is missing semantic-retry contract `$token`")
+    ).filter(presentTriggers::contains).forEach { token ->
+        add("Applicability present-trigger inventory retains removed semantic-retry contract `$token`")
     }
 
-    val absentTriggers = applicability.substringAfter("## Absent trigger scopes", missingDelimiterValue = "")
-    absentTriggers.lineSequence()
-        .filter { line -> line.trimStart().startsWith('|') }
-        .filter { line -> Regex("\\bretr(?:y|ies)\\b", RegexOption.IGNORE_CASE).containsMatchIn(line) }
-        .forEach { line ->
-            add("Applicability absence inventory contradicts present PBA-24 semantic retry: ${line.trim()}")
-        }
-
-    semanticRetryEvidenceAnchors.forEach { anchor ->
-        val evidence = evidenceByPath[anchor.path]
-        if (evidence == null) {
-            add("Semantic-retry policy evidence is missing ${anchor.path}")
-        } else {
-            anchor.tokens.filterNot(evidence::contains).forEach { token ->
-                add("Semantic-retry policy evidence ${anchor.path} is missing `$token`")
-            }
-        }
-    }
 }.distinct().sorted()
 
 internal fun parseStrictTriggerAbsenceProofs(document: String): List<TriggerAbsenceProof> {
@@ -1086,11 +929,8 @@ private fun validateFrozenAuditPolicy(root: Path, revision: String): List<String
 
     val policy = readFrozenText(POKEBALL_POLICY_PATH)
     val applicability = readFrozenText(POKEBALL_APPLICABILITY_PATH)
-    val evidence = semanticRetryEvidenceAnchors.mapNotNull { anchor ->
-        readFrozenText(anchor.path)?.let { text -> anchor.path to text }
-    }.toMap()
     if (policy != null && applicability != null) {
-        addAll(auditPolicyViolations(policy, applicability, evidence))
+        addAll(auditPolicyViolations(policy, applicability, emptyMap()))
     }
 }
 

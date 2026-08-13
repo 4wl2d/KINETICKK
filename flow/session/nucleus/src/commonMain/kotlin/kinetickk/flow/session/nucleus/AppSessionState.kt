@@ -12,13 +12,12 @@ import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.ProfileBootstrapStatus
 import kinetickk.ball.profile.api.ProfileModuleCommandRequest
-import kinetickk.ball.profile.api.ProfileResetStatus
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.flow.session.api.AppDestination
 import kinetickk.flow.session.api.AppSessionInstanceId
 import kinetickk.flow.session.api.LOCAL_APP_SESSION_INSTANCE_ID
-import kinetickk.flow.session.api.SessionResetLifecycle
+import kinetickk.flow.session.api.SessionLifecycle
 import kinetickk.flow.session.api.SessionRevision
 import kinetickk.flow.session.api.SessionWorkflowFailureCode
 import kinetickk.flow.session.api.isBaseDestination
@@ -92,13 +91,6 @@ sealed interface PendingWorkflow {
         override val participant: PendingParticipantCommand.Gameplay,
     ) : PendingWorkflow
 
-    data class ConfirmingReset(
-        override val participant: PendingParticipantCommand.Profile,
-    ) : PendingWorkflow
-
-    data class RetryingPurge(
-        override val participant: PendingParticipantCommand.Profile,
-    ) : PendingWorkflow
 }
 
 sealed interface RebirthConfirmation {
@@ -121,7 +113,7 @@ data class AppSessionState(
     val gameplayPhase: GameplayRunPhase?,
     val pendingWorkflow: PendingWorkflow?,
     val rebirthConfirmation: RebirthConfirmation,
-    val resetLifecycle: SessionResetLifecycle,
+    val lifecycle: SessionLifecycle,
     val lastFailure: SessionWorkflowFailureCode?,
     val nextRunId: RunId?,
 ) {
@@ -156,7 +148,7 @@ data class AppSessionState(
                 gameplayPhase = null,
                 pendingWorkflow = null,
                 rebirthConfirmation = RebirthConfirmation.Disarmed,
-                resetLifecycle = persistenceStatus.toSessionResetLifecycle(),
+                lifecycle = persistenceStatus.toSessionLifecycle(),
                 lastFailure = null,
                 nextRunId = RunId(0L),
             )
@@ -164,16 +156,9 @@ data class AppSessionState(
     }
 }
 
-internal fun PersistenceStatusProjection.toSessionResetLifecycle(): SessionResetLifecycle =
-    when (reset) {
-        is ProfileResetStatus.ConfirmationRequired -> SessionResetLifecycle.CONFIRMATION_REQUIRED
-        is ProfileResetStatus.WritingFreshV4,
-        is ProfileResetStatus.PurgingLegacy,
-        -> SessionResetLifecycle.RESET_IN_PROGRESS
-        is ProfileResetStatus.NeedsAttention -> SessionResetLifecycle.PURGE_NEEDS_ATTENTION
-        is ProfileResetStatus.NotRequired -> if (bootstrap == ProfileBootstrapStatus.Ready) {
-            SessionResetLifecycle.READY
-        } else {
-            SessionResetLifecycle.BOOTSTRAP_UNAVAILABLE
-        }
+internal fun PersistenceStatusProjection.toSessionLifecycle(): SessionLifecycle =
+    if (bootstrap == ProfileBootstrapStatus.Ready) {
+        SessionLifecycle.READY
+    } else {
+        SessionLifecycle.BOOTSTRAP_UNAVAILABLE
     }

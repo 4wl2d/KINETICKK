@@ -11,7 +11,6 @@ import kinetickk.ball.profile.api.LoadoutProjection
 import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PreferencesProjection
 import kinetickk.ball.profile.api.ProfileAcceptance
-import kinetickk.ball.profile.api.ProfileBootstrapResourceResult
 import kinetickk.ball.profile.api.ProfileCommandAdmissionFailureReason
 import kinetickk.ball.profile.api.ProfileCommandBoundaryResponse
 import kinetickk.ball.profile.api.ProfileCommandIngressResult
@@ -22,7 +21,6 @@ import kinetickk.ball.profile.api.ProfileCommandSourceToken
 import kinetickk.ball.profile.api.ProfileCommandValidationFailureReason
 import kinetickk.ball.profile.api.ProfileEffectiveProtocolIdentity
 import kinetickk.ball.profile.api.ProfileInstanceId
-import kinetickk.ball.profile.api.ProfileLegacyPurgeResult
 import kinetickk.ball.profile.api.ProfileModuleCommand
 import kinetickk.ball.profile.api.ProfileModuleCommandPulse
 import kinetickk.ball.profile.api.ProfileModuleCommandRequest
@@ -34,10 +32,10 @@ import kinetickk.ball.profile.api.ProfilePulse
 import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.api.ProfileResultIssuerProvenance
 import kinetickk.ball.profile.api.ProfileResultSourceToken
-import kinetickk.ball.profile.api.ProfileResetStatus
 import kinetickk.ball.profile.api.ProfileRevision
+import kinetickk.ball.profile.api.ProfileSnapshotReadResult
 import kinetickk.ball.profile.api.ProfileTargetBoundaryProvenance
-import kinetickk.ball.profile.api.ProfileV4WriteResult
+import kinetickk.ball.profile.api.ProfileWriteResult
 import kinetickk.ball.profile.api.RebirthProgressProjection
 import kinetickk.ball.profile.api.RunBootstrapProjection
 import kinetickk.ball.profile.nucleus.MAX_PROFILE_OUTPUTS_PER_DECISION
@@ -61,7 +59,7 @@ internal class DefaultProfileComponent(
     private val completions = profileCompletionDeque<ProfileWorkItem>()
     private var committedState: ProfileState = ProfileState.initial(
         policy = policy,
-        bootstrapResult = readConstructionBootstrap(resource),
+        snapshotReadResult = readConstructionSnapshot(resource),
     )
     private var activeCommandRoute: ProfileCommandRouteReservation? = null
     private var nextLocalCausalScope: Long = 1L
@@ -146,11 +144,7 @@ internal class DefaultProfileComponent(
                 response = causalBudgetFailure(commandSource),
             )
         }
-        val hasRevisionCapacity = hasProfileCommandRevisionCapacity(
-            committedState.revision,
-            committedState.reset,
-            request.command,
-        )
+        val hasRevisionCapacity = hasProfileCommandRevisionCapacity(committedState.revision)
         if (!hasRevisionCapacity) {
             return refused(
                 commandSource = commandSource,
@@ -338,7 +332,7 @@ internal class DefaultProfileComponent(
         }
 
         val synchronousCompletions = frame.outputs.count { output ->
-            output is ProfileOutput.PersistV4Snapshot || output is ProfileOutput.PurgeLegacy
+            output is ProfileOutput.PersistSnapshot
         }
         requireProfileSynchronousResourceEffectBound(synchronousCompletions)
         if (synchronousCompletions > 0) {
@@ -348,15 +342,9 @@ internal class DefaultProfileComponent(
 
         frame.outputs.forEachIndexed { index, output ->
             when (output) {
-                is ProfileOutput.PersistV4Snapshot -> {
+                is ProfileOutput.PersistSnapshot -> {
                     check(output.effectRef.sourceRevision == next.revision)
                     check(output.snapshot.revision == next.revision)
-                    check(output.effectRef.ordinal == index) {
-                        "Profile EffectRequest ordinal must equal its accepted output position"
-                    }
-                }
-                is ProfileOutput.PurgeLegacy -> {
-                    check(output.effectRef.sourceRevision == next.revision)
                     check(output.effectRef.ordinal == index) {
                         "Profile EffectRequest ordinal must equal its accepted output position"
                     }
@@ -380,20 +368,11 @@ internal class DefaultProfileComponent(
 
     private fun execute(output: ProfileOutput, item: ProfileWorkItem) {
         when (output) {
-            is ProfileOutput.PersistV4Snapshot -> {
-                val result = resource.writeV4(output.snapshot)
+            is ProfileOutput.PersistSnapshot -> {
+                val result = resource.writeSnapshot(output.snapshot)
                 validateWriteCompletion(output, result)
                 enqueueCompletion(
-                    pulse = ProfileNucleusPulse.V4WriteCompleted(output.effectRef, result),
-                    causalScope = item.causalScope,
-                    causalDepth = item.causalDepth + 1,
-                )
-            }
-            is ProfileOutput.PurgeLegacy -> {
-                val result = resource.purgeLegacy()
-                validatePurgeCompletion(output, result)
-                enqueueCompletion(
-                    pulse = ProfileNucleusPulse.LegacyPurgeCompleted(output.effectRef, result),
+                    pulse = ProfileNucleusPulse.WriteCompleted(output.effectRef, result),
                     causalScope = item.causalScope,
                     causalDepth = item.causalDepth + 1,
                 )
@@ -439,8 +418,8 @@ internal class DefaultProfileComponent(
 
     /** Trusted Resource boundary validation precedes Fact construction. */
     private fun validateWriteCompletion(
-        output: ProfileOutput.PersistV4Snapshot,
-        result: ProfileV4WriteResult,
+        output: ProfileOutput.PersistSnapshot,
+        result: ProfileWriteResult,
     ) {
         val pending = checkNotNull(committedState.persistence as? ProfilePersistenceStatus.Pending) {
             "Profile Resource returned a write completion with no accepted effect"
@@ -448,34 +427,11 @@ internal class DefaultProfileComponent(
         check(pending.effectRef == output.effectRef) {
             "Profile Resource write completion effect correlation mismatch"
         }
-        if (result is ProfileV4WriteResult.Written) {
+        if (result is ProfileWriteResult.Written) {
             check(result.revision == pending.snapshotRevision) {
                 "Profile Resource write completion revision mismatch"
             }
         }
-        if (pending.purpose == kinetickk.ball.profile.api.ProfileV4WritePurpose.RESET_DEFAULT) {
-            val reset = checkNotNull(committedState.reset as? ProfileResetStatus.WritingFreshV4)
-            check(reset.effectRef == output.effectRef)
-        }
-    }
-
-    /** Trusted Resource boundary validation precedes Fact construction. */
-    private fun validatePurgeCompletion(
-        output: ProfileOutput.PurgeLegacy,
-        result: ProfileLegacyPurgeResult,
-    ) {
-        val reset = checkNotNull(committedState.reset as? ProfileResetStatus.PurgingLegacy) {
-            "Profile Resource returned a purge completion with no accepted effect"
-        }
-        check(reset.effectRef == output.effectRef) {
-            "Profile Resource purge completion effect correlation mismatch"
-        }
-        check(
-            result !is ProfileLegacyPurgeResult.Partial || result.remaining.isNotEmpty,
-        ) { "Profile Resource returned an empty partial purge result" }
-        check(
-            result !is ProfileLegacyPurgeResult.OutcomeUnknown || result.unknown.isNotEmpty,
-        ) { "Profile Resource returned an empty unknown purge result" }
     }
 
     private fun enqueueCompletion(
@@ -494,19 +450,13 @@ internal class DefaultProfileComponent(
         frame: ProfileAcceptedFrame,
     ): Int {
         var deepest = item.causalDepth
-        if (frame.outputs.any { it is ProfileOutput.PersistV4Snapshot || it is ProfileOutput.PurgeLegacy }) {
+        if (frame.outputs.any { it is ProfileOutput.PersistSnapshot }) {
             deepest += 1
         }
         if (frame.outputs.any { it is ProfileOutput.CompleteCommand }) {
             deepest = maxOf(deepest, item.causalDepth + 1)
         }
-        return when (val reset = frame.nextState.reset) {
-            is kinetickk.ball.profile.api.ProfileResetStatus.WritingFreshV4 ->
-                maxOf(deepest, item.causalDepth + if (reset.legacyKeys.isEmpty) 2 else 3)
-            is kinetickk.ball.profile.api.ProfileResetStatus.PurgingLegacy ->
-                maxOf(deepest, item.causalDepth + 2)
-            else -> deepest
-        }
+        return deepest
     }
 
     private fun bindingFor(
@@ -523,12 +473,6 @@ internal class DefaultProfileComponent(
             ProfileModuleCommand.AdvanceRebirth -> request.sessionBinding(
                 ProfileEffectiveProtocolIdentity.SESSION_REBIRTH,
             )
-            ProfileModuleCommand.ConfirmLegacyReset -> request.sessionBinding(
-                ProfileEffectiveProtocolIdentity.SESSION_RESET_CONFIRM,
-            )
-            ProfileModuleCommand.RetryLegacyPurge -> request.sessionBinding(
-                ProfileEffectiveProtocolIdentity.SESSION_RESET_RETRY,
-            )
             is ProfileModuleCommand.ApplyGameplayProgress -> null
         }
         ProfileIngressSource.Gameplay -> when (request.command) {
@@ -542,8 +486,6 @@ internal class DefaultProfileComponent(
             is ProfileModuleCommand.SelectCoreShape,
             ProfileModuleCommand.ToggleMute,
             ProfileModuleCommand.AdvanceRebirth,
-            ProfileModuleCommand.ConfirmLegacyReset,
-            ProfileModuleCommand.RetryLegacyPurge,
             -> null
         }
     }
@@ -561,8 +503,6 @@ internal class DefaultProfileComponent(
             is ProfileModuleCommand.SelectCoreShape -> ProfileEffectiveProtocolIdentity.SESSION_CORE_SHAPE
             ProfileModuleCommand.ToggleMute -> ProfileEffectiveProtocolIdentity.SESSION_MUTE
             ProfileModuleCommand.AdvanceRebirth -> ProfileEffectiveProtocolIdentity.SESSION_REBIRTH
-            ProfileModuleCommand.ConfirmLegacyReset -> ProfileEffectiveProtocolIdentity.SESSION_RESET_CONFIRM
-            ProfileModuleCommand.RetryLegacyPurge -> ProfileEffectiveProtocolIdentity.SESSION_RESET_RETRY
             is ProfileModuleCommand.ApplyGameplayProgress -> ProfileEffectiveProtocolIdentity.GAMEPLAY_PROGRESS
         }
 
@@ -612,15 +552,6 @@ internal fun profileResultMatches(
         result is ProfileModuleResult.RebirthAdvanced
     ProfileEffectiveProtocolIdentity.GAMEPLAY_PROGRESS ->
         result == ProfileModuleResult.GameplayProgressApplied
-    ProfileEffectiveProtocolIdentity.SESSION_RESET_CONFIRM ->
-        result == ProfileModuleResult.ResetCompleted ||
-        result is ProfileModuleResult.ResetWriteRejected ||
-        result is ProfileModuleResult.ResetWriteResourceFailure ||
-        result is ProfileModuleResult.ResetWriteOutcomeUnknown ||
-        result is ProfileModuleResult.ResetNeedsAttention
-    ProfileEffectiveProtocolIdentity.SESSION_RESET_RETRY ->
-        result == ProfileModuleResult.ResetCompleted ||
-            result is ProfileModuleResult.ResetNeedsAttention
 }
 
 internal fun <T> profileCompletionDeque(): BoundedCompletionDeque<T> =
@@ -646,22 +577,10 @@ internal fun requireProfileCompletionCapacity(remainingCapacity: Int, requiredCo
 
 internal fun hasProfileCommandRevisionCapacity(
     revision: ProfileRevision,
-    reset: ProfileResetStatus,
-    command: ProfileModuleCommand,
-): Boolean {
-    val required = if (
-        command == ProfileModuleCommand.ConfirmLegacyReset &&
-        (reset as? ProfileResetStatus.ConfirmationRequired)?.legacyKeys?.isEmpty == false
-    ) {
-        MAX_RESET_CONFIRM_REVISIONS_PER_DISPATCH
-    } else {
-        MAX_ORDINARY_REVISIONS_PER_DISPATCH
-    }
-    return revision.value <= Long.MAX_VALUE - required
-}
+): Boolean = revision.value <= Long.MAX_VALUE - MAX_ORDINARY_REVISIONS_PER_DISPATCH
 
-private fun readConstructionBootstrap(resource: ProfileResource): ProfileBootstrapResourceResult =
-    resource.readBootstrap()
+private fun readConstructionSnapshot(resource: ProfileResource): ProfileSnapshotReadResult =
+    resource.readSnapshot()
 
 private data class ProfileWorkItem(
     val pulse: ProfileNucleusPulse,
@@ -685,4 +604,3 @@ private const val PROFILE_COMPLETION_CAPACITY: Int = 8
 private const val MAX_PROFILE_CAUSAL_DEPTH: Int = 8
 private const val MAX_LOCAL_REVISIONS_PER_DISPATCH: Long = 2L
 private const val MAX_ORDINARY_REVISIONS_PER_DISPATCH: Long = 2L
-private const val MAX_RESET_CONFIRM_REVISIONS_PER_DISPATCH: Long = 3L

@@ -5,7 +5,6 @@ package kinetickk.ball.profile.resource.performance
 
 import java.security.MessageDigest
 import kinetickk.ball.content.api.ContentBounds
-import kinetickk.ball.content.api.ContentVersion
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.WeaponId
@@ -19,21 +18,20 @@ import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PlayerProfile
-import kinetickk.ball.profile.api.ProfileBootstrapResourceResult
 import kinetickk.ball.profile.api.ProfileRevision
-import kinetickk.ball.profile.api.ProfileV4Rejection
-import kinetickk.ball.profile.api.ProfileV4Snapshot
-import kinetickk.ball.profile.api.ProfileV4WriteResult
+import kinetickk.ball.profile.api.ProfileSnapshot
+import kinetickk.ball.profile.api.ProfileSnapshotReadResult
+import kinetickk.ball.profile.api.ProfileSnapshotRejection
+import kinetickk.ball.profile.api.ProfileWriteResult
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kinetickk.ball.profile.resource.ExactProfilePersistence
 import kinetickk.ball.profile.resource.MAX_PROFILE_PAYLOAD_BYTES
-import kinetickk.ball.profile.resource.PROFILE_SCHEMA_VERSION
+import kinetickk.ball.profile.resource.ProfileCodec
+import kinetickk.ball.profile.resource.ProfileDecodeResult
+import kinetickk.ball.profile.resource.ProfileEncodeResult
 import kinetickk.ball.profile.resource.ProfileProviderMutationResult
 import kinetickk.ball.profile.resource.ProfileProviderReadResult
-import kinetickk.ball.profile.resource.ProfileV4Codec
-import kinetickk.ball.profile.resource.ProfileV4DecodeResult
-import kinetickk.ball.profile.resource.ProfileV4EncodeResult
 import kinetickk.ball.profile.resource.createProfileResource
 import kinetickk.performance.BenchmarkScenario
 import kinetickk.performance.BenchmarkSuiteIdentity
@@ -41,13 +39,13 @@ import kinetickk.performance.BenchmarkValidation
 import kinetickk.performance.BenchmarkValidationContext
 import kinetickk.performance.runBenchmarkSuite
 
-private const val SUITE_VERSION = "profile-persistence-v2"
-private const val DEFAULT_CONTENT_VERSION = "benchmark-content"
+internal const val PROFILE_PERSISTENCE_BENCHMARK_SUITE_VERSION =
+    "profile-persistence-current-schema-v2"
 
 fun main() {
     runBenchmarkSuite(
         identity = BenchmarkSuiteIdentity(
-            suiteVersion = SUITE_VERSION,
+            suiteVersion = PROFILE_PERSISTENCE_BENCHMARK_SUITE_VERSION,
             adapter = "feature-pokeball-full-refactor",
             label = System.getProperty(
                 "kinetickk.benchmark.label",
@@ -64,440 +62,310 @@ internal fun profileBenchmarkScenarios(): List<BenchmarkScenario> =
     ProfileBenchmarkFixtures().scenarios()
 
 private class ProfileBenchmarkFixtures {
-    private val defaultSnapshot = ProfileV4Snapshot(
-        contentVersion = ContentVersion(DEFAULT_CONTENT_VERSION),
-        revision = ProfileRevision(0L),
-        legacyResetConfirmed = false,
+    private val defaultSnapshot = ProfileSnapshot(
+        revision = ProfileRevision.ZERO,
         profile = PlayerProfile(),
     )
     private val defaultPayload = encodeOrFail(defaultSnapshot)
-    private val logicalMaximumSnapshot = schemaMaximumSnapshot(
-        ContentVersion(DEFAULT_CONTENT_VERSION),
-    )
-    private val logicalMaximumPayload = encodeOrFail(logicalMaximumSnapshot)
-    private val maximumSnapshot = exactMaximumPayloadSnapshot()
-    private val maximumPayload = encodeOrFail(maximumSnapshot).also { payload ->
-        check(payload.encodeToByteArray().size == MAX_PROFILE_PAYLOAD_BYTES)
-    }
+    private val maximumSnapshot = maximumBusinessSnapshot()
+    private val maximumPayload = encodeOrFail(maximumSnapshot)
     private val malformedPayload = maximumPayload.dropLast(1)
     private val oversizePayload = "x".repeat(MAX_PROFILE_PAYLOAD_BYTES + 1)
     private val unknownFieldPayload = defaultPayload.replace(
-        "\"schemaVersion\":$PROFILE_SCHEMA_VERSION,",
-        "\"schemaVersion\":$PROFILE_SCHEMA_VERSION,\"unknown\":0,",
+        "\"revision\":\"0\",",
+        "\"revision\":\"0\",\"unknown\":0,",
     )
     private val nonCanonicalPayload = "$defaultPayload\n"
     private val invalidUtf8Payload = "\uD800"
-    private val defaultMetadata = logicalPayloadMetadata(
-        logicalShape = "default",
-        snapshot = defaultSnapshot,
-        payload = defaultPayload,
-    )
-    private val logicalMaximumMetadata = logicalPayloadMetadata(
-        logicalShape = "maximum",
-        snapshot = logicalMaximumSnapshot,
-        payload = logicalMaximumPayload,
-    )
-    private val maximumMetadata = boundaryPayloadMetadata(maximumSnapshot, maximumPayload)
-    private val defaultReadResource = createProfileResource(
-        InMemoryExactProfilePersistence(defaultPayload),
-    )
-    private val maximumReadResource = createProfileResource(
-        InMemoryExactProfilePersistence(maximumPayload),
-    )
-    private val malformedReadResource = createProfileResource(
-        InMemoryExactProfilePersistence(malformedPayload),
-    )
-    private val emptyReadResource = createProfileResource(
-        InMemoryExactProfilePersistence(null),
-    )
-    private val defaultWriteResource = createProfileResource(InMemoryExactProfilePersistence(null))
-    private val maximumWriteResource = createProfileResource(InMemoryExactProfilePersistence(null))
+    private val defaultMetadata = payloadMetadata("default", defaultSnapshot, defaultPayload)
+    private val maximumMetadata = payloadMetadata("maximum", maximumSnapshot, maximumPayload)
+    private val emptyReadResource = resource(null)
+    private val defaultReadResource = resource(defaultPayload)
+    private val maximumReadResource = resource(maximumPayload)
+    private val malformedReadResource = resource(malformedPayload)
+    private val defaultWriteResource = resource(null)
+    private val maximumWriteResource = resource(null)
     private var controlCounter = 1L
 
     fun scenarios(): List<BenchmarkScenario> = listOf(
-        BenchmarkScenario(
+        scenario(
             name = "profile_harness_control",
             category = "harness",
             description = "Lambda, loop, timer, counter and blackhole floor for this profile suite.",
             maximumOperations = 5_000_000,
-        ) { validation ->
-            controlCounter = controlCounter * 2_862_933_555_777_941_757L + 3_037_000_493L
-            validation.validated(controlCounter)
+        ) {
+            controlCounter = nextControlValue(controlCounter)
+            controlCounter
         },
-        BenchmarkScenario(
+        scenario(
             name = "profile_encode_default",
             category = "codec",
-            description = "Validate and canonically encode the default v4 profile.",
+            description = "Validate and canonically encode the default current profile.",
             metadata = defaultMetadata,
             maximumOperations = 100_000,
-        ) { validation ->
-            validation.validated(payloadSignature(encodeOrFail(defaultSnapshot)))
-        },
-        BenchmarkScenario(
+        ) { payloadSignature(encodeOrFail(defaultSnapshot)) },
+        scenario(
             name = "profile_decode_default",
             category = "codec",
-            description = "Strictly decode and canonically re-encode the default v4 payload.",
+            description = "Strictly decode and canonically re-encode the default current payload.",
             metadata = defaultMetadata,
             maximumOperations = 100_000,
-        ) { validation ->
-            validation.validated(snapshotSignature(decodeOrFail(defaultPayload)))
-        },
-        BenchmarkScenario(
+        ) { snapshotSignature(decodeOrFail(defaultPayload)) },
+        scenario(
             name = "profile_roundtrip_default",
             category = "codec",
-            description = "Encode then strictly decode the default v4 profile.",
+            description = "Encode then strictly decode the default current profile.",
             metadata = defaultMetadata,
             maximumOperations = 50_000,
-        ) { validation ->
+        ) {
             val payload = encodeOrFail(defaultSnapshot)
-            validation.validated(
-                snapshotSignature(decodeOrFail(payload)) xor payloadSignature(payload),
-            )
+            snapshotSignature(decodeOrFail(payload)) xor payloadSignature(payload)
         },
-        BenchmarkScenario(
-            name = "profile_encode_logical_maximum",
+        scenario(
+            name = "profile_encode_business_maximum",
             category = "codec",
-            description = "Encode every branch-native strict-v4 logical collection and value at its maximum.",
-            metadata = logicalMaximumMetadata,
+            description = "Encode every current-schema business collection and value at its maximum.",
+            metadata = maximumMetadata,
             maximumOperations = 10_000,
-        ) { validation ->
-            validation.validated(payloadSignature(encodeOrFail(logicalMaximumSnapshot)))
-        },
-        BenchmarkScenario(
-            name = "profile_decode_logical_maximum",
+        ) { payloadSignature(encodeOrFail(maximumSnapshot)) },
+        scenario(
+            name = "profile_decode_business_maximum",
             category = "codec",
-            description = "Strictly decode the branch-native v4 logical-maximum payload without padding.",
-            metadata = logicalMaximumMetadata,
+            description = "Strictly decode the current-schema business-maximum payload.",
+            metadata = maximumMetadata,
             maximumOperations = 10_000,
-        ) { validation ->
-            validation.validated(snapshotSignature(decodeOrFail(logicalMaximumPayload)))
-        },
-        BenchmarkScenario(
-            name = "profile_roundtrip_logical_maximum",
+        ) { snapshotSignature(decodeOrFail(maximumPayload)) },
+        scenario(
+            name = "profile_roundtrip_business_maximum",
             category = "codec",
-            description = "Encode then strictly decode the branch-native v4 logical-maximum profile.",
-            metadata = logicalMaximumMetadata,
-            maximumOperations = 5_000,
-        ) { validation ->
-            val payload = encodeOrFail(logicalMaximumSnapshot)
-            validation.validated(
-                snapshotSignature(decodeOrFail(payload)) xor payloadSignature(payload),
-            )
-        },
-        BenchmarkScenario(
-            name = "profile_encode_maximum",
-            category = "codec",
-            description = "Validate and encode the synthetic strict-v4 65,536-byte payload boundary fixture.",
+            description = "Encode then strictly decode the current-schema business maximum.",
             metadata = maximumMetadata,
             maximumOperations = 5_000,
-        ) { validation ->
-            validation.validated(payloadSignature(encodeOrFail(maximumSnapshot)))
-        },
-        BenchmarkScenario(
-            name = "profile_decode_maximum",
-            category = "codec",
-            description = "Strictly decode and canonically re-encode the synthetic v4 payload boundary fixture.",
-            metadata = maximumMetadata,
-            maximumOperations = 2_000,
-        ) { validation ->
-            validation.validated(snapshotSignature(decodeOrFail(maximumPayload)))
-        },
-        BenchmarkScenario(
-            name = "profile_roundtrip_maximum",
-            category = "codec",
-            description = "Roundtrip the synthetic exact-limit v4 payload boundary fixture.",
-            metadata = maximumMetadata,
-            maximumOperations = 1_000,
-        ) { validation ->
+        ) {
             val payload = encodeOrFail(maximumSnapshot)
-            validation.validated(
-                snapshotSignature(decodeOrFail(payload)) xor payloadSignature(payload),
-            )
+            snapshotSignature(decodeOrFail(payload)) xor payloadSignature(payload)
         },
-        BenchmarkScenario(
-            name = "profile_decode_malformed_rejection",
-            category = "codec_rejection",
-            description = "Reject malformed JSON only after traversing an almost-maximum payload.",
-            metadata = rejectionMetadata(malformedPayload, ProfileV4Rejection.MALFORMED_JSON),
-            maximumOperations = 5_000,
-        ) { validation ->
-            validation.validated(
-                rejectionSignature(malformedPayload, ProfileV4Rejection.MALFORMED_JSON),
-            )
-        },
-        BenchmarkScenario(
-            name = "profile_decode_oversize_rejection",
-            category = "codec_rejection",
-            description = "Reject the first payload byte beyond the 65,536-byte boundary before JSON parsing.",
-            metadata = rejectionMetadata(oversizePayload, ProfileV4Rejection.PAYLOAD_TOO_LARGE),
-            maximumOperations = 10_000,
-        ) { validation ->
-            validation.validated(
-                rejectionSignature(oversizePayload, ProfileV4Rejection.PAYLOAD_TOO_LARGE),
-            )
-        },
-        BenchmarkScenario(
-            name = "profile_decode_unknown_field_rejection",
-            category = "codec_rejection",
-            description = "Reject an unknown JSON field under the strict v4 schema.",
-            metadata = rejectionMetadata(unknownFieldPayload, ProfileV4Rejection.MALFORMED_JSON),
-            maximumOperations = 50_000,
-        ) { validation ->
-            validation.validated(
-                rejectionSignature(unknownFieldPayload, ProfileV4Rejection.MALFORMED_JSON),
-            )
-        },
-        BenchmarkScenario(
-            name = "profile_decode_noncanonical_rejection",
-            category = "codec_rejection",
-            description = "Decode and re-encode before rejecting a semantically valid but non-canonical payload.",
-            metadata = rejectionMetadata(nonCanonicalPayload, ProfileV4Rejection.NON_CANONICAL_PAYLOAD),
-            maximumOperations = 50_000,
-        ) { validation ->
-            validation.validated(
-                rejectionSignature(
-                    nonCanonicalPayload,
-                    ProfileV4Rejection.NON_CANONICAL_PAYLOAD,
-                ),
-            )
-        },
-        BenchmarkScenario(
-            name = "profile_decode_invalid_utf8_rejection",
-            category = "codec_rejection",
-            description = "Reject an unpaired UTF-16 surrogate before JSON parsing.",
-            metadata = rejectionMetadata(invalidUtf8Payload, ProfileV4Rejection.INVALID_UTF8),
-            maximumOperations = 200_000,
-        ) { validation ->
-            validation.validated(
-                rejectionSignature(invalidUtf8Payload, ProfileV4Rejection.INVALID_UTF8),
-            )
-        },
-        BenchmarkScenario(
+        rejectionScenario(
+            "profile_decode_malformed_rejection",
+            "Reject malformed JSON after traversing the maximum business payload.",
+            malformedPayload,
+            ProfileSnapshotRejection.MALFORMED_JSON,
+            5_000,
+        ),
+        rejectionScenario(
+            "profile_decode_oversize_rejection",
+            "Reject the first payload byte beyond the 65,536-byte boundary before JSON parsing.",
+            oversizePayload,
+            ProfileSnapshotRejection.PAYLOAD_TOO_LARGE,
+            10_000,
+        ),
+        rejectionScenario(
+            "profile_decode_unknown_field_rejection",
+            "Reject an unknown JSON field under the strict current schema.",
+            unknownFieldPayload,
+            ProfileSnapshotRejection.MALFORMED_JSON,
+            50_000,
+        ),
+        rejectionScenario(
+            "profile_decode_noncanonical_rejection",
+            "Reject a semantically valid but non-canonical current payload.",
+            nonCanonicalPayload,
+            ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD,
+            50_000,
+        ),
+        rejectionScenario(
+            "profile_decode_invalid_utf8_rejection",
+            "Reject an unpaired UTF-16 surrogate before JSON parsing.",
+            invalidUtf8Payload,
+            ProfileSnapshotRejection.INVALID_UTF8,
+            200_000,
+        ),
+        scenario(
             name = "profile_resource_read_empty",
             category = "resource",
-            description = "Read the exact in-memory provider when v4 and both legacy keys are absent.",
+            description = "Read the exact in-memory provider when the current snapshot is absent.",
             metadata = resourceMetadata(emptyMap(), "empty"),
             maximumOperations = 500_000,
-        ) { validation ->
-            validation.validated(bootstrapSignature(emptyReadResource.readBootstrap()))
-        },
-        BenchmarkScenario(
+        ) { readSignature(emptyReadResource.readSnapshot()) },
+        scenario(
             name = "profile_resource_read_default",
             category = "resource",
-            description = "Read and strictly decode the default payload from an exact in-memory provider.",
+            description = "Read and strictly decode the default current snapshot.",
             metadata = resourceMetadata(defaultMetadata, "observed"),
             maximumOperations = 100_000,
-        ) { validation ->
-            validation.validated(bootstrapSignature(defaultReadResource.readBootstrap()))
-        },
-        BenchmarkScenario(
-            name = "profile_resource_read_maximum",
+        ) { readSignature(defaultReadResource.readSnapshot()) },
+        scenario(
+            name = "profile_resource_read_business_maximum",
             category = "resource",
-            description = "Read and strictly decode the exact-limit payload from an exact in-memory provider.",
+            description = "Read and strictly decode the maximum current business snapshot.",
             metadata = resourceMetadata(maximumMetadata, "observed"),
-            maximumOperations = 2_000,
-        ) { validation ->
-            validation.validated(bootstrapSignature(maximumReadResource.readBootstrap()))
-        },
-        BenchmarkScenario(
+            maximumOperations = 10_000,
+        ) { readSignature(maximumReadResource.readSnapshot()) },
+        scenario(
             name = "profile_resource_read_malformed_rejection",
             category = "resource",
-            description = "Read an almost-maximum malformed payload and map its typed Resource rejection.",
+            description = "Map a malformed current payload to the typed Resource rejection.",
             metadata = resourceMetadata(
-                rejectionMetadata(malformedPayload, ProfileV4Rejection.MALFORMED_JSON),
+                rejectionMetadata(malformedPayload, ProfileSnapshotRejection.MALFORMED_JSON),
                 "rejected",
             ),
             maximumOperations = 5_000,
-        ) { validation ->
-            validation.validated(bootstrapSignature(malformedReadResource.readBootstrap()))
-        },
-        BenchmarkScenario(
+        ) { readSignature(malformedReadResource.readSnapshot()) },
+        scenario(
             name = "profile_resource_write_readback_default",
             category = "resource",
-            description = "Encode, write and confirm an exact readback using only an in-memory provider.",
+            description = "Encode, write and confirm the default snapshot by exact readback.",
             metadata = resourceMetadata(defaultMetadata, "write-readback"),
             maximumOperations = 100_000,
-        ) { validation ->
-            validation.validated(writeSignature(defaultWriteResource.writeV4(defaultSnapshot)))
-        },
-        BenchmarkScenario(
-            name = "profile_resource_write_readback_maximum",
+        ) { writeSignature(defaultWriteResource.writeSnapshot(defaultSnapshot)) },
+        scenario(
+            name = "profile_resource_write_readback_business_maximum",
             category = "resource",
-            description = "Encode, write and confirm an exact readback for the 65,536-byte payload in memory.",
+            description = "Encode, write and confirm the maximum business snapshot by exact readback.",
             metadata = resourceMetadata(maximumMetadata, "write-readback"),
-            maximumOperations = 5_000,
-        ) { validation ->
-            validation.validated(writeSignature(maximumWriteResource.writeV4(maximumSnapshot)))
-        },
-    ).map { scenario ->
-        val expectedResult = expectedTimedResult(scenario.name)
-        scenario.copy(
-            metadata = scenario.metadata + ("outcomeFingerprint" to expectedResult.toString()),
+            maximumOperations = 10_000,
+        ) { writeSignature(maximumWriteResource.writeSnapshot(maximumSnapshot)) },
+    ).map { benchmark ->
+        val expected = expectedTimedResult(benchmark.name)
+        benchmark.copy(
+            metadata = benchmark.metadata + ("outcomeFingerprint" to expected.toString()),
             validation = BenchmarkValidation(
-                expectedTimedResult = expectedResult,
-                expectedOutcomeWitness = expectedResult,
+                expectedTimedResult = expected,
+                expectedOutcomeWitness = expected,
                 prepareProbe = {
-                    if (scenario.category == "harness") controlCounter = 1L
+                    if (benchmark.category == "harness") controlCounter = 1L
                 },
             ),
         )
     }
 
+    private fun scenario(
+        name: String,
+        category: String,
+        description: String,
+        metadata: Map<String, String> = emptyMap(),
+        maximumOperations: Int,
+        measure: BenchmarkValidationContext.() -> Long,
+    ): BenchmarkScenario = BenchmarkScenario(
+        name = name,
+        category = category,
+        description = description,
+        metadata = metadata,
+        maximumOperations = maximumOperations,
+    ) { validation -> validation.validated(validation.measure()) }
+
+    private fun rejectionScenario(
+        name: String,
+        description: String,
+        payload: String,
+        rejection: ProfileSnapshotRejection,
+        maximumOperations: Int,
+    ): BenchmarkScenario = scenario(
+        name = name,
+        category = "codec_rejection",
+        description = description,
+        metadata = rejectionMetadata(payload, rejection),
+        maximumOperations = maximumOperations,
+    ) { rejectionSignature(payload, rejection) }
+
     private fun expectedTimedResult(name: String): Long = when (name) {
         "profile_harness_control" -> nextControlValue(1L)
         "profile_encode_default" -> payloadSignature(encodeOrFail(defaultSnapshot))
         "profile_decode_default" -> snapshotSignature(decodeOrFail(defaultPayload))
-        "profile_roundtrip_default" -> encodeOrFail(defaultSnapshot).let { payload ->
-            snapshotSignature(decodeOrFail(payload)) xor payloadSignature(payload)
-        }
-        "profile_encode_logical_maximum" ->
-            payloadSignature(encodeOrFail(logicalMaximumSnapshot))
-        "profile_decode_logical_maximum" ->
-            snapshotSignature(decodeOrFail(logicalMaximumPayload))
-        "profile_roundtrip_logical_maximum" -> encodeOrFail(logicalMaximumSnapshot).let { payload ->
-            snapshotSignature(decodeOrFail(payload)) xor payloadSignature(payload)
-        }
-        "profile_encode_maximum" -> payloadSignature(encodeOrFail(maximumSnapshot))
-        "profile_decode_maximum" -> snapshotSignature(decodeOrFail(maximumPayload))
-        "profile_roundtrip_maximum" -> encodeOrFail(maximumSnapshot).let { payload ->
-            snapshotSignature(decodeOrFail(payload)) xor payloadSignature(payload)
-        }
+        "profile_roundtrip_default" -> roundtripSignature(defaultSnapshot)
+        "profile_encode_business_maximum" -> payloadSignature(encodeOrFail(maximumSnapshot))
+        "profile_decode_business_maximum" -> snapshotSignature(decodeOrFail(maximumPayload))
+        "profile_roundtrip_business_maximum" -> roundtripSignature(maximumSnapshot)
         "profile_decode_malformed_rejection" ->
-            rejectionSignature(malformedPayload, ProfileV4Rejection.MALFORMED_JSON)
+            rejectionSignature(malformedPayload, ProfileSnapshotRejection.MALFORMED_JSON)
         "profile_decode_oversize_rejection" ->
-            rejectionSignature(oversizePayload, ProfileV4Rejection.PAYLOAD_TOO_LARGE)
+            rejectionSignature(oversizePayload, ProfileSnapshotRejection.PAYLOAD_TOO_LARGE)
         "profile_decode_unknown_field_rejection" ->
-            rejectionSignature(unknownFieldPayload, ProfileV4Rejection.MALFORMED_JSON)
+            rejectionSignature(unknownFieldPayload, ProfileSnapshotRejection.MALFORMED_JSON)
         "profile_decode_noncanonical_rejection" ->
-            rejectionSignature(nonCanonicalPayload, ProfileV4Rejection.NON_CANONICAL_PAYLOAD)
+            rejectionSignature(nonCanonicalPayload, ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD)
         "profile_decode_invalid_utf8_rejection" ->
-            rejectionSignature(invalidUtf8Payload, ProfileV4Rejection.INVALID_UTF8)
-        "profile_resource_read_empty" -> bootstrapSignature(
-            createProfileResource(InMemoryExactProfilePersistence(null)).readBootstrap(),
-        )
-        "profile_resource_read_default" -> bootstrapSignature(
-            createProfileResource(InMemoryExactProfilePersistence(defaultPayload)).readBootstrap(),
-        )
-        "profile_resource_read_maximum" -> bootstrapSignature(
-            createProfileResource(InMemoryExactProfilePersistence(maximumPayload)).readBootstrap(),
-        )
-        "profile_resource_read_malformed_rejection" -> bootstrapSignature(
-            createProfileResource(InMemoryExactProfilePersistence(malformedPayload)).readBootstrap(),
-        )
-        "profile_resource_write_readback_default" -> writeSignature(
-            createProfileResource(InMemoryExactProfilePersistence(null)).writeV4(defaultSnapshot),
-        )
-        "profile_resource_write_readback_maximum" -> writeSignature(
-            createProfileResource(InMemoryExactProfilePersistence(null)).writeV4(maximumSnapshot),
-        )
+            rejectionSignature(invalidUtf8Payload, ProfileSnapshotRejection.INVALID_UTF8)
+        "profile_resource_read_empty" -> readSignature(resource(null).readSnapshot())
+        "profile_resource_read_default" -> readSignature(resource(defaultPayload).readSnapshot())
+        "profile_resource_read_business_maximum" ->
+            readSignature(resource(maximumPayload).readSnapshot())
+        "profile_resource_read_malformed_rejection" ->
+            readSignature(resource(malformedPayload).readSnapshot())
+        "profile_resource_write_readback_default" ->
+            writeSignature(resource(null).writeSnapshot(defaultSnapshot))
+        "profile_resource_write_readback_business_maximum" ->
+            writeSignature(resource(null).writeSnapshot(maximumSnapshot))
         else -> error("Missing expected timed result for profile benchmark scenario: $name")
+    }
+
+    private fun resource(payload: String?) =
+        createProfileResource(InMemoryExactProfilePersistence(payload))
+
+    private fun roundtripSignature(snapshot: ProfileSnapshot): Long {
+        val payload = encodeOrFail(snapshot)
+        return snapshotSignature(decodeOrFail(payload)) xor payloadSignature(payload)
     }
 
     private fun nextControlValue(value: Long): Long =
         value * 2_862_933_555_777_941_757L + 3_037_000_493L
-
-    private fun exactMaximumPayloadSnapshot(): ProfileV4Snapshot {
-        val base = schemaMaximumSnapshot(ContentVersion(DEFAULT_CONTENT_VERSION))
-        val basePayloadBytes = encodeOrFail(base).encodeToByteArray().size
-        val bytesWithoutVersion = basePayloadBytes - DEFAULT_CONTENT_VERSION.encodeToByteArray().size
-        val exactVersionBytes = MAX_PROFILE_PAYLOAD_BYTES - bytesWithoutVersion
-        check(exactVersionBytes > 0)
-        return schemaMaximumSnapshot(ContentVersion("x".repeat(exactVersionBytes)))
-    }
-
-    private fun schemaMaximumSnapshot(contentVersion: ContentVersion): ProfileV4Snapshot =
-        ProfileV4Snapshot(
-            contentVersion = contentVersion,
-            revision = ProfileRevision(Long.MAX_VALUE),
-            legacyResetConfirmed = true,
-            profile = PlayerProfile(
-                preferences = PlayerPreferences(
-                    soundEnabled = false,
-                    musicEnabled = true,
-                    masterVolume = 1f,
-                    simulationSpeed = SIMULATION_SPEED_OPTIONS.last(),
-                    textScale = 1.75f,
-                    screenShake = false,
-                    particleDensity = ParticleDensity.HIGH,
-                    damageNumbers = false,
-                    damageNumberSize = DamageNumberSize.HUGE,
-                    damageNumberFormat = DamageNumberFormat.FULL,
-                    damageNumberTierThreshold = DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS.last(),
-                ),
-                economy = PlayerEconomy(
-                    matter = Long.MAX_VALUE - 1L,
-                    lifetimeMatter = Long.MAX_VALUE,
-                ),
-                loadout = PlayerLoadout(
-                    coreShape = CoreShape.SHARD,
-                    selectedWeapon = WeaponId.entries.last(),
-                    unlockedWeapons = WeaponId.entries.reversed().toSet(),
-                ),
-                labProgress = LabProgress(List(MetaUpgradeId.entries.size) { Int.MAX_VALUE }),
-                collection = PlayerCollection(
-                    (0 until ContentBounds.MAX_ITEMS).reversed().toSet(),
-                ),
-                rebirthProgress = RebirthProgress(
-                    level = ContentBounds.MAX_REBIRTH_LEVEL,
-                    highestCleared = ContentBounds.MAX_REBIRTH_LEVEL,
-                ),
-            ),
-        )
 }
+
+private fun maximumBusinessSnapshot(): ProfileSnapshot = ProfileSnapshot(
+    revision = ProfileRevision(Long.MAX_VALUE),
+    profile = PlayerProfile(
+        preferences = PlayerPreferences(
+            soundEnabled = false,
+            musicEnabled = true,
+            masterVolume = 1f,
+            simulationSpeed = SIMULATION_SPEED_OPTIONS.last(),
+            textScale = 1.75f,
+            screenShake = false,
+            particleDensity = ParticleDensity.HIGH,
+            damageNumbers = false,
+            damageNumberSize = DamageNumberSize.HUGE,
+            damageNumberFormat = DamageNumberFormat.FULL,
+            damageNumberTierThreshold = DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS.last(),
+        ),
+        economy = PlayerEconomy(Long.MAX_VALUE - 1L, Long.MAX_VALUE),
+        loadout = PlayerLoadout(
+            coreShape = CoreShape.SHARD,
+            selectedWeapon = WeaponId.entries.last(),
+            unlockedWeapons = WeaponId.entries.reversed().toSet(),
+        ),
+        labProgress = LabProgress(List(MetaUpgradeId.entries.size) { Int.MAX_VALUE }),
+        collection = PlayerCollection((0 until ContentBounds.MAX_ITEMS).reversed().toSet()),
+        rebirthProgress = RebirthProgress(
+            level = ContentBounds.MAX_REBIRTH_LEVEL,
+            highestCleared = ContentBounds.MAX_REBIRTH_LEVEL,
+        ),
+    ),
+)
 
 private class InMemoryExactProfilePersistence(
     initialPayload: String?,
 ) : ExactProfilePersistence {
     private var payload: String? = initialPayload
 
-    override fun readV4(): ProfileProviderReadResult =
+    override fun readSnapshot(): ProfileProviderReadResult =
         ProfileProviderReadResult.Observed(payload)
 
-    override fun writeV4(payload: String): ProfileProviderMutationResult {
+    override fun writeSnapshot(payload: String): ProfileProviderMutationResult {
         this.payload = payload
         return ProfileProviderMutationResult.COMPLETED
     }
-
-    override fun readLegacyProgressV2(): ProfileProviderReadResult =
-        ProfileProviderReadResult.Observed(null)
-
-    override fun readLegacyMatter(): ProfileProviderReadResult =
-        ProfileProviderReadResult.Observed(null)
-
-    override fun removeLegacyProgressV2(): ProfileProviderMutationResult =
-        ProfileProviderMutationResult.COMPLETED
-
-    override fun removeLegacyMatter(): ProfileProviderMutationResult =
-        ProfileProviderMutationResult.COMPLETED
 }
 
-private fun logicalPayloadMetadata(
+private fun payloadMetadata(
     logicalShape: String,
-    snapshot: ProfileV4Snapshot,
-    payload: String,
-): Map<String, String> = basePayloadMetadata(snapshot, payload) + mapOf(
-    "comparisonContract" to "branch-native-logical-profile",
-    "logicalShape" to logicalShape,
-    "wireFormat" to "strict-v4",
-)
-
-private fun boundaryPayloadMetadata(
-    snapshot: ProfileV4Snapshot,
-    payload: String,
-): Map<String, String> = basePayloadMetadata(snapshot, payload) + mapOf(
-    "comparisonContract" to "strict-v4-payload-boundary",
-    "logicalShape" to "maximum-with-content-version-padding",
-    "wireFormat" to "strict-v4",
-)
-
-private fun basePayloadMetadata(
-    snapshot: ProfileV4Snapshot,
+    snapshot: ProfileSnapshot,
     payload: String,
 ): Map<String, String> = mapOf(
-    "schemaVersion" to PROFILE_SCHEMA_VERSION.toString(),
+    "comparisonContract" to "current-schema-logical-profile",
+    "logicalShape" to logicalShape,
+    "wireFormat" to "strict-current",
     "payloadBytes" to payload.encodeToByteArray().size.toString(),
     "payloadSha256" to payload.sha256(),
-    "contentVersionBytes" to snapshot.contentVersion.value.encodeToByteArray().size.toString(),
     "unlockedWeapons" to snapshot.profile.loadout.unlockedWeapons.size.toString(),
     "labRanks" to snapshot.profile.labProgress.ranks.size.toString(),
     "discoveries" to snapshot.profile.collection.discoveredItemIds.size.toString(),
@@ -505,9 +373,8 @@ private fun basePayloadMetadata(
 
 private fun rejectionMetadata(
     payload: String,
-    rejection: ProfileV4Rejection,
+    rejection: ProfileSnapshotRejection,
 ): Map<String, String> = mapOf(
-    "schemaVersion" to PROFILE_SCHEMA_VERSION.toString(),
     "payloadBytes" to payload.encodeToByteArray().size.toString(),
     "payloadSha256" to payload.sha256(),
     "expectedRejection" to rejection.name,
@@ -518,59 +385,54 @@ private fun resourceMetadata(
     outcome: String,
 ): Map<String, String> = payload + mapOf(
     "provider" to "exact-in-memory",
-    "providerLegacyKeys" to "absent",
     "expectedOutcome" to outcome,
 )
 
-private fun encodeOrFail(snapshot: ProfileV4Snapshot): String =
-    when (val result = ProfileV4Codec.encode(snapshot)) {
-        is ProfileV4EncodeResult.Encoded -> result.payload
-        is ProfileV4EncodeResult.Rejected -> error("Benchmark fixture encode rejected: ${result.reason}")
+private fun encodeOrFail(snapshot: ProfileSnapshot): String =
+    when (val result = ProfileCodec.encode(snapshot)) {
+        is ProfileEncodeResult.Encoded -> result.payload
+        is ProfileEncodeResult.Rejected -> error("Benchmark fixture encode rejected: ${result.reason}")
     }
 
-private fun decodeOrFail(payload: String): ProfileV4Snapshot =
-    when (val result = ProfileV4Codec.decode(payload)) {
-        is ProfileV4DecodeResult.Decoded -> result.snapshot
-        is ProfileV4DecodeResult.Rejected -> error("Benchmark fixture decode rejected: ${result.reason}")
+private fun decodeOrFail(payload: String): ProfileSnapshot =
+    when (val result = ProfileCodec.decode(payload)) {
+        is ProfileDecodeResult.Decoded -> result.snapshot
+        is ProfileDecodeResult.Rejected -> error("Benchmark fixture decode rejected: ${result.reason}")
     }
 
 private fun rejectionSignature(
     payload: String,
-    expected: ProfileV4Rejection,
-): Long = when (val result = ProfileV4Codec.decode(payload)) {
-    is ProfileV4DecodeResult.Decoded -> error("Benchmark rejection unexpectedly decoded")
-    is ProfileV4DecodeResult.Rejected -> {
-        check(result.reason == expected) {
-            "Expected $expected, got ${result.reason}"
-        }
+    expected: ProfileSnapshotRejection,
+): Long = when (val result = ProfileCodec.decode(payload)) {
+    is ProfileDecodeResult.Decoded -> error("Benchmark rejection unexpectedly decoded")
+    is ProfileDecodeResult.Rejected -> {
+        check(result.reason == expected) { "Expected $expected, got ${result.reason}" }
         result.reason.ordinal.toLong() + 1L
     }
 }
 
-private fun bootstrapSignature(result: ProfileBootstrapResourceResult): Long = when (result) {
-    is ProfileBootstrapResourceResult.Observed ->
-        result.snapshot?.let(::snapshotSignature) ?: 1L
-    is ProfileBootstrapResourceResult.Rejected ->
-        10_000L + result.reason.ordinal
-    is ProfileBootstrapResourceResult.ResourceFailure ->
+private fun readSignature(result: ProfileSnapshotReadResult): Long = when (result) {
+    is ProfileSnapshotReadResult.Observed -> result.snapshot?.let(::snapshotSignature) ?: 1L
+    is ProfileSnapshotReadResult.Rejected -> 10_000L + result.reason.ordinal
+    is ProfileSnapshotReadResult.ResourceFailure ->
         error("In-memory benchmark provider unexpectedly failed: ${result.reason}")
 }
 
-private fun writeSignature(result: ProfileV4WriteResult): Long = when (result) {
-    is ProfileV4WriteResult.Written -> result.revision.value + 1L
-    is ProfileV4WriteResult.Rejected -> error("Benchmark write rejected: ${result.reason}")
-    is ProfileV4WriteResult.ResourceFailure -> error("In-memory benchmark write failed: ${result.reason}")
-    is ProfileV4WriteResult.OutcomeUnknown -> error("In-memory benchmark write was uncertain: ${result.reason}")
+private fun writeSignature(result: ProfileWriteResult): Long = when (result) {
+    is ProfileWriteResult.Written -> result.revision.value + 1L
+    is ProfileWriteResult.Rejected -> error("Benchmark write rejected: ${result.reason}")
+    is ProfileWriteResult.ResourceFailure -> error("In-memory benchmark write failed: ${result.reason}")
+    is ProfileWriteResult.OutcomeUnknown -> error("In-memory benchmark write was uncertain: ${result.reason}")
 }
 
-private inline fun BenchmarkValidationContext.validated(result: Long): Long {
+private fun BenchmarkValidationContext.validated(result: Long): Long {
     observeOutcome { result }
     return result
 }
 
-private fun snapshotSignature(snapshot: ProfileV4Snapshot): Long {
+private fun snapshotSignature(snapshot: ProfileSnapshot): Long {
     val profile = snapshot.profile
-    var result = snapshot.revision.value xor snapshot.contentVersion.value.hashCode().toLong()
+    var result = snapshot.revision.value
     result = result * 31L + profile.loadout.unlockedWeapons.size
     result = result * 31L + profile.labProgress.ranks.sumOf(Int::toLong)
     result = result * 31L + profile.collection.discoveredItemIds.sumOf(Int::toLong)

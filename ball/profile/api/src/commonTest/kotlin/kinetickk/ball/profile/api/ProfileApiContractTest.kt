@@ -11,7 +11,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
-import kotlin.test.assertTrue
 
 class ProfileApiContractTest {
     @Test
@@ -126,13 +125,12 @@ class ProfileApiContractTest {
     }
 
     @Test
-    fun legacyKeyInventoryIsClosedAndUnionsWithoutInventingKeys() {
-        val progress = ProfileLegacyKeys(progressV2 = true, matter = false)
-        val matter = ProfileLegacyKeys(progressV2 = false, matter = true)
+    fun resourceSnapshotCarriesOnlyRevisionAndValidatedBusinessProfile() {
+        val profile = PlayerProfile()
+        val snapshot = ProfileSnapshot(ProfileRevision(3L), profile)
 
-        assertTrue(ProfileLegacyKeys.NONE.isEmpty)
-        assertFalse(ProfileLegacyKeys.ALL.isEmpty)
-        assertEquals(ProfileLegacyKeys.ALL, progress union matter)
+        assertEquals(ProfileRevision(3L), snapshot.revision)
+        assertEquals(profile, snapshot.profile)
     }
 
     @Test

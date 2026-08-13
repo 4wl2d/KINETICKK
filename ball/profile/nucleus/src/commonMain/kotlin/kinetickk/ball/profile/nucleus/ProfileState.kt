@@ -9,14 +9,11 @@ import kinetickk.ball.profile.api.LabProgress
 import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.ProfileBootstrapBlockReason
-import kinetickk.ball.profile.api.ProfileBootstrapResourceResult
 import kinetickk.ball.profile.api.ProfileBootstrapStatus
 import kinetickk.ball.profile.api.ProfileInstanceId
-import kinetickk.ball.profile.api.ProfileLegacyPurgeResult
 import kinetickk.ball.profile.api.ProfilePersistenceStatus
-import kinetickk.ball.profile.api.ProfileResetReason
-import kinetickk.ball.profile.api.ProfileResetStatus
 import kinetickk.ball.profile.api.ProfileRevision
+import kinetickk.ball.profile.api.ProfileSnapshotReadResult
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.foundation.collections.immutableSetOf
 
@@ -27,7 +24,6 @@ data class ProfileState(
     val profile: PlayerProfile,
     val policy: ProfilePolicySnapshot,
     val bootstrap: ProfileBootstrapStatus,
-    val reset: ProfileResetStatus,
     val persistence: ProfilePersistenceStatus,
 ) {
     init {
@@ -37,14 +33,14 @@ data class ProfileState(
     companion object {
         fun initial(
             policy: ProfilePolicySnapshot,
-            bootstrapResult: ProfileBootstrapResourceResult,
-        ): ProfileState = constructInitialProfileState(policy, bootstrapResult)
+            snapshotReadResult: ProfileSnapshotReadResult,
+        ): ProfileState = constructInitialProfileState(policy, snapshotReadResult)
     }
 }
 
 private fun constructInitialProfileState(
     policy: ProfilePolicySnapshot,
-    result: ProfileBootstrapResourceResult,
+    result: ProfileSnapshotReadResult,
 ): ProfileState {
     val default = defaultPlayerProfile(policy)
 
@@ -52,7 +48,6 @@ private fun constructInitialProfileState(
         revision: ProfileRevision,
         profile: PlayerProfile = default,
         bootstrap: ProfileBootstrapStatus,
-        reset: ProfileResetStatus,
         persistence: ProfilePersistenceStatus,
     ): ProfileState = ProfileState(
         instanceId = LOCAL_PROFILE_INSTANCE_ID,
@@ -60,101 +55,52 @@ private fun constructInitialProfileState(
         profile = profile,
         policy = policy,
         bootstrap = bootstrap,
-        reset = reset,
-        persistence = persistence,
-    )
-
-    fun resetRequired(
-        revision: ProfileRevision,
-        profile: PlayerProfile,
-        reason: ProfileResetReason,
-        legacyKeys: kinetickk.ball.profile.api.ProfileLegacyKeys,
-        persistence: ProfilePersistenceStatus,
-    ): ProfileState = state(
-        revision = revision,
-        profile = profile,
-        bootstrap = ProfileBootstrapStatus.Blocked(ProfileBootstrapBlockReason.ResetRequired(reason)),
-        reset = ProfileResetStatus.ConfirmationRequired(reason, legacyKeys),
         persistence = persistence,
     )
 
     return when (result) {
-        is ProfileBootstrapResourceResult.ResourceFailure -> state(
+        is ProfileSnapshotReadResult.ResourceFailure -> state(
             revision = ProfileRevision(1L),
             bootstrap = ProfileBootstrapStatus.Blocked(
                 ProfileBootstrapBlockReason.ResourceFailure(result.reason),
             ),
-            reset = ProfileResetStatus.NotRequired(legacyResetConfirmed = false),
             persistence = ProfilePersistenceStatus.NotAttempted,
         )
-        is ProfileBootstrapResourceResult.Rejected -> resetRequired(
+        is ProfileSnapshotReadResult.Rejected -> state(
             revision = ProfileRevision(1L),
-            profile = default,
-            reason = ProfileResetReason.InvalidV4(result.reason),
-            legacyKeys = result.legacyKeys,
+            bootstrap = ProfileBootstrapStatus.Ready,
             persistence = ProfilePersistenceStatus.NotAttempted,
         )
-        is ProfileBootstrapResourceResult.Observed -> {
+        is ProfileSnapshotReadResult.Observed -> {
             val snapshot = result.snapshot
             when {
-                snapshot == null && result.legacyKeys.isEmpty -> state(
+                snapshot == null -> state(
                     revision = ProfileRevision(1L),
                     bootstrap = ProfileBootstrapStatus.Ready,
-                    reset = ProfileResetStatus.NotRequired(legacyResetConfirmed = false),
                     persistence = ProfilePersistenceStatus.NotAttempted,
                 )
-                snapshot == null -> resetRequired(
+                snapshot.revision.value > MAX_LOADABLE_SNAPSHOT_REVISION ||
+                    !isPolicyCompatibleAtConstruction(snapshot.profile, policy) -> state(
                     revision = ProfileRevision(1L),
-                    profile = default,
-                    reason = ProfileResetReason.LegacyDataDetected,
-                    legacyKeys = result.legacyKeys,
+                    bootstrap = ProfileBootstrapStatus.Ready,
                     persistence = ProfilePersistenceStatus.NotAttempted,
                 )
-                snapshot.contentVersion != policy.version -> resetRequired(
-                    revision = ProfileRevision(1L),
-                    profile = default,
-                    reason = ProfileResetReason.ContentVersionMismatch(policy.version, snapshot.contentVersion),
-                    legacyKeys = result.legacyKeys,
-                    persistence = ProfilePersistenceStatus.NotAttempted,
-                )
-                snapshot.revision.value == Long.MAX_VALUE ||
-                    !isPolicyCompatibleAtConstruction(snapshot.profile, policy) -> resetRequired(
-                    revision = ProfileRevision(1L),
-                    profile = default,
-                    reason = ProfileResetReason.IncompatibleProfile,
-                    legacyKeys = result.legacyKeys,
-                    persistence = ProfilePersistenceStatus.NotAttempted,
-                )
-                result.legacyKeys.isEmpty -> state(
+                else -> state(
                     revision = ProfileRevision(snapshot.revision.value + 1L),
                     profile = snapshot.profile,
                     bootstrap = ProfileBootstrapStatus.Ready,
-                    reset = ProfileResetStatus.NotRequired(snapshot.legacyResetConfirmed),
-                    persistence = ProfilePersistenceStatus.Persisted(snapshot.revision),
-                )
-                snapshot.legacyResetConfirmed -> {
-                    val purge = ProfileLegacyPurgeResult.Partial(result.legacyKeys)
-                    state(
-                        revision = ProfileRevision(snapshot.revision.value + 1L),
-                        profile = snapshot.profile,
-                        bootstrap = ProfileBootstrapStatus.Blocked(
-                            ProfileBootstrapBlockReason.ResetNeedsAttention(purge),
-                        ),
-                        reset = ProfileResetStatus.NeedsAttention(result.legacyKeys, purge),
-                        persistence = ProfilePersistenceStatus.Persisted(snapshot.revision),
-                    )
-                }
-                else -> resetRequired(
-                    revision = ProfileRevision(snapshot.revision.value + 1L),
-                    profile = snapshot.profile,
-                    reason = ProfileResetReason.LegacyDataDetected,
-                    legacyKeys = result.legacyKeys,
                     persistence = ProfilePersistenceStatus.Persisted(snapshot.revision),
                 )
             }
         }
     }
 }
+
+/**
+ * Loading advances once, and one complete mutation advances for acceptance and write completion.
+ * Snapshots above this boundary cannot support that smallest useful current-schema lifecycle.
+ */
+private const val MAX_LOADABLE_SNAPSHOT_REVISION: Long = Long.MAX_VALUE - 3L
 
 private fun isPolicyCompatibleAtConstruction(
     profile: PlayerProfile,

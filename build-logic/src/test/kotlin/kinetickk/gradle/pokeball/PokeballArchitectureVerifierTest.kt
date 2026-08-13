@@ -63,8 +63,7 @@ class PokeballArchitectureVerifierTest {
     @Test
     fun outputExecutorInventoryIsClosedAgainstAllDeclaredVariants() {
         val expected = setOf(
-            "ProfileOutput.PersistV4Snapshot",
-            "ProfileOutput.PurgeLegacy",
+            "ProfileOutput.PersistSnapshot",
             "ProfileOutput.CompleteCommand",
             "GameplayOutput.EmitVisualFx",
             "GameplayOutput.SendProfileCommand",
@@ -385,7 +384,7 @@ class PokeballArchitectureVerifierTest {
     @Test
     fun typedRouteRowsBindToTargetProtocolsSourceCarriersAndIssuance() {
         assertEquals(14, readRouteProjections.size)
-        assertEquals(10, commandRouteProjections.size)
+        assertEquals(8, commandRouteProjections.size)
         assertEquals(expectedReadRoutes, readRouteProjections.map(ReadRouteProjection::id).toSortedSet())
         assertEquals(expectedCommandRoutes, commandRouteProjections.map(CommandRouteProjection::id).toSortedSet())
         assertTrue(commandRouteProjections.all { it.operationToken.contains("ModuleCommand.") })
@@ -1053,8 +1052,7 @@ class PokeballArchitectureVerifierTest {
                 "ball/profile/nucleus/src/commonMain/kotlin/kinetickk/ball/profile/nucleus/ProfileDecision.kt",
                 """
                     sealed interface ProfileOutput {
-                        data class PersistV4Snapshot(val value: Int) : ProfileOutput
-                        data object PurgeLegacy : ProfileOutput
+                        data class PersistSnapshot(val value: Int) : ProfileOutput
                         data object CompleteCommand : ProfileOutput
                     }
                 """.trimIndent(),
@@ -1112,7 +1110,7 @@ class PokeballArchitectureVerifierTest {
         appendLine("co-reachable branches")
         appendLine("converging")
         appendLine("Mutually exclusive alternatives")
-        appendLine("Retry or redelivery of the same source tuple")
+        appendLine("duplicate traversal record for the same source tuple")
         appendLine("independent root")
         appendLine("No asynchronous semantic handoff exists")
         appendLine("## Closed semantic output executors")

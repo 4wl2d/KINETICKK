@@ -18,7 +18,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotSame
-import kotlin.test.assertNull
 
 class PlatformCapabilitiesWebTest {
     @Test
@@ -70,44 +69,31 @@ class PlatformCapabilitiesWebTest {
     }
 
     @Test
-    fun testPersistenceCapabilityUsesOnlyExactKeysAndPreservesUnrelatedData() {
+    fun persistenceCapabilityUsesOnlySnapshotAndPreservesUnrelatedData() {
         val prefix = "kinetickk_app_platform_capability_${Random.nextLong()}"
-        val keys = TestWebProfilePersistenceKeys(
-            snapshotV4 = "${prefix}_v4",
-            legacyProgressV2 = "${prefix}_v2",
-            legacyMatter = "${prefix}_matter",
-        )
+        val snapshotKey = "${prefix}_profile"
+        val legacyProgressKey = "${prefix}_progress_v2"
+        val legacyMatterKey = "${prefix}_matter"
         val unrelated = "${prefix}_unrelated"
         try {
-            val capability = TestWebProfilePersistenceCapability(localStorage, keys)
-            localStorage.setItem(keys.legacyProgressV2, "legacy")
-            localStorage.setItem(keys.legacyMatter, "1")
+            val capability = TestWebProfilePersistenceCapability(localStorage, snapshotKey)
+            localStorage.setItem(legacyProgressKey, "legacy")
+            localStorage.setItem(legacyMatterKey, "1")
             localStorage.setItem(unrelated, "preserve-me")
 
             assertEquals(
                 ProfilePersistenceMutationResult.COMPLETED,
-                capability.writeV4("strict-v4-payload"),
+                capability.writeSnapshot("strict-current-payload"),
             )
             assertEquals(
-                ProfilePersistenceReadResult.Observed("strict-v4-payload"),
-                capability.readV4(),
+                ProfilePersistenceReadResult.Observed("strict-current-payload"),
+                capability.readSnapshot(),
             )
-            assertEquals(
-                ProfilePersistenceReadResult.Observed("legacy"),
-                capability.readLegacyProgressV2(),
-            )
-            assertEquals(ProfilePersistenceReadResult.Observed("1"), capability.readLegacyMatter())
-
-            assertEquals(
-                ProfilePersistenceMutationResult.COMPLETED,
-                capability.removeLegacyProgressV2(),
-            )
-            assertEquals(ProfilePersistenceMutationResult.COMPLETED, capability.removeLegacyMatter())
-            assertNull(localStorage.getItem(keys.legacyProgressV2))
-            assertNull(localStorage.getItem(keys.legacyMatter))
+            assertEquals("legacy", localStorage.getItem(legacyProgressKey))
+            assertEquals("1", localStorage.getItem(legacyMatterKey))
             assertEquals("preserve-me", localStorage.getItem(unrelated))
         } finally {
-            listOf(keys.snapshotV4, keys.legacyProgressV2, keys.legacyMatter, unrelated).forEach {
+            listOf(snapshotKey, legacyProgressKey, legacyMatterKey, unrelated).forEach {
                 localStorage.removeItem(it)
             }
         }
@@ -119,75 +105,42 @@ class PlatformCapabilitiesWebTest {
         withWebStorageMethodFailure("getItem", "SecurityError", programmingFault = false) {
             assertEquals(
                 ProfilePersistenceReadResult.Failed,
-                createPlatformProfilePersistenceCapability().readV4(),
+                createPlatformProfilePersistenceCapability().readSnapshot(),
             )
         }
         withWebStorageMethodFailure("setItem", "QuotaExceededError", programmingFault = false) {
             assertEquals(
                 ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION,
-                createPlatformProfilePersistenceCapability().writeV4("payload"),
-            )
-        }
-        withWebStorageMethodFailure("removeItem", "SecurityError", programmingFault = false) {
-            assertEquals(
-                ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION,
-                createPlatformProfilePersistenceCapability().removeLegacyProgressV2(),
+                createPlatformProfilePersistenceCapability().writeSnapshot("payload"),
             )
         }
         withWebStorageMethodFailure("getItem", "ignored", programmingFault = true) {
             assertFailsWith<JsException> {
-                createPlatformProfilePersistenceCapability().readV4()
+                createPlatformProfilePersistenceCapability().readSnapshot()
             }
         }
         withWebStorageMethodFailure("setItem", "ignored", programmingFault = true) {
             assertFailsWith<JsException> {
-                createPlatformProfilePersistenceCapability().writeV4("payload")
-            }
-        }
-        withWebStorageMethodFailure("removeItem", "ignored", programmingFault = true) {
-            assertFailsWith<JsException> {
-                createPlatformProfilePersistenceCapability().removeLegacyMatter()
+                createPlatformProfilePersistenceCapability().writeSnapshot("payload")
             }
         }
         withWebStorageMethodFailure("getItem", "InvalidStateError", programmingFault = false) {
             assertFailsWith<JsException> {
-                createPlatformProfilePersistenceCapability().readLegacyMatter()
+                createPlatformProfilePersistenceCapability().readSnapshot()
             }
         }
     }
 }
 
-private data class TestWebProfilePersistenceKeys(
-    val snapshotV4: String,
-    val legacyProgressV2: String,
-    val legacyMatter: String,
-)
-
 private class TestWebProfilePersistenceCapability(
     private val storage: Storage,
-    private val keys: TestWebProfilePersistenceKeys,
+    private val snapshotKey: String,
 ) : ProfilePersistenceCapability {
-    override fun readV4(): ProfilePersistenceReadResult =
-        ProfilePersistenceReadResult.Observed(storage.getItem(keys.snapshotV4))
+    override fun readSnapshot(): ProfilePersistenceReadResult =
+        ProfilePersistenceReadResult.Observed(storage.getItem(snapshotKey))
 
-    override fun writeV4(payload: String): ProfilePersistenceMutationResult {
-        storage.setItem(keys.snapshotV4, payload)
-        return ProfilePersistenceMutationResult.COMPLETED
-    }
-
-    override fun readLegacyProgressV2(): ProfilePersistenceReadResult =
-        ProfilePersistenceReadResult.Observed(storage.getItem(keys.legacyProgressV2))
-
-    override fun readLegacyMatter(): ProfilePersistenceReadResult =
-        ProfilePersistenceReadResult.Observed(storage.getItem(keys.legacyMatter))
-
-    override fun removeLegacyProgressV2(): ProfilePersistenceMutationResult {
-        storage.removeItem(keys.legacyProgressV2)
-        return ProfilePersistenceMutationResult.COMPLETED
-    }
-
-    override fun removeLegacyMatter(): ProfilePersistenceMutationResult {
-        storage.removeItem(keys.legacyMatter)
+    override fun writeSnapshot(payload: String): ProfilePersistenceMutationResult {
+        storage.setItem(snapshotKey, payload)
         return ProfilePersistenceMutationResult.COMPLETED
     }
 }

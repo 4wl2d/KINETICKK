@@ -15,7 +15,6 @@ import kinetickk.ball.gameplay.api.GameplayRunStatusProjection
 import kinetickk.ball.gameplay.api.GameplaySemanticHandle
 import kinetickk.ball.gameplay.api.RunId
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
-import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.ProfileCommandIssuerProvenance
 import kinetickk.ball.profile.api.ProfileCommandSource
@@ -23,15 +22,14 @@ import kinetickk.ball.profile.api.ProfileEffectiveProtocolIdentity
 import kinetickk.ball.profile.api.ProfileModuleCommand
 import kinetickk.ball.profile.api.ProfileModuleCommandRequest
 import kinetickk.ball.profile.api.ProfileModuleResult
-import kinetickk.ball.profile.api.ProfileResetStatus
 import kinetickk.ball.profile.api.ProfileRunBootstrapResult
 import kinetickk.ball.profile.api.ProfileSemanticHandle
 import kinetickk.flow.session.api.AppDestination
 import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.flow.session.api.AppShellProjection
 import kinetickk.flow.session.api.SessionInteractionPulse
+import kinetickk.flow.session.api.SessionLifecycle
 import kinetickk.flow.session.api.SessionRejection
-import kinetickk.flow.session.api.SessionResetLifecycle
 import kinetickk.flow.session.api.SessionRevision
 import kinetickk.flow.session.api.SessionShortcut
 import kinetickk.flow.session.api.SessionWorkflowFailureCode
@@ -69,13 +67,8 @@ object AppSessionNucleus {
         if (state.pendingWorkflow != null) {
             return rejected(SessionRejection.ParticipantCommandPending)
         }
-        if (
-            state.resetLifecycle != SessionResetLifecycle.READY &&
-            intent != SessionInteractionPulse.ResetCancelled &&
-            intent != SessionInteractionPulse.ResetConfirmed &&
-            intent != SessionInteractionPulse.ResetRetryRequested
-        ) {
-            return rejected(SessionRejection.ResetBlocksInput)
+        if (state.lifecycle != SessionLifecycle.READY) {
+            return rejected(SessionRejection.BootstrapUnavailable)
         }
         return when (intent) {
             SessionInteractionPulse.StartRunRequested -> startRun(state, context, RunStartReason.START)
@@ -87,9 +80,6 @@ object AppSessionNucleus {
             SessionInteractionPulse.ToggleMuteRequested -> toggleMute(state)
             is SessionInteractionPulse.SelectCoreShapeRequested -> selectCoreShape(state, intent.shape)
             SessionInteractionPulse.RebirthRequested -> rebirth(state, context)
-            SessionInteractionPulse.ResetCancelled -> cancelReset(state)
-            SessionInteractionPulse.ResetConfirmed -> confirmReset(state, context)
-            SessionInteractionPulse.ResetRetryRequested -> retryReset(state, context)
         }
     }
 
@@ -448,69 +438,6 @@ object AppSessionNucleus {
         )
     }
 
-    private fun cancelReset(state: AppSessionState): AppSessionDecision {
-        if (state.resetLifecycle == SessionResetLifecycle.READY) {
-            return rejected(SessionRejection.ResetActionUnavailable)
-        }
-        return accepted(state.copy(revision = state.nextRevision()))
-    }
-
-    private fun confirmReset(
-        state: AppSessionState,
-        context: AppSessionContext,
-    ): AppSessionDecision {
-        if (state.resetLifecycle != SessionResetLifecycle.CONFIRMATION_REQUIRED) {
-            return rejected(SessionRejection.ResetActionUnavailable)
-        }
-        val persistence = checkNotNull(context.persistenceStatus) {
-            "Impl must supply the validated Profile persistence read"
-        }
-        if (persistence.toSessionResetLifecycle() != SessionResetLifecycle.CONFIRMATION_REQUIRED) {
-            return rejected(SessionRejection.ResetActionUnavailable)
-        }
-        val revision = state.nextRevision()
-        val request = profileRequest(revision, 0, ProfileModuleCommand.ConfirmLegacyReset)
-        return accepted(
-            state.copy(
-                revision = revision,
-                pendingWorkflow = PendingWorkflow.ConfirmingReset(
-                    PendingParticipantCommand.Profile(request),
-                ),
-                resetLifecycle = SessionResetLifecycle.RESET_IN_PROGRESS,
-                lastFailure = null,
-            ),
-            immutableListOf(AppSessionOutput.SendProfileCommand(request)),
-        )
-    }
-
-    private fun retryReset(
-        state: AppSessionState,
-        context: AppSessionContext,
-    ): AppSessionDecision {
-        if (state.resetLifecycle != SessionResetLifecycle.PURGE_NEEDS_ATTENTION) {
-            return rejected(SessionRejection.ResetActionUnavailable)
-        }
-        val persistence = checkNotNull(context.persistenceStatus) {
-            "Impl must supply the validated Profile persistence read"
-        }
-        if (persistence.toSessionResetLifecycle() != SessionResetLifecycle.PURGE_NEEDS_ATTENTION) {
-            return rejected(SessionRejection.ResetActionUnavailable)
-        }
-        val revision = state.nextRevision()
-        val request = profileRequest(revision, 0, ProfileModuleCommand.RetryLegacyPurge)
-        return accepted(
-            state.copy(
-                revision = revision,
-                pendingWorkflow = PendingWorkflow.RetryingPurge(
-                    PendingParticipantCommand.Profile(request),
-                ),
-                resetLifecycle = SessionResetLifecycle.RESET_IN_PROGRESS,
-                lastFailure = null,
-            ),
-            immutableListOf(AppSessionOutput.SendProfileCommand(request)),
-        )
-    }
-
     private fun completeProfileCommand(
         state: AppSessionState,
         pulse: ProfileModuleResultPulse,
@@ -541,9 +468,6 @@ object AppSessionNucleus {
             }
             is PendingWorkflow.TogglingMute -> completeMuteProfileResult(state, pulse.result)
             is PendingWorkflow.AdvancingRebirth -> completeRebirthProfileResult(state, pulse.result, context)
-            is PendingWorkflow.ConfirmingReset,
-            is PendingWorkflow.RetryingPurge,
-            -> completeResetProfileResult(state, pulse.result, context)
             else -> error("Trusted Profile result contradicted the pending workflow")
         }
     }
@@ -643,55 +567,6 @@ object AppSessionNucleus {
             } else {
                 immutableListOf(send, AppSessionOutput.PlayRebirthAcceptedFeedback)
             },
-        )
-    }
-
-    private fun completeResetProfileResult(
-        state: AppSessionState,
-        result: ProfileModuleResult,
-        context: AppSessionContext,
-    ): AppSessionDecision {
-        val persistence = checkNotNull(context.persistenceStatus) {
-            "Impl must supply the validated Profile persistence read"
-        }
-        val preferences = checkNotNull(context.preferences) {
-            "Impl must supply the validated Profile preferences read"
-        }.preferences
-        val lifecycle = persistence.toSessionResetLifecycle()
-        val failure = when (result) {
-            ProfileModuleResult.ResetCompleted -> {
-                check(lifecycle == SessionResetLifecycle.READY)
-                null
-            }
-            is ProfileModuleResult.ResetWriteRejected -> {
-                check(lifecycle == SessionResetLifecycle.CONFIRMATION_REQUIRED)
-                SessionWorkflowFailureCode.RESET_WRITE_REJECTED
-            }
-            is ProfileModuleResult.ResetWriteResourceFailure -> {
-                check(lifecycle == SessionResetLifecycle.CONFIRMATION_REQUIRED)
-                SessionWorkflowFailureCode.RESET_WRITE_RESOURCE_FAILURE
-            }
-            is ProfileModuleResult.ResetWriteOutcomeUnknown -> {
-                check(lifecycle == SessionResetLifecycle.CONFIRMATION_REQUIRED)
-                SessionWorkflowFailureCode.RESET_WRITE_OUTCOME_UNKNOWN
-            }
-            is ProfileModuleResult.ResetNeedsAttention -> {
-                check(
-                    lifecycle == SessionResetLifecycle.PURGE_NEEDS_ATTENTION &&
-                        persistence.reset == result.status,
-                )
-                SessionWorkflowFailureCode.RESET_NEEDS_ATTENTION
-            }
-            else -> error("Validated Profile result contradicted reset mapping")
-        }
-        return accepted(
-            state.copy(
-                revision = state.nextRevision(),
-                pendingWorkflow = null,
-                resetLifecycle = lifecycle,
-                lastFailure = failure,
-            ),
-            immutableListOf(AppSessionOutput.SynchronizeAudioPreferences(preferences)),
         )
     }
 
@@ -819,11 +694,6 @@ object AppSessionNucleus {
         val pending = checkNotNull(state.pendingWorkflow)
         val participant = checkNotNull(pending.participant as? PendingParticipantCommand.Profile)
         requireProfileRefusalCorrelation(participant.request, pulse)
-        val resetLifecycle = when (pending) {
-            is PendingWorkflow.ConfirmingReset -> SessionResetLifecycle.CONFIRMATION_REQUIRED
-            is PendingWorkflow.RetryingPurge -> SessionResetLifecycle.PURGE_NEEDS_ATTENTION
-            else -> state.resetLifecycle
-        }
         val outputs: ImmutableList<AppSessionOutput> = if (pending is PendingWorkflow.TogglingMute) {
             immutableListOf(AppSessionOutput.PlayMuteFeedback)
         } else {
@@ -833,7 +703,6 @@ object AppSessionNucleus {
             state.copy(
                 revision = state.nextRevision(),
                 pendingWorkflow = null,
-                resetLifecycle = resetLifecycle,
                 rebirthConfirmation = if (pending is PendingWorkflow.AdvancingRebirth) {
                     RebirthConfirmation.Disarmed
                 } else {
@@ -958,8 +827,6 @@ private val ProfileModuleCommand.effectiveIdentity: ProfileEffectiveProtocolIden
         is ProfileModuleCommand.SelectCoreShape -> ProfileEffectiveProtocolIdentity.SESSION_CORE_SHAPE
         ProfileModuleCommand.ToggleMute -> ProfileEffectiveProtocolIdentity.SESSION_MUTE
         ProfileModuleCommand.AdvanceRebirth -> ProfileEffectiveProtocolIdentity.SESSION_REBIRTH
-        ProfileModuleCommand.ConfirmLegacyReset -> ProfileEffectiveProtocolIdentity.SESSION_RESET_CONFIRM
-        ProfileModuleCommand.RetryLegacyPurge -> ProfileEffectiveProtocolIdentity.SESSION_RESET_RETRY
         is ProfileModuleCommand.ApplyGameplayProgress -> error("Gameplay progress is not a Session mapping")
     }
 
@@ -1043,7 +910,7 @@ private fun AppSessionState.toShellProjection(): AppShellProjection = AppShellPr
     activeRunId = activeRunId,
     rebirthEligible = base == AppDestination.Home || gameplayPhase == GameplayRunPhase.VICTORY,
     pendingWorkflow = pendingWorkflow?.toProjection(),
-    resetLifecycle = resetLifecycle,
+    lifecycle = lifecycle,
     rebirthConfirmationArmed = rebirthConfirmation is RebirthConfirmation.Armed,
     workflowFailure = lastFailure,
 )
@@ -1062,8 +929,6 @@ private fun PendingWorkflow.toProjection(): SessionWorkflowPhase = when (this) {
     is PendingWorkflow.AdvancingRebirth -> SessionWorkflowPhase.ADVANCING_REBIRTH
     is PendingWorkflow.StartingRebirthRun -> SessionWorkflowPhase.STARTING_REBIRTH_RUN
     is PendingWorkflow.ExitingRun -> SessionWorkflowPhase.EXITING_RUN
-    is PendingWorkflow.ConfirmingReset -> SessionWorkflowPhase.CONFIRMING_RESET
-    is PendingWorkflow.RetryingPurge -> SessionWorkflowPhase.RETRYING_PURGE
 }
 
 private fun accepted(

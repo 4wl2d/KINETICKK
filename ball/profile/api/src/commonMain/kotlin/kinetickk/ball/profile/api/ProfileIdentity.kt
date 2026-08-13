@@ -109,13 +109,11 @@ data class ProfileResultSourceToken(
     }
 }
 
-/** The six exact same-build Profile command/result mappings. */
+/** The four exact same-build Profile command/result mappings. */
 enum class ProfileEffectiveProtocolIdentity {
     SESSION_CORE_SHAPE,
     SESSION_MUTE,
     SESSION_REBIRTH,
-    SESSION_RESET_CONFIRM,
-    SESSION_RESET_RETRY,
     GAMEPLAY_PROGRESS,
 }
 

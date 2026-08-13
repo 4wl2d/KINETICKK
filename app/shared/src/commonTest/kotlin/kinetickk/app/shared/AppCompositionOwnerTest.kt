@@ -47,7 +47,6 @@ import kinetickk.ball.profile.api.ProfileModuleCommandRequest
 import kinetickk.ball.profile.api.ProfilePersistenceStatus
 import kinetickk.ball.profile.api.ProfilePulse
 import kinetickk.ball.profile.api.ProfileQuery
-import kinetickk.ball.profile.api.ProfileResetStatus
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileRunBootstrapResult
 import kinetickk.ball.profile.api.RebirthProgressProjection
@@ -212,7 +211,6 @@ private class ReadyProfileComponent(
             instanceId = instanceId,
             revision = revision,
             bootstrap = ProfileBootstrapStatus.Ready,
-            reset = ProfileResetStatus.NotRequired(legacyResetConfirmed = false),
             persistence = ProfilePersistenceStatus.NotAttempted,
         )
 

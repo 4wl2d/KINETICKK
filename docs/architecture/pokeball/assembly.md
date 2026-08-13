@@ -68,7 +68,7 @@ not appear in the semantic direct-control graph above.
 | `gameplay-content-bootstrap` | GameplayRun -> ContentCatalog | `ContentCatalog.gameplayContent` -> `GameplayContentSnapshot` | captured at accepted `StartRun`; no later global lookup |
 | `gameplay-profile-run-bootstrap` | GameplayRun -> Profile | `ProfileQuery.GetRunBootstrap` -> `RunBootstrapProjection` | validated trusted start Context for the exact Profile instance/revision |
 | `gameplay-profile-preferences` | GameplayRun -> Profile | `ProfileQuery.GetPreferences` -> `PreferencesProjection` | validated trusted preferences Context for the exact Profile instance/revision |
-| `profile-content-policy` | Profile -> ContentCatalog | `ContentCatalog.profilePolicy` -> `ProfilePolicySnapshot` | captured at Profile bootstrap/reset; no later global lookup |
+| `profile-content-policy` | Profile -> ContentCatalog | `ContentCatalog.profilePolicy` -> `ProfilePolicySnapshot` | captured at Profile bootstrap; no later global lookup |
 
 An admitted read creates no Decision, accepted-input marker, revision, handle,
 or semantic output.
@@ -89,8 +89,6 @@ public source completion wrapper exists.
 | `session-profile-core-shape` | AppSession -> Profile | `ProfileModuleCommand.SelectCoreShape` -> `ProfileModuleResult.CoreShapeSelected` | `ProfileModuleResultPulse` / `ProfileCommandRejectedBeforeAcceptance` |
 | `session-profile-mute` | AppSession -> Profile | `ProfileModuleCommand.ToggleMute` -> `ProfileModuleResult.PreferencesChanged` | `ProfileModuleResultPulse` / `ProfileCommandRejectedBeforeAcceptance` |
 | `session-profile-rebirth` | AppSession -> Profile | `ProfileModuleCommand.AdvanceRebirth` -> `ProfileModuleResult.RebirthAdvanced` | `ProfileModuleResultPulse` / `ProfileCommandRejectedBeforeAcceptance` |
-| `session-profile-reset-confirm` | AppSession -> Profile | `ProfileModuleCommand.ConfirmLegacyReset` -> `ProfileModuleResult.ResetCompleted` / `ProfileModuleResult.ResetWriteRejected` / `ProfileModuleResult.ResetWriteResourceFailure` / `ProfileModuleResult.ResetWriteOutcomeUnknown` / `ProfileModuleResult.ResetNeedsAttention` | `ProfileModuleResultPulse` / `ProfileCommandRejectedBeforeAcceptance` |
-| `session-profile-reset-retry` | AppSession -> Profile | `ProfileModuleCommand.RetryLegacyPurge` -> `ProfileModuleResult.ResetCompleted` / `ProfileModuleResult.ResetNeedsAttention` | `ProfileModuleResultPulse` / `ProfileCommandRejectedBeforeAcceptance` |
 | `session-gameplay-start` | AppSession -> GameplayRun | `GameplayModuleCommand.StartRun` -> `GameplayModuleResult.RunStarted` | `GameplayModuleResultPulse` / `GameplayCommandRejectedBeforeAcceptance` |
 | `session-gameplay-pause` | AppSession -> GameplayRun | `GameplayModuleCommand.PauseForOverlay` -> `GameplayModuleResult.OverlayPaused` | `GameplayModuleResultPulse` / `GameplayCommandRejectedBeforeAcceptance` |
 | `session-gameplay-preferences` | AppSession -> GameplayRun | `GameplayModuleCommand.ApplyPreferences` -> `GameplayModuleResult.PreferencesApplied` | `GameplayModuleResultPulse` / `GameplayCommandRejectedBeforeAcceptance` |
@@ -100,19 +98,19 @@ public source completion wrapper exists.
 The AppSession Flow has exactly two participant authorities: Profile and
 GameplayRun. A `FlowParticipation` declaration exists once per pair. The
 AppSession/Profile participation references the six declared Profile reads and
-five distinct command/result mappings. The AppSession/GameplayRun participation
+three distinct command/result mappings. The AppSession/GameplayRun participation
 references the three declared Gameplay reads and four distinct command/result
 mappings. Its owned coordination is lifecycle, ordering, branching,
-reset/recovery, and terminal navigation; referenced reads and commands retain
+bootstrap availability, and terminal navigation; referenced reads and commands retain
 their own ownership. The repository has exactly fourteen typed read routes.
-AppSession has exactly nine command/result route mappings; the repository has ten
+AppSession has exactly seven command/result route mappings; the repository has eight
 after adding GameplayRun/Profile progress.
 
 ## Flow participations
 
 | FlowParticipation ID | Flow / participant | Owned coordination | Dependency references |
 |---|---|---|---|
-| `app-session-profile` | AppSession / Profile | lifecycle, ordering, branching, reset and recovery | `session-profile-run-bootstrap`, `session-profile-preferences`, `session-profile-home`, `session-profile-collection`, `session-profile-rebirth-progress`, `session-profile-persistence`; `session-profile-core-shape`, `session-profile-mute`, `session-profile-rebirth`, `session-profile-reset-confirm`, `session-profile-reset-retry` |
+| `app-session-profile` | AppSession / Profile | lifecycle, ordering, branching, and bootstrap availability | `session-profile-run-bootstrap`, `session-profile-preferences`, `session-profile-home`, `session-profile-collection`, `session-profile-rebirth-progress`, `session-profile-persistence`; `session-profile-core-shape`, `session-profile-mute`, `session-profile-rebirth` |
 | `app-session-gameplay` | AppSession / GameplayRun | lifecycle, ordering, branching, overlay and terminal navigation | `session-gameplay-status`, `session-gameplay-weapon`, `session-gameplay-codex`; `session-gameplay-start`, `session-gameplay-pause`, `session-gameplay-preferences`, `session-gameplay-exit` |
 
 At most one Session participant command is pending. GameplayRun holds at most
@@ -131,8 +129,7 @@ variant; it does not add a consumer or wildcard registry.
 
 | ID | Output variant | Conditional selection | Effective route | Consumer/executor |
 |---|---|---|---|---|
-| `ProfileOutput.PersistV4Snapshot` | `ProfileOutput.PersistV4Snapshot` | always | `profile-resource-write-v4` | `DefaultProfileComponent.execute -> ProfileResource.writeV4` |
-| `ProfileOutput.PurgeLegacy` | `ProfileOutput.PurgeLegacy` | always | `profile-resource-purge-legacy` | `DefaultProfileComponent.execute -> ProfileResource.purgeLegacy` |
+| `ProfileOutput.PersistSnapshot` | `ProfileOutput.PersistSnapshot` | always | `profile-resource-write-snapshot` | `DefaultProfileComponent.execute -> ProfileResource.writeSnapshot` |
 | `ProfileOutput.CompleteCommand@app-session` | `ProfileOutput.CompleteCommand` | `profile-complete-consumer/app-session-command-source` | `profile-result-to-app-session` | `AppSession Nucleus` |
 | `ProfileOutput.CompleteCommand@gameplay-run` | `ProfileOutput.CompleteCommand` | `profile-complete-consumer/gameplay-run-command-source` | `profile-result-to-gameplay-run` | `GameplayRun Nucleus` |
 | `GameplayOutput.EmitVisualFx` | `GameplayOutput.EmitVisualFx` | always | `gameplay-visual-fx` | `InteractionFxReducer.apply` |
@@ -141,7 +138,7 @@ variant; it does not add a consumer or wildcard registry.
 | `GameplayOutput.EnsureAudioUnlocked` | `GameplayOutput.EnsureAudioUnlocked` | always | `gameplay-audio-unlock` | `GameComponent.execute -> GameplayAudioExecutor.ensureUnlocked` |
 | `GameplayOutput.CompleteCommand` | `GameplayOutput.CompleteCommand` | AppSession is the only command source | `gameplay-result-to-app-session` | `AppSession Nucleus` |
 | `AppSessionOutput.EnsureGameplayRun` | `AppSessionOutput.EnsureGameplayRun` | always | `session-ensure-gameplay-run` | `DefaultAppSessionComponent.ensureGameplayRun -> GameplaySessionHost.createRun` |
-| `AppSessionOutput.SendProfileCommand` | `AppSessionOutput.SendProfileCommand` | target operation selects one of five closed routes | `session-profile-command-closed-route` | `DefaultAppSessionComponent.executeProfileCommand -> SessionProfileRoute.acceptFromSession` |
+| `AppSessionOutput.SendProfileCommand` | `AppSessionOutput.SendProfileCommand` | target operation selects one of three closed routes | `session-profile-command-closed-route` | `DefaultAppSessionComponent.executeProfileCommand -> SessionProfileRoute.acceptFromSession` |
 | `AppSessionOutput.SendGameplayCommand` | `AppSessionOutput.SendGameplayCommand` | target operation selects one of four closed routes | `session-gameplay-command-closed-route` | `DefaultAppSessionComponent.executeGameplayCommand -> GameplaySessionRunPort.acceptFromSession` |
 | `AppSessionOutput.SynchronizeAudioPreferences` | `AppSessionOutput.SynchronizeAudioPreferences` | always | `session-audio-preferences` | `DefaultAppSessionComponent.updateAudioPreferences` |
 | `AppSessionOutput.PlayMuteFeedback` | `AppSessionOutput.PlayMuteFeedback` | always | `session-audio-mute-feedback` | `DefaultAppSessionComponent.playMuteFeedback` |
@@ -167,9 +164,9 @@ Terminal branches count. All co-reachable branches across accepted causal
 depths `0..7` sum, and separate converging branches to the same authority
 remain separate units (a diamond counts route traversals, not unique
 authorities). Mutually exclusive alternatives share one reservation equal to
-their maximum and only the selected accepted alternative consumes it. Retry or redelivery of the same source tuple
-through the same route to the same consumer
-adds no unit; a newly accepted source tuple does. A separately accepted
+their maximum and only the selected accepted alternative consumes it. A
+duplicate traversal record for the same source tuple, route, and consumer adds
+no unit; a newly accepted source tuple does. A separately accepted
 independent root starts a fresh scope and ceiling.
 
 The source-derived graph is same-stack: No asynchronous semantic handoff exists
@@ -188,7 +185,8 @@ settings row:  Profile Interaction -> local Profile adjustment accepted
 settings exit: Profile GetPreferences -> active Gameplay ApplyPreferences accepted -> Session closes/replaces overlay
 rebirth:       Profile AdvanceRebirth accepted -> allocate/accept new GameplayRun -> Session navigation accepted
 exit:          Gameplay ExitRun accepted -> Profile ApplyGameplayProgress accepted -> Session Home accepted
-reset:         Profile bootstrap/reset result -> Session reset-modal projection; no Assembly-created reset payload
+bootstrap:     absent/rejected/incompatible current snapshot -> default Profile -> Session READY
+               provider read failure -> Session BOOTSTRAP_UNAVAILABLE -> blocking PROFILE UNAVAILABLE UI
 ```
 
 Participant rejection or carrier failure is a closed Session workflow input and

@@ -20,7 +20,7 @@ data class AppShellProjection(
     val activeRunId: RunId?,
     val rebirthEligible: Boolean,
     val pendingWorkflow: SessionWorkflowPhase?,
-    val resetLifecycle: SessionResetLifecycle,
+    val lifecycle: SessionLifecycle,
     val rebirthConfirmationArmed: Boolean,
     val workflowFailure: SessionWorkflowFailureCode?,
 ) {
@@ -44,7 +44,7 @@ data class AppShellProjection(
         get() = overlay?.let { immutableListOf(base, it) } ?: immutableListOf(base)
 
     val normalInputEnabled: Boolean
-        get() = resetLifecycle == SessionResetLifecycle.READY && pendingWorkflow == null
+        get() = lifecycle == SessionLifecycle.READY && pendingWorkflow == null
 }
 
 /** Local Interaction/query facade. Participant command authority is bound separately by Impl. */

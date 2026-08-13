@@ -13,7 +13,6 @@ import kinetickk.ball.gameplay.api.GameplayResultSourceToken
 import kinetickk.ball.gameplay.api.GameplayRunStatusProjection
 import kinetickk.ball.gameplay.api.GameplayTargetBoundaryProvenance
 import kinetickk.ball.gameplay.api.RunId
-import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PreferencesProjection
 import kinetickk.ball.profile.api.ProfileCommandBoundaryResponse
@@ -37,7 +36,6 @@ data class AppSessionContext(
     val runBootstrap: RunBootstrapProjection? = null,
     val preferences: PreferencesProjection? = null,
     val rebirthProgress: RebirthProgressProjection? = null,
-    val persistenceStatus: PersistenceStatusProjection? = null,
     val gameplayStatus: GameplayRunStatusProjection? = null,
 ) {
     companion object {
