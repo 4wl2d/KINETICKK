@@ -41,39 +41,30 @@ Use `smoke` only to validate the pipeline. Use `standard` for a change decision;
 use `deep` when the standard interval is wide or the decision is expensive.
 Each cycle launches fresh JVMs in feature-baseline-baseline-feature order.
 
-## Reproduce the branch comparisons
+## Reproduce a branch comparison
 
-Run the complete comparable gameplay matrix against the literal local `main`
-requested for the original comparison:
+Only compare revisions that both implement the exact raw-schema-v2 harness,
+five-role source provenance, and semantic validation contract. Run the complete
+gameplay and profile A-B-B-A matrix against an exact compatible base SHA:
 
 ```bash
-bash tools/performance/scripts/compare-main-refactor.sh \
-  --baseline literal-main \
+bash tools/performance/scripts/compare-pr-base.sh \
+  --base "$(git rev-parse origin/main^{commit})" \
   --profile standard
 ```
 
-Run the control against the newer remote-tracking baseline:
+The runner rejects a base that lacks or drifts from the v2 capability marker and
+attested source files. It retains a clean detached worktree under
+`build/performance/worktrees`, never resets, cleans, removes, or commits it, and
+refuses a non-empty output directory.
 
-```bash
-bash tools/performance/scripts/compare-main-refactor.sh \
-  --baseline origin-main \
-  --profile standard
-```
-
-Run the branch-native profile comparison. The logical fixtures match, but the
-wire contracts intentionally do not: `main` uses legacy v3 and the feature uses
-strict v4 with canonical validation.
-
-```bash
-bash tools/performance/scripts/compare-main-refactor-profile.sh \
-  --profile standard
-```
-
-Both runners pin exact baseline SHAs and retain detached worktrees under
-`build/performance/worktrees`. They validate the worktree HEAD and permitted
-overlay files, never reset, clean, remove, or commit a worktree, and refuse a
-non-empty output directory. Profile scenarios use private in-memory persistence;
-the branches never share Preferences or browser storage.
+The original `main@fedceb8` and `origin/main@a0762dd` reports remain immutable
+historical raw-schema-v1 evidence under `docs/performance/results/2026-08-11`.
+Their compatibility adapters cannot be relabelled or executed through the v2
+harness: doing so would mix schemas and validation workloads. The archived
+`compare-main-refactor*.sh` entry points therefore fail before starting Gradle
+on a v2 checkout. Reproduce those reports from their recorded historical commit,
+or record candidate-only bootstrap evidence until a comparable v2 base exists.
 
 For one current-branch suite without a comparison:
 
@@ -309,9 +300,12 @@ the same branch-native tasks, and fresh A-B-B-A JVM forks. The check fails on a
 confirmed regression, an unpaired scenario, or a semantic contract mismatch.
 Gameplay requires matching deterministic outcome fingerprints; profile requires
 exact category, description, and all payload SHA/boundary/expected-outcome metadata.
-The initial benchmark-migration PR cannot benchmark a suite absent from its base,
-so it records the pinned historical `main` comparisons instead; that fallback is
-migration evidence, not a dynamic PR-base regression gate.
+The initial benchmark-migration PR cannot benchmark a suite absent from its base.
+It therefore records strict candidate-only gameplay and profile raw reports,
+validates their schema, source provenance, semantic witnesses, revision, clean
+identity, and fork identity, and emits no branch-relative verdict. Once the exact
+base carries the same v2 capability and source contract, CI switches to the
+blocking A-B-B-A regression gate.
 
 Every path publishes the generated Markdown to the GitHub step summary and
 uploads raw reports. Weekly/manual runs retain the broader historical and

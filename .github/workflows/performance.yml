@@ -87,12 +87,12 @@ jobs:
           esac
           printf 'PERFORMANCE_PROFILE=%s\n' "$profile" >> "$GITHUB_ENV"
 
-      - name: Select incremental PR gate or migration evidence
+      - name: Select incremental PR gate or bootstrap evidence
         env:
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
         run: |
-          mode="historical"
+          mode="bootstrap"
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
             if bash tools/performance/scripts/compare-pr-base.sh \
               --base "$PR_BASE_SHA" \
@@ -103,7 +103,7 @@ jobs:
               if (( status != 3 )); then
                 exit "$status"
               fi
-              printf 'Exact PR base predates the incremental suite; using migration evidence.\n'
+              printf 'Exact PR base predates the incremental suite; recording candidate-only bootstrap evidence.\n'
             fi
           fi
           printf 'PERFORMANCE_GATE_MODE=%s\n' "$mode" >> "$GITHUB_ENV"
@@ -134,20 +134,74 @@ jobs:
           --profile "$PERFORMANCE_PROFILE"
           --output build/performance/ci/incremental
 
-      - name: Record historical gameplay migration evidence
-        if: env.PERFORMANCE_GATE_MODE == 'historical'
+      - name: Record current gameplay bootstrap evidence
+        if: env.PERFORMANCE_GATE_MODE == 'bootstrap'
+        env:
+          REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
         run: >-
-          bash tools/performance/scripts/compare-main-refactor.sh
-          --baseline literal-main
-          --profile "$PERFORMANCE_PROFILE"
-          --output build/performance/ci/gameplay
+          ./gradlew
+          :ball:gameplay:nucleus:performanceBenchmark
+          -PbenchmarkProfile="$PERFORMANCE_PROFILE"
+          -PbenchmarkOutput="$GITHUB_WORKSPACE/kinetickk/build/performance/ci/gameplay.json"
+          -PbenchmarkLabel=ci-bootstrap
+          -PbenchmarkRevision="$REVISION"
+          -PbenchmarkDirty=false
+          -PbenchmarkFork=1
+          -PbenchmarkSeed=731991
+          --no-daemon
+          --no-parallel
+          --console=plain
 
-      - name: Record historical profile migration evidence
-        if: env.PERFORMANCE_GATE_MODE == 'historical'
+      - name: Record current profile bootstrap evidence
+        if: env.PERFORMANCE_GATE_MODE == 'bootstrap'
+        env:
+          REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
         run: >-
-          bash tools/performance/scripts/compare-main-refactor-profile.sh
-          --profile "$PERFORMANCE_PROFILE"
-          --output build/performance/ci/profile
+          ./gradlew
+          :ball:profile:resource:profilePerformanceBenchmark
+          -PbenchmarkProfile="$PERFORMANCE_PROFILE"
+          -PbenchmarkOutput="$GITHUB_WORKSPACE/kinetickk/build/performance/ci/profile.json"
+          -PbenchmarkLabel=ci-bootstrap
+          -PbenchmarkRevision="$REVISION"
+          -PbenchmarkDirty=false
+          -PbenchmarkFork=1
+          --no-daemon
+          --no-parallel
+          --console=plain
+
+      - name: Validate bootstrap evidence contracts
+        if: env.PERFORMANCE_GATE_MODE == 'bootstrap'
+        env:
+          REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=tools/performance python3 - <<'PY'
+          from pathlib import Path
+          import os
+
+          import compare_results
+
+          expected = (
+              ("gameplay-core-v2", Path("build/performance/ci/gameplay.json")),
+              ("profile-persistence-v2", Path("build/performance/ci/profile.json")),
+          )
+          for suite_version, path in expected:
+              runs = compare_results.load_runs([path])
+              compare_results.validate_run_group(runs, suite_version)
+              compare_results.validate_expected_run_identity(
+                  runs,
+                  suite_version,
+                  os.environ["REVISION"],
+                  "ci-bootstrap",
+                  {"1"},
+                  True,
+              )
+              actual_suite = runs[0].get("suiteVersion")
+              if actual_suite != suite_version:
+                  raise ValueError(
+                      f"{path}: suiteVersion {actual_suite!r} does not match {suite_version!r}",
+                  )
+              print(f"{suite_version}: strict schema/source/validation/identity contract OK")
+          PY
 
       - name: Measure current runtime telemetry overhead
         env:
@@ -174,12 +228,9 @@ jobs:
               build/performance/ci/incremental/gameplay/comparison.md
               build/performance/ci/incremental/profile/comparison.md
             )
-          elif [[ "$mode" == "historical" ]]; then
-            mode_description="historical migration evidence; not a dynamic PR-base gate"
-            reports=(
-              build/performance/ci/gameplay/comparison.md
-              build/performance/ci/profile/comparison.md
-            )
+          elif [[ "$mode" == "bootstrap" ]]; then
+            mode_description="candidate-only schema-v2 bootstrap evidence; exact base is not comparable"
+            reports=()
           else
             mode_description="gate selection failed before a comparison could start"
             reports=()
@@ -187,6 +238,18 @@ jobs:
           {
             printf '# JVM performance\n\n'
             printf -- '- Mode: %s\n\n' "$mode_description"
+            if [[ "$mode" == "bootstrap" ]]; then
+              for artifact in gameplay profile; do
+                path="build/performance/ci/$artifact.json"
+                if [[ -f "$path" ]]; then
+                  printf -- '- Raw %s generated: `%s` (see contract-validation step)\n' "$artifact" "$path"
+                else
+                  printf -- '- Raw %s unavailable: `%s`\n' "$artifact" "$path"
+                fi
+              done
+              printf '\n'
+              printf '> No branch-relative verdict is emitted until both sides implement the exact v2 source and validation contracts.\n\n'
+            fi
             for report in "${reports[@]}"; do
               if [[ -f "$report" ]]; then
                 cat "$report"

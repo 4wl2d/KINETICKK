@@ -145,7 +145,7 @@ if ((${#missing_paths[@]} > 0)); then
     exit 3
 fi
 if ((${#drifted_paths[@]} > 0)); then
-    printf 'Base %s uses different benchmark source contracts; selecting migration evidence.\n' \
+    printf 'Base %s uses different benchmark source contracts; selecting candidate-only bootstrap evidence.\n' \
         "$base_revision" >&2
     printf 'Drifted: %s\n' "${drifted_paths[@]}" >&2
     exit 3

@@ -117,6 +117,10 @@ while (($# > 0)); do
     esac
 done
 
+if [[ -f "$repository_root/tools/performance/contracts/incremental-gate-v2.json" ]]; then
+    fail "This archived raw-schema-v1 comparison cannot run with the strict v2 harness; use compare-pr-base.sh for v2-to-v2 comparisons or the committed historical reports"
+fi
+
 case "$baseline" in
     literal-main)
         baseline_revision="$LITERAL_MAIN_REVISION"
