@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.NonRestartableComposable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -180,7 +181,7 @@ fun GameplayContent(
         }
     }
 
-    LaunchedEffect(component, inputEnabled, focusRequester) {
+    SideEffect(component, inputEnabled) {
         if (inputEnabled) focusRequester.requestFocus()
     }
 

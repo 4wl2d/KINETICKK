@@ -7,7 +7,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -68,7 +68,7 @@ fun AppSessionContent(
         return accepted
     }
 
-    LaunchedEffect(sessionPort) {
+    SideEffect(sessionPort) {
         focusRequester.requestFocus()
     }
 

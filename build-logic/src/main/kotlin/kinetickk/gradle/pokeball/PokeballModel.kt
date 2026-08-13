@@ -333,7 +333,9 @@ private const val DESKTOP_AUDIO_TEST_PATH =
 private const val ANDROID_AUDIO_PATH =
     "app/shared/src/androidMain/kotlin/kinetickk/app/shared/PlatformCapabilities.android.kt"
 private const val ANDROID_AUDIO_TEST_PATH =
-    "app/shared/src/androidInstrumentedTest/kotlin/kinetickk/app/shared/PlatformCapabilitiesAndroidTest.kt"
+    "app/shared/src/androidDeviceTest/kotlin/kinetickk/app/shared/PlatformCapabilitiesAndroidTest.kt"
+internal const val ANDROID_HOST_ACTIVITY_PATH =
+    "app/android/src/main/kotlin/kinetickk/app/shared/MainActivity.kt"
 private const val FOUNDATION_COMPLETION_DEQUE_PATH =
     "foundation/common/src/commonMain/kotlin/kinetickk/foundation/dispatch/BoundedCompletionDeque.kt"
 private const val CONTENT_CATALOG_PATH =
@@ -354,6 +356,7 @@ private const val ARCHITECTURE_VERIFIER_TEST_PATH =
     "build-logic/src/test/kotlin/kinetickk/gradle/pokeball/PokeballArchitectureVerifierTest.kt"
 
 internal val expectedLeafProjects = sortedSetOf(
+    ":app:android",
     ":app:desktop",
     ":app:shared",
     ":app:web",
@@ -3691,7 +3694,7 @@ internal val mechanicallyDerivedBounds = listOf(
 }
 
 internal val authorityModules = uniqueLinkedMap("authorityModules", listOf(
-    "AppAssembly" to listOf(":app:shared", ":app:desktop", ":app:web"),
+    "AppAssembly" to listOf(":app:android", ":app:desktop", ":app:shared", ":app:web"),
     "AppSession" to listOf(
         ":flow:session:api",
         ":flow:session:nucleus",
@@ -3759,6 +3762,12 @@ internal val allowedForeignInternalProjectEdges = setOf(
     ProjectEdge(":flow:session:interaction", "commonMainApi", ":ball:profile:interaction"),
     ProjectEdge(":ball:gameplay:nucleus", "commonTestImplementation", ":ball:content:impl"),
 )
+
+internal val expectedAndroidHostProductionEdges = setOf(
+    ProjectEdge(":app:android", "implementation", ":app:shared"),
+)
+
+internal val expectedAndroidHostProductionSources = setOf(ANDROID_HOST_ACTIVITY_PATH)
 
 internal fun authorityFor(projectPath: String): String = when {
     projectPath.startsWith(":app:") -> "AppAssembly"

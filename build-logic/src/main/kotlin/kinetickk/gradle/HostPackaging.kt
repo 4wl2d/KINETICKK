@@ -22,9 +22,10 @@ private val legalDocumentPaths = listOf(
 )
 
 internal fun Project.packageLegalDocuments() {
+    val repositoryRoot = rootDir
     tasks.withType(Copy::class.java).configureEach {
         if (name.endsWith("processResources", ignoreCase = true)) {
-            from(rootProject.projectDir) {
+            from(repositoryRoot) {
                 include(legalDocumentPaths)
                 into("META-INF")
             }

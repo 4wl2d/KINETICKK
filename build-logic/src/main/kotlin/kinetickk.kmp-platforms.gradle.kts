@@ -4,6 +4,7 @@
 import org.gradle.api.tasks.compile.JavaCompile
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import kinetickk.gradle.isolatedProjectsProfileEnabled
 
 plugins {
     id("kinetickk.base")
@@ -22,9 +23,11 @@ kotlin {
         }
     }
 
-    @OptIn(ExperimentalWasmDsl::class)
-    wasmJs {
-        browser()
+    if (!isolatedProjectsProfileEnabled()) {
+        @OptIn(ExperimentalWasmDsl::class)
+        wasmJs {
+            browser()
+        }
     }
 
     sourceSets {

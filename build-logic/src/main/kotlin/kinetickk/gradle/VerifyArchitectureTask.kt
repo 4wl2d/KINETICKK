@@ -17,8 +17,9 @@ abstract class VerifyArchitectureTask : DefaultTask() {
     @get:Input
     abstract val leafProjectPaths: SetProperty<String>
 
-    @get:Input
-    abstract val declaredProjectDependencies: SetProperty<String>
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val architectureEdgeReportFiles: ConfigurableFileCollection
 
     @get:InputFiles
     @get:PathSensitive(PathSensitivity.RELATIVE)
@@ -26,13 +27,15 @@ abstract class VerifyArchitectureTask : DefaultTask() {
 
     init {
         leafProjectPaths.convention(emptySet())
-        declaredProjectDependencies.convention(emptySet())
     }
 
     @TaskAction
     fun verify() {
         val actualLeafProjects = leafProjectPaths.get()
-        val dependencies = declaredProjectDependencies.get()
+        val dependencies = loadArchitectureEdges(
+            reportFiles = architectureEdgeReportFiles.files,
+            expectedSourceProjectPaths = actualLeafProjects,
+        )
             .map(DeclaredProjectDependency::decode)
             .sortedWith(compareBy(DeclaredProjectDependency::source, DeclaredProjectDependency::configuration))
         val violations = buildList {
@@ -132,7 +135,7 @@ private fun MutableList<String>.addDependencyViolations(dependencies: List<Decla
         }
 
         if (dependency.source !in EXPECTED_LEAF_PROJECTS || dependency.target !in EXPECTED_LEAF_PROJECTS) {
-            add("Dependency endpoint is outside the declared 22-module graph: ${dependency.displayName}")
+            add("Dependency endpoint is outside the declared 23-module graph: ${dependency.displayName}")
         }
     }
 }
@@ -146,11 +149,13 @@ private const val EDGE_SEPARATOR = '\t'
 private const val APP_SHARED_PROJECT = ":app:shared"
 
 private val HOST_PROJECTS = setOf(
+    ":app:android",
     ":app:desktop",
     ":app:web",
 )
 
 private val EXPECTED_LEAF_PROJECTS = setOf(
+    ":app:android",
     ":app:desktop",
     ":app:shared",
     ":app:web",

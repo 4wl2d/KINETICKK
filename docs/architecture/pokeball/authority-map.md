@@ -41,9 +41,11 @@ fact or writing authority.
 | tone validation and bounded playback request selection | Audio Resource | receives only typed `ToneRequest` and a narrow playback capability; no provider acquisition |
 | platform storage/audio provider acquisition and mechanical execution | instance-owned platform capability brokers / Execution-Gate mechanics bound by AppAssembly | Profile/Audio retain Resource operation semantics; Assembly selects and binds only, gains no effect/policy authority, and broad provider types never enter a Resource constructor |
 
-The closed platform bindings are actuals inside the existing `app:shared` leaf:
+The closed platform bindings are actuals inside the `app:shared` KMP leaf:
 `androidMain` binds Android SharedPreferences/AudioTrack, `desktopMain` binds JVM providers, and
-`wasmJsMain` binds browser providers. Android adds no authority or graph leaf.
+`wasmJsMain` binds browser providers. The separate `app:android` leaf is a pure
+application/packaging host with exactly one production project edge to
+`app:shared`; it adds no authority, business fact, writer, or semantic route.
 
 Home and Codex may combine independent Profile and Gameplay reads only in
 Session Interaction and must label the result non-atomic. Assembly never joins
@@ -59,7 +61,7 @@ those reads into a fabricated business snapshot.
 | Profile | `ball:profile:api`, `ball:profile:nucleus`, `ball:profile:resource`, `ball:profile:interaction`, `ball:profile:impl` |
 | GameplayRun | `ball:gameplay:api`, `ball:gameplay:nucleus`, `ball:gameplay:interaction`, `ball:gameplay:impl` |
 | AppSession Flow | `flow:session:api`, `flow:session:nucleus`, `flow:session:interaction`, `flow:session:impl` |
-| construction hosts | `app:shared` (shared Compose plus Android application host), `app:desktop`, `app:web` |
+| construction and packaging hosts | `app:shared` (shared KMP Compose Assembly and platform bindings), `app:android` (pure Android host; only production project edge is `implementation -> :app:shared`), `app:desktop`, `app:web` |
 
 Nucleus modules depend on neither Compose, platform APIs, nor Resource
 implementations. Assembly constructs components and binds declared routes; it

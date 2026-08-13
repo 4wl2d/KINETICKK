@@ -30,9 +30,9 @@ Build the non-debuggable, shell-profileable benchmark APK, attach and unlock all
 four devices, then run:
 
 ```bash
-./gradlew :app:shared:assembleBenchmark
+./gradlew :app:android:assembleBenchmark
 python3 tools/performance/android_device_benchmark.py \
-  --apk app/shared/build/outputs/apk/benchmark/app-shared-benchmark.apk \
+  --apk app/android/build/outputs/apk/benchmark/app-android-benchmark.apk \
   --output build/performance/android-device/current \
   --label feature/pokeball-full-refactor \
   --forks 3
@@ -64,7 +64,7 @@ telemetry-on diagnostic as a separate artifact:
 
 ```bash
 python3 tools/performance/android_device_benchmark.py \
-  --apk app/shared/build/outputs/apk/benchmark/app-shared-benchmark.apk \
+  --apk app/android/build/outputs/apk/benchmark/app-android-benchmark.apk \
   --flow tools/performance/android_gameplay_telemetry_flow.json \
   --output build/performance/android-device/telemetry-current \
   --label feature/pokeball-full-refactor-telemetry \

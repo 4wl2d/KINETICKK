@@ -12,8 +12,8 @@
 </p>
 
 <p align="center">
-  <img alt="Kotlin 2.3.20" src="https://img.shields.io/badge/Kotlin-2.3.20-7F52FF?logo=kotlin&logoColor=white">
-  <img alt="Compose Multiplatform 1.11.0" src="https://img.shields.io/badge/Compose_Multiplatform-1.11.0-4285F4?logo=jetpackcompose&logoColor=white">
+  <img alt="Kotlin 2.4.20 RC" src="https://img.shields.io/badge/Kotlin-2.4.20--RC-7F52FF?logo=kotlin&logoColor=white">
+  <img alt="Compose Multiplatform 1.12.0 RC1" src="https://img.shields.io/badge/Compose_Multiplatform-1.12.0--rc01-4285F4?logo=jetpackcompose&logoColor=white">
   <img alt="Desktop and WebAssembly" src="https://img.shields.io/badge/targets-Desktop_%2B_WebAssembly-42F5E9">
   <a href="LICENSE"><img alt="GNU GPL version 3 or later" src="https://img.shields.io/badge/license-GPLv3%2B-FF426D"></a>
 </p>
@@ -52,7 +52,7 @@ whole game locally, experiment with it, and contribute changes under the GPL.
 
 | 400 items | 12 weapons | 40 Relics | 9 enemy archetypes | 7 application routes |
 |:---:|:---:|:---:|:---:|:---:|
-| Deterministic catalog | Movement-reactive | Six aspects | Architect included | 22 leaf modules |
+| Deterministic catalog | Movement-reactive | Six aspects | Architect included | 23 leaf modules |
 
 ## How to play
 
@@ -104,13 +104,14 @@ The optimized bundle is written to `app/web/build/dist/wasmJs/productionExecutab
 Build the Android app and its Compose instrumentation tests with:
 
 ```bash
-./gradlew :app:shared:assembleDebug :app:shared:assembleDebugAndroidTest
+./gradlew :app:android:assembleDebug :app:android:assembleDebugAndroidTest \
+  :app:shared:assembleAndroidDeviceTest
 ```
 
 The debug package is `com.vladislavtomilov.kinetickk.debug`, isolated from the
 stable benchmark/release package so device tests cannot remove or overwrite
 gameplay data. The APK is written to
-`app/shared/build/outputs/apk/debug/app-shared-debug.apk`.
+`app/android/build/outputs/apk/debug/app-android-debug.apk`.
 
 ### Verification and packaging
 
@@ -123,13 +124,34 @@ Pokeball architecture verification requires an immutable checkout of
 | Goal | Command |
 |---|---|
 | Run desktop tests | `./gradlew desktopTest` |
-| Compile the Android app and Compose device tests | `./gradlew :app:shared:assembleDebug :app:shared:assembleBenchmark :app:shared:assembleDebugAndroidTest` |
+| Compile the Android app and both device-test APKs | `./gradlew :app:android:assembleDebug :app:android:assembleBenchmark :app:android:assembleDebugAndroidTest :app:shared:assembleAndroidDeviceTest` |
 | Verify the module graph and Pokeball architecture/claim prerequisites | `./gradlew verifyArchitecture verifyPokeballArchitecture verifyPokeballConformance` |
 | Compile and run isolated Wasm browser tests | `CHROME_BIN=/path/to/chrome ./gradlew compileTestKotlinWasmJs wasmJsBrowserTest` |
 | Build the production web bundle | `./gradlew wasmJsBrowserDistribution` |
 | Run reproducible performance comparisons | See [`tools/performance`](tools/performance/README.md) |
-| Run the complete local gate | `./gradlew verifyArchitecture verifyPokeballArchitecture verifyPokeballConformance desktopTest compileTestKotlinWasmJs wasmJsBrowserTest wasmJsBrowserDistribution` |
+| Run the complete local gate | Run both commands below: the strict Android/Desktop/architecture graph, then the normal Web graph |
 | List every available task | `./gradlew tasks` |
+
+Gradle 9.7 Isolated Projects is enabled for the Android, Desktop, and architecture CI graphs:
+
+```bash
+./gradlew \
+  verifyArchitecture verifyPokeballArchitecture verifyPokeballConformance desktopTest \
+  :app:android:assembleDebug :app:android:assembleBenchmark \
+  :app:android:assembleDebugAndroidTest :app:shared:assembleAndroidDeviceTest \
+  -Pkinetickk.gradle.isolatedProfile=true \
+  --isolated-projects \
+  --configuration-cache-problems=fail
+
+CHROME_BIN=/path/to/chrome ./gradlew \
+  compileTestKotlinWasmJs wasmJsBrowserTest wasmJsBrowserDistribution \
+  --configuration-cache-problems=fail
+```
+
+The strict profile omits Kotlin/Wasm targets because Kotlin's JS/Wasm Gradle plugins still access
+the root task graph under Isolated Projects
+([KT-80311](https://youtrack.jetbrains.com/issue/KT-80311)). Wasm tests and distributions use the
+normal profile without `--isolated-projects`; no Gradle problem is ignored or suppressed.
 
 ## Systems
 
@@ -144,7 +166,8 @@ Pokeball architecture verification requires an immutable checkout of
 
 | Path | Responsibility |
 |---|---|
-| `app/shared` | Thin Application Assembly and Android host: constructs fixed bindings and exact platform storage/audio brokers, transports Profile results by source identity, owns provider lifecycle, and delegates the shell to AppSession |
+| `app/android` | Thin Android application host: manifest, activity, resources, build types, R8, and UI device tests; depends only on `app/shared` |
+| `app/shared` | Multiplatform Application Assembly and platform brokers; constructs fixed bindings, owns provider lifecycle, and delegates the shell to AppSession |
 | `app/desktop` | Thin JVM/desktop host and native packaging; depends only on `app/shared` |
 | `app/web` | Thin Wasm browser host and production web bundle; depends only on `app/shared` |
 | `foundation/common`, `foundation/design` | Shared mechanical collections, random utilities, Canvas tokens, text, geometry, and UI primitives |
@@ -155,9 +178,9 @@ Pokeball architecture verification requires an immutable checkout of
 | `flow/session/api`, `flow/session/nucleus`, `flow/session/interaction`, `flow/session/impl` | Session protocols, navigation/workflow decisions, Home/Codex interaction, and orchestration role |
 | `build-logic` | Gradle conventions plus deterministic module, ownership, route, bound, snapshot, manifest-drift, and conformance verification |
 
-The graph has exactly 22 leaf modules. Ball APIs and Nuclei are separate from
+The graph has exactly 23 leaf modules. Ball APIs and Nuclei are separate from
 Compose Interaction and provider-facing Resource roles; the Android host lives
-in `app/shared`, while Desktop and Web depend only on it. AppSession owns navigation and cross-authority workflow;
+in `app/android`, while Android, Desktop, and Web depend only on `app/shared`. AppSession owns navigation and cross-authority workflow;
 `app/shared` is static construction and transport only. The build rejects
 legacy `core:*` and `feature:*` modules and dependencies, invalid role imports,
 unexpected graph endpoints, manifest drift, and any mismatch in the pinned

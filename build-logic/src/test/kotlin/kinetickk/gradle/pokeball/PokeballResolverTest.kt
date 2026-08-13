@@ -11,6 +11,67 @@ import kotlin.test.assertTrue
 
 class PokeballResolverTest {
     @Test
+    fun androidApplicationHostIsOneStrictMechanicalEdgeInTheTwentyThreeLeafGraph() {
+        val expectedEdge = ProjectEdge(":app:android", "implementation", ":app:shared")
+        val activity = SourceDocument(
+            ANDROID_HOST_ACTIVITY_PATH,
+            "class MainActivity : ComponentActivity() { fun render() = KinetickkApp() }",
+        )
+
+        assertEquals(23, expectedLeafProjects.size)
+        assertEquals(
+            listOf(":app:android", ":app:desktop", ":app:shared", ":app:web"),
+            authorityModules.getValue("AppAssembly"),
+        )
+        assertEquals(setOf(expectedEdge), expectedAndroidHostProductionEdges)
+        assertEquals(setOf(ANDROID_HOST_ACTIVITY_PATH), expectedAndroidHostProductionSources)
+        assertTrue(androidApplicationHostBoundaryViolations(setOf(expectedEdge)).isEmpty())
+        assertTrue(androidApplicationHostSourceViolations(listOf(activity)).isEmpty())
+
+        val missing = androidApplicationHostBoundaryViolations(emptySet())
+        assertTrue(missing.any { "missing its exact production edge" in it })
+
+        val wrongConfiguration = expectedEdge.copy(configuration = "api")
+        val wrong = androidApplicationHostBoundaryViolations(setOf(wrongConfiguration))
+        assertTrue(wrong.any { "missing its exact production edge" in it })
+        assertTrue(wrong.any { "unexpected production edge" in it })
+
+        val extra = expectedEdge.copy(target = ":flow:session:impl")
+        assertTrue(
+            androidApplicationHostBoundaryViolations(setOf(expectedEdge, extra)).any {
+                "unexpected production edge" in it
+            },
+        )
+        assertTrue(
+            androidApplicationHostBoundaryViolations(
+                setOf(expectedEdge, expectedEdge.copy(configuration = "androidTestImplementation")),
+            ).isEmpty(),
+        )
+        assertEquals(
+            ":app:android",
+            projectPathForSource(ANDROID_HOST_ACTIVITY_PATH),
+        )
+
+        val unexpectedSource = SourceDocument(
+            "app/android/src/main/kotlin/kinetickk/app/shared/BusinessLogic.kt",
+            "class BusinessLogic",
+        )
+        assertTrue(
+            androidApplicationHostSourceViolations(listOf(activity, unexpectedSource)).any {
+                "unexpected production source" in it
+            },
+        )
+        val forbiddenImport = activity.copy(
+            text = activity.text + "\nimport kinetickk.ball.profile.impl.DefaultProfileComponent",
+        )
+        assertTrue(
+            androidApplicationHostSourceViolations(listOf(forbiddenImport)).any {
+                "references forbidden authority detail" in it
+            },
+        )
+    }
+
+    @Test
     fun repositoryOriginsNormalizeAcrossSshAndHttps() {
         assertEquals(
             "github.com/4wl2d/pokeball",

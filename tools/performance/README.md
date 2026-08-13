@@ -204,9 +204,9 @@ Build the non-debuggable, shell-profileable benchmark variant and run the
 selector-first process-cold protocol on attached devices:
 
 ```bash
-./gradlew :app:shared:assembleBenchmark
+./gradlew :app:android:assembleBenchmark
 python3 tools/performance/android_device_benchmark.py \
-  --apk app/shared/build/outputs/apk/benchmark/app-shared-benchmark.apk \
+  --apk app/android/build/outputs/apk/benchmark/app-android-benchmark.apk \
   --output build/performance/android-device/current \
   --label current \
   --forks 3
@@ -283,7 +283,7 @@ not replace deterministic JVM comparisons or browser traces.
 
 - Put deterministic mechanical work in an existing module's `desktopTest`
   compilation. Do not add a benchmark leaf module: the architecture verifier
-  intentionally fixes the 22-module graph.
+  intentionally fixes the 23-module graph.
 - Make setup happen outside the measured operation, consume an observable result,
   and include cardinalities plus a deterministic semantic fingerprint.
 - Use branch-specific thin adapters when types changed. Keep the shared scenario

@@ -817,7 +817,7 @@ private val audioRuntimeFaultEvidenceAnchors = listOf(
         ),
     ),
     BoundAnchor(
-        path = "app/shared/src/androidInstrumentedTest/kotlin/kinetickk/app/shared/PlatformCapabilitiesAndroidTest.kt",
+        path = "app/shared/src/androidDeviceTest/kotlin/kinetickk/app/shared/PlatformCapabilitiesAndroidTest.kt",
         tokens = listOf(
             "androidAudioBrokerIsInstanceOwnedAndCloseIsIdempotent",
             "androidWorkerAndDiscardOldestQueueEnforceOneAndTwentyFour",

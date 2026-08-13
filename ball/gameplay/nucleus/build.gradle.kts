@@ -19,7 +19,7 @@ kotlin {
             implementation(projects.ball.content.impl)
         }
         desktopTest {
-            kotlin.srcDir(rootProject.file("tools/performance/harness/src/main/kotlin"))
+            kotlin.srcDir(rootDir.resolve("tools/performance/harness/src/main/kotlin"))
         }
     }
 }
@@ -39,7 +39,7 @@ tasks.register<JavaExec>("performanceBenchmark") {
         desktopBenchmarkCompilation.runtimeDependencyFiles,
     )
     benchmarkSourceContract(
-        rootProject.layout.projectDirectory.asFile,
+        rootDir,
         "ball/gameplay/nucleus/src/desktopTest/kotlin/kinetickk/ball/gameplay/nucleus/performance/GameplayPerformanceBenchmark.kt",
         "ball/gameplay/nucleus/build.gradle.kts",
     )
@@ -53,9 +53,7 @@ tasks.register<JavaExec>("performanceBenchmark") {
 
     val defaults = mapOf(
         "benchmarkProfile" to "standard",
-        "benchmarkOutput" to rootProject.layout.buildDirectory
-            .file("performance/gameplay-result.json")
-            .get().asFile.absolutePath,
+        "benchmarkOutput" to rootDir.resolve("build/performance/gameplay-result.json").absolutePath,
         "benchmarkLabel" to project.name,
         "benchmarkRevision" to "unknown",
         "benchmarkDirty" to "false",

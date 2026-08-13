@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import kinetickk.gradle.benchmarkSourceContract
+import kinetickk.gradle.isolatedProjectsProfileEnabled
 
 plugins {
     id("kinetickk.kmp-shared")
@@ -15,11 +16,13 @@ kotlin {
             api(projects.ball.content.api)
             implementation(libs.kotlinx.serialization.json)
         }
-        wasmJsTest.dependencies {
-            implementation(libs.kotlinx.browser)
+        if (!isolatedProjectsProfileEnabled()) {
+            wasmJsTest.dependencies {
+                implementation(libs.kotlinx.browser)
+            }
         }
         desktopTest {
-            kotlin.srcDir(rootProject.file("tools/performance/harness/src/main/kotlin"))
+            kotlin.srcDir(rootDir.resolve("tools/performance/harness/src/main/kotlin"))
         }
     }
 }
@@ -39,7 +42,7 @@ tasks.register<JavaExec>("profilePerformanceBenchmark") {
         profileDesktopBenchmarkCompilation.runtimeDependencyFiles,
     )
     benchmarkSourceContract(
-        rootProject.layout.projectDirectory.asFile,
+        rootDir,
         "ball/profile/resource/src/desktopTest/kotlin/kinetickk/ball/profile/resource/performance/ProfilePerformanceBenchmark.kt",
         "ball/profile/resource/build.gradle.kts",
     )
@@ -53,9 +56,7 @@ tasks.register<JavaExec>("profilePerformanceBenchmark") {
 
     val defaults = mapOf(
         "benchmarkProfile" to "standard",
-        "benchmarkOutput" to rootProject.layout.buildDirectory
-            .file("performance/profile-result.json")
-            .get().asFile.absolutePath,
+        "benchmarkOutput" to rootDir.resolve("build/performance/profile-result.json").absolutePath,
         "benchmarkLabel" to project.name,
         "benchmarkRevision" to "unknown",
         "benchmarkDirty" to "false",

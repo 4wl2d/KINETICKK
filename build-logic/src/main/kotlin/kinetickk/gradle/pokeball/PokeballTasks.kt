@@ -3,6 +3,7 @@
 
 package kinetickk.gradle.pokeball
 
+import kinetickk.gradle.loadArchitectureEdges
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.file.ConfigurableFileCollection
@@ -31,8 +32,9 @@ abstract class GeneratePokeballResolvedManifestTask : DefaultTask() {
     @get:Input
     abstract val leafProjectPaths: SetProperty<String>
 
-    @get:Input
-    abstract val declaredProjectDependencies: SetProperty<String>
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val architectureEdgeReportFiles: ConfigurableFileCollection
 
     @get:InputFile
     @get:PathSensitive(PathSensitivity.RELATIVE)
@@ -46,9 +48,13 @@ abstract class GeneratePokeballResolvedManifestTask : DefaultTask() {
         val assembly = assemblyRecord.get().asFile.readText(StandardCharsets.UTF_8)
         val reads = parseTableIds(assembly, "## Read dependencies")
         val commands = parseTableIds(assembly, "## Command/result routes")
+        val edges = loadArchitectureEdges(
+            reportFiles = architectureEdgeReportFiles.files,
+            expectedSourceProjectPaths = leafProjectPaths.get(),
+        )
         val json = resolvedManifestJson(
             leafProjects = leafProjectPaths.get(),
-            edges = declaredProjectDependencies.get().map(ProjectEdge::decode),
+            edges = edges.map(ProjectEdge::decode),
             readRoutes = reads,
             commandRoutes = commands,
         )
@@ -150,8 +156,9 @@ abstract class VerifyPokeballArchitectureTask : DefaultTask() {
     @get:Input
     abstract val leafProjectPaths: SetProperty<String>
 
-    @get:Input
-    abstract val declaredProjectDependencies: SetProperty<String>
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val architectureEdgeReportFiles: ConfigurableFileCollection
 
     @get:InputFiles
     @get:PathSensitive(PathSensitivity.RELATIVE)
@@ -184,9 +191,13 @@ abstract class VerifyPokeballArchitectureTask : DefaultTask() {
         val records = architectureRecordFiles.files
             .filter { it.isFile }
             .associate { it.name to it.readText(StandardCharsets.UTF_8) }
+        val declaredProjectDependencies = loadArchitectureEdges(
+            reportFiles = architectureEdgeReportFiles.files,
+            expectedSourceProjectPaths = leafProjectPaths.get(),
+        )
         val violations = resolveArchitectureViolations(
             leafProjects = leafProjectPaths.get(),
-            edges = declaredProjectDependencies.get().map(ProjectEdge::decode).toSet(),
+            edges = declaredProjectDependencies.map(ProjectEdge::decode).toSet(),
             sources = sources,
             architectureRecords = records,
         )
@@ -196,7 +207,7 @@ abstract class VerifyPokeballArchitectureTask : DefaultTask() {
             appendLine("  \"schema\": \"kinetickk-pokeball-architecture-report/v1\",")
             appendLine("  \"status\": \"${if (violations.isEmpty()) "PASS" else "FAIL"}\",")
             appendLine("  \"leafModules\": ${leafProjectPaths.get().size},")
-            appendLine("  \"declaredProjectEdges\": ${declaredProjectDependencies.get().size},")
+            appendLine("  \"declaredProjectEdges\": ${declaredProjectDependencies.size},")
             appendLine("  \"violations\": [")
             violations.forEachIndexed { index, violation ->
                 append("    \"${jsonEscape(violation)}\"")
@@ -220,7 +231,7 @@ abstract class VerifyPokeballArchitectureTask : DefaultTask() {
         }
         logger.lifecycle(
             "Pokeball architecture verified: ${leafProjectPaths.get().size} modules, " +
-                "${declaredProjectDependencies.get().size} declared edges, " +
+                "${declaredProjectDependencies.size} declared edges, " +
                 "${expectedReadRoutes.size} read routes, ${expectedCommandRoutes.size} command mappings.",
         )
     }
@@ -608,7 +619,8 @@ private const val CONFORMANCE_METADATA_MARKER = "<!-- pokeball-conformance"
 private const val TRIGGER_ABSENCE_PROOF_MARKER = "<!-- pokeball-trigger-absence-proof"
 private const val EFFECTIVE_PROFILE = "Inline+Transient+InProcess+Standard+Static"
 private const val PROOF_SCOPE =
-    "KINETICKK four-authority Desktop/Web application | Inline+Transient+InProcess+Standard+Static"
+    "KINETICKK four-authority Android/Desktop/Web application | " +
+        "Inline+Transient+InProcess+Standard+Static"
 private const val PROOF_OWNER = "KINETICKK project"
 private const val PROOF_INVALIDATION_CONDITIONS =
     "scope-change|profile-change|version-change|inventory-change|digest-change|" +
@@ -962,7 +974,7 @@ private fun validateConformanceMetadata(
         add("claimBoundary must bind the full implementation-freeze and Core commits")
     }
     validateSubstantiveField(metadata, "claimScope")?.let(::add)
-    listOf("Profile", "GameplayRun", "AppSession", "ContentCatalog", "Desktop", "Web")
+    listOf("Profile", "GameplayRun", "AppSession", "ContentCatalog", "Android", "Desktop", "Web")
         .filterNot(metadata.getValue("claimScope")::contains)
         .forEach { add("claimScope is missing $it") }
     listOf("claimMechanism", "claimAssumptions", "claimRetention").forEach { key ->

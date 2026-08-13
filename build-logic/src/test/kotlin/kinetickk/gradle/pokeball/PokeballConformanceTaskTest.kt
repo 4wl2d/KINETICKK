@@ -355,7 +355,7 @@ class PokeballConformanceTaskTest {
                 "Pokeball Core 1.4.0-draft at ${PokeballBaseline.CORE_COMMIT}",
         )
         put("claimBoundary", "Implementation $freeze bound to Pokeball Core ${PokeballBaseline.CORE_COMMIT}")
-        put("claimScope", "Profile GameplayRun AppSession ContentCatalog across Desktop and Web")
+        put("claimScope", "Profile GameplayRun AppSession ContentCatalog across Android, Desktop, and Web")
         put("claimBinding", "Inline+Transient+InProcess+Standard+Static")
         put("claimMechanism", "Pure Nucleus decisions, bounded acceptors, same-stack results, commit-before-dispatch")
         put("claimAssumptions", "Pinned same-build single-process source, policy, inventory, and browser environment")
@@ -416,7 +416,7 @@ class PokeballConformanceTaskTest {
         triggerClass=${required.triggerClass}
         triggerAnchor=${required.triggerAnchor}
         exactScopeAndEffectiveProfile=${
-            "KINETICKK four-authority Desktop/Web application | " +
+            "KINETICKK four-authority Android/Desktop/Web application | " +
                 "Inline+Transient+InProcess+Standard+Static"
         }
         inventoryEvidence=${required.inventoryEvidence}

@@ -24,6 +24,12 @@ trigger.
 | shared Foundation | two or more Balls share immutable collections, PRNG, dispatch guard, or completion deque | project scan proving mechanical-only exports and no mutable business meaning/communication |
 | explicit conformance claim | the final docs-only commit self-attests one implementation freeze | frozen Core/pack/source/environment/policy/Assembly, RG-01..RG-10 evidence, exact non-guarantees |
 
+The finite physical graph has exactly 23 leaf modules. The separate
+`app:android` packaging host is mechanical AppAssembly infrastructure: its
+complete production project-dependency set is the single edge
+`implementation -> :app:shared`. That intra-AppAssembly packaging edge is not a
+business command, read route, output route, or additional authority.
+
 For that Audio row, synchronous Resource/platform calls propagate.
 Synchronous JavaScript invocation/graph faults propagate.
 Android and Desktop worker faults escape the detached `Runnable` to runtime; this is not caller propagation.

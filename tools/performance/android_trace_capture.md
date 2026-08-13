@@ -18,10 +18,10 @@ Build the non-debuggable, shell-profileable APK first. The exact APK must alread
 be installed on the selected unlocked device; this tool never installs it.
 
 ```bash
-./gradlew :app:shared:assembleBenchmark
+./gradlew :app:android:assembleBenchmark
 
 python3 tools/performance/android_trace_capture.py \
-  --apk app/shared/build/outputs/apk/benchmark/app-shared-benchmark.apk \
+  --apk app/android/build/outputs/apk/benchmark/app-android-benchmark.apk \
   --serial NVYXIJQGTOMVNZZH \
   --output build/performance/android-trace/realme-diagnostic \
   --label feature/pokeball-full-refactor

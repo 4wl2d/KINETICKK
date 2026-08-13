@@ -214,14 +214,29 @@ if [[ -n "$(git -C "$repository_root" status --porcelain=v1 --untracked-files=al
     feature_dirty="true"
 fi
 
-printf 'Preparing feature profile benchmark compilation...\n'
+runtime_prime_directory="$(mktemp -d "${TMPDIR:-/tmp}/kinetickk-profile-runtime.XXXXXX")"
+printf 'Priming the complete feature profile benchmark runtime classpath online...\n'
 (cd "$repository_root" && ./gradlew \
-    --no-daemon --console=plain \
-    :ball:profile:resource:compileTestKotlinDesktop)
-printf 'Preparing pinned main profile benchmark compilation...\n'
+    --no-daemon --no-parallel --console=plain \
+    :ball:profile:resource:profilePerformanceBenchmark \
+    -PbenchmarkProfile=smoke \
+    -PbenchmarkOutput="$runtime_prime_directory/feature.json" \
+    -PbenchmarkLabel="$feature_branch-runtime-prime" \
+    -PbenchmarkRevision="$feature_revision" \
+    -PbenchmarkDirty="$feature_dirty" \
+    -PbenchmarkFork=1 \
+    -PbenchmarkScenarios=profile_encode_default)
+printf 'Priming the complete pinned main profile benchmark runtime classpath online...\n'
 (cd "$main_worktree" && ./gradlew \
-    --no-daemon --console=plain \
-    compileTestKotlinDesktop)
+    --no-daemon --no-parallel --console=plain \
+    profilePerformanceBenchmark \
+    -PbenchmarkProfile=smoke \
+    -PbenchmarkOutput="$runtime_prime_directory/main.json" \
+    -PbenchmarkLabel=main-runtime-prime \
+    -PbenchmarkRevision="$MAIN_REVISION" \
+    -PbenchmarkDirty=false \
+    -PbenchmarkFork=1 \
+    -PbenchmarkScenarios=profile_encode_default)
 
 sequence=0
 run_feature() {
@@ -235,7 +250,7 @@ run_feature() {
     printf '[%s] A feature profile fork %s -> %s\n' \
         "$sequence_label" "$fork_label" "$result_file"
     (cd "$repository_root" && ./gradlew \
-        --no-daemon --offline --console=plain \
+        --no-daemon --no-parallel --offline --console=plain \
         :ball:profile:resource:profilePerformanceBenchmark \
         -PbenchmarkProfile="$profile" \
         -PbenchmarkOutput="$result_file" \
@@ -257,7 +272,7 @@ run_main() {
     printf '[%s] B main profile fork %s -> %s\n' \
         "$sequence_label" "$fork_label" "$result_file"
     (cd "$main_worktree" && ./gradlew \
-        --no-daemon --offline --console=plain \
+        --no-daemon --no-parallel --offline --console=plain \
         profilePerformanceBenchmark \
         -PbenchmarkProfile="$profile" \
         -PbenchmarkOutput="$result_file" \

@@ -39,6 +39,8 @@ import java.util.zip.ZipFile
  * plugin to resource-free modules. Keep [skikoVersion] aligned with the Compose UI dependency.
  */
 fun Project.configureSkikoWasmRuntime(skikoVersion: String) {
+    if (isolatedProjectsProfileEnabled()) return
+
     val ownerProjectPathValue = path
     val projectConfigurations = configurations
     val runtimeConfiguration = configurations.create("kinetickkSkikoJsWasmRuntime") {

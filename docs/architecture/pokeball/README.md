@@ -23,6 +23,12 @@ The record is split by ownership:
 - `resolved-manifest.json` deterministically projects modules, compile and
   direct-control edges, Application Surfaces, routes, and selected bounds.
 
+The verified physical graph contains exactly 23 leaf modules. `app:android` is
+the mechanical Android application host and has exactly one production project
+edge, `implementation -> :app:shared`. The shared KMP leaf retains Compose
+Assembly and Android/Desktop/Web capability bindings, so the host split adds no
+business authority or semantic direct-control edge.
+
 The Pokeball Core and Agent Pack are deliberately not copied into this
 repository. Verification consumes the exact external immutable snapshot named
 in `baseline.md` and fails closed if its commit or digests differ. Supply that

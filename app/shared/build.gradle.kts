@@ -1,11 +1,24 @@
 // SPDX-FileCopyrightText: 2026 Vladislav Tomilov
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import kinetickk.gradle.isolatedProjectsProfileEnabled
+
 plugins {
-    id("kinetickk.compose-android-application")
+    id("kinetickk.compose-library")
 }
 
 kotlin {
+    android {
+        // The standalone application keeps the historical `kinetickk.app.shared` namespace.
+        // AGP 9.3 requires every consumed library to use a distinct namespace even when neither
+        // module references an R class, so keep this implementation-only namespace unique.
+        namespace = "kinetickk.app.shared.library"
+
+        withDeviceTest {
+            instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        }
+    }
+
     sourceSets {
         commonMain.dependencies {
             implementation(libs.compose.runtime)
@@ -26,19 +39,16 @@ kotlin {
             implementation(projects.ball.gameplay.interaction)
             implementation(projects.flow.session.api)
         }
-        wasmJsTest.dependencies {
-            implementation(libs.kotlinx.browser)
+        if (!isolatedProjectsProfileEnabled()) {
+            wasmJsTest.dependencies {
+                implementation(libs.kotlinx.browser)
+            }
         }
-        androidMain.dependencies {
-            implementation(libs.androidx.activity.compose)
-            implementation(libs.compose.foundation)
-            implementation(libs.compose.ui)
-        }
-        androidInstrumentedTest.dependencies {
-            implementation(libs.compose.ui.test.junit4)
-            implementation(libs.androidx.test.runner)
-            implementation(libs.androidx.test.rules)
-            implementation(libs.androidx.test.ext.junit)
+        getByName("androidDeviceTest") {
+            dependencies {
+                implementation(libs.androidx.test.runner)
+                implementation(libs.androidx.test.ext.junit)
+            }
         }
     }
 }

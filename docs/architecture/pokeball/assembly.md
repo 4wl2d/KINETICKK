@@ -31,14 +31,25 @@ a reverse direct-control edge. Generated or inline dispatch remains a direct
 edge until the target returns; the bounded completion deque prevents recursive
 source acceptor entry without pretending there is an asynchronous transport.
 
-`app/shared/AppComposition.kt` is the only production holder/importer of the
+`app/shared/src/commonMain/kotlin/kinetickk/app/shared/AppComposition.kt` is the
+only production holder/importer of the
 Impl-owned `ProfileComponent` and `GameplayCompositionComponent` composites.
 It passes only `SessionProfileRoute` plus `GameplaySessionHost` to Session,
 `GameplayProfileRoute` to Gameplay, `GameplayPresentation` to Session
 Interaction, and local/read-only Profile views to their declared Interactions.
 The mechanical Profile result router is
-`app/shared/ProfileModuleResultRouter.kt`; it switches only on the accepted
+`app/shared/src/commonMain/kotlin/kinetickk/app/shared/ProfileModuleResultRouter.kt`;
+it switches only on the accepted
 command-source identity and never inspects or reconstructs the ModuleResult.
+
+The Android application plugin is isolated in the pure `app:android` host.
+That leaf owns Android packaging and its `MainActivity`, has exactly one
+production project dependency (`implementation -> :app:shared`), belongs to
+AppAssembly, and neither introduces a semantic authority nor imports any
+Ball/Flow/Resource implementation directly.
+`app:shared` remains the KMP Compose Assembly and platform-capability leaf. The
+host-to-shared compile edge stays wholly inside AppAssembly and therefore does
+not appear in the semantic direct-control graph above.
 
 ## Read dependencies
 

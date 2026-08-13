@@ -10,7 +10,8 @@ clear copyright record and the option to ship official store builds.
 ## Before opening a pull request
 
 1. Discuss large features in an issue before writing them.
-2. Build the project and run `./gradlew desktopTest`.
+2. Run the cross-target **complete local gate** documented in the
+   [project README](../../README.md#verification-and-packaging).
 3. If the change touches a runtime or build hot path, run the relevant
    [`tools/performance`](../../tools/performance/README.md) comparison and record
    its exact revisions, semantic compatibility, and material tradeoffs.

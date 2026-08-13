@@ -2,14 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import com.android.build.api.dsl.ApplicationExtension
-import kinetickk.gradle.configureSkikoWasmRuntime
-import org.gradle.api.artifacts.VersionCatalogsExtension
-import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSetTree
 
 plugins {
-    id("kinetickk.kmp-platforms")
+    id("kinetickk.base")
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
 }
@@ -19,22 +14,9 @@ composeCompiler {
     includeTraceMarkers.set(false)
 }
 
-val libraries = extensions.getByType<VersionCatalogsExtension>().named("libs")
-configureSkikoWasmRuntime(libraries.findVersion("skiko").get().requiredVersion)
-
-@OptIn(ExperimentalKotlinGradlePluginApi::class)
-kotlin {
-    androidTarget {
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
-        instrumentedTestVariant.sourceSetTree.set(KotlinSourceSetTree.test)
-    }
-}
-
 extensions.configure<ApplicationExtension> {
     namespace = "kinetickk.app.shared"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.vladislavtomilov.kinetickk"
@@ -45,14 +27,27 @@ extensions.configure<ApplicationExtension> {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    buildFeatures {
+        compose = true
+    }
+
     buildTypes {
         getByName("debug") {
             applicationIdSuffix = ".debug"
         }
         getByName("release") {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            optimization {
+                // AGP 9.3's unified switch enables R8 code optimization and optimized resource
+                // shrinking together, with the optimized Android defaults included implicitly.
+                enable = true
+
+                // Compose Runtime's consumer file hard-codes the default GapBuffer choice. The
+                // application owns an equivalent rule set with LinkBuffer selected instead, so
+                // exclude only that artifact's consumer rules to leave R8 one unambiguous value.
+                keepRules {
+                    ignoreFrom("androidx.compose.runtime:runtime-android")
+                }
+            }
         }
         create("benchmark") {
             initWith(getByName("release"))

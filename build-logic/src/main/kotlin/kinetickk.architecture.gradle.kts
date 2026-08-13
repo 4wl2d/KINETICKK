@@ -1,24 +1,43 @@
 // SPDX-FileCopyrightText: 2026 Vladislav Tomilov
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import kinetickk.gradle.ARCHITECTURE_EDGE_ELEMENTS_CONFIGURATION_NAME
+import kinetickk.gradle.ARCHITECTURE_EDGE_REPORTS_CONFIGURATION_NAME
 import kinetickk.gradle.VerifyArchitectureTask
 import kinetickk.gradle.pokeball.GeneratePokeballResolvedManifestTask
 import kinetickk.gradle.pokeball.VerifyPokeballArchitectureTask
 import kinetickk.gradle.pokeball.VerifyPokeballConformanceTask
 import kinetickk.gradle.pokeball.VerifyPokeballManifestDriftTask
 import kinetickk.gradle.pokeball.VerifyPokeballSnapshotTask
-import org.gradle.api.artifacts.ProjectDependency
 import org.gradle.api.tasks.Copy
+
+val leafProjects = rootProject.subprojects.filter { it.childProjects.isEmpty() }
+val leafProjectPathValues = leafProjects.map { it.path }.toSet()
+val architectureEdgeReports = configurations.create(
+    ARCHITECTURE_EDGE_REPORTS_CONFIGURATION_NAME,
+) {
+    description = "Resolved deterministic project-local architecture edge reports."
+    isCanBeConsumed = false
+    isCanBeResolved = true
+    isCanBeDeclared = true
+    isTransitive = false
+}
+dependencies {
+    leafProjectPathValues.sorted().forEach { leafProjectPath ->
+        architectureEdgeReports(
+            project(
+                path = leafProjectPath,
+                configuration = ARCHITECTURE_EDGE_ELEMENTS_CONFIGURATION_NAME,
+            ),
+        )
+    }
+}
 
 val verifyArchitectureTask = tasks.register<VerifyArchitectureTask>("verifyArchitecture") {
     group = "verification"
-    description = "Verifies the declared 22-module Pokeball role graph without resolving dependencies."
-    leafProjectPaths.set(
-        rootProject.subprojects
-            .filter { it.childProjects.isEmpty() }
-            .map { it.path }
-            .toSet(),
-    )
+    description = "Verifies the declared 23-module Pokeball role graph without resolving classpaths."
+    leafProjectPaths.set(leafProjectPathValues)
+    architectureEdgeReportFiles.from(architectureEdgeReports)
     rootSourceFiles.from(rootProject.fileTree("src"))
 }
 
@@ -62,12 +81,8 @@ val generatePokeballManifestTask = tasks.register<GeneratePokeballResolvedManife
 ) {
     group = "verification"
     description = "Generates the non-authoritative Pokeball architecture projection."
-    leafProjectPaths.set(
-        rootProject.subprojects
-            .filter { it.childProjects.isEmpty() }
-            .map { it.path }
-            .toSet(),
-    )
+    leafProjectPaths.set(leafProjectPathValues)
+    architectureEdgeReportFiles.from(architectureEdgeReports)
     assemblyRecord.set(rootProject.layout.projectDirectory.file("docs/architecture/pokeball/assembly.md"))
     outputFile.set(generatedManifestFile)
 }
@@ -119,12 +134,8 @@ val verifyPokeballArchitectureTask = tasks.register<VerifyPokeballArchitectureTa
         verifyPokeballManifestTask,
         gradle.includedBuild("build-logic").task(":test"),
     )
-    leafProjectPaths.set(
-        rootProject.subprojects
-            .filter { it.childProjects.isEmpty() }
-            .map { it.path }
-            .toSet(),
-    )
+    leafProjectPaths.set(leafProjectPathValues)
+    architectureEdgeReportFiles.from(architectureEdgeReports)
     productionSourceFiles.from(architectureSources)
     architectureRecordFiles.from(architectureRecords)
     repositoryRoot.set(rootProject.layout.projectDirectory)
@@ -137,39 +148,4 @@ tasks.register<VerifyPokeballConformanceTask>("verifyPokeballConformance") {
     dependsOn(verifyPokeballArchitectureTask)
     repositoryRoot.set(rootProject.layout.projectDirectory)
     reportFile.set(rootProject.layout.buildDirectory.file("reports/pokeball/conformance.json"))
-}
-
-rootProject.allprojects {
-    val sourceProjectPath = path
-    configurations.configureEach {
-        val declarationConfiguration = this
-        dependencies.withType(ProjectDependency::class.java).configureEach projectDependency@{
-            val targetProjectPath = path
-            // Android/AGP realizes resolvable classpaths by copying declared project
-            // dependencies. Only the declarable source configuration belongs to the
-            // architecture graph; generated classpaths must not make it task-order dependent.
-            if (
-                !declarationConfiguration.isCanBeDeclared ||
-                declarationConfiguration.name.endsWith("CompileClasspath") ||
-                declarationConfiguration.name.endsWith("RuntimeClasspath")
-            ) {
-                return@projectDependency
-            }
-            verifyArchitectureTask.configure {
-                declaredProjectDependencies.add(
-                    "$sourceProjectPath\t${declarationConfiguration.name}\t$targetProjectPath",
-                )
-            }
-            generatePokeballManifestTask.configure {
-                declaredProjectDependencies.add(
-                    "$sourceProjectPath\t${declarationConfiguration.name}\t$targetProjectPath",
-                )
-            }
-            verifyPokeballArchitectureTask.configure {
-                declaredProjectDependencies.add(
-                    "$sourceProjectPath\t${declarationConfiguration.name}\t$targetProjectPath",
-                )
-            }
-        }
-    }
 }

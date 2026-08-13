@@ -3,8 +3,6 @@
 
 package kinetickk.app.shared
 
-import android.app.Application
-import android.content.Context
 import android.graphics.Color as AndroidColor
 import android.os.Bundle
 import android.view.WindowManager
@@ -28,33 +26,6 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.dp
-
-class KinetickkApplication : Application() {
-    override fun onCreate() {
-        super.onCreate()
-        AndroidApplicationContext.install(applicationContext)
-    }
-}
-
-internal object AndroidApplicationContext {
-    @Volatile
-    private var installedContext: Context? = null
-
-    fun install(context: Context) {
-        val applicationContext = context.applicationContext
-        synchronized(this) {
-            val current = installedContext
-            check(current == null || current === applicationContext) {
-                "Android application context may be installed only once per process"
-            }
-            installedContext = applicationContext
-        }
-    }
-
-    fun requireContext(): Context = checkNotNull(installedContext) {
-        "KINETICKK Android application context is not installed"
-    }
-}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

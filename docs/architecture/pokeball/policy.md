@@ -65,6 +65,9 @@ effective-profile resolution.
 The four-authority Inline binding adds no semantic actor, mailbox, worker pool,
 reflection registry, service locator, coroutine queue, transport serialization,
 or thread hop to authority Decision, command, result, output, or Fact delivery.
+The `app:android` application/packaging host contributes exactly one production
+project edge, `implementation -> :app:shared`. Both ends belong to AppAssembly;
+the split adds no authority, semantic route, or delivery hop.
 `InlineDispatchGuard` and a bounded synchronous completion deque are mechanical
 Foundation only. The guard inlines its dispatch block to avoid a hot-path
 function object; its `@PublishedApi internal` reentrancy bit exists solely for

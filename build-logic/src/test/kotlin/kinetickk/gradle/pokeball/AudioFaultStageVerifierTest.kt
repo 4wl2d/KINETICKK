@@ -310,7 +310,7 @@ class AudioFaultStageVerifierTest {
         const val DESKTOP_TEST_PATH =
             "app/shared/src/desktopTest/kotlin/kinetickk/app/shared/PlatformCapabilitiesDesktopTest.kt"
         const val ANDROID_TEST_PATH =
-            "app/shared/src/androidInstrumentedTest/kotlin/kinetickk/app/shared/PlatformCapabilitiesAndroidTest.kt"
+            "app/shared/src/androidDeviceTest/kotlin/kinetickk/app/shared/PlatformCapabilitiesAndroidTest.kt"
         const val WEB_TEST_PATH =
             "app/shared/src/wasmJsTest/kotlin/kinetickk/app/shared/PlatformCapabilitiesWebTest.kt"
         const val RESOURCE_TEST_TOKEN =

@@ -273,14 +273,31 @@ if [[ -n "$(git -C "$repository_root" status --porcelain=v1 --untracked-files=al
     feature_dirty="true"
 fi
 
-printf 'Preparing feature benchmark compilation...\n'
+runtime_prime_directory="$(mktemp -d "${TMPDIR:-/tmp}/kinetickk-gameplay-runtime.XXXXXX")"
+printf 'Priming the complete feature benchmark runtime classpath online...\n'
 (cd "$repository_root" && ./gradlew \
-    --no-daemon --console=plain \
-    :ball:gameplay:nucleus:compileTestKotlinDesktop)
-printf 'Preparing pinned %s benchmark compilation...\n' "$baseline_label"
+    --no-daemon --no-parallel --console=plain \
+    :ball:gameplay:nucleus:performanceBenchmark \
+    -PbenchmarkProfile=smoke \
+    -PbenchmarkOutput="$runtime_prime_directory/feature.json" \
+    -PbenchmarkLabel="$feature_branch-runtime-prime" \
+    -PbenchmarkRevision="$feature_revision" \
+    -PbenchmarkDirty="$feature_dirty" \
+    -PbenchmarkFork=1 \
+    -PbenchmarkSeed="$seed" \
+    -PbenchmarkScenarios=harness_control)
+printf 'Priming the complete pinned %s benchmark runtime classpath online...\n' "$baseline_label"
 (cd "$baseline_worktree" && ./gradlew \
-    --no-daemon --console=plain \
-    "$baseline_compile_task")
+    --no-daemon --no-parallel --console=plain \
+    "$baseline_benchmark_task" \
+    -PbenchmarkProfile=smoke \
+    -PbenchmarkOutput="$runtime_prime_directory/baseline.json" \
+    -PbenchmarkLabel="$baseline_label-runtime-prime" \
+    -PbenchmarkRevision="$baseline_revision" \
+    -PbenchmarkDirty=false \
+    -PbenchmarkFork=1 \
+    -PbenchmarkSeed="$seed" \
+    -PbenchmarkScenarios=harness_control)
 
 sequence=0
 run_feature() {
@@ -293,7 +310,7 @@ run_feature() {
     local result_file="$output_directory/$sequence_label-feature-fork-$fork_label.json"
     printf '[%s] A feature fork %s -> %s\n' "$sequence_label" "$fork_label" "$result_file"
     (cd "$repository_root" && ./gradlew \
-        --no-daemon --offline --console=plain \
+        --no-daemon --no-parallel --offline --console=plain \
         :ball:gameplay:nucleus:performanceBenchmark \
         -PbenchmarkProfile="$profile" \
         -PbenchmarkOutput="$result_file" \
@@ -315,7 +332,7 @@ run_baseline() {
     local result_file="$output_directory/$sequence_label-main-fork-$fork_label.json"
     printf '[%s] B %s fork %s -> %s\n' "$sequence_label" "$baseline_label" "$fork_label" "$result_file"
     (cd "$baseline_worktree" && ./gradlew \
-        --no-daemon --offline --console=plain \
+        --no-daemon --no-parallel --offline --console=plain \
         "$baseline_benchmark_task" \
         -PbenchmarkProfile="$profile" \
         -PbenchmarkOutput="$result_file" \

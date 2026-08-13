@@ -85,6 +85,8 @@ private fun MutableList<String>.addGraphViolations(
     sources: List<SourceDocument>,
 ) {
     addAll(foreignInternalAccessViolations(edges, sources))
+    addAll(androidApplicationHostBoundaryViolations(edges))
+    addAll(androidApplicationHostSourceViolations(sources))
     val productionEdges = edges.filterNot(ProjectEdge::isTest)
     findCycle(productionEdges.map { it.source to it.target })?.let { cycle ->
         add("Compile-time project graph contains a cycle: ${cycle.joinToString(" -> ")}")
@@ -120,6 +122,63 @@ private fun MutableList<String>.addGraphViolations(
         add("Required Application Surface import is missing: $source -> $target")
     }
 }
+
+internal fun androidApplicationHostBoundaryViolations(
+    edges: Set<ProjectEdge>,
+): List<String> = buildList {
+    val actual = edges
+        .filter { edge -> edge.source == ":app:android" && !edge.isTest }
+        .toSet()
+    val missing = expectedAndroidHostProductionEdges - actual
+    val unexpected = actual - expectedAndroidHostProductionEdges
+    if (missing.isNotEmpty()) {
+        add(
+            "Pure Android application host is missing its exact production edge: " +
+                missing.sortedBy(ProjectEdge::encoded).joinToString { edge -> edge.encoded },
+        )
+    }
+    if (unexpected.isNotEmpty()) {
+        add(
+            "Pure Android application host has an unexpected production edge: " +
+                unexpected.sortedBy(ProjectEdge::encoded).joinToString { edge -> edge.encoded },
+        )
+    }
+}.distinct().sorted()
+
+internal fun androidApplicationHostSourceViolations(
+    sources: List<SourceDocument>,
+): List<String> = buildList {
+    val hostSources = sources
+        .filter(SourceDocument::isProductionKotlinSource)
+        .filter { source -> projectPathForSource(source.relativePath) == ":app:android" }
+        .associateBy(SourceDocument::relativePath)
+    val actualPaths = hostSources.keys
+    val missing = expectedAndroidHostProductionSources - actualPaths
+    val unexpected = actualPaths - expectedAndroidHostProductionSources
+    if (missing.isNotEmpty()) {
+        add("Pure Android application host is missing exact source ${missing.sorted().joinToString()}")
+    }
+    if (unexpected.isNotEmpty()) {
+        add("Pure Android application host contains unexpected production source ${unexpected.sorted().joinToString()}")
+    }
+
+    hostSources[ANDROID_HOST_ACTIVITY_PATH]?.let { activity ->
+        listOf(
+            "class MainActivity : ComponentActivity()",
+            "KinetickkApp()",
+        ).filterNot(activity.text::contains).forEach { token ->
+            add("Pure Android application host activity is missing mechanical host token `$token`")
+        }
+        listOf(
+            "kinetickk.ball.",
+            "kinetickk.flow.",
+            "kinetickk.foundation.",
+            "kinetickk.resource.",
+        ).filter(activity.text::contains).forEach { token ->
+            add("Pure Android application host activity references forbidden authority detail `$token`")
+        }
+    }
+}.distinct().sorted()
 
 internal fun foreignInternalAccessViolations(
     edges: Set<ProjectEdge>,

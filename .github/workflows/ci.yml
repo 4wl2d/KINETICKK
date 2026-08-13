@@ -65,6 +65,8 @@ jobs:
           verifyPokeballArchitecture
           verifyPokeballConformance
           desktopTest
+          -Pkinetickk.gradle.isolatedProfile=true
+          --isolated-projects
           --no-daemon
           --stacktrace
 
@@ -94,21 +96,21 @@ jobs:
       - name: Verify JDK
         run: java -version
 
-      - name: Set up Android SDK 36
+      - name: Set up Android SDK 37
         uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
         with:
           cmdline-tools-version: "14742923"
           packages: >-
             platform-tools
-            platforms;android-36
-            build-tools;35.0.0
+            platforms;android-37
+            build-tools;36.0.0
 
       - name: Verify Android SDK
         run: |
-          test -x "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt"
-          test -x "$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner"
-          test -x "$ANDROID_SDK_ROOT/build-tools/35.0.0/zipalign"
-          test -f "$ANDROID_SDK_ROOT/platforms/android-36/android.jar"
+          test -x "$ANDROID_SDK_ROOT/build-tools/36.0.0/aapt"
+          test -x "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner"
+          test -x "$ANDROID_SDK_ROOT/build-tools/36.0.0/zipalign"
+          test -f "$ANDROID_SDK_ROOT/platforms/android-37/android.jar"
           sdkmanager --version
 
       - name: Set up Gradle
@@ -119,10 +121,11 @@ jobs:
           set -o pipefail
           mkdir -p build/ci
           ./gradlew \
-            :app:shared:assembleDebug \
-            :app:shared:assembleBenchmark \
-            :app:shared:assembleDebugAndroidTest \
-            --no-daemon \
+            :app:android:assembleDebug \
+            :app:android:assembleBenchmark \
+            :app:android:assembleDebugAndroidTest \
+            -Pkinetickk.gradle.isolatedProfile=true \
+            --isolated-projects \
             --console=plain \
             --stacktrace |
             tee build/ci/android-build.log
@@ -135,11 +138,10 @@ jobs:
                 sub(/:[^:]+$/, "", module)
                 name = task
                 sub(/^.*:/, "", name)
-                if (
-                  module != ":app:shared" &&
-                  name ~ /^(compile.*LibraryResources|package.*Resources|parse.*LocalResources|generate.*RFile|merge.*Resources)$/
-                ) {
-                  print task
+                if (module != ":app:android") {
+                  if (name ~ /^(compile.*LibraryResources|package.*Resources|parse.*LocalResources|generate.*RFile|merge.*Resources)$/) {
+                    print task
+                  }
                 }
               }
             ' build/ci/android-build.log |
@@ -151,19 +153,27 @@ jobs:
             exit 1
           fi
 
+          ./gradlew \
+            :app:shared:assembleAndroidDeviceTest \
+            -Pkinetickk.gradle.isolatedProfile=true \
+            --isolated-projects \
+            --console=plain \
+            --stacktrace
+
       - name: Verify APK identities and static benchmark viability
         run: |
-          build_tools="$ANDROID_SDK_ROOT/build-tools/35.0.0"
+          build_tools="$ANDROID_SDK_ROOT/build-tools/36.0.0"
           aapt="$build_tools/aapt"
           apksigner="$build_tools/apksigner"
           zipalign="$build_tools/zipalign"
-          debug_apk="app/shared/build/outputs/apk/debug/app-shared-debug.apk"
-          benchmark_apk="app/shared/build/outputs/apk/benchmark/app-shared-benchmark.apk"
-          test_apk="app/shared/build/outputs/apk/androidTest/debug/app-shared-debug-androidTest.apk"
-          mapping="app/shared/build/outputs/mapping/benchmark/mapping.txt"
-          usage="app/shared/build/outputs/mapping/benchmark/usage.txt"
+          debug_apk="app/android/build/outputs/apk/debug/app-android-debug.apk"
+          benchmark_apk="app/android/build/outputs/apk/benchmark/app-android-benchmark.apk"
+          test_apk="app/android/build/outputs/apk/androidTest/debug/app-android-debug-androidTest.apk"
+          shared_test_apk="app/shared/build/outputs/apk/androidTest/app-shared-androidTest.apk"
+          mapping="app/android/build/outputs/mapping/benchmark/mapping.txt"
+          usage="app/android/build/outputs/mapping/benchmark/usage.txt"
 
-          for artifact in "$debug_apk" "$benchmark_apk" "$test_apk"; do
+          for artifact in "$debug_apk" "$benchmark_apk" "$test_apk" "$shared_test_apk"; do
             test -s "$artifact"
           done
 
@@ -191,6 +201,38 @@ jobs:
 
           test -s "$mapping"
           test -s "$usage"
+
+          # The optimized app must contain exactly the selected SlotTable implementation. Keeping
+          # both blocks Compose Runtime devirtualization and defeats the release-only speedup.
+          true_rule_count=$(grep -cF 'isLinkBufferComposerEnabled return true;' \
+            app/android/build/outputs/mapping/benchmark/configuration.txt || true)
+          false_rule_count=$(grep -cF 'isLinkBufferComposerEnabled return false;' \
+            app/android/build/outputs/mapping/benchmark/configuration.txt || true)
+          test "$true_rule_count" -eq 1
+          test "$false_rule_count" -eq 0
+          grep -Eq '^androidx\.compose\.runtime\.LinkComposer( ->|:)' "$mapping"
+          grep -Eq '^androidx\.compose\.runtime\.composer\.linkbuffer\.SlotTable( ->|:)' "$mapping"
+          grep -Eq '^androidx\.compose\.runtime\.GapComposer$' "$usage"
+          grep -Eq '^androidx\.compose\.runtime\.composer\.gapbuffer\.SlotTable$' "$usage"
+          if grep -Eq '^androidx\.compose\.runtime\.GapComposer( ->|:)' "$mapping" ||
+            grep -Eq '^androidx\.compose\.runtime\.composer\.gapbuffer\.(SlotTable|SlotReader|SlotWriter)( ->|:)' "$mapping" ||
+            grep -Eq '^androidx\.compose\.runtime\.composer\.gapbuffer\.changelist\.(ChangeList|ComposerChangeListWriter|Operations)( ->|:)' "$mapping"; then
+            printf 'benchmark APK retained the Compose Runtime GapBuffer implementation\n' >&2
+            exit 1
+          fi
+
+          # LinkBuffer currently reuses these two implementation-neutral helpers from the legacy
+          # package. Fail closed if any other gapbuffer-namespaced class survives this exact RC.
+          gap_helper_classes=$(
+            sed -nE 's/^(androidx\.compose\.runtime\.composer\.gapbuffer\.[^ ]+) ->.*/\1/p' "$mapping"
+          )
+          expected_gap_helpers=$'androidx.compose.runtime.composer.gapbuffer.BitVector\nandroidx.compose.runtime.composer.gapbuffer.changelist.OperationErrorContext'
+          if [[ "$gap_helper_classes" != "$expected_gap_helpers" ]]; then
+            printf 'unexpected residual Compose Runtime gapbuffer classes:\n%s\n' \
+              "$gap_helper_classes" >&2
+            exit 1
+          fi
+
           "$apksigner" verify --verbose "$benchmark_apk"
           "$zipalign" -c -P 16 4 "$benchmark_apk"
 
@@ -198,6 +240,7 @@ jobs:
             printf '### Android artifact verification\n\n'
             printf -- '- Benchmark APK: R8 evidence present, signed, 16 KiB aligned, non-debuggable, and shell-profileable.\n'
             printf -- '- Instrumentation APK: compiled and target manifest verified; this job did not execute device tests.\n'
+            printf -- '- Shared Android-KMP capability-test APK: compiled; this job did not execute device tests.\n'
           } >> "$GITHUB_STEP_SUMMARY"
 
   wasm-and-browser:
@@ -231,7 +274,7 @@ jobs:
         id: chrome
         uses: browser-actions/setup-chrome@086160e580d6e8c142ad5ba29009dcde677c6321 # v2
         with:
-          chrome-version: 150.0.7871.24
+          chrome-version: 152.0.7977.42
 
       - name: Verify Chrome
         env:

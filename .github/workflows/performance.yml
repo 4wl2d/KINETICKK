@@ -8,9 +8,12 @@ on:
     paths:
       - "**/*.kt"
       - "**/*.kts"
+      - "app/android/src/main/**"
+      - "app/web/src/wasmJsMain/resources/**"
       - "gradle/**"
       - "gradle.properties"
       - "tools/performance/**"
+      - ".github/workflows/ci.yml"
       - ".github/workflows/performance.yml"
   workflow_dispatch:
     inputs:
@@ -109,7 +112,7 @@ jobs:
       - name: Validate benchmark tooling
         run: |
           python3 -m pip install --disable-pip-version-check --no-input \
-            jsonschema==4.23.0
+            jsonschema==4.26.0
           scripts=(
             tools/performance/playwright_cli.sh
             tools/performance/scripts/compare-main-refactor.sh
@@ -158,6 +161,7 @@ jobs:
           -PbenchmarkRevision="$REVISION"
           -PbenchmarkDirty=false
           --no-daemon
+          --no-parallel
           --console=plain
 
       - name: Publish JVM performance summary
@@ -238,6 +242,7 @@ jobs:
         run: >-
           ./gradlew
           :app:web:wasmJsBrowserDistribution
+          --no-parallel
           --no-build-cache
           --no-daemon
           --console=plain

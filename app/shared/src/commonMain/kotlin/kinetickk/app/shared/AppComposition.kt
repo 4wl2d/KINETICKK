@@ -37,7 +37,7 @@ import kinetickk.resource.audio.api.AudioService
 import kinetickk.resource.audio.impl.DefaultAudioService
 import kinetickk.resource.audio.impl.TonePlaybackCapability
 
-/** The single UI entry point used by Desktop and Web hosts. */
+/** The single UI entry point used by Android, Desktop, and Web hosts. */
 @Composable
 fun KinetickkApp() {
     val ownerValue = remember { AppCompositionOwner() }

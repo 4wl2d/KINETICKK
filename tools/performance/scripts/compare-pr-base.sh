@@ -211,16 +211,42 @@ if git -C "$base_worktree" symbolic-ref -q HEAD >/dev/null; then
 fi
 require_clean_worktree "$base_worktree" "Base"
 
-printf 'Preparing candidate benchmark compilations...\n'
-(cd "$repository_root" && ./gradlew \
-    --no-daemon --console=plain \
-    :ball:gameplay:nucleus:compileTestKotlinDesktop \
-    :ball:profile:resource:compileTestKotlinDesktop)
-printf 'Preparing exact PR base benchmark compilations...\n'
-(cd "$base_worktree" && ./gradlew \
-    --no-daemon --console=plain \
-    :ball:gameplay:nucleus:compileTestKotlinDesktop \
-    :ball:profile:resource:compileTestKotlinDesktop)
+runtime_prime_directory="$(mktemp -d "${TMPDIR:-/tmp}/kinetickk-pr-runtime.XXXXXX")"
+
+prime_benchmark_runtime() {
+    local worktree="$1"
+    local side="$2"
+    local revision="$3"
+    local suite="$4"
+    local task
+    local scenario
+    local extra_properties=()
+    if [[ "$suite" == "gameplay" ]]; then
+        task=":ball:gameplay:nucleus:performanceBenchmark"
+        scenario="harness_control"
+        extra_properties+=("-PbenchmarkSeed=$seed")
+    else
+        task=":ball:profile:resource:profilePerformanceBenchmark"
+        scenario="profile_encode_default"
+    fi
+    printf 'Priming the complete %s %s runtime classpath online...\n' "$side" "$suite"
+    (cd "$worktree" && ./gradlew \
+        --no-daemon --no-parallel --console=plain \
+        "$task" \
+        -PbenchmarkProfile=smoke \
+        -PbenchmarkOutput="$runtime_prime_directory/$side-$suite.json" \
+        -PbenchmarkLabel="$side-runtime-prime" \
+        -PbenchmarkRevision="$revision" \
+        -PbenchmarkDirty=false \
+        -PbenchmarkFork=1 \
+        -PbenchmarkScenarios="$scenario" \
+        "${extra_properties[@]}")
+}
+
+prime_benchmark_runtime "$repository_root" candidate "$candidate_revision" gameplay
+prime_benchmark_runtime "$repository_root" candidate "$candidate_revision" profile
+prime_benchmark_runtime "$base_worktree" base "$base_revision" gameplay
+prime_benchmark_runtime "$base_worktree" base "$base_revision" profile
 
 gate_status=0
 
@@ -264,7 +290,7 @@ run_benchmark() {
     local result_file="$suite_directory/$sequence_label-$side-fork-$fork_label.json"
     printf '[%s/%s] %s fork %s -> %s\n' "$suite" "$sequence_label" "$side" "$fork_label" "$result_file"
     (cd "$worktree" && ./gradlew \
-        --no-daemon --offline --console=plain \
+        --no-daemon --no-parallel --offline --console=plain \
         "$task" \
         -PbenchmarkProfile="$profile" \
         -PbenchmarkOutput="$result_file" \

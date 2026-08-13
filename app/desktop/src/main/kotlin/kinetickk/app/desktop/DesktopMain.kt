@@ -9,14 +9,18 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowState
 import kinetickk.app.shared.KinetickkApp
+import kinetickk.app.shared.enableKinetickkComposeRuntimeOptimizations
 
-fun main() = application {
-    Window(
-        onCloseRequest = ::exitApplication,
-        title = "KINETICKK",
-        state = WindowState(size = DpSize(1280.dp, 800.dp)),
-    ) {
-        window.minimumSize = java.awt.Dimension(720, 540)
-        KinetickkApp()
+fun main() {
+    enableKinetickkComposeRuntimeOptimizations()
+    application {
+        Window(
+            onCloseRequest = ::exitApplication,
+            title = "KINETICKK",
+            state = WindowState(size = DpSize(1280.dp, 800.dp)),
+        ) {
+            window.minimumSize = java.awt.Dimension(720, 540)
+            KinetickkApp()
+        }
     }
 }
