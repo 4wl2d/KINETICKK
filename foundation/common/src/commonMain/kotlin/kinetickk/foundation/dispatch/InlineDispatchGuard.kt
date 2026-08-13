@@ -5,12 +5,14 @@ package kinetickk.foundation.dispatch
 
 /** Prevents recursive entry while one synchronous semantic dispatch is active. */
 class InlineDispatchGuard {
-    private var dispatching: Boolean = false
+    @PublishedApi
+    internal var dispatching: Boolean = false
 
     val isDispatching: Boolean
         get() = dispatching
 
-    fun <T> dispatch(block: () -> T): T {
+    /** Inlined so every accepted hot-path dispatch does not allocate a capturing Function0. */
+    inline fun <T> dispatch(block: () -> T): T {
         check(!dispatching) { "Recursive inline dispatch is forbidden" }
         dispatching = true
         return try {

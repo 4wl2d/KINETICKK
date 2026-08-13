@@ -186,6 +186,27 @@ class AudioFaultStageVerifierTest {
             """.trimIndent(),
         ),
         SourceDocument(
+            ANDROID_PATH,
+            """
+                private class AndroidTonePlaybackCapability {
+                    fun play(request: ToneRequest) {
+                        executor.execute { synthesize(request) }
+                    }
+
+                    fun close() {
+                        executor.shutdownNow()
+                    }
+
+                    private fun synthesize(request: ToneRequest) {
+                        val track = AudioTrack.Builder()
+                        val samples = ShortArray(1)
+                        val written = track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
+                        track.release()
+                    }
+                }
+            """.trimIndent(),
+        ),
+        SourceDocument(
             WEB_PATH,
             """
                 private class WebTonePlaybackCapability {
@@ -233,6 +254,10 @@ class AudioFaultStageVerifierTest {
             DESKTOP_TEST_PATH,
             listOf(DESKTOP_TEST_TOKEN, DESKTOP_QUEUE_TEST_TOKEN, DESKTOP_BUFFER_TEST_TOKEN).joinToString("\n"),
         ),
+        SourceDocument(
+            ANDROID_TEST_PATH,
+            listOf(ANDROID_TEST_TOKEN, ANDROID_QUEUE_TEST_TOKEN, ANDROID_BUFFER_TEST_TOKEN).joinToString("\n"),
+        ),
         SourceDocument(WEB_TEST_PATH, WEB_TEST_TOKEN),
     )
 
@@ -246,7 +271,7 @@ class AudioFaultStageVerifierTest {
             Core §9.13 live mechanical Projection
             Audio produces no typed Fact, result, or status
             Synchronous Audio Resource and platform calls propagate under runtime-fault policy
-            a synthesis fault escapes that `Runnable` to the runtime
+            Android and Desktop synthesis faults escape their detached executor `Runnable` to the runtime
             no caller-propagation claim
             `.catch(() => undefined)`
             post-acceptance mechanical projection loss
@@ -257,7 +282,7 @@ class AudioFaultStageVerifierTest {
         """
             live mechanical Audio Projection (Core §9.13)
             no typed Audio Fact/result/status
-            Desktop worker faults escape the detached `Runnable` to runtime
+            Android and Desktop worker faults escape the detached `Runnable` to runtime
             Web native `resume()`/`close()` Promise rejections
             `.catch(() => undefined)`
             Synchronous JavaScript invocation/graph faults propagate
@@ -274,6 +299,8 @@ class AudioFaultStageVerifierTest {
             "ball/gameplay/impl/src/commonMain/kotlin/kinetickk/ball/gameplay/impl/GameComponent.kt"
         const val DESKTOP_PATH =
             "app/shared/src/desktopMain/kotlin/kinetickk/app/shared/PlatformCapabilities.desktop.kt"
+        const val ANDROID_PATH =
+            "app/shared/src/androidMain/kotlin/kinetickk/app/shared/PlatformCapabilities.android.kt"
         const val WEB_PATH =
             "app/shared/src/wasmJsMain/kotlin/kinetickk/app/shared/PlatformCapabilities.wasm.kt"
         const val RESOURCE_TEST_PATH =
@@ -282,6 +309,8 @@ class AudioFaultStageVerifierTest {
             "ball/gameplay/impl/src/commonTest/kotlin/kinetickk/ball/gameplay/impl/GameComponentTest.kt"
         const val DESKTOP_TEST_PATH =
             "app/shared/src/desktopTest/kotlin/kinetickk/app/shared/PlatformCapabilitiesDesktopTest.kt"
+        const val ANDROID_TEST_PATH =
+            "app/shared/src/androidInstrumentedTest/kotlin/kinetickk/app/shared/PlatformCapabilitiesAndroidTest.kt"
         const val WEB_TEST_PATH =
             "app/shared/src/wasmJsTest/kotlin/kinetickk/app/shared/PlatformCapabilitiesWebTest.kt"
         const val RESOURCE_TEST_TOKEN =
@@ -291,6 +320,9 @@ class AudioFaultStageVerifierTest {
         const val DESKTOP_TEST_TOKEN = "audioBrokerIsInstanceOwnedAndCloseIsIdempotent"
         const val DESKTOP_QUEUE_TEST_TOKEN = "workerAndDiscardOldestQueueEnforceOneAndTwentyFour"
         const val DESKTOP_BUFFER_TEST_TOKEN = "synthesisBufferAcceptsMaximumDurationAndRejectsNext"
+        const val ANDROID_TEST_TOKEN = "androidAudioBrokerIsInstanceOwnedAndCloseIsIdempotent"
+        const val ANDROID_QUEUE_TEST_TOKEN = "androidWorkerAndDiscardOldestQueueEnforceOneAndTwentyFour"
+        const val ANDROID_BUFFER_TEST_TOKEN = "androidSynthesisBufferAcceptsMaximumDurationAndRejectsNext"
         const val WEB_TEST_TOKEN =
             "webAudioSynchronousProviderFaultsPropagateWithoutFabricatingClosedState"
     }

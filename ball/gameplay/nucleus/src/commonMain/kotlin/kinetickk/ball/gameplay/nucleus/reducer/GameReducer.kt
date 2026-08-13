@@ -3,20 +3,23 @@
 
 package kinetickk.ball.gameplay.nucleus.reducer
 
-import kinetickk.foundation.collections.ImmutableList
-import kinetickk.foundation.collections.immutableListOf
-import kinetickk.foundation.collections.toImmutableList
 import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.api.GameplayPointerAxis
 import kinetickk.ball.gameplay.api.GameplayRejection
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
-import kinetickk.ball.gameplay.nucleus.protocol.SimulationOutput
+import kinetickk.ball.gameplay.nucleus.model.clamp
+import kinetickk.ball.gameplay.nucleus.model.length
+import kinetickk.ball.gameplay.nucleus.protocol.SimulationOutputs
+import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.simulation.*
+import kotlin.math.max
 
 class EngineState internal constructor(
     internal val model: MutableGameState,
+    /** Lightweight provenance retained by render snapshots without retaining the mutable model. */
+    internal val renderProjectionIdentity: Any = Any(),
 )
 
 internal fun initialEngineState(
@@ -38,11 +41,15 @@ internal fun initialEngineState(
 
 internal data class GameReduction(
     val state: EngineState,
-    val outputs: ImmutableList<SimulationOutput>,
+    val outputs: SimulationOutputs,
 )
 
 internal sealed interface GameReductionResult {
-    data class Accepted(val value: GameReduction) : GameReductionResult
+    data class Accepted(
+        val state: EngineState,
+        val outputs: SimulationOutputs,
+    ) : GameReductionResult
+
     data class Rejected(val reason: GameplayRejection) : GameReductionResult
 }
 
@@ -53,38 +60,59 @@ internal class GameReducer {
 
         if (intent == GameplayInteractionPulse.UserGestureObserved) {
             return GameReductionResult.Accepted(
-                GameReduction(
-                    state = state,
-                    outputs = immutableListOf(SimulationOutput.EnsureAudioUnlocked),
+                state = state,
+                outputs = SimulationOutputs.EnsureAudioUnlocked,
+            )
+        }
+
+        if (
+            intent is GameplayInteractionPulse.FrameElapsed &&
+            state.model.phase != GamePhase.RUNNING &&
+            state.model.accumulator == 0f &&
+            state.model.lastTransitionSteps == 0 &&
+            !state.model.hasPendingReductionOutputs()
+        ) {
+            return GameReductionResult.Accepted(
+                state = state,
+                outputs = SimulationOutputs.create(
+                    advanceAudio = true,
+                    audioRealDeltaSeconds = intent.realDeltaSeconds,
                 ),
             )
         }
 
-        val candidate = state.model.copyForReduction()
+        if (
+            intent.leavesStateUnchanged(state.model) &&
+            !state.model.hasPendingReductionOutputs()
+        ) {
+            return GameReductionResult.Accepted(
+                state = state,
+                outputs = SimulationOutputs.Empty,
+            )
+        }
+
+        val candidate = if (intent.preservesStableSimulationStorage()) {
+            state.model.copyForScalarInputReduction()
+        } else {
+            state.model.copyForReduction()
+        }
         applyIntent(candidate, intent)
-        val outputs = buildList<SimulationOutput> {
-            candidate.takeVisualFxCues()
-                .takeIf { it.isNotEmpty() }
-                ?.let { add(SimulationOutput.EmitVisualFx(it.toImmutableList())) }
-            candidate.takeProgressUpdate()?.let { update ->
-                add(SimulationOutput.PublishProgress(update))
-            }
-            val soundCues = candidate.takeSoundCues()
-            if (intent is GameplayInteractionPulse.FrameElapsed || soundCues.isNotEmpty()) {
-                add(
-                    SimulationOutput.AdvanceAudio(
-                        realDeltaSeconds = (intent as? GameplayInteractionPulse.FrameElapsed)?.realDeltaSeconds ?: 0f,
-                        cues = soundCues.toImmutableList(),
-                    ),
-                )
-            }
-        }.toImmutableList()
+        val visualFxCues = candidate.takeVisualFxCues()
+        val progressUpdate = candidate.takeProgressUpdate()
+        val soundCues = candidate.takeSoundCues()
+        val frameIntent = intent as? GameplayInteractionPulse.FrameElapsed
+        val advanceAudio = frameIntent != null || soundCues.isNotEmpty()
+        val outputs = SimulationOutputs.create(
+            visualFxCues = visualFxCues,
+            progressUpdate = progressUpdate,
+            advanceAudio = advanceAudio,
+            audioRealDeltaSeconds = frameIntent?.realDeltaSeconds ?: 0f,
+            audioCues = soundCues,
+        )
 
         return GameReductionResult.Accepted(
-            GameReduction(
-                state = EngineState(candidate),
-                    outputs = outputs,
-            ),
+            state = EngineState(candidate),
+            outputs = outputs,
         )
     }
 
@@ -117,4 +145,86 @@ internal class GameReducer {
             }
             else -> null
         }
+
+    private fun GameplayInteractionPulse.preservesStableSimulationStorage(): Boolean = when (this) {
+        is GameplayInteractionPulse.ViewportChanged,
+        is GameplayInteractionPulse.PointerMoved,
+        is GameplayInteractionPulse.BrakeChanged,
+        GameplayInteractionPulse.DashRequested,
+        GameplayInteractionPulse.PauseToggled,
+        -> true
+        is GameplayInteractionPulse.FrameElapsed,
+        is GameplayInteractionPulse.ChoiceSelected,
+        GameplayInteractionPulse.ChoicesRerolled,
+        GameplayInteractionPulse.UserGestureObserved,
+        -> false
+    }
+
+    private fun GameplayInteractionPulse.leavesStateUnchanged(state: MutableGameState): Boolean =
+        when (this) {
+            is GameplayInteractionPulse.ViewportChanged -> {
+                val nextWidth = max(1f, width)
+                val nextHeight = max(1f, height)
+                val nextUiScale = max(1f, density)
+                nextWidth.sameBitsAs(state.screenWidth) &&
+                    nextHeight.sameBitsAs(state.screenHeight) &&
+                    nextUiScale.sameBitsAs(state.uiScale)
+            }
+            is GameplayInteractionPulse.PointerMoved -> state.pointerInputIsUnchanged(this)
+            is GameplayInteractionPulse.BrakeChanged -> state.brakeInputIsUnchanged(this)
+            GameplayInteractionPulse.DashRequested ->
+                state.phase != GamePhase.RUNNING ||
+                    state.dashBufferTime.sameBitsAs(MutableGameState.DASH_INPUT_BUFFER_SECONDS)
+            is GameplayInteractionPulse.FrameElapsed,
+            GameplayInteractionPulse.PauseToggled,
+            is GameplayInteractionPulse.ChoiceSelected,
+            GameplayInteractionPulse.ChoicesRerolled,
+            GameplayInteractionPulse.UserGestureObserved,
+            -> false
+        }
+
+    private fun MutableGameState.pointerInputIsUnchanged(
+        intent: GameplayInteractionPulse.PointerMoved,
+    ): Boolean {
+        val nextPointerX = clamp(intent.x, 0f, screenWidth)
+        val nextPointerY = clamp(intent.y, 0f, screenHeight)
+        if (
+            !nextPointerX.sameBitsAs(pointerX) ||
+            !nextPointerY.sameBitsAs(pointerY) ||
+            intent.active != pointerActive
+        ) {
+            return false
+        }
+
+        val targetX = cameraX + nextPointerX - screenWidth * 0.5f
+        val targetY = cameraY + nextPointerY - screenHeight * 0.5f
+        val dx = targetX - coreX
+        val dy = targetY - coreY
+        val distance = length(dx, dy)
+        if (!(distance > 24f)) return true
+        return (dx / distance).sameBitsAs(lastAimDirectionX) &&
+            (dy / distance).sameBitsAs(lastAimDirectionY)
+    }
+
+    private fun MutableGameState.brakeInputIsUnchanged(
+        intent: GameplayInteractionPulse.BrakeChanged,
+    ): Boolean {
+        val sourceUnchanged = when (intent.source) {
+            BrakeSource.KEYBOARD -> keyboardBrakeActive == intent.active
+            BrakeSource.SECONDARY_POINTER -> secondaryBrakeActive == intent.active
+            BrakeSource.TOUCH_CONTROL -> touchBrakeActive == intent.active
+        }
+        val expectedBraking = phase == GamePhase.RUNNING &&
+            (keyboardBrakeActive || secondaryBrakeActive || touchBrakeActive)
+        return sourceUnchanged && braking == expectedBraking
+    }
+
+    private fun MutableGameState.hasPendingReductionOutputs(): Boolean =
+        soundCues.isNotEmpty() ||
+            !visualFxCues.isEmpty() ||
+            pendingBankedMatter != 0L ||
+            pendingDiscoveredItemIds.isNotEmpty() ||
+            pendingClearedRebirthLevel != null
+
+    private fun Float.sameBitsAs(other: Float): Boolean = toBits() == other.toBits()
 }

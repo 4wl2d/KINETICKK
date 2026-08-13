@@ -1,0 +1,1089 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kinetickk.local/contracts/android-trace-capture-v1.schema.json",
+  "title": "KINETICKK Android Perfetto diagnostic capture",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "suite",
+    "status",
+    "runId",
+    "createdAtUtc",
+    "source",
+    "apk",
+    "tool",
+    "protocol",
+    "device"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "android_trace_capture.schema.json"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "suite": {
+      "const": "kinetickk-android-perfetto-diagnostic"
+    },
+    "status": {
+      "enum": ["running", "ok", "error"]
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "createdAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completedAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "apk": {
+      "$ref": "#/$defs/apk"
+    },
+    "tool": {
+      "$ref": "#/$defs/tool"
+    },
+    "protocol": {
+      "$ref": "#/$defs/protocol"
+    },
+    "device": {
+      "$ref": "#/$defs/device"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "ok"
+          }
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "required": ["completedAtUtc"],
+        "properties": {
+          "device": {
+            "properties": {
+              "status": {
+                "const": "ok"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "error"
+          }
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "required": ["completedAtUtc"],
+        "properties": {
+          "device": {
+            "properties": {
+              "status": {
+                "const": "error"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "branch",
+        "revision",
+        "dirty",
+        "gitStatusSha256",
+        "gitStatusEntryCount"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "branch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "dirty": {
+          "type": "boolean"
+        },
+        "gitStatusSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "gitStatusEntryCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inspectionStatus",
+        "package",
+        "minSdk",
+        "targetSdk",
+        "debuggableDeclared",
+        "profileableByShellDeclared"
+      ],
+      "properties": {
+        "inspectionStatus": {
+          "const": "observed"
+        },
+        "package": {
+          "type": "string",
+          "minLength": 1
+        },
+        "minSdk": {
+          "type": ["integer", "null"]
+        },
+        "targetSdk": {
+          "type": ["integer", "null"]
+        },
+        "debuggableDeclared": {
+          "const": false
+        },
+        "profileableByShellDeclared": {
+          "const": true
+        }
+      }
+    },
+    "apk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "snapshotPath",
+        "snapshotMode",
+        "sha256",
+        "bytes",
+        "modifiedAtUnixNanos",
+        "manifest"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "not": {
+            "pattern": "^/"
+          }
+        },
+        "snapshotPath": {
+          "const": "input.apk"
+        },
+        "snapshotMode": {
+          "const": "single-open-fstat-stable-copy"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "modifiedAtUnixNanos": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "manifest": {
+          "$ref": "#/$defs/manifest"
+        }
+      }
+    },
+    "toolBinary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["basename", "logicalPath", "sha256"],
+      "properties": {
+        "basename": {
+          "type": "string",
+          "minLength": 1
+        },
+        "logicalPath": {
+          "type": "string",
+          "minLength": 1,
+          "not": {
+            "pattern": "^/"
+          }
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scriptPath",
+        "scriptSha256",
+        "benchmarkDependencyPath",
+        "benchmarkDependencySha256",
+        "schemaPath",
+        "schemaSha256",
+        "flowPath",
+        "flowSnapshotPath",
+        "flowSha256",
+        "flowSchemaPath",
+        "flowSchemaSha256",
+        "configTemplatePath",
+        "configTemplateSnapshotPath",
+        "configTemplateSha256",
+        "materializedConfigSha256",
+        "pythonVersion",
+        "hostPlatform",
+        "adbBinary",
+        "adbVersion",
+        "aapt2Binary"
+      ],
+      "properties": {
+        "scriptPath": {
+          "const": "tools/performance/android_trace_capture.py"
+        },
+        "scriptSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "benchmarkDependencyPath": {
+          "const": "tools/performance/android_device_benchmark.py"
+        },
+        "benchmarkDependencySha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "schemaPath": {
+          "const": "tools/performance/android_trace_capture.schema.json"
+        },
+        "schemaSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "flowPath": {
+          "type": "string",
+          "minLength": 1,
+          "not": {
+            "pattern": "^/"
+          }
+        },
+        "flowSnapshotPath": {
+          "const": "android-gameplay-flow.json"
+        },
+        "flowSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "flowSchemaPath": {
+          "const": "tools/performance/android_gameplay_flow.schema.json"
+        },
+        "flowSchemaSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "configTemplatePath": {
+          "type": "string",
+          "minLength": 1,
+          "not": {
+            "pattern": "^/"
+          }
+        },
+        "configTemplateSnapshotPath": {
+          "const": "perfetto-config-template.pbtxt.in"
+        },
+        "configTemplateSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "materializedConfigSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "pythonVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hostPlatform": {
+          "type": "string",
+          "minLength": 1
+        },
+        "adbBinary": {
+          "$ref": "#/$defs/toolBinary"
+        },
+        "adbVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "aapt2Binary": {
+          "$ref": "#/$defs/toolBinary"
+        }
+      }
+    },
+    "flow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "schemaVersion",
+        "measurementStartStep",
+        "stepCount",
+        "sha256",
+        "traceExecutorAlwaysUsesFreshHierarchy"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "schemaVersion": {
+          "const": 1
+        },
+        "measurementStartStep": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "stepCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "traceExecutorAlwaysUsesFreshHierarchy": {
+          "const": true
+        }
+      }
+    },
+    "protocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "backend",
+        "serial",
+        "package",
+        "component",
+        "durationMillis",
+        "minimumTraceBytes",
+        "startupSettleMillis",
+        "captureMode",
+        "perfettoReadinessTimeoutMillis",
+        "perfettoClosureTimeoutMillis",
+        "perfettoReadinessSettleMillis",
+        "commandTimeoutSeconds",
+        "traceCompletionGraceMillis",
+        "exclusiveHostSerialLock",
+        "maximumThermalStatus",
+        "minimumBatteryLevelPercent",
+        "flow",
+        "decisionIsolation",
+        "deviceMutationPolicy"
+      ],
+      "properties": {
+        "backend": {
+          "const": "perfetto"
+        },
+        "serial": {
+          "type": "string",
+          "minLength": 1
+        },
+        "package": {
+          "type": "string",
+          "minLength": 1
+        },
+        "component": {
+          "type": "string",
+          "minLength": 1
+        },
+        "durationMillis": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 60000
+        },
+        "minimumTraceBytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "startupSettleMillis": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "captureMode": {
+          "const": "foreground-adb-session"
+        },
+        "perfettoReadinessTimeoutMillis": {
+          "const": 15000
+        },
+        "perfettoClosureTimeoutMillis": {
+          "const": 10000
+        },
+        "perfettoReadinessSettleMillis": {
+          "type": "integer",
+          "minimum": 250,
+          "maximum": 5000
+        },
+        "commandTimeoutSeconds": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "traceCompletionGraceMillis": {
+          "const": 15000
+        },
+        "exclusiveHostSerialLock": {
+          "const": true,
+          "description": "Exclusive only among cooperating KINETICKK trace-tool processes; it does not lock arbitrary adb clients."
+        },
+        "maximumThermalStatus": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "minimumBatteryLevelPercent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "flow": {
+          "$ref": "#/$defs/flow"
+        },
+        "decisionIsolation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "separateFromGfxinfoBenchmark",
+            "traceOverheadExpected",
+            "eligibleForGfxinfoVerdict",
+            "collectsGfxinfo"
+          ],
+          "properties": {
+            "separateFromGfxinfoBenchmark": {
+              "const": true
+            },
+            "traceOverheadExpected": {
+              "const": true
+            },
+            "eligibleForGfxinfoVerdict": {
+              "const": false
+            },
+            "collectsGfxinfo": {
+              "const": false
+            }
+          }
+        },
+        "deviceMutationPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "apkInstalled",
+            "applicationDataCleared",
+            "packageUninstalled",
+            "globalSettingsChanged",
+            "screenWakeOrUnlockInjected",
+            "consentOrPermissionPromptAccepted",
+            "packageForceStoppedForProcessColdStart",
+            "selectorAuthorizedGameplayInputInjected",
+            "ownedRemoteTraceRemovalRequiredForSuccess"
+          ],
+          "properties": {
+            "apkInstalled": {
+              "const": false
+            },
+            "applicationDataCleared": {
+              "const": false
+            },
+            "packageUninstalled": {
+              "const": false
+            },
+            "globalSettingsChanged": {
+              "const": false
+            },
+            "screenWakeOrUnlockInjected": {
+              "const": false
+            },
+            "consentOrPermissionPromptAccepted": {
+              "const": false
+            },
+            "packageForceStoppedForProcessColdStart": {
+              "const": true
+            },
+            "selectorAuthorizedGameplayInputInjected": {
+              "const": true
+            },
+            "ownedRemoteTraceRemovalRequiredForSuccess": {
+              "const": true
+            }
+          }
+        }
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "message"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "installedPackage": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "verificationMode",
+        "installedBaseApkSha256",
+        "installedBaseApkBytes",
+        "debuggable",
+        "profileableByShell",
+        "observedAtUtc"
+      ],
+      "properties": {
+        "verificationMode": {
+          "const": "exact-existing-no-install-pre-and-post"
+        },
+        "installedBaseApkSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "installedBaseApkBytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "debuggable": {
+          "const": false
+        },
+        "profileableByShell": {
+          "const": true
+        },
+        "observedAtUtc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "postTraceVerification": {
+          "$ref": "#/$defs/installedPackageObservation"
+        },
+        "unchangedDuringCapture": {
+          "const": true
+        }
+      }
+    },
+    "installedPackageObservation": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "observedAtUtc",
+        "installedBaseApkPath",
+        "installedBaseApkSha256",
+        "installedBaseApkBytes",
+        "versionName",
+        "versionCode",
+        "debuggable",
+        "profileableByShell"
+      ],
+      "properties": {
+        "observedAtUtc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "installedBaseApkPath": {
+          "type": "string",
+          "pattern": "^/data/app/(?:[^/]+/)+base\\.apk$"
+        },
+        "installedBaseApkSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "installedBaseApkBytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "versionName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "versionCode": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "debuggable": {
+          "const": false
+        },
+        "profileableByShell": {
+          "const": true
+        }
+      }
+    },
+    "perfettoBinary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "logicalPath",
+        "version",
+        "versionProbeExitCode",
+        "helpProbeExitCode",
+        "versionProbeArtifact",
+        "helpArtifact",
+        "helpSha256",
+        "capabilities",
+        "bytes",
+        "sha256"
+      ],
+      "properties": {
+        "logicalPath": {
+          "const": "/system/bin/perfetto"
+        },
+        "version": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "versionProbeExitCode": {
+          "type": "integer"
+        },
+        "helpProbeExitCode": {
+          "type": "integer"
+        },
+        "versionProbeArtifact": {
+          "const": "perfetto-version-probe.txt"
+        },
+        "helpArtifact": {
+          "const": "perfetto-help.txt"
+        },
+        "helpSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["background", "backgroundWait", "detachAttach", "query"],
+          "properties": {
+            "background": {
+              "type": "boolean"
+            },
+            "backgroundWait": {
+              "type": "boolean"
+            },
+            "detachAttach": {
+              "type": "boolean"
+            },
+            "query": {
+              "const": true
+            }
+          }
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "traceArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "bytes",
+        "sha256",
+        "remoteTemporaryPath",
+        "remoteTemporaryArtifactRemoved"
+      ],
+      "properties": {
+        "path": {
+          "const": "diagnostic.perfetto-trace"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "remoteTemporaryPath": {
+          "type": "string",
+          "pattern": "^/data/misc/perfetto-traces/kinetickk-[0-9a-f]{16}\\.perfetto-trace$"
+        },
+        "remoteTemporaryArtifactRemoved": {
+          "const": true
+        }
+      }
+    },
+    "trace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "backend",
+        "pid",
+        "captureMode",
+        "readinessMode",
+        "readinessStrength",
+        "readinessSettleMillis",
+        "closureMode",
+        "finalQuerySha256",
+        "durationMillisConfigured",
+        "elapsedMillis",
+        "diagnosticOnly",
+        "eligibleForGfxinfoVerdict",
+        "artifact"
+      ],
+      "properties": {
+        "backend": {
+          "const": "perfetto"
+        },
+        "pid": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "captureMode": {
+          "const": "foreground-adb-session"
+        },
+        "readinessMode": {
+          "const": "foreground-query-session-delta-pid-trace-file-plus-settle"
+        },
+        "readinessStrength": {
+          "const": "session-started-not-all-data-sources-acknowledged"
+        },
+        "readinessSettleMillis": {
+          "type": "integer",
+          "minimum": 250,
+          "maximum": 5000
+        },
+        "closureMode": {
+          "const": "owned-pid-absent-query-idle-baseline-restored",
+          "description": "Endpoint evidence: the attributed PID is absent and the final current-state query matches the idle baseline. This is not continuous detection of third-party detached sessions between probes."
+        },
+        "finalQuerySha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "durationMillisConfigured": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 60000
+        },
+        "elapsedMillis": {
+          "type": "number",
+          "minimum": 0
+        },
+        "diagnosticOnly": {
+          "const": true
+        },
+        "eligibleForGfxinfoVerdict": {
+          "const": false
+        },
+        "artifact": {
+          "$ref": "#/$defs/traceArtifact"
+        }
+      }
+    },
+    "session": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "startedAtUtc",
+        "completedAtUtc",
+        "processColdStart",
+        "processIds",
+        "initialProcessIds",
+        "finalProcessIds",
+        "startup",
+        "runtimeBefore",
+        "runtimeAfter",
+        "uiEventCount",
+        "trace",
+        "artifacts"
+      ],
+      "properties": {
+        "status": {
+          "const": "ok"
+        },
+        "startedAtUtc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "completedAtUtc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "processColdStart": {
+          "const": true
+        },
+        "processIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "initialProcessIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "finalProcessIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "uiEventCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "trace": {
+          "$ref": "#/$defs/trace"
+        }
+      }
+    },
+    "traceCleanupEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "remoteTemporaryPath",
+        "ownershipAcquired",
+        "state",
+        "removed",
+        "reason"
+      ],
+      "properties": {
+        "remoteTemporaryPath": {
+          "type": "string",
+          "pattern": "^/data/misc/perfetto-traces/kinetickk-[0-9a-f]{16}\\.perfetto-trace$"
+        },
+        "ownershipAcquired": {
+          "const": true
+        },
+        "state": {
+          "enum": [
+            "owned-active",
+            "removed",
+            "retained-unclosed",
+            "cleanup-failed"
+          ]
+        },
+        "removed": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": ["string", "null"]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "removed"
+              }
+            },
+            "required": ["state"]
+          },
+          "then": {
+            "properties": {
+              "removed": {
+                "const": true
+              },
+              "reason": {
+                "const": "verified-absent-after-owned-cleanup"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "removed": {
+                "const": false
+              }
+            }
+          }
+        }
+      ]
+    },
+    "startupTextArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "bytes"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^perfetto-startup-[a-z-]+\\.txt$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "perfettoStartupFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "failureType",
+        "failureMessage",
+        "readyPid",
+        "hostExitCode",
+        "artifacts"
+      ],
+      "properties": {
+        "failureType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failureMessage": {
+          "type": "string",
+          "minLength": 1
+        },
+        "readyPid": {
+          "type": ["integer", "null"],
+          "minimum": 2
+        },
+        "hostExitCode": {
+          "type": ["integer", "null"]
+        },
+        "artifacts": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/startupTextArtifact"
+          }
+        }
+      }
+    },
+    "device": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["serial", "status"],
+      "properties": {
+        "serial": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": ["running", "ok", "error"]
+        },
+        "installedPackage": {
+          "$ref": "#/$defs/installedPackage"
+        },
+        "environment": {
+          "type": "object"
+        },
+        "perfetto": {
+          "$ref": "#/$defs/perfettoBinary"
+        },
+        "hostSerialLock": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["key", "logicalPath"],
+          "properties": {
+            "key": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{16}$"
+            },
+            "logicalPath": {
+              "type": "string",
+              "pattern": "^host-temp/kinetickk-android-trace-[0-9a-f]{16}\\.lock$"
+            }
+          }
+        },
+        "traceCleanupEvidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "$ref": "#/$defs/traceCleanupEvidence"
+          }
+        },
+        "perfettoStartupFailure": {
+          "$ref": "#/$defs/perfettoStartupFailure"
+        },
+        "session": {
+          "$ref": "#/$defs/session"
+        },
+        "error": {
+          "$ref": "#/$defs/error"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "ok"
+              }
+            },
+            "required": ["status"]
+          },
+          "then": {
+            "required": [
+              "hostSerialLock",
+              "installedPackage",
+              "environment",
+              "perfetto",
+              "session",
+              "traceCleanupEvidence"
+            ],
+            "properties": {
+              "installedPackage": {
+                "required": [
+                  "postTraceVerification",
+                  "unchangedDuringCapture"
+                ],
+                "properties": {
+                  "unchangedDuringCapture": {
+                    "const": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "error"
+              }
+            },
+            "required": ["status"]
+          },
+          "then": {
+            "required": ["error"]
+          }
+        }
+      ]
+    }
+  }
+}

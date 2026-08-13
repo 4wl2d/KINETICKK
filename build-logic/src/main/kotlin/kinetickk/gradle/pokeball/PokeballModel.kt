@@ -242,8 +242,14 @@ private const val GAMEPLAY_STATE_PATH =
     "ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/simulation/MutableGameState.kt"
 private const val GAMEPLAY_ENTITIES_PATH =
     "ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/model/GameEntities.kt"
+private const val GAMEPLAY_COW_STORAGE_PATH =
+    "ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/model/CopyOnWriteStorage.kt"
+private const val GAMEPLAY_COW_STORAGE_TEST_PATH =
+    "ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/model/CopyOnWriteStorageTest.kt"
 private const val GAMEPLAY_REDUCER_PATH =
     "ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/reducer/GameReducer.kt"
+private const val GAMEPLAY_RENDER_SNAPSHOT_PATH =
+    "ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/render/GameplayRenderSnapshot.kt"
 private const val GAMEPLAY_LOOP_PATH =
     "ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/simulation/GameLoop.kt"
 private const val GAMEPLAY_ENEMY_SYSTEM_PATH =
@@ -262,10 +268,22 @@ private const val GAMEPLAY_RELIC_COMBAT_SYSTEM_PATH =
     "ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/simulation/RelicCombatSystem.kt"
 private const val GAMEPLAY_RENDER_MODEL_MAPPER_PATH =
     "ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/simulation/GameplayRenderModelMapper.kt"
+private const val GAMEPLAY_RENDER_MODEL_MAPPER_TEST_PATH =
+    "ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/GameplayRenderModelMapperTest.kt"
+private const val GAMEPLAY_NUCLEUS_TEST_PATH =
+    "ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/GameplayNucleusTest.kt"
+private const val GAMEPLAY_IMPL_TEST_PATH =
+    "ball/gameplay/impl/src/commonTest/kotlin/kinetickk/ball/gameplay/impl/GameComponentTest.kt"
+private const val GAMEPLAY_REDUCTION_ISOLATION_TEST_PATH =
+    "ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/GameplayReductionIsolationTest.kt"
+private const val GAMEPLAY_SIMULATION_PROTOCOL_PATH =
+    "ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/protocol/GameProtocol.kt"
 private const val GAMEPLAY_VISUAL_FX_PROTOCOL_PATH =
     "ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/protocol/VisualFxProtocol.kt"
 private const val GAMEPLAY_COLLECTION_BOUNDS_TEST_PATH =
     "ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/GameplayCollectionBoundsTest.kt"
+private const val GAMEPLAY_PENDING_OUTPUT_BUFFER_TEST_PATH =
+    "ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/PendingOutputBufferIsolationTest.kt"
 private const val GAMEPLAY_ARCHITECTURE_BOUNDS_TEST_PATH =
     "ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/characterization/GameplayArchitectureBoundsTest.kt"
 private const val GAMEPLAY_BASELINE_TEST_PATH =
@@ -312,6 +330,10 @@ private const val DESKTOP_AUDIO_PATH =
     "app/shared/src/desktopMain/kotlin/kinetickk/app/shared/PlatformCapabilities.desktop.kt"
 private const val DESKTOP_AUDIO_TEST_PATH =
     "app/shared/src/desktopTest/kotlin/kinetickk/app/shared/PlatformCapabilitiesDesktopTest.kt"
+private const val ANDROID_AUDIO_PATH =
+    "app/shared/src/androidMain/kotlin/kinetickk/app/shared/PlatformCapabilities.android.kt"
+private const val ANDROID_AUDIO_TEST_PATH =
+    "app/shared/src/androidInstrumentedTest/kotlin/kinetickk/app/shared/PlatformCapabilitiesAndroidTest.kt"
 private const val FOUNDATION_COMPLETION_DEQUE_PATH =
     "foundation/common/src/commonMain/kotlin/kinetickk/foundation/dispatch/BoundedCompletionDeque.kt"
 private const val CONTENT_CATALOG_PATH =
@@ -1091,6 +1113,74 @@ internal val expectedBounds = listOf(
         additionalRequiredTokens = listOf(
             "require(outputs.size <= MAX_GAMEPLAY_OUTPUTS_PER_DECISION)",
         ),
+        additionalSourceAnchors = listOf(
+            BoundAnchor(
+                GAMEPLAY_SIMULATION_PROTOCOL_PATH,
+                listOf(
+                    "internal class SimulationOutputs private constructor(",
+                    "internal val visualFxCuesOrNull: ImmutableList<VisualFxCue>?",
+                    "internal val progressUpdate: GameplayProgressUpdate?",
+                    "internal val audioCuesOrNull: ImmutableList<GameplayAudioCue>?",
+                    "internal val ensuresAudioUnlocked: Boolean",
+                    "(if (visualFxCuesOrNull == null) 0 else 1)",
+                    "(if (progressUpdate == null) 0 else 1)",
+                    "(if (audioCuesOrNull == null && !ensuresAudioUnlocked) 0 else 1)",
+                    "val EnsureAudioUnlocked: SimulationOutputs = SimulationOutputs(",
+                    "fun create(",
+                    "require(advanceAudio || audioCues.isEmpty())",
+                    "Simulation audio cues require an AdvanceAudio consequence",
+                    "require(advanceAudio || audioRealDeltaSeconds.toRawBits() == 0f.toRawBits())",
+                    "Simulation audio delta requires an AdvanceAudio consequence",
+                    "val retainedAudioCues = audioCues.takeIf { advanceAudio }",
+                ),
+            ),
+            BoundAnchor(
+                GAMEPLAY_REDUCER_PATH,
+                listOf(
+                    "data class Accepted(\n        val state: EngineState,\n        val outputs: SimulationOutputs,\n    )",
+                    "outputs = SimulationOutputs.EnsureAudioUnlocked",
+                    "outputs = SimulationOutputs.Empty",
+                    "val outputs = SimulationOutputs.create(",
+                    "return GameReductionResult.Accepted(\n" +
+                        "            state = EngineState(candidate),\n" +
+                        "            outputs = outputs,\n" +
+                        "        )",
+                ),
+            ),
+            BoundAnchor(
+                GAMEPLAY_NUCLEUS_PATH,
+                listOf(
+                    "val outputs = result.outputs.toGameplayOutputs(",
+                    "private fun SimulationOutputs.toGameplayOutputs(",
+                    "val mappedOutputCount = sourceOutputCount + if (trailingOutput == null) 0 else 1",
+                    "return immutableListOfSize(mappedOutputCount) { sourceOrdinal ->",
+                    "toGameplayOutputAt(instanceId, revision, sourceOrdinal)",
+                    "private fun SimulationOutputs.toGameplayOutputAt(",
+                    "val nextState = state.copy(\n" +
+                        "            revision = revision,\n" +
+                        "            phase = GameplayRunPhase.EXITED,\n" +
+                        "            engine = reduction.state,\n" +
+                        "            pendingProfileCommand = pending,\n" +
+                        "        )",
+                    "val nextState = state.copy(\n" +
+                        "                    revision = revision,\n" +
+                        "                    phase = result.state.model.phase.toRunPhase(),\n" +
+                        "                    engine = result.state,\n" +
+                        "                    pendingProfileCommand = pending ?: state.pendingProfileCommand,\n" +
+                        "                )",
+                ),
+            ),
+        ),
+        additionalEvidenceAnchors = listOf(
+            BoundAnchor(
+                GAMEPLAY_COLLECTION_BOUNDS_TEST_PATH,
+                listOf(
+                    "fixedSimulationOutputBatchPreservesCanonicalOrderAndOwnedPayloads",
+                    "SimulationOutputs.create(audioCues = audioCues)",
+                    "SimulationOutputs.create(audioRealDeltaSeconds = 0.25f)",
+                ),
+            ),
+        ),
     ),
     BoundProjection(
         "session.outputs-per-decision", "3",
@@ -1209,6 +1299,26 @@ internal val expectedBounds = listOf(
                     "values.addLast(value)",
                 ),
             ),
+            BoundAnchor(
+                GAMEPLAY_IMPL_PATH,
+                listOf(
+                    "private val localOutputItem = GameplayWorkItem.reusableLocalOutputItem()",
+                    "localOutputItem.bindLocalCausalScope(causalScope)",
+                    "val rootAcceptance = when (",
+                    "while (!completions.isEmpty)",
+                    "val item = checkNotNull(completions.removeFirstOrNull())",
+                ),
+            ),
+        ),
+        additionalEvidenceAnchors = listOf(
+            BoundAnchor(
+                GAMEPLAY_IMPL_TEST_PATH,
+                listOf(
+                    "rejectedLocalRootPublishesNothingAndLeavesTheNextDispatchAdmissible",
+                    "localProfileCompletionDrainsAfterLaterAudioFaultInExactCausalOrder",
+                    "localProfileDeliverThenThrowStillExecutesAudioAndDrainsItsCompletion",
+                ),
+            ),
         ),
     ),
     BoundProjection(
@@ -1257,19 +1367,28 @@ internal val expectedBounds = listOf(
             BoundAnchor(
                 GAMEPLAY_NUCLEUS_PATH,
                 listOf(
-                    "var pending: PendingProfileCommand? = null",
-                    "check(pending == null) { \"A Gameplay Decision may emit at most one Profile command\" }",
-                    "pending = PendingProfileCommand(request, exitCompletion)",
+                    "val pending = reduction.outputs.toPendingProfileCommand(outputs, commandSource)",
+                    "val pending = result.outputs.toPendingProfileCommand(",
+                    "mappedOutputs = outputs",
+                    "exitCompletion = null",
+                    "private fun SimulationOutputs.toPendingProfileCommand(",
+                    "val profileOutput = mappedOutputs[profileOutputIndex] as GameplayOutput.SendProfileCommand",
+                    "return PendingProfileCommand(profileOutput.request, exitCompletion)",
                     "if (state.pendingProfileCommand != null)",
-                    "if (mapped.pending != null && state.pendingProfileCommand != null)",
-                    "pendingProfileCommand = mapped.pending ?: state.pendingProfileCommand",
-                    "prepared.copy(pendingProfileCommand = mapped.pending)",
+                    "if (pending != null && state.pendingProfileCommand != null)",
+                    "pendingProfileCommand = pending ?: state.pendingProfileCommand",
+                    "val nextState = state.copy(\n" +
+                        "            revision = revision,\n" +
+                        "            phase = GameplayRunPhase.EXITED,\n" +
+                        "            engine = reduction.state,\n" +
+                        "            pendingProfileCommand = pending,\n" +
+                        "        )",
                 ),
             ),
             BoundAnchor(
                 GAMEPLAY_IMPL_PATH,
                 listOf(
-                    "requireGameplayProfileOutputFanoutBound(profileOutputs.size)",
+                    "requireGameplayProfileOutputFanoutBound(profileOutputCount)",
                     "check(before.pendingProfileCommand == null)",
                     "val pending = checkNotNull(next.pendingProfileCommand)",
                     "check(profileCommandCount in 0..1)",
@@ -1331,6 +1450,10 @@ internal val expectedBounds = listOf(
                 "ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/characterization/TotemEnemySystemsTest.kt",
                 "splitterFragmentsAcceptTheDynamicEnemyCapAndRejectTheNextCandidate",
             ),
+            BoundAnchor(
+                GAMEPLAY_RENDER_MODEL_MAPPER_TEST_PATH,
+                "equalNonEmptyEntitiesAreSharedButMutationsReprojectWithoutChangingRetainedSnapshot",
+            ),
         ),
         additionalSourceAnchors = listOf(
             BoundAnchor(
@@ -1355,19 +1478,41 @@ internal val expectedBounds = listOf(
                 ),
             ),
             BoundAnchor(
+                GAMEPLAY_STATE_PATH,
+                listOf(
+                    "val enemies: MutableList<Enemy> = reductionSource?.enemies?.let { source ->",
+                    "source.mapTo(ArrayList(source.size), Enemy::isolatedCopy)",
+                ),
+            ),
+            BoundAnchor(
+                GAMEPLAY_ENTITIES_PATH,
+                listOf(
+                    "fun isolatedCopy(): Enemy = copy(",
+                    "relicCounters = relicCounters.fork()",
+                    "relicTimers = relicTimers.fork()",
+                    "relicValues = relicValues.fork()",
+                ),
+            ),
+            BoundAnchor(
                 GAMEPLAY_RENDER_MODEL_MAPPER_PATH,
                 listOf(
-                    "target.enemies.clear()",
-                    "target.enemies.addAll(enemies.map { enemy ->",
-                    "enemies = enemies.map { value ->",
-                    "    }.toImmutableList(),\n    projectiles = projectiles.map { value ->",
+                    "?: enemies.reuseEmptyProjection(reusableCollections?.enemies)",
+                    "?: enemies.reuseProjectionIfContentEqual(reusableCollections?.enemies) { value, previous ->",
+                    "value.id == previous.id",
+                    "value.dead == previous.dead",
+                    "?: enemies.mapToImmutableList { value ->",
+                    "EnemyProjection(",
+                    "if (previous == null || size != previous.size) return null",
+                    "if (!sameProjection(this[index], previous[index])) return null",
+                    "private fun Float.sameBitsAs(other: Float): Boolean = toRawBits() == other.toRawBits()",
                 ),
             ),
             BoundAnchor(
                 GAMEPLAY_COLLISION_SYSTEM_PATH,
                 listOf(
-                    "val liveEnemyIds = enemies.asSequence()",
-                    ".mapTo(mutableSetOf(), Enemy::id)",
+                    "val ids = IntArray(enemies.size)",
+                    "if (enemy.dead) continue",
+                    "liveEnemyIds = ids",
                 ),
             ),
         ),
@@ -1386,13 +1531,29 @@ internal val expectedBounds = listOf(
                 "while (projectiles.size > MutableGameState.MAX_PROJECTILES) projectiles.removeAt(0)",
             ),
             BoundAnchor(
+                GAMEPLAY_STATE_PATH,
+                listOf(
+                    "val projectiles: MutableList<Projectile> = reductionSource?.projectiles?.let { source ->",
+                    "else source.mapTo(ArrayList(source.size), Projectile::isolatedCopy)",
+                ),
+            ),
+            BoundAnchor(
                 GAMEPLAY_RENDER_MODEL_MAPPER_PATH,
                 listOf(
-                    "target.projectiles.clear()",
-                    "target.projectiles.addAll(projectiles.map(Projectile::isolatedCopy))",
-                    "projectiles = projectiles.map { value ->",
-                    "    }.toImmutableList(),\n    pickups = pickups.map { value ->",
+                    "projectiles = projectiles.reuseEmptyProjection(reusableCollections?.projectiles)",
+                    "?: projectiles.reuseProjectionIfContentEqual(\n" +
+                        "                reusableCollections?.projectiles,",
+                    "value.hostile == previous.hostile",
+                    "value.previousY.sameBitsAs(previous.previousY)",
+                    "?: projectiles.mapToImmutableList { value ->",
+                    "ProjectileProjection(",
                 ),
+            ),
+        ),
+        additionalEvidenceAnchors = listOf(
+            BoundAnchor(
+                GAMEPLAY_RENDER_MODEL_MAPPER_TEST_PATH,
+                "equalNonEmptyEntitiesAreSharedButMutationsReprojectWithoutChangingRetainedSnapshot",
             ),
         ),
     ),
@@ -1410,13 +1571,28 @@ internal val expectedBounds = listOf(
                 "while (pickups.size > MutableGameState.MAX_PICKUPS) pickups.removeAt(0)",
             ),
             BoundAnchor(
+                GAMEPLAY_STATE_PATH,
+                listOf(
+                    "val pickups: MutableList<Pickup> = reductionSource?.pickups?.let { source ->",
+                    "else source.mapTo(ArrayList(source.size), Pickup::copy)",
+                ),
+            ),
+            BoundAnchor(
                 GAMEPLAY_RENDER_MODEL_MAPPER_PATH,
                 listOf(
-                    "target.pickups.clear()",
-                    "target.pickups.addAll(pickups.map(Pickup::copy))",
-                    "pickups = pickups.map { value ->",
-                    "    }.toImmutableList(),\n    trail = trail.map { value ->",
+                    "pickups = pickups.reuseEmptyProjection(reusableCollections?.pickups)",
+                    "?: pickups.reuseProjectionIfContentEqual(reusableCollections?.pickups) { value, previous ->",
+                    "value.type == previous.type",
+                    "value.previousY.sameBitsAs(previous.previousY)",
+                    "?: pickups.mapToImmutableList { value ->",
+                    "PickupProjection(",
                 ),
+            ),
+        ),
+        additionalEvidenceAnchors = listOf(
+            BoundAnchor(
+                GAMEPLAY_RENDER_MODEL_MAPPER_TEST_PATH,
+                "equalNonEmptyEntitiesAreSharedButMutationsReprojectWithoutChangingRetainedSnapshot",
             ),
         ),
     ),
@@ -1433,13 +1609,26 @@ internal val expectedBounds = listOf(
                 ),
             ),
             BoundAnchor(
+                GAMEPLAY_STATE_PATH,
+                listOf(
+                    "val trail: MutableList<TrailPoint> = reductionSource?.trail?.let { source ->",
+                    "else source.mapTo(ArrayList(source.size), TrailPoint::copy)",
+                ),
+            ),
+            BoundAnchor(
                 GAMEPLAY_RENDER_MODEL_MAPPER_PATH,
                 listOf(
-                    "target.trail.clear()",
-                    "target.trail.addAll(trail.map(TrailPoint::copy))",
-                    "trail = trail.map { value -> " +
-                        "TrailPointProjection(value.x, value.y, value.age) }.toImmutableList()",
+                    "trail = trail.reuseEmptyProjection(reusableCollections?.trail)",
+                    "?: trail.reuseProjectionIfContentEqual(reusableCollections?.trail) { value, previous ->",
+                    "value.age.sameBitsAs(previous.age)",
+                    "?: trail.mapToImmutableList { value -> TrailPointProjection(value.x, value.y, value.age) }",
                 ),
+            ),
+        ),
+        additionalEvidenceAnchors = listOf(
+            BoundAnchor(
+                GAMEPLAY_RENDER_MODEL_MAPPER_TEST_PATH,
+                "equalNonEmptyEntitiesAreSharedButMutationsReprojectWithoutChangingRetainedSnapshot",
             ),
         ),
     ),
@@ -1456,10 +1645,10 @@ internal val expectedBounds = listOf(
                 ),
             ),
             BoundAnchor(
-                GAMEPLAY_RENDER_MODEL_MAPPER_PATH,
+                GAMEPLAY_STATE_PATH,
                 listOf(
-                    "target.delayedRelicHits.clear()",
-                    "target.delayedRelicHits.addAll(delayedRelicHits.map(DelayedRelicHit::copy))",
+                    "internal val delayedRelicHits: MutableList<DelayedRelicHit> = reductionSource?.delayedRelicHits",
+                    "source.mapTo(ArrayList(source.size), DelayedRelicHit::copy)",
                 ),
             ),
         ),
@@ -1471,9 +1660,12 @@ internal val expectedBounds = listOf(
         GAMEPLAY_COLLECTION_BOUNDS_TEST_PATH,
         "relicChainWorkAcceptsFiveAndRejectsSixthIteration",
         additionalRequiredTokens = listOf(
-            "val used = mutableSetOf(origin.id)",
+            "val usedEnemyIds = IntArray(count + 1)",
+            "usedEnemyIds[0] = origin.id",
+            "var usedEnemyCount = 1",
             "repeat(count)",
-            "used += target.id",
+            "for (usedIndex in 0 until usedEnemyCount)",
+            "usedEnemyIds[usedEnemyCount++] = target.id",
         ),
         additionalSourceAnchors = listOf(
             BoundAnchor(CONTENT_CATALOG_PATH, "RelicPolicy(maxSlots = 4, maxRank = 5)"),
@@ -1485,10 +1677,24 @@ internal val expectedBounds = listOf(
         "MAX_HIT_ENEMY_IDS = 120", GAMEPLAY_COLLECTION_BOUNDS_TEST_PATH,
         "projectileHitHistoryAcceptsOneHundredTwentyRejectsNextThenReclaimsDeadEntry",
         additionalRequiredTokens = listOf(
-            "require(recordedHitEnemyIds.size <= MAX_HIT_ENEMY_IDS)",
-            "if (recordedHitEnemyIds.size >= MAX_HIT_ENEMY_IDS) return false",
-            "recordedHitEnemyIds += enemyId",
-            "recordedHitEnemyIds = recordedHitEnemyIds.toMutableSet()",
+            "require((recordedHitEnemyIds?.size ?: 0) <= MAX_HIT_ENEMY_IDS)",
+            "require(recordedHitEnemyCount in 0..MAX_HIT_ENEMY_IDS)",
+            "if (recordedHitEnemyCount >= MAX_HIT_ENEMY_IDS) return false",
+            "minOf(MAX_HIT_ENEMY_IDS, storage.size * 2)",
+            "while (index > insertionIndex)",
+            "storage[insertionIndex] = enemyId",
+            "recordedHitEnemyCount++",
+            "recordedHitEnemyIds = recordedHitEnemyIds?.copyOf(recordedHitEnemyCount)",
+        ),
+        additionalEvidenceAnchors = listOf(
+            BoundAnchor(
+                GAMEPLAY_COLLECTION_BOUNDS_TEST_PATH,
+                listOf(
+                    "projectileCopyOwnsAnIndependentCompactHitHistory",
+                    "projectileHitHistoryMembershipIsCorrectAtLinearAndBinarySearchBoundaries",
+                    "projectileHitHistoryRetentionMergesSortedLiveIdsAndHonorsTheirLogicalCount",
+                ),
+            ),
         ),
     ),
     BoundProjection(
@@ -1499,16 +1705,33 @@ internal val expectedBounds = listOf(
                 GAMEPLAY_PROGRESSION_SYSTEM_PATH,
                 listOf(
                     "if (soundCues.size < MutableGameState.MAX_GAMEPLAY_SOUND_CUES) soundCues += cue",
-                    "val result = soundCues.toList()",
+                    "val result = soundCues.toImmutableList()",
                     "soundCues.clear()",
                     "return result",
                 ),
             ),
             BoundAnchor(
-                GAMEPLAY_RENDER_MODEL_MAPPER_PATH,
+                GAMEPLAY_STATE_PATH,
                 listOf(
-                    "target.soundCues.clear()",
-                    "target.soundCues.addAll(soundCues)",
+                    "internal var soundCueStorage: MutableList<GameplayAudioCue>? =",
+                    "reductionSource?.soundCueStorage?.let { source -> ArrayList(source) }",
+                    "internal val soundCues: PendingSoundCueBuffer",
+                    "get() = PendingSoundCueBuffer(this)",
+                    "val retained = owner.soundCueStorage",
+                    "owner.soundCueStorage = arrayListOf(cue)",
+                    "owner.soundCueStorage = null",
+                    "owner.soundCueStorage?.toImmutableList() ?: immutableListOf()",
+                ),
+            ),
+        ),
+        additionalEvidenceAnchors = listOf(
+            BoundAnchor(
+                GAMEPLAY_PENDING_OUTPUT_BUFFER_TEST_PATH,
+                listOf(
+                    "emptyReductionCopyKeepsEveryOutputStorageUnmaterialized",
+                    "drainingOneForkAndRecordingLaterCannotMutateSourceOrSiblingOutputs",
+                    "assertNull(candidate.soundCueStorage)",
+                    "assertEquals(listOf(GameplayAudioCue.UI_CLICK), retainedSibling.takeSoundCues().toList())",
                 ),
             ),
         ),
@@ -1525,13 +1748,28 @@ internal val expectedBounds = listOf(
                 ),
             ),
             BoundAnchor(
+                GAMEPLAY_STATE_PATH,
+                listOf(
+                    "val weaponNodes: MutableList<WeaponNode> = reductionSource?.weaponNodes?.let { source ->",
+                    "else source.mapTo(ArrayList(source.size), WeaponNode::copy)",
+                ),
+            ),
+            BoundAnchor(
                 GAMEPLAY_RENDER_MODEL_MAPPER_PATH,
                 listOf(
-                    "target.weaponNodes.clear()",
-                    "target.weaponNodes.addAll(weaponNodes.map(WeaponNode::copy))",
-                    "weaponNodes = weaponNodes.map { value ->",
-                    "    }.toImmutableList(),\n    weaponOrbitals = weaponOrbitals.map { value ->",
+                    "weaponNodes = weaponNodes.reuseEmptyProjection(reusableCollections?.weaponNodes)",
+                    "?: weaponNodes.reuseProjectionIfContentEqual(\n" +
+                        "                reusableCollections?.weaponNodes,",
+                    "value.radius.sameBitsAs(previous.radius)",
+                    "?: weaponNodes.mapToImmutableList { value ->",
+                    "WeaponNodeProjection(",
                 ),
+            ),
+        ),
+        additionalEvidenceAnchors = listOf(
+            BoundAnchor(
+                GAMEPLAY_RENDER_MODEL_MAPPER_TEST_PATH,
+                "equalNonEmptyEntitiesAreSharedButMutationsReprojectWithoutChangingRetainedSnapshot",
             ),
         ),
     ),
@@ -1548,13 +1786,29 @@ internal val expectedBounds = listOf(
                 ),
             ),
             BoundAnchor(
+                GAMEPLAY_STATE_PATH,
+                listOf(
+                    "val weaponOrbitals: MutableList<WeaponOrbital> = reductionSource?.weaponOrbitals?.let { source ->",
+                    "else source.mapTo(ArrayList(source.size), WeaponOrbital::copy)",
+                ),
+            ),
+            BoundAnchor(
                 GAMEPLAY_RENDER_MODEL_MAPPER_PATH,
                 listOf(
-                    "target.weaponOrbitals.clear()",
-                    "target.weaponOrbitals.addAll(weaponOrbitals.map(WeaponOrbital::copy))",
-                    "weaponOrbitals = weaponOrbitals.map { value ->",
-                    "    }.toImmutableList(),\n    choices = choices.toImmutableList()",
+                    "weaponOrbitals = weaponOrbitals.reuseEmptyProjection(reusableCollections?.weaponOrbitals)",
+                    "?: weaponOrbitals.reuseProjectionIfContentEqual(\n" +
+                        "                reusableCollections?.weaponOrbitals,",
+                    "value.index == previous.index",
+                    "value.radius.sameBitsAs(previous.radius)",
+                    "?: weaponOrbitals.mapToImmutableList { value ->",
+                    "WeaponOrbitalProjection(",
                 ),
+            ),
+        ),
+        additionalEvidenceAnchors = listOf(
+            BoundAnchor(
+                GAMEPLAY_RENDER_MODEL_MAPPER_TEST_PATH,
+                "equalNonEmptyEntitiesAreSharedButMutationsReprojectWithoutChangingRetainedSnapshot",
             ),
         ),
     ),
@@ -1569,8 +1823,10 @@ internal val expectedBounds = listOf(
             BoundAnchor(
                 GAMEPLAY_RENDER_MODEL_MAPPER_PATH,
                 listOf(
-                    "target.choices = choices.toList()",
-                    "choices = choices.toImmutableList()",
+                    "target.choices = choices",
+                    "choices = choices.reuseIfIdentical(identitySource?.choices, reusableCollections?.choices)",
+                    "?: choices.reuseIfContentEqual(reusableCollections?.choices)",
+                    "?: choices.toImmutableList()",
                 ),
             ),
         ),
@@ -1590,7 +1846,9 @@ internal val expectedBounds = listOf(
         "MAX_ARC_COIL_TARGETS: Int = 6", GAMEPLAY_COLLECTION_BOUNDS_TEST_PATH,
         "arcCoilTargetsSixNearestAndLeavesSeventhUntouched",
         additionalRequiredTokens = listOf(
-            ".take(min(MAX_ARC_COIL_TARGETS, 3 + weaponLevel / 3))",
+            "val maximumTargets = min(MAX_ARC_COIL_TARGETS, 3 + weaponLevel / 3)",
+            "val targets = arrayOfNulls<Enemy>(maximumTargets)",
+            "while (targetCount < maximumTargets)",
         ),
     ),
     BoundProjection(
@@ -1615,21 +1873,51 @@ internal val expectedBounds = listOf(
         "outputCapTwoThousandFortyEightReportsAttemptedTwoThousandFortyNinthWithoutGrowth",
         additionalRequiredTokens = listOf(
             "MAX_RETAINED_CUES = VisualFxCueLimits.MAX_CUES_PER_PROJECTION - 1",
-            "if (cues.size < MAX_RETAINED_CUES)",
-            "cues.removeAt(replaceIndex)",
-            "add(VisualFxCue.VisualCuesDropped(droppedVisualCueCount))",
+            "if (retainedCues.size < MAX_RETAINED_CUES)",
+            "retainedCues.removeAt(replaceIndex)",
             "fun drain(): ImmutableList<VisualFxCue>",
-            "val result = buildList {",
-            "addAll(cues)",
-            "}.toImmutableList()\n        cues.clear()",
+            "val retainedCues = cues",
+            "val result = if (droppedVisualCueCount > 0)",
+            "retainedCues.orEmpty().toImmutableListAppending(",
+            "} else if (retainedCues == null) {",
+            "retainedCues.toImmutableList()",
+            "cues = null",
+            "droppedVisualCueCount = 0",
             "fun copy(): BoundedVisualFxCueAccumulator = BoundedVisualFxCueAccumulator(",
-            "cues = cues.toMutableList()",
+            "cues = cues?.toMutableList()",
         ),
         additionalSourceAnchors = listOf(
             BoundAnchor(GAMEPLAY_PROGRESSION_SYSTEM_PATH, "visualFxCues.record(cue)"),
             BoundAnchor(
-                GAMEPLAY_RENDER_MODEL_MAPPER_PATH,
-                "target.visualFxCues = visualFxCues.copy()",
+                FOUNDATION_COLLECTIONS_PATH,
+                listOf(
+                    "fun <Element> Iterable<Element>.toImmutableListAppending(",
+                    "val destination = ArrayList<Element>(sourceSize + 1)",
+                    "destination += element",
+                    "return ImmutableList.takeOwnership(destination)",
+                ),
+            ),
+            BoundAnchor(
+                GAMEPLAY_STATE_PATH,
+                listOf(
+                    "internal var visualFxCueStorage: BoundedVisualFxCueAccumulator? =",
+                    "reductionSource?.visualFxCueStorage?.copy()",
+                    "internal val visualFxCues: PendingVisualFxCueBuffer",
+                    "get() = PendingVisualFxCueBuffer(this)",
+                    "owner.visualFxCueStorage ?: BoundedVisualFxCueAccumulator().also",
+                    "owner.visualFxCueStorage = null",
+                ),
+            ),
+        ),
+        additionalEvidenceAnchors = listOf(
+            BoundAnchor(
+                GAMEPLAY_PENDING_OUTPUT_BUFFER_TEST_PATH,
+                listOf(
+                    "emptyReductionCopyKeepsEveryOutputStorageUnmaterialized",
+                    "drainingOneForkAndRecordingLaterCannotMutateSourceOrSiblingOutputs",
+                    "assertNull(candidate.visualFxCueStorage)",
+                    "assertEquals(listOf(VisualFxCue.ClearAll), drainedBranch.takeVisualFxCues().toList())",
+                ),
             ),
         ),
     ),
@@ -1644,8 +1932,14 @@ internal val expectedBounds = listOf(
             "if (particles.size >= InteractionFxLimits.MAX_PARTICLES) return@repeat\n" +
                 "            val angle = baseAngle + (random.nextFloat() - 0.5f) * 1.15f",
             "val life = 0.22f + random.nextFloat() * 0.42f\n            particles += Particle(",
-            "particles = particles.map { value ->",
-            "        }.toImmutableList(),\n        motionEchoes = motionEchoes.map { value ->",
+            "particles = if (particlesDirty) particles.mapToImmutableList { value ->",
+            "} else cachedProjection.particles",
+        ),
+        additionalEvidenceAnchors = listOf(
+            BoundAnchor(
+                GAMEPLAY_FX_TEST_PATH,
+                "categorySnapshotsAreSharedAndPreviouslyPublishedValuesRemainImmutable",
+            ),
         ),
     ),
     BoundProjection(
@@ -1655,8 +1949,8 @@ internal val expectedBounds = listOf(
             "motionEchoes += MotionEcho(",
             "trimFront(motionEchoes, InteractionFxLimits.MAX_MOTION_ECHOES)",
             "while (values.size > maximum) values.removeAt(0)",
-            "motionEchoes = motionEchoes.map { value ->",
-            "        }.toImmutableList(),\n        shockwaves = shockwaves.map { value ->",
+            "motionEchoes = if (motionEchoesDirty) motionEchoes.mapToImmutableList { value ->",
+            "} else cachedProjection.motionEchoes",
         ),
     ),
     BoundProjection(
@@ -1666,8 +1960,8 @@ internal val expectedBounds = listOf(
             "shockwaves += Shockwave(",
             "trimFront(shockwaves, InteractionFxLimits.MAX_SHOCKWAVES)",
             "while (values.size > maximum) values.removeAt(0)",
-            "shockwaves = shockwaves.map { value ->",
-            "        }.toImmutableList(),\n        damageNumbers = damageNumbers.map { value ->",
+            "shockwaves = if (shockwavesDirty) shockwaves.mapToImmutableList { value ->",
+            "} else cachedProjection.shockwaves",
         ),
     ),
     BoundProjection(
@@ -1676,8 +1970,8 @@ internal val expectedBounds = listOf(
         additionalRequiredTokens = listOf(
             "if (damageNumbers.size < InteractionFxLimits.MAX_DAMAGE_NUMBERS)",
             "damageNumbers += DamageNumber(",
-            "damageNumbers = damageNumbers.map { value ->",
-            "        }.toImmutableList(),\n        weaponArcs = weaponArcs.map { value ->",
+            "damageNumbers = if (damageNumbersDirty) damageNumbers.mapToImmutableList { value ->",
+            "} else cachedProjection.damageNumbers",
         ),
     ),
     BoundProjection(
@@ -1687,9 +1981,9 @@ internal val expectedBounds = listOf(
             "weaponArcs += WeaponArc(",
             "trimFront(weaponArcs, InteractionFxLimits.MAX_WEAPON_ARCS)",
             "while (values.size > maximum) values.removeAt(0)",
-            "weaponArcs = weaponArcs.map { value ->\n" +
-                "            WeaponArcProjection(value.fromX, value.fromY, value.toX, value.toY, value.life)\n" +
-                "        }.toImmutableList()",
+            "weaponArcs = if (weaponArcsDirty) weaponArcs.mapToImmutableList { value ->",
+            "WeaponArcProjection(value.fromX, value.fromY, value.toX, value.toY, value.life)",
+            "} else cachedProjection.weaponArcs",
         ),
     ),
     BoundProjection(
@@ -2021,6 +2315,47 @@ internal val expectedBounds = listOf(
         ),
     ),
     BoundProjection(
+        "audio.android-workers", "1", ANDROID_AUDIO_PATH, "WORKER_COUNT = 1",
+        ANDROID_AUDIO_TEST_PATH, "androidWorkerAndDiscardOldestQueueEnforceOneAndTwentyFour",
+        additionalRequiredTokens = listOf(
+            "private val executor = ThreadPoolExecutor(\n" +
+                "        AndroidAudioExecutionPolicy.WORKER_COUNT,\n" +
+                "        AndroidAudioExecutionPolicy.WORKER_COUNT,",
+        ),
+    ),
+    BoundProjection(
+        "audio.android-queue-capacity", "24", ANDROID_AUDIO_PATH, "QUEUE_CAPACITY = 24",
+        ANDROID_AUDIO_TEST_PATH, "androidWorkerAndDiscardOldestQueueEnforceOneAndTwentyFour",
+        additionalRequiredTokens = listOf(
+            "ArrayBlockingQueue(AndroidAudioExecutionPolicy.QUEUE_CAPACITY)",
+            "ThreadPoolExecutor.DiscardOldestPolicy()",
+        ),
+    ),
+    BoundProjection(
+        "audio.android-synthesis-samples", "22050", ANDROID_AUDIO_PATH,
+        "MAX_SAMPLE_COUNT = SAMPLE_RATE", ANDROID_AUDIO_TEST_PATH,
+        "androidSynthesisBufferAcceptsMaximumDurationAndRejectsNext",
+        additionalRequiredTokens = listOf(
+            "SAMPLE_RATE = 22_050",
+            "internal fun androidToneBufferShape(durationSeconds: Float)",
+            "check(sampleCount <= AndroidAudioExecutionPolicy.MAX_SAMPLE_COUNT)",
+            "val shape = androidToneBufferShape(request.durationSeconds)",
+            "val samples = ShortArray(shape.sampleCount)",
+        ),
+    ),
+    BoundProjection(
+        "audio.android-synthesis-bytes", "44100", ANDROID_AUDIO_PATH,
+        "MAX_PCM_BYTES = MAX_SAMPLE_COUNT * BYTES_PER_SAMPLE", ANDROID_AUDIO_TEST_PATH,
+        "androidSynthesisBufferAcceptsMaximumDurationAndRejectsNext",
+        additionalRequiredTokens = listOf(
+            "BYTES_PER_SAMPLE = 2",
+            "internal fun androidToneBufferShape(durationSeconds: Float)",
+            "check(byteCount <= AndroidAudioExecutionPolicy.MAX_PCM_BYTES)",
+            "val shape = androidToneBufferShape(request.durationSeconds)",
+            ".setBufferSizeInBytes(shape.byteCount)",
+        ),
+    ),
+    BoundProjection(
         "content.items", "400",
         "ball/content/api/src/commonMain/kotlin/kinetickk/ball/content/api/ContentVersion.kt",
         "MAX_ITEMS: Int = 400", CONTENT_BOUNDS_TEST_PATH,
@@ -2038,9 +2373,13 @@ internal val expectedBounds = listOf(
                 GAMEPLAY_STATE_PATH,
                 listOf(
                     "?.filterTo(mutableSetOf()) { content.item(it) != null }",
-                    "internal val pendingDiscoveredItemIds = mutableSetOf<Int>()",
-                    "internal val itemStacks = IntArray(content.items.size)",
-                    "internal val familyStacks = IntArray(content.items.maxOfOrNull { it.id / 20 + 1 } ?: 0)",
+                    "internal var pendingDiscoveredItemIdStorage: CopyOnWriteMutableSet<Int>? =",
+                    "reductionSource?.pendingDiscoveredItemIdStorage?.fork()",
+                    "internal val pendingDiscoveredItemIds: PendingDiscoveredItemIdBuffer",
+                    "owner.pendingDiscoveredItemIdStorage = CopyOnWriteMutableSet(mutableSetOf(itemId))",
+                    "owner.pendingDiscoveredItemIdStorage = null",
+                    "?: CopyOnWriteIntArray(IntArray(content.items.size))",
+                    "?: CopyOnWriteIntArray(IntArray(content.items.maxOfOrNull { it.id / 20 + 1 } ?: 0))",
                 ),
             ),
             BoundAnchor(
@@ -2053,17 +2392,45 @@ internal val expectedBounds = listOf(
             ),
             BoundAnchor(
                 GAMEPLAY_NUCLEUS_PATH,
-                "itemStacks = state.engine?.model?.itemStacks?.asIterable()?.toImmutableList()",
+                "itemStacks = state.engine?.model?.itemStacks?.toImmutableList()",
             ),
             BoundAnchor(
                 GAMEPLAY_RENDER_MODEL_MAPPER_PATH,
                 listOf(
-                    "target.discoveredItemIds.addAll(discoveredItemIds)",
-                    "target.pendingDiscoveredItemIds.addAll(pendingDiscoveredItemIds)",
-                    "itemStacks.copyInto(target.itemStacks)",
-                    "familyStacks.copyInto(target.familyStacks)",
-                    "itemStacks = itemStacks.asIterable().toImmutableList()",
-                    "discoveredItemIds = discoveredItemIds.toImmutableSet()",
+                    "copyForReduction(shareStableStorage = false)",
+                    "copyForReduction(shareStableStorage = true)",
+                    "itemStacks = itemStacks.reuseIfStorageShared(",
+                    ") ?: itemStacks.reuseIfContentEqual(reusableCollections?.itemStacks)",
+                    "?: itemStacks.toImmutableList()",
+                    "discoveredItemIds = discoveredItemIds.reuseIfStorageShared(",
+                    ") ?: discoveredItemIds.reuseIfContentEqual(reusableCollections?.discoveredItemIds)",
+                    "?: discoveredItemIds.toImmutableSet()",
+                ),
+            ),
+            BoundAnchor(
+                GAMEPLAY_COW_STORAGE_PATH,
+                listOf(
+                    "internal class CopyOnWriteIntArray",
+                    "internal class CopyOnWriteMutableSet<Element>",
+                    "storage.shared = true",
+                ),
+            ),
+            BoundAnchor(
+                GAMEPLAY_STATE_PATH,
+                listOf(
+                    "internal val discoveredItemIds: CopyOnWriteMutableSet<Int>",
+                    "if (shareStableReductionStorage) it else it.fork()",
+                    "internal val itemStacks: CopyOnWriteIntArray",
+                    "internal val familyStacks: CopyOnWriteIntArray",
+                ),
+            ),
+            BoundAnchor(
+                GAMEPLAY_COW_STORAGE_PATH,
+                listOf(
+                    "internal class CopyOnWriteIntArray",
+                    "internal class CopyOnWriteMutableSet<Element>",
+                    "if (storage.values[index] == value) return",
+                    "storage.shared = true",
                 ),
             ),
         ),
@@ -2071,6 +2438,15 @@ internal val expectedBounds = listOf(
             BoundAnchor(
                 CONTENT_CATALOG_TEST_PATH,
                 "publishedCatalogCollectionsExposeNoMutationAuthorityAndCopyBootstrapInputs",
+            ),
+            BoundAnchor(
+                GAMEPLAY_PENDING_OUTPUT_BUFFER_TEST_PATH,
+                listOf(
+                    "emptyReductionCopyKeepsEveryOutputStorageUnmaterialized",
+                    "drainingOneForkAndRecordingLaterCannotMutateSourceOrSiblingOutputs",
+                    "assertNull(candidate.pendingDiscoveredItemIdStorage)",
+                    "Triple(7L, setOf(0), 1)",
+                ),
             ),
         ),
     ),
@@ -2091,19 +2467,22 @@ internal val expectedBounds = listOf(
             BoundAnchor(
                 GAMEPLAY_STATE_PATH,
                 listOf(
-                    "internal val unlockedWeaponSet = mutableSetOf<WeaponId>().apply",
+                    "internal val unlockedWeaponSet: CopyOnWriteMutableSet<WeaponId>",
+                    "if (shareStableReductionStorage) it else it.fork()",
+                    "?: CopyOnWriteMutableSet(mutableSetOf<WeaponId>().apply",
                     "addAll(bootstrapProgress?.loadout?.unlockedWeapons.orEmpty())",
                     "add(WeaponId.FLUX_WAKE)",
-                    "internal var unlockedWeaponView: Set<WeaponId> = unlockedWeaponSet.toSet()",
-                    "internal val agonyMutationCounts = IntArray(content.weapons.size)",
+                    "internal var unlockedWeaponView: Set<WeaponId> = reductionSource?.unlockedWeaponView",
+                    "internal val agonyMutationCounts: CopyOnWriteIntArray",
+                    "?: CopyOnWriteIntArray(IntArray(content.weapons.size))",
                 ),
             ),
             BoundAnchor(
-                GAMEPLAY_RENDER_MODEL_MAPPER_PATH,
+                GAMEPLAY_COW_STORAGE_PATH,
                 listOf(
-                    "target.unlockedWeaponSet.addAll(unlockedWeaponSet)",
-                    "target.unlockedWeaponView = target.unlockedWeaponSet.toSet()",
-                    "agonyMutationCounts.copyInto(target.agonyMutationCounts)",
+                    "internal class CopyOnWriteIntArray",
+                    "internal class CopyOnWriteMutableSet<Element>",
+                    "storage.shared = true",
                 ),
             ),
             BoundAnchor(
@@ -2136,8 +2515,14 @@ internal val expectedBounds = listOf(
                     "private val metaUpgrades = data.metaUpgrades.toImmutableList()",
                 ),
             ),
-            BoundAnchor(GAMEPLAY_STATE_PATH, "internal val metaRanks = IntArray(content.metaUpgrades.size)"),
-            BoundAnchor(GAMEPLAY_RENDER_MODEL_MAPPER_PATH, "metaRanks.copyInto(target.metaRanks)"),
+            BoundAnchor(
+                GAMEPLAY_STATE_PATH,
+                listOf(
+                    "internal val metaRanks: CopyOnWriteIntArray",
+                    "if (shareStableReductionStorage) it else it.fork()",
+                    "?: CopyOnWriteIntArray(IntArray(content.metaUpgrades.size)",
+                ),
+            ),
         ),
         additionalEvidenceAnchors = listOf(
             BoundAnchor(
@@ -2163,10 +2548,12 @@ internal val expectedBounds = listOf(
             BoundAnchor(
                 GAMEPLAY_STATE_PATH,
                 listOf(
-                    "internal val relicRanks = IntArray(content.relics.size)",
-                    "internal val relicCooldowns = FloatArray(content.relics.size)",
-                    "internal val relicCounters = IntArray(content.relics.size)",
-                    "internal val relicProcCounts = IntArray(content.relics.size)",
+                    "internal val relicRanks: CopyOnWriteIntArray",
+                    "internal val relicCooldowns: CopyOnWriteFloatArray",
+                    "internal val relicCounters: CopyOnWriteIntArray",
+                    "internal val relicProcCounts: CopyOnWriteIntArray",
+                    "?: CopyOnWriteIntArray(IntArray(content.relics.size))",
+                    "?: CopyOnWriteFloatArray(FloatArray(content.relics.size))",
                 ),
             ),
             BoundAnchor(
@@ -2178,12 +2565,19 @@ internal val expectedBounds = listOf(
                 ),
             ),
             BoundAnchor(
+                GAMEPLAY_ENTITIES_PATH,
+                listOf(
+                    "relicCounters = relicCounters.fork()",
+                    "relicTimers = relicTimers.fork()",
+                    "relicValues = relicValues.fork()",
+                ),
+            ),
+            BoundAnchor(
                 GAMEPLAY_RENDER_MODEL_MAPPER_PATH,
                 listOf(
-                    "relicCounters = enemy.relicCounters.copyOf()",
-                    "relicTimers = enemy.relicTimers.copyOf()",
-                    "relicValues = enemy.relicValues.copyOf()",
-                    "relicRanks = relicRanks.asIterable().toImmutableList()",
+                    "relicRanks = relicRanks.reuseIfStorageShared(",
+                    ") ?: relicRanks.reuseIfContentEqual(reusableCollections?.relicRanks)",
+                    "?: relicRanks.toImmutableList()",
                 ),
             ),
             BoundAnchor(
@@ -2192,15 +2586,6 @@ internal val expectedBounds = listOf(
                     "relicCounters = IntArray(content.relics.size)",
                     "relicTimers = FloatArray(content.relics.size)",
                     "relicValues = FloatArray(content.relics.size)",
-                ),
-            ),
-            BoundAnchor(
-                GAMEPLAY_RENDER_MODEL_MAPPER_PATH,
-                listOf(
-                    "relicRanks.copyInto(target.relicRanks)",
-                    "relicCooldowns.copyInto(target.relicCooldowns)",
-                    "relicCounters.copyInto(target.relicCounters)",
-                    "relicProcCounts.copyInto(target.relicProcCounts)",
                 ),
             ),
         ),
@@ -2260,8 +2645,10 @@ internal val expectedBounds = listOf(
             BoundAnchor(
                 GAMEPLAY_RENDER_MODEL_MAPPER_PATH,
                 listOf(
-                    "target.equippedRelics = equippedRelics.toList()",
-                    "equippedRelics = equippedRelics.toImmutableList()",
+                    "target.equippedRelics = equippedRelics",
+                    "equippedRelics = equippedRelics.reuseIfIdentical(",
+                    ") ?: equippedRelics.reuseIfContentEqual(reusableCollections?.equippedRelics)",
+                    "?: equippedRelics.toImmutableList()",
                 ),
             ),
         ),
@@ -2541,7 +2928,8 @@ internal val mechanicallyDerivedBounds = listOf(
     MechanicallyDerivedBoundProjection(
         id = "gameplay.item-indexed-state",
         value = "item arrays/discoveries <=400; family stacks <=20",
-        derivation = "validated contiguous Item IDs; pending discoveries are a subset; copies preserve cardinality",
+        derivation =
+            "validated contiguous Item IDs; pending discoveries are a subset; copy-on-write forks preserve cardinality",
         sourceAnchors = listOf(
             BoundAnchor(
                 CONTENT_CATALOG_PATH,
@@ -2554,9 +2942,13 @@ internal val mechanicallyDerivedBounds = listOf(
                 GAMEPLAY_STATE_PATH,
                 listOf(
                     "?.filterTo(mutableSetOf()) { content.item(it) != null }",
-                    "internal val pendingDiscoveredItemIds = mutableSetOf<Int>()",
-                    "internal val itemStacks = IntArray(content.items.size)",
-                    "internal val familyStacks = IntArray(content.items.maxOfOrNull { it.id / 20 + 1 } ?: 0)",
+                    "internal var pendingDiscoveredItemIdStorage: CopyOnWriteMutableSet<Int>? =",
+                    "reductionSource?.pendingDiscoveredItemIdStorage?.fork()",
+                    "internal val pendingDiscoveredItemIds: PendingDiscoveredItemIdBuffer",
+                    "owner.pendingDiscoveredItemIdStorage = CopyOnWriteMutableSet(mutableSetOf(itemId))",
+                    "owner.pendingDiscoveredItemIdStorage = null",
+                    "?: CopyOnWriteIntArray(IntArray(content.items.size))",
+                    "?: CopyOnWriteIntArray(IntArray(content.items.maxOfOrNull { it.id / 20 + 1 } ?: 0))",
                 ),
             ),
             BoundAnchor(
@@ -2569,17 +2961,27 @@ internal val mechanicallyDerivedBounds = listOf(
             ),
             BoundAnchor(
                 GAMEPLAY_NUCLEUS_PATH,
-                "itemStacks = state.engine?.model?.itemStacks?.asIterable()?.toImmutableList()",
+                "itemStacks = state.engine?.model?.itemStacks?.toImmutableList()",
             ),
             BoundAnchor(
                 GAMEPLAY_RENDER_MODEL_MAPPER_PATH,
                 listOf(
-                    "target.discoveredItemIds.addAll(discoveredItemIds)",
-                    "target.pendingDiscoveredItemIds.addAll(pendingDiscoveredItemIds)",
-                    "itemStacks.copyInto(target.itemStacks)",
-                    "familyStacks.copyInto(target.familyStacks)",
-                    "itemStacks = itemStacks.asIterable().toImmutableList()",
-                    "discoveredItemIds = discoveredItemIds.toImmutableSet()",
+                    "copyForReduction(shareStableStorage = false)",
+                    "copyForReduction(shareStableStorage = true)",
+                    "itemStacks = itemStacks.reuseIfStorageShared(",
+                    ") ?: itemStacks.reuseIfContentEqual(reusableCollections?.itemStacks)",
+                    "?: itemStacks.toImmutableList()",
+                    "discoveredItemIds = discoveredItemIds.reuseIfStorageShared(",
+                    ") ?: discoveredItemIds.reuseIfContentEqual(reusableCollections?.discoveredItemIds)",
+                    "?: discoveredItemIds.toImmutableSet()",
+                ),
+            ),
+            BoundAnchor(
+                GAMEPLAY_COW_STORAGE_PATH,
+                listOf(
+                    "internal class CopyOnWriteIntArray",
+                    "internal class CopyOnWriteMutableSet<Element>",
+                    "storage.shared = true",
                 ),
             ),
         ),
@@ -2596,15 +2998,23 @@ internal val mechanicallyDerivedBounds = listOf(
                 "ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/GameplayNucleusTest.kt",
                 "retainedRenderAndQueryCollectionsStayImmutable",
             ),
+            BoundAnchor(
+                GAMEPLAY_PENDING_OUTPUT_BUFFER_TEST_PATH,
+                listOf(
+                    "emptyReductionCopyKeepsEveryOutputStorageUnmaterialized",
+                    "drainingOneForkAndRecordingLaterCannotMutateSourceOrSiblingOutputs",
+                ),
+            ),
         ),
         policyRow =
             "| `gameplay.item-indexed-state` | item arrays/discoveries <=400; family stacks <=20 | " +
-                "validated contiguous Item IDs; pending is a subset |",
+                "validated contiguous Item IDs; pending is a subset; cardinality-stable COW |",
     ),
     MechanicallyDerivedBoundProjection(
         id = "gameplay.weapon-indexed-state",
         value = "unlocked weapons/mutation counters <=12",
-        derivation = "closed WeaponId bootstrap with no live growth; copy and fixed array retain captured cardinality",
+        derivation =
+            "closed WeaponId bootstrap with no live growth; copy-on-write storage retains captured cardinality",
         sourceAnchors = listOf(
             BoundAnchor(
                 CONTENT_CATALOG_PATH,
@@ -2616,19 +3026,22 @@ internal val mechanicallyDerivedBounds = listOf(
             BoundAnchor(
                 GAMEPLAY_STATE_PATH,
                 listOf(
-                    "internal val unlockedWeaponSet = mutableSetOf<WeaponId>().apply",
+                    "internal val unlockedWeaponSet: CopyOnWriteMutableSet<WeaponId>",
+                    "if (shareStableReductionStorage) it else it.fork()",
+                    "?: CopyOnWriteMutableSet(mutableSetOf<WeaponId>().apply",
                     "addAll(bootstrapProgress?.loadout?.unlockedWeapons.orEmpty())",
                     "add(WeaponId.FLUX_WAKE)",
-                    "internal var unlockedWeaponView: Set<WeaponId> = unlockedWeaponSet.toSet()",
-                    "internal val agonyMutationCounts = IntArray(content.weapons.size)",
+                    "internal var unlockedWeaponView: Set<WeaponId> = reductionSource?.unlockedWeaponView",
+                    "internal val agonyMutationCounts: CopyOnWriteIntArray",
+                    "?: CopyOnWriteIntArray(IntArray(content.weapons.size))",
                 ),
             ),
             BoundAnchor(
-                GAMEPLAY_RENDER_MODEL_MAPPER_PATH,
+                GAMEPLAY_COW_STORAGE_PATH,
                 listOf(
-                    "target.unlockedWeaponSet.addAll(unlockedWeaponSet)",
-                    "target.unlockedWeaponView = target.unlockedWeaponSet.toSet()",
-                    "agonyMutationCounts.copyInto(target.agonyMutationCounts)",
+                    "internal class CopyOnWriteIntArray",
+                    "internal class CopyOnWriteMutableSet<Element>",
+                    "storage.shared = true",
                 ),
             ),
         ),
@@ -2648,7 +3061,7 @@ internal val mechanicallyDerivedBounds = listOf(
         ),
         policyRow =
             "| `gameplay.weapon-indexed-state` | unlocked weapons/mutation counters <=12 | " +
-                "closed WeaponId bootstrap; invariant-preserving copy |",
+                "closed WeaponId bootstrap; invariant-preserving COW |",
     ),
     MechanicallyDerivedBoundProjection(
         id = "gameplay.meta-indexed-state",
@@ -2659,8 +3072,14 @@ internal val mechanicallyDerivedBounds = listOf(
                 CONTENT_CATALOG_PATH,
                 "requireBound(\"meta upgrades\", data.metaUpgrades.size, ContentBounds.MAX_META_UPGRADES)",
             ),
-            BoundAnchor(GAMEPLAY_STATE_PATH, "internal val metaRanks = IntArray(content.metaUpgrades.size)"),
-            BoundAnchor(GAMEPLAY_RENDER_MODEL_MAPPER_PATH, "metaRanks.copyInto(target.metaRanks)"),
+            BoundAnchor(
+                GAMEPLAY_STATE_PATH,
+                listOf(
+                    "internal val metaRanks: CopyOnWriteIntArray",
+                    "if (shareStableReductionStorage) it else it.fork()",
+                    "?: CopyOnWriteIntArray(IntArray(content.metaUpgrades.size)",
+                ),
+            ),
         ),
         evidenceAnchors = listOf(
             BoundAnchor(
@@ -2681,10 +3100,12 @@ internal val mechanicallyDerivedBounds = listOf(
             BoundAnchor(
                 GAMEPLAY_STATE_PATH,
                 listOf(
-                    "internal val relicRanks = IntArray(content.relics.size)",
-                    "internal val relicCooldowns = FloatArray(content.relics.size)",
-                    "internal val relicCounters = IntArray(content.relics.size)",
-                    "internal val relicProcCounts = IntArray(content.relics.size)",
+                    "internal val relicRanks: CopyOnWriteIntArray",
+                    "internal val relicCooldowns: CopyOnWriteFloatArray",
+                    "internal val relicCounters: CopyOnWriteIntArray",
+                    "internal val relicProcCounts: CopyOnWriteIntArray",
+                    "?: CopyOnWriteIntArray(IntArray(content.relics.size))",
+                    "?: CopyOnWriteFloatArray(FloatArray(content.relics.size))",
                 ),
             ),
             BoundAnchor(
@@ -2706,12 +3127,19 @@ internal val mechanicallyDerivedBounds = listOf(
                 ),
             ),
             BoundAnchor(
+                GAMEPLAY_ENTITIES_PATH,
+                listOf(
+                    "relicCounters = relicCounters.fork()",
+                    "relicTimers = relicTimers.fork()",
+                    "relicValues = relicValues.fork()",
+                ),
+            ),
+            BoundAnchor(
                 GAMEPLAY_RENDER_MODEL_MAPPER_PATH,
                 listOf(
-                    "relicCounters = enemy.relicCounters.copyOf()",
-                    "relicTimers = enemy.relicTimers.copyOf()",
-                    "relicValues = enemy.relicValues.copyOf()",
-                    "relicRanks = relicRanks.asIterable().toImmutableList()",
+                    "relicRanks = relicRanks.reuseIfStorageShared(",
+                    ") ?: relicRanks.reuseIfContentEqual(reusableCollections?.relicRanks)",
+                    "?: relicRanks.toImmutableList()",
                 ),
             ),
         ),
@@ -2732,47 +3160,314 @@ internal val mechanicallyDerivedBounds = listOf(
     MechanicallyDerivedBoundProjection(
         id = "gameplay.collision-live-enemy-ids",
         value = "<=120",
-        derivation = "one-shot filtered identity set from the already bounded enemy collection",
+        derivation =
+            "lazy compact sorted identity array from the bounded live-enemy collection when hit history exists",
         sourceAnchors = listOf(
             BoundAnchor(
                 GAMEPLAY_COLLISION_SYSTEM_PATH,
                 listOf(
-                    "val liveEnemyIds = enemies.asSequence()",
-                    ".filter { enemy -> !enemy.dead }",
-                    ".mapTo(mutableSetOf(), Enemy::id)",
-                    "projectile.retainLiveEnemyHits(liveEnemyIds)",
+                    "needsLiveEnemyIds = needsLiveEnemyIds || projectile.hasRecordedEnemyHits",
+                    "val ids = IntArray(enemies.size)",
+                    "if (enemy.dead) continue",
+                    "ids[liveEnemyCount++] = enemy.id",
+                    "if (!idsAreSorted) ids.sort(0, liveEnemyCount)",
+                    "projectile.retainLiveEnemyHits(liveEnemyIds, liveEnemyCount)",
                 ),
             ),
         ),
-        policyRow = "| `gameplay.collision-live-enemy-ids` | <=120 | filtered identity set from bounded enemies |",
+        policyRow =
+            "| `gameplay.collision-live-enemy-ids` | <=120 | lazy compact sorted array from bounded live enemies |",
     ),
     MechanicallyDerivedBoundProjection(
         id = "gameplay.reducer-copy-collections",
         value = "equal to committed bounded source cardinality",
         derivation =
-            "private copyForReduction clones committed state; subsequent growth still crosses " +
-                "the modeled gates",
+            "private reduction construction preserves cardinality via exact-size entity copies and " +
+                "write-detaching storage forks; scalar-only pulses may share exhaustive stable storage; " +
+                "nullable pending-output storage is copied only when materialized",
         sourceAnchors = listOf(
             BoundAnchor(
                 GAMEPLAY_RENDER_MODEL_MAPPER_PATH,
                 listOf(
                     "internal fun MutableGameState.copyForReduction(): MutableGameState",
-                    "target.enemies.addAll(enemies.map { enemy ->",
-                    "target.projectiles.addAll(projectiles.map(Projectile::isolatedCopy))",
-                    "target.pickups.addAll(pickups.map(Pickup::copy))",
-                    "target.trail.addAll(trail.map(TrailPoint::copy))",
-                    "target.soundCues.addAll(soundCues)",
-                    "target.delayedRelicHits.addAll(delayedRelicHits.map(DelayedRelicHit::copy))",
-                    "target.weaponNodes.addAll(weaponNodes.map(WeaponNode::copy))",
-                    "target.weaponOrbitals.addAll(weaponOrbitals.map(WeaponOrbital::copy))",
-                    "target.choices = choices.toList()",
-                    "target.visualFxCues = visualFxCues.copy()",
+                    "copyForReduction(shareStableStorage = false)",
+                    "internal fun MutableGameState.copyForScalarInputReduction(): MutableGameState",
+                    "copyForReduction(shareStableStorage = true)",
+                    "reductionSource = this",
+                    "shareStableReductionStorage = shareStableStorage",
+                    "target.equippedRelics = equippedRelics",
+                    "target.choices = choices",
+                ),
+            ),
+            BoundAnchor(
+                GAMEPLAY_STATE_PATH,
+                listOf(
+                    "if (shareStableReductionStorage) source",
+                    "source.mapTo(ArrayList(source.size), Enemy::isolatedCopy)",
+                    "else source.mapTo(ArrayList(source.size), Projectile::isolatedCopy)",
+                    "else source.mapTo(ArrayList(source.size), Pickup::copy)",
+                    "else source.mapTo(ArrayList(source.size), TrailPoint::copy)",
+                    "else source.mapTo(ArrayList(source.size), WeaponNode::copy)",
+                    "else source.mapTo(ArrayList(source.size), WeaponOrbital::copy)",
+                    "reductionSource?.pendingDiscoveredItemIdStorage?.fork()",
+                    "reductionSource?.soundCueStorage?.let { source -> ArrayList(source) }",
+                    "reductionSource?.visualFxCueStorage?.copy()",
+                ),
+            ),
+            BoundAnchor(
+                GAMEPLAY_COW_STORAGE_PATH,
+                listOf(
+                    "storage.shared = true",
+                    "if (!current.shared) return current.values",
+                    "return current.values.copyOf().also",
+                    "fun sharesStorageWith(other: CopyOnWriteIntArray): Boolean",
+                ),
+            ),
+            BoundAnchor(
+                GAMEPLAY_REDUCER_PATH,
+                listOf(
+                    "if (intent.preservesStableSimulationStorage())",
+                    "state.model.copyForScalarInputReduction()",
+                    "is GameplayInteractionPulse.FrameElapsed,",
+                    "is GameplayInteractionPulse.ChoiceSelected,",
+                    "GameplayInteractionPulse.ChoicesRerolled,",
+                    "-> false",
+                ),
+            ),
+        ),
+        evidenceAnchors = listOf(
+            BoundAnchor(
+                GAMEPLAY_REDUCTION_ISOLATION_TEST_PATH,
+                listOf(
+                    "everyScalarCowIntentLeavesTheCompleteCommittedSourceFingerprintUnchanged",
+                    "fullReductionAfterScalarCowDoesNotMutateSourceOrSiblingBranch",
+                    "scalarReductionDrainsCopiedPendingOutputsWithoutMutatingSourceOrSiblings",
+                    "threeProductionFrameSiblingsDetachOnlyActiveRelicTimersAndRemainDeterministic",
+                    "threeProductionCollisionSiblingsDetachEnemyRelicBuffersWithoutTouchingSource",
+                    "threeProductionItemChoiceSiblingsDetachProgressionStorageIndependently",
+                    "copyOnWriteProductionTraceMatchesIndependentEagerMutableReference",
+                ),
+            ),
+            BoundAnchor(
+                GAMEPLAY_COW_STORAGE_TEST_PATH,
+                listOf(
+                    "intArrayMultiForkWritesDetachInBothDirectionsWithoutCrossBranchMutation",
+                    "sameIntValueAndFillRemainSharedUntilContentActuallyChanges",
+                    "floatArrayUsesRawBitsForSignedZeroAndNanPayloadDetachDecisions",
+                    "setNoOpMutatorsStaySharedAndIteratorRemoveIsForkSafe",
+                    "mutableIteratorRejectsRemoveBeforeNextAndRepeatedRemoveOnEveryOwnershipPath",
+                ),
+            ),
+            BoundAnchor(
+                GAMEPLAY_PENDING_OUTPUT_BUFFER_TEST_PATH,
+                listOf(
+                    "emptyReductionCopyKeepsEveryOutputStorageUnmaterialized",
+                    "drainingOneForkAndRecordingLaterCannotMutateSourceOrSiblingOutputs",
+                    "assertNull(candidate.pendingDiscoveredItemIdStorage)",
+                    "assertNull(candidate.soundCueStorage)",
+                    "assertNull(candidate.visualFxCueStorage)",
                 ),
             ),
         ),
         policyRow =
             "| `gameplay.reducer-copy-collections` | equal to bounded committed source cardinality | " +
-                "invariant-preserving private reduction clone |",
+                "exact-size entity copy; write-detaching COW; exhaustive scalar-only sharing; lazy bounded outputs |",
+    ),
+    MechanicallyDerivedBoundProjection(
+        id = "gameplay.render-projection-collections",
+        value = "equal to bounded source cardinality",
+        derivation =
+            "an exact committed predecessor state/snapshot provenance pair permits identity or shared-storage " +
+                "reuse; otherwise raw-bit, field, and stable-order equality or fresh immutable mapping " +
+                "preserves source cardinality",
+        sourceAnchors = listOf(
+            BoundAnchor(
+                GAMEPLAY_IMPL_PATH,
+                listOf(
+                    "private var committedFrame: CommittedGameplayFrame",
+                    "localOutputItem.bindLocalCausalScope(causalScope)",
+                    "GameplayNucleus.decide(\n                    beforeRoot,",
+                    "renderModelNeutralTransition =\n                            pulse === GameplayInteractionPulse.DashRequested,",
+                    "next.engine === before.engine ||",
+                    "renderModelNeutralTransition",
+                    "GameplayNucleus.reuseRenderSnapshot(",
+                    "GameplayNucleus.renderSnapshot(",
+                    "reusableSnapshot = committedRenderSnapshot",
+                    "publish(decision.frame.nextState, renderSnapshot)",
+                    "committedFrame = CommittedGameplayFrame(state, renderSnapshot)",
+                ),
+            ),
+            BoundAnchor(
+                GAMEPLAY_NUCLEUS_PATH,
+                listOf(
+                    "validateReusableRenderPair(state, reusableState, reusableSnapshot)",
+                    "state.revision.value == reusableState.revision.value + 1L",
+                    "reusableSnapshot.instanceId == reusableState.instanceId",
+                    "reusableSnapshot.revision == reusableState.revision",
+                    "reusableState.content === state.content",
+                    "reusableSnapshot.projectionSourceIdentity ===",
+                    "reusableState.engine?.renderProjectionIdentity",
+                    "reusableModel.content === reusableState.content",
+                    "identitySource = reusableSource",
+                ),
+            ),
+            BoundAnchor(
+                GAMEPLAY_REDUCER_PATH,
+                "internal val renderProjectionIdentity: Any = Any()",
+            ),
+            BoundAnchor(
+                GAMEPLAY_RENDER_SNAPSHOT_PATH,
+                "internal val projectionSourceIdentity: Any?",
+            ),
+            BoundAnchor(
+                GAMEPLAY_RENDER_MODEL_MAPPER_PATH,
+                listOf(
+                    "require(identitySource == null || identitySource.content === content)",
+                    "reusableCollections.content === identitySource.content",
+                    "equippedRelics = equippedRelics.reuseIfIdentical(",
+                    "value === identitySource?.totem",
+                    "enemies = enemies.reuseIfIdentical(identitySource?.enemies, reusableCollections?.enemies)",
+                    "?: projectiles.reuseIfIdentical(",
+                    "?: pickups.reuseIfIdentical(identitySource?.pickups, reusableCollections?.pickups)",
+                    "?: trail.reuseIfIdentical(identitySource?.trail, reusableCollections?.trail)",
+                    "?: weaponNodes.reuseIfIdentical(",
+                    "?: weaponOrbitals.reuseIfIdentical(",
+                    "choices = choices.reuseIfIdentical(identitySource?.choices, reusableCollections?.choices)",
+                    "itemStacks = itemStacks.reuseIfStorageShared(",
+                    "discoveredItemIds = discoveredItemIds.reuseIfStorageShared(",
+                    "relicRanks = relicRanks.reuseIfStorageShared(",
+                    "if (!sameProjection(this[index], previous[index])) return null",
+                    "private fun Float.sameBitsAs(other: Float): Boolean = toRawBits() == other.toRawBits()",
+                    "?: enemies.mapToImmutableList { value ->",
+                    "?: itemStacks.toImmutableList()",
+                    "?: discoveredItemIds.toImmutableSet()",
+                ),
+            ),
+            BoundAnchor(
+                GAMEPLAY_COW_STORAGE_PATH,
+                listOf(
+                    "fun reuseIfContentEqual(previous: ImmutableSet<Element>?)",
+                    "if (previous == null || previous.size != storage.values.size) return null",
+                    "val current = storage.values.iterator()",
+                    "val retained = previous.iterator()",
+                    "if (current.next() != retained.next()) return null",
+                    "if (storage.values[index].toRawBits() == value.toRawBits()) return",
+                    "storage.shared = true",
+                ),
+            ),
+        ),
+        evidenceAnchors = listOf(
+            BoundAnchor(
+                GAMEPLAY_IMPL_TEST_PATH,
+                listOf(
+                    "renderSnapshotIsBuiltOncePerCommittedRevision",
+                    "renderModelIsReusedWhenOnlyTheStampedRevisionChanges",
+                    "dashCachedModelMatchesAnIndependentFreshProjectionExactly",
+                    "scalarInputPublicationStructurallySharesUnchangedCollections",
+                ),
+            ),
+            BoundAnchor(
+                GAMEPLAY_NUCLEUS_TEST_PATH,
+                listOf(
+                    "retainedRenderAndQueryCollectionsStayImmutable",
+                    "reusableRenderSnapshotMustMatchItsExactCommittedSource",
+                ),
+            ),
+            BoundAnchor(
+                GAMEPLAY_RENDER_MODEL_MAPPER_TEST_PATH,
+                listOf(
+                    "identityMatchedScalarSourceReusesEveryProjectionWithoutReadingStableLists",
+                    "fullReductionRebuildsOnlyTheChangedProjectionFamily",
+                    "mismatchedIdentitySourceUsesExactFallbackAndCannotReuseChangedStorage",
+                    "identityMismatchFallsBackToRawFloatBitsRatherThanNumericEquality",
+                ),
+            ),
+            BoundAnchor(
+                GAMEPLAY_COW_STORAGE_TEST_PATH,
+                listOf(
+                    "intArrayMultiForkWritesDetachInBothDirectionsWithoutCrossBranchMutation",
+                    "floatArrayUsesRawBitsForSignedZeroAndNanPayloadDetachDecisions",
+                    "immutableSetReuseRequiresTheSameStableIterationOrder",
+                ),
+            ),
+        ),
+        policyRow =
+            "| `gameplay.render-projection-collections` | equal to bounded source cardinality | " +
+                "verified predecessor provenance; identity/storage reuse or exact ordered fallback |",
+    ),
+    MechanicallyDerivedBoundProjection(
+        id = "gameplay.stable-compaction",
+        value = "retained cardinality <= bounded source; stable survivor order",
+        derivation =
+            "forward survivor compaction with reverse tail deletion, or index-stable removal, " +
+                "never grows the bounded source and preserves the relative order of survivors",
+        sourceAnchors = listOf(
+            BoundAnchor(
+                GAMEPLAY_ENEMY_SYSTEM_PATH,
+                listOf(
+                    "enemies.removeMatchingStable { enemy ->",
+                    "projectiles.removeMatchingStable { projectile ->",
+                    "pickups.removeMatchingStable { pickup -> pickup.life <= 0f }",
+                    "internal inline fun <Element> MutableList<Element>.removeMatchingStable(",
+                    "if (retainedCount != index) this[retainedCount] = value",
+                    "while (index >= retainedCount)",
+                    "removeAt(index)",
+                ),
+            ),
+            BoundAnchor(
+                GAMEPLAY_LOOP_PATH,
+                listOf(
+                    "projectiles.removeMatchingStable { projectile -> projectile.hostile }",
+                    "var retainedDelayedHitCount = 0",
+                    "delayedRelicHits[retainedDelayedHitCount] = delayed",
+                    "while (delayedHitIndex >= retainedDelayedHitCount)",
+                    "delayedRelicHits.removeAt(delayedHitIndex)",
+                ),
+            ),
+            BoundAnchor(
+                GAMEPLAY_COLLISION_SYSTEM_PATH,
+                listOf(
+                    "var retainedCount = 0",
+                    "enemies[retainedCount] = enemy",
+                    "while (index >= retainedCount)",
+                    "projectiles.removeAt(hostileIndex)",
+                    "projectiles.removeAt(friendlyIndex)",
+                    "pickups.removeAt(pickupIndex)",
+                ),
+            ),
+            BoundAnchor(
+                GAMEPLAY_WEAPON_SYSTEM_PATH,
+                listOf(
+                    "var retainedTrailCount = 0",
+                    "trail[retainedTrailCount] = point",
+                    "while (trailIndex >= retainedTrailCount)",
+                    "trail.removeAt(trailIndex)",
+                ),
+            ),
+            BoundAnchor(
+                GAMEPLAY_PROGRESSION_SYSTEM_PATH,
+                listOf(
+                    "delayedRelicHits.removeMatchingStable { delayedHit -> delayedHit.relicId == id }",
+                    "projectiles.removeMatchingStable { projectile -> !projectile.hostile }",
+                ),
+            ),
+        ),
+        evidenceAnchors = listOf(
+            BoundAnchor(
+                GAMEPLAY_COLLECTION_BOUNDS_TEST_PATH,
+                listOf(
+                    "fixedStepStableCompactionRetainsOrderAcrossConsecutiveRemovals",
+                    "collisionCompactionRetainsOrderAcrossConsecutiveProjectileAndPickupHits",
+                    "listOf(retainedEnemy.id, lastRetainedEnemy.id)",
+                    "listOf(firstRetainedProjectile, lastRetainedProjectile)",
+                    "listOf(firstRetainedPickup, lastRetainedPickup)",
+                    "listOf(firstRetainedHit, lastRetainedHit)",
+                ),
+            ),
+        ),
+        policyRow =
+            "| `gameplay.stable-compaction` | retained cardinality <= bounded source; stable survivor order | " +
+                "forward survivor compaction/reverse-tail deletion or index-stable removal |",
     ),
     MechanicallyDerivedBoundProjection(
         id = "profile.codec-temporary-collections",
@@ -2956,17 +3651,23 @@ internal val mechanicallyDerivedBounds = listOf(
     MechanicallyDerivedBoundProjection(
         id = "foundation.immutable-set-copy",
         value = "list = input cardinality; set <= input cardinality",
-        derivation = "list owns elements.toList(); set appends only first occurrences before that list copy",
+        derivation =
+            "immutable inputs are safely reused; other lists own one copied storage; sets preserve " +
+                "source cardinality/order or deduplicate in linear time before taking local ownership",
         sourceAnchors = listOf(
             BoundAnchor(
                 FOUNDATION_COLLECTIONS_PATH,
                 listOf(
-                    "fun <Element> copyOf(elements: Iterable<Element>): ImmutableList<Element> =",
-                    "ImmutableList(elements.toList())",
-                    "val distinctElements = mutableListOf<Element>()",
-                    "if (element !in distinctElements)",
-                    "distinctElements += element",
-                    "return ImmutableSet(ImmutableList.copyOf(distinctElements))",
+                    "if (elements is ImmutableList<*>) return elements as ImmutableList<Element>",
+                    "return ImmutableList(elements.toList())",
+                    "internal fun <Element> takeOwnership(elements: List<Element>): ImmutableList<Element>",
+                    "if (elements is ImmutableSet<*>) return elements as ImmutableSet<Element>",
+                    "if (elements is Set<*>)",
+                    "return ImmutableSet(ImmutableList.copyOf(elements as Iterable<Element>))",
+                    "val seen = mutableSetOf<Element>()",
+                    "if (seen.add(element))",
+                    "return ImmutableSet(ImmutableList.takeOwnership(distinctElements))",
+                    "inline fun <Element, Result> Iterable<Element>.mapToImmutableList(",
                 ),
             ),
         ),
@@ -2978,7 +3679,7 @@ internal val mechanicallyDerivedBounds = listOf(
         ),
         policyRow =
             "| `foundation.immutable-set-copy` | list = input cardinality; set <= input cardinality | " +
-                "owned list copy; first-occurrence-only set copy |",
+                "safe immutable reuse or owned copy; stable first-occurrence set semantics |",
     ),
 ).also { projections ->
     requireUniqueKeys("mechanicallyDerivedBounds", projections, MechanicallyDerivedBoundProjection::id)
@@ -3047,7 +3748,7 @@ internal val internalProjectPackages = uniqueLinkedMap("internalProjectPackages"
 internal val allowedForeignInternalProjectEdges = setOf(
     ProjectEdge(":app:shared", "commonMainImplementation", ":ball:content:impl"),
     ProjectEdge(":app:shared", "commonMainImplementation", ":ball:gameplay:impl"),
-    ProjectEdge(":app:shared", "commonMainImplementation", ":ball:gameplay:interaction"),
+    ProjectEdge(":app:shared", "commonTestImplementation", ":ball:gameplay:interaction"),
     ProjectEdge(":app:shared", "commonMainImplementation", ":ball:profile:impl"),
     ProjectEdge(":app:shared", "commonMainImplementation", ":ball:profile:interaction"),
     ProjectEdge(":app:shared", "commonMainImplementation", ":flow:session:impl"),

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "capability": "kinetickk-incremental-performance-gate",
+  "runOrder": [
+    "candidate",
+    "baseline",
+    "baseline",
+    "candidate"
+  ],
+  "gameplaySemanticContract": "outcome-fingerprint",
+  "profileSemanticContract": "exact-metadata",
+  "spdxFileCopyrightText": "2026 Vladislav Tomilov",
+  "spdxLicenseIdentifier": "GPL-3.0-or-later"
+}

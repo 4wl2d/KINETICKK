@@ -81,40 +81,10 @@ internal data class HomeViewport(
 )
 
 internal fun resolveHomePress(viewport: HomeViewport, x: Float, y: Float): HomeAction? {
-    val d = viewport.density
-    val cardY = viewport.height * 0.62f
-    if (y in cardY - 55f * d..cardY + 55f * d) {
-        val center = viewport.width * 0.5f
-        when {
-            x in center - 190f * d..center - 70f * d -> return HomeAction.SelectCoreShape(CoreShape.ORB)
-            x in center - 60f * d..center + 60f * d -> return HomeAction.SelectCoreShape(CoreShape.PRISM)
-            x in center + 70f * d..center + 190f * d -> return HomeAction.SelectCoreShape(CoreShape.SHARD)
+    val hit = homeLayoutGeometry(viewport.width, viewport.height, viewport.density)
+        .actions
+        .firstOrNull { action ->
+            x in action.bounds.left..action.bounds.right && y in action.bounds.top..action.bounds.bottom
         }
-    }
-
-    val buttonY = viewport.height * 0.78f
-    if (
-        x in viewport.width * 0.5f - 150f * d..viewport.width * 0.5f + 150f * d &&
-        y in buttonY - 31f * d..buttonY + 31f * d
-    ) {
-        return HomeAction.StartRun
-    }
-
-    val secondaryY = viewport.height * 0.9f
-    if (y !in secondaryY - 20f * d..secondaryY + 20f * d) return null
-    val spacing = minOf(132f * d, viewport.width * 0.19f)
-    val start = viewport.width * 0.5f - spacing * 2f
-    val index = ((x - start) / spacing).toInt().let { floor ->
-        val fraction = (x - start) / spacing - floor
-        if (fraction >= 0.5f) floor + 1 else floor
-    }
-    val itemCenter = start + index * spacing
-    if (index !in 0..4 || x !in itemCenter - spacing * 0.44f..itemCenter + spacing * 0.44f) return null
-    return when (index) {
-        0 -> HomeAction.OpenLab
-        1 -> HomeAction.OpenArmory
-        2 -> HomeAction.OpenRebirth
-        3 -> HomeAction.OpenCodex
-        else -> HomeAction.OpenSettings
-    }
+    return hit?.target?.toHomeAction()
 }

@@ -16,12 +16,17 @@ import kotlin.math.sin
 
 
 internal fun MutableGameState.updateEnemies(delta: Float) {
-    enemies.forEach { enemy ->
+    for (enemyIndex in enemies.indices) {
+        val enemy = enemies[enemyIndex]
         enemy.previousX = enemy.x
         enemy.previousY = enemy.y
-        enemy.flash = max(0f, enemy.flash - delta * 5f)
-        enemy.contactCooldown = max(0f, enemy.contactCooldown - delta)
-        enemy.weaponCooldown = max(0f, enemy.weaponCooldown - delta)
+        if (enemy.flash.toRawBits() != 0) enemy.flash = max(0f, enemy.flash - delta * 5f)
+        if (enemy.contactCooldown.toRawBits() != 0) {
+            enemy.contactCooldown = max(0f, enemy.contactCooldown - delta)
+        }
+        if (enemy.weaponCooldown.toRawBits() != 0) {
+            enemy.weaponCooldown = max(0f, enemy.weaponCooldown - delta)
+        }
         val dx = coreX - enemy.x
         val dy = coreY - enemy.y
         val distance = max(1f, length(dx, dy))
@@ -148,7 +153,7 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
     }
     val leashDistance = max(screenWidth, screenHeight) * 1.15f + 360f
     val leashSquared = leashDistance * leashDistance
-    enemies.removeAll { enemy ->
+    enemies.removeMatchingStable { enemy ->
         enemy.type != EnemyType.ELITE &&
             enemy.type != EnemyType.ARCHITECT &&
             distanceSquared(enemy.x, enemy.y, coreX, coreY) > leashSquared
@@ -179,21 +184,24 @@ internal fun MutableGameState.steerEnemy(enemy: Enemy, desiredX: Float, desiredY
 }
 
 internal fun MutableGameState.updateProjectiles(delta: Float) {
-    projectiles.forEach {
-        it.previousX = it.x
-        it.previousY = it.y
-        it.x += it.vx * delta
-        it.y += it.vy * delta
-        it.life -= delta
+    for (projectileIndex in projectiles.indices) {
+        val projectile = projectiles[projectileIndex]
+        projectile.previousX = projectile.x
+        projectile.previousY = projectile.y
+        projectile.x += projectile.vx * delta
+        projectile.y += projectile.vy * delta
+        projectile.life -= delta
     }
-    projectiles.removeAll {
-        it.life <= 0f || distanceSquared(it.x, it.y, coreX, coreY) > 1_600f * 1_600f
+    projectiles.removeMatchingStable { projectile ->
+        projectile.life <= 0f ||
+            distanceSquared(projectile.x, projectile.y, coreX, coreY) > 1_600f * 1_600f
     }
     while (projectiles.size > MutableGameState.MAX_PROJECTILES) projectiles.removeAt(0)
 }
 
 internal fun MutableGameState.updatePickups(delta: Float) {
-    pickups.forEach { pickup ->
+    for (pickupIndex in pickups.indices) {
+        val pickup = pickups[pickupIndex]
         pickup.previousX = pickup.x
         pickup.previousY = pickup.y
         pickup.life -= delta
@@ -210,8 +218,27 @@ internal fun MutableGameState.updatePickups(delta: Float) {
         pickup.x += pickup.vx * delta
         pickup.y += pickup.vy * delta
     }
-    pickups.removeAll { it.life <= 0f }
+    pickups.removeMatchingStable { pickup -> pickup.life <= 0f }
     while (pickups.size > MutableGameState.MAX_PICKUPS) pickups.removeAt(0)
+}
+
+/** Stable one-pass compaction without iterator or stdlib predicate-wrapper allocation. */
+internal inline fun <Element> MutableList<Element>.removeMatchingStable(
+    remove: (Element) -> Boolean,
+) {
+    var retainedCount = 0
+    for (index in indices) {
+        val value = this[index]
+        if (!remove(value)) {
+            if (retainedCount != index) this[retainedCount] = value
+            retainedCount++
+        }
+    }
+    var index = lastIndex
+    while (index >= retainedCount) {
+        removeAt(index)
+        index--
+    }
 }
 
 internal fun MutableGameState.updateTotem(delta: Float) {

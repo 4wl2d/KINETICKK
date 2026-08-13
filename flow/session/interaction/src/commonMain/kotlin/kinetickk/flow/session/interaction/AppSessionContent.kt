@@ -16,7 +16,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import kinetickk.ball.gameplay.api.GameplayQuery
@@ -32,6 +34,7 @@ import kinetickk.flow.session.api.AppShellProjection
 import kinetickk.flow.session.api.SessionAcceptance
 import kinetickk.flow.session.api.SessionInteractionPulse
 import kinetickk.flow.session.api.SessionResetLifecycle
+import kinetickk.flow.session.api.SessionShortcut
 import kinetickk.flow.session.interaction.audio.SessionAudioExecutor
 import kinetickk.flow.session.interaction.codex.api.CodexFeature
 import kinetickk.flow.session.interaction.codex.api.CodexRunStacks
@@ -76,11 +79,21 @@ fun AppSessionContent(
             .fillMaxSize()
             .focusRequester(focusRequester)
             .onPreviewKeyEvent { event ->
+                // Let a focused semantic control own Enter. When focus remains on
+                // this root, the bubble handler below preserves the global shortcut.
+                if (event.key == Key.Enter) return@onPreviewKeyEvent false
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 audioExecutor.ensureUnlocked()
                 val shortcut = event.key.toSessionShortcut()
                     ?: return@onPreviewKeyEvent false
                 dispatch(SessionInteractionPulse.ShortcutObserved(shortcut))
+            }
+            .onKeyEvent { event ->
+                if (event.key != Key.Enter || event.type != KeyEventType.KeyDown) {
+                    return@onKeyEvent false
+                }
+                audioExecutor.ensureUnlocked()
+                dispatch(SessionInteractionPulse.ShortcutObserved(SessionShortcut.ENTER))
             }
             .focusable(),
     ) {

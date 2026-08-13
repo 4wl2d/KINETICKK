@@ -1,0 +1,437 @@
+{
+  "$schema": "android_trace_capture.schema.json",
+  "schemaVersion": 1,
+  "suite": "kinetickk-android-perfetto-diagnostic",
+  "status": "ok",
+  "runId": "android-trace-20260811T212748.492920Z",
+  "createdAtUtc": "2026-08-11T21:27:48.493080Z",
+  "source": {
+    "label": "feature/pokeball-full-refactor",
+    "branch": "feature/pokeball-full-refactor",
+    "revision": "20a3e2f78988419f5263247085a9a4b3900f4a6e",
+    "dirty": true,
+    "gitStatusSha256": "90a125ce8874ccad7f900de8117d9ae0ad915b8dd0c688a70fac28a10ebf108a",
+    "gitStatusEntryCount": 122
+  },
+  "apk": {
+    "path": "app/shared/build/outputs/apk/benchmark/app-shared-benchmark.apk",
+    "snapshotPath": "input.apk",
+    "snapshotMode": "single-open-fstat-stable-copy",
+    "sha256": "ae18ba15339c9276ccbefddb0bcdce86c39f6df9eb761b73dd76fd484c394c25",
+    "bytes": 7175221,
+    "modifiedAtUnixNanos": 1786483015950875220,
+    "manifest": {
+      "inspectionStatus": "observed",
+      "package": "com.vladislavtomilov.kinetickk",
+      "minSdk": 26,
+      "targetSdk": 36,
+      "debuggableDeclared": false,
+      "profileableByShellDeclared": true
+    }
+  },
+  "tool": {
+    "scriptPath": "tools/performance/android_trace_capture.py",
+    "scriptSha256": "8b555540ce9fa93d89970fa39279d7b7134d1d6422552d3d76e973985f29247c",
+    "benchmarkDependencyPath": "tools/performance/android_device_benchmark.py",
+    "benchmarkDependencySha256": "055ba520df26dbe7806736be5f18c92f12c48c6aa9b99e8341f76ca7dbeb8fd6",
+    "schemaPath": "tools/performance/android_trace_capture.schema.json",
+    "schemaSha256": "6791bfc7d2beaa9245ce779beec7f869cac49ccc1eed5697e314db7425558867",
+    "flowPath": "tools/performance/android_gameplay_flow.json",
+    "flowSnapshotPath": "android-gameplay-flow.json",
+    "flowSha256": "4773c8f469c6addac70f94ef0e607d01f6d637169d4f2768a8d00863a4f6210a",
+    "flowSchemaPath": "tools/performance/android_gameplay_flow.schema.json",
+    "flowSchemaSha256": "653f35f66f1350adaedc02cb23a5daf8118c6f39fd9ebf72accc00956ef006af",
+    "configTemplatePath": "tools/performance/android_trace_perfetto.pbtxt.in",
+    "configTemplateSnapshotPath": "perfetto-config-template.pbtxt.in",
+    "configTemplateSha256": "e8202e06edf3b6805411f00f70ae96df4315145d927844bcacfebd0857e47e7d",
+    "materializedConfigSha256": "6ceb820a0b6eb51c44642df9753ad333b2fa801b39e695b5f9a065ad0943289b",
+    "pythonVersion": "3.12.13",
+    "hostPlatform": "macOS-26.5.2-arm64-arm-64bit",
+    "adbBinary": {
+      "basename": "adb",
+      "logicalPath": "android-sdk/platform-tools/adb",
+      "sha256": "9fdf861259dc807937b13afdd5f053c7fda9f3b7726933fe0e0f45130ecb8dc7"
+    },
+    "adbVersion": "Android Debug Bridge version 1.0.41\nVersion 37.0.0-14910828\nRunning on Darwin 25.5.0 (arm64)",
+    "aapt2Binary": {
+      "basename": "aapt2",
+      "logicalPath": "android-sdk/build-tools/37.0.0/aapt2",
+      "sha256": "13a206c0b022ba3b92f21b6f142f3a4b2d0f3bb1ac0bddfa820ee2c6b00c4c99",
+      "version": "Android Asset Packaging Tool (aapt) 2.20-15087165"
+    }
+  },
+  "protocol": {
+    "backend": "perfetto",
+    "serial": "R58R603CSEY",
+    "package": "com.vladislavtomilov.kinetickk",
+    "component": "com.vladislavtomilov.kinetickk/kinetickk.app.shared.MainActivity",
+    "durationMillis": 45000,
+    "minimumTraceBytes": 4096,
+    "startupSettleMillis": 750,
+    "captureMode": "foreground-adb-session",
+    "perfettoReadinessTimeoutMillis": 15000,
+    "perfettoClosureTimeoutMillis": 10000,
+    "perfettoReadinessSettleMillis": 1000,
+    "commandTimeoutSeconds": 30.0,
+    "traceCompletionGraceMillis": 15000,
+    "exclusiveHostSerialLock": true,
+    "maximumThermalStatus": 0,
+    "minimumBatteryLevelPercent": 50,
+    "flow": {
+      "name": "kinetickk-gameplay-primary-touch-v1",
+      "schemaVersion": 1,
+      "measurementStartStep": 3,
+      "stepCount": 10,
+      "sha256": "4773c8f469c6addac70f94ef0e607d01f6d637169d4f2768a8d00863a4f6210a",
+      "traceExecutorAlwaysUsesFreshHierarchy": true
+    },
+    "decisionIsolation": {
+      "separateFromGfxinfoBenchmark": true,
+      "traceOverheadExpected": true,
+      "eligibleForGfxinfoVerdict": false,
+      "collectsGfxinfo": false
+    },
+    "deviceMutationPolicy": {
+      "apkInstalled": false,
+      "applicationDataCleared": false,
+      "packageUninstalled": false,
+      "globalSettingsChanged": false,
+      "screenWakeOrUnlockInjected": false,
+      "consentOrPermissionPromptAccepted": false,
+      "packageForceStoppedForProcessColdStart": true,
+      "selectorAuthorizedGameplayInputInjected": true,
+      "ownedRemoteTraceRemovalRequiredForSuccess": true
+    }
+  },
+  "device": {
+    "serial": "R58R603CSEY",
+    "status": "ok",
+    "hostSerialLock": {
+      "key": "27a283c7ed0297dc",
+      "logicalPath": "host-temp/kinetickk-android-trace-27a283c7ed0297dc.lock"
+    },
+    "installedPackage": {
+      "verificationMode": "exact-existing-no-install-pre-and-post",
+      "observedAtUtc": "2026-08-11T21:27:49.236587Z",
+      "installedBaseApkPath": "/data/app/~~iVZ_lCMqjf3QE7BM3BuBXw==/com.vladislavtomilov.kinetickk-0DMerYY5l82U-vFOVSII4g==/base.apk",
+      "installedBaseApkSha256": "ae18ba15339c9276ccbefddb0bcdce86c39f6df9eb761b73dd76fd484c394c25",
+      "installedBaseApkBytes": 7175221,
+      "versionName": "0.1.0",
+      "versionCode": 1,
+      "debuggable": false,
+      "profileableByShellObserved": null,
+      "profileableByShell": true,
+      "profileableByShellProvenance": {
+        "effective": true,
+        "source": "apk-manifest",
+        "manifestDeclared": true,
+        "dumpsysObserved": null
+      },
+      "postTraceVerification": {
+        "observedAtUtc": "2026-08-11T21:28:57.514836Z",
+        "installedBaseApkPath": "/data/app/~~iVZ_lCMqjf3QE7BM3BuBXw==/com.vladislavtomilov.kinetickk-0DMerYY5l82U-vFOVSII4g==/base.apk",
+        "installedBaseApkSha256": "ae18ba15339c9276ccbefddb0bcdce86c39f6df9eb761b73dd76fd484c394c25",
+        "installedBaseApkBytes": 7175221,
+        "versionName": "0.1.0",
+        "versionCode": 1,
+        "debuggable": false,
+        "profileableByShellObserved": null,
+        "profileableByShell": true,
+        "profileableByShellProvenance": {
+          "effective": true,
+          "source": "apk-manifest",
+          "manifestDeclared": true,
+          "dumpsysObserved": null
+        }
+      },
+      "unchangedDuringCapture": true
+    },
+    "environment": {
+      "serial": "R58R603CSEY",
+      "manufacturer": "samsung",
+      "model": "SM-A325F",
+      "product": "a32xx",
+      "device": "a32",
+      "androidRelease": "13",
+      "apiLevel": 33,
+      "securityPatch": "2025-03-01",
+      "buildFingerprint": "samsung/a32xx/a32:13/TP1A.220624.014/A325FXXSCDYB2:user/release-keys",
+      "primaryAbi": "arm64-v8a",
+      "physicalMemoryBytes": 3822628864,
+      "display": {
+        "physicalWidthPixels": 1080,
+        "physicalHeightPixels": 2400,
+        "effectiveWidthPixels": 1080,
+        "effectiveHeightPixels": 2400,
+        "physicalDensityDpi": 420,
+        "effectiveDensityDpi": 420,
+        "effectiveWidthDp": 411.42857142857144,
+        "effectiveHeightDp": 914.2857142857143,
+        "activeRefreshRateHz": 90.0,
+        "frameBudgetMillis": 11.11111111111111,
+        "rotation": 0
+      },
+      "navigation": {
+        "rawMode": 0,
+        "mode": "three-button"
+      },
+      "rotationPolicy": {
+        "accelerometerRotationEnabled": true
+      },
+      "battery": {
+        "levelPercent": 100,
+        "statusCode": 5,
+        "temperatureCelsius": 35.1,
+        "acPowered": false,
+        "usbPowered": true,
+        "wirelessPowered": false
+      },
+      "thermal": {
+        "statusCode": 0,
+        "temperatures": [
+          {
+            "valueCelsius": 0.0,
+            "typeCode": 2,
+            "name": "SUBBAT",
+            "statusCode": 0
+          },
+          {
+            "valueCelsius": 37.2,
+            "typeCode": 0,
+            "name": "AP",
+            "statusCode": 0
+          },
+          {
+            "valueCelsius": 35.6,
+            "typeCode": 5,
+            "name": "PA",
+            "statusCode": 0
+          },
+          {
+            "valueCelsius": 35.1,
+            "typeCode": 2,
+            "name": "BAT",
+            "statusCode": 0
+          },
+          {
+            "valueCelsius": 0.0,
+            "typeCode": 4,
+            "name": "USB",
+            "statusCode": 0
+          },
+          {
+            "valueCelsius": 36.9,
+            "typeCode": 3,
+            "name": "SKIN",
+            "statusCode": 0
+          }
+        ],
+        "maximumSkinTemperatureCelsius": 36.9
+      },
+      "lowPowerModeEnabled": false,
+      "windowPolicy": {
+        "screenState": "SCREEN_STATE_ON",
+        "interactiveState": "INTERACTIVE_STATE_AWAKE",
+        "keyguardShowing": false
+      },
+      "rawArtifactDirectory": "raw-environment"
+    },
+    "perfetto": {
+      "logicalPath": "/system/bin/perfetto",
+      "version": "Perfetto v25.0 (N/A)",
+      "versionProbeExitCode": 0,
+      "helpProbeExitCode": 1,
+      "versionProbeArtifact": "perfetto-version-probe.txt",
+      "helpArtifact": "perfetto-help.txt",
+      "helpSha256": "d172bb012cbc9565863f467d4ce2a26d75c22743ddd7ba90af2e4c53e72d1320",
+      "capabilities": {
+        "background": true,
+        "backgroundWait": true,
+        "detachAttach": true,
+        "query": true
+      },
+      "bytes": 593104,
+      "sha256": "25c4b6a6a7ef3a94134c396232f3ca1325c03513e54aee952c800e2e0f3620c2"
+    },
+    "session": {
+      "status": "ok",
+      "startedAtUtc": "2026-08-11T21:27:50.192220Z",
+      "completedAtUtc": "2026-08-11T21:28:56.784368Z",
+      "processColdStart": true,
+      "processIds": [
+        20282
+      ],
+      "initialProcessIds": [
+        20282
+      ],
+      "finalProcessIds": [
+        20282
+      ],
+      "startup": {
+        "status": "ok",
+        "activity": "com.vladislavtomilov.kinetickk/kinetickk.app.shared.MainActivity",
+        "launchState": "COLD",
+        "thisTimeMillis": null,
+        "totalTimeMillis": 524,
+        "waitTimeMillis": 531,
+        "complete": null
+      },
+      "runtimeBefore": {
+        "capturedAtUtc": "2026-08-11T21:27:59.653381Z",
+        "activeRefreshRateHz": 90.0,
+        "frameBudgetMillis": 11.11111111111111,
+        "rotation": 0,
+        "battery": {
+          "levelPercent": 100,
+          "statusCode": 5,
+          "temperatureCelsius": 35.1,
+          "acPowered": false,
+          "usbPowered": true,
+          "wirelessPowered": false
+        },
+        "thermal": {
+          "statusCode": 0,
+          "temperatures": [
+            {
+              "valueCelsius": 0.0,
+              "typeCode": 2,
+              "name": "SUBBAT",
+              "statusCode": 0
+            },
+            {
+              "valueCelsius": 38.0,
+              "typeCode": 0,
+              "name": "AP",
+              "statusCode": 0
+            },
+            {
+              "valueCelsius": 35.9,
+              "typeCode": 5,
+              "name": "PA",
+              "statusCode": 0
+            },
+            {
+              "valueCelsius": 35.1,
+              "typeCode": 2,
+              "name": "BAT",
+              "statusCode": 0
+            },
+            {
+              "valueCelsius": 0.0,
+              "typeCode": 4,
+              "name": "USB",
+              "statusCode": 0
+            },
+            {
+              "valueCelsius": 37.0,
+              "typeCode": 3,
+              "name": "SKIN",
+              "statusCode": 0
+            }
+          ],
+          "maximumSkinTemperatureCelsius": 37.0
+        }
+      },
+      "runtimeAfter": {
+        "capturedAtUtc": "2026-08-11T21:28:54.250910Z",
+        "activeRefreshRateHz": 90.0,
+        "frameBudgetMillis": 11.11111111111111,
+        "rotation": 0,
+        "battery": {
+          "levelPercent": 100,
+          "statusCode": 5,
+          "temperatureCelsius": 35.2,
+          "acPowered": false,
+          "usbPowered": true,
+          "wirelessPowered": false
+        },
+        "thermal": {
+          "statusCode": 0,
+          "temperatures": [
+            {
+              "valueCelsius": 0.0,
+              "typeCode": 2,
+              "name": "SUBBAT",
+              "statusCode": 0
+            },
+            {
+              "valueCelsius": 38.4,
+              "typeCode": 0,
+              "name": "AP",
+              "statusCode": 0
+            },
+            {
+              "valueCelsius": 36.3,
+              "typeCode": 5,
+              "name": "PA",
+              "statusCode": 0
+            },
+            {
+              "valueCelsius": 35.2,
+              "typeCode": 2,
+              "name": "BAT",
+              "statusCode": 0
+            },
+            {
+              "valueCelsius": 0.0,
+              "typeCode": 4,
+              "name": "USB",
+              "statusCode": 0
+            },
+            {
+              "valueCelsius": 37.3,
+              "typeCode": 3,
+              "name": "SKIN",
+              "statusCode": 0
+            }
+          ],
+          "maximumSkinTemperatureCelsius": 37.3
+        }
+      },
+      "uiEventCount": 12,
+      "trace": {
+        "backend": "perfetto",
+        "pid": 20423,
+        "captureMode": "foreground-adb-session",
+        "readinessMode": "foreground-query-session-delta-pid-trace-file-plus-settle",
+        "readinessStrength": "session-started-not-all-data-sources-acknowledged",
+        "readinessSettleMillis": 1000,
+        "closureMode": "owned-pid-absent-query-idle-baseline-restored",
+        "finalQuerySha256": "188b41f679de8278235c9d569b61b1681e4b00411ca684c885503d109f067c54",
+        "durationMillisConfigured": 45000,
+        "elapsedMillis": 54435.632542008534,
+        "diagnosticOnly": true,
+        "eligibleForGfxinfoVerdict": false,
+        "artifact": {
+          "path": "diagnostic.perfetto-trace",
+          "bytes": 116053354,
+          "sha256": "3a27694dba0d56ae5c9e75bf0588b46efa648b2c9f986fefa1e0e3dee5aef54a",
+          "remoteTemporaryPath": "/data/misc/perfetto-traces/kinetickk-cc78fc0070c136ab.perfetto-trace",
+          "remoteTemporaryArtifactRemoved": true
+        }
+      },
+      "artifacts": {
+        "startup": "startup.txt",
+        "uiEvents": "ui-events.json",
+        "finalUiHierarchy": "ui-final.xml",
+        "perfettoTrace": "diagnostic.perfetto-trace",
+        "perfettoStdout": "perfetto-stdout.txt",
+        "perfettoStderr": "perfetto-stderr.txt",
+        "perfettoQueryBefore": "perfetto-query-before.txt",
+        "perfettoQueryReady": "perfetto-query-ready.txt",
+        "perfettoQueryFinal": "perfetto-query-final.txt",
+        "materializedConfig": "../../perfetto-config.pbtxt"
+      }
+    },
+    "traceCleanupEvidence": [
+      {
+        "remoteTemporaryPath": "/data/misc/perfetto-traces/kinetickk-cc78fc0070c136ab.perfetto-trace",
+        "ownershipAcquired": true,
+        "state": "removed",
+        "removed": true,
+        "reason": "verified-absent-after-owned-cleanup"
+      }
+    ]
+  },
+  "completedAtUtc": "2026-08-11T21:28:57.519743Z"
+}

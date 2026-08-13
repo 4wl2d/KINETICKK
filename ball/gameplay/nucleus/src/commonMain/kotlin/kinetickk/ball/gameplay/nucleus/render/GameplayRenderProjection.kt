@@ -199,9 +199,9 @@ class GameplayRenderModel(
     val choices: ImmutableList<ChoiceOption>,
     val choiceType: ChoiceType,
     val pendingRelicChoiceCount: Int,
-    private val itemStacks: ImmutableList<Int>,
-    private val discoveredItemIds: ImmutableSet<Int>,
-    private val relicRanks: ImmutableList<Int>,
+    internal val itemStacks: ImmutableList<Int>,
+    internal val discoveredItemIds: ImmutableSet<Int>,
+    internal val relicRanks: ImmutableList<Int>,
 ) {
     val speed: Float get() = vectorLength(velocityX, velocityY)
     val runProgress: Float get() = (elapsed / RUN_DURATION_SECONDS).coerceIn(0f, 1f)

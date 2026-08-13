@@ -19,13 +19,41 @@ internal fun MutableGameState.rebaseWorldIfNeeded() {
     cameraY -= shiftY
     trailLastX -= shiftX
     trailLastY -= shiftY
-    enemies.forEach { it.x -= shiftX; it.y -= shiftY; it.previousX -= shiftX; it.previousY -= shiftY }
-    projectiles.forEach { it.x -= shiftX; it.y -= shiftY; it.previousX -= shiftX; it.previousY -= shiftY }
-    pickups.forEach { it.x -= shiftX; it.y -= shiftY }
-    trail.forEach { it.x -= shiftX; it.y -= shiftY }
+    for (index in enemies.indices) {
+        val enemy = enemies[index]
+        enemy.x -= shiftX
+        enemy.y -= shiftY
+        enemy.previousX -= shiftX
+        enemy.previousY -= shiftY
+    }
+    for (index in projectiles.indices) {
+        val projectile = projectiles[index]
+        projectile.x -= shiftX
+        projectile.y -= shiftY
+        projectile.previousX -= shiftX
+        projectile.previousY -= shiftY
+    }
+    for (index in pickups.indices) {
+        val pickup = pickups[index]
+        pickup.x -= shiftX
+        pickup.y -= shiftY
+    }
+    for (index in trail.indices) {
+        val point = trail[index]
+        point.x -= shiftX
+        point.y -= shiftY
+    }
     emitVisualFx(VisualFxCue.WorldRebased(shiftX, shiftY))
-    weaponNodes.forEach { it.x -= shiftX; it.y -= shiftY }
-    weaponOrbitals.forEach { it.x -= shiftX; it.y -= shiftY }
+    for (index in weaponNodes.indices) {
+        val node = weaponNodes[index]
+        node.x -= shiftX
+        node.y -= shiftY
+    }
+    for (index in weaponOrbitals.indices) {
+        val orbital = weaponOrbitals[index]
+        orbital.x -= shiftX
+        orbital.y -= shiftY
+    }
     totem?.let { it.x -= shiftX; it.y -= shiftY }
     morningstarX -= shiftX
     morningstarY -= shiftY

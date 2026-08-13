@@ -72,6 +72,33 @@ class BoundedVisualFxCueAccumulatorTest {
         assertTrue(accumulator.drain().isEmpty())
     }
 
+    @Test
+    fun drainingAndLaterRecordingOneCopyCannotMutateSourceOrSibling() {
+        val source = BoundedVisualFxCueAccumulator().apply {
+            record(burst(1))
+            record(VisualFxCue.EffectsAdvanced(0.125f))
+        }
+        val drainedCopy = source.copy()
+        val retainedSibling = source.copy()
+
+        assertEquals(
+            listOf(burst(1), VisualFxCue.EffectsAdvanced(0.125f)),
+            drainedCopy.drain(),
+        )
+        drainedCopy.record(VisualFxCue.ClearAll)
+        source.record(burst(2))
+
+        assertEquals(
+            listOf(burst(1), VisualFxCue.EffectsAdvanced(0.125f)),
+            retainedSibling.drain(),
+        )
+        assertEquals(listOf(VisualFxCue.ClearAll), drainedCopy.drain().toList())
+        assertEquals(
+            listOf(burst(1), VisualFxCue.EffectsAdvanced(0.125f), burst(2)),
+            source.drain(),
+        )
+    }
+
     private fun burst(index: Int) = VisualFxCue.Burst(
         x = index.toFloat(),
         y = 0f,

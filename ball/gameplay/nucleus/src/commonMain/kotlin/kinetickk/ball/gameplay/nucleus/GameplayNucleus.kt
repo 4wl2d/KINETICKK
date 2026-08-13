@@ -8,6 +8,7 @@ import kinetickk.ball.gameplay.api.GameplayCodexStacksProjection
 import kinetickk.ball.gameplay.api.GameplayCommandSourceToken
 import kinetickk.ball.gameplay.api.GameplayConfigurationRejection
 import kinetickk.ball.gameplay.api.GameplayExitProgressResult
+import kinetickk.ball.gameplay.api.GameplayInstanceId
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.api.GameplayModuleCommand
 import kinetickk.ball.gameplay.api.GameplayModuleCommandPulse
@@ -19,7 +20,7 @@ import kinetickk.ball.gameplay.api.GameplayRejection
 import kinetickk.ball.gameplay.api.GameplayRevision
 import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.GameplayRunStatusProjection
-import kinetickk.ball.gameplay.nucleus.protocol.SimulationOutput
+import kinetickk.ball.gameplay.nucleus.protocol.SimulationOutputs
 import kinetickk.ball.gameplay.nucleus.reducer.EngineState
 import kinetickk.ball.gameplay.nucleus.reducer.GameReducer
 import kinetickk.ball.gameplay.nucleus.reducer.GameReduction
@@ -37,6 +38,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.takeSoundCues
 import kinetickk.ball.gameplay.nucleus.simulation.takeVisualFxCues
 import kinetickk.ball.gameplay.nucleus.simulation.toRenderModel
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
+import kinetickk.ball.profile.api.GameplayProgressUpdate
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.ProfileCommandSource
@@ -47,10 +49,13 @@ import kinetickk.ball.profile.api.ProfileSemanticHandle
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
+import kinetickk.foundation.collections.immutableListOfSize
 import kinetickk.foundation.collections.toImmutableList
 
 /** Pure, deterministic authority for GameplayRun decisions and projections. */
 object GameplayNucleus {
+    private val reducer = GameReducer()
+
     fun decide(
         state: GameplayState,
         pulse: GameplayNucleusPulse,
@@ -70,7 +75,103 @@ object GameplayNucleus {
             instanceId = state.instanceId,
             revision = state.revision,
             renderModel = state.engine?.model?.toRenderModel(),
+            projectionSourceIdentity = state.engine?.renderProjectionIdentity,
         )
+
+    /**
+     * Builds a stamped immutable model with structural projection reuse from a verified committed
+     * source/snapshot pair. Callers cannot accidentally mix a render snapshot with another source:
+     * mismatched stamps, content, or engine nullability are rejected before mapping.
+     */
+    fun renderSnapshot(
+        state: GameplayState,
+        reusableState: GameplayState,
+        reusableSnapshot: GameplayRenderSnapshot,
+    ): GameplayRenderSnapshot {
+        validateReusableRenderPair(state, reusableState, reusableSnapshot)
+        val model = state.engine?.model
+        val reusableSource = reusableState.engine?.model
+        val reusableModel = reusableSnapshot.renderModel
+        return GameplayRenderSnapshot(
+            instanceId = state.instanceId,
+            revision = state.revision,
+            renderModel = model?.toRenderModel(
+                reusableCollections = reusableModel,
+                identitySource = reusableSource,
+            ),
+            projectionSourceIdentity = state.engine?.renderProjectionIdentity,
+        )
+    }
+
+    /** Restamps a render-neutral transition without allocating another render model. */
+    fun reuseRenderSnapshot(
+        state: GameplayState,
+        reusableState: GameplayState,
+        reusableSnapshot: GameplayRenderSnapshot,
+    ): GameplayRenderSnapshot {
+        validateReusableRenderPair(state, reusableState, reusableSnapshot)
+        require((state.engine == null) == (reusableSnapshot.renderModel == null)) {
+            "Render-neutral transition changed Gameplay engine availability"
+        }
+        return GameplayRenderSnapshot(
+            instanceId = state.instanceId,
+            revision = state.revision,
+            renderModel = reusableSnapshot.renderModel,
+            projectionSourceIdentity = state.engine?.renderProjectionIdentity,
+        )
+    }
+
+    private fun validateReusableRenderPair(
+        state: GameplayState,
+        reusableState: GameplayState,
+        reusableSnapshot: GameplayRenderSnapshot,
+    ) {
+        val model = state.engine?.model
+        val reusableSource = reusableState.engine?.model
+        val reusableModel = reusableSnapshot.renderModel
+        require(state.instanceId == reusableState.instanceId) {
+            "Reusable Gameplay render source is not this instance's predecessor"
+        }
+        require(reusableState.revision.value < Long.MAX_VALUE) {
+            "Reusable Gameplay render source revision cannot advance"
+        }
+        require(state.revision.value == reusableState.revision.value + 1L) {
+            "Reusable Gameplay render source is not the immediately preceding revision"
+        }
+        require(reusableSnapshot.instanceId == reusableState.instanceId) {
+            "Reusable Gameplay render snapshot belongs to another instance"
+        }
+        require(reusableSnapshot.revision == reusableState.revision) {
+            "Reusable Gameplay render snapshot has a mismatched source revision"
+        }
+        require(reusableState.content === state.content) {
+            "Reusable Gameplay render source belongs to different content"
+        }
+        require((reusableSource == null) == (reusableModel == null)) {
+            "Reusable Gameplay render source/model nullability mismatch"
+        }
+        require(
+            reusableSnapshot.projectionSourceIdentity ===
+                reusableState.engine?.renderProjectionIdentity,
+        ) {
+            "Reusable Gameplay render snapshot was not projected from its claimed source"
+        }
+        require(
+            (reusableModel == null) == (reusableSnapshot.projectionSourceIdentity == null),
+        ) {
+            "Reusable Gameplay render provenance/model nullability mismatch"
+        }
+        if (reusableModel != null) {
+            require(reusableModel.content === reusableState.content) {
+                "Reusable Gameplay render model belongs to different content"
+            }
+        }
+        if (model != null) {
+            require(model.content === state.content) {
+                "Gameplay render source belongs to different content"
+            }
+        }
+    }
 
     fun query(state: GameplayState, query: GameplayQuery.GetRunStatus): GameplayRunStatusProjection =
         GameplayRunStatusProjection(
@@ -91,7 +192,7 @@ object GameplayNucleus {
         GameplayCodexStacksProjection(
             instanceId = state.instanceId,
             revision = state.revision,
-            itemStacks = state.engine?.model?.itemStacks?.asIterable()?.toImmutableList()
+            itemStacks = state.engine?.model?.itemStacks?.toImmutableList()
                 ?: immutableListOf(),
         )
 
@@ -171,16 +272,19 @@ object GameplayNucleus {
             phase = reduction.state.model.phase.toRunPhase(),
             engine = reduction.state,
         )
-        val mapped = reduction.outputs.toGameplayOutputs(prepared, exitCompletion = null)
-        check(mapped.pending == null) { "Pause unexpectedly emitted Profile progress" }
-        return accepted(
-            prepared,
-            mapped.outputs + completion(
+        val outputs = reduction.outputs.toGameplayOutputs(
+            instanceId = prepared.instanceId,
+            revision = prepared.revision,
+            trailingOutput = completion(
                 commandSource,
-                sourceOrdinal = mapped.outputs.size,
+                sourceOrdinal = reduction.outputs.size,
                 result = GameplayModuleResult.OverlayPaused,
             ),
         )
+        check(reduction.outputs.progressUpdate == null) {
+            "Pause unexpectedly emitted Profile progress"
+        }
+        return accepted(prepared, outputs)
     }
 
     private fun applyPreferences(
@@ -195,16 +299,19 @@ object GameplayNucleus {
         val reduction = reduceTrusted(state.engine!!) { it.applyPreferences(preferences) }
         val revision = state.revision.next()
         val prepared = state.copy(revision = revision, engine = reduction.state)
-        val mapped = reduction.outputs.toGameplayOutputs(prepared, exitCompletion = null)
-        check(mapped.pending == null) { "Preferences unexpectedly emitted Profile progress" }
-        return accepted(
-            prepared,
-            mapped.outputs + completion(
+        val outputs = reduction.outputs.toGameplayOutputs(
+            instanceId = prepared.instanceId,
+            revision = prepared.revision,
+            trailingOutput = completion(
                 commandSource,
-                sourceOrdinal = mapped.outputs.size,
+                sourceOrdinal = reduction.outputs.size,
                 result = GameplayModuleResult.PreferencesApplied,
             ),
         )
+        check(reduction.outputs.progressUpdate == null) {
+            "Preferences unexpectedly emitted Profile progress"
+        }
+        return accepted(prepared, outputs)
     }
 
     private fun exitRun(
@@ -217,22 +324,27 @@ object GameplayNucleus {
         }
         val reduction = reduceTrusted(state.engine!!) { it.exitRun() }
         val revision = state.revision.next()
-        val prepared = state.copy(
+        val profileProgressPending = reduction.outputs.progressUpdate != null
+        val outputs = reduction.outputs.toGameplayOutputs(
+            instanceId = state.instanceId,
+            revision = revision,
+            trailingOutput = if (profileProgressPending) {
+                null
+            } else {
+                completion(
+                    commandSource,
+                    sourceOrdinal = reduction.outputs.size,
+                    result = GameplayModuleResult.RunExited(GameplayExitProgressResult.NoProgress),
+                )
+            },
+        )
+        val pending = reduction.outputs.toPendingProfileCommand(outputs, commandSource)
+        val nextState = state.copy(
             revision = revision,
             phase = GameplayRunPhase.EXITED,
             engine = reduction.state,
+            pendingProfileCommand = pending,
         )
-        val mapped = reduction.outputs.toGameplayOutputs(prepared, commandSource)
-        val nextState = prepared.copy(pendingProfileCommand = mapped.pending)
-        val outputs = if (mapped.pending == null) {
-            mapped.outputs + completion(
-                commandSource,
-                sourceOrdinal = mapped.outputs.size,
-                result = GameplayModuleResult.RunExited(GameplayExitProgressResult.NoProgress),
-            )
-        } else {
-            mapped.outputs
-        }
         return accepted(nextState, outputs)
     }
 
@@ -241,24 +353,30 @@ object GameplayNucleus {
         pulse: GameplayInteractionPulse,
     ): GameplayDecision {
         lifecycleGate(state)?.let { return rejected(it) }
-        return when (val result = GameReducer().reduce(state.engine!!, pulse)) {
+        return when (val result = reducer.reduce(state.engine!!, pulse)) {
             is GameReductionResult.Rejected -> rejected(result.reason)
             is GameReductionResult.Accepted -> {
                 val revision = state.revision.next()
-                val prepared = state.copy(
+                val outputs = result.outputs.toGameplayOutputs(
+                    instanceId = state.instanceId,
                     revision = revision,
-                    phase = result.value.state.model.phase.toRunPhase(),
-                    engine = result.value.state,
                 )
-                val mapped = result.value.outputs.toGameplayOutputs(prepared, exitCompletion = null)
-                if (mapped.pending != null && state.pendingProfileCommand != null) {
+                val pending = result.outputs.toPendingProfileCommand(
+                    mappedOutputs = outputs,
+                    exitCompletion = null,
+                )
+                if (pending != null && state.pendingProfileCommand != null) {
                     return rejected(GameplayRejection.ProfileCommandPending)
                 }
+                val nextState = state.copy(
+                    revision = revision,
+                    phase = result.state.model.phase.toRunPhase(),
+                    engine = result.state,
+                    pendingProfileCommand = pending ?: state.pendingProfileCommand,
+                )
                 accepted(
-                    prepared.copy(
-                        pendingProfileCommand = mapped.pending ?: state.pendingProfileCommand,
-                    ),
-                    mapped.outputs,
+                    nextState,
+                    outputs,
                 )
             }
         }
@@ -360,60 +478,90 @@ object GameplayNucleus {
     ): GameReduction {
         val candidate = engine.model.copyForReduction()
         mutation(candidate)
-        val outputs = buildList<SimulationOutput> {
-            candidate.takeVisualFxCues().takeIf { it.isNotEmpty() }?.let { cues ->
-                add(SimulationOutput.EmitVisualFx(cues.toImmutableList()))
-            }
-            candidate.takeProgressUpdate()?.let { add(SimulationOutput.PublishProgress(it)) }
-            val soundCues = candidate.takeSoundCues()
-            if (soundCues.isNotEmpty()) {
-                add(SimulationOutput.AdvanceAudio(0f, soundCues.toImmutableList()))
-            }
-        }.toImmutableList()
+        val visualFxCues = candidate.takeVisualFxCues()
+        val progressUpdate = candidate.takeProgressUpdate()
+        val soundCues = candidate.takeSoundCues()
+        val outputs = SimulationOutputs.create(
+            visualFxCues = visualFxCues,
+            progressUpdate = progressUpdate,
+            advanceAudio = soundCues.isNotEmpty(),
+            audioCues = soundCues,
+        )
         return GameReduction(EngineState(candidate), outputs)
     }
 
-    private data class MappedOutputs(
-        val outputs: ImmutableList<GameplayOutput>,
-        val pending: PendingProfileCommand?,
-    )
-
-    private fun ImmutableList<SimulationOutput>.toGameplayOutputs(
-        nextState: GameplayState,
-        exitCompletion: GameplayCommandSourceToken?,
-    ): MappedOutputs {
-        var pending: PendingProfileCommand? = null
-        val mapped = buildList<GameplayOutput> {
-            this@toGameplayOutputs.forEach { output ->
-                when (output) {
-                    is SimulationOutput.EmitVisualFx -> add(GameplayOutput.EmitVisualFx(output.cues))
-                    is SimulationOutput.PublishProgress -> {
-                        check(pending == null) { "A Gameplay Decision may emit at most one Profile command" }
-                        val sourceOrdinal = size
-                        val handle = ProfileSemanticHandle(
-                            sourceInstance = ProfileCommandSource.GameplayRun(
-                                nextState.instanceId.runId.value,
-                            ),
-                            sourceRevision = nextState.revision.value,
-                            sourceOrdinal = sourceOrdinal,
-                        )
-                        val request = ProfileModuleCommandRequest(
-                            semanticHandle = handle,
-                            sourceOrdinal = sourceOrdinal,
-                            targetInstance = LOCAL_PROFILE_INSTANCE_ID,
-                            command = ProfileModuleCommand.ApplyGameplayProgress(output.update),
-                        )
-                        pending = PendingProfileCommand(request, exitCompletion)
-                        add(GameplayOutput.SendProfileCommand(request))
-                    }
-                    is SimulationOutput.AdvanceAudio -> add(
-                        GameplayOutput.AdvanceAudio(output.realDeltaSeconds, output.cues),
-                    )
-                    SimulationOutput.EnsureAudioUnlocked -> add(GameplayOutput.EnsureAudioUnlocked)
-                }
+    private fun SimulationOutputs.toGameplayOutputs(
+        instanceId: GameplayInstanceId,
+        revision: GameplayRevision,
+        trailingOutput: GameplayOutput? = null,
+    ): ImmutableList<GameplayOutput> {
+        val sourceOutputCount = size
+        val mappedOutputCount = sourceOutputCount + if (trailingOutput == null) 0 else 1
+        return immutableListOfSize(mappedOutputCount) { sourceOrdinal ->
+            if (sourceOrdinal == sourceOutputCount) {
+                checkNotNull(trailingOutput)
+            } else {
+                toGameplayOutputAt(instanceId, revision, sourceOrdinal)
             }
-        }.toImmutableList()
-        return MappedOutputs(mapped, pending)
+        }
+    }
+
+    private fun SimulationOutputs.toGameplayOutputAt(
+        instanceId: GameplayInstanceId,
+        revision: GameplayRevision,
+        sourceOrdinal: Int,
+    ): GameplayOutput {
+        var remainingIndex = sourceOrdinal
+        visualFxCuesOrNull?.let { cues ->
+            if (remainingIndex == 0) return GameplayOutput.EmitVisualFx(cues)
+            remainingIndex--
+        }
+        progressUpdate?.let { update ->
+            if (remainingIndex == 0) {
+                return profileOutput(instanceId, revision, sourceOrdinal, update)
+            }
+            remainingIndex--
+        }
+        audioCuesOrNull?.let { cues ->
+            if (remainingIndex == 0) {
+                return GameplayOutput.AdvanceAudio(audioRealDeltaSeconds, cues)
+            }
+            remainingIndex--
+        }
+        if (ensuresAudioUnlocked && remainingIndex == 0) {
+            return GameplayOutput.EnsureAudioUnlocked
+        }
+        error("Canonical Simulation output index was not resolved")
+    }
+
+    private fun profileOutput(
+        instanceId: GameplayInstanceId,
+        revision: GameplayRevision,
+        sourceOrdinal: Int,
+        update: GameplayProgressUpdate,
+    ): GameplayOutput.SendProfileCommand {
+        val handle = ProfileSemanticHandle(
+            sourceInstance = ProfileCommandSource.GameplayRun(instanceId.runId.value),
+            sourceRevision = revision.value,
+            sourceOrdinal = sourceOrdinal,
+        )
+        val request = ProfileModuleCommandRequest(
+            semanticHandle = handle,
+            sourceOrdinal = sourceOrdinal,
+            targetInstance = LOCAL_PROFILE_INSTANCE_ID,
+            command = ProfileModuleCommand.ApplyGameplayProgress(update),
+        )
+        return GameplayOutput.SendProfileCommand(request)
+    }
+
+    private fun SimulationOutputs.toPendingProfileCommand(
+        mappedOutputs: ImmutableList<GameplayOutput>,
+        exitCompletion: GameplayCommandSourceToken?,
+    ): PendingProfileCommand? {
+        if (progressUpdate == null) return null
+        val profileOutputIndex = if (visualFxCuesOrNull == null) 0 else 1
+        val profileOutput = mappedOutputs[profileOutputIndex] as GameplayOutput.SendProfileCommand
+        return PendingProfileCommand(profileOutput.request, exitCompletion)
     }
 
     private fun completion(
@@ -428,10 +576,6 @@ object GameplayNucleus {
             result = result,
         ),
     )
-
-    private operator fun ImmutableList<GameplayOutput>.plus(
-        output: GameplayOutput,
-    ): ImmutableList<GameplayOutput> = (asIterable() + output).toImmutableList()
 
     private fun accepted(
         nextState: GameplayState,

@@ -27,13 +27,37 @@ internal fun MutableGameState.resolveCollisions(delta: Float) {
     resolveProjectileHits()
     if (phase != GamePhase.RUNNING) return
     resolvePickupCollection()
-    val killed = enemies.filter { it.dead || it.hp <= 0f }
-    killed.forEach(::onEnemyKilled)
-    enemies.removeAll { it.dead || it.hp <= 0f }
+    var killedCount = 0
+    for (index in enemies.indices) {
+        val enemy = enemies[index]
+        if (enemy.dead || enemy.hp <= 0f) killedCount++
+    }
+    if (killedCount == 0) return
+    val killed = arrayOfNulls<Enemy>(killedCount)
+    var killedIndex = 0
+    for (index in enemies.indices) {
+        val enemy = enemies[index]
+        if (enemy.dead || enemy.hp <= 0f) killed[killedIndex++] = enemy
+    }
+    for (index in killed.indices) onEnemyKilled(checkNotNull(killed[index]))
+    var retainedCount = 0
+    for (index in enemies.indices) {
+        val enemy = enemies[index]
+        if (!enemy.dead && !(enemy.hp <= 0f)) {
+            if (retainedCount != index) enemies[retainedCount] = enemy
+            retainedCount++
+        }
+    }
+    var index = enemies.lastIndex
+    while (index >= retainedCount) {
+        enemies.removeAt(index)
+        index--
+    }
 }
 
 internal fun MutableGameState.resolveEnemyCoreCollisions() {
-    for (enemy in enemies) {
+    for (index in enemies.indices) {
+        val enemy = enemies[index]
         if (phase != GamePhase.RUNNING) return
         val combined = MutableGameState.CORE_RADIUS + enemy.radius
         val sweptHit = segmentCircleIntersects(
@@ -78,10 +102,19 @@ internal fun MutableGameState.resolveWeaponDamage(delta: Float) {
     val power = effectiveWeaponPower()
     val agonyRank = relicRank(RelicId.AGONY_SCEPTER)
     when (weapon) {
-        WeaponId.FLUX_WAKE -> enemies.forEach { enemy ->
-            val touching = trail.any { point ->
-                point.age < 1.8f + agonyRank * 0.18f &&
-                    distanceSquared(point.x, point.y, enemy.x, enemy.y) < square(enemy.radius + 20f + agonyRank * 4f)
+        WeaponId.FLUX_WAKE -> for (enemyIndex in enemies.indices) {
+            val enemy = enemies[enemyIndex]
+            var touching = false
+            for (trailIndex in trail.indices) {
+                val point = trail[trailIndex]
+                if (
+                    point.age < 1.8f + agonyRank * 0.18f &&
+                    distanceSquared(point.x, point.y, enemy.x, enemy.y) <
+                    square(enemy.radius + 20f + agonyRank * 4f)
+                ) {
+                    touching = true
+                    break
+                }
             }
             if (touching) {
                 dealWeaponDamage(
@@ -91,7 +124,8 @@ internal fun MutableGameState.resolveWeaponDamage(delta: Float) {
                 )
             }
         }
-        WeaponId.MORNINGSTAR -> enemies.forEach { enemy ->
+        WeaponId.MORNINGSTAR -> for (enemyIndex in enemies.indices) {
+            val enemy = enemies[enemyIndex]
             val hitRadius = enemy.radius + 24f
             val primaryHit = distanceSquared(morningstarX, morningstarY, enemy.x, enemy.y) < hitRadius * hitRadius
             val mirrorX = coreX * 2f - morningstarX
@@ -104,23 +138,36 @@ internal fun MutableGameState.resolveWeaponDamage(delta: Float) {
                 screenShake = max(screenShake, 5f)
             }
         }
-        WeaponId.PHASE_LATTICE -> enemies.forEach { enemy ->
+        WeaponId.PHASE_LATTICE -> for (enemyIndex in enemies.indices) {
+            val enemy = enemies[enemyIndex]
             val ring = distanceSquared(coreX, coreY, enemy.x, enemy.y)
             if (ring in square(82f)..square(138f)) dealWeaponDamage(enemy, 19f * delta * power, cadence = WeaponHitCadence.CONTINUOUS)
             if (agonyRank > 0 && ring in square(158f)..square(192f + agonyRank * 4f)) {
                 dealWeaponDamage(enemy, (8f + 3f * agonyRank) * delta * power, cadence = WeaponHitCadence.CONTINUOUS)
             }
         }
-        WeaponId.RIFT_BLADES -> enemies.forEach { enemy ->
-            if (enemy.weaponCooldown <= 0f && weaponOrbitals.any {
-                    distanceSquared(it.x, it.y, enemy.x, enemy.y) <= square(it.radius + enemy.radius)
+        WeaponId.RIFT_BLADES -> for (enemyIndex in enemies.indices) {
+            val enemy = enemies[enemyIndex]
+            var orbitalHit = false
+            if (enemy.weaponCooldown <= 0f) {
+                for (orbitalIndex in weaponOrbitals.indices) {
+                    val orbital = weaponOrbitals[orbitalIndex]
+                    if (
+                        distanceSquared(orbital.x, orbital.y, enemy.x, enemy.y) <=
+                        square(orbital.radius + enemy.radius)
+                    ) {
+                        orbitalHit = true
+                        break
+                    }
                 }
-            ) {
+            }
+            if (orbitalHit) {
                 dealWeaponDamage(enemy, (31f + softVelocity(speed) * 0.025f) * power, canCrit = true)
                 enemy.weaponCooldown = 0.17f
             }
         }
-        WeaponId.ENTROPY_FIELD -> enemies.forEach { enemy ->
+        WeaponId.ENTROPY_FIELD -> for (enemyIndex in enemies.indices) {
+            val enemy = enemies[enemyIndex]
             val radius = 170f + weaponLevel * 5f + agonyRank * 18f
             if (distanceSquared(coreX, coreY, enemy.x, enemy.y) <= square(radius + enemy.radius)) {
                 val collapse = agonyRank > 0 && enemy.hp <= enemy.maxHp * (0.06f + agonyRank * 0.015f)
@@ -138,11 +185,27 @@ internal fun MutableGameState.resolveWeaponDamage(delta: Float) {
 }
 
 internal fun MutableGameState.resolveProjectileHits() {
-    val hostileIterator = projectiles.iterator()
-    while (hostileIterator.hasNext()) {
-        if (phase != GamePhase.RUNNING) break
-        val projectile = hostileIterator.next()
-        if (!projectile.hostile) continue
+    var needsLiveEnemyIds = false
+    var hostileIndex = 0
+    var hostileRemaining = projectiles.size
+    while (hostileRemaining > 0) {
+        val projectile = projectiles[hostileIndex]
+        hostileRemaining--
+        if (!projectile.hostile) {
+            needsLiveEnemyIds = needsLiveEnemyIds || projectile.hasRecordedEnemyHits
+            hostileIndex++
+            continue
+        }
+        if (phase != GamePhase.RUNNING) {
+            var scanIndex = hostileIndex + 1
+            repeat(hostileRemaining) {
+                val remainingProjectile = projectiles[scanIndex++]
+                if (!remainingProjectile.hostile && remainingProjectile.hasRecordedEnemyHits) {
+                    needsLiveEnemyIds = true
+                }
+            }
+            break
+        }
         val hitRadius = MutableGameState.CORE_RADIUS + projectile.radius
         val hit = segmentCircleIntersects(
             projectile.previousX - previousCoreX,
@@ -154,7 +217,7 @@ internal fun MutableGameState.resolveProjectileHits() {
             hitRadius,
         )
         if (hit) {
-            hostileIterator.remove()
+            projectiles.removeAt(hostileIndex)
             if (dashPhaseTime <= 0f) {
                 takeDamage(12f)
                 screenShake = max(screenShake, 6f)
@@ -162,20 +225,43 @@ internal fun MutableGameState.resolveProjectileHits() {
                 grantMatter(1f)
                 burst(projectile.x, projectile.y, 5, 2)
             }
+        } else {
+            hostileIndex++
         }
     }
 
-    val liveEnemyIds = enemies.asSequence()
-        .filter { enemy -> !enemy.dead }
-        .mapTo(mutableSetOf(), Enemy::id)
-    val friendlyIterator = projectiles.iterator()
-    while (friendlyIterator.hasNext()) {
-        val projectile = friendlyIterator.next()
-        if (projectile.hostile) continue
-        projectile.retainLiveEnemyHits(liveEnemyIds)
+    var liveEnemyIds: IntArray? = null
+    var liveEnemyCount = 0
+    if (needsLiveEnemyIds) {
+        val ids = IntArray(enemies.size)
+        var idsAreSorted = true
+        for (enemyIndex in enemies.indices) {
+            val enemy = enemies[enemyIndex]
+            if (enemy.dead) continue
+            if (liveEnemyCount > 0 && ids[liveEnemyCount - 1] > enemy.id) {
+                idsAreSorted = false
+            }
+            ids[liveEnemyCount++] = enemy.id
+        }
+        if (!idsAreSorted) ids.sort(0, liveEnemyCount)
+        liveEnemyIds = ids
+    }
+    var friendlyIndex = 0
+    var friendlyRemaining = projectiles.size
+    while (friendlyRemaining > 0) {
+        val projectile = projectiles[friendlyIndex]
+        friendlyRemaining--
+        if (projectile.hostile) {
+            friendlyIndex++
+            continue
+        }
+        if (liveEnemyIds != null && projectile.hasRecordedEnemyHits) {
+            projectile.retainLiveEnemyHits(liveEnemyIds, liveEnemyCount)
+        }
         var consumed = false
-        for (enemy in enemies) {
-            if (projectile.hasRecordedEnemyHit(enemy.id) || enemy.dead) continue
+        for (enemyIndex in enemies.indices) {
+            val enemy = enemies[enemyIndex]
+            if (enemy.dead || projectile.hasRecordedEnemyHit(enemy.id)) continue
             val hitRadius = projectile.radius + enemy.radius
             val hit = segmentCircleIntersects(
                 projectile.previousX - enemy.previousX,
@@ -206,30 +292,47 @@ internal fun MutableGameState.resolveProjectileHits() {
                 }
             }
         }
-        if (consumed) friendlyIterator.remove()
+        if (consumed) {
+            projectiles.removeAt(friendlyIndex)
+        } else {
+            friendlyIndex++
+        }
     }
 }
 
 internal fun MutableGameState.redirectPrismRelay(projectile: Projectile) {
-    val target = enemies.asSequence()
-        .filter { !it.dead && !projectile.hasRecordedEnemyHit(it.id) }
-        .filter { distanceSquared(projectile.x, projectile.y, it.x, it.y) <= square(720f) }
-        .minByOrNull { distanceSquared(projectile.x, projectile.y, it.x, it.y) }
-        ?: return
-    val angle = atan2(target.y - projectile.y, target.x - projectile.x)
+    val maximumDistanceSquared = square(720f)
+    var target: Enemy? = null
+    var targetDistanceSquared = maximumDistanceSquared
+    for (enemyIndex in enemies.indices) {
+        val enemy = enemies[enemyIndex]
+        if (enemy.dead || projectile.hasRecordedEnemyHit(enemy.id)) continue
+        val distanceSquared = distanceSquared(projectile.x, projectile.y, enemy.x, enemy.y)
+        if (
+            distanceSquared < targetDistanceSquared ||
+            (target == null && distanceSquared == targetDistanceSquared)
+        ) {
+            target = enemy
+            targetDistanceSquared = distanceSquared
+        }
+    }
+    val selectedTarget = target ?: return
+    val angle = atan2(selectedTarget.y - projectile.y, selectedTarget.x - projectile.x)
     val projectileSpeed = max(520f, length(projectile.vx, projectile.vy))
     projectile.vx = cos(angle) * projectileSpeed
     projectile.vy = sin(angle) * projectileSpeed
     projectile.previousX = projectile.x
     projectile.previousY = projectile.y
     projectile.life = max(projectile.life, 0.9f)
-    addWeaponArc(projectile.x, projectile.y, target.x, target.y, 0.08f)
+    addWeaponArc(projectile.x, projectile.y, selectedTarget.x, selectedTarget.y, 0.08f)
 }
 
 internal fun MutableGameState.resolvePickupCollection() {
-    val iterator = pickups.iterator()
-    while (iterator.hasNext()) {
-        val pickup = iterator.next()
+    var pickupIndex = 0
+    var pickupsRemaining = pickups.size
+    while (pickupsRemaining > 0) {
+        val pickup = pickups[pickupIndex]
+        pickupsRemaining--
         if (segmentCircleIntersects(
                 previousCoreX - pickup.previousX,
                 previousCoreY - pickup.previousY,
@@ -240,7 +343,7 @@ internal fun MutableGameState.resolvePickupCollection() {
                 34f,
             )
         ) {
-            iterator.remove()
+            pickups.removeAt(pickupIndex)
             when (pickup.type) {
                 PickupType.DATA -> gainData(dataGain)
                 PickupType.KEY -> {
@@ -258,6 +361,8 @@ internal fun MutableGameState.resolvePickupCollection() {
             burst(pickup.x, pickup.y, 7, if (pickup.type == PickupType.KEY || pickup.type == PickupType.RELIC) 3 else 1)
             emitSound(GameplayAudioCue.PICKUP)
             openNextPendingChoice()
+        } else {
+            pickupIndex++
         }
     }
 }

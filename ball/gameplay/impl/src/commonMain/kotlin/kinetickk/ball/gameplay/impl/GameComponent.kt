@@ -76,7 +76,21 @@ internal class GameComponent private constructor(
 ) : GameplaySessionRunPort, GameplayPresentationPort, GameplayInteractionPort {
     private val dispatchGuard = InlineDispatchGuard()
     private val completions = gameplayCompletionDeque<GameplayWorkItem>()
-    private var committedState: GameplayState = initialState
+
+    /**
+     * Root Interaction outputs consume only causal metadata. Reusing that metadata under the
+     * non-reentrant dispatch guard keeps the root Intent out of the completion deque without
+     * introducing a second output dispatcher or a per-Interaction work-item allocation.
+     */
+    private val localOutputItem = GameplayWorkItem.reusableLocalOutputItem()
+    private var committedFrame: CommittedGameplayFrame = CommittedGameplayFrame(
+        state = initialState,
+        renderSnapshot = GameplayNucleus.renderSnapshot(initialState),
+    )
+    private val committedState: GameplayState
+        get() = committedFrame.state
+    private val committedRenderSnapshot: GameplayRenderSnapshot
+        get() = committedFrame.renderSnapshot
     private var interactionFxReducer: InteractionFxReducer? = null
     private var activeGameplayCommandRoute: GameplayCommandRouteReservation? = null
     private var activeProfileCommandRoute: GameplayProfileRouteReservation? = null
@@ -168,8 +182,7 @@ internal class GameComponent private constructor(
     override fun query(query: GameplayQuery.GetCodexStacks): GameplayCodexStacksProjection =
         GameplayNucleus.query(committedState, query)
 
-    override fun renderSnapshot(): GameplayRenderSnapshot =
-        GameplayNucleus.renderSnapshot(committedState)
+    override fun renderSnapshot(): GameplayRenderSnapshot = committedRenderSnapshot
 
     override fun visualFxSnapshot(): VisualFxProjection =
         interactionFxReducer?.snapshot() ?: VisualFxProjection.EMPTY
@@ -248,59 +261,82 @@ internal class GameComponent private constructor(
                 "Gameplay local revision capacity exhausted before Intent construction"
             }
             val causalScope = allocateLocalCausalScope()
-            check(
-                completions.tryAddLast(
-                    GameplayWorkItem(
-                        pulse = GameplayNucleusPulse.Intent(pulse),
-                        context = GameplayContext.Empty,
-                        causalScope = causalScope,
-                        causalDepth = 0,
-                    ),
-                ),
-            )
-
-            var rootAcceptance: GameplayAcceptance? = null
-            var root = true
+            localOutputItem.bindLocalCausalScope(causalScope)
             var deferredFault: Throwable? = null
+
+            val beforeRoot = committedState
+            val rootAcceptance = when (
+                val decision = GameplayNucleus.decide(
+                    beforeRoot,
+                    GameplayNucleusPulse.Intent(pulse),
+                    GameplayContext.Empty,
+                )
+            ) {
+                is GameplayDecision.Rejected -> GameplayAcceptance.Rejected(
+                    instanceId = beforeRoot.instanceId,
+                    observedRevision = beforeRoot.revision,
+                    reason = decision.reason,
+                )
+                is GameplayDecision.Accepted -> {
+                    val renderSnapshot = preflight(
+                        before = beforeRoot,
+                        renderModelNeutralTransition =
+                            pulse === GameplayInteractionPulse.DashRequested,
+                        causalScope = causalScope,
+                        frame = decision.frame,
+                    )
+                    publish(decision.frame.nextState, renderSnapshot)
+                    val acceptance = GameplayAcceptance.Accepted(
+                        instanceId = committedState.instanceId,
+                        revision = committedState.revision,
+                    )
+                    var outputIndex = 0
+                    while (outputIndex < decision.frame.outputs.size) {
+                        val output = decision.frame.outputs[outputIndex]
+                        try {
+                            execute(output, localOutputItem)
+                        } catch (failure: Throwable) {
+                            if (deferredFault == null) deferredFault = failure
+                        }
+                        outputIndex++
+                    }
+                    acceptance
+                }
+            }
+
             while (!completions.isEmpty) {
                 val item = checkNotNull(completions.removeFirstOrNull())
                 val before = committedState
                 when (val decision = GameplayNucleus.decide(before, item.pulse, item.context)) {
                     is GameplayDecision.Rejected -> {
-                        check(root) {
-                            "A trusted Gameplay completion was rejected: ${decision.reason}"
-                        }
-                        rootAcceptance = GameplayAcceptance.Rejected(
-                            instanceId = before.instanceId,
-                            observedRevision = before.revision,
-                            reason = decision.reason,
-                        )
+                        error("A trusted Gameplay completion was rejected: ${decision.reason}")
                     }
                     is GameplayDecision.Accepted -> {
-                        preflight(before, item, decision.frame)
-                        committedState = decision.frame.nextState
+                        val renderSnapshot = preflight(
+                            before = before,
+                            renderModelNeutralTransition = false,
+                            causalScope = item.causalScope,
+                            frame = decision.frame,
+                        )
+                        publish(decision.frame.nextState, renderSnapshot)
                         initializeInteractionFxIfStarted(before, item)
-                        if (root) {
-                            rootAcceptance = GameplayAcceptance.Accepted(
-                                instanceId = committedState.instanceId,
-                                revision = committedState.revision,
-                            )
-                        }
-                        decision.frame.outputs.forEach { output ->
+                        var outputIndex = 0
+                        while (outputIndex < decision.frame.outputs.size) {
+                            val output = decision.frame.outputs[outputIndex]
                             try {
                                 execute(output, item)
                             } catch (failure: Throwable) {
                                 if (deferredFault == null) deferredFault = failure
                             }
+                            outputIndex++
                         }
                     }
                 }
-                root = false
             }
 
             deferredFault?.let { throw it }
             check(activeProfileCommandRoute == null)
-            checkNotNull(rootAcceptance)
+            rootAcceptance
         }
 
     private fun dispatchCommand(
@@ -347,16 +383,24 @@ internal class GameComponent private constructor(
                             causalBudgetFailure(pulse.commandSource),
                         )
                     }
-                    preflight(before, item, decision.frame)
-                    committedState = decision.frame.nextState
+                    val renderSnapshot = preflight(
+                        before = before,
+                        renderModelNeutralTransition = false,
+                        causalScope = item.causalScope,
+                        frame = decision.frame,
+                    )
+                    publish(decision.frame.nextState, renderSnapshot)
                     initializeInteractionFxIfStarted(before, item)
                     if (root) acceptedTargetRevision = committedState.revision
-                    decision.frame.outputs.forEach { output ->
+                    var outputIndex = 0
+                    while (outputIndex < decision.frame.outputs.size) {
+                        val output = decision.frame.outputs[outputIndex]
                         try {
                             execute(output, item)
                         } catch (failure: Throwable) {
                             if (deferredFault == null) deferredFault = failure
                         }
+                        outputIndex++
                     }
                 }
             }
@@ -378,9 +422,10 @@ internal class GameComponent private constructor(
 
     private fun preflight(
         before: GameplayState,
-        item: GameplayWorkItem,
+        renderModelNeutralTransition: Boolean,
+        causalScope: Long,
         frame: GameplayAcceptedFrame,
-    ) {
+    ): GameplayRenderSnapshot {
         val next = frame.nextState
         check(next.instanceId == before.instanceId) { "Gameplay instance identity changed" }
         check(next.content === before.content) { "Captured Gameplay content identity changed" }
@@ -388,7 +433,24 @@ internal class GameComponent private constructor(
         check(next.revision.value == before.revision.value + 1L) {
             "Gameplay revision must advance exactly once"
         }
-        val renderSnapshot = GameplayNucleus.renderSnapshot(next)
+        val renderSnapshot = if (
+            next.engine === before.engine ||
+            renderModelNeutralTransition
+        ) {
+            check(committedRenderSnapshot.instanceId == before.instanceId)
+            check(committedRenderSnapshot.revision == before.revision)
+            GameplayNucleus.reuseRenderSnapshot(
+                state = next,
+                reusableState = before,
+                reusableSnapshot = committedRenderSnapshot,
+            )
+        } else {
+            GameplayNucleus.renderSnapshot(
+                state = next,
+                reusableState = before,
+                reusableSnapshot = committedRenderSnapshot,
+            )
+        }
         check(renderSnapshot.instanceId == next.instanceId)
         check(renderSnapshot.revision == next.revision)
         check((renderSnapshot.renderModel == null) == (next.engine == null))
@@ -406,42 +468,61 @@ internal class GameComponent private constructor(
             check(render.phase == expectedRenderPhase)
         }
         check(frame.outputs.size <= MAX_GAMEPLAY_OUTPUTS_PER_DECISION)
-        check(frame.outputs.zipWithNext().all { (left, right) ->
-            left.dispatchOrder <= right.dispatchOrder
-        }) { "Gameplay outputs are not in FX -> Profile -> Audio -> result order" }
+        var profileOutput: GameplayOutput.SendProfileCommand? = null
+        var profileOutputIndex = -1
+        var profileOutputCount = 0
+        var outputIndex = 0
+        var previousDispatchOrder = 0
+        while (outputIndex < frame.outputs.size) {
+            val output = frame.outputs[outputIndex]
+            val dispatchOrder = output.dispatchOrder
+            if (outputIndex > 0) {
+                check(previousDispatchOrder <= dispatchOrder) {
+                    "Gameplay outputs are not in FX -> Profile -> Audio -> result order"
+                }
+            }
+            previousDispatchOrder = dispatchOrder
+            if (output is GameplayOutput.SendProfileCommand) {
+                profileOutputCount++
+                if (profileOutput == null) {
+                    profileOutput = output
+                    profileOutputIndex = outputIndex
+                }
+            }
+            outputIndex++
+        }
 
-        val profileOutputs = frame.outputs.filterIsInstance<GameplayOutput.SendProfileCommand>()
-        requireGameplayProfileOutputFanoutBound(profileOutputs.size)
-        if (profileOutputs.isNotEmpty()) {
+        requireGameplayProfileOutputFanoutBound(profileOutputCount)
+        if (profileOutput != null) {
             check(before.pendingProfileCommand == null)
             requireGameplayCompletionCapacity(completions.remainingCapacity, requiredCompletions = 1)
-            val output = profileOutputs.single()
-            val outputIndex = frame.outputs.indexOf(output)
             val pending = checkNotNull(next.pendingProfileCommand)
-            check(pending.request == output.request)
-            check(output.request.targetInstance == profilePort.instanceId)
-            check(output.request.command is ProfileModuleCommand.ApplyGameplayProgress)
-            check(output.request.sourceOrdinal == outputIndex)
-            check(output.request.semanticHandle.sourceOrdinal == outputIndex)
-            check(output.request.semanticHandle.sourceRevision == next.revision.value)
+            check(pending.request == profileOutput.request)
+            check(profileOutput.request.targetInstance == profilePort.instanceId)
+            check(profileOutput.request.command is ProfileModuleCommand.ApplyGameplayProgress)
+            check(profileOutput.request.sourceOrdinal == profileOutputIndex)
+            check(profileOutput.request.semanticHandle.sourceOrdinal == profileOutputIndex)
+            check(profileOutput.request.semanticHandle.sourceRevision == next.revision.value)
             check(
-                output.request.semanticHandle.sourceInstance ==
+                profileOutput.request.semanticHandle.sourceInstance ==
                     ProfileCommandSource.GameplayRun(next.instanceId.runId.value),
             )
         } else if (before.pendingProfileCommand == null) {
             check(next.pendingProfileCommand == null)
         }
 
-        frame.outputs.forEachIndexed { index, output ->
+        outputIndex = 0
+        while (outputIndex < frame.outputs.size) {
+            val output = frame.outputs[outputIndex]
             when (output) {
                 is GameplayOutput.CompleteCommand -> {
                     val route = checkNotNull(activeGameplayCommandRoute)
                     check(output.result.commandSource == route.commandSource)
                     check(output.result.semanticHandle == route.commandSource.semanticHandle)
-                    check(output.result.sourceOrdinal == index)
+                    check(output.result.sourceOrdinal == outputIndex)
                     check(resultMatches(route.effectiveProtocolIdentity, output.result.result))
-                    check(index == frame.outputs.lastIndex)
-                    check(item.causalScope == route.commandSource.causalScope)
+                    check(outputIndex == frame.outputs.lastIndex)
+                    check(causalScope == route.commandSource.causalScope)
                 }
                 is GameplayOutput.SendProfileCommand -> Unit
                 is GameplayOutput.AdvanceAudio,
@@ -449,7 +530,13 @@ internal class GameComponent private constructor(
                 GameplayOutput.EnsureAudioUnlocked,
                 -> Unit
             }
+            outputIndex++
         }
+        return renderSnapshot
+    }
+
+    private fun publish(state: GameplayState, renderSnapshot: GameplayRenderSnapshot) {
+        committedFrame = CommittedGameplayFrame(state, renderSnapshot)
     }
 
     private fun initializeInteractionFxIfStarted(
@@ -698,6 +785,11 @@ internal class GameComponent private constructor(
     }
 }
 
+private data class CommittedGameplayFrame(
+    val state: GameplayState,
+    val renderSnapshot: GameplayRenderSnapshot,
+)
+
 internal fun <T> gameplayCompletionDeque(): BoundedCompletionDeque<T> =
     BoundedCompletionDeque(GAMEPLAY_COMPLETION_CAPACITY)
 
@@ -750,12 +842,32 @@ private fun resultMatches(
     GameplayEffectiveProtocolIdentity.SESSION_EXIT -> result is GameplayModuleResult.RunExited
 }
 
-private data class GameplayWorkItem(
+private class GameplayWorkItem(
     val pulse: GameplayNucleusPulse,
     val context: GameplayContext,
-    val causalScope: Long,
+    causalScope: Long,
     val causalDepth: Int,
-)
+    private val reusableLocalOutputItem: Boolean = false,
+) {
+    var causalScope: Long = causalScope
+        private set
+
+    fun bindLocalCausalScope(causalScope: Long) {
+        check(reusableLocalOutputItem && causalDepth == 0)
+        check(causalScope >= 0L)
+        this.causalScope = causalScope
+    }
+
+    companion object {
+        fun reusableLocalOutputItem(): GameplayWorkItem = GameplayWorkItem(
+            pulse = LOCAL_OUTPUT_METADATA_PULSE,
+            context = GameplayContext.Empty,
+            causalScope = 0L,
+            causalDepth = 0,
+            reusableLocalOutputItem = true,
+        )
+    }
+}
 
 private data class GameplayCommandRouteReservation(
     val commandSource: GameplayCommandSourceToken,
@@ -793,3 +905,5 @@ private const val MAX_GAMEPLAY_CAUSAL_DEPTH: Int = 8
 private const val PROFILE_GAMEPLAY_RESULT_ORDINAL: Int = 1
 private const val MAX_LOCAL_REVISIONS_PER_DISPATCH: Long = 2L
 private const val MAX_EXIT_REVISIONS_PER_DISPATCH: Long = 2L
+private val LOCAL_OUTPUT_METADATA_PULSE: GameplayNucleusPulse =
+    GameplayNucleusPulse.Intent(GameplayInteractionPulse.UserGestureObserved)

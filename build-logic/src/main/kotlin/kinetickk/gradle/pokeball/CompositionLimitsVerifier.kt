@@ -13,6 +13,8 @@ private const val APP_PLATFORM_EXPECT_PATH =
     "app/shared/src/commonMain/kotlin/kinetickk/app/shared/AppComposition.kt"
 private const val DESKTOP_PLATFORM_BROKER_PATH =
     "app/shared/src/desktopMain/kotlin/kinetickk/app/shared/PlatformCapabilities.desktop.kt"
+private const val ANDROID_PLATFORM_BROKER_PATH =
+    "app/shared/src/androidMain/kotlin/kinetickk/app/shared/PlatformCapabilities.android.kt"
 private const val WEB_PLATFORM_BROKER_PATH =
     "app/shared/src/wasmJsMain/kotlin/kinetickk/app/shared/PlatformCapabilities.wasm.kt"
 private const val APP_ASSEMBLY_PATH =
@@ -170,6 +172,7 @@ private val trustedNucleusCallsites = listOf(
 
 private val platformBrokerPaths = setOf(
     DESKTOP_PLATFORM_BROKER_PATH,
+    ANDROID_PLATFORM_BROKER_PATH,
     WEB_PLATFORM_BROKER_PATH,
 )
 
@@ -195,6 +198,8 @@ private val semanticProviderEvidenceConstruction = Regex(
 )
 
 private val broadPlatformAuthorityTokens = setOf(
+    "android.content.SharedPreferences",
+    "android.media.AudioTrack",
     "java.util.prefs.Preferences",
     "org.w3c.dom.Storage",
     "kotlinx.browser.localStorage",
@@ -206,6 +211,8 @@ private val broadPlatformAuthorityTokens = setOf(
 )
 
 private val broadBrokerSignatureTypes = setOf(
+    "SharedPreferences",
+    "AudioTrack",
     "Preferences",
     "Storage",
     "JsAny",
@@ -351,6 +358,21 @@ internal fun platformCapabilityBoundaryViolations(
             "AudioSystem.getSourceDataLine(format).use { line ->",
             "private class DesktopProfilePersistenceCapability",
             "private class DesktopTonePlaybackCapability",
+        ),
+    )
+    requireTokens(
+        ANDROID_PLATFORM_BROKER_PATH,
+        listOf(
+            "actual fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability",
+            "actual fun createPlatformTonePlaybackCapability(): TonePlaybackCapability",
+            "context.getSharedPreferences(ANDROID_PROFILE_PREFERENCES, Context.MODE_PRIVATE)",
+            "context.getSharedPreferences(ANDROID_LEGACY_PREFERENCES, Context.MODE_PRIVATE)",
+            "private class AndroidProfilePersistenceCapability",
+            "private class AndroidTonePlaybackCapability",
+            "executor.execute { synthesize(request) }",
+            "val track = AudioTrack.Builder()",
+            "val written = track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)",
+            "track.release()",
         ),
     )
     requireTokens(
@@ -588,6 +610,7 @@ internal fun audioRuntimeFaultStageViolations(
         AUDIO_RESOURCE_PATH,
         GAMEPLAY_RUN_IMPL_PATH,
         DESKTOP_PLATFORM_BROKER_PATH,
+        ANDROID_PLATFORM_BROKER_PATH,
         WEB_PLATFORM_BROKER_PATH,
     )
     requiredPaths.filterNot(codeByPath::containsKey).forEach { path ->
@@ -673,6 +696,21 @@ internal fun audioRuntimeFaultStageViolations(
                 "executor.shutdownNow()",
                 "AudioSystem.getSourceDataLine(format).use { line ->",
                 "line.write(bytes, 0, bytes.size)",
+            ),
+        )
+    }
+
+    codeByPath[ANDROID_PLATFORM_BROKER_PATH]?.let { code ->
+        verifyDirectScope(
+            ANDROID_PLATFORM_BROKER_PATH,
+            "Android Tone submission/synthesis/close",
+            declarationBodyForCapability(code, "private class AndroidTonePlaybackCapability"),
+            listOf(
+                "executor.execute { synthesize(request) }",
+                "executor.shutdownNow()",
+                "val track = AudioTrack.Builder()",
+                "val written = track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)",
+                "track.release()",
             ),
         )
     }
@@ -779,6 +817,14 @@ private val audioRuntimeFaultEvidenceAnchors = listOf(
         ),
     ),
     BoundAnchor(
+        path = "app/shared/src/androidInstrumentedTest/kotlin/kinetickk/app/shared/PlatformCapabilitiesAndroidTest.kt",
+        tokens = listOf(
+            "androidAudioBrokerIsInstanceOwnedAndCloseIsIdempotent",
+            "androidWorkerAndDiscardOldestQueueEnforceOneAndTwentyFour",
+            "androidSynthesisBufferAcceptsMaximumDurationAndRejectsNext",
+        ),
+    ),
+    BoundAnchor(
         path = "app/shared/src/wasmJsTest/kotlin/kinetickk/app/shared/PlatformCapabilitiesWebTest.kt",
         tokens = listOf("webAudioSynchronousProviderFaultsPropagateWithoutFabricatingClosedState"),
     ),
@@ -792,7 +838,7 @@ internal fun audioProjectionPolicyViolations(
         "Core §9.13 live mechanical Projection",
         "Audio produces no typed Fact, result, or status",
         "Synchronous Audio Resource and platform calls propagate under runtime-fault policy",
-        "a synthesis fault escapes that `Runnable` to the runtime",
+        "Android and Desktop synthesis faults escape their detached executor `Runnable` to the runtime",
         "no caller-propagation claim",
         "`.catch(() => undefined)`",
         "post-acceptance mechanical projection loss",
@@ -803,7 +849,7 @@ internal fun audioProjectionPolicyViolations(
     listOf(
         "live mechanical Audio Projection (Core §9.13)",
         "no typed Audio Fact/result/status",
-        "Desktop worker faults escape the detached `Runnable` to runtime",
+        "Android and Desktop worker faults escape the detached `Runnable` to runtime",
         "Web native `resume()`/`close()` Promise rejections",
         "`.catch(() => undefined)`",
         "Synchronous JavaScript invocation/graph faults propagate",
@@ -902,6 +948,7 @@ private fun platformBrokerSourceViolations(path: String, code: String): List<Str
 
     when (path) {
         DESKTOP_PLATFORM_BROKER_PATH -> addAll(desktopBrokerSourceViolations(code))
+        ANDROID_PLATFORM_BROKER_PATH -> addAll(androidBrokerSourceViolations(code))
         WEB_PLATFORM_BROKER_PATH -> addAll(webBrokerSourceViolations(code))
         else -> add("Unrecognized platform broker path $path")
     }
@@ -1185,6 +1232,219 @@ private fun desktopValueAdmissionViolations(code: String): List<String> = buildL
         0 until writeBody.indexOf("profileNode()")
     ) {
         add("Desktop value length must be admitted before profile-node/provider acquisition")
+    }
+}
+
+private fun androidBrokerSourceViolations(code: String): List<String> = buildList {
+    listOf(
+        "SharedPreferences.all",
+        ".all",
+        ".apply()",
+    ).filter(code::contains).forEach { token ->
+        add("Android persistence broker may not acquire bulk or ambiguous authority via `$token`")
+    }
+    if ("request.wave.ordinal" in code) {
+        add("Android tone mapping may not depend on ToneWave ordinal or enum cardinality")
+    }
+    requireRegexCount(
+        code,
+        Regex("private\\s+const\\s+val\\s+ANDROID_PROFILE_PREFERENCES\\s*=\\s*\"kinetickk\\.profile\""),
+        1,
+        "fixed Android profile preferences name",
+        ANDROID_PLATFORM_BROKER_PATH,
+        this,
+    )
+    requireRegexCount(
+        code,
+        Regex("private\\s+const\\s+val\\s+ANDROID_LEGACY_PREFERENCES\\s*=\\s*\"kinetickk\\.progression\""),
+        1,
+        "fixed Android legacy preferences name",
+        ANDROID_PLATFORM_BROKER_PATH,
+        this,
+    )
+    requireRegexCount(
+        code,
+        Regex("\\bgetSharedPreferences\\s*\\("),
+        2,
+        "two and only two Android SharedPreferences acquisitions",
+        ANDROID_PLATFORM_BROKER_PATH,
+        this,
+    )
+    requireRegexCount(
+        code,
+        Regex("context\\.getSharedPreferences\\(ANDROID_PROFILE_PREFERENCES,\\s*Context\\.MODE_PRIVATE\\)"),
+        1,
+        "fixed Android profile SharedPreferences acquisition",
+        ANDROID_PLATFORM_BROKER_PATH,
+        this,
+    )
+    requireRegexCount(
+        code,
+        Regex("context\\.getSharedPreferences\\(ANDROID_LEGACY_PREFERENCES,\\s*Context\\.MODE_PRIVATE\\)"),
+        1,
+        "fixed Android legacy SharedPreferences acquisition",
+        ANDROID_PLATFORM_BROKER_PATH,
+        this,
+    )
+    requireRegexCount(
+        code,
+        Regex("actual\\s+fun\\s+createPlatformProfilePersistenceCapability\\s*\\(\\s*\\)\\s*:\\s*ProfilePersistenceCapability\\s*\\{"),
+        1,
+        "direct Android profile broker construction",
+        ANDROID_PLATFORM_BROKER_PATH,
+        this,
+    )
+    requireRegexCount(
+        code,
+        Regex(
+            "actual\\s+fun\\s+createPlatformTonePlaybackCapability\\s*\\(\\s*\\)\\s*:\\s*" +
+                "TonePlaybackCapability\\s*=\\s*AndroidTonePlaybackCapability\\s*\\(\\s*\\)",
+        ),
+        1,
+        "direct Android audio broker construction",
+        ANDROID_PLATFORM_BROKER_PATH,
+        this,
+    )
+    addAll(
+        closedPersistenceBrokerViolations(
+            path = ANDROID_PLATFORM_BROKER_PATH,
+            code = code,
+            declaration = "private class AndroidProfilePersistenceCapability",
+            allowedCalls = exactPersistenceOperations + setOf(
+                "androidProfileReadCall",
+                "androidProfileMutationCall",
+                "edit",
+                "putString",
+                "remove",
+            ),
+            exactCallCounts = mapOf(
+                "androidProfileReadCall" to 3,
+                "androidProfileMutationCall" to 0,
+                "edit" to 3,
+                "putString" to 1,
+                "remove" to 2,
+            ),
+            exactIdentifierCounts = emptyMap(),
+            requiredExpressions = listOf(
+                "androidProfileReadCall(profile, ANDROID_SNAPSHOT_V4)",
+                "profile.edit().putString(ANDROID_SNAPSHOT_V4, payload)",
+                "androidProfileReadCall(legacy, ANDROID_LEGACY_PROGRESS_V2)",
+                "androidProfileReadCall(legacy, ANDROID_LEGACY_MATTER)",
+                "legacy.edit().remove(ANDROID_LEGACY_PROGRESS_V2)",
+                "legacy.edit().remove(ANDROID_LEGACY_MATTER)",
+            ),
+        ),
+    )
+    requireRegexCount(
+        code,
+        Regex("\\bandroidProfileMutationCall\\s*\\{"),
+        3,
+        "three exact Android persistence mutations",
+        ANDROID_PLATFORM_BROKER_PATH,
+        this,
+    )
+    addAll(androidPersistenceHelperViolations(code))
+
+    requireRegexCount(
+        code,
+        Regex("\\bThreadPoolExecutor\\s*\\("),
+        1,
+        "private Android executor construction",
+        ANDROID_PLATFORM_BROKER_PATH,
+        this,
+    )
+    requireRegexCount(
+        code,
+        Regex("\\bAudioTrack\\.Builder\\s*\\(\\s*\\)"),
+        1,
+        "private Android AudioTrack construction",
+        ANDROID_PLATFORM_BROKER_PATH,
+        this,
+    )
+    val audioBody = declarationBodyForCapability(code, "private class AndroidTonePlaybackCapability")
+    if (audioBody == null) {
+        add("Private Android audio broker is missing")
+    } else {
+        listOf(
+            "ArrayBlockingQueue(AndroidAudioExecutionPolicy.QUEUE_CAPACITY)",
+            "ThreadPoolExecutor.DiscardOldestPolicy()",
+            "executor.execute { synthesize(request) }",
+            "executor.shutdownNow()",
+            ".setTransferMode(AudioTrack.MODE_STATIC)",
+            ".setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)",
+            "track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)",
+            "track.release()",
+        ).filterNot(audioBody::contains).forEach { token ->
+            add("Private Android audio broker is missing `$token`")
+        }
+        if (Regex("\\bthis\\b").containsMatchIn(audioBody)) {
+            add("Android audio broker may not publish its capability instance via `this`")
+        }
+    }
+}
+
+private fun androidPersistenceHelperViolations(code: String): List<String> = buildList {
+    val readBody = topLevelDeclarationSlice(code, "private fun androidProfileReadCall")
+    if (readBody == null) {
+        add("Private Android profile read seam is missing")
+    } else {
+        listOf(
+            "preferences.contains(exactKey)",
+            "preferences.getString(exactKey, null)",
+            "ProfilePersistenceReadResult.Observed(null)",
+            "ProfilePersistenceReadResult.Failed",
+            "ProfilePersistenceReadResult.Observed(payload)",
+        ).filterNot(readBody::contains).forEach { token ->
+            add("Private Android profile read seam is missing `$token`")
+        }
+        val expectedCatchCounts = mapOf(
+            "ClassCastException" to 1,
+            "IllegalStateException" to 2,
+            "SecurityException" to 2,
+        )
+        val actualCatchCounts = kotlinCatchBlocks(readBody)
+            .groupingBy { caught -> caught.type.substringAfterLast('.') }
+            .eachCount()
+        if (actualCatchCounts != expectedCatchCounts) {
+            add(
+                "Android profile read seam catch inventory must be exactly " +
+                    "${expectedCatchCounts.toSortedMap()}; found ${actualCatchCounts.toSortedMap()}",
+            )
+        }
+    }
+
+    val mutationBody = topLevelDeclarationSlice(code, "private fun androidProfileMutationCall")
+    if (mutationBody == null) {
+        add("Private Android profile mutation seam is missing")
+    } else {
+        val normalized = mutationBody.squashWhitespace()
+        listOf(
+            "val editor = try { prepare() }",
+            "return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION",
+            "if (editor.commit()) { ProfilePersistenceMutationResult.COMPLETED } else { " +
+                "ProfilePersistenceMutationResult.POSSIBLE_EXECUTION }",
+            "catch (_: SecurityException) { ProfilePersistenceMutationResult.POSSIBLE_EXECUTION }",
+            "catch (_: IllegalStateException) { ProfilePersistenceMutationResult.POSSIBLE_EXECUTION }",
+        ).filterNot(normalized::contains).forEach { token ->
+            add("Private Android profile mutation seam is missing exact stage split `$token`")
+        }
+        val expectedCatchCounts = mapOf(
+            "IllegalArgumentException" to 1,
+            "IllegalStateException" to 2,
+            "SecurityException" to 2,
+        )
+        val actualCatchCounts = kotlinCatchBlocks(mutationBody)
+            .groupingBy { caught -> caught.type.substringAfterLast('.') }
+            .eachCount()
+        if (actualCatchCounts != expectedCatchCounts) {
+            add(
+                "Android profile mutation seam catch inventory must be exactly " +
+                    "${expectedCatchCounts.toSortedMap()}; found ${actualCatchCounts.toSortedMap()}",
+            )
+        }
+        if (".apply()" in mutationBody) {
+            add("Android profile mutation seam must use synchronous commit for exact execution staging")
+        }
     }
 }
 
@@ -1509,6 +1769,7 @@ private fun platformFactoryCallsiteViolations(
     val expectedCountsByPath = mapOf(
         APP_PLATFORM_EXPECT_PATH to 2,
         DESKTOP_PLATFORM_BROKER_PATH to 1,
+        ANDROID_PLATFORM_BROKER_PATH to 1,
         WEB_PLATFORM_BROKER_PATH to 1,
     )
     listOf(
@@ -1572,12 +1833,14 @@ private fun closedCapabilityTypeInventoryViolations(
         PROFILE_FACTORY_PATH to 3,
         APP_PLATFORM_EXPECT_PATH to 2,
         DESKTOP_PLATFORM_BROKER_PATH to 3,
+        ANDROID_PLATFORM_BROKER_PATH to 3,
         WEB_PLATFORM_BROKER_PATH to 3,
     )
     val expectedAudioCounts = mapOf(
         AUDIO_RESOURCE_PATH to 3,
         APP_PLATFORM_EXPECT_PATH to 2,
         DESKTOP_PLATFORM_BROKER_PATH to 3,
+        ANDROID_PLATFORM_BROKER_PATH to 3,
         WEB_PLATFORM_BROKER_PATH to 3,
     )
     listOf(

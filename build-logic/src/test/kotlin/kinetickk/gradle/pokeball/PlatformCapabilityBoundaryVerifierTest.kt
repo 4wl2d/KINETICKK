@@ -387,6 +387,7 @@ class PlatformCapabilityBoundaryVerifierTest {
             """.trimIndent(),
         ),
         SourceDocument(DESKTOP_PATH, desktopBrokerFixture()),
+        SourceDocument(ANDROID_PATH, androidBrokerFixture()),
         SourceDocument(WEB_PATH, webBrokerFixture()),
     )
 
@@ -611,6 +612,133 @@ class PlatformCapabilityBoundaryVerifierTest {
             }
         """.trimIndent()
 
+    private fun androidBrokerFixture(): String =
+        """
+            import android.content.Context
+            import android.content.SharedPreferences
+            import android.media.AudioTrack
+            import java.util.concurrent.ThreadPoolExecutor
+            import kinetickk.ball.profile.impl.ProfilePersistenceCapability
+            import kinetickk.resource.audio.impl.TonePlaybackCapability
+
+            private const val ANDROID_PROFILE_PREFERENCES = "kinetickk.profile"
+            private const val ANDROID_LEGACY_PREFERENCES = "kinetickk.progression"
+            private const val ANDROID_SNAPSHOT_V4 = "snapshot_v4"
+            private const val ANDROID_LEGACY_PROGRESS_V2 = "progress_v2"
+            private const val ANDROID_LEGACY_MATTER = "kinetickk_matter"
+
+            internal actual fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability {
+                val context = AndroidApplicationContext.requireContext()
+                return AndroidProfilePersistenceCapability(
+                    profile = context.getSharedPreferences(ANDROID_PROFILE_PREFERENCES, Context.MODE_PRIVATE),
+                    legacy = context.getSharedPreferences(ANDROID_LEGACY_PREFERENCES, Context.MODE_PRIVATE),
+                )
+            }
+
+            private class AndroidProfilePersistenceCapability(
+                private val profile: SharedPreferences,
+                private val legacy: SharedPreferences,
+            ) : ProfilePersistenceCapability {
+                override fun readV4(): ProfilePersistenceReadResult =
+                    androidProfileReadCall(profile, ANDROID_SNAPSHOT_V4)
+                override fun writeV4(payload: String): ProfilePersistenceMutationResult =
+                    androidProfileMutationCall {
+                        profile.edit().putString(ANDROID_SNAPSHOT_V4, payload)
+                    }
+                override fun readLegacyProgressV2(): ProfilePersistenceReadResult =
+                    androidProfileReadCall(legacy, ANDROID_LEGACY_PROGRESS_V2)
+                override fun readLegacyMatter(): ProfilePersistenceReadResult =
+                    androidProfileReadCall(legacy, ANDROID_LEGACY_MATTER)
+                override fun removeLegacyProgressV2(): ProfilePersistenceMutationResult =
+                    androidProfileMutationCall {
+                        legacy.edit().remove(ANDROID_LEGACY_PROGRESS_V2)
+                    }
+                override fun removeLegacyMatter(): ProfilePersistenceMutationResult =
+                    androidProfileMutationCall {
+                        legacy.edit().remove(ANDROID_LEGACY_MATTER)
+                    }
+            }
+
+            private fun androidProfileReadCall(
+                preferences: SharedPreferences,
+                exactKey: String,
+            ): ProfilePersistenceReadResult {
+                val keyIsPresent = try {
+                    preferences.contains(exactKey)
+                } catch (_: SecurityException) {
+                    return ProfilePersistenceReadResult.Failed
+                } catch (_: IllegalStateException) {
+                    return ProfilePersistenceReadResult.Failed
+                }
+                if (!keyIsPresent) return ProfilePersistenceReadResult.Observed(null)
+                val payload = try {
+                    preferences.getString(exactKey, null)
+                } catch (_: ClassCastException) {
+                    return ProfilePersistenceReadResult.Failed
+                } catch (_: SecurityException) {
+                    return ProfilePersistenceReadResult.Failed
+                } catch (_: IllegalStateException) {
+                    return ProfilePersistenceReadResult.Failed
+                }
+                return if (payload == null) {
+                    ProfilePersistenceReadResult.Failed
+                } else {
+                    ProfilePersistenceReadResult.Observed(payload)
+                }
+            }
+
+            private fun androidProfileMutationCall(
+                prepare: () -> SharedPreferences.Editor,
+            ): ProfilePersistenceMutationResult {
+                val editor = try {
+                    prepare()
+                } catch (_: SecurityException) {
+                    return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
+                } catch (_: IllegalArgumentException) {
+                    return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
+                } catch (_: IllegalStateException) {
+                    return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
+                }
+                return try {
+                    if (editor.commit()) {
+                        ProfilePersistenceMutationResult.COMPLETED
+                    } else {
+                        ProfilePersistenceMutationResult.POSSIBLE_EXECUTION
+                    }
+                } catch (_: SecurityException) {
+                    ProfilePersistenceMutationResult.POSSIBLE_EXECUTION
+                } catch (_: IllegalStateException) {
+                    ProfilePersistenceMutationResult.POSSIBLE_EXECUTION
+                }
+            }
+
+            internal actual fun createPlatformTonePlaybackCapability(): TonePlaybackCapability =
+                AndroidTonePlaybackCapability()
+
+            private class AndroidTonePlaybackCapability : TonePlaybackCapability {
+                private val executor = ThreadPoolExecutor(
+                    ArrayBlockingQueue(AndroidAudioExecutionPolicy.QUEUE_CAPACITY),
+                    ThreadPoolExecutor.DiscardOldestPolicy(),
+                )
+                override fun unlock() = Unit
+                override fun play(request: ToneRequest) {
+                    executor.execute { synthesize(request) }
+                }
+                override fun close() {
+                    executor.shutdownNow()
+                }
+                private fun synthesize(request: ToneRequest) {
+                    val samples = ShortArray(1)
+                    val track = AudioTrack.Builder()
+                        .setTransferMode(AudioTrack.MODE_STATIC)
+                        .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
+                        .build()
+                    val written = track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
+                    track.release()
+                }
+            }
+        """.trimIndent()
+
     private fun webBrokerFixture(): String =
         """
             import kotlin.js.JsAny
@@ -779,6 +907,8 @@ class PlatformCapabilityBoundaryVerifierTest {
             "app/shared/src/commonMain/kotlin/kinetickk/app/shared/AppComposition.kt"
         const val DESKTOP_PATH =
             "app/shared/src/desktopMain/kotlin/kinetickk/app/shared/PlatformCapabilities.desktop.kt"
+        const val ANDROID_PATH =
+            "app/shared/src/androidMain/kotlin/kinetickk/app/shared/PlatformCapabilities.android.kt"
         const val WEB_PATH =
             "app/shared/src/wasmJsMain/kotlin/kinetickk/app/shared/PlatformCapabilities.wasm.kt"
     }

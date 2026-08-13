@@ -1,0 +1,4761 @@
+{
+  "schemaVersion": 1,
+  "spdxFileCopyrightText": "2026 Vladislav Tomilov",
+  "spdxLicenseIdentifier": "GPL-3.0-or-later",
+  "generatedAt": "2026-08-11T18:50:47.553585+00:00",
+  "suiteVersion": "profile-persistence-v1",
+  "comparisonContract": "branch-native-logical-profile",
+  "effectThresholdPercent": 5.0,
+  "bootstrapResamples": 10000,
+  "profile": {
+    "name": "standard",
+    "warmupIterations": 5,
+    "measurementIterations": 10,
+    "targetIterationMillis": 180
+  },
+  "environment": {
+    "osName": "Mac OS X",
+    "osVersion": "26.5.2",
+    "architecture": "aarch64",
+    "javaVersion": "21.0.11",
+    "javaVendor": "Eclipse Adoptium",
+    "vmName": "OpenJDK 64-Bit Server VM",
+    "availableProcessors": 18,
+    "maxHeapBytes": 1073741824,
+    "garbageCollectors": [
+      "G1 Young Generation",
+      "G1 Concurrent GC",
+      "G1 Old Generation"
+    ],
+    "jvmArguments": [
+      "-Dfile.encoding=UTF-8",
+      "-Duser.country=US",
+      "-Duser.language=en",
+      "-Duser.variant",
+      "-XX:+AlwaysPreTouch",
+      "-XX:+UseG1GC",
+      "-Xms1g",
+      "-Xmx1g"
+    ]
+  },
+  "feature": {
+    "adapter": "feature-pokeball-full-refactor",
+    "label": "feature/pokeball-full-refactor",
+    "revision": "20a3e2f78988419f5263247085a9a4b3900f4a6e",
+    "dirty": true,
+    "forks": 4
+  },
+  "main": {
+    "adapter": "main-fedceb8-legacy-v3",
+    "label": "main",
+    "revision": "fedceb8e2d9009d805d70249e10c77e424447945",
+    "dirty": false,
+    "forks": 4
+  },
+  "runOrder": [
+    {
+      "sequence": 1,
+      "branch": "feature",
+      "fork": 1,
+      "file": "01-feature-fork-01.json",
+      "sha256": "3e02c54494bf47ac223e93acd181b4193a2fc414bed540af1b6e8b417abfa213"
+    },
+    {
+      "sequence": 2,
+      "branch": "main",
+      "fork": 1,
+      "file": "02-main-fork-01.json",
+      "sha256": "06124ed29d34fda7493061217a7d8d2662f5dda93845ff521519478c908615c7"
+    },
+    {
+      "sequence": 3,
+      "branch": "main",
+      "fork": 2,
+      "file": "03-main-fork-02.json",
+      "sha256": "2a7829c10821b978c4006208424606ba864d2fbe6df20c2692571eea4c8e8e23"
+    },
+    {
+      "sequence": 4,
+      "branch": "feature",
+      "fork": 2,
+      "file": "04-feature-fork-02.json",
+      "sha256": "3257fb281062edced75082295b167c1bae57be5d2d3592650ebaef3c55d68b6d"
+    },
+    {
+      "sequence": 5,
+      "branch": "feature",
+      "fork": 3,
+      "file": "05-feature-fork-03.json",
+      "sha256": "ea06e5eab3f1eae08187fd2a4fc0a088974bb9afb1396be685214d176ac0674a"
+    },
+    {
+      "sequence": 6,
+      "branch": "main",
+      "fork": 3,
+      "file": "06-main-fork-03.json",
+      "sha256": "49a8ec7d788b80d5443df0e215ed0d6832b185e59c97a46c5feb92685743a9f0"
+    },
+    {
+      "sequence": 7,
+      "branch": "main",
+      "fork": 4,
+      "file": "07-main-fork-04.json",
+      "sha256": "bc053dc84bf43377c0d0444da497de3817b1002e92c05658e2257425f482219b"
+    },
+    {
+      "sequence": 8,
+      "branch": "feature",
+      "fork": 4,
+      "file": "08-feature-fork-04.json",
+      "sha256": "3ead2b4f24990faf994fcbe82aa2d038892c47f0f13358a8aebd5a683edf44fc"
+    }
+  ],
+  "deltaConvention": "positive featureVsMain values mean feature is slower or allocates more",
+  "comparisonCaveat": "The logical fixtures match, but each branch measures its native wire contract: main legacy-v3 versus feature strict-v4. Deltas are end-to-end migration outcomes, not same-byte codec microbenchmarks; strict-v4 validation and canonical re-encoding are intentionally included. Payload bytes and SHA-256 values are outcomes, not inputs.",
+  "scenarios": [
+    {
+      "name": "profile_encode_default",
+      "category": "codec",
+      "semanticFixture": {
+        "comparisonContract": "branch-native-logical-profile",
+        "logicalShape": "default",
+        "unlockedWeapons": "1",
+        "labRanks": "8",
+        "discoveries": "0"
+      },
+      "wireOutcome": {
+        "feature": {
+          "wireFormat": "strict-v4",
+          "schemaVersion": "4",
+          "payloadBytes": "959",
+          "payloadSha256": "a194879fdbc08e91bd30a6355bb1f7d03b177d69c93120f4890c19ccc22db4df"
+        },
+        "main": {
+          "wireFormat": "legacy-v3",
+          "schemaVersion": "3",
+          "payloadBytes": "61",
+          "payloadSha256": "15dd3578f843e6c2e0bfa51a7bc8e67d75cf99a020a9774397fee95acca4d542"
+        }
+      },
+      "description": {
+        "feature": "Validate and canonically encode the default v4 profile.",
+        "main": "Validate and encode the branch-native default legacy-v3 profile."
+      },
+      "rawForkSamples": {
+        "feature": [
+          [
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1249.32292,
+              "cpuNanosPerOperation": 1244.01,
+              "allocatedBytesPerOperation": 2760.11112,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1380.72208,
+              "cpuNanosPerOperation": 1378.98,
+              "allocatedBytesPerOperation": 2764.22304,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1234.315,
+              "cpuNanosPerOperation": 1233.43,
+              "allocatedBytesPerOperation": 2760.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1239.23666,
+              "cpuNanosPerOperation": 1227.84,
+              "allocatedBytesPerOperation": 2760.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1263.02292,
+              "cpuNanosPerOperation": 1261.72,
+              "allocatedBytesPerOperation": 2760.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1238.96625,
+              "cpuNanosPerOperation": 1228.42,
+              "allocatedBytesPerOperation": 2760.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1227.92875,
+              "cpuNanosPerOperation": 1227.38,
+              "allocatedBytesPerOperation": 2760.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1237.65292,
+              "cpuNanosPerOperation": 1227.05,
+              "allocatedBytesPerOperation": 2760.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1337.36583,
+              "cpuNanosPerOperation": 1324.79,
+              "allocatedBytesPerOperation": 2760.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1233.58125,
+              "cpuNanosPerOperation": 1232.14,
+              "allocatedBytesPerOperation": 2760.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ],
+          [
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1248.31916,
+              "cpuNanosPerOperation": 1253.93,
+              "allocatedBytesPerOperation": 2592.11112,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1400.7725,
+              "cpuNanosPerOperation": 1391.37,
+              "allocatedBytesPerOperation": 2596.55304,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1251.81917,
+              "cpuNanosPerOperation": 1244.22,
+              "allocatedBytesPerOperation": 2592.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1264.715,
+              "cpuNanosPerOperation": 1252.87,
+              "allocatedBytesPerOperation": 2592.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1244.91083,
+              "cpuNanosPerOperation": 1244.67,
+              "allocatedBytesPerOperation": 2592.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1250.17708,
+              "cpuNanosPerOperation": 1249.52,
+              "allocatedBytesPerOperation": 2592.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1250.75958,
+              "cpuNanosPerOperation": 1241.6,
+              "allocatedBytesPerOperation": 2592.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1229.62959,
+              "cpuNanosPerOperation": 1229.39,
+              "allocatedBytesPerOperation": 2592.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1236.97625,
+              "cpuNanosPerOperation": 1227.44,
+              "allocatedBytesPerOperation": 2592.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1221.0425,
+              "cpuNanosPerOperation": 1220.79,
+              "allocatedBytesPerOperation": 2592.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ],
+          [
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1252.60125,
+              "cpuNanosPerOperation": 1258.2,
+              "allocatedBytesPerOperation": 2592.11112,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1515.1675,
+              "cpuNanosPerOperation": 1501.83,
+              "allocatedBytesPerOperation": 2599.73208,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 20.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1233.21333,
+              "cpuNanosPerOperation": 1232.71,
+              "allocatedBytesPerOperation": 2592.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1249.75917,
+              "cpuNanosPerOperation": 1239.27,
+              "allocatedBytesPerOperation": 2592.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1236.28125,
+              "cpuNanosPerOperation": 1236.06,
+              "allocatedBytesPerOperation": 2592.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1243.11667,
+              "cpuNanosPerOperation": 1241.41,
+              "allocatedBytesPerOperation": 2592.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1241.5625,
+              "cpuNanosPerOperation": 1231.3,
+              "allocatedBytesPerOperation": 2592.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1234.74834,
+              "cpuNanosPerOperation": 1233.6,
+              "allocatedBytesPerOperation": 2592.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1247.08375,
+              "cpuNanosPerOperation": 1237.19,
+              "allocatedBytesPerOperation": 2592.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1239.44833,
+              "cpuNanosPerOperation": 1238.99,
+              "allocatedBytesPerOperation": 2592.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ],
+          [
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1260.4,
+              "cpuNanosPerOperation": 1255.78,
+              "allocatedBytesPerOperation": 2760.11112,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1571.13166,
+              "cpuNanosPerOperation": 1558.8,
+              "allocatedBytesPerOperation": 2768.19976,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1249.1,
+              "cpuNanosPerOperation": 1247.73,
+              "allocatedBytesPerOperation": 2760.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1265.77542,
+              "cpuNanosPerOperation": 1250.64,
+              "allocatedBytesPerOperation": 2760.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1270.54208,
+              "cpuNanosPerOperation": 1260.04,
+              "allocatedBytesPerOperation": 2760.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1254.35708,
+              "cpuNanosPerOperation": 1242.71,
+              "allocatedBytesPerOperation": 2760.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1251.32583,
+              "cpuNanosPerOperation": 1249.15,
+              "allocatedBytesPerOperation": 2760.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1264.64917,
+              "cpuNanosPerOperation": 1250.64,
+              "allocatedBytesPerOperation": 2760.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1238.72,
+              "cpuNanosPerOperation": 1237.86,
+              "allocatedBytesPerOperation": 2760.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 1251.70834,
+              "cpuNanosPerOperation": 1249.63,
+              "allocatedBytesPerOperation": 2760.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ]
+        ],
+        "main": [
+          [
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 336.55042,
+              "cpuNanosPerOperation": 333.94,
+              "allocatedBytesPerOperation": 2112.11208,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 337.91625,
+              "cpuNanosPerOperation": 337.79,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 341.07125,
+              "cpuNanosPerOperation": 340.37,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 357.29875,
+              "cpuNanosPerOperation": 347.39,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 334.85791,
+              "cpuNanosPerOperation": 334.64,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 344.025,
+              "cpuNanosPerOperation": 342.95,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 345.51167,
+              "cpuNanosPerOperation": 337.15,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 343.00708,
+              "cpuNanosPerOperation": 342.18,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 343.87292,
+              "cpuNanosPerOperation": 343.11,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 351.14834,
+              "cpuNanosPerOperation": 342.28,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            }
+          ],
+          [
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 385.81208,
+              "cpuNanosPerOperation": 391.28,
+              "allocatedBytesPerOperation": 2352.11208,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 385.19458,
+              "cpuNanosPerOperation": 385.07,
+              "allocatedBytesPerOperation": 2352.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 395.26209,
+              "cpuNanosPerOperation": 386.07,
+              "allocatedBytesPerOperation": 2352.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 386.72958,
+              "cpuNanosPerOperation": 386.49,
+              "allocatedBytesPerOperation": 2352.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 394.90542,
+              "cpuNanosPerOperation": 385.35,
+              "allocatedBytesPerOperation": 2352.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 383.87792,
+              "cpuNanosPerOperation": 383.81,
+              "allocatedBytesPerOperation": 2352.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 380.88292,
+              "cpuNanosPerOperation": 380.76,
+              "allocatedBytesPerOperation": 2352.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 390.50041,
+              "cpuNanosPerOperation": 380.73,
+              "allocatedBytesPerOperation": 2352.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 385.42792,
+              "cpuNanosPerOperation": 385.22,
+              "allocatedBytesPerOperation": 2352.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 383.34833,
+              "cpuNanosPerOperation": 383.14,
+              "allocatedBytesPerOperation": 2352.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ],
+          [
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 353.89833,
+              "cpuNanosPerOperation": 351.89,
+              "allocatedBytesPerOperation": 2112.11208,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 340.47042,
+              "cpuNanosPerOperation": 340.56,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 328.41667,
+              "cpuNanosPerOperation": 328.37,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 339.37417,
+              "cpuNanosPerOperation": 330.46,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 331.04167,
+              "cpuNanosPerOperation": 331.16,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 334.29375,
+              "cpuNanosPerOperation": 334.38,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 339.98084,
+              "cpuNanosPerOperation": 332.36,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 328.72292,
+              "cpuNanosPerOperation": 328.75,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 333.15333,
+              "cpuNanosPerOperation": 333.14,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 336.79916,
+              "cpuNanosPerOperation": 328.92,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 0.0
+            }
+          ],
+          [
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 357.09375,
+              "cpuNanosPerOperation": 354.28,
+              "allocatedBytesPerOperation": 2112.11208,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 341.94833,
+              "cpuNanosPerOperation": 341.91,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 345.67833,
+              "cpuNanosPerOperation": 345.53,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 350.81791,
+              "cpuNanosPerOperation": 342.53,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 344.08666,
+              "cpuNanosPerOperation": 343.98,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 359.24541,
+              "cpuNanosPerOperation": 350.37,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 360.05542,
+              "cpuNanosPerOperation": 350.63,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 355.97166,
+              "cpuNanosPerOperation": 352.0,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 347.91625,
+              "cpuNanosPerOperation": 347.8,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 352.59917,
+              "cpuNanosPerOperation": 344.29,
+              "allocatedBytesPerOperation": 2112.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            }
+          ]
+        ]
+      },
+      "feature": {
+        "wallNanosPerOperation": {
+          "mean": 1270.2981977499999,
+          "median": 1249.21146,
+          "p95": 1406.4922499999998,
+          "min": 1221.0425,
+          "max": 1571.13166,
+          "coefficientOfVariation": 0.0577301916995523
+        },
+        "cpuNanosPerOperation": {
+          "mean": 1264.8775,
+          "median": 1243.3600000000001,
+          "p95": 1396.8929999999996,
+          "min": 1220.79,
+          "max": 1558.8,
+          "coefficientOfVariation": 0.056450527743445465
+        },
+        "allocatedBytesPerOperation": {
+          "mean": 2676.630026,
+          "median": 2679.8668,
+          "p95": 2760.316716,
+          "min": 2592.00152,
+          "max": 2768.19976,
+          "coefficientOfVariation": 0.03179227503048296
+        }
+      },
+      "main": {
+        "wallNanosPerOperation": {
+          "mean": 354.71912475,
+          "median": 346.79729,
+          "p95": 390.72066049999995,
+          "min": 328.41667,
+          "max": 395.26209,
+          "coefficientOfVariation": 0.0583212742518089
+        },
+        "cpuNanosPerOperation": {
+          "mean": 351.57575,
+          "median": 343.545,
+          "p95": 386.091,
+          "min": 328.37,
+          "max": 391.28,
+          "coefficientOfVariation": 0.058478258722589486
+        },
+        "allocatedBytesPerOperation": {
+          "mean": 2172.012576,
+          "median": 2112.00152,
+          "p95": 2352.00152,
+          "min": 2112.00152,
+          "max": 2352.11208,
+          "coefficientOfVariation": 0.04845596606582847
+        }
+      },
+      "featureVsMain": {
+        "wallMedianDeltaPercent": 260.2137317739709,
+        "cpuMedianDeltaPercent": 261.9205635360724,
+        "allocationMedianDeltaPercent": 26.887541255178643
+      },
+      "statistics": {
+        "wallNanosPerOperation": {
+          "medianDeltaPercent": 260.2137317739709,
+          "bootstrap95Percent": [
+            224.36317011205185,
+            269.5919343639301
+          ],
+          "classification": "regression"
+        },
+        "cpuNanosPerOperation": {
+          "medianDeltaPercent": 261.9205635360724,
+          "bootstrap95Percent": [
+            223.9385081962235,
+            273.4274108404267
+          ],
+          "classification": "regression"
+        },
+        "allocatedBytesPerOperation": {
+          "medianDeltaPercent": 26.887541255178643,
+          "bootstrap95Percent": [
+            13.872259742417171,
+            30.681796100222503
+          ],
+          "classification": "regression"
+        }
+      }
+    },
+    {
+      "name": "profile_decode_default",
+      "category": "codec",
+      "semanticFixture": {
+        "comparisonContract": "branch-native-logical-profile",
+        "logicalShape": "default",
+        "unlockedWeapons": "1",
+        "labRanks": "8",
+        "discoveries": "0"
+      },
+      "wireOutcome": {
+        "feature": {
+          "wireFormat": "strict-v4",
+          "schemaVersion": "4",
+          "payloadBytes": "959",
+          "payloadSha256": "a194879fdbc08e91bd30a6355bb1f7d03b177d69c93120f4890c19ccc22db4df"
+        },
+        "main": {
+          "wireFormat": "legacy-v3",
+          "schemaVersion": "3",
+          "payloadBytes": "61",
+          "payloadSha256": "15dd3578f843e6c2e0bfa51a7bc8e67d75cf99a020a9774397fee95acca4d542"
+        }
+      },
+      "description": {
+        "feature": "Strictly decode and canonically re-encode the default v4 payload.",
+        "main": "Decode the branch-native default legacy-v3 payload."
+      },
+      "rawForkSamples": {
+        "feature": [
+          [
+            {
+              "operations": 27557,
+              "wallNanosPerOperation": 4121.572232101,
+              "cpuNanosPerOperation": 4119.28003774,
+              "allocatedBytesPerOperation": 9368.00551584,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 27557,
+              "wallNanosPerOperation": 4164.962622927,
+              "cpuNanosPerOperation": 4124.977319737,
+              "allocatedBytesPerOperation": 9368.00551584,
+              "gcCollectionsPerOperation": 3.6288e-05,
+              "gcNanosPerOperation": 36.288420365
+            },
+            {
+              "operations": 27557,
+              "wallNanosPerOperation": 4168.358638458,
+              "cpuNanosPerOperation": 4166.164676852,
+              "allocatedBytesPerOperation": 9368.00551584,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 27557,
+              "wallNanosPerOperation": 4204.318938927,
+              "cpuNanosPerOperation": 4199.441158326,
+              "allocatedBytesPerOperation": 9368.00551584,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 27557,
+              "wallNanosPerOperation": 4222.100228617,
+              "cpuNanosPerOperation": 4181.87756287,
+              "allocatedBytesPerOperation": 9368.00551584,
+              "gcCollectionsPerOperation": 3.6288e-05,
+              "gcNanosPerOperation": 36.288420365
+            },
+            {
+              "operations": 27557,
+              "wallNanosPerOperation": 4180.917443844,
+              "cpuNanosPerOperation": 4177.668106107,
+              "allocatedBytesPerOperation": 9368.00551584,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 27557,
+              "wallNanosPerOperation": 4223.022571397,
+              "cpuNanosPerOperation": 4182.313023914,
+              "allocatedBytesPerOperation": 9368.00551584,
+              "gcCollectionsPerOperation": 3.6288e-05,
+              "gcNanosPerOperation": 36.288420365
+            },
+            {
+              "operations": 27557,
+              "wallNanosPerOperation": 4116.218202272,
+              "cpuNanosPerOperation": 4113.256159959,
+              "allocatedBytesPerOperation": 9368.00551584,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 27557,
+              "wallNanosPerOperation": 4189.927532025,
+              "cpuNanosPerOperation": 4149.290561382,
+              "allocatedBytesPerOperation": 9368.00551584,
+              "gcCollectionsPerOperation": 3.6288e-05,
+              "gcNanosPerOperation": 36.288420365
+            },
+            {
+              "operations": 27557,
+              "wallNanosPerOperation": 4158.981093733,
+              "cpuNanosPerOperation": 4157.709474907,
+              "allocatedBytesPerOperation": 9368.00551584,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ],
+          [
+            {
+              "operations": 27264,
+              "wallNanosPerOperation": 4017.199127054,
+              "cpuNanosPerOperation": 3984.851819249,
+              "allocatedBytesPerOperation": 9216.005575117,
+              "gcCollectionsPerOperation": 3.6678e-05,
+              "gcNanosPerOperation": 36.678403756
+            },
+            {
+              "operations": 27264,
+              "wallNanosPerOperation": 3997.325520833,
+              "cpuNanosPerOperation": 3995.892018779,
+              "allocatedBytesPerOperation": 9216.005575117,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 27264,
+              "wallNanosPerOperation": 4004.248569542,
+              "cpuNanosPerOperation": 3971.427523474,
+              "allocatedBytesPerOperation": 9216.005575117,
+              "gcCollectionsPerOperation": 3.6678e-05,
+              "gcNanosPerOperation": 36.678403756
+            },
+            {
+              "operations": 27264,
+              "wallNanosPerOperation": 3972.929834214,
+              "cpuNanosPerOperation": 3972.931338028,
+              "allocatedBytesPerOperation": 9216.005575117,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 27264,
+              "wallNanosPerOperation": 4049.456242664,
+              "cpuNanosPerOperation": 4049.552523474,
+              "allocatedBytesPerOperation": 9216.005575117,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 27264,
+              "wallNanosPerOperation": 4088.069432218,
+              "cpuNanosPerOperation": 4052.486795775,
+              "allocatedBytesPerOperation": 9216.005575117,
+              "gcCollectionsPerOperation": 3.6678e-05,
+              "gcNanosPerOperation": 36.678403756
+            },
+            {
+              "operations": 27264,
+              "wallNanosPerOperation": 4034.806264671,
+              "cpuNanosPerOperation": 4033.707453052,
+              "allocatedBytesPerOperation": 9216.005575117,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 27264,
+              "wallNanosPerOperation": 4116.08868838,
+              "cpuNanosPerOperation": 4080.215669014,
+              "allocatedBytesPerOperation": 9216.005575117,
+              "gcCollectionsPerOperation": 3.6678e-05,
+              "gcNanosPerOperation": 36.678403756
+            },
+            {
+              "operations": 27264,
+              "wallNanosPerOperation": 4031.80630135,
+              "cpuNanosPerOperation": 4029.929577465,
+              "allocatedBytesPerOperation": 9216.005575117,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 27264,
+              "wallNanosPerOperation": 4056.336524354,
+              "cpuNanosPerOperation": 4055.457746479,
+              "allocatedBytesPerOperation": 9216.005575117,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ],
+          [
+            {
+              "operations": 24969,
+              "wallNanosPerOperation": 4067.730625976,
+              "cpuNanosPerOperation": 4023.469101686,
+              "allocatedBytesPerOperation": 9200.006087549,
+              "gcCollectionsPerOperation": 4.005e-05,
+              "gcNanosPerOperation": 40.04966158
+            },
+            {
+              "operations": 24969,
+              "wallNanosPerOperation": 4048.284873243,
+              "cpuNanosPerOperation": 4048.299891866,
+              "allocatedBytesPerOperation": 9200.006087549,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 24969,
+              "wallNanosPerOperation": 4047.420441347,
+              "cpuNanosPerOperation": 4041.57154872,
+              "allocatedBytesPerOperation": 9200.006087549,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 24969,
+              "wallNanosPerOperation": 4077.647963475,
+              "cpuNanosPerOperation": 4030.517842124,
+              "allocatedBytesPerOperation": 9200.006087549,
+              "gcCollectionsPerOperation": 4.005e-05,
+              "gcNanosPerOperation": 80.099323161
+            },
+            {
+              "operations": 24969,
+              "wallNanosPerOperation": 4031.25211262,
+              "cpuNanosPerOperation": 4030.878289078,
+              "allocatedBytesPerOperation": 9200.006087549,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 24969,
+              "wallNanosPerOperation": 4011.669470143,
+              "cpuNanosPerOperation": 4011.614401858,
+              "allocatedBytesPerOperation": 9200.006087549,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 24969,
+              "wallNanosPerOperation": 4089.228963915,
+              "cpuNanosPerOperation": 4046.017061156,
+              "allocatedBytesPerOperation": 9200.006087549,
+              "gcCollectionsPerOperation": 4.005e-05,
+              "gcNanosPerOperation": 40.04966158
+            },
+            {
+              "operations": 24969,
+              "wallNanosPerOperation": 4102.699026793,
+              "cpuNanosPerOperation": 4091.23312908,
+              "allocatedBytesPerOperation": 9200.006087549,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 24969,
+              "wallNanosPerOperation": 4164.388842164,
+              "cpuNanosPerOperation": 4152.148664344,
+              "allocatedBytesPerOperation": 9200.006087549,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 24969,
+              "wallNanosPerOperation": 4129.707477272,
+              "cpuNanosPerOperation": 4084.865232889,
+              "allocatedBytesPerOperation": 9200.006087549,
+              "gcCollectionsPerOperation": 4.005e-05,
+              "gcNanosPerOperation": 0.0
+            }
+          ],
+          [
+            {
+              "operations": 25288,
+              "wallNanosPerOperation": 4168.289623537,
+              "cpuNanosPerOperation": 4159.799114204,
+              "allocatedBytesPerOperation": 9368.006010756,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 25288,
+              "wallNanosPerOperation": 4183.769653591,
+              "cpuNanosPerOperation": 4173.83739323,
+              "allocatedBytesPerOperation": 9368.006010756,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 25288,
+              "wallNanosPerOperation": 4132.765540968,
+              "cpuNanosPerOperation": 4091.901297058,
+              "allocatedBytesPerOperation": 9368.006010756,
+              "gcCollectionsPerOperation": 3.9544e-05,
+              "gcNanosPerOperation": 39.54444796
+            },
+            {
+              "operations": 25288,
+              "wallNanosPerOperation": 4135.854950965,
+              "cpuNanosPerOperation": 4133.027522936,
+              "allocatedBytesPerOperation": 9368.006010756,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 25288,
+              "wallNanosPerOperation": 4271.922453338,
+              "cpuNanosPerOperation": 4217.731730465,
+              "allocatedBytesPerOperation": 9368.006010756,
+              "gcCollectionsPerOperation": 3.9544e-05,
+              "gcNanosPerOperation": 39.54444796
+            },
+            {
+              "operations": 25288,
+              "wallNanosPerOperation": 4220.517953179,
+              "cpuNanosPerOperation": 4205.512496046,
+              "allocatedBytesPerOperation": 9368.006010756,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 25288,
+              "wallNanosPerOperation": 4111.92727776,
+              "cpuNanosPerOperation": 4110.487187599,
+              "allocatedBytesPerOperation": 9368.006010756,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 25288,
+              "wallNanosPerOperation": 4158.766015501,
+              "cpuNanosPerOperation": 4120.096488453,
+              "allocatedBytesPerOperation": 9368.006010756,
+              "gcCollectionsPerOperation": 3.9544e-05,
+              "gcNanosPerOperation": 39.54444796
+            },
+            {
+              "operations": 25288,
+              "wallNanosPerOperation": 4103.482877254,
+              "cpuNanosPerOperation": 4101.985131288,
+              "allocatedBytesPerOperation": 9368.006010756,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 25288,
+              "wallNanosPerOperation": 4110.45092534,
+              "cpuNanosPerOperation": 4108.668142993,
+              "allocatedBytesPerOperation": 9368.006010756,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ]
+        ],
+        "main": [
+          [
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 573.90583,
+              "cpuNanosPerOperation": 573.66,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 585.0575,
+              "cpuNanosPerOperation": 575.92,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 573.77417,
+              "cpuNanosPerOperation": 573.55,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 585.61459,
+              "cpuNanosPerOperation": 576.03,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 575.38708,
+              "cpuNanosPerOperation": 574.99,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 588.44542,
+              "cpuNanosPerOperation": 578.91,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 573.93042,
+              "cpuNanosPerOperation": 573.65,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 584.20792,
+              "cpuNanosPerOperation": 574.13,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 574.37666,
+              "cpuNanosPerOperation": 574.04,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 588.85708,
+              "cpuNanosPerOperation": 578.58,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            }
+          ],
+          [
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 578.30875,
+              "cpuNanosPerOperation": 569.8,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 571.90792,
+              "cpuNanosPerOperation": 571.52,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 580.8425,
+              "cpuNanosPerOperation": 571.0,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 571.2725,
+              "cpuNanosPerOperation": 570.95,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 579.08292,
+              "cpuNanosPerOperation": 570.68,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 572.50458,
+              "cpuNanosPerOperation": 572.19,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 580.35625,
+              "cpuNanosPerOperation": 571.85,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 569.37333,
+              "cpuNanosPerOperation": 569.05,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 580.64958,
+              "cpuNanosPerOperation": 571.83,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 571.81917,
+              "cpuNanosPerOperation": 571.37,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ],
+          [
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 573.95458,
+              "cpuNanosPerOperation": 574.11,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 580.47666,
+              "cpuNanosPerOperation": 571.28,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 567.54833,
+              "cpuNanosPerOperation": 567.62,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 581.68041,
+              "cpuNanosPerOperation": 572.14,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 570.215,
+              "cpuNanosPerOperation": 570.09,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 584.17833,
+              "cpuNanosPerOperation": 574.42,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 568.69333,
+              "cpuNanosPerOperation": 568.63,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 580.37417,
+              "cpuNanosPerOperation": 571.13,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 571.41417,
+              "cpuNanosPerOperation": 571.0,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 580.3,
+              "cpuNanosPerOperation": 570.92,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 0.0
+            }
+          ],
+          [
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 575.05083,
+              "cpuNanosPerOperation": 574.7,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 585.34542,
+              "cpuNanosPerOperation": 575.63,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 576.01666,
+              "cpuNanosPerOperation": 575.76,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 586.26708,
+              "cpuNanosPerOperation": 575.91,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 571.90208,
+              "cpuNanosPerOperation": 571.57,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 580.98292,
+              "cpuNanosPerOperation": 570.99,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 568.2425,
+              "cpuNanosPerOperation": 568.05,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 582.81709,
+              "cpuNanosPerOperation": 572.67,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 10.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 574.18125,
+              "cpuNanosPerOperation": 573.93,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 100000,
+              "wallNanosPerOperation": 587.17792,
+              "cpuNanosPerOperation": 577.65,
+              "allocatedBytesPerOperation": 3128.00152,
+              "gcCollectionsPerOperation": 1e-05,
+              "gcNanosPerOperation": 0.0
+            }
+          ]
+        ]
+      },
+      "feature": {
+        "wallNanosPerOperation": {
+          "mean": 4112.160576949051,
+          "median": 4114.00798307,
+          "p95": 4222.146345755999,
+          "min": 3972.929834214,
+          "max": 4271.922453338,
+          "coefficientOfVariation": 0.01766185835895428
+        },
+        "cpuNanosPerOperation": {
+          "mean": 4094.5523053414,
+          "median": 4096.943214173,
+          "p95": 4199.744725212,
+          "min": 3971.427523474,
+          "max": 4217.731730465,
+          "coefficientOfVariation": 0.016768516711960415
+        },
+        "allocatedBytesPerOperation": {
+          "mean": 9288.0057973155,
+          "median": 9292.0055454785,
+          "p95": 9368.006010756,
+          "min": 9200.006087549,
+          "max": 9368.006010756,
+          "coefficientOfVariation": 0.008744761701525315
+        }
+      },
+      "main": {
+        "wallNanosPerOperation": {
+          "mean": 577.6623225000001,
+          "median": 577.162705,
+          "p95": 587.2412949999999,
+          "min": 567.54833,
+          "max": 588.85708,
+          "coefficientOfVariation": 0.010628814259790962
+        },
+        "cpuNanosPerOperation": {
+          "mean": 572.7975,
+          "median": 572.165,
+          "p95": 577.6965,
+          "min": 567.62,
+          "max": 578.91,
+          "coefficientOfVariation": 0.0047736636525739385
+        },
+        "allocatedBytesPerOperation": {
+          "mean": 3128.00152,
+          "median": 3128.00152,
+          "p95": 3128.00152,
+          "min": 3128.00152,
+          "max": 3128.00152,
+          "coefficientOfVariation": 0.0
+        }
+      },
+      "featureVsMain": {
+        "wallMedianDeltaPercent": 612.798652343623,
+        "cpuMedianDeltaPercent": 616.0422630138161,
+        "allocationMedianDeltaPercent": 197.0588564636791
+      },
+      "statistics": {
+        "wallNanosPerOperation": {
+          "medianDeltaPercent": 612.798652343623,
+          "bootstrap95Percent": [
+            597.8211688202654,
+            624.7715604185704
+          ],
+          "classification": "regression"
+        },
+        "cpuNanosPerOperation": {
+          "medianDeltaPercent": 616.0422630138161,
+          "bootstrap95Percent": [
+            604.022457135201,
+            626.6944235514036
+          ],
+          "classification": "regression"
+        },
+        "allocatedBytesPerOperation": {
+          "medianDeltaPercent": 197.0588564636791,
+          "bootstrap95Percent": [
+            194.1176987519175,
+            199.4885376767976
+          ],
+          "classification": "regression"
+        }
+      }
+    },
+    {
+      "name": "profile_roundtrip_default",
+      "category": "codec",
+      "semanticFixture": {
+        "comparisonContract": "branch-native-logical-profile",
+        "logicalShape": "default",
+        "unlockedWeapons": "1",
+        "labRanks": "8",
+        "discoveries": "0"
+      },
+      "wireOutcome": {
+        "feature": {
+          "wireFormat": "strict-v4",
+          "schemaVersion": "4",
+          "payloadBytes": "959",
+          "payloadSha256": "a194879fdbc08e91bd30a6355bb1f7d03b177d69c93120f4890c19ccc22db4df"
+        },
+        "main": {
+          "wireFormat": "legacy-v3",
+          "schemaVersion": "3",
+          "payloadBytes": "61",
+          "payloadSha256": "15dd3578f843e6c2e0bfa51a7bc8e67d75cf99a020a9774397fee95acca4d542"
+        }
+      },
+      "description": {
+        "feature": "Encode then strictly decode the default v4 profile.",
+        "main": "Encode then decode the branch-native default legacy-v3 profile."
+      },
+      "rawForkSamples": {
+        "feature": [
+          [
+            {
+              "operations": 31446,
+              "wallNanosPerOperation": 5641.222254023,
+              "cpuNanosPerOperation": 5637.56916619,
+              "allocatedBytesPerOperation": 12128.004833683,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 31446,
+              "wallNanosPerOperation": 5705.548146028,
+              "cpuNanosPerOperation": 5661.928385168,
+              "allocatedBytesPerOperation": 12128.004833683,
+              "gcCollectionsPerOperation": 3.1801e-05,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 31446,
+              "wallNanosPerOperation": 5647.920244228,
+              "cpuNanosPerOperation": 5644.469884882,
+              "allocatedBytesPerOperation": 12128.004833683,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 31446,
+              "wallNanosPerOperation": 5668.947020289,
+              "cpuNanosPerOperation": 5637.441964002,
+              "allocatedBytesPerOperation": 12128.004833683,
+              "gcCollectionsPerOperation": 3.1801e-05,
+              "gcNanosPerOperation": 31.800546969
+            },
+            {
+              "operations": 31446,
+              "wallNanosPerOperation": 5648.721904217,
+              "cpuNanosPerOperation": 5618.806843478,
+              "allocatedBytesPerOperation": 12128.004833683,
+              "gcCollectionsPerOperation": 3.1801e-05,
+              "gcNanosPerOperation": 31.800546969
+            },
+            {
+              "operations": 31446,
+              "wallNanosPerOperation": 5620.260382879,
+              "cpuNanosPerOperation": 5615.94479425,
+              "allocatedBytesPerOperation": 12128.004833683,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 31446,
+              "wallNanosPerOperation": 5637.746708643,
+              "cpuNanosPerOperation": 5606.786236723,
+              "allocatedBytesPerOperation": 12128.004833683,
+              "gcCollectionsPerOperation": 3.1801e-05,
+              "gcNanosPerOperation": 31.800546969
+            },
+            {
+              "operations": 31446,
+              "wallNanosPerOperation": 5649.928957578,
+              "cpuNanosPerOperation": 5645.551103479,
+              "allocatedBytesPerOperation": 12128.004833683,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 31446,
+              "wallNanosPerOperation": 6077.287254341,
+              "cpuNanosPerOperation": 6010.335177765,
+              "allocatedBytesPerOperation": 12128.004833683,
+              "gcCollectionsPerOperation": 3.1801e-05,
+              "gcNanosPerOperation": 31.800546969
+            },
+            {
+              "operations": 31446,
+              "wallNanosPerOperation": 5671.053806525,
+              "cpuNanosPerOperation": 5643.166062456,
+              "allocatedBytesPerOperation": 12128.004833683,
+              "gcCollectionsPerOperation": 3.1801e-05,
+              "gcNanosPerOperation": 0.0
+            }
+          ],
+          [
+            {
+              "operations": 32442,
+              "wallNanosPerOperation": 5495.901670674,
+              "cpuNanosPerOperation": 5474.107638247,
+              "allocatedBytesPerOperation": 11808.004685285,
+              "gcCollectionsPerOperation": 3.0824e-05,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 32442,
+              "wallNanosPerOperation": 5505.129646754,
+              "cpuNanosPerOperation": 5504.561987547,
+              "allocatedBytesPerOperation": 11808.004685285,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 32442,
+              "wallNanosPerOperation": 5560.438628938,
+              "cpuNanosPerOperation": 5538.622772949,
+              "allocatedBytesPerOperation": 11808.004685285,
+              "gcCollectionsPerOperation": 3.0824e-05,
+              "gcNanosPerOperation": 30.824240182
+            },
+            {
+              "operations": 32442,
+              "wallNanosPerOperation": 5516.541057888,
+              "cpuNanosPerOperation": 5515.782010973,
+              "allocatedBytesPerOperation": 11808.004685285,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 32442,
+              "wallNanosPerOperation": 5505.03205721,
+              "cpuNanosPerOperation": 5484.002219345,
+              "allocatedBytesPerOperation": 11808.004685285,
+              "gcCollectionsPerOperation": 3.0824e-05,
+              "gcNanosPerOperation": 30.824240182
+            },
+            {
+              "operations": 32442,
+              "wallNanosPerOperation": 5494.121570803,
+              "cpuNanosPerOperation": 5473.460329203,
+              "allocatedBytesPerOperation": 11808.004685285,
+              "gcCollectionsPerOperation": 3.0824e-05,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 32442,
+              "wallNanosPerOperation": 5470.052986869,
+              "cpuNanosPerOperation": 5468.836693176,
+              "allocatedBytesPerOperation": 11808.004685285,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 32442,
+              "wallNanosPerOperation": 5505.441742186,
+              "cpuNanosPerOperation": 5482.800073978,
+              "allocatedBytesPerOperation": 11808.004685285,
+              "gcCollectionsPerOperation": 3.0824e-05,
+              "gcNanosPerOperation": 30.824240182
+            },
+            {
+              "operations": 32442,
+              "wallNanosPerOperation": 5573.387399051,
+              "cpuNanosPerOperation": 5565.624807348,
+              "allocatedBytesPerOperation": 11808.004685285,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 32442,
+              "wallNanosPerOperation": 5514.709574009,
+              "cpuNanosPerOperation": 5492.386412675,
+              "allocatedBytesPerOperation": 11808.004685285,
+              "gcCollectionsPerOperation": 3.0824e-05,
+              "gcNanosPerOperation": 30.824240182
+            }
+          ],
+          [
+            {
+              "operations": 32181,
+              "wallNanosPerOperation": 5532.814393586,
+              "cpuNanosPerOperation": 5503.060812281,
+              "allocatedBytesPerOperation": 11792.004723284,
+              "gcCollectionsPerOperation": 3.1074e-05,
+              "gcNanosPerOperation": 31.074236351
+            },
+            {
+              "operations": 32181,
+              "wallNanosPerOperation": 5506.881669308,
+              "cpuNanosPerOperation": 5482.862558653,
+              "allocatedBytesPerOperation": 11792.004723284,
+              "gcCollectionsPerOperation": 3.1074e-05,
+              "gcNanosPerOperation": 31.074236351
+            },
+            {
+              "operations": 32181,
+              "wallNanosPerOperation": 5606.655852832,
+              "cpuNanosPerOperation": 5598.800534477,
+              "allocatedBytesPerOperation": 11792.004723284,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 32181,
+              "wallNanosPerOperation": 5608.178490414,
+              "cpuNanosPerOperation": 5575.18411485,
+              "allocatedBytesPerOperation": 11792.004723284,
+              "gcCollectionsPerOperation": 3.1074e-05,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 32181,
+              "wallNanosPerOperation": 5508.102607128,
+              "cpuNanosPerOperation": 5501.817842827,
+              "allocatedBytesPerOperation": 11792.004723284,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 32181,
+              "wallNanosPerOperation": 5577.24536217,
+              "cpuNanosPerOperation": 5555.451974768,
+              "allocatedBytesPerOperation": 11792.004723284,
+              "gcCollectionsPerOperation": 3.1074e-05,
+              "gcNanosPerOperation": 31.074236351
+            },
+            {
+              "operations": 32181,
+              "wallNanosPerOperation": 5536.228675305,
+              "cpuNanosPerOperation": 5508.995991424,
+              "allocatedBytesPerOperation": 11792.004723284,
+              "gcCollectionsPerOperation": 3.1074e-05,
+              "gcNanosPerOperation": 31.074236351
+            },
+            {
+              "operations": 32181,
+              "wallNanosPerOperation": 5555.577576831,
+              "cpuNanosPerOperation": 5550.697616606,
+              "allocatedBytesPerOperation": 11792.004723284,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 32181,
+              "wallNanosPerOperation": 5539.653304745,
+              "cpuNanosPerOperation": 5510.705074423,
+              "allocatedBytesPerOperation": 11792.004723284,
+              "gcCollectionsPerOperation": 3.1074e-05,
+              "gcNanosPerOperation": 31.074236351
+            },
+            {
+              "operations": 32181,
+              "wallNanosPerOperation": 5498.022901712,
+              "cpuNanosPerOperation": 5496.939187719,
+              "allocatedBytesPerOperation": 11792.004723284,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ],
+          [
+            {
+              "operations": 31374,
+              "wallNanosPerOperation": 5694.898642188,
+              "cpuNanosPerOperation": 5660.260087971,
+              "allocatedBytesPerOperation": 12128.004844776,
+              "gcCollectionsPerOperation": 3.1874e-05,
+              "gcNanosPerOperation": 31.873525849
+            },
+            {
+              "operations": 31374,
+              "wallNanosPerOperation": 5643.80139606,
+              "cpuNanosPerOperation": 5640.339134315,
+              "allocatedBytesPerOperation": 12128.004844776,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 31374,
+              "wallNanosPerOperation": 5650.177408045,
+              "cpuNanosPerOperation": 5624.051762606,
+              "allocatedBytesPerOperation": 12128.004844776,
+              "gcCollectionsPerOperation": 3.1874e-05,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 31374,
+              "wallNanosPerOperation": 5723.679097342,
+              "cpuNanosPerOperation": 5716.198125837,
+              "allocatedBytesPerOperation": 12128.004844776,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 31374,
+              "wallNanosPerOperation": 5655.650379295,
+              "cpuNanosPerOperation": 5631.510167655,
+              "allocatedBytesPerOperation": 12128.004844776,
+              "gcCollectionsPerOperation": 3.1874e-05,
+              "gcNanosPerOperation": 31.873525849
+            },
+            {
+              "operations": 31374,
+              "wallNanosPerOperation": 5666.576337094,
+              "cpuNanosPerOperation": 5640.753490151,
+              "allocatedBytesPerOperation": 12128.004844776,
+              "gcCollectionsPerOperation": 3.1874e-05,
+              "gcNanosPerOperation": 31.873525849
+            },
+            {
+              "operations": 31374,
+              "wallNanosPerOperation": 5616.955918914,
+              "cpuNanosPerOperation": 5612.513546248,
+              "allocatedBytesPerOperation": 12128.004844776,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 31374,
+              "wallNanosPerOperation": 5694.31296615,
+              "cpuNanosPerOperation": 5659.303882195,
+              "allocatedBytesPerOperation": 12128.004844776,
+              "gcCollectionsPerOperation": 3.1874e-05,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 31374,
+              "wallNanosPerOperation": 5649.917128833,
+              "cpuNanosPerOperation": 5646.713839485,
+              "allocatedBytesPerOperation": 12128.004844776,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 31374,
+              "wallNanosPerOperation": 5657.613246637,
+              "cpuNanosPerOperation": 5632.880729266,
+              "allocatedBytesPerOperation": 12128.004844776,
+              "gcCollectionsPerOperation": 3.1874e-05,
+              "gcNanosPerOperation": 31.873525849
+            }
+          ]
+        ],
+        "main": [
+          [
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 925.79832,
+              "cpuNanosPerOperation": 924.16,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 918.43168,
+              "cpuNanosPerOperation": 918.5,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 940.7825,
+              "cpuNanosPerOperation": 924.14,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 2e-05,
+              "gcNanosPerOperation": 20.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 925.70084,
+              "cpuNanosPerOperation": 923.72,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 938.40584,
+              "cpuNanosPerOperation": 921.4,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 2e-05,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 913.105,
+              "cpuNanosPerOperation": 910.78,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 912.09,
+              "cpuNanosPerOperation": 908.54,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 983.09332,
+              "cpuNanosPerOperation": 966.6,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 2e-05,
+              "gcNanosPerOperation": 20.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 923.205,
+              "cpuNanosPerOperation": 920.06,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 995.24918,
+              "cpuNanosPerOperation": 979.92,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 2e-05,
+              "gcNanosPerOperation": 20.0
+            }
+          ],
+          [
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 1124.60334,
+              "cpuNanosPerOperation": 1108.56,
+              "allocatedBytesPerOperation": 5480.00304,
+              "gcCollectionsPerOperation": 2e-05,
+              "gcNanosPerOperation": 20.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 1030.69082,
+              "cpuNanosPerOperation": 1030.96,
+              "allocatedBytesPerOperation": 5480.00304,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 964.23916,
+              "cpuNanosPerOperation": 951.3,
+              "allocatedBytesPerOperation": 5480.00304,
+              "gcCollectionsPerOperation": 2e-05,
+              "gcNanosPerOperation": 20.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 947.44832,
+              "cpuNanosPerOperation": 946.78,
+              "allocatedBytesPerOperation": 5480.00304,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 951.73334,
+              "cpuNanosPerOperation": 951.12,
+              "allocatedBytesPerOperation": 5480.00304,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 958.35916,
+              "cpuNanosPerOperation": 945.42,
+              "allocatedBytesPerOperation": 5480.00304,
+              "gcCollectionsPerOperation": 2e-05,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 947.32584,
+              "cpuNanosPerOperation": 946.7,
+              "allocatedBytesPerOperation": 5480.00304,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 964.44332,
+              "cpuNanosPerOperation": 951.34,
+              "allocatedBytesPerOperation": 5480.00304,
+              "gcCollectionsPerOperation": 2e-05,
+              "gcNanosPerOperation": 20.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 948.76668,
+              "cpuNanosPerOperation": 948.62,
+              "allocatedBytesPerOperation": 5480.00304,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 958.54334,
+              "cpuNanosPerOperation": 945.8,
+              "allocatedBytesPerOperation": 5480.00304,
+              "gcCollectionsPerOperation": 2e-05,
+              "gcNanosPerOperation": 20.0
+            }
+          ],
+          [
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 907.40084,
+              "cpuNanosPerOperation": 906.88,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 915.01834,
+              "cpuNanosPerOperation": 915.04,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 919.64,
+              "cpuNanosPerOperation": 906.0,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 2e-05,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 911.0025,
+              "cpuNanosPerOperation": 910.5,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 923.61084,
+              "cpuNanosPerOperation": 907.2,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 2e-05,
+              "gcNanosPerOperation": 20.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 909.05084,
+              "cpuNanosPerOperation": 908.76,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 912.41166,
+              "cpuNanosPerOperation": 911.8,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 924.09,
+              "cpuNanosPerOperation": 908.66,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 2e-05,
+              "gcNanosPerOperation": 20.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 904.99166,
+              "cpuNanosPerOperation": 904.48,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 923.2775,
+              "cpuNanosPerOperation": 907.34,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 2e-05,
+              "gcNanosPerOperation": 20.0
+            }
+          ],
+          [
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 923.09082,
+              "cpuNanosPerOperation": 921.58,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 924.88,
+              "cpuNanosPerOperation": 925.08,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 940.6475,
+              "cpuNanosPerOperation": 925.5,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 2e-05,
+              "gcNanosPerOperation": 20.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 925.73334,
+              "cpuNanosPerOperation": 925.58,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 943.335,
+              "cpuNanosPerOperation": 926.56,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 2e-05,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 923.31416,
+              "cpuNanosPerOperation": 923.06,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 922.24668,
+              "cpuNanosPerOperation": 921.78,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 936.97,
+              "cpuNanosPerOperation": 920.24,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 2e-05,
+              "gcNanosPerOperation": 20.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 941.48082,
+              "cpuNanosPerOperation": 941.08,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 50000,
+              "wallNanosPerOperation": 929.10416,
+              "cpuNanosPerOperation": 913.74,
+              "allocatedBytesPerOperation": 5240.00304,
+              "gcCollectionsPerOperation": 2e-05,
+              "gcNanosPerOperation": 20.0
+            }
+          ]
+        ]
+      },
+      "feature": {
+        "wallNanosPerOperation": {
+          "mean": 5605.80840919305,
+          "median": 5612.567204664,
+          "p95": 5706.4546935937,
+          "min": 5470.052986869,
+          "max": 6077.287254341,
+          "coefficientOfVariation": 0.01882025470116372
+        },
+        "cpuNanosPerOperation": {
+          "mean": 5586.780625939775,
+          "median": 5602.7933856,
+          "p95": 5664.64187220145,
+          "min": 5468.836693176,
+          "max": 6010.335177765,
+          "coefficientOfVariation": 0.01760291115916821
+        },
+        "allocatedBytesPerOperation": {
+          "mean": 11964.004771757001,
+          "median": 11968.004759484,
+          "p95": 12128.004844776,
+          "min": 11792.004723284,
+          "max": 12128.004844776,
+          "coefficientOfVariation": 0.013890674708372075
+        }
+      },
+      "main": {
+        "wallNanosPerOperation": {
+          "mean": 940.8327915,
+          "median": 925.76583,
+          "p95": 997.021262,
+          "min": 904.99166,
+          "max": 1124.60334,
+          "coefficientOfVariation": 0.04175060880891491
+        },
+        "cpuNanosPerOperation": {
+          "mean": 933.882,
+          "median": 923.39,
+          "p95": 982.4719999999999,
+          "min": 904.48,
+          "max": 1108.56,
+          "coefficientOfVariation": 0.04009487676355589
+        },
+        "allocatedBytesPerOperation": {
+          "mean": 5300.00304,
+          "median": 5240.00304,
+          "p95": 5480.00304,
+          "min": 5240.00304,
+          "max": 5480.00304,
+          "coefficientOfVariation": 0.019857906028077205
+        }
+      },
+      "featureVsMain": {
+        "wallMedianDeltaPercent": 506.2620830004063,
+        "cpuMedianDeltaPercent": 506.7634894898147,
+        "allocationMedianDeltaPercent": 128.39690488965826
+      },
+      "statistics": {
+        "wallNanosPerOperation": {
+          "medianDeltaPercent": 506.2620830004063,
+          "bootstrap95Percent": [
+            482.25245023264176,
+            512.995219797
+          ],
+          "classification": "regression"
+        },
+        "cpuNanosPerOperation": {
+          "medianDeltaPercent": 506.7634894898147,
+          "bootstrap95Percent": [
+            482.5864776624613,
+            518.0594165401989
+          ],
+          "classification": "regression"
+        },
+        "allocatedBytesPerOperation": {
+          "medianDeltaPercent": 128.39690488965826,
+          "bootstrap95Percent": [
+            118.39412628289345,
+            131.45033986041352
+          ],
+          "classification": "regression"
+        }
+      }
+    },
+    {
+      "name": "profile_encode_logical_maximum",
+      "category": "codec",
+      "semanticFixture": {
+        "comparisonContract": "branch-native-logical-profile",
+        "logicalShape": "maximum",
+        "unlockedWeapons": "12",
+        "labRanks": "8",
+        "discoveries": "400"
+      },
+      "wireOutcome": {
+        "feature": {
+          "wireFormat": "strict-v4",
+          "schemaVersion": "4",
+          "payloadBytes": "2744",
+          "payloadSha256": "057502e41b9c9845568c7d65c571e79d81860f8b9f2517f1e91d70014f637daf"
+        },
+        "main": {
+          "wireFormat": "legacy-v3",
+          "schemaVersion": "3",
+          "payloadBytes": "1671",
+          "payloadSha256": "85297fbd56b8398359ef024d620e46ab2945b387d93128dc70e9e123da6656e3"
+        }
+      },
+      "description": {
+        "feature": "Encode every branch-native strict-v4 logical collection and value at its maximum.",
+        "main": "Encode every branch-native legacy-v3 logical collection and value at its maximum."
+      },
+      "rawForkSamples": {
+        "feature": [
+          [
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 12315.4458,
+              "cpuNanosPerOperation": 12087.6,
+              "allocatedBytesPerOperation": 26640.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 10966.3417,
+              "cpuNanosPerOperation": 10958.9,
+              "allocatedBytesPerOperation": 26640.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 10968.5708,
+              "cpuNanosPerOperation": 10956.5,
+              "allocatedBytesPerOperation": 26640.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11010.1958,
+              "cpuNanosPerOperation": 10921.5,
+              "allocatedBytesPerOperation": 26640.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 10951.1125,
+              "cpuNanosPerOperation": 10944.4,
+              "allocatedBytesPerOperation": 26640.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11018.4875,
+              "cpuNanosPerOperation": 10930.8,
+              "allocatedBytesPerOperation": 26640.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 10924.5291,
+              "cpuNanosPerOperation": 10915.9,
+              "allocatedBytesPerOperation": 26640.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 10994.2916,
+              "cpuNanosPerOperation": 10910.3,
+              "allocatedBytesPerOperation": 26640.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 10906.4584,
+              "cpuNanosPerOperation": 10898.4,
+              "allocatedBytesPerOperation": 26640.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 10857.8375,
+              "cpuNanosPerOperation": 10851.0,
+              "allocatedBytesPerOperation": 26640.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ],
+          [
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11155.2375,
+              "cpuNanosPerOperation": 11148.6,
+              "allocatedBytesPerOperation": 26472.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11153.55,
+              "cpuNanosPerOperation": 11146.6,
+              "allocatedBytesPerOperation": 26472.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11154.9875,
+              "cpuNanosPerOperation": 11089.1,
+              "allocatedBytesPerOperation": 26472.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11155.1917,
+              "cpuNanosPerOperation": 11145.9,
+              "allocatedBytesPerOperation": 26472.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 12280.7958,
+              "cpuNanosPerOperation": 12176.9,
+              "allocatedBytesPerOperation": 26472.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11040.2291,
+              "cpuNanosPerOperation": 11035.1,
+              "allocatedBytesPerOperation": 26472.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11101.4917,
+              "cpuNanosPerOperation": 11031.0,
+              "allocatedBytesPerOperation": 26472.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11065.7375,
+              "cpuNanosPerOperation": 11063.5,
+              "allocatedBytesPerOperation": 26472.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11106.9125,
+              "cpuNanosPerOperation": 11102.8,
+              "allocatedBytesPerOperation": 26472.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11116.1875,
+              "cpuNanosPerOperation": 11052.0,
+              "allocatedBytesPerOperation": 26472.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            }
+          ],
+          [
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11416.7125,
+              "cpuNanosPerOperation": 11409.9,
+              "allocatedBytesPerOperation": 26456.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11500.7458,
+              "cpuNanosPerOperation": 11401.8,
+              "allocatedBytesPerOperation": 26456.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11453.225,
+              "cpuNanosPerOperation": 11445.7,
+              "allocatedBytesPerOperation": 26456.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11658.5916,
+              "cpuNanosPerOperation": 11592.7,
+              "allocatedBytesPerOperation": 26456.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11394.1875,
+              "cpuNanosPerOperation": 11385.8,
+              "allocatedBytesPerOperation": 26456.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11434.5,
+              "cpuNanosPerOperation": 11425.4,
+              "allocatedBytesPerOperation": 26456.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11549.7167,
+              "cpuNanosPerOperation": 11457.8,
+              "allocatedBytesPerOperation": 26456.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11451.5708,
+              "cpuNanosPerOperation": 11446.4,
+              "allocatedBytesPerOperation": 26456.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11551.1709,
+              "cpuNanosPerOperation": 11458.0,
+              "allocatedBytesPerOperation": 26456.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11496.9542,
+              "cpuNanosPerOperation": 11482.0,
+              "allocatedBytesPerOperation": 26456.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ],
+          [
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11543.1583,
+              "cpuNanosPerOperation": 11539.0,
+              "allocatedBytesPerOperation": 26624.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11545.8041,
+              "cpuNanosPerOperation": 11541.2,
+              "allocatedBytesPerOperation": 26624.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11512.2791,
+              "cpuNanosPerOperation": 11442.8,
+              "allocatedBytesPerOperation": 26624.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11402.1416,
+              "cpuNanosPerOperation": 11398.1,
+              "allocatedBytesPerOperation": 26624.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11607.675,
+              "cpuNanosPerOperation": 11528.0,
+              "allocatedBytesPerOperation": 26624.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11486.175,
+              "cpuNanosPerOperation": 11479.5,
+              "allocatedBytesPerOperation": 26624.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11599.1708,
+              "cpuNanosPerOperation": 11518.8,
+              "allocatedBytesPerOperation": 26624.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11917.3333,
+              "cpuNanosPerOperation": 11707.3,
+              "allocatedBytesPerOperation": 26624.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11601.0875,
+              "cpuNanosPerOperation": 11543.1,
+              "allocatedBytesPerOperation": 26624.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 11583.0083,
+              "cpuNanosPerOperation": 11510.1,
+              "allocatedBytesPerOperation": 26624.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 0.0
+            }
+          ]
+        ],
+        "main": [
+          [
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7171.9292,
+              "cpuNanosPerOperation": 7093.2,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7174.125,
+              "cpuNanosPerOperation": 7094.5,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7143.2459,
+              "cpuNanosPerOperation": 7108.9,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7191.4292,
+              "cpuNanosPerOperation": 7116.5,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7204.4958,
+              "cpuNanosPerOperation": 7132.4,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7144.4458,
+              "cpuNanosPerOperation": 7087.1,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7191.4042,
+              "cpuNanosPerOperation": 7160.1,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7191.625,
+              "cpuNanosPerOperation": 7098.4,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7184.7,
+              "cpuNanosPerOperation": 7106.8,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7210.2417,
+              "cpuNanosPerOperation": 7169.6,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ],
+          [
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7359.7208,
+              "cpuNanosPerOperation": 7255.5,
+              "allocatedBytesPerOperation": 46056.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7358.225,
+              "cpuNanosPerOperation": 7274.3,
+              "allocatedBytesPerOperation": 46056.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7177.8917,
+              "cpuNanosPerOperation": 7171.2,
+              "allocatedBytesPerOperation": 46056.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7232.7125,
+              "cpuNanosPerOperation": 7166.1,
+              "allocatedBytesPerOperation": 46056.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7578.5417,
+              "cpuNanosPerOperation": 7413.6,
+              "allocatedBytesPerOperation": 46056.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7212.0833,
+              "cpuNanosPerOperation": 7141.8,
+              "allocatedBytesPerOperation": 46056.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7174.7459,
+              "cpuNanosPerOperation": 7161.4,
+              "allocatedBytesPerOperation": 46056.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7257.0292,
+              "cpuNanosPerOperation": 7190.2,
+              "allocatedBytesPerOperation": 46056.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7272.0958,
+              "cpuNanosPerOperation": 7188.6,
+              "allocatedBytesPerOperation": 46056.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7227.5666,
+              "cpuNanosPerOperation": 7224.5,
+              "allocatedBytesPerOperation": 46056.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ],
+          [
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7062.3709,
+              "cpuNanosPerOperation": 6984.9,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7179.1916,
+              "cpuNanosPerOperation": 7075.0,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 6989.9833,
+              "cpuNanosPerOperation": 6986.0,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7065.5792,
+              "cpuNanosPerOperation": 6987.0,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7074.8583,
+              "cpuNanosPerOperation": 6996.0,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7059.8958,
+              "cpuNanosPerOperation": 6978.3,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 6988.6375,
+              "cpuNanosPerOperation": 6984.8,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7096.5208,
+              "cpuNanosPerOperation": 7013.9,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7080.1875,
+              "cpuNanosPerOperation": 6999.4,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7009.8333,
+              "cpuNanosPerOperation": 7005.5,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ],
+          [
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7163.0833,
+              "cpuNanosPerOperation": 7077.1,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7147.9334,
+              "cpuNanosPerOperation": 7068.5,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7094.7833,
+              "cpuNanosPerOperation": 7087.2,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7120.2125,
+              "cpuNanosPerOperation": 7036.5,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7138.9833,
+              "cpuNanosPerOperation": 7051.4,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7130.6375,
+              "cpuNanosPerOperation": 7045.4,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7091.825,
+              "cpuNanosPerOperation": 7088.7,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7207.4042,
+              "cpuNanosPerOperation": 7124.9,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7162.8833,
+              "cpuNanosPerOperation": 7079.9,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0001,
+              "gcNanosPerOperation": 100.0
+            },
+            {
+              "operations": 10000,
+              "wallNanosPerOperation": 7090.45,
+              "cpuNanosPerOperation": 7086.1,
+              "allocatedBytesPerOperation": 45896.0152,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ]
+        ]
+      },
+      "feature": {
+        "wallNanosPerOperation": {
+          "mean": 11348.719987499999,
+          "median": 11409.42705,
+          "p95": 11935.506425,
+          "min": 10857.8375,
+          "max": 12315.4458,
+          "coefficientOfVariation": 0.030498737419412236
+        },
+        "cpuNanosPerOperation": {
+          "mean": 11302.005000000001,
+          "median": 11399.95,
+          "p95": 11726.314999999999,
+          "min": 10851.0,
+          "max": 12176.9,
+          "coefficientOfVariation": 0.02801085928821356
+        },
+        "allocatedBytesPerOperation": {
+          "mean": 26548.0152,
+          "median": 26548.0152,
+          "p95": 26640.0152,
+          "min": 26456.0152,
+          "max": 26640.0152,
+          "coefficientOfVariation": 0.0032188862620151364
+        }
+      },
+      "main": {
+        "wallNanosPerOperation": {
+          "mean": 7165.3377075,
+          "median": 7167.50625,
+          "p95": 7358.29979,
+          "min": 6988.6375,
+          "max": 7578.5417,
+          "coefficientOfVariation": 0.014884174010858823
+        },
+        "cpuNanosPerOperation": {
+          "mean": 7102.780000000001,
+          "median": 7090.95,
+          "p95": 7256.44,
+          "min": 6978.3,
+          "max": 7413.6,
+          "coefficientOfVariation": 0.012883671623263012
+        },
+        "allocatedBytesPerOperation": {
+          "mean": 45936.0152,
+          "median": 45896.0152,
+          "p95": 46056.0152,
+          "min": 45896.0152,
+          "max": 46056.0152,
+          "coefficientOfVariation": 0.0015274429277131192
+        }
+      },
+      "featureVsMain": {
+        "wallMedianDeltaPercent": 59.182659240792425,
+        "cpuMedianDeltaPercent": 60.7675981356518,
+        "allocationMedianDeltaPercent": -42.156165226300516
+      },
+      "statistics": {
+        "wallNanosPerOperation": {
+          "medianDeltaPercent": 59.182659240792425,
+          "bootstrap95Percent": [
+            53.249233878696025,
+            62.229836095628634
+          ],
+          "classification": "regression"
+        },
+        "cpuNanosPerOperation": {
+          "medianDeltaPercent": 60.7675981356518,
+          "bootstrap95Percent": [
+            54.089852598449845,
+            63.144672907138
+          ],
+          "classification": "regression"
+        },
+        "allocatedBytesPerOperation": {
+          "medianDeltaPercent": -42.156165226300516,
+          "bootstrap95Percent": [
+            -42.45692001598259,
+            -41.95571209415148
+          ],
+          "classification": "improvement"
+        }
+      }
+    },
+    {
+      "name": "profile_decode_logical_maximum",
+      "category": "codec",
+      "semanticFixture": {
+        "comparisonContract": "branch-native-logical-profile",
+        "logicalShape": "maximum",
+        "unlockedWeapons": "12",
+        "labRanks": "8",
+        "discoveries": "400"
+      },
+      "wireOutcome": {
+        "feature": {
+          "wireFormat": "strict-v4",
+          "schemaVersion": "4",
+          "payloadBytes": "2744",
+          "payloadSha256": "057502e41b9c9845568c7d65c571e79d81860f8b9f2517f1e91d70014f637daf"
+        },
+        "main": {
+          "wireFormat": "legacy-v3",
+          "schemaVersion": "3",
+          "payloadBytes": "1671",
+          "payloadSha256": "85297fbd56b8398359ef024d620e46ab2945b387d93128dc70e9e123da6656e3"
+        }
+      },
+      "description": {
+        "feature": "Strictly decode the branch-native v4 logical-maximum payload without padding.",
+        "main": "Decode the branch-native legacy-v3 logical-maximum payload without padding."
+      },
+      "rawForkSamples": {
+        "feature": [
+          [
+            {
+              "operations": 2976,
+              "wallNanosPerOperation": 55208.487231183,
+              "cpuNanosPerOperation": 54912.298387097,
+              "allocatedBytesPerOperation": 98400.051075269,
+              "gcCollectionsPerOperation": 0.000336022,
+              "gcNanosPerOperation": 336.021505376
+            },
+            {
+              "operations": 2976,
+              "wallNanosPerOperation": 55422.351142473,
+              "cpuNanosPerOperation": 55343.75,
+              "allocatedBytesPerOperation": 98400.051075269,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2976,
+              "wallNanosPerOperation": 56221.774193548,
+              "cpuNanosPerOperation": 55852.48655914,
+              "allocatedBytesPerOperation": 98400.051075269,
+              "gcCollectionsPerOperation": 0.000336022,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2976,
+              "wallNanosPerOperation": 56190.916330645,
+              "cpuNanosPerOperation": 55970.430107527,
+              "allocatedBytesPerOperation": 98400.051075269,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2976,
+              "wallNanosPerOperation": 57327.005040323,
+              "cpuNanosPerOperation": 56736.22311828,
+              "allocatedBytesPerOperation": 98400.051075269,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2976,
+              "wallNanosPerOperation": 56440.846102151,
+              "cpuNanosPerOperation": 56087.029569892,
+              "allocatedBytesPerOperation": 98400.051075269,
+              "gcCollectionsPerOperation": 0.000336022,
+              "gcNanosPerOperation": 336.021505376
+            },
+            {
+              "operations": 2976,
+              "wallNanosPerOperation": 57123.193884409,
+              "cpuNanosPerOperation": 56778.897849462,
+              "allocatedBytesPerOperation": 98400.051075269,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2976,
+              "wallNanosPerOperation": 56878.920362903,
+              "cpuNanosPerOperation": 56408.266129032,
+              "allocatedBytesPerOperation": 98400.051075269,
+              "gcCollectionsPerOperation": 0.000336022,
+              "gcNanosPerOperation": 336.021505376
+            },
+            {
+              "operations": 2976,
+              "wallNanosPerOperation": 56261.690860215,
+              "cpuNanosPerOperation": 56139.112903226,
+              "allocatedBytesPerOperation": 98400.051075269,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2976,
+              "wallNanosPerOperation": 56412.690524194,
+              "cpuNanosPerOperation": 56020.161290323,
+              "allocatedBytesPerOperation": 98400.051075269,
+              "gcCollectionsPerOperation": 0.000336022,
+              "gcNanosPerOperation": 336.021505376
+            }
+          ],
+          [
+            {
+              "operations": 2896,
+              "wallNanosPerOperation": 56394.552831492,
+              "cpuNanosPerOperation": 56247.928176796,
+              "allocatedBytesPerOperation": 98224.052486188,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2896,
+              "wallNanosPerOperation": 56013.955801105,
+              "cpuNanosPerOperation": 55964.433701657,
+              "allocatedBytesPerOperation": 98224.052486188,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2896,
+              "wallNanosPerOperation": 56036.918853591,
+              "cpuNanosPerOperation": 55781.077348066,
+              "allocatedBytesPerOperation": 98224.052486188,
+              "gcCollectionsPerOperation": 0.000345304,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2896,
+              "wallNanosPerOperation": 55970.720994475,
+              "cpuNanosPerOperation": 55924.378453039,
+              "allocatedBytesPerOperation": 98224.052486188,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2896,
+              "wallNanosPerOperation": 55641.963052486,
+              "cpuNanosPerOperation": 55397.444751381,
+              "allocatedBytesPerOperation": 98224.052486188,
+              "gcCollectionsPerOperation": 0.000345304,
+              "gcNanosPerOperation": 345.303867403
+            },
+            {
+              "operations": 2896,
+              "wallNanosPerOperation": 55609.878453039,
+              "cpuNanosPerOperation": 55603.245856354,
+              "allocatedBytesPerOperation": 98224.052486188,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2896,
+              "wallNanosPerOperation": 55892.13570442,
+              "cpuNanosPerOperation": 55646.754143646,
+              "allocatedBytesPerOperation": 98224.052486188,
+              "gcCollectionsPerOperation": 0.000345304,
+              "gcNanosPerOperation": 345.303867403
+            },
+            {
+              "operations": 2896,
+              "wallNanosPerOperation": 55604.109116022,
+              "cpuNanosPerOperation": 55570.096685083,
+              "allocatedBytesPerOperation": 98224.052486188,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2896,
+              "wallNanosPerOperation": 55488.979281768,
+              "cpuNanosPerOperation": 55247.928176796,
+              "allocatedBytesPerOperation": 98224.052486188,
+              "gcCollectionsPerOperation": 0.000345304,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2896,
+              "wallNanosPerOperation": 55355.360842541,
+              "cpuNanosPerOperation": 55353.245856354,
+              "allocatedBytesPerOperation": 98224.052486188,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ],
+          [
+            {
+              "operations": 2706,
+              "wallNanosPerOperation": 55831.131559497,
+              "cpuNanosPerOperation": 55794.161123429,
+              "allocatedBytesPerOperation": 98232.056171471,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2706,
+              "wallNanosPerOperation": 55946.19992609,
+              "cpuNanosPerOperation": 55631.559497413,
+              "allocatedBytesPerOperation": 98232.056171471,
+              "gcCollectionsPerOperation": 0.000369549,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2706,
+              "wallNanosPerOperation": 56028.224316334,
+              "cpuNanosPerOperation": 55986.696230599,
+              "allocatedBytesPerOperation": 98232.056171471,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2706,
+              "wallNanosPerOperation": 56359.24796748,
+              "cpuNanosPerOperation": 56337.398373984,
+              "allocatedBytesPerOperation": 98232.056171471,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2706,
+              "wallNanosPerOperation": 55883.099408721,
+              "cpuNanosPerOperation": 55566.149297857,
+              "allocatedBytesPerOperation": 98232.056171471,
+              "gcCollectionsPerOperation": 0.000369549,
+              "gcNanosPerOperation": 369.549150037
+            },
+            {
+              "operations": 2706,
+              "wallNanosPerOperation": 56107.322985957,
+              "cpuNanosPerOperation": 56052.845528455,
+              "allocatedBytesPerOperation": 98232.056171471,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2706,
+              "wallNanosPerOperation": 56120.596082779,
+              "cpuNanosPerOperation": 55786.031042129,
+              "allocatedBytesPerOperation": 98232.056171471,
+              "gcCollectionsPerOperation": 0.000369549,
+              "gcNanosPerOperation": 369.549150037
+            },
+            {
+              "operations": 2706,
+              "wallNanosPerOperation": 55654.841093865,
+              "cpuNanosPerOperation": 55625.277161863,
+              "allocatedBytesPerOperation": 98232.056171471,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2706,
+              "wallNanosPerOperation": 55956.331855137,
+              "cpuNanosPerOperation": 55912.786400591,
+              "allocatedBytesPerOperation": 98232.056171471,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2706,
+              "wallNanosPerOperation": 56359.509977827,
+              "cpuNanosPerOperation": 55950.849963045,
+              "allocatedBytesPerOperation": 98232.056171471,
+              "gcCollectionsPerOperation": 0.000369549,
+              "gcNanosPerOperation": 369.549150037
+            }
+          ],
+          [
+            {
+              "operations": 2936,
+              "wallNanosPerOperation": 55937.272820163,
+              "cpuNanosPerOperation": 55902.929155313,
+              "allocatedBytesPerOperation": 98400.051771117,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2936,
+              "wallNanosPerOperation": 56873.694482289,
+              "cpuNanosPerOperation": 56603.542234332,
+              "allocatedBytesPerOperation": 98400.051771117,
+              "gcCollectionsPerOperation": 0.000340599,
+              "gcNanosPerOperation": 340.599455041
+            },
+            {
+              "operations": 2936,
+              "wallNanosPerOperation": 56111.972070845,
+              "cpuNanosPerOperation": 56073.569482289,
+              "allocatedBytesPerOperation": 98400.051771117,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2936,
+              "wallNanosPerOperation": 55887.417574932,
+              "cpuNanosPerOperation": 55846.730245232,
+              "allocatedBytesPerOperation": 98400.051771117,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2936,
+              "wallNanosPerOperation": 56491.059264305,
+              "cpuNanosPerOperation": 56228.201634877,
+              "allocatedBytesPerOperation": 98400.051771117,
+              "gcCollectionsPerOperation": 0.000340599,
+              "gcNanosPerOperation": 340.599455041
+            },
+            {
+              "operations": 2936,
+              "wallNanosPerOperation": 56409.457425068,
+              "cpuNanosPerOperation": 56352.861035422,
+              "allocatedBytesPerOperation": 98400.051771117,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2936,
+              "wallNanosPerOperation": 56715.826294278,
+              "cpuNanosPerOperation": 56444.822888283,
+              "allocatedBytesPerOperation": 98400.051771117,
+              "gcCollectionsPerOperation": 0.000340599,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2936,
+              "wallNanosPerOperation": 56616.059264305,
+              "cpuNanosPerOperation": 56573.228882834,
+              "allocatedBytesPerOperation": 98400.051771117,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2936,
+              "wallNanosPerOperation": 56166.098773842,
+              "cpuNanosPerOperation": 55869.550408719,
+              "allocatedBytesPerOperation": 98400.051771117,
+              "gcCollectionsPerOperation": 0.000340599,
+              "gcNanosPerOperation": 340.599455041
+            },
+            {
+              "operations": 2936,
+              "wallNanosPerOperation": 55542.603542234,
+              "cpuNanosPerOperation": 55504.427792916,
+              "allocatedBytesPerOperation": 98400.051771117,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ]
+        ],
+        "main": [
+          [
+            {
+              "operations": 3416,
+              "wallNanosPerOperation": 38443.806206089,
+              "cpuNanosPerOperation": 38251.756440281,
+              "allocatedBytesPerOperation": 75528.044496487,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 3416,
+              "wallNanosPerOperation": 38099.507318501,
+              "cpuNanosPerOperation": 37803.278688525,
+              "allocatedBytesPerOperation": 75528.044496487,
+              "gcCollectionsPerOperation": 0.00029274,
+              "gcNanosPerOperation": 292.740046838
+            },
+            {
+              "operations": 3416,
+              "wallNanosPerOperation": 37412.641393443,
+              "cpuNanosPerOperation": 37390.807962529,
+              "allocatedBytesPerOperation": 75528.044496487,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 3416,
+              "wallNanosPerOperation": 37671.338407494,
+              "cpuNanosPerOperation": 37428.864168618,
+              "allocatedBytesPerOperation": 75528.044496487,
+              "gcCollectionsPerOperation": 0.00029274,
+              "gcNanosPerOperation": 292.740046838
+            },
+            {
+              "operations": 3416,
+              "wallNanosPerOperation": 37322.709309133,
+              "cpuNanosPerOperation": 37293.618266979,
+              "allocatedBytesPerOperation": 75528.044496487,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 3416,
+              "wallNanosPerOperation": 37416.849531616,
+              "cpuNanosPerOperation": 37390.807962529,
+              "allocatedBytesPerOperation": 75528.044496487,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 3416,
+              "wallNanosPerOperation": 37722.519028103,
+              "cpuNanosPerOperation": 37474.824355972,
+              "allocatedBytesPerOperation": 75528.044496487,
+              "gcCollectionsPerOperation": 0.00029274,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 3416,
+              "wallNanosPerOperation": 37408.908957845,
+              "cpuNanosPerOperation": 37384.367681499,
+              "allocatedBytesPerOperation": 75528.044496487,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 3416,
+              "wallNanosPerOperation": 37636.343676815,
+              "cpuNanosPerOperation": 37388.758782201,
+              "allocatedBytesPerOperation": 75528.044496487,
+              "gcCollectionsPerOperation": 0.00029274,
+              "gcNanosPerOperation": 292.740046838
+            },
+            {
+              "operations": 3416,
+              "wallNanosPerOperation": 37395.321135831,
+              "cpuNanosPerOperation": 37363.87587822,
+              "allocatedBytesPerOperation": 75528.044496487,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ],
+          [
+            {
+              "operations": 2533,
+              "wallNanosPerOperation": 38326.227398342,
+              "cpuNanosPerOperation": 38048.559020924,
+              "allocatedBytesPerOperation": 75528.060007896,
+              "gcCollectionsPerOperation": 0.000394789,
+              "gcNanosPerOperation": 394.788787998
+            },
+            {
+              "operations": 2533,
+              "wallNanosPerOperation": 37960.011448875,
+              "cpuNanosPerOperation": 37945.124358468,
+              "allocatedBytesPerOperation": 75528.060007896,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2533,
+              "wallNanosPerOperation": 38051.783260955,
+              "cpuNanosPerOperation": 38025.66127122,
+              "allocatedBytesPerOperation": 75528.060007896,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2533,
+              "wallNanosPerOperation": 37860.968416897,
+              "cpuNanosPerOperation": 37845.637583893,
+              "allocatedBytesPerOperation": 75528.060007896,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2533,
+              "wallNanosPerOperation": 38090.423213581,
+              "cpuNanosPerOperation": 37776.944334781,
+              "allocatedBytesPerOperation": 75528.060007896,
+              "gcCollectionsPerOperation": 0.000394789,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2533,
+              "wallNanosPerOperation": 37695.552309514,
+              "cpuNanosPerOperation": 37675.483616265,
+              "allocatedBytesPerOperation": 75528.060007896,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2533,
+              "wallNanosPerOperation": 37651.96091591,
+              "cpuNanosPerOperation": 37631.662060797,
+              "allocatedBytesPerOperation": 75528.060007896,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2533,
+              "wallNanosPerOperation": 38043.146861429,
+              "cpuNanosPerOperation": 37758.784050533,
+              "allocatedBytesPerOperation": 75528.060007896,
+              "gcCollectionsPerOperation": 0.000394789,
+              "gcNanosPerOperation": 394.788787998
+            },
+            {
+              "operations": 2533,
+              "wallNanosPerOperation": 37579.270035531,
+              "cpuNanosPerOperation": 37554.678247138,
+              "allocatedBytesPerOperation": 75528.060007896,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2533,
+              "wallNanosPerOperation": 37776.862218713,
+              "cpuNanosPerOperation": 37762.731938413,
+              "allocatedBytesPerOperation": 75528.060007896,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ],
+          [
+            {
+              "operations": 3628,
+              "wallNanosPerOperation": 37777.999724366,
+              "cpuNanosPerOperation": 37534.729878721,
+              "allocatedBytesPerOperation": 75528.041896362,
+              "gcCollectionsPerOperation": 0.000275634,
+              "gcNanosPerOperation": 275.633958104
+            },
+            {
+              "operations": 3628,
+              "wallNanosPerOperation": 37592.762403528,
+              "cpuNanosPerOperation": 37568.908489526,
+              "allocatedBytesPerOperation": 75528.041896362,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 3628,
+              "wallNanosPerOperation": 37914.048235943,
+              "cpuNanosPerOperation": 37885.611907387,
+              "allocatedBytesPerOperation": 75528.041896362,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 3628,
+              "wallNanosPerOperation": 38078.153803749,
+              "cpuNanosPerOperation": 37835.997794928,
+              "allocatedBytesPerOperation": 75528.041896362,
+              "gcCollectionsPerOperation": 0.000275634,
+              "gcNanosPerOperation": 275.633958104
+            },
+            {
+              "operations": 3628,
+              "wallNanosPerOperation": 37752.032800441,
+              "cpuNanosPerOperation": 37724.090407938,
+              "allocatedBytesPerOperation": 75528.041896362,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 3628,
+              "wallNanosPerOperation": 37994.613836825,
+              "cpuNanosPerOperation": 37734.840132304,
+              "allocatedBytesPerOperation": 75528.041896362,
+              "gcCollectionsPerOperation": 0.000275634,
+              "gcNanosPerOperation": 275.633958104
+            },
+            {
+              "operations": 3628,
+              "wallNanosPerOperation": 37551.061190739,
+              "cpuNanosPerOperation": 37523.153252481,
+              "allocatedBytesPerOperation": 75528.041896362,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 3628,
+              "wallNanosPerOperation": 37925.957828004,
+              "cpuNanosPerOperation": 37676.130099228,
+              "allocatedBytesPerOperation": 75528.041896362,
+              "gcCollectionsPerOperation": 0.000275634,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 3628,
+              "wallNanosPerOperation": 37581.978224917,
+              "cpuNanosPerOperation": 37558.434399118,
+              "allocatedBytesPerOperation": 75528.041896362,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 3628,
+              "wallNanosPerOperation": 37604.407662624,
+              "cpuNanosPerOperation": 37581.312017641,
+              "allocatedBytesPerOperation": 75528.041896362,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ],
+          [
+            {
+              "operations": 2624,
+              "wallNanosPerOperation": 37989.07507622,
+              "cpuNanosPerOperation": 37654.344512195,
+              "allocatedBytesPerOperation": 75528.057926829,
+              "gcCollectionsPerOperation": 0.000381098,
+              "gcNanosPerOperation": 381.097560976
+            },
+            {
+              "operations": 2624,
+              "wallNanosPerOperation": 37933.339557927,
+              "cpuNanosPerOperation": 37911.585365854,
+              "allocatedBytesPerOperation": 75528.057926829,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2624,
+              "wallNanosPerOperation": 37999.174542683,
+              "cpuNanosPerOperation": 37964.93902439,
+              "allocatedBytesPerOperation": 75528.057926829,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2624,
+              "wallNanosPerOperation": 38053.290015244,
+              "cpuNanosPerOperation": 37737.042682927,
+              "allocatedBytesPerOperation": 75528.057926829,
+              "gcCollectionsPerOperation": 0.000381098,
+              "gcNanosPerOperation": 381.097560976
+            },
+            {
+              "operations": 2624,
+              "wallNanosPerOperation": 46433.752286585,
+              "cpuNanosPerOperation": 45474.466463415,
+              "allocatedBytesPerOperation": 75528.057926829,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2624,
+              "wallNanosPerOperation": 38557.323170732,
+              "cpuNanosPerOperation": 38519.43597561,
+              "allocatedBytesPerOperation": 75528.057926829,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2624,
+              "wallNanosPerOperation": 39022.230564024,
+              "cpuNanosPerOperation": 38663.490853659,
+              "allocatedBytesPerOperation": 75528.057926829,
+              "gcCollectionsPerOperation": 0.000381098,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2624,
+              "wallNanosPerOperation": 38400.216082317,
+              "cpuNanosPerOperation": 38290.777439024,
+              "allocatedBytesPerOperation": 75528.057926829,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2624,
+              "wallNanosPerOperation": 38040.698170732,
+              "cpuNanosPerOperation": 38021.341463415,
+              "allocatedBytesPerOperation": 75528.057926829,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2624,
+              "wallNanosPerOperation": 38050.273246951,
+              "cpuNanosPerOperation": 38021.341463415,
+              "allocatedBytesPerOperation": 75528.057926829,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ]
+        ]
+      },
+      "feature": {
+        "wallNanosPerOperation": {
+          "mean": 56112.36043222328,
+          "median": 56072.120919773995,
+          "p95": 56891.1340389783,
+          "min": 55208.487231183,
+          "max": 57327.005040323,
+          "coefficientOfVariation": 0.008481700407725007
+        },
+        "cpuNanosPerOperation": {
+          "mean": 55925.72018606833,
+          "median": 55918.582426815,
+          "p95": 56610.176278529405,
+          "min": 54912.298387097,
+          "max": 56778.897849462,
+          "coefficientOfVariation": 0.007431390337735046
+        },
+        "allocatedBytesPerOperation": {
+          "mean": 98314.05287601125,
+          "median": 98316.05362337001,
+          "p95": 98400.051771117,
+          "min": 98224.052486188,
+          "max": 98400.051771117,
+          "coefficientOfVariation": 0.0008863559918476251
+        }
+      },
+      "main": {
+        "wallNanosPerOperation": {
+          "mean": 38095.463486729204,
+          "median": 37920.0030319735,
+          "p95": 38580.5685403966,
+          "min": 37322.709309133,
+          "max": 46433.752286585,
+          "coefficientOfVariation": 0.03666386499059406
+        },
+        "cpuNanosPerOperation": {
+          "mean": 37951.955007324024,
+          "median": 37735.9414076155,
+          "p95": 38526.63871951245,
+          "min": 37293.618266979,
+          "max": 45474.466463415,
+          "coefficientOfVariation": 0.033167500532659086
+        },
+        "allocatedBytesPerOperation": {
+          "mean": 75528.0510818935,
+          "median": 75528.05121165799,
+          "p95": 75528.060007896,
+          "min": 75528.041896362,
+          "max": 75528.060007896,
+          "coefficientOfVariation": 1.0690683401026475e-07
+        }
+      },
+      "featureVsMain": {
+        "wallMedianDeltaPercent": 47.869505370278944,
+        "cpuMedianDeltaPercent": 48.183880780379994,
+        "allocationMedianDeltaPercent": 30.1715747277147
+      },
+      "statistics": {
+        "wallNanosPerOperation": {
+          "medianDeltaPercent": 47.869505370278944,
+          "bootstrap95Percent": [
+            47.071306956596096,
+            49.38160485600551
+          ],
+          "classification": "regression"
+        },
+        "cpuNanosPerOperation": {
+          "medianDeltaPercent": 48.183880780379994,
+          "bootstrap95Percent": [
+            47.056322182613016,
+            49.433794458528965
+          ],
+          "classification": "regression"
+        },
+        "allocatedBytesPerOperation": {
+          "medianDeltaPercent": 30.1715747277147,
+          "bootstrap95Percent": [
+            30.049764174276493,
+            30.282802597289148
+          ],
+          "classification": "regression"
+        }
+      }
+    },
+    {
+      "name": "profile_roundtrip_logical_maximum",
+      "category": "codec",
+      "semanticFixture": {
+        "comparisonContract": "branch-native-logical-profile",
+        "logicalShape": "maximum",
+        "unlockedWeapons": "12",
+        "labRanks": "8",
+        "discoveries": "400"
+      },
+      "wireOutcome": {
+        "feature": {
+          "wireFormat": "strict-v4",
+          "schemaVersion": "4",
+          "payloadBytes": "2744",
+          "payloadSha256": "057502e41b9c9845568c7d65c571e79d81860f8b9f2517f1e91d70014f637daf"
+        },
+        "main": {
+          "wireFormat": "legacy-v3",
+          "schemaVersion": "3",
+          "payloadBytes": "1671",
+          "payloadSha256": "85297fbd56b8398359ef024d620e46ab2945b387d93128dc70e9e123da6656e3"
+        }
+      },
+      "description": {
+        "feature": "Encode then strictly decode the branch-native v4 logical-maximum profile.",
+        "main": "Encode then decode the branch-native legacy-v3 logical-maximum profile."
+      },
+      "rawForkSamples": {
+        "feature": [
+          [
+            {
+              "operations": 2603,
+              "wallNanosPerOperation": 72790.674222051,
+              "cpuNanosPerOperation": 71216.288897426,
+              "allocatedBytesPerOperation": 125040.058394161,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2603,
+              "wallNanosPerOperation": 68568.622742989,
+              "cpuNanosPerOperation": 68140.991164042,
+              "allocatedBytesPerOperation": 125040.058394161,
+              "gcCollectionsPerOperation": 0.000384172,
+              "gcNanosPerOperation": 384.172109105
+            },
+            {
+              "operations": 2603,
+              "wallNanosPerOperation": 68282.222435651,
+              "cpuNanosPerOperation": 68178.640030734,
+              "allocatedBytesPerOperation": 125040.058394161,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2603,
+              "wallNanosPerOperation": 69551.222819823,
+              "cpuNanosPerOperation": 69038.41721091,
+              "allocatedBytesPerOperation": 125040.058394161,
+              "gcCollectionsPerOperation": 0.000384172,
+              "gcNanosPerOperation": 384.172109105
+            },
+            {
+              "operations": 2603,
+              "wallNanosPerOperation": 68257.107184018,
+              "cpuNanosPerOperation": 68196.311947753,
+              "allocatedBytesPerOperation": 125040.058394161,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2603,
+              "wallNanosPerOperation": 68508.14752209,
+              "cpuNanosPerOperation": 68149.058778333,
+              "allocatedBytesPerOperation": 125040.058394161,
+              "gcCollectionsPerOperation": 0.000384172,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2603,
+              "wallNanosPerOperation": 67426.559354591,
+              "cpuNanosPerOperation": 67342.681521322,
+              "allocatedBytesPerOperation": 125040.058394161,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2603,
+              "wallNanosPerOperation": 67074.177103342,
+              "cpuNanosPerOperation": 66713.791778717,
+              "allocatedBytesPerOperation": 125040.058394161,
+              "gcCollectionsPerOperation": 0.000384172,
+              "gcNanosPerOperation": 384.172109105
+            },
+            {
+              "operations": 2603,
+              "wallNanosPerOperation": 67113.682673838,
+              "cpuNanosPerOperation": 67063.388398002,
+              "allocatedBytesPerOperation": 125040.058394161,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2603,
+              "wallNanosPerOperation": 67402.740299654,
+              "cpuNanosPerOperation": 67020.745293892,
+              "allocatedBytesPerOperation": 125040.058394161,
+              "gcCollectionsPerOperation": 0.000384172,
+              "gcNanosPerOperation": 384.172109105
+            }
+          ],
+          [
+            {
+              "operations": 2611,
+              "wallNanosPerOperation": 68149.09689774,
+              "cpuNanosPerOperation": 67878.207583301,
+              "allocatedBytesPerOperation": 124696.058215243,
+              "gcCollectionsPerOperation": 0.000382995,
+              "gcNanosPerOperation": 382.995021065
+            },
+            {
+              "operations": 2611,
+              "wallNanosPerOperation": 67628.478743776,
+              "cpuNanosPerOperation": 67596.323247798,
+              "allocatedBytesPerOperation": 124696.058215243,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2611,
+              "wallNanosPerOperation": 68171.230563003,
+              "cpuNanosPerOperation": 67924.166985829,
+              "allocatedBytesPerOperation": 124696.058215243,
+              "gcCollectionsPerOperation": 0.000382995,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2611,
+              "wallNanosPerOperation": 67328.466104941,
+              "cpuNanosPerOperation": 67287.246265799,
+              "allocatedBytesPerOperation": 124696.058215243,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2611,
+              "wallNanosPerOperation": 67841.743393336,
+              "cpuNanosPerOperation": 67591.344312524,
+              "allocatedBytesPerOperation": 124696.058215243,
+              "gcCollectionsPerOperation": 0.000382995,
+              "gcNanosPerOperation": 382.995021065
+            },
+            {
+              "operations": 2611,
+              "wallNanosPerOperation": 67159.613175029,
+              "cpuNanosPerOperation": 67158.1769437,
+              "allocatedBytesPerOperation": 124696.058215243,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2611,
+              "wallNanosPerOperation": 67462.00382995,
+              "cpuNanosPerOperation": 67200.306396017,
+              "allocatedBytesPerOperation": 124696.058215243,
+              "gcCollectionsPerOperation": 0.000382995,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2611,
+              "wallNanosPerOperation": 67351.222137112,
+              "cpuNanosPerOperation": 67340.865568748,
+              "allocatedBytesPerOperation": 124696.058215243,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2611,
+              "wallNanosPerOperation": 68615.28150134,
+              "cpuNanosPerOperation": 68266.947529682,
+              "allocatedBytesPerOperation": 124696.058215243,
+              "gcCollectionsPerOperation": 0.000382995,
+              "gcNanosPerOperation": 382.995021065
+            },
+            {
+              "operations": 2611,
+              "wallNanosPerOperation": 68334.163155879,
+              "cpuNanosPerOperation": 68269.245499809,
+              "allocatedBytesPerOperation": 124696.058215243,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ],
+          [
+            {
+              "operations": 2621,
+              "wallNanosPerOperation": 68371.391453644,
+              "cpuNanosPerOperation": 68046.54711942,
+              "allocatedBytesPerOperation": 124688.057993132,
+              "gcCollectionsPerOperation": 0.000381534,
+              "gcNanosPerOperation": 381.533765738
+            },
+            {
+              "operations": 2621,
+              "wallNanosPerOperation": 68109.325448302,
+              "cpuNanosPerOperation": 68091.949637543,
+              "allocatedBytesPerOperation": 124688.057993132,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2621,
+              "wallNanosPerOperation": 70125.66768409,
+              "cpuNanosPerOperation": 69780.999618466,
+              "allocatedBytesPerOperation": 124688.057993132,
+              "gcCollectionsPerOperation": 0.000381534,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2621,
+              "wallNanosPerOperation": 68525.022510492,
+              "cpuNanosPerOperation": 68490.652422739,
+              "allocatedBytesPerOperation": 124688.057993132,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2621,
+              "wallNanosPerOperation": 68712.721098817,
+              "cpuNanosPerOperation": 68320.106829454,
+              "allocatedBytesPerOperation": 124688.057993132,
+              "gcCollectionsPerOperation": 0.000381534,
+              "gcNanosPerOperation": 381.533765738
+            },
+            {
+              "operations": 2621,
+              "wallNanosPerOperation": 68441.545974819,
+              "cpuNanosPerOperation": 68395.650515071,
+              "allocatedBytesPerOperation": 124688.057993132,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2621,
+              "wallNanosPerOperation": 68444.566577642,
+              "cpuNanosPerOperation": 68089.278901183,
+              "allocatedBytesPerOperation": 124688.057993132,
+              "gcCollectionsPerOperation": 0.000381534,
+              "gcNanosPerOperation": 381.533765738
+            },
+            {
+              "operations": 2621,
+              "wallNanosPerOperation": 68350.900038153,
+              "cpuNanosPerOperation": 68303.319343762,
+              "allocatedBytesPerOperation": 124688.057993132,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2621,
+              "wallNanosPerOperation": 68298.184662343,
+              "cpuNanosPerOperation": 67955.742083174,
+              "allocatedBytesPerOperation": 124688.057993132,
+              "gcCollectionsPerOperation": 0.000381534,
+              "gcNanosPerOperation": 381.533765738
+            },
+            {
+              "operations": 2621,
+              "wallNanosPerOperation": 67982.655856543,
+              "cpuNanosPerOperation": 67975.200305227,
+              "allocatedBytesPerOperation": 124688.057993132,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ],
+          [
+            {
+              "operations": 2618,
+              "wallNanosPerOperation": 68026.658517953,
+              "cpuNanosPerOperation": 67718.487394958,
+              "allocatedBytesPerOperation": 125024.058059587,
+              "gcCollectionsPerOperation": 0.000381971,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2618,
+              "wallNanosPerOperation": 67693.006875477,
+              "cpuNanosPerOperation": 67642.093200917,
+              "allocatedBytesPerOperation": 125024.058059587,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2618,
+              "wallNanosPerOperation": 67901.754010695,
+              "cpuNanosPerOperation": 67590.527119939,
+              "allocatedBytesPerOperation": 125024.058059587,
+              "gcCollectionsPerOperation": 0.000381971,
+              "gcNanosPerOperation": 381.970970206
+            },
+            {
+              "operations": 2618,
+              "wallNanosPerOperation": 67764.085179526,
+              "cpuNanosPerOperation": 67715.049656226,
+              "allocatedBytesPerOperation": 125024.058059587,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2618,
+              "wallNanosPerOperation": 67973.150878533,
+              "cpuNanosPerOperation": 67661.573720397,
+              "allocatedBytesPerOperation": 125024.058059587,
+              "gcCollectionsPerOperation": 0.000381971,
+              "gcNanosPerOperation": 381.970970206
+            },
+            {
+              "operations": 2618,
+              "wallNanosPerOperation": 68343.391902215,
+              "cpuNanosPerOperation": 68302.521008403,
+              "allocatedBytesPerOperation": 125024.058059587,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2618,
+              "wallNanosPerOperation": 68540.839190222,
+              "cpuNanosPerOperation": 68245.225362872,
+              "allocatedBytesPerOperation": 125024.058059587,
+              "gcCollectionsPerOperation": 0.000381971,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2618,
+              "wallNanosPerOperation": 68070.982811306,
+              "cpuNanosPerOperation": 67943.85026738,
+              "allocatedBytesPerOperation": 125024.058059587,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 2618,
+              "wallNanosPerOperation": 67961.548128342,
+              "cpuNanosPerOperation": 67670.741023682,
+              "allocatedBytesPerOperation": 125024.058059587,
+              "gcCollectionsPerOperation": 0.000381971,
+              "gcNanosPerOperation": 381.970970206
+            },
+            {
+              "operations": 2618,
+              "wallNanosPerOperation": 67692.051948052,
+              "cpuNanosPerOperation": 67641.329258976,
+              "allocatedBytesPerOperation": 125024.058059587,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ]
+        ],
+        "main": [
+          [
+            {
+              "operations": 4044,
+              "wallNanosPerOperation": 44144.236152324,
+              "cpuNanosPerOperation": 44114.985163205,
+              "allocatedBytesPerOperation": 121424.037586548,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 4044,
+              "wallNanosPerOperation": 49692.775222552,
+              "cpuNanosPerOperation": 49278.684470821,
+              "allocatedBytesPerOperation": 121424.037586548,
+              "gcCollectionsPerOperation": 0.00024728,
+              "gcNanosPerOperation": 247.27992087
+            },
+            {
+              "operations": 4044,
+              "wallNanosPerOperation": 44590.617952522,
+              "cpuNanosPerOperation": 44388.229475767,
+              "allocatedBytesPerOperation": 121424.037586548,
+              "gcCollectionsPerOperation": 0.00024728,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 4044,
+              "wallNanosPerOperation": 44442.723788328,
+              "cpuNanosPerOperation": 44215.87537092,
+              "allocatedBytesPerOperation": 121424.037586548,
+              "gcCollectionsPerOperation": 0.00024728,
+              "gcNanosPerOperation": 247.27992087
+            },
+            {
+              "operations": 4044,
+              "wallNanosPerOperation": 44299.538328388,
+              "cpuNanosPerOperation": 44266.320474777,
+              "allocatedBytesPerOperation": 121424.037586548,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 4044,
+              "wallNanosPerOperation": 44443.146389713,
+              "cpuNanosPerOperation": 44215.628090999,
+              "allocatedBytesPerOperation": 121424.037586548,
+              "gcCollectionsPerOperation": 0.00024728,
+              "gcNanosPerOperation": 247.27992087
+            },
+            {
+              "operations": 4044,
+              "wallNanosPerOperation": 44887.065034619,
+              "cpuNanosPerOperation": 44665.182987141,
+              "allocatedBytesPerOperation": 121424.037586548,
+              "gcCollectionsPerOperation": 0.00024728,
+              "gcNanosPerOperation": 247.27992087
+            },
+            {
+              "operations": 4044,
+              "wallNanosPerOperation": 44628.925568744,
+              "cpuNanosPerOperation": 44407.517309594,
+              "allocatedBytesPerOperation": 121424.037586548,
+              "gcCollectionsPerOperation": 0.00024728,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 4044,
+              "wallNanosPerOperation": 44459.961177052,
+              "cpuNanosPerOperation": 44241.59248269,
+              "allocatedBytesPerOperation": 121424.037586548,
+              "gcCollectionsPerOperation": 0.00024728,
+              "gcNanosPerOperation": 247.27992087
+            },
+            {
+              "operations": 4044,
+              "wallNanosPerOperation": 44315.426310584,
+              "cpuNanosPerOperation": 44278.684470821,
+              "allocatedBytesPerOperation": 121424.037586548,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ],
+          [
+            {
+              "operations": 3970,
+              "wallNanosPerOperation": 45055.709571788,
+              "cpuNanosPerOperation": 44868.765743073,
+              "allocatedBytesPerOperation": 121584.038287154,
+              "gcCollectionsPerOperation": 0.000251889,
+              "gcNanosPerOperation": 251.889168766
+            },
+            {
+              "operations": 3970,
+              "wallNanosPerOperation": 44710.138539043,
+              "cpuNanosPerOperation": 44678.085642317,
+              "allocatedBytesPerOperation": 121584.038287154,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 3970,
+              "wallNanosPerOperation": 44760.569017632,
+              "cpuNanosPerOperation": 44559.445843829,
+              "allocatedBytesPerOperation": 121584.038287154,
+              "gcCollectionsPerOperation": 0.000251889,
+              "gcNanosPerOperation": 251.889168766
+            },
+            {
+              "operations": 3970,
+              "wallNanosPerOperation": 45040.165743073,
+              "cpuNanosPerOperation": 44826.952141058,
+              "allocatedBytesPerOperation": 121584.038287154,
+              "gcCollectionsPerOperation": 0.000251889,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 3970,
+              "wallNanosPerOperation": 44868.535012594,
+              "cpuNanosPerOperation": 44684.130982368,
+              "allocatedBytesPerOperation": 121584.038287154,
+              "gcCollectionsPerOperation": 0.000251889,
+              "gcNanosPerOperation": 251.889168766
+            },
+            {
+              "operations": 3970,
+              "wallNanosPerOperation": 44772.890428212,
+              "cpuNanosPerOperation": 44743.324937028,
+              "allocatedBytesPerOperation": 121584.038287154,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 3970,
+              "wallNanosPerOperation": 44976.164987406,
+              "cpuNanosPerOperation": 44800.755667506,
+              "allocatedBytesPerOperation": 121584.038287154,
+              "gcCollectionsPerOperation": 0.000251889,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 3970,
+              "wallNanosPerOperation": 45219.7,
+              "cpuNanosPerOperation": 44998.236775819,
+              "allocatedBytesPerOperation": 121584.038287154,
+              "gcCollectionsPerOperation": 0.000251889,
+              "gcNanosPerOperation": 251.889168766
+            },
+            {
+              "operations": 3970,
+              "wallNanosPerOperation": 44928.1697733,
+              "cpuNanosPerOperation": 44734.256926952,
+              "allocatedBytesPerOperation": 121584.038287154,
+              "gcCollectionsPerOperation": 0.000251889,
+              "gcNanosPerOperation": 251.889168766
+            },
+            {
+              "operations": 3970,
+              "wallNanosPerOperation": 44720.161460957,
+              "cpuNanosPerOperation": 44701.007556675,
+              "allocatedBytesPerOperation": 121584.038287154,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            }
+          ],
+          [
+            {
+              "operations": 4022,
+              "wallNanosPerOperation": 44834.099950273,
+              "cpuNanosPerOperation": 44619.343610144,
+              "allocatedBytesPerOperation": 121424.037792143,
+              "gcCollectionsPerOperation": 0.000248633,
+              "gcNanosPerOperation": 248.632521134
+            },
+            {
+              "operations": 4022,
+              "wallNanosPerOperation": 44728.772998508,
+              "cpuNanosPerOperation": 44499.005469915,
+              "allocatedBytesPerOperation": 121424.037792143,
+              "gcCollectionsPerOperation": 0.000248633,
+              "gcNanosPerOperation": 248.632521134
+            },
+            {
+              "operations": 4022,
+              "wallNanosPerOperation": 44590.502237693,
+              "cpuNanosPerOperation": 44553.455992044,
+              "allocatedBytesPerOperation": 121424.037792143,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 4022,
+              "wallNanosPerOperation": 44889.741919443,
+              "cpuNanosPerOperation": 44643.212332173,
+              "allocatedBytesPerOperation": 121424.037792143,
+              "gcCollectionsPerOperation": 0.000248633,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 4022,
+              "wallNanosPerOperation": 45096.873446047,
+              "cpuNanosPerOperation": 44848.58279463,
+              "allocatedBytesPerOperation": 121424.037792143,
+              "gcCollectionsPerOperation": 0.000248633,
+              "gcNanosPerOperation": 248.632521134
+            },
+            {
+              "operations": 4022,
+              "wallNanosPerOperation": 44859.408751865,
+              "cpuNanosPerOperation": 44635.504724018,
+              "allocatedBytesPerOperation": 121424.037792143,
+              "gcCollectionsPerOperation": 0.000248633,
+              "gcNanosPerOperation": 248.632521134
+            },
+            {
+              "operations": 4022,
+              "wallNanosPerOperation": 44536.424664346,
+              "cpuNanosPerOperation": 44506.464445549,
+              "allocatedBytesPerOperation": 121424.037792143,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 4022,
+              "wallNanosPerOperation": 44749.606414719,
+              "cpuNanosPerOperation": 44516.658378916,
+              "allocatedBytesPerOperation": 121424.037792143,
+              "gcCollectionsPerOperation": 0.000248633,
+              "gcNanosPerOperation": 248.632521134
+            },
+            {
+              "operations": 4022,
+              "wallNanosPerOperation": 44803.73570363,
+              "cpuNanosPerOperation": 44568.871208354,
+              "allocatedBytesPerOperation": 121424.037792143,
+              "gcCollectionsPerOperation": 0.000248633,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 4022,
+              "wallNanosPerOperation": 44843.547986077,
+              "cpuNanosPerOperation": 44620.835405271,
+              "allocatedBytesPerOperation": 121424.037792143,
+              "gcCollectionsPerOperation": 0.000248633,
+              "gcNanosPerOperation": 248.632521134
+            }
+          ],
+          [
+            {
+              "operations": 3766,
+              "wallNanosPerOperation": 45235.937865109,
+              "cpuNanosPerOperation": 44985.926712693,
+              "allocatedBytesPerOperation": 121424.040361126,
+              "gcCollectionsPerOperation": 0.000265534,
+              "gcNanosPerOperation": 265.533722783
+            },
+            {
+              "operations": 3766,
+              "wallNanosPerOperation": 44891.960966543,
+              "cpuNanosPerOperation": 44865.639936272,
+              "allocatedBytesPerOperation": 121424.040361126,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 3766,
+              "wallNanosPerOperation": 45225.880775358,
+              "cpuNanosPerOperation": 45000.265533723,
+              "allocatedBytesPerOperation": 121424.040361126,
+              "gcCollectionsPerOperation": 0.000265534,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 3766,
+              "wallNanosPerOperation": 45298.625862985,
+              "cpuNanosPerOperation": 45000.0,
+              "allocatedBytesPerOperation": 121424.040361126,
+              "gcCollectionsPerOperation": 0.000265534,
+              "gcNanosPerOperation": 265.533722783
+            },
+            {
+              "operations": 3766,
+              "wallNanosPerOperation": 45158.755974509,
+              "cpuNanosPerOperation": 45126.92511949,
+              "allocatedBytesPerOperation": 121424.040361126,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 3766,
+              "wallNanosPerOperation": 49844.596388741,
+              "cpuNanosPerOperation": 48336.696760489,
+              "allocatedBytesPerOperation": 121424.040361126,
+              "gcCollectionsPerOperation": 0.000265534,
+              "gcNanosPerOperation": 265.533722783
+            },
+            {
+              "operations": 3766,
+              "wallNanosPerOperation": 53367.321561338,
+              "cpuNanosPerOperation": 50534.784917685,
+              "allocatedBytesPerOperation": 121424.040361126,
+              "gcCollectionsPerOperation": 0.000265534,
+              "gcNanosPerOperation": 265.533722783
+            },
+            {
+              "operations": 3766,
+              "wallNanosPerOperation": 45223.623473181,
+              "cpuNanosPerOperation": 44972.118959108,
+              "allocatedBytesPerOperation": 121424.040361126,
+              "gcCollectionsPerOperation": 0.000265534,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 3766,
+              "wallNanosPerOperation": 45104.642326075,
+              "cpuNanosPerOperation": 45052.044609665,
+              "allocatedBytesPerOperation": 121424.040361126,
+              "gcCollectionsPerOperation": 0.0,
+              "gcNanosPerOperation": 0.0
+            },
+            {
+              "operations": 3766,
+              "wallNanosPerOperation": 48666.976633032,
+              "cpuNanosPerOperation": 47586.82952735,
+              "allocatedBytesPerOperation": 121424.040361126,
+              "gcCollectionsPerOperation": 0.000265534,
+              "gcNanosPerOperation": 265.533722783
+            }
+          ]
+        ]
+      },
+      "feature": {
+        "wallNanosPerOperation": {
+          "mean": 68208.64766518297,
+          "median": 68129.211173021,
+          "p95": 69579.94506303634,
+          "min": 67074.177103342,
+          "max": 72790.674222051,
+          "coefficientOfVariation": 0.014080481020508136
+        },
+        "cpuNanosPerOperation": {
+          "mean": 67978.84975360318,
+          "median": 67949.796175277,
+          "p95": 69075.5463312878,
+          "min": 66713.791778717,
+          "max": 71216.288897426,
+          "coefficientOfVariation": 0.011290102562477375
+        },
+        "allocatedBytesPerOperation": {
+          "mean": 124862.05816553075,
+          "median": 124860.058137415,
+          "p95": 125040.058394161,
+          "min": 124688.057993132,
+          "max": 125040.058394161,
+          "coefficientOfVariation": 0.0013798015740934708
+        }
+      },
+      "main": {
+        "wallNanosPerOperation": {
+          "mean": 45372.69140895757,
+          "median": 44863.971882229496,
+          "p95": 49700.36628086145,
+          "min": 44144.236152324,
+          "max": 53367.321561338,
+          "coefficientOfVariation": 0.03986696732919817
+        },
+        "cpuNanosPerOperation": {
+          "mean": 45078.520723771224,
+          "median": 44681.1083123425,
+          "p95": 48383.796146005596,
+          "min": 44114.985163205,
+          "max": 50534.784917685,
+          "coefficientOfVariation": 0.030440848005525437
+        },
+        "allocatedBytesPerOperation": {
+          "mean": 121464.03850674276,
+          "median": 121424.03907663451,
+          "p95": 121584.038287154,
+          "min": 121424.037586548,
+          "max": 121584.038287154,
+          "coefficientOfVariation": 0.0005776566794680349
+        }
+      },
+      "featureVsMain": {
+        "wallMedianDeltaPercent": 51.857288409203036,
+        "cpuMedianDeltaPercent": 52.077239669784284,
+        "allocationMedianDeltaPercent": 2.829768377752546
+      },
+      "statistics": {
+        "wallNanosPerOperation": {
+          "medianDeltaPercent": 51.857288409203036,
+          "bootstrap95Percent": [
+            50.409557106155724,
+            53.10320409222595
+          ],
+          "classification": "regression"
+        },
+        "cpuNanosPerOperation": {
+          "medianDeltaPercent": 52.077239669784284,
+          "bootstrap95Percent": [
+            50.502634208604476,
+            53.23417857427002
+          ],
+          "classification": "regression"
+        },
+        "allocatedBytesPerOperation": {
+          "medianDeltaPercent": 2.829768377752546,
+          "bootstrap95Percent": [
+            2.620505462085543,
+            2.9780094164420845
+          ],
+          "classification": "stable"
+        }
+      }
+    }
+  ]
+}

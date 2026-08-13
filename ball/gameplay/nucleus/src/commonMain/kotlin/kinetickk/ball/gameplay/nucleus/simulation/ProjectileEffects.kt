@@ -173,10 +173,23 @@ internal fun MutableGameState.addWeaponArc(
     )
 }
 
-internal fun MutableGameState.nearestEnemy(x: Float, y: Float, range: Float): Enemy? = enemies
-    .asSequence()
-    .filter { !it.dead && it.hp > 0f && distanceSquared(x, y, it.x, it.y) <= range * range }
-    .minByOrNull { distanceSquared(x, y, it.x, it.y) }
+internal fun MutableGameState.nearestEnemy(x: Float, y: Float, range: Float): Enemy? {
+    var nearest: Enemy? = null
+    var nearestDistanceSquared = range * range
+    for (index in enemies.indices) {
+        val candidate = enemies[index]
+        if (candidate.dead || !(candidate.hp > 0f)) continue
+        val candidateDistanceSquared = distanceSquared(x, y, candidate.x, candidate.y)
+        if (
+            candidateDistanceSquared <= nearestDistanceSquared &&
+            (nearest == null || candidateDistanceSquared < nearestDistanceSquared)
+        ) {
+            nearest = candidate
+            nearestDistanceSquared = candidateDistanceSquared
+        }
+    }
+    return nearest
+}
 
 internal fun MutableGameState.movementAngle(): Float {
     if (speed > 20f) return atan2(velocityY, velocityX)

@@ -65,15 +65,15 @@ internal const val MAX_SIMULATION_ACCUMULATOR_SECONDS: Float = 0.3f
 
 internal fun MutableGameState.simulateStep(delta: Float) {
     elapsed += delta
-    runGrace = max(0f, runGrace - delta)
-    hurtCooldown = max(0f, hurtCooldown - delta)
-    dashPhaseTime = max(0f, dashPhaseTime - delta)
-    screenShake = max(0f, screenShake - delta * 18f)
-    lastImpactTime = max(0f, lastImpactTime - delta)
-    damageFlash = max(0f, damageFlash - delta * 3.4f)
-    messageTime = max(0f, messageTime - delta)
-    comboTime = max(0f, comboTime - delta)
-    weaponBeamTime = max(0f, weaponBeamTime - delta)
+    if (runGrace.toRawBits() != 0) runGrace = max(0f, runGrace - delta)
+    if (hurtCooldown.toRawBits() != 0) hurtCooldown = max(0f, hurtCooldown - delta)
+    if (dashPhaseTime.toRawBits() != 0) dashPhaseTime = max(0f, dashPhaseTime - delta)
+    if (screenShake.toRawBits() != 0) screenShake = max(0f, screenShake - delta * 18f)
+    if (lastImpactTime.toRawBits() != 0) lastImpactTime = max(0f, lastImpactTime - delta)
+    if (damageFlash.toRawBits() != 0) damageFlash = max(0f, damageFlash - delta * 3.4f)
+    if (messageTime.toRawBits() != 0) messageTime = max(0f, messageTime - delta)
+    if (comboTime.toRawBits() != 0) comboTime = max(0f, comboTime - delta)
+    if (weaponBeamTime.toRawBits() != 0) weaponBeamTime = max(0f, weaponBeamTime - delta)
     if (comboTime <= 0f) combo = 0
 
     updateSurvival(delta)
@@ -109,7 +109,7 @@ internal fun MutableGameState.simulateStep(delta: Float) {
         bossSpawned = true
         message = "THE ARCHITECT"
         messageTime = 3f
-        projectiles.removeAll { it.hostile }
+        projectiles.removeMatchingStable { projectile -> projectile.hostile }
         // The terminal boss has priority over the oldest ordinary enemy at the hard cap.
         if (enemies.size >= content.rebirth.maxActiveEnemies) enemies.removeAt(0)
         spawnEnemy(EnemyType.ARCHITECT)
@@ -118,7 +118,9 @@ internal fun MutableGameState.simulateStep(delta: Float) {
 
 internal fun MutableGameState.updateSurvival(delta: Float) {
     timeSinceDamage += delta
-    shieldRechargeDelay = max(0f, shieldRechargeDelay - delta)
+    if (shieldRechargeDelay.toRawBits() != 0) {
+        shieldRechargeDelay = max(0f, shieldRechargeDelay - delta)
+    }
     if (regenPerSecond > 0f && timeSinceDamage >= 3f) hp = min(maxHp, hp + regenPerSecond * delta)
     if (maxShield > 0f && shieldRechargeDelay <= 0f) {
         shield = min(maxShield, shield + max(2f, maxShield * 0.09f) * delta)
@@ -126,11 +128,16 @@ internal fun MutableGameState.updateSurvival(delta: Float) {
 }
 
 internal fun MutableGameState.updateRelicRuntime(delta: Float) {
-    relicCooldowns.indices.forEach { index ->
-        relicCooldowns[index] = max(0f, relicCooldowns[index] - delta)
+    for (index in relicCooldowns.indices) {
+        val cooldown = relicCooldowns[index]
+        if (cooldown.toRawBits() != 0) relicCooldowns[index] = max(0f, cooldown - delta)
     }
-    slipstreamRelayTime = max(0f, slipstreamRelayTime - delta)
-    borrowedMomentTime = max(0f, borrowedMomentTime - delta)
+    if (slipstreamRelayTime.toRawBits() != 0) {
+        slipstreamRelayTime = max(0f, slipstreamRelayTime - delta)
+    }
+    if (borrowedMomentTime.toRawBits() != 0) {
+        borrowedMomentTime = max(0f, borrowedMomentTime - delta)
+    }
     val brakeRank = relicRank(RelicId.BRAKEPOINT_MEMORY)
     if (brakeRank > 0 && braking) {
         val cap = 0.18f * brakeRank
@@ -140,9 +147,13 @@ internal fun MutableGameState.updateRelicRuntime(delta: Float) {
     val glassIndex = RelicId.GLASS_WITNESS.ordinal
     val scarIndex = RelicId.SCAR_TISSUE.ordinal
     val scarRank = relicRank(RelicId.SCAR_TISSUE)
-    enemies.forEach { enemy ->
-        enemy.relicQualificationCooldown = max(0f, enemy.relicQualificationCooldown - delta)
-        enemy.relicTimers[glassIndex] = max(0f, enemy.relicTimers[glassIndex] - delta)
+    for (enemyIndex in enemies.indices) {
+        val enemy = enemies[enemyIndex]
+        if (enemy.relicQualificationCooldown.toRawBits() != 0) {
+            enemy.relicQualificationCooldown = max(0f, enemy.relicQualificationCooldown - delta)
+        }
+        val glassTimer = enemy.relicTimers[glassIndex]
+        if (glassTimer.toRawBits() != 0) enemy.relicTimers[glassIndex] = max(0f, glassTimer - delta)
         if (enemy.relicTimers[scarIndex] > 0f) {
             enemy.relicTimers[scarIndex] = max(0f, enemy.relicTimers[scarIndex] - delta)
             if (scarRank > 0 && enemy.hp > 0f) {
@@ -152,18 +163,35 @@ internal fun MutableGameState.updateRelicRuntime(delta: Float) {
         }
     }
 
-    val iterator = delayedRelicHits.iterator()
-    while (iterator.hasNext()) {
-        val delayed = iterator.next()
+    var retainedDelayedHitCount = 0
+    for (delayedHitIndex in delayedRelicHits.indices) {
+        val delayed = delayedRelicHits[delayedHitIndex]
         delayed.delay -= delta
-        if (delayed.delay > 0f) continue
-        val target = enemies.firstOrNull { it.id == delayed.enemyId && !it.dead && it.hp > 0f }
+        if (delayed.delay > 0f) {
+            if (retainedDelayedHitCount != delayedHitIndex) {
+                delayedRelicHits[retainedDelayedHitCount] = delayed
+            }
+            retainedDelayedHitCount++
+            continue
+        }
+        var target: Enemy? = null
+        for (enemyIndex in enemies.indices) {
+            val candidate = enemies[enemyIndex]
+            if (candidate.id == delayed.enemyId && !candidate.dead && candidate.hp > 0f) {
+                target = candidate
+                break
+            }
+        }
         if (target != null && relicRank(delayed.relicId) > 0) {
             damageEnemy(target, delayed.damage)
             relicProcCounts[delayed.relicId.ordinal]++
             burst(target.x, target.y, 4, 2)
         }
-        iterator.remove()
+    }
+    var delayedHitIndex = delayedRelicHits.lastIndex
+    while (delayedHitIndex >= retainedDelayedHitCount) {
+        delayedRelicHits.removeAt(delayedHitIndex)
+        delayedHitIndex--
     }
 }
 
@@ -192,7 +220,7 @@ internal fun MutableGameState.updateOverdrive(delta: Float) {
 
 internal fun MutableGameState.updateHeat(delta: Float) {
     val cooling = coolingRate * if (braking) 1.6f else 1f
-    overheatHoldTime = max(0f, overheatHoldTime - delta)
+    if (overheatHoldTime.toRawBits() != 0) overheatHoldTime = max(0f, overheatHoldTime - delta)
     if (overheatHoldTime <= 0f) heat = max(0f, heat - cooling * delta)
     if (overheated && heat <= 28f) {
         overheated = false
@@ -200,7 +228,7 @@ internal fun MutableGameState.updateHeat(delta: Float) {
         messageTime = 1f
         emitSound(GameplayAudioCue.RECOVERED)
     }
-    dashBufferTime = max(0f, dashBufferTime - delta)
+    if (dashBufferTime.toRawBits() != 0) dashBufferTime = max(0f, dashBufferTime - delta)
     if (dashBufferTime > 0f && dashReady) {
         dashBufferTime = 0f
         performDash()
@@ -234,7 +262,8 @@ internal fun MutableGameState.performDash() {
     val ghostRank = relicRank(RelicId.GHOST_VECTOR)
     if (ghostRank > 0) {
         val radius = 72f + 14f * ghostRank
-        enemies.forEach { enemy ->
+        for (enemyIndex in enemies.indices) {
+            val enemy = enemies[enemyIndex]
             if (!enemy.dead && enemy.hp > 0f && distanceSquared(departureX, departureY, enemy.x, enemy.y) <= square(radius + enemy.radius)) {
                 damageEnemy(enemy, 24f * ghostRank)
             }

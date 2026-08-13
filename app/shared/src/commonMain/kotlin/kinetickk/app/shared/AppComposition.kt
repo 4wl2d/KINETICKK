@@ -5,6 +5,7 @@ package kinetickk.app.shared
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.NonRestartableComposable
 import androidx.compose.runtime.remember
 import kinetickk.ball.content.api.ContentCatalog
 import kinetickk.ball.content.impl.createContentCatalog
@@ -135,6 +136,7 @@ internal class AppCompositionOwner(
         get() = appSessionComponent
 
     @Composable
+    @NonRestartableComposable
     fun Content() {
         AppSessionContent(
             sessionPort = appSessionComponent,

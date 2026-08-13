@@ -12,6 +12,11 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+composeCompiler {
+    includeSourceInformation.set(false)
+    includeTraceMarkers.set(false)
+}
+
 kotlin {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_17)

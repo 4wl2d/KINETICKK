@@ -78,10 +78,17 @@ public data class GameplayAcceptedFrame(
 ) {
     init {
         require(outputs.size <= MAX_GAMEPLAY_OUTPUTS_PER_DECISION)
-        val completionIndex = outputs.indexOfFirst { it is GameplayOutput.CompleteCommand }
+        var completionIndex = -1
+        var index = 0
+        while (index < outputs.size && completionIndex < 0) {
+            if (outputs[index] is GameplayOutput.CompleteCommand) completionIndex = index
+            index++
+        }
         require(completionIndex < 0 || completionIndex == outputs.lastIndex)
-        outputs.zipWithNext().forEach { (before, after) ->
-            require(before.orderRank() <= after.orderRank())
+        index = 1
+        while (index < outputs.size) {
+            require(outputs[index - 1].orderRank() <= outputs[index].orderRank())
+            index++
         }
     }
 }

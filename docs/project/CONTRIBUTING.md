@@ -11,10 +11,13 @@ clear copyright record and the option to ship official store builds.
 
 1. Discuss large features in an issue before writing them.
 2. Build the project and run `./gradlew desktopTest`.
-3. Keep each change focused and explain its purpose.
-4. Do not submit code, art, audio, text, or other material unless you have the
+3. If the change touches a runtime or build hot path, run the relevant
+   [`tools/performance`](../../tools/performance/README.md) comparison and record
+   its exact revisions, semantic compatibility, and material tradeoffs.
+4. Keep each change focused and explain its purpose.
+5. Do not submit code, art, audio, text, or other material unless you have the
    right to license it on the terms below.
-5. Disclose copied, generated, or adapted material and record its source and
+6. Disclose copied, generated, or adapted material and record its source and
    license. Do not submit confidential material or output whose rights are
    unclear.
 

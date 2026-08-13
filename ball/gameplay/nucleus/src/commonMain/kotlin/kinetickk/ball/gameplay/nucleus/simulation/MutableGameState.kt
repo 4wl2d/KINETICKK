@@ -21,8 +21,15 @@ import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.protocol.BoundedVisualFxCueAccumulator
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
+import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
+import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.ImmutableSet
+import kinetickk.foundation.collections.immutableListOf
+import kinetickk.foundation.collections.immutableSetOf
+import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.jvm.JvmInline
 
 
 internal class MutableGameState(
@@ -31,6 +38,8 @@ internal class MutableGameState(
     initialMatter: Int? = null,
     initialRebirthLevel: Int = 0,
     bootstrapProgress: GameplayProfileSnapshot? = null,
+    reductionSource: MutableGameState? = null,
+    shareStableReductionStorage: Boolean = false,
 ) {
     companion object {
         const val RUN_DURATION_SECONDS = 20f * 60f
@@ -50,29 +59,60 @@ internal class MutableGameState(
         const val MAX_TRAIL_SAMPLES_PER_UPDATE = 32
     }
 
-    internal var gameplayRandom = CloneableXorWowRandom(seed)
-    internal var activeRebirthProfile = content.rebirth.profile(
-        bootstrapProgress?.rebirthProgress?.level ?: initialRebirthLevel,
-    )
-    internal val unlockedWeaponSet = mutableSetOf<WeaponId>().apply {
-        addAll(bootstrapProgress?.loadout?.unlockedWeapons.orEmpty())
-        add(WeaponId.FLUX_WAKE)
+    internal var gameplayRandom: CloneableXorWowRandom = reductionSource?.gameplayRandom?.let { source ->
+        if (shareStableReductionStorage) source else source.copy()
+    } ?: CloneableXorWowRandom(seed)
+    internal var activeRebirthProfile: RebirthProfile = reductionSource?.activeRebirthProfile
+        ?: content.rebirth.profile(
+            bootstrapProgress?.rebirthProgress?.level ?: initialRebirthLevel,
+        )
+    internal val unlockedWeaponSet: CopyOnWriteMutableSet<WeaponId> = reductionSource?.unlockedWeaponSet?.let {
+        if (shareStableReductionStorage) it else it.fork()
     }
-    internal var unlockedWeaponView: Set<WeaponId> = unlockedWeaponSet.toSet()
-    internal val metaRanks = IntArray(content.metaUpgrades.size) { index ->
-        val definition = content.metaUpgrades[index]
-        bootstrapProgress?.labProgress?.ranks?.getOrNull(index)?.coerceIn(0, definition.maxRanks) ?: 0
+        ?: CopyOnWriteMutableSet(mutableSetOf<WeaponId>().apply {
+            addAll(bootstrapProgress?.loadout?.unlockedWeapons.orEmpty())
+            add(WeaponId.FLUX_WAKE)
+        })
+    internal var unlockedWeaponView: Set<WeaponId> = reductionSource?.unlockedWeaponView
+        ?: unlockedWeaponSet.toSet()
+    internal val metaRanks: CopyOnWriteIntArray = reductionSource?.metaRanks?.let {
+        if (shareStableReductionStorage) it else it.fork()
     }
-    internal val discoveredItemIds = bootstrapProgress?.collection?.discoveredItemIds
-        ?.filterTo(mutableSetOf()) { content.item(it) != null }
-        ?: mutableSetOf()
-    internal val pendingDiscoveredItemIds = mutableSetOf<Int>()
-    internal val itemStacks = IntArray(content.items.size)
-    internal val familyStacks = IntArray(content.items.maxOfOrNull { it.id / 20 + 1 } ?: 0)
-    internal val soundCues = mutableListOf<GameplayAudioCue>()
-    internal var visualFxCues = BoundedVisualFxCueAccumulator()
-    internal var pendingBankedMatter = 0L
-    internal var pendingClearedRebirthLevel: Int? = null
+        ?: CopyOnWriteIntArray(IntArray(content.metaUpgrades.size) { index ->
+            val definition = content.metaUpgrades[index]
+            bootstrapProgress?.labProgress?.ranks?.getOrNull(index)
+                ?.coerceIn(0, definition.maxRanks) ?: 0
+        })
+    internal val discoveredItemIds: CopyOnWriteMutableSet<Int> = reductionSource?.discoveredItemIds?.let {
+        if (shareStableReductionStorage) it else it.fork()
+    }
+        ?: CopyOnWriteMutableSet(
+            bootstrapProgress?.collection?.discoveredItemIds
+                ?.filterTo(mutableSetOf()) { content.item(it) != null }
+                ?: mutableSetOf(),
+        )
+    internal var pendingDiscoveredItemIdStorage: CopyOnWriteMutableSet<Int>? =
+        reductionSource?.pendingDiscoveredItemIdStorage?.fork()
+    internal val pendingDiscoveredItemIds: PendingDiscoveredItemIdBuffer
+        get() = PendingDiscoveredItemIdBuffer(this)
+    internal val itemStacks: CopyOnWriteIntArray = reductionSource?.itemStacks?.let {
+        if (shareStableReductionStorage) it else it.fork()
+    }
+        ?: CopyOnWriteIntArray(IntArray(content.items.size))
+    internal val familyStacks: CopyOnWriteIntArray = reductionSource?.familyStacks?.let {
+        if (shareStableReductionStorage) it else it.fork()
+    }
+        ?: CopyOnWriteIntArray(IntArray(content.items.maxOfOrNull { it.id / 20 + 1 } ?: 0))
+    internal var soundCueStorage: MutableList<GameplayAudioCue>? =
+        reductionSource?.soundCueStorage?.let { source -> ArrayList(source) }
+    internal val soundCues: PendingSoundCueBuffer
+        get() = PendingSoundCueBuffer(this)
+    internal var visualFxCueStorage: BoundedVisualFxCueAccumulator? =
+        reductionSource?.visualFxCueStorage?.copy()
+    internal val visualFxCues: PendingVisualFxCueBuffer
+        get() = PendingVisualFxCueBuffer(this)
+    internal var pendingBankedMatter: Long = reductionSource?.pendingBankedMatter ?: 0L
+    internal var pendingClearedRebirthLevel: Int? = reductionSource?.pendingClearedRebirthLevel
 
     internal var nextEntityId = 1
     internal var spawnClock = 0f
@@ -99,12 +139,35 @@ internal class MutableGameState(
     internal var pendingRelicChoices = 0
     internal var pendingBindingRelic: RelicId? = null
     internal var pendingRelicBindAction: RelicChoiceAction? = null
-    internal val relicRanks = IntArray(content.relics.size)
-    internal val relicCooldowns = FloatArray(content.relics.size)
-    internal val relicCounters = IntArray(content.relics.size)
-    internal val relicProcCounts = IntArray(content.relics.size)
-    internal val delayedRelicHits = mutableListOf<DelayedRelicHit>()
-    internal val agonyMutationCounts = IntArray(content.weapons.size)
+    internal val relicRanks: CopyOnWriteIntArray = reductionSource?.relicRanks?.let {
+        if (shareStableReductionStorage) it else it.fork()
+    }
+        ?: CopyOnWriteIntArray(IntArray(content.relics.size))
+    internal val relicCooldowns: CopyOnWriteFloatArray = reductionSource?.relicCooldowns?.let {
+        if (shareStableReductionStorage) it else it.fork()
+    }
+        ?: CopyOnWriteFloatArray(FloatArray(content.relics.size))
+    internal val relicCounters: CopyOnWriteIntArray = reductionSource?.relicCounters?.let {
+        if (shareStableReductionStorage) it else it.fork()
+    }
+        ?: CopyOnWriteIntArray(IntArray(content.relics.size))
+    internal val relicProcCounts: CopyOnWriteIntArray = reductionSource?.relicProcCounts?.let {
+        if (shareStableReductionStorage) it else it.fork()
+    }
+        ?: CopyOnWriteIntArray(IntArray(content.relics.size))
+    internal val delayedRelicHits: MutableList<DelayedRelicHit> = reductionSource?.delayedRelicHits
+        ?.let { source ->
+            if (shareStableReductionStorage) {
+                source
+            } else {
+                source.mapTo(ArrayList(source.size), DelayedRelicHit::copy)
+            }
+        }
+        ?: mutableListOf()
+    internal val agonyMutationCounts: CopyOnWriteIntArray = reductionSource?.agonyMutationCounts?.let {
+        if (shareStableReductionStorage) it else it.fork()
+    }
+        ?: CopyOnWriteIntArray(IntArray(content.weapons.size))
     internal var slipstreamRelayTime = 0f
     internal var borrowedMomentTime = 0f
     internal var brakepointCharge = 0f
@@ -286,12 +349,38 @@ internal class MutableGameState(
     var coreShape: CoreShape = CoreShape.ORB
         internal set
 
-    val enemies = mutableListOf<Enemy>()
-    val projectiles = mutableListOf<Projectile>()
-    val pickups = mutableListOf<Pickup>()
-    val trail = mutableListOf<TrailPoint>()
-    val weaponNodes = mutableListOf<WeaponNode>()
-    val weaponOrbitals = mutableListOf<WeaponOrbital>()
+    val enemies: MutableList<Enemy> = reductionSource?.enemies?.let { source ->
+        if (shareStableReductionStorage) {
+            source
+        } else {
+            source.mapTo(ArrayList(source.size), Enemy::isolatedCopy)
+        }
+    } ?: mutableListOf()
+    val projectiles: MutableList<Projectile> = reductionSource?.projectiles?.let { source ->
+        if (shareStableReductionStorage) source
+        else source.mapTo(ArrayList(source.size), Projectile::isolatedCopy)
+    }
+        ?: mutableListOf()
+    val pickups: MutableList<Pickup> = reductionSource?.pickups?.let { source ->
+        if (shareStableReductionStorage) source
+        else source.mapTo(ArrayList(source.size), Pickup::copy)
+    }
+        ?: mutableListOf()
+    val trail: MutableList<TrailPoint> = reductionSource?.trail?.let { source ->
+        if (shareStableReductionStorage) source
+        else source.mapTo(ArrayList(source.size), TrailPoint::copy)
+    }
+        ?: mutableListOf()
+    val weaponNodes: MutableList<WeaponNode> = reductionSource?.weaponNodes?.let { source ->
+        if (shareStableReductionStorage) source
+        else source.mapTo(ArrayList(source.size), WeaponNode::copy)
+    }
+        ?: mutableListOf()
+    val weaponOrbitals: MutableList<WeaponOrbital> = reductionSource?.weaponOrbitals?.let { source ->
+        if (shareStableReductionStorage) source
+        else source.mapTo(ArrayList(source.size), WeaponOrbital::copy)
+    }
+        ?: mutableListOf()
     var choices: List<ChoiceOption> = emptyList()
         internal set(value) {
             require(value.size <= MAX_CHOICES) {
@@ -368,4 +457,104 @@ internal class MutableGameState(
         uiScale = max(1f, density)
     }
 
+}
+
+/**
+ * Allocation-free owner view over discoveries awaiting publication.
+ *
+ * The actual COW set is absent for the overwhelmingly common empty state. A reduction fork only
+ * creates its small COW facade when there is retained output to preserve.
+ */
+@JvmInline
+internal value class PendingDiscoveredItemIdBuffer(
+    private val owner: MutableGameState,
+) {
+    val size: Int
+        get() = owner.pendingDiscoveredItemIdStorage?.size ?: 0
+
+    fun isEmpty(): Boolean = owner.pendingDiscoveredItemIdStorage?.isEmpty() != false
+
+    fun isNotEmpty(): Boolean = owner.pendingDiscoveredItemIdStorage?.isNotEmpty() == true
+
+    operator fun contains(itemId: Int): Boolean =
+        owner.pendingDiscoveredItemIdStorage?.contains(itemId) == true
+
+    fun add(itemId: Int): Boolean {
+        owner.pendingDiscoveredItemIdStorage?.let { return it.add(itemId) }
+        owner.pendingDiscoveredItemIdStorage = CopyOnWriteMutableSet(mutableSetOf(itemId))
+        return true
+    }
+
+    operator fun plusAssign(itemId: Int) {
+        add(itemId)
+    }
+
+    fun clear() {
+        owner.pendingDiscoveredItemIdStorage = null
+    }
+
+    fun toList(): List<Int> = owner.pendingDiscoveredItemIdStorage?.toList().orEmpty()
+
+    fun toImmutableSet(): ImmutableSet<Int> =
+        owner.pendingDiscoveredItemIdStorage?.toImmutableSet() ?: immutableSetOf()
+
+    operator fun iterator(): Iterator<Int> =
+        owner.pendingDiscoveredItemIdStorage?.iterator() ?: emptySet<Int>().iterator()
+}
+
+/** Allocation-free owner view over the lazily materialized bounded audio batch. */
+@JvmInline
+internal value class PendingSoundCueBuffer(
+    private val owner: MutableGameState,
+) {
+    val size: Int
+        get() = owner.soundCueStorage?.size ?: 0
+
+    fun isEmpty(): Boolean = owner.soundCueStorage.isNullOrEmpty()
+
+    fun isNotEmpty(): Boolean = !owner.soundCueStorage.isNullOrEmpty()
+
+    fun add(cue: GameplayAudioCue): Boolean {
+        val retained = owner.soundCueStorage
+        if (retained != null) return retained.add(cue)
+        owner.soundCueStorage = arrayListOf(cue)
+        return true
+    }
+
+    operator fun plusAssign(cue: GameplayAudioCue) {
+        add(cue)
+    }
+
+    fun clear() {
+        owner.soundCueStorage = null
+    }
+
+    fun toList(): List<GameplayAudioCue> = owner.soundCueStorage?.toList().orEmpty()
+
+    fun toImmutableList(): ImmutableList<GameplayAudioCue> =
+        owner.soundCueStorage?.toImmutableList() ?: immutableListOf()
+
+    operator fun iterator(): Iterator<GameplayAudioCue> =
+        owner.soundCueStorage?.iterator() ?: emptyList<GameplayAudioCue>().iterator()
+}
+
+/** Allocation-free owner view over the lazily materialized visual batch. */
+@JvmInline
+internal value class PendingVisualFxCueBuffer(
+    private val owner: MutableGameState,
+) {
+    fun isEmpty(): Boolean = owner.visualFxCueStorage?.isEmpty() != false
+
+    fun record(cue: VisualFxCue) {
+        val accumulator = owner.visualFxCueStorage ?: BoundedVisualFxCueAccumulator().also {
+            owner.visualFxCueStorage = it
+        }
+        accumulator.record(cue)
+    }
+
+    fun drain(): ImmutableList<VisualFxCue> {
+        val accumulator = owner.visualFxCueStorage ?: return immutableListOf()
+        owner.visualFxCueStorage = null
+        return accumulator.drain()
+    }
 }

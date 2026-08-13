@@ -6,10 +6,61 @@ package kinetickk.ball.gameplay.interaction.fx
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kotlin.test.assertEquals
+import kotlin.test.assertNotSame
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlin.test.Test
 
 class InteractionFxReducerTest {
+    @Test
+    fun snapshotIsReusedUntilTheVisibleProjectionChanges() {
+        val reducer = InteractionFxReducer(seed = 46)
+        val empty = reducer.snapshot()
+        reducer.apply(
+            listOf(
+                VisualFxCue.EffectsAdvanced(1f / 120f),
+                VisualFxCue.WeaponArcsAdvanced(1f / 120f),
+                VisualFxCue.MotionSample(1f / 120f, 0f, 0f, 0f, 0f),
+                VisualFxCue.VisualCuesDropped(1),
+                VisualFxCue.ClearAll,
+            ),
+        )
+        assertSame(empty, reducer.snapshot())
+
+        reducer.apply(listOf(VisualFxCue.Burst(0f, 0f, 1, 0, ParticleDensity.NORMAL)))
+        val populated = reducer.snapshot()
+        assertNotSame(empty, populated)
+        assertSame(populated, reducer.snapshot())
+
+        reducer.apply(listOf(VisualFxCue.EffectsAdvanced(1f / 120f)))
+        assertNotSame(populated, reducer.snapshot())
+    }
+
+    @Test
+    fun categorySnapshotsAreSharedAndPreviouslyPublishedValuesRemainImmutable() {
+        val reducer = InteractionFxReducer(seed = 460)
+        reducer.apply(
+            listOf(
+                VisualFxCue.Burst(10f, 20f, 1, 0, ParticleDensity.NORMAL),
+                VisualFxCue.WeaponArcAdded(0f, 0f, 1f, 1f, 1f),
+            ),
+        )
+        val before = reducer.snapshot()
+        val beforeParticle = before.particles.single()
+
+        reducer.apply(listOf(VisualFxCue.WeaponArcsAdvanced(0.1f)))
+        val arcsAdvanced = reducer.snapshot()
+        assertSame(before.particles, arcsAdvanced.particles)
+        assertNotSame(before.weaponArcs, arcsAdvanced.weaponArcs)
+
+        reducer.apply(listOf(VisualFxCue.EffectsAdvanced(0.1f)))
+        val particlesAdvanced = reducer.snapshot()
+        assertNotSame(arcsAdvanced.particles, particlesAdvanced.particles)
+        assertSame(arcsAdvanced.weaponArcs, particlesAdvanced.weaponArcs)
+        assertEquals(beforeParticle, before.particles.single())
+        assertTrue(particlesAdvanced.particles.single().life < beforeParticle.life)
+    }
+
     @Test
     fun identicalSeedsAndCuesProduceIdenticalVisualSnapshots() {
         val cues = listOf(

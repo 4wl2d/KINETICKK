@@ -3,7 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.fx
 
-import kinetickk.foundation.collections.toImmutableList
+import kinetickk.foundation.collections.mapToImmutableList
 import kinetickk.foundation.random.CloneableXorWowRandom
 import kinetickk.ball.gameplay.nucleus.model.clamp
 import kinetickk.ball.profile.api.DamageNumberFormat
@@ -37,57 +37,91 @@ class InteractionFxReducer(seed: Int) {
     private val shockwaves = mutableListOf<Shockwave>()
     private val damageNumbers = mutableListOf<DamageNumber>()
     private val weaponArcs = mutableListOf<WeaponArc>()
+    private var projectionDirty = false
+    private var cachedProjection = VisualFxProjection.EMPTY
+    private var particlesDirty = false
+    private var motionEchoesDirty = false
+    private var shockwavesDirty = false
+    private var damageNumbersDirty = false
+    private var weaponArcsDirty = false
 
     fun apply(cues: Iterable<VisualFxCue>) {
-        cues.forEach(::apply)
+        if (cues is List<*>) {
+            @Suppress("UNCHECKED_CAST")
+            val indexedCues = cues as List<VisualFxCue>
+            for (index in indexedCues.indices) {
+                if (applyCue(indexedCues[index])) projectionDirty = true
+            }
+        } else {
+            for (cue in cues) {
+                if (applyCue(cue)) projectionDirty = true
+            }
+        }
     }
 
-    fun snapshot(): VisualFxProjection = VisualFxProjection(
-        particles = particles.map { value ->
-            ParticleProjection(
-                value.x,
-                value.y,
-                value.vx,
-                value.vy,
-                value.life,
-                value.maxLife,
-                value.colorIndex,
-                value.size,
-            )
-        }.toImmutableList(),
-        motionEchoes = motionEchoes.map { value ->
-            MotionEchoProjection(value.x, value.y, value.life, value.maxLife, value.intensity)
-        }.toImmutableList(),
-        shockwaves = shockwaves.map { value ->
-            ShockwaveProjection(
-                value.x,
-                value.y,
-                value.life,
-                value.maxLife,
-                value.maxRadius,
-                value.colorIndex,
-            )
-        }.toImmutableList(),
-        damageNumbers = damageNumbers.map { value ->
-            DamageNumberProjection(
-                x = value.x,
-                y = value.y,
-                amount = value.amount,
-                critical = value.critical,
-                life = value.life,
-                compactAmount = value.compactAmount,
-                fullAmount = value.fullAmount,
-            )
-        }.toImmutableList(),
-        weaponArcs = weaponArcs.map { value ->
-            WeaponArcProjection(value.fromX, value.fromY, value.toX, value.toY, value.life)
-        }.toImmutableList(),
-    )
+    fun snapshot(): VisualFxProjection {
+        if (!projectionDirty) return cachedProjection
+        cachedProjection = VisualFxProjection(
+            particles = if (particlesDirty) particles.mapToImmutableList { value ->
+                ParticleProjection(
+                    value.x,
+                    value.y,
+                    value.vx,
+                    value.vy,
+                    value.life,
+                    value.maxLife,
+                    value.colorIndex,
+                    value.size,
+                )
+            } else cachedProjection.particles,
+            motionEchoes = if (motionEchoesDirty) motionEchoes.mapToImmutableList { value ->
+                MotionEchoProjection(value.x, value.y, value.life, value.maxLife, value.intensity)
+            } else cachedProjection.motionEchoes,
+            shockwaves = if (shockwavesDirty) shockwaves.mapToImmutableList { value ->
+                ShockwaveProjection(
+                    value.x,
+                    value.y,
+                    value.life,
+                    value.maxLife,
+                    value.maxRadius,
+                    value.colorIndex,
+                )
+            } else cachedProjection.shockwaves,
+            damageNumbers = if (damageNumbersDirty) damageNumbers.mapToImmutableList { value ->
+                DamageNumberProjection(
+                    x = value.x,
+                    y = value.y,
+                    amount = value.amount,
+                    critical = value.critical,
+                    life = value.life,
+                    compactAmount = value.compactAmount,
+                    fullAmount = value.fullAmount,
+                )
+            } else cachedProjection.damageNumbers,
+            weaponArcs = if (weaponArcsDirty) weaponArcs.mapToImmutableList { value ->
+                WeaponArcProjection(value.fromX, value.fromY, value.toX, value.toY, value.life)
+            } else cachedProjection.weaponArcs,
+        )
+        projectionDirty = false
+        particlesDirty = false
+        motionEchoesDirty = false
+        shockwavesDirty = false
+        damageNumbersDirty = false
+        weaponArcsDirty = false
+        return cachedProjection
+    }
 
-    private fun apply(cue: VisualFxCue) {
+    /** Returns whether the externally visible projection changed. */
+    private fun applyCue(cue: VisualFxCue): Boolean =
         when (cue) {
             VisualFxCue.ClearAll -> clearAll()
-            VisualFxCue.ClearWeaponArcs -> weaponArcs.clear()
+            VisualFxCue.ClearWeaponArcs -> if (weaponArcs.isEmpty()) {
+                false
+            } else {
+                weaponArcs.clear()
+                weaponArcsDirty = true
+                true
+            }
             is VisualFxCue.MotionSample -> sampleMotionEcho(cue)
             is VisualFxCue.EffectsAdvanced -> advanceEffects(cue.deltaSeconds)
             is VisualFxCue.WeaponArcsAdvanced -> advanceWeaponArcs(cue.deltaSeconds)
@@ -96,47 +130,73 @@ class InteractionFxReducer(seed: Int) {
             is VisualFxCue.ShockwaveAdded -> {
                 shockwaves += Shockwave(cue.x, cue.y, cue.life, cue.life, cue.maxRadius, cue.colorIndex)
                 trimFront(shockwaves, InteractionFxLimits.MAX_SHOCKWAVES)
+                shockwavesDirty = true
+                true
             }
             is VisualFxCue.DamageNumberAdded -> {
                 if (damageNumbers.size < InteractionFxLimits.MAX_DAMAGE_NUMBERS) {
                     damageNumbers += DamageNumber(cue.x, cue.y, cue.amount, cue.critical)
+                    damageNumbersDirty = true
+                    true
+                } else {
+                    false
                 }
             }
             is VisualFxCue.WeaponArcAdded -> {
                 weaponArcs += WeaponArc(cue.fromX, cue.fromY, cue.toX, cue.toY, cue.life)
                 trimFront(weaponArcs, InteractionFxLimits.MAX_WEAPON_ARCS)
+                weaponArcsDirty = true
+                true
             }
             is VisualFxCue.WorldRebased -> {
-                particles.forEach { value ->
+                val changed = particles.isNotEmpty() || damageNumbers.isNotEmpty()
+                for (index in particles.indices) {
+                    val value = particles[index]
                     value.x -= cue.shiftX
                     value.y -= cue.shiftY
                 }
-                damageNumbers.forEach { value ->
+                for (index in damageNumbers.indices) {
+                    val value = damageNumbers[index]
                     value.x -= cue.shiftX
                     value.y -= cue.shiftY
                 }
+                if (particles.isNotEmpty()) particlesDirty = true
+                if (damageNumbers.isNotEmpty()) damageNumbersDirty = true
+                changed
             }
-            is VisualFxCue.VisualCuesDropped -> Unit
+            is VisualFxCue.VisualCuesDropped -> false
         }
-    }
 
-    private fun clearAll() {
+    private fun clearAll(): Boolean {
+        val changed = particles.isNotEmpty() ||
+            motionEchoes.isNotEmpty() ||
+            shockwaves.isNotEmpty() ||
+            damageNumbers.isNotEmpty() ||
+            weaponArcs.isNotEmpty()
         particles.clear()
         motionEchoes.clear()
         shockwaves.clear()
         damageNumbers.clear()
         weaponArcs.clear()
         motionEchoClock = 0f
+        if (changed) {
+            particlesDirty = true
+            motionEchoesDirty = true
+            shockwavesDirty = true
+            damageNumbersDirty = true
+            weaponArcsDirty = true
+        }
+        return changed
     }
 
-    private fun sampleMotionEcho(cue: VisualFxCue.MotionSample) {
+    private fun sampleMotionEcho(cue: VisualFxCue.MotionSample): Boolean {
         val intensity = clamp((cue.speed - 260f) / 1_500f, 0f, 1f)
         if (intensity <= 0f && cue.dashPhaseTime <= 0f) {
             motionEchoClock = 0f
-            return
+            return false
         }
         motionEchoClock -= cue.deltaSeconds
-        if (motionEchoClock > 0f) return
+        if (motionEchoClock > 0f) return false
         val dashIntensity = if (cue.dashPhaseTime > 0f) 1f else intensity
         motionEchoClock = if (cue.dashPhaseTime > 0f) 0.018f else 0.075f - intensity * 0.04f
         val maxLife = 0.2f + dashIntensity * 0.16f
@@ -148,34 +208,53 @@ class InteractionFxReducer(seed: Int) {
             dashIntensity,
         )
         trimFront(motionEchoes, InteractionFxLimits.MAX_MOTION_ECHOES)
+        motionEchoesDirty = true
+        return true
     }
 
-    private fun advanceEffects(delta: Float) {
-        particles.forEach { value ->
+    private fun advanceEffects(delta: Float): Boolean {
+        if (
+            particles.isEmpty() &&
+            motionEchoes.isEmpty() &&
+            shockwaves.isEmpty() &&
+            damageNumbers.isEmpty()
+        ) return false
+        for (index in particles.indices) {
+            val value = particles[index]
             value.x += value.vx * delta
             value.y += value.vy * delta
             value.vx *= exp(-2.2f * delta)
             value.vy *= exp(-2.2f * delta)
             value.life -= delta
         }
-        particles.removeAll { it.life <= 0f }
-        motionEchoes.forEach { it.life -= delta }
-        motionEchoes.removeAll { it.life <= 0f }
-        shockwaves.forEach { it.life -= delta }
-        shockwaves.removeAll { it.life <= 0f }
-        damageNumbers.forEach { value ->
+        removeExpired(particles) { value -> !(value.life <= 0f) }
+        for (index in motionEchoes.indices) motionEchoes[index].life -= delta
+        removeExpired(motionEchoes) { value -> !(value.life <= 0f) }
+        for (index in shockwaves.indices) shockwaves[index].life -= delta
+        removeExpired(shockwaves) { value -> !(value.life <= 0f) }
+        for (index in damageNumbers.indices) {
+            val value = damageNumbers[index]
             value.y -= 34f * delta
             value.life -= delta
         }
-        damageNumbers.removeAll { it.life <= 0f }
+        removeExpired(damageNumbers) { value -> !(value.life <= 0f) }
+        if (particles.isNotEmpty() || cachedProjection.particles.isNotEmpty()) particlesDirty = true
+        if (motionEchoes.isNotEmpty() || cachedProjection.motionEchoes.isNotEmpty()) motionEchoesDirty = true
+        if (shockwaves.isNotEmpty() || cachedProjection.shockwaves.isNotEmpty()) shockwavesDirty = true
+        if (damageNumbers.isNotEmpty() || cachedProjection.damageNumbers.isNotEmpty()) damageNumbersDirty = true
+        return true
     }
 
-    private fun advanceWeaponArcs(delta: Float) {
-        weaponArcs.forEach { it.life -= delta }
-        weaponArcs.removeAll { it.life <= 0f }
+    private fun advanceWeaponArcs(delta: Float): Boolean {
+        if (weaponArcs.isEmpty()) return false
+        for (index in weaponArcs.indices) weaponArcs[index].life -= delta
+        removeExpired(weaponArcs) { value -> !(value.life <= 0f) }
+        weaponArcsDirty = true
+        return true
     }
 
-    private fun burst(cue: VisualFxCue.Burst) {
+    private fun burst(cue: VisualFxCue.Burst): Boolean {
+        val sizeBefore = particles.size
         repeat(particleCount(cue.requestedCount, cue.density)) {
             if (particles.size >= InteractionFxLimits.MAX_PARTICLES) return@repeat
             val angle = random.nextFloat() * TAU
@@ -192,9 +271,13 @@ class InteractionFxReducer(seed: Int) {
                 1.5f + random.nextFloat() * 3.5f,
             )
         }
+        return (particles.size != sizeBefore).also { changed ->
+            if (changed) particlesDirty = true
+        }
     }
 
-    private fun directionalBurst(cue: VisualFxCue.DirectionalBurst) {
+    private fun directionalBurst(cue: VisualFxCue.DirectionalBurst): Boolean {
+        val sizeBefore = particles.size
         val baseAngle = atan2(cue.directionY, cue.directionX)
         repeat(particleCount(cue.requestedCount, cue.density)) {
             if (particles.size >= InteractionFxLimits.MAX_PARTICLES) return@repeat
@@ -212,6 +295,9 @@ class InteractionFxReducer(seed: Int) {
                 1.8f + random.nextFloat() * 4.2f,
             )
         }
+        return (particles.size != sizeBefore).also { changed ->
+            if (changed) particlesDirty = true
+        }
     }
 
     private fun particleCount(requestedCount: Int, density: ParticleDensity): Int {
@@ -225,6 +311,26 @@ class InteractionFxReducer(seed: Int) {
 
     private fun <Element> trimFront(values: MutableList<Element>, maximum: Int) {
         while (values.size > maximum) values.removeAt(0)
+    }
+
+    /** Stable in-place compaction avoids iterator allocation and repeated ArrayList shifts. */
+    private inline fun <Element> removeExpired(
+        values: MutableList<Element>,
+        isAlive: (Element) -> Boolean,
+    ) {
+        var retainedCount = 0
+        for (index in values.indices) {
+            val value = values[index]
+            if (isAlive(value)) {
+                if (retainedCount != index) values[retainedCount] = value
+                retainedCount++
+            }
+        }
+        var index = values.lastIndex
+        while (index >= retainedCount) {
+            values.removeAt(index)
+            index--
+        }
     }
 
     private data class Particle(

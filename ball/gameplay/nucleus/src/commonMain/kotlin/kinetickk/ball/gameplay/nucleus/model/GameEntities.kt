@@ -9,7 +9,8 @@ import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
 
-internal data class Enemy(
+@ConsistentCopyVisibility
+internal data class Enemy private constructor(
     val id: Int,
     val type: EnemyType,
     var x: Float,
@@ -28,12 +29,65 @@ internal data class Enemy(
     var dead: Boolean = false,
     var relicKillProcsEligible: Boolean = false,
     var relicQualificationCooldown: Float = 0f,
-    val relicCounters: IntArray,
-    val relicTimers: FloatArray,
-    val relicValues: FloatArray,
-)
+    val relicCounters: CopyOnWriteIntArray,
+    val relicTimers: CopyOnWriteFloatArray,
+    val relicValues: CopyOnWriteFloatArray,
+) {
+    constructor(
+        id: Int,
+        type: EnemyType,
+        x: Float,
+        y: Float,
+        vx: Float = 0f,
+        vy: Float = 0f,
+        hp: Float,
+        maxHp: Float,
+        radius: Float,
+        actionTimer: Float = 0f,
+        flash: Float = 0f,
+        contactCooldown: Float = 0f,
+        weaponCooldown: Float = 0f,
+        previousX: Float = x,
+        previousY: Float = y,
+        dead: Boolean = false,
+        relicKillProcsEligible: Boolean = false,
+        relicQualificationCooldown: Float = 0f,
+        relicCounters: IntArray,
+        relicTimers: FloatArray,
+        relicValues: FloatArray,
+    ) : this(
+        id = id,
+        type = type,
+        x = x,
+        y = y,
+        vx = vx,
+        vy = vy,
+        hp = hp,
+        maxHp = maxHp,
+        radius = radius,
+        actionTimer = actionTimer,
+        flash = flash,
+        contactCooldown = contactCooldown,
+        weaponCooldown = weaponCooldown,
+        previousX = previousX,
+        previousY = previousY,
+        dead = dead,
+        relicKillProcsEligible = relicKillProcsEligible,
+        relicQualificationCooldown = relicQualificationCooldown,
+        relicCounters = CopyOnWriteIntArray(relicCounters),
+        relicTimers = CopyOnWriteFloatArray(relicTimers),
+        relicValues = CopyOnWriteFloatArray(relicValues),
+    )
 
-internal data class Projectile(
+    /** Copies mutable scalar state while sharing large relic buffers until first changed write. */
+    fun isolatedCopy(): Enemy = copy(
+        relicCounters = relicCounters.fork(),
+        relicTimers = relicTimers.fork(),
+        relicValues = relicValues.fork(),
+    )
+}
+
+internal class Projectile(
     var x: Float,
     var y: Float,
     var vx: Float,
@@ -47,33 +101,123 @@ internal data class Projectile(
     val sourceWeapon: WeaponId? = null,
     var previousX: Float = x,
     var previousY: Float = y,
-    private val recordedHitEnemyIds: MutableSet<Int> = mutableSetOf(),
+    private var recordedHitEnemyIds: IntArray? = null,
+    private var recordedHitEnemyCount: Int = 0,
 ) {
     init {
-        require(recordedHitEnemyIds.size <= MAX_HIT_ENEMY_IDS) {
+        require((recordedHitEnemyIds?.size ?: 0) <= MAX_HIT_ENEMY_IDS) {
+            "projectile hit history storage cannot exceed $MAX_HIT_ENEMY_IDS entries"
+        }
+        require(recordedHitEnemyCount in 0..MAX_HIT_ENEMY_IDS) {
             "projectile hit history cannot exceed $MAX_HIT_ENEMY_IDS entries"
+        }
+        require(recordedHitEnemyCount <= (recordedHitEnemyIds?.size ?: 0)) {
+            "projectile hit history count exceeds its storage"
         }
     }
 
     fun tryRecordEnemyHit(enemyId: Int): Boolean {
-        if (enemyId in recordedHitEnemyIds) return true
-        if (recordedHitEnemyIds.size >= MAX_HIT_ENEMY_IDS) return false
-        recordedHitEnemyIds += enemyId
+        val match = findRecordedEnemyHit(enemyId)
+        if (match >= 0) return true
+        if (recordedHitEnemyCount >= MAX_HIT_ENEMY_IDS) return false
+        var storage = recordedHitEnemyIds
+        if (storage == null || storage.isEmpty()) {
+            storage = IntArray(INITIAL_HIT_ENEMY_CAPACITY)
+            recordedHitEnemyIds = storage
+        } else if (recordedHitEnemyCount == storage.size) {
+            storage = storage.copyOf(
+                minOf(MAX_HIT_ENEMY_IDS, storage.size * 2),
+            )
+            recordedHitEnemyIds = storage
+        }
+        val insertionIndex = -match - 1
+        var index = recordedHitEnemyCount
+        while (index > insertionIndex) {
+            storage[index] = storage[index - 1]
+            index--
+        }
+        storage[insertionIndex] = enemyId
+        recordedHitEnemyCount++
         return true
     }
 
-    fun hasRecordedEnemyHit(enemyId: Int): Boolean = enemyId in recordedHitEnemyIds
+    fun hasRecordedEnemyHit(enemyId: Int): Boolean = findRecordedEnemyHit(enemyId) >= 0
 
-    fun retainLiveEnemyHits(liveEnemyIds: Set<Int>) {
-        recordedHitEnemyIds.retainAll(liveEnemyIds)
+    val hasRecordedEnemyHits: Boolean
+        get() = recordedHitEnemyCount != 0
+
+    fun retainLiveEnemyHits(
+        liveEnemyIds: IntArray,
+        liveEnemyCount: Int,
+    ) {
+        val storage = recordedHitEnemyIds ?: return
+        var hitIndex = 0
+        var liveIndex = 0
+        var retainedCount = 0
+        while (hitIndex < recordedHitEnemyCount && liveIndex < liveEnemyCount) {
+            val hitEnemyId = storage[hitIndex]
+            val liveEnemyId = liveEnemyIds[liveIndex]
+            when {
+                hitEnemyId < liveEnemyId -> hitIndex++
+                hitEnemyId > liveEnemyId -> liveIndex++
+                else -> {
+                    storage[retainedCount++] = hitEnemyId
+                    hitIndex++
+                    liveIndex++
+                }
+            }
+        }
+        recordedHitEnemyCount = retainedCount
+        if (retainedCount == 0) recordedHitEnemyIds = null
     }
 
-    fun isolatedCopy(): Projectile = copy(
-        recordedHitEnemyIds = recordedHitEnemyIds.toMutableSet(),
+    fun isolatedCopy(): Projectile = Projectile(
+        x = x,
+        y = y,
+        vx = vx,
+        vy = vy,
+        radius = radius,
+        life = life,
+        hostile = hostile,
+        damage = damage,
+        pierce = pierce,
+        colorIndex = colorIndex,
+        sourceWeapon = sourceWeapon,
+        previousX = previousX,
+        previousY = previousY,
+        recordedHitEnemyIds = recordedHitEnemyIds?.copyOf(recordedHitEnemyCount),
+        recordedHitEnemyCount = recordedHitEnemyCount,
     )
+
+    private fun findRecordedEnemyHit(enemyId: Int): Int {
+        val storage = recordedHitEnemyIds ?: return -1
+        if (recordedHitEnemyCount <= LINEAR_SEARCH_THRESHOLD) {
+            for (index in 0 until recordedHitEnemyCount) {
+                val recordedEnemyId = storage[index]
+                if (recordedEnemyId == enemyId) return index
+                if (recordedEnemyId > enemyId) return -index - 1
+            }
+            return -recordedHitEnemyCount - 1
+        }
+
+        var low = 0
+        var high = recordedHitEnemyCount - 1
+        while (low <= high) {
+            val middle = (low + high) ushr 1
+            val recordedEnemyId = storage[middle]
+            when {
+                recordedEnemyId < enemyId -> low = middle + 1
+                recordedEnemyId > enemyId -> high = middle - 1
+                else -> return middle
+            }
+        }
+        return -low - 1
+    }
 
     companion object {
         const val MAX_HIT_ENEMY_IDS = 120
+        private const val INITIAL_HIT_ENEMY_CAPACITY = 4
+        private const val LINEAR_SEARCH_THRESHOLD = 8
     }
 }
 

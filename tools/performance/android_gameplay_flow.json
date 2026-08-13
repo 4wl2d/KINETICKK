@@ -1,0 +1,139 @@
+{
+  "$schema": "android_gameplay_flow.schema.json",
+  "schemaVersion": 1,
+  "name": "kinetickk-gameplay-primary-touch-v1",
+  "measurementStartStep": 3,
+  "steps": [
+    {
+      "action": "wait",
+      "selector": {
+        "anyOf": [
+          {
+            "resourceId": "kinetickk.home"
+          },
+          {
+            "contentDescription": "KINETICKK home"
+          }
+        ]
+      },
+      "timeoutMillis": 15000
+    },
+    {
+      "action": "tap",
+      "selector": {
+        "anyOf": [
+          {
+            "resourceId": "kinetickk.home.start"
+          },
+          {
+            "contentDescription": "Start run"
+          }
+        ]
+      }
+    },
+    {
+      "action": "wait",
+      "selector": {
+        "anyOf": [
+          {
+            "resourceId": "kinetickk.gameplay"
+          },
+          {
+            "contentDescription": "KINETICKK gameplay"
+          }
+        ]
+      },
+      "timeoutMillis": 15000
+    },
+    {
+      "action": "tap",
+      "selector": {
+        "anyOf": [
+          {
+            "resourceId": "kinetickk.gameplay.dash"
+          },
+          {
+            "contentDescription": "Dash"
+          }
+        ]
+      },
+      "repeat": 3,
+      "intervalMillis": 450
+    },
+    {
+      "action": "longPress",
+      "selector": {
+        "anyOf": [
+          {
+            "resourceId": "kinetickk.gameplay.brake"
+          },
+          {
+            "contentDescription": "Brake"
+          }
+        ]
+      },
+      "reusePreviousHierarchy": true,
+      "durationMillis": 650
+    },
+    {
+      "action": "tap",
+      "selector": {
+        "anyOf": [
+          {
+            "resourceId": "kinetickk.gameplay.pause"
+          },
+          {
+            "contentDescription": "Pause game"
+          }
+        ]
+      },
+      "reusePreviousHierarchy": true
+    },
+    {
+      "action": "wait",
+      "selector": {
+        "anyOf": [
+          {
+            "resourceId": "kinetickk.gameplay.resume"
+          },
+          {
+            "contentDescription": "Resume game"
+          }
+        ]
+      },
+      "timeoutMillis": 10000
+    },
+    {
+      "action": "tap",
+      "selector": {
+        "anyOf": [
+          {
+            "resourceId": "kinetickk.gameplay.resume"
+          },
+          {
+            "contentDescription": "Resume game"
+          }
+        ]
+      },
+      "reusePreviousHierarchy": true
+    },
+    {
+      "action": "wait",
+      "selector": {
+        "anyOf": [
+          {
+            "resourceId": "kinetickk.gameplay"
+          },
+          {
+            "contentDescription": "KINETICKK gameplay"
+          }
+        ]
+      },
+      "timeoutMillis": 10000
+    },
+    {
+      "action": "sleep",
+      "durationMillis": 5000
+    }
+  ]
+}

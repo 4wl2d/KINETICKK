@@ -73,7 +73,8 @@ internal fun MutableGameState.updateWeapons(delta: Float) {
             if (agonyRank > 0) agonyMutationCounts[WeaponId.ION_SWARM.ordinal]++
             if (weaponClock <= 0f && enemies.isNotEmpty()) {
                 weaponClock = cooldown(0.72f)
-                weaponOrbitals.forEach { orbital ->
+                for (index in weaponOrbitals.indices) {
+                    val orbital = weaponOrbitals[index]
                     nearestEnemy(orbital.x, orbital.y, 620f)?.let { enemy ->
                         val angle = atan2(enemy.y - orbital.y, enemy.x - orbital.x)
                         firePlayerProjectile(orbital.x, orbital.y, angle, 620f, 15f * power, 0, 4f, 1)
@@ -124,8 +125,20 @@ internal fun MutableGameState.updateWeapons(delta: Float) {
         }
     }
 
-    trail.forEach { it.age += delta }
-    trail.removeAll { it.age > 2.25f }
+    var retainedTrailCount = 0
+    for (index in trail.indices) {
+        val point = trail[index]
+        point.age += delta
+        if (!(point.age > 2.25f)) {
+            if (retainedTrailCount != index) trail[retainedTrailCount] = point
+            retainedTrailCount++
+        }
+    }
+    var trailIndex = trail.lastIndex
+    while (trailIndex >= retainedTrailCount) {
+        trail.removeAt(trailIndex)
+        trailIndex--
+    }
     updateWeaponNodes(delta)
     emitVisualFx(VisualFxCue.WeaponArcsAdvanced(delta))
 }
@@ -165,11 +178,21 @@ internal fun MutableGameState.ensureOrbitals(
     require(count in 0..MutableGameState.MAX_WEAPON_ORBITALS) {
         "weapon orbital count cannot exceed ${MutableGameState.MAX_WEAPON_ORBITALS}"
     }
-    if (weaponOrbitals.size != count || weaponOrbitals.any { it.radius != hitRadius }) {
+    var orbitalsMatch = weaponOrbitals.size == count
+    if (orbitalsMatch) {
+        for (index in weaponOrbitals.indices) {
+            if (weaponOrbitals[index].radius != hitRadius) {
+                orbitalsMatch = false
+                break
+            }
+        }
+    }
+    if (!orbitalsMatch) {
         weaponOrbitals.clear()
         repeat(count) { weaponOrbitals += WeaponOrbital(it, coreX, coreY, hitRadius) }
     }
-    weaponOrbitals.forEach { orbital ->
+    for (index in weaponOrbitals.indices) {
+        val orbital = weaponOrbitals[index]
         val angle = elapsed * angularSpeed + orbital.index * TAU / max(1, count)
         orbital.x = coreX + cos(angle) * orbitRadius
         orbital.y = coreY + sin(angle) * orbitRadius
@@ -183,20 +206,23 @@ internal fun MutableGameState.tryAddWeaponNode(node: WeaponNode): Boolean {
 }
 
 internal fun MutableGameState.updateWeaponNodes(delta: Float) {
-    val iterator = weaponNodes.iterator()
-    while (iterator.hasNext()) {
-        val node = iterator.next()
+    var index = 0
+    while (index < weaponNodes.size) {
+        val node = weaponNodes[index]
         node.life -= delta
         if (node.life <= 0f) {
             explodeMine(node)
-            iterator.remove()
+            weaponNodes.removeAt(index)
+        } else {
+            index++
         }
     }
 }
 
 internal fun MutableGameState.explodeMine(node: WeaponNode) {
     val power = effectiveWeaponPower()
-    enemies.forEach { enemy ->
+    for (index in enemies.indices) {
+        val enemy = enemies[index]
         val distance = length(enemy.x - node.x, enemy.y - node.y)
         if (distance <= node.radius + enemy.radius) {
             dealWeaponDamage(enemy, 62f * power * (1f - distance / (node.radius * 1.7f)).coerceAtLeast(0.35f), canCrit = true)
@@ -211,22 +237,52 @@ internal fun MutableGameState.explodeMine(node: WeaponNode) {
 }
 
 internal fun MutableGameState.fireArcCoil(baseDamage: Float) {
-    val targets = enemies.asSequence()
-        .filter { !it.dead && it.hp > 0f && distanceSquared(coreX, coreY, it.x, it.y) <= 560f * 560f }
-        .sortedBy { distanceSquared(coreX, coreY, it.x, it.y) }
-        .take(min(MAX_ARC_COIL_TARGETS, 3 + weaponLevel / 3))
-        .toList()
+    val maximumTargets = min(MAX_ARC_COIL_TARGETS, 3 + weaponLevel / 3)
+    val targets = arrayOfNulls<Enemy>(maximumTargets)
+    var targetCount = 0
+    while (targetCount < maximumTargets) {
+        var nearest: Enemy? = null
+        var nearestDistanceSquared = ARC_COIL_RANGE_SQUARED
+        for (enemyIndex in enemies.indices) {
+            val candidate = enemies[enemyIndex]
+            if (candidate.dead || !(candidate.hp > 0f)) continue
+            var alreadySelected = false
+            for (selectedIndex in 0 until targetCount) {
+                if (targets[selectedIndex] === candidate) {
+                    alreadySelected = true
+                    break
+                }
+            }
+            if (alreadySelected) continue
+            val candidateDistanceSquared = distanceSquared(
+                coreX,
+                coreY,
+                candidate.x,
+                candidate.y,
+            )
+            if (
+                candidateDistanceSquared <= nearestDistanceSquared &&
+                (nearest == null || candidateDistanceSquared < nearestDistanceSquared)
+            ) {
+                nearest = candidate
+                nearestDistanceSquared = candidateDistanceSquared
+            }
+        }
+        if (nearest == null) break
+        targets[targetCount++] = nearest
+    }
     var fromX = coreX
     var fromY = coreY
-    targets.forEachIndexed { index, enemy ->
+    for (index in 0 until targetCount) {
+        val enemy = checkNotNull(targets[index])
         dealWeaponDamage(enemy, baseDamage * powFast(0.76f, index), canCrit = true)
         addWeaponArc(fromX, fromY, enemy.x, enemy.y)
         fromX = enemy.x
         fromY = enemy.y
     }
     val agonyRank = relicRank(RelicId.AGONY_SCEPTER)
-    if (agonyRank > 0 && targets.isNotEmpty()) {
-        val first = targets.first()
+    if (agonyRank > 0 && targetCount > 0) {
+        val first = checkNotNull(targets[0])
         dealWeaponDamage(first, baseDamage * 0.18f * agonyRank, canCrit = true)
         addRelicArc(fromX, fromY, first.x, first.y)
         agonyMutationCounts[WeaponId.ARC_COIL.ordinal]++
@@ -234,6 +290,7 @@ internal fun MutableGameState.fireArcCoil(baseDamage: Float) {
 }
 
 internal const val MAX_ARC_COIL_TARGETS: Int = 6
+private const val ARC_COIL_RANGE_SQUARED: Float = 560f * 560f
 
 internal fun MutableGameState.fireSingularitySpear(damage: Float) {
     val angle = movementAngle()
@@ -243,7 +300,8 @@ internal fun MutableGameState.fireSingularitySpear(damage: Float) {
     weaponBeamEndX = coreX + cos(angle) * length
     weaponBeamEndY = coreY + sin(angle) * length
     weaponBeamTime = 0.18f
-    enemies.forEach { enemy ->
+    for (index in enemies.indices) {
+        val enemy = enemies[index]
         if (segmentCircleIntersects(
                 weaponBeamStartX,
                 weaponBeamStartY,
@@ -262,7 +320,8 @@ internal fun MutableGameState.fireSingularitySpear(damage: Float) {
         val crossAngle = angle + TAU * 0.25f
         val crossEndX = coreX + cos(crossAngle) * length * 0.72f
         val crossEndY = coreY + sin(crossAngle) * length * 0.72f
-        enemies.forEach { enemy ->
+        for (index in enemies.indices) {
+            val enemy = enemies[index]
             if (segmentCircleIntersects(coreX, coreY, crossEndX, crossEndY, enemy.x, enemy.y, enemy.radius + 12f)) {
                 dealWeaponDamage(enemy, damage * 0.28f * agonyRank, canCrit = true)
             }

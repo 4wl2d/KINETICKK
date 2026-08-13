@@ -62,6 +62,46 @@ class ImmutableCollectionsTest {
     }
 
     @Test
+    fun compactFactoriesPreserveOrderAndOwnedStorage() {
+        val source = mutableListOf(1, 2)
+        val appended = source.toImmutableListAppending(3)
+        source[0] = 99
+
+        assertEquals(emptyList(), immutableListOf<Int>())
+        assertEquals(listOf(1), immutableListOf(1))
+        assertEquals(listOf(1, 2), immutableListOf(1, 2))
+        assertEquals(listOf(1, 2, 3), immutableListOf(1, 2, 3))
+        assertEquals(listOf(1, 3), immutableListOfNotNull(1, null, 3))
+        assertEquals(listOf(7), immutableListOfSize(1) { 7 })
+        assertEquals(listOf(0, 1, 4), immutableListOfSize(3) { index -> index * index })
+        assertEquals(listOf(1, 2, 3), appended)
+    }
+
+    @Test
+    fun indexedMapBuildsTheExpectedImmutableList() {
+        val mapped = listOf("a", "b", "c").mapIndexedToImmutableList { index, value ->
+            "$index:$value"
+        }
+
+        assertEquals(listOf("0:a", "1:b", "2:c"), mapped)
+        assertFalse((mapped as Any) is MutableList<*>)
+    }
+
+    @Test
+    fun ordinaryMapUsesIndexedAccessForLists() {
+        val indexedOnly = object : AbstractList<Int>() {
+            override val size: Int = 3
+
+            override fun get(index: Int): Int = index + 1
+
+            override fun iterator(): Iterator<Int> =
+                error("List mapping must not allocate or consume an iterator")
+        }
+
+        assertEquals(listOf(2, 4, 6), indexedOnly.mapToImmutableList { value -> value * 2 })
+    }
+
+    @Test
     fun setIterationOrderAndSetEqualityAreStable() {
         val first = immutableSetOf(3, 1, 3, 2, 1)
         val second = listOf(2, 3, 1).toImmutableSet()

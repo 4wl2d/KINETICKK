@@ -26,7 +26,7 @@ trigger.
 
 For that Audio row, synchronous Resource/platform calls propagate.
 Synchronous JavaScript invocation/graph faults propagate.
-Desktop worker faults escape the detached `Runnable` to runtime; this is not caller propagation.
+Android and Desktop worker faults escape the detached `Runnable` to runtime; this is not caller propagation.
 Web native `resume()`/`close()` Promise rejections alone are explicitly observed and consumed by
 `.catch(() => undefined)` as non-semantic post-acceptance projection loss.
 
@@ -40,8 +40,8 @@ the absence.
 | Absent scope | Denial by construction |
 |---|---|
 | actors, authentication, tenants, grants, secrets, privileged actions | local single-player inputs cannot vary Decision/read authorization; no credential or secret type/capability exists |
-| network, remote deployment, IPC, independently versioned endpoints | Desktop/Web bind all authorities in one process and one build; no network client/server or remote route exists |
-| detached asynchronous semantic delivery | no actor/mailbox/coroutine queue/event bus carries a Pulse, command, result, output, or Fact; all semantic commands complete through the bounded same-stack deque. App platform-broker mechanical execution, including Desktop tone playback, is outside this absence scope and may not acquire business meaning |
+| network, remote deployment, IPC, independently versioned endpoints | Android/Desktop/Web bind all authorities in one process and one build; no network client/server or remote route exists |
+| detached asynchronous semantic delivery | no actor/mailbox/coroutine queue/event bus carries a Pulse, command, result, output, or Fact; all semantic commands complete through the bounded same-stack deque. App platform-broker mechanical execution, including Android/Desktop tone playback, is outside this absence scope and may not acquire business meaning |
 | root idempotency or cancellation protocol | no root idempotency key/record and no cancellable operation exists; these inactive layers are not inferred from the present AppSession-owned semantic policy |
 | dynamic registry or wildcard routing | all authorities, instances, queries, commands, results, and routes are closed typed/static sets |
 | process/security isolation | selected profile is `InProcess + Standard`; no containment or separate-principal claim is made |

@@ -4,7 +4,9 @@
 package kinetickk.ball.gameplay.nucleus.protocol
 
 import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
+import kinetickk.foundation.collections.toImmutableListAppending
 import kinetickk.ball.profile.api.ParticleDensity
 
 object VisualFxCueLimits {
@@ -102,42 +104,53 @@ sealed interface VisualFxCue {
  * an unbounded number of cosmetic events.
  */
 internal class BoundedVisualFxCueAccumulator private constructor(
-    private val cues: MutableList<VisualFxCue>,
+    private var cues: MutableList<VisualFxCue>?,
     private var droppedVisualCueCount: Int,
 ) {
-    constructor() : this(mutableListOf(), 0)
+    constructor() : this(null, 0)
 
     fun record(cue: VisualFxCue) {
-        if (cues.size < MAX_RETAINED_CUES) {
-            cues += cue
+        val retainedCues = cues
+        if (retainedCues == null) {
+            cues = arrayListOf(cue)
+            return
+        }
+        if (retainedCues.size < MAX_RETAINED_CUES) {
+            retainedCues += cue
             return
         }
         if (cue.isSynchronizationCritical()) {
-            val replaceIndex = cues.indexOfFirst { retained ->
+            val replaceIndex = retainedCues.indexOfFirst { retained ->
                 !retained.isSynchronizationCritical()
             }.takeIf { it >= 0 } ?: 0
-            cues.removeAt(replaceIndex)
+            retainedCues.removeAt(replaceIndex)
             recordDrop()
-            cues += cue
+            retainedCues += cue
         } else {
             recordDrop()
         }
     }
 
     fun drain(): ImmutableList<VisualFxCue> {
-        val result = buildList {
-            addAll(cues)
-            if (droppedVisualCueCount > 0) {
-                add(VisualFxCue.VisualCuesDropped(droppedVisualCueCount))
-            }
-        }.toImmutableList()
-        cues.clear()
+        val retainedCues = cues
+        val result = if (droppedVisualCueCount > 0) {
+            retainedCues.orEmpty().toImmutableListAppending(
+                VisualFxCue.VisualCuesDropped(droppedVisualCueCount),
+            )
+        } else if (retainedCues == null) {
+            immutableListOf()
+        } else {
+            retainedCues.toImmutableList()
+        }
+        cues = null
         droppedVisualCueCount = 0
         return result
     }
 
+    fun isEmpty(): Boolean = cues == null && droppedVisualCueCount == 0
+
     fun copy(): BoundedVisualFxCueAccumulator = BoundedVisualFxCueAccumulator(
-        cues = cues.toMutableList(),
+        cues = cues?.toMutableList(),
         droppedVisualCueCount = droppedVisualCueCount,
     )
 

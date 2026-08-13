@@ -12,6 +12,8 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
+import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
+import kinetickk.ball.gameplay.interaction.layout.ChoiceLayoutGeometry
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
@@ -20,7 +22,12 @@ import kinetickk.ball.gameplay.nucleus.render.TotemAction
 import kotlin.math.min
 import kotlin.math.sin
 
-internal fun DrawScope.drawChoice(engine: GameplayRenderModel, textMeasurer: TextMeasurer, renderTime: Float) {
+internal fun DrawScope.drawChoice(
+    engine: GameplayRenderModel,
+    textMeasurer: TextMeasurer,
+    renderTime: Float,
+    layout: ChoiceLayoutGeometry,
+) {
     drawRect(Color(0xF2050610))
     val bindAction = engine.choices.firstOrNull()?.relicAction
     val title = when (engine.choiceType) {
@@ -47,32 +54,59 @@ internal fun DrawScope.drawChoice(engine: GameplayRenderModel, textMeasurer: Tex
     }
     val titleAccent = if (engine.choiceType == ChoiceType.RELIC || engine.choiceType == ChoiceType.RELIC_BIND) Gold else White
     val subtitleAccent = if (engine.choiceType == ChoiceType.RELIC || engine.choiceType == ChoiceType.RELIC_BIND) Magenta else Violet
-    drawLabel(textMeasurer, title, size.width * 0.5f, size.height * 0.14f, 24f, titleAccent, centered = true, weight = FontWeight.Bold)
-    drawLabel(textMeasurer, subtitle, size.width * 0.5f, size.height * 0.17f + d(36f), 9f, subtitleAccent, centered = true, maxWidth = size.width - d(30f), maxLines = 2)
-    val choiceCount = engine.choices.size.coerceAtLeast(1)
-    val gap = d(if (choiceCount >= 4) 10f else 18f)
-    val maxCardWidth = d(when {
-        choiceCount >= 4 -> 190f
-        choiceCount == 3 -> 250f
-        else -> 300f
-    })
-    val availableCardWidth = (size.width - d(30f) - gap * (choiceCount - 1)) / choiceCount
-    val cardWidth = min(maxCardWidth, availableCardWidth).coerceAtLeast(d(92f))
-    val total = cardWidth * choiceCount + gap * (choiceCount - 1)
-    val startX = (size.width - total) * 0.5f
-    val top = size.height * if (choiceCount >= 4) 0.29f else 0.31f
-    val bottomReserve = d(if (engine.choicesCanReroll) 105f else 35f)
-    val cardHeight = min(d(270f), size.height - bottomReserve - top).coerceAtLeast(d(170f))
+    val compact = layout.mode != GameplayLayoutMode.REGULAR
+    drawLabel(textMeasurer, title, size.width * 0.5f, layout.titleY, if (compact) 17f else 24f, titleAccent, centered = true, weight = FontWeight.Bold, maxWidth = size.width - d(24f))
+    drawLabel(textMeasurer, subtitle, size.width * 0.5f, layout.subtitleY, if (compact) 7f else 9f, subtitleAccent, centered = true, maxWidth = size.width - d(30f), maxLines = 2)
     engine.choices.forEachIndexed { index, choice ->
-        drawChoiceCard(engine, textMeasurer, choice, index, startX + index * (cardWidth + gap), top, cardWidth, cardHeight, renderTime)
+        val bounds = layout.cards[index]
+        if (layout.compactCardContent) {
+            drawCompactChoiceCard(engine, textMeasurer, choice, index, bounds.topLeft, bounds.size, renderTime)
+        } else {
+            drawChoiceCard(engine, textMeasurer, choice, index, bounds.left, bounds.top, bounds.width, bounds.height, renderTime)
+        }
     }
-    if (engine.choicesCanReroll) {
-        val rerollY = size.height - d(72f)
+    layout.reroll?.let { bounds ->
         val accent = if (engine.choiceType == ChoiceType.RELIC) Gold else Violet
-        drawRect(accent.copy(alpha = 0.1f), Offset(size.width * 0.5f - d(90f), rerollY - d(22f)), Size(d(180f), d(44f)))
-        drawRect(accent, Offset(size.width * 0.5f - d(90f), rerollY - d(22f)), Size(d(180f), d(44f)), style = Stroke(d(1.3f)))
-        drawLabel(textMeasurer, "REROLL [Q] // ${engine.rerollsRemaining}", size.width * 0.5f, rerollY - d(6f), 9f, accent, centered = true, weight = FontWeight.Bold)
+        drawRect(accent.copy(alpha = 0.1f), bounds.topLeft, bounds.size)
+        drawRect(accent, bounds.topLeft, bounds.size, style = Stroke(d(1.3f)))
+        drawLabel(textMeasurer, if (compact) "REROLL // ${engine.rerollsRemaining}" else "REROLL [Q] // ${engine.rerollsRemaining}", bounds.center.x, bounds.center.y - d(7f), 9f, accent, centered = true, weight = FontWeight.Bold)
     }
+}
+
+private fun DrawScope.drawCompactChoiceCard(
+    engine: GameplayRenderModel,
+    textMeasurer: TextMeasurer,
+    choice: ChoiceOption,
+    index: Int,
+    topLeft: Offset,
+    cardSize: Size,
+    renderTime: Float,
+) {
+    val item = choice.itemId?.let(engine.content::item)
+    val weapon = choice.weaponId?.let(engine.content::weapon)
+    val relicId = choice.relicId ?: choice.relicSlot?.let(engine.equippedRelics::getOrNull)?.id
+    val relic = relicId?.let(engine.content::relic)
+    val accent = when {
+        relic != null -> relicAspectColor(relic.aspect)
+        item != null -> rarityColor(item.rarity)
+        weapon != null -> weaponColor(weapon.id)
+        else -> ParticleColors[index.coerceIn(ParticleColors.indices)]
+    }
+    val pulse = (sin(renderTime * 2.4f + index * 1.6f) + 1f) * 0.5f
+    drawRect(OverlayPanel, topLeft, cardSize)
+    drawRect(accent.copy(alpha = 0.72f + pulse * 0.2f), topLeft, cardSize, style = Stroke(d(1.4f)))
+    drawRect(accent.copy(alpha = 0.14f), topLeft, Size(cardSize.width, d(34f)))
+    drawLabel(textMeasurer, "0${index + 1} // ${choice.tag}", topLeft.x + d(10f), topLeft.y + d(10f), 6f, accent, weight = FontWeight.Bold, maxWidth = cardSize.width - d(20f))
+    drawLabel(textMeasurer, choice.title.uppercase(), topLeft.x + cardSize.width * 0.5f, topLeft.y + d(42f), 8f, White, centered = true, weight = FontWeight.Bold, maxWidth = cardSize.width - d(16f), maxLines = 2)
+    drawLabel(textMeasurer, choice.description, topLeft.x + cardSize.width * 0.5f, topLeft.y + d(68f), 5.5f, Muted, centered = true, maxWidth = cardSize.width - d(18f), maxLines = 2)
+    val footer = when {
+        relic != null -> relic.rankEffect
+        item != null -> "STACK ${engine.itemStack(item.id) + 1}/${item.maxStacks}"
+        weapon != null -> weapon.tags.firstOrNull().orEmpty()
+        else -> choice.tag
+    }
+    drawLabel(textMeasurer, footer, topLeft.x + cardSize.width * 0.5f, topLeft.y + cardSize.height - d(38f), 5.5f, accent, centered = true, maxWidth = cardSize.width - d(18f), maxLines = 1)
+    drawLabel(textMeasurer, "TAP TO SELECT", topLeft.x + cardSize.width * 0.5f, topLeft.y + cardSize.height - d(16f), 7f, accent, centered = true, weight = FontWeight.Bold)
 }
 
 internal fun DrawScope.drawChoiceCard(engine: GameplayRenderModel, textMeasurer: TextMeasurer, choice: ChoiceOption, index: Int, x: Float, y: Float, width: Float, height: Float, renderTime: Float) {

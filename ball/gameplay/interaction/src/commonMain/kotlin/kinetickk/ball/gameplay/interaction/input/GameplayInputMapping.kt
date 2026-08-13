@@ -5,9 +5,17 @@ package kinetickk.ball.gameplay.interaction.input
 
 import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
+import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
+import kinetickk.ball.gameplay.interaction.layout.PauseTarget
+import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
+import kinetickk.ball.gameplay.interaction.layout.choiceLayoutGeometry
+import kinetickk.ball.gameplay.interaction.layout.containsInclusive
+import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
+import kinetickk.ball.gameplay.interaction.layout.gameplayLayoutMode
+import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
+import kinetickk.ball.gameplay.interaction.layout.terminalLayoutGeometry
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
-import kotlin.math.min
 
 /** A pointer result is either a live-run action or a request for the Session-owned host. */
 sealed interface GameplayInput {
@@ -16,6 +24,7 @@ sealed interface GameplayInput {
     data object OpenRebirth : GameplayInput
     data object ExitToHome : GameplayInput
     data object RestartRun : GameplayInput
+    data object TogglePerformance : GameplayInput
 }
 
 /** Interaction-ephemeral values required for deterministic canvas hit testing. */
@@ -30,116 +39,201 @@ internal data class GameplayHitTestState(
 
 /** Maps gameplay canvas coordinates without encoding any app destination in domain state. */
 fun GameplayRenderModel.resolveGameplayPress(x: Float, y: Float): GameplayInput? =
-    hitTestState().resolveGameplayPress(x, y)
+    resolveGameplayPress(
+        phase = phase,
+        screenWidth = screenWidth,
+        screenHeight = screenHeight,
+        uiScale = uiScale,
+        choiceCount = choices.size,
+        choicesCanReroll = choicesCanReroll,
+        x = x,
+        y = y,
+    )
 
 fun GameplayRenderModel.isHudControlPosition(x: Float, y: Float): Boolean =
-    hitTestState().isHudControlPosition(x, y)
+    isHudControlPosition(
+        phase = phase,
+        screenWidth = screenWidth,
+        screenHeight = screenHeight,
+        uiScale = uiScale,
+        x = x,
+        y = y,
+    )
 
-private fun GameplayRenderModel.hitTestState(): GameplayHitTestState = GameplayHitTestState(
-    phase = phase,
-    screenWidth = screenWidth,
-    screenHeight = screenHeight,
-    uiScale = uiScale,
-    choiceCount = choices.size,
-    choicesCanReroll = choicesCanReroll,
-)
+internal fun GameplayHitTestState.resolveGameplayPress(x: Float, y: Float): GameplayInput? =
+    resolveGameplayPress(
+        phase = phase,
+        screenWidth = screenWidth,
+        screenHeight = screenHeight,
+        uiScale = uiScale,
+        choiceCount = choiceCount,
+        choicesCanReroll = choicesCanReroll,
+        x = x,
+        y = y,
+    )
 
-internal fun GameplayHitTestState.resolveGameplayPress(x: Float, y: Float): GameplayInput? = when (phase) {
-    GamePhase.RUNNING -> resolveHudPress(x, y)
-    GamePhase.PAUSED -> resolvePausePress(x, y)
-    GamePhase.CHOICE -> resolveChoicePress(x, y)
-    GamePhase.GAME_OVER, GamePhase.VICTORY -> resolveEndPress(x, y)
+internal fun GameplayHitTestState.isHudControlPosition(x: Float, y: Float): Boolean =
+    isHudControlPosition(
+        phase = phase,
+        screenWidth = screenWidth,
+        screenHeight = screenHeight,
+        uiScale = uiScale,
+        x = x,
+        y = y,
+    )
+
+private fun resolveGameplayPress(
+    phase: GamePhase,
+    screenWidth: Float,
+    screenHeight: Float,
+    uiScale: Float,
+    choiceCount: Int,
+    choicesCanReroll: Boolean,
+    x: Float,
+    y: Float,
+): GameplayInput? = when (phase) {
+    GamePhase.RUNNING -> resolveHudPress(screenWidth, screenHeight, uiScale, x, y)
+    GamePhase.PAUSED -> resolvePausePress(screenWidth, screenHeight, uiScale, x, y)
+    GamePhase.CHOICE -> resolveChoicePress(
+        screenWidth,
+        screenHeight,
+        uiScale,
+        choiceCount,
+        choicesCanReroll,
+        x,
+        y,
+    )
+    GamePhase.GAME_OVER, GamePhase.VICTORY ->
+        resolveEndPress(phase, screenWidth, screenHeight, uiScale, x, y)
 }
 
-private fun GameplayHitTestState.isHudControlPosition(x: Float, y: Float): Boolean =
-    phase == GamePhase.RUNNING && (isDashButton(x, y) || isBrakeButton(x, y))
+private fun isHudControlPosition(
+    phase: GamePhase,
+    screenWidth: Float,
+    screenHeight: Float,
+    uiScale: Float,
+    x: Float,
+    y: Float,
+): Boolean = phase == GamePhase.RUNNING &&
+    runningControlTargetAt(screenWidth, screenHeight, uiScale, x, y) != null
 
-private fun GameplayHitTestState.resolvePausePress(x: Float, y: Float): GameplayInput? {
-    val center = screenWidth * 0.5f
-    if (x !in center - d(150f)..center + d(150f)) return null
+private fun resolvePausePress(
+    screenWidth: Float,
+    screenHeight: Float,
+    uiScale: Float,
+    x: Float,
+    y: Float,
+): GameplayInput? {
+    val target = pauseLayoutGeometry(screenWidth, screenHeight, uiScale)
+        .actions
+        .firstOrNull { containsInclusive(it.bounds, x, y) }
+        ?.target
+        ?: return null
+    return when (target) {
+        PauseTarget.RESUME -> GameplayInput.Action(GameplayInteractionPulse.PauseToggled)
+        PauseTarget.SETTINGS -> GameplayInput.OpenSettings
+        PauseTarget.PERFORMANCE -> GameplayInput.TogglePerformance
+        PauseTarget.EXIT -> GameplayInput.ExitToHome
+    }
+}
+
+private fun resolveEndPress(
+    phase: GamePhase,
+    screenWidth: Float,
+    screenHeight: Float,
+    uiScale: Float,
+    x: Float,
+    y: Float,
+): GameplayInput? {
+    val layout = terminalLayoutGeometry(
+        width = screenWidth,
+        height = screenHeight,
+        scale = uiScale,
+        victory = phase == GamePhase.VICTORY,
+    )
     return when {
-        y in screenHeight * 0.5f..screenHeight * 0.5f + d(52f) ->
-            GameplayInput.Action(GameplayInteractionPulse.PauseToggled)
-        y in screenHeight * 0.62f..screenHeight * 0.62f + d(52f) -> GameplayInput.OpenSettings
-        y in screenHeight * 0.74f..screenHeight * 0.74f + d(52f) -> GameplayInput.ExitToHome
+        containsInclusive(layout.restart, x, y) -> GameplayInput.RestartRun
+        layout.rebirth?.let { containsInclusive(it, x, y) } == true -> GameplayInput.OpenRebirth
+        containsInclusive(layout.exit, x, y) -> GameplayInput.ExitToHome
         else -> null
     }
 }
 
-private fun GameplayHitTestState.resolveEndPress(x: Float, y: Float): GameplayInput? {
-    val centerX = screenWidth * 0.5f
-    val buttonY = screenHeight * 0.72f
-    if (x in centerX - d(155f)..centerX + d(155f) && y in buttonY - d(38f)..buttonY + d(38f)) {
-        return GameplayInput.RestartRun
-    }
-    if (
-        phase == GamePhase.VICTORY &&
-        x in centerX - d(120f)..centerX + d(120f) &&
-        y in buttonY + d(50f)..buttonY + d(90f)
-    ) {
-        return GameplayInput.OpenRebirth
-    }
-    return if (y > buttonY + d(if (phase == GamePhase.VICTORY) 100f else 50f)) {
-        GameplayInput.ExitToHome
-    } else {
-        null
-    }
-}
-
-private fun GameplayHitTestState.resolveChoicePress(x: Float, y: Float): GameplayInput? {
-    val visibleChoiceCount = choiceCount.coerceAtLeast(1)
-    val gap = d(if (visibleChoiceCount >= 4) 10f else 18f)
-    val maxCardWidth = d(
-        when {
-            visibleChoiceCount >= 4 -> 190f
-            visibleChoiceCount == 3 -> 250f
-            else -> 300f
-        },
+private fun resolveChoicePress(
+    screenWidth: Float,
+    screenHeight: Float,
+    uiScale: Float,
+    choiceCount: Int,
+    choicesCanReroll: Boolean,
+    x: Float,
+    y: Float,
+): GameplayInput? {
+    val layout = choiceLayoutGeometry(
+        width = screenWidth,
+        height = screenHeight,
+        scale = uiScale,
+        choiceCount = choiceCount,
+        canReroll = choicesCanReroll,
     )
-    val availableCardWidth =
-        (screenWidth - d(30f) - gap * (visibleChoiceCount - 1)) / visibleChoiceCount
-    val cardWidth = min(maxCardWidth, availableCardWidth).coerceAtLeast(d(92f))
-    val total = cardWidth * visibleChoiceCount + gap * (visibleChoiceCount - 1)
-    val startX = (screenWidth - total) * 0.5f
-    val top = screenHeight * if (visibleChoiceCount >= 4) 0.29f else 0.31f
-    val bottomReserve = d(if (choicesCanReroll) 105f else 35f)
-    val cardHeight = min(d(270f), screenHeight - bottomReserve - top).coerceAtLeast(d(170f))
-    if (y in top..top + cardHeight) {
-        repeat(visibleChoiceCount) { index ->
-            val left = startX + index * (cardWidth + gap)
-            if (x in left..left + cardWidth) {
-                return GameplayInput.Action(
-                    GameplayInteractionPulse.ChoiceSelected.fromValidated(index),
-                )
-            }
+    layout.cards.forEachIndexed { index, bounds ->
+        if (containsInclusive(bounds, x, y)) {
+            return GameplayInput.Action(
+                GameplayInteractionPulse.ChoiceSelected.fromValidated(index),
+            )
         }
     }
-    val rerollY = screenHeight - d(72f)
-    return if (
-        x in screenWidth * 0.5f - d(90f)..screenWidth * 0.5f + d(90f) &&
-        y in rerollY - d(22f)..rerollY + d(22f)
-    ) {
+    return if (layout.reroll?.let { containsInclusive(it, x, y) } == true) {
         GameplayInput.Action(GameplayInteractionPulse.ChoicesRerolled)
     } else {
         null
     }
 }
 
-private fun GameplayHitTestState.resolveHudPress(x: Float, y: Float): GameplayInput? = when {
-    isDashButton(x, y) -> GameplayInput.Action(GameplayInteractionPulse.DashRequested)
-    isBrakeButton(x, y) -> GameplayInput.Action(
+private fun resolveHudPress(
+    screenWidth: Float,
+    screenHeight: Float,
+    uiScale: Float,
+    x: Float,
+    y: Float,
+): GameplayInput? = when (
+    runningControlTargetAt(screenWidth, screenHeight, uiScale, x, y)
+) {
+    RunningControlTarget.DASH -> GameplayInput.Action(GameplayInteractionPulse.DashRequested)
+    RunningControlTarget.BRAKE -> GameplayInput.Action(
         GameplayInteractionPulse.BrakeChanged(BrakeSource.TOUCH_CONTROL, active = true),
     )
-    else -> null
+    RunningControlTarget.PERFORMANCE -> GameplayInput.TogglePerformance
+    RunningControlTarget.PAUSE -> GameplayInput.Action(GameplayInteractionPulse.PauseToggled)
+    null -> null
 }
 
-private fun GameplayHitTestState.isDashButton(x: Float, y: Float): Boolean =
-    distanceSquared(x, y, screenWidth - d(82f), screenHeight - d(88f)) < square(d(48f))
+private fun runningControlTargetAt(
+    screenWidth: Float,
+    screenHeight: Float,
+    uiScale: Float,
+    x: Float,
+    y: Float,
+): RunningControlTarget? {
+    val mode = gameplayLayoutMode(screenWidth, screenHeight, uiScale)
+    var matched: RunningControlTarget? = null
+    forEachRunningControlBounds(
+        screenWidth,
+        screenHeight,
+        uiScale,
+    ) { target, left, top, right, bottom ->
+        if (matched != null) return@forEachRunningControlBounds
+        val hit = if (mode == GameplayLayoutMode.REGULAR) {
+            val radius = (right - left) * 0.5f
+            distanceSquared(x, y, (left + right) * 0.5f, (top + bottom) * 0.5f) <
+                square(radius)
+        } else {
+            x in left..right && y in top..bottom
+        }
+        if (hit) matched = target
+    }
+    return matched
+}
 
-private fun GameplayHitTestState.isBrakeButton(x: Float, y: Float): Boolean =
-    distanceSquared(x, y, screenWidth - d(190f), screenHeight - d(67f)) < square(d(38f))
-
-private fun GameplayHitTestState.d(value: Float): Float = value * uiScale
 private fun square(value: Float): Float = value * value
 private fun distanceSquared(ax: Float, ay: Float, bx: Float, by: Float): Float =
     square(ax - bx) + square(ay - by)

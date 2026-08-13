@@ -27,7 +27,11 @@ val Red = Color(0xFFFF426D)
 val White = Color(0xFFF4F6FF)
 val Muted = Color(0xFF8F98B5)
 val DarkLine = Color(0xFF252C4F)
-val dashEffect = PathEffect.dashPathEffect(floatArrayOf(9f, 9f))
+// Construct the native-backed effect only when a Canvas actually draws it. Eager initialization
+// made every consumer of an unrelated color token load Skiko, including pure geometry tests.
+val dashEffect: PathEffect by lazy {
+    PathEffect.dashPathEffect(floatArrayOf(9f, 9f))
+}
 val mono = FontFamily.Monospace
 fun textStyle(size: Float, color: Color = White, weight: FontWeight = FontWeight.Normal) =
     TextStyle(fontFamily = mono, fontSize = size.sp, color = color, fontWeight = weight)

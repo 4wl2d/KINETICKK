@@ -84,7 +84,8 @@ internal fun MutableGameState.triggerRelicKillEffects(enemy: Enemy) {
     val eventideRank = relicRank(RelicId.EVENTIDE_ANCHOR)
     if (eventideRank > 0) {
         val radius = 72f + 18f * eventideRank
-        enemies.forEach { target ->
+        for (index in enemies.indices) {
+            val target = enemies[index]
             if (!target.dead && target.hp > 0f && target.id != enemy.id) {
                 val dx = enemy.x - target.x
                 val dy = enemy.y - target.y
@@ -119,7 +120,8 @@ internal fun MutableGameState.triggerRelicKillEffects(enemy: Enemy) {
     if (quietusRank > 0) {
         val radius = 68f + 16f * quietusRank
         val slow = (1f - 0.10f * quietusRank).coerceAtLeast(0.35f)
-        enemies.forEach { target ->
+        for (index in enemies.indices) {
+            val target = enemies[index]
             if (!target.dead && target.hp > 0f && target.id != enemy.id &&
                 distanceSquared(enemy.x, enemy.y, target.x, target.y) <= square(radius + target.radius)
             ) {

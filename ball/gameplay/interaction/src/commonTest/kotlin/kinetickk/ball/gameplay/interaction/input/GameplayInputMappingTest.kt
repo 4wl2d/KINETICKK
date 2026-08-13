@@ -4,11 +4,19 @@
 package kinetickk.ball.gameplay.interaction.input
 
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
+import kinetickk.ball.gameplay.interaction.layout.PauseTarget
+import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
+import kinetickk.ball.gameplay.interaction.layout.choiceLayoutGeometry
+import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
+import kinetickk.ball.gameplay.interaction.layout.runningControlBounds
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class GameplayInputMappingTest {
     @Test
@@ -20,6 +28,36 @@ class GameplayInputMappingTest {
 
         assertSame(GameplayInteractionPulse.DashRequested, dash.action)
         assertIs<GameplayInteractionPulse.BrakeChanged>(brake.action)
+    }
+
+    @Test
+    fun regularBrakeBoundingSquareCornersRemainOutsideTheCanonicalCircle() {
+        val running = hitTestState(GamePhase.RUNNING)
+        val brakeBounds = runningControlBounds(
+            running.screenWidth,
+            running.screenHeight,
+            running.uiScale,
+        ).single { it.target == RunningControlTarget.BRAKE }.bounds
+        val cornerX = brakeBounds.left + 1f
+        val cornerY = brakeBounds.top + 1f
+
+        assertNull(running.resolveGameplayPress(cornerX, cornerY))
+        assertFalse(running.isHudControlPosition(cornerX, cornerY))
+    }
+
+    @Test
+    fun runningHudClassificationUsesTheSameCanonicalTargetsAsActionResolution() {
+        val running = hitTestState(GamePhase.RUNNING)
+
+        runningControlBounds(running.screenWidth, running.screenHeight, running.uiScale)
+            .forEach { control ->
+                val center = control.bounds.center
+                assertTrue(running.isHudControlPosition(center.x, center.y))
+                assertIs<GameplayInput>(running.resolveGameplayPress(center.x, center.y))
+            }
+
+        assertFalse(running.isHudControlPosition(640f, 360f))
+        assertNull(running.resolveGameplayPress(640f, 360f))
     }
 
     @Test
@@ -59,15 +97,92 @@ class GameplayInputMappingTest {
         assertSame(GameplayInput.ExitToHome, victory.resolveGameplayPress(640f, 650f))
     }
 
+    @Test
+    fun compactRunningControlsMapDashBrakePauseAndPerformanceFromSharedGeometry() {
+        val running = hitTestState(
+            phase = GamePhase.RUNNING,
+            screenWidth = 2_400f,
+            screenHeight = 1_080f,
+            uiScale = 3f,
+        )
+
+        runningControlBounds(running.screenWidth, running.screenHeight, running.uiScale).forEach { control ->
+            val input = running.resolveGameplayPress(control.bounds.center.x, control.bounds.center.y)
+            when (control.target) {
+                RunningControlTarget.DASH -> assertSame(
+                    GameplayInteractionPulse.DashRequested,
+                    assertIs<GameplayInput.Action>(input).action,
+                )
+                RunningControlTarget.BRAKE -> assertIs<GameplayInteractionPulse.BrakeChanged>(
+                    assertIs<GameplayInput.Action>(input).action,
+                )
+                RunningControlTarget.PERFORMANCE -> assertSame(GameplayInput.TogglePerformance, input)
+                RunningControlTarget.PAUSE -> assertSame(
+                    GameplayInteractionPulse.PauseToggled,
+                    assertIs<GameplayInput.Action>(input).action,
+                )
+            }
+        }
+    }
+
+    @Test
+    fun compactPauseAndChoiceMappingMatchesRenderedTargets() {
+        val paused = hitTestState(
+            phase = GamePhase.PAUSED,
+            screenWidth = 2_400f,
+            screenHeight = 1_080f,
+            uiScale = 3f,
+        )
+        val performance = pauseLayoutGeometry(paused.screenWidth, paused.screenHeight, paused.uiScale)
+            .actions
+            .single { it.target == PauseTarget.PERFORMANCE }
+            .bounds
+            .center
+        assertSame(
+            GameplayInput.TogglePerformance,
+            paused.resolveGameplayPress(performance.x, performance.y),
+        )
+
+        val choice = hitTestState(
+            phase = GamePhase.CHOICE,
+            choiceCount = 4,
+            choicesCanReroll = true,
+            screenWidth = 2_400f,
+            screenHeight = 1_080f,
+            uiScale = 3f,
+        )
+        val layout = choiceLayoutGeometry(
+            choice.screenWidth,
+            choice.screenHeight,
+            choice.uiScale,
+            choice.choiceCount,
+            choice.choicesCanReroll,
+        )
+        layout.cards.forEachIndexed { index, bounds ->
+            val input = assertIs<GameplayInput.Action>(
+                choice.resolveGameplayPress(bounds.center.x, bounds.center.y),
+            )
+            assertEquals(index, assertIs<GameplayInteractionPulse.ChoiceSelected>(input.action).index)
+        }
+        val reroll = requireNotNull(layout.reroll).center
+        assertSame(
+            GameplayInteractionPulse.ChoicesRerolled,
+            assertIs<GameplayInput.Action>(choice.resolveGameplayPress(reroll.x, reroll.y)).action,
+        )
+    }
+
     private fun hitTestState(
         phase: GamePhase,
         choiceCount: Int = 0,
         choicesCanReroll: Boolean = false,
+        screenWidth: Float = 1_280f,
+        screenHeight: Float = 720f,
+        uiScale: Float = 1f,
     ): GameplayHitTestState = GameplayHitTestState(
         phase = phase,
-        screenWidth = 1_280f,
-        screenHeight = 720f,
-        uiScale = 1f,
+        screenWidth = screenWidth,
+        screenHeight = screenHeight,
+        uiScale = uiScale,
         choiceCount = choiceCount,
         choicesCanReroll = choicesCanReroll,
     )

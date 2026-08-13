@@ -7,8 +7,10 @@ import kinetickk.ball.gameplay.api.GameplayInstanceId
 import kinetickk.ball.gameplay.api.GameplayRevision
 
 /** Ball-internal Nucleus-to-Interaction snapshot; not a Gameplay Application Surface. */
-data class GameplayRenderSnapshot(
+@ConsistentCopyVisibility
+data class GameplayRenderSnapshot internal constructor(
     val instanceId: GameplayInstanceId,
     val revision: GameplayRevision,
     val renderModel: GameplayRenderModel?,
+    internal val projectionSourceIdentity: Any?,
 )

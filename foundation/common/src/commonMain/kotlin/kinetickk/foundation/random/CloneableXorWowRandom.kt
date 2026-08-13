@@ -66,7 +66,15 @@ class CloneableXorWowRandom private constructor(
     )
 
     /** Returns an independent generator positioned at the same cursor. */
-    fun copy(): CloneableXorWowRandom = fromSnapshot(snapshot())
+    fun copy(): CloneableXorWowRandom = CloneableXorWowRandom(
+        x = x,
+        y = y,
+        z = z,
+        w = w,
+        v = v,
+        addend = addend,
+        warmUp = false,
+    )
 
     override fun nextInt(): Int {
         var transition = x

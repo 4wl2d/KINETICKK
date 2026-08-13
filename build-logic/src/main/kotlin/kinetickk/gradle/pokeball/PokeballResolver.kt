@@ -444,7 +444,15 @@ private fun MutableList<String>.addApplicationSurfaceViolations(sources: List<So
 }
 
 private fun MutableList<String>.addAuthorityViolations(sources: Map<String, SourceDocument>) {
-    data class WriterRule(val path: String, val stateType: String, val nucleusPath: String, val nucleusToken: String)
+    data class WriterRule(
+        val path: String,
+        val stateType: String,
+        val nucleusPath: String,
+        val nucleusToken: String,
+        val writerDeclaration: String = "private var committedState: $stateType",
+        val requiredWriterTokens: List<String> = emptyList(),
+        val forbiddenWriterTokens: List<String> = emptyList(),
+    )
     val rules = listOf(
         WriterRule(
             "ball/profile/impl/src/commonMain/kotlin/kinetickk/ball/profile/impl/DefaultProfileComponent.kt",
@@ -457,6 +465,21 @@ private fun MutableList<String>.addAuthorityViolations(sources: Map<String, Sour
             "GameplayState",
             "ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/GameplayNucleus.kt",
             "object GameplayNucleus",
+            writerDeclaration = "private var committedFrame: CommittedGameplayFrame",
+            requiredWriterTokens = listOf(
+                "private val committedState: GameplayState\n        get() = committedFrame.state",
+                "private val committedRenderSnapshot: GameplayRenderSnapshot\n" +
+                    "        get() = committedFrame.renderSnapshot",
+                "private fun publish(state: GameplayState, renderSnapshot: GameplayRenderSnapshot) {\n" +
+                    "        committedFrame = CommittedGameplayFrame(state, renderSnapshot)\n    }",
+                "private data class CommittedGameplayFrame(\n" +
+                    "    val state: GameplayState,\n" +
+                    "    val renderSnapshot: GameplayRenderSnapshot,\n)",
+            ),
+            forbiddenWriterTokens = listOf(
+                "private var committedState: GameplayState",
+                "private var committedRenderSnapshot: GameplayRenderSnapshot",
+            ),
         ),
         WriterRule(
             "flow/session/impl/src/commonMain/kotlin/kinetickk/flow/session/impl/DefaultAppSessionComponent.kt",
@@ -469,8 +492,25 @@ private fun MutableList<String>.addAuthorityViolations(sources: Map<String, Sour
         val writer = sources[rule.path]?.text
         if (writer == null) {
             add("Missing sole writer source ${rule.path}")
-        } else if (writer.countOccurrences("private var committedState: ${rule.stateType}") != 1) {
-            add("${rule.stateType} must have exactly one committedState writer in ${rule.path}")
+        } else {
+            if (writer.countOccurrences(rule.writerDeclaration) != 1) {
+                add(
+                    "${rule.stateType} must have exactly one `${rule.writerDeclaration}` " +
+                        "semantic writer in ${rule.path}",
+                )
+            }
+            rule.requiredWriterTokens.forEach { token ->
+                if (writer.countOccurrences(token) != 1) {
+                    add(
+                        "${rule.stateType} atomic writer in ${rule.path} must contain exactly one `$token`",
+                    )
+                }
+            }
+            rule.forbiddenWriterTokens.forEach { token ->
+                if (token in writer) {
+                    add("${rule.stateType} atomic writer in ${rule.path} must not contain `$token`")
+                }
+            }
         }
         val nucleus = sources[rule.nucleusPath]?.text
         if (nucleus == null || nucleus.countOccurrences(rule.nucleusToken) != 1 || "fun decide(" !in nucleus) {
@@ -481,8 +521,17 @@ private fun MutableList<String>.addAuthorityViolations(sources: Map<String, Sour
     val committedWriterCount = sources.values.sumOf {
         Regex("private var committedState: (ProfileState|GameplayState|AppSessionState)").findAll(it.text).count()
     }
-    if (committedWriterCount != 3) {
-        add("Expected exactly three mutable semantic committedState writers; found $committedWriterCount")
+    if (committedWriterCount != 2) {
+        add("Expected exactly two direct mutable semantic committedState writers; found $committedWriterCount")
+    }
+    val atomicGameplayWriterCount = sources.values.sumOf {
+        Regex("private var committedFrame: CommittedGameplayFrame").findAll(it.text).count()
+    }
+    if (atomicGameplayWriterCount != 1) {
+        add(
+            "Expected exactly one atomic Gameplay state/render semantic writer; " +
+                "found $atomicGameplayWriterCount",
+        )
     }
 
     val contentSurface = sources[

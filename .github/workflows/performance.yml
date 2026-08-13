@@ -1,0 +1,326 @@
+# SPDX-FileCopyrightText: 2026 Vladislav Tomilov
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: Performance evidence
+
+on:
+  pull_request:
+    paths:
+      - "**/*.kt"
+      - "**/*.kts"
+      - "gradle/**"
+      - "gradle.properties"
+      - "tools/performance/**"
+      - ".github/workflows/performance.yml"
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: JVM benchmark profile
+        required: true
+        default: standard
+        type: choice
+        options:
+          - smoke
+          - standard
+          - deep
+      browser:
+        description: Record production browser, build, and artifact evidence
+        required: true
+        default: true
+        type: boolean
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: performance-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  jvm-comparison:
+    name: JVM branch comparison
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+        working-directory: kinetickk
+
+    steps:
+      - name: Check out KINETICKK with benchmark baselines
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          path: kinetickk
+          persist-credentials: false
+
+      - name: Set up pinned JDK 17
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "17.0.20+8"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@4733eaac7c1b0da527e4206b7671e0061de1ce37 # v6
+
+      - name: Select benchmark profile
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REQUESTED_PROFILE: ${{ inputs.profile }}
+        run: |
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            profile="standard"
+          elif [[ "$EVENT_NAME" == "schedule" ]]; then
+            profile="standard"
+          else
+            profile="$REQUESTED_PROFILE"
+          fi
+          case "$profile" in
+            smoke|standard|deep) ;;
+            *) printf 'invalid benchmark profile: %s\n' "$profile" >&2; exit 1 ;;
+          esac
+          printf 'PERFORMANCE_PROFILE=%s\n' "$profile" >> "$GITHUB_ENV"
+
+      - name: Select incremental PR gate or migration evidence
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+        run: |
+          mode="historical"
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            if bash tools/performance/scripts/compare-pr-base.sh \
+              --base "$PR_BASE_SHA" \
+              --check-only; then
+              mode="incremental"
+            else
+              status=$?
+              if (( status != 3 )); then
+                exit "$status"
+              fi
+              printf 'Exact PR base predates the incremental suite; using migration evidence.\n'
+            fi
+          fi
+          printf 'PERFORMANCE_GATE_MODE=%s\n' "$mode" >> "$GITHUB_ENV"
+          printf 'PERFORMANCE_GATE_BASE=%s\n' "$PR_BASE_SHA" >> "$GITHUB_ENV"
+
+      - name: Validate benchmark tooling
+        run: |
+          python3 -m pip install --disable-pip-version-check --no-input \
+            jsonschema==4.23.0
+          scripts=(
+            tools/performance/playwright_cli.sh
+            tools/performance/scripts/compare-main-refactor.sh
+            tools/performance/scripts/compare-main-refactor-profile.sh
+            tools/performance/scripts/compare-pr-base.sh
+          )
+          for script in "${scripts[@]}"; do
+            bash -n "$script"
+          done
+          node --check tools/performance/browser_probe.js
+          PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=tools/performance \
+            python3 -m unittest discover -s tools/performance -p 'test_*.py'
+
+      - name: Gate gameplay and profile against exact PR base
+        if: env.PERFORMANCE_GATE_MODE == 'incremental'
+        run: >-
+          bash tools/performance/scripts/compare-pr-base.sh
+          --base "$PERFORMANCE_GATE_BASE"
+          --profile "$PERFORMANCE_PROFILE"
+          --output build/performance/ci/incremental
+
+      - name: Record historical gameplay migration evidence
+        if: env.PERFORMANCE_GATE_MODE == 'historical'
+        run: >-
+          bash tools/performance/scripts/compare-main-refactor.sh
+          --baseline literal-main
+          --profile "$PERFORMANCE_PROFILE"
+          --output build/performance/ci/gameplay
+
+      - name: Record historical profile migration evidence
+        if: env.PERFORMANCE_GATE_MODE == 'historical'
+        run: >-
+          bash tools/performance/scripts/compare-main-refactor-profile.sh
+          --profile "$PERFORMANCE_PROFILE"
+          --output build/performance/ci/profile
+
+      - name: Measure current runtime telemetry overhead
+        env:
+          REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: >-
+          ./gradlew
+          :ball:gameplay:interaction:performanceTelemetryBenchmark
+          -PbenchmarkProfile="$PERFORMANCE_PROFILE"
+          -PbenchmarkOutput="$GITHUB_WORKSPACE/kinetickk/build/performance/ci/telemetry.json"
+          -PbenchmarkLabel=ci-candidate
+          -PbenchmarkRevision="$REVISION"
+          -PbenchmarkDirty=false
+          --no-daemon
+          --console=plain
+
+      - name: Publish JVM performance summary
+        if: always()
+        run: |
+          mode="${PERFORMANCE_GATE_MODE:-selection-failed}"
+          if [[ "$mode" == "incremental" ]]; then
+            mode_description="blocking incremental gate against exact PR base $PERFORMANCE_GATE_BASE"
+            reports=(
+              build/performance/ci/incremental/gameplay/comparison.md
+              build/performance/ci/incremental/profile/comparison.md
+            )
+          elif [[ "$mode" == "historical" ]]; then
+            mode_description="historical migration evidence; not a dynamic PR-base gate"
+            reports=(
+              build/performance/ci/gameplay/comparison.md
+              build/performance/ci/profile/comparison.md
+            )
+          else
+            mode_description="gate selection failed before a comparison could start"
+            reports=()
+          fi
+          {
+            printf '# JVM performance\n\n'
+            printf -- '- Mode: %s\n\n' "$mode_description"
+            for report in "${reports[@]}"; do
+              if [[ -f "$report" ]]; then
+                cat "$report"
+                printf '\n'
+              else
+                printf '> Report unavailable: `%s`. Inspect the failed benchmark step.\n\n' "$report"
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload JVM evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: jvm-performance-${{ github.run_id }}
+          path: kinetickk/build/performance/ci
+          if-no-files-found: error
+          retention-days: 30
+
+  browser-build-artifacts:
+    name: Production browser, build, and artifacts
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && inputs.browser)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      GRADLE_USER_HOME: ${{ github.workspace }}/.gradle-performance
+    defaults:
+      run:
+        shell: bash
+        working-directory: kinetickk
+
+    steps:
+      - name: Check out KINETICKK
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          path: kinetickk
+          persist-credentials: false
+
+      - name: Set up pinned JDK 17
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "17.0.20+8"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@4733eaac7c1b0da527e4206b7671e0061de1ce37 # v6
+
+      - name: Prime production dependencies and Gradle toolchains
+        run: >-
+          ./gradlew
+          :app:web:wasmJsBrowserDistribution
+          --no-build-cache
+          --no-daemon
+          --console=plain
+
+      - name: Install pinned Playwright Chromium
+        run: tools/performance/playwright_cli.sh install-browser chromium
+
+      - name: Measure production build
+        env:
+          REVISION: ${{ github.sha }}
+        run: >-
+          python3 tools/performance/measure_command.py
+          --output build/performance/ci-browser/build.json
+          --cwd "$GITHUB_WORKSPACE/kinetickk"
+          --label ci-candidate
+          --revision "$REVISION"
+          --dirty false
+          --warmups 1
+          --repetitions 3
+          --timeout-seconds 3600
+          --
+          ./gradlew
+          clean
+          :app:web:wasmJsBrowserDistribution
+          --no-build-cache
+          --offline
+          --no-daemon
+          --console=plain
+
+      - name: Inventory production artifacts
+        env:
+          REVISION: ${{ github.sha }}
+        run: >-
+          python3 tools/performance/collect_artifacts.py
+          --root app/web/build/dist/wasmJs/productionExecutable
+          --application-wasm-source app/web/build/compileSync/wasmJs/main/productionExecutable/optimized/kinetickk.wasm
+          --output build/performance/ci-browser/artifacts.json
+          --label ci-candidate
+          --revision "$REVISION"
+          --dirty false
+
+      - name: Record isolated browser evidence
+        env:
+          REVISION: ${{ github.sha }}
+        run: |
+          mkdir -p build/performance/ci-browser
+          python3 -m http.server 18891 \
+            --bind 127.0.0.1 \
+            --directory app/web/build/dist/wasmJs/productionExecutable \
+            >build/performance/ci-browser/server.log 2>&1 &
+          server_pid=$!
+          cleanup() {
+            kill "$server_pid" 2>/dev/null || true
+            wait "$server_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          for attempt in {1..60}; do
+            if curl --fail --silent --output /dev/null http://127.0.0.1:18891/; then
+              break
+            fi
+            if (( attempt == 60 )); then
+              printf 'browser benchmark server did not become ready\n' >&2
+              exit 1
+            fi
+            sleep 1
+          done
+          python3 tools/performance/browser_benchmark.py \
+            --url http://127.0.0.1:18891/ \
+            --output build/performance/ci-browser/browser.json \
+            --label ci-candidate \
+            --revision "$REVISION" \
+            --dirty false \
+            --forks 5 \
+            --warmup-frames 120 \
+            --measure-frames 600 \
+            --require-canvas \
+            --fail-on-diagnostics
+
+      - name: Upload browser and delivery evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: browser-performance-${{ github.run_id }}
+          path: kinetickk/build/performance/ci-browser
+          if-no-files-found: error
+          retention-days: 30

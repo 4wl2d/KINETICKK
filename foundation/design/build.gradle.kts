@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 plugins {
-    id("kinetickk.compose-library")
+    id("kinetickk.kmp-shared")
 }
 
 kotlin {

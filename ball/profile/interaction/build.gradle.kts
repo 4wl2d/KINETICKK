@@ -17,9 +17,5 @@ kotlin {
             implementation(libs.compose.ui)
             implementation(projects.foundation.design)
         }
-
-        desktopTest.dependencies {
-            implementation(compose.desktop.currentOs)
-        }
     }
 }

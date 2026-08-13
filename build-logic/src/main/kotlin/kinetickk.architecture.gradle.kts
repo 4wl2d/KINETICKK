@@ -93,10 +93,17 @@ val verifyPokeballManifestTask = tasks.register<VerifyPokeballManifestDriftTask>
 val snapshotPath = providers.gradleProperty("pokeballSnapshotDir")
     .orElse(providers.environmentVariable("POKEBALL_SNAPSHOT_DIR"))
     .orElse(rootProject.layout.projectDirectory.dir("../Pokeball").asFile.absolutePath)
+val repositoryDirectory = rootProject.layout.projectDirectory.asFile
+val configuredSnapshotPath = java.io.File(snapshotPath.get())
+val configuredSnapshotDirectory = if (configuredSnapshotPath.isAbsolute) {
+    configuredSnapshotPath
+} else {
+    repositoryDirectory.resolve(configuredSnapshotPath)
+}
 val verifyPokeballSnapshotTask = tasks.register<VerifyPokeballSnapshotTask>("verifyPokeballSnapshot") {
     group = "verification"
     description = "Verifies the exact external Pokeball Core and Agent Pack snapshot/digests."
-    snapshotDirectory.set(rootProject.layout.dir(snapshotPath.map(rootProject::file)))
+    snapshotDirectory.set(configuredSnapshotDirectory)
     baselineRecord.set(rootProject.layout.projectDirectory.file("docs/architecture/pokeball/baseline.md"))
     reportFile.set(rootProject.layout.buildDirectory.file("reports/pokeball/snapshot-integrity.json"))
 }
@@ -135,22 +142,32 @@ tasks.register<VerifyPokeballConformanceTask>("verifyPokeballConformance") {
 rootProject.allprojects {
     val sourceProjectPath = path
     configurations.configureEach {
-        val declarationConfiguration = name
-        dependencies.withType(ProjectDependency::class.java).configureEach {
+        val declarationConfiguration = this
+        dependencies.withType(ProjectDependency::class.java).configureEach projectDependency@{
             val targetProjectPath = path
+            // Android/AGP realizes resolvable classpaths by copying declared project
+            // dependencies. Only the declarable source configuration belongs to the
+            // architecture graph; generated classpaths must not make it task-order dependent.
+            if (
+                !declarationConfiguration.isCanBeDeclared ||
+                declarationConfiguration.name.endsWith("CompileClasspath") ||
+                declarationConfiguration.name.endsWith("RuntimeClasspath")
+            ) {
+                return@projectDependency
+            }
             verifyArchitectureTask.configure {
                 declaredProjectDependencies.add(
-                    "$sourceProjectPath\t$declarationConfiguration\t$targetProjectPath",
+                    "$sourceProjectPath\t${declarationConfiguration.name}\t$targetProjectPath",
                 )
             }
             generatePokeballManifestTask.configure {
                 declaredProjectDependencies.add(
-                    "$sourceProjectPath\t$declarationConfiguration\t$targetProjectPath",
+                    "$sourceProjectPath\t${declarationConfiguration.name}\t$targetProjectPath",
                 )
             }
             verifyPokeballArchitectureTask.configure {
                 declaredProjectDependencies.add(
-                    "$sourceProjectPath\t$declarationConfiguration\t$targetProjectPath",
+                    "$sourceProjectPath\t${declarationConfiguration.name}\t$targetProjectPath",
                 )
             }
         }

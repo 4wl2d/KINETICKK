@@ -3,6 +3,8 @@
 
 package kinetickk.ball.gameplay.impl
 
+import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.api.GameplayAcceptance
 import kinetickk.ball.gameplay.api.GameplayCommandAdmissionFailureReason
 import kinetickk.ball.gameplay.api.GameplayCommandBoundaryResponse
@@ -20,17 +22,22 @@ import kinetickk.ball.gameplay.api.GameplayRevision
 import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.GameplaySemanticHandle
 import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.nucleus.GameplayNucleus
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
+import kinetickk.ball.gameplay.nucleus.render.ChoiceType
+import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.profile.api.CollectionProjection
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.GameplayProfileRoute
 import kinetickk.ball.profile.api.HomeProgressProjection
 import kinetickk.ball.profile.api.LabProgressProjection
+import kinetickk.ball.profile.api.LabProgress
 import kinetickk.ball.profile.api.LoadoutProjection
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PlayerProfile
+import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.api.PreferencesProjection
 import kinetickk.ball.profile.api.ProfileAcceptance
 import kinetickk.ball.profile.api.ProfileBootstrapBlockReason
@@ -54,6 +61,7 @@ import kinetickk.ball.profile.api.ProfileTargetBoundaryProvenance
 import kinetickk.ball.profile.api.RebirthProgressProjection
 import kinetickk.ball.profile.api.RunBootstrapProjection
 import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.toImmutableList
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
 import kinetickk.resource.audio.api.ToneRequest
@@ -62,6 +70,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotSame
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
@@ -81,6 +90,198 @@ class GameComponentTest {
         assertNull(component.query(GameplayQuery.GetActiveWeapon).weapon)
         assertTrue(component.query(GameplayQuery.GetCodexStacks).itemStacks.isEmpty())
         assertTrue(component.visualFxSnapshot().particles.isEmpty())
+    }
+
+    @Test
+    fun renderSnapshotIsBuiltOncePerCommittedRevision() {
+        val component = component()
+        val created = component.renderSnapshot()
+        assertSame(created, component.renderSnapshot())
+
+        component.start()
+        val started = component.renderSnapshot()
+        assertNotSame(created, started)
+        assertSame(started, component.renderSnapshot())
+
+        val acceptance = assertIs<GameplayAcceptance.Accepted>(
+            component.accept(GameplayInteractionPulse.FrameElapsed.fromValidated(1f / 60f)),
+        )
+        val advanced = component.renderSnapshot()
+        assertEquals(acceptance.revision, advanced.revision)
+        assertNotSame(started, advanced)
+        assertSame(advanced, component.renderSnapshot())
+    }
+
+    @Test
+    fun renderModelIsReusedWhenOnlyTheStampedRevisionChanges() {
+        val component = component()
+        component.start()
+        val started = component.renderSnapshot()
+
+        val acceptance = assertIs<GameplayAcceptance.Accepted>(
+            component.accept(GameplayInteractionPulse.UserGestureObserved),
+        )
+        val gesture = component.renderSnapshot()
+
+        assertEquals(acceptance.revision, gesture.revision)
+        assertNotSame(started, gesture)
+        assertSame(started.renderModel, gesture.renderModel)
+        assertSame(gesture, component.renderSnapshot())
+
+        val beforeDashModel = gesture.renderModel
+        assertIs<GameplayAcceptance.Accepted>(
+            component.accept(GameplayInteractionPulse.DashRequested),
+        )
+        assertSame(beforeDashModel, component.renderSnapshot().renderModel)
+    }
+
+    @Test
+    fun dashCachedModelMatchesAnIndependentFreshProjectionExactly() {
+        val component = component()
+        component.start()
+        val beforeModel = checkNotNull(component.renderSnapshot().renderModel)
+
+        assertTrue(beforeModel.enemies.isNotEmpty())
+        val acceptance = assertIs<GameplayAcceptance.Accepted>(
+            component.accept(GameplayInteractionPulse.DashRequested),
+        )
+        val cachedSnapshot = component.renderSnapshot()
+        val cachedModel = checkNotNull(cachedSnapshot.renderModel)
+
+        // Project the committed state independently, bypassing GameComponent's cache.
+        val freshSnapshot = GameplayNucleus.renderSnapshot(component.stateSnapshot())
+        val freshModel = checkNotNull(freshSnapshot.renderModel)
+
+        assertEquals(acceptance.revision, cachedSnapshot.revision)
+        assertEquals(cachedSnapshot.instanceId, freshSnapshot.instanceId)
+        assertEquals(cachedSnapshot.revision, freshSnapshot.revision)
+        assertSame(beforeModel, cachedModel)
+        assertNotSame(cachedModel, freshModel)
+        assertSame(freshModel.content, cachedModel.content)
+        assertEquals(freshModel.exactRenderWitness(), cachedModel.exactRenderWitness())
+    }
+
+    @Test
+    fun scalarInputPublicationStructurallySharesUnchangedCollections() {
+        val component = component()
+        component.start()
+        val before = checkNotNull(component.renderSnapshot().renderModel)
+
+        assertIs<GameplayAcceptance.Accepted>(
+            component.accept(GameplayInteractionPulse.PointerMoved.fromValidated(1_000f, 300f)),
+        )
+        val after = checkNotNull(component.renderSnapshot().renderModel)
+
+        assertNotSame(before, after)
+        assertSame(before.enemies, after.enemies)
+        assertSame(before.projectiles, after.projectiles)
+        assertSame(before.pickups, after.pickups)
+        assertSame(before.trail, after.trail)
+        assertSame(before.weaponNodes, after.weaponNodes)
+        assertSame(before.weaponOrbitals, after.weaponOrbitals)
+        assertSame(before.choices, after.choices)
+        assertEquals(1_000f, after.pointerX)
+        assertEquals(300f, after.pointerY)
+    }
+
+    @Test
+    fun rejectedLocalRootPublishesNothingAndLeavesTheNextDispatchAdmissible() {
+        val component = component()
+        component.start()
+        val beforeState = component.stateSnapshot()
+        val beforeRender = component.renderSnapshot()
+
+        val rejection = assertIs<GameplayAcceptance.Rejected>(
+            component.accept(GameplayInteractionPulse.PointerMoved.fromValidated(-1f, 0f)),
+        )
+
+        assertEquals(beforeState.instanceId, rejection.instanceId)
+        assertEquals(beforeState.revision, rejection.observedRevision)
+        assertEquals(
+            kinetickk.ball.gameplay.api.GameplayRejection.PointerOutsideViewport(
+                kinetickk.ball.gameplay.api.GameplayPointerAxis.HORIZONTAL,
+            ),
+            rejection.reason,
+        )
+        assertSame(beforeState, component.stateSnapshot())
+        assertSame(beforeRender, component.renderSnapshot())
+
+        val accepted = assertIs<GameplayAcceptance.Accepted>(
+            component.accept(GameplayInteractionPulse.UserGestureObserved),
+        )
+        assertEquals(beforeState.revision.value + 1L, accepted.revision.value)
+        assertEquals(accepted.revision, component.stateSnapshot().revision)
+        assertEquals(accepted.revision, component.renderSnapshot().revision)
+    }
+
+    @Test
+    fun localProfileCompletionDrainsAfterLaterAudioFaultInExactCausalOrder() {
+        val events = mutableListOf<String>()
+        val profile = TestProfilePort(events::add)
+        profile.snapshot = resilientLocalDispatchProfile()
+        val audio = RecordingGameplayAudioExecutor(eventSink = events::add)
+        val component = component(profile, audio, content = LocalDispatchGameplayContent)
+        component.start()
+        component.advanceUntilItemChoice()
+        profile.calls.clear()
+        profile.deliveries.clear()
+        audio.frames.clear()
+        events.clear()
+        audio.throwOnAdvance = true
+        val beforeRevision = component.stateSnapshot().revision
+
+        assertFailsWith<AudioResourceFault> {
+            component.accept(GameplayInteractionPulse.ChoiceSelected.fromValidated(0))
+        }
+
+        val call = profile.calls.single()
+        val delivery = profile.deliveries.single()
+        assertTrue(call.causalScope > 0L)
+        assertEquals(0, call.causalDepth)
+        assertEquals(call.causalScope, delivery.resultSource.causalScope)
+        assertEquals(1, delivery.resultSource.causalDepth)
+        assertEquals(
+            listOf("profile:${call.causalScope}:0", "audio"),
+            events,
+        )
+        assertFalse(component.query(GameplayQuery.GetRunStatus).profileCommandPending)
+        assertEquals(beforeRevision.value + 2L, component.stateSnapshot().revision.value)
+        assertEquals(component.stateSnapshot().revision, component.renderSnapshot().revision)
+    }
+
+    @Test
+    fun localProfileDeliverThenThrowStillExecutesAudioAndDrainsItsCompletion() {
+        val events = mutableListOf<String>()
+        val profile = TestProfilePort(events::add)
+        profile.snapshot = resilientLocalDispatchProfile()
+        val audio = RecordingGameplayAudioExecutor(eventSink = events::add)
+        val component = component(profile, audio, content = LocalDispatchGameplayContent)
+        component.start()
+        component.advanceUntilItemChoice()
+        profile.calls.clear()
+        profile.deliveries.clear()
+        audio.frames.clear()
+        events.clear()
+        profile.mode = ProfileMode.DeliverThenThrow
+        val beforeRevision = component.stateSnapshot().revision
+
+        assertFailsWith<ProfileInvocationFault> {
+            component.accept(GameplayInteractionPulse.ChoiceSelected.fromValidated(0))
+        }
+
+        val call = profile.calls.single()
+        val delivery = profile.deliveries.single()
+        assertEquals(0, call.causalDepth)
+        assertEquals(call.causalScope, delivery.resultSource.causalScope)
+        assertEquals(1, delivery.resultSource.causalDepth)
+        assertEquals(
+            listOf("profile:${call.causalScope}:0", "audio"),
+            events,
+        )
+        assertEquals(1, audio.frames.size)
+        assertFalse(component.query(GameplayQuery.GetRunStatus).profileCommandPending)
+        assertEquals(beforeRevision.value + 2L, component.stateSnapshot().revision.value)
+        assertEquals(component.stateSnapshot().revision, component.renderSnapshot().revision)
     }
 
     @Test
@@ -330,6 +531,12 @@ class GameComponentTest {
         }
 
         assertFalse(component.query(GameplayQuery.GetRunStatus).profileCommandPending)
+        val status = component.query(GameplayQuery.GetRunStatus)
+        val state = component.stateSnapshot()
+        val render = component.renderSnapshot()
+        assertEquals(status.revision, state.revision)
+        assertEquals(state.revision, render.revision)
+        assertSame(render, component.renderSnapshot())
         assertEquals(
             GameplayModuleResult.RunExited(GameplayExitProgressResult.Applied),
             results.single().result,
@@ -499,6 +706,9 @@ class GameComponentTest {
         assertEquals(GameplayRunPhase.RUNNING, started.phase)
         assertEquals(1, unlockAudio.unlockCount)
         assertEquals(GameplayModuleResult.RunStarted, unlockResults.single().result)
+        assertEquals(started.revision, unlockComponent.stateSnapshot().revision)
+        assertEquals(started.revision, unlockComponent.renderSnapshot().revision)
+        assertSame(unlockComponent.renderSnapshot(), unlockComponent.renderSnapshot())
 
         val frameAudio = RecordingGameplayAudioExecutor()
         val frameResults = mutableListOf<GameplayModuleResultDelivery>()
@@ -517,6 +727,9 @@ class GameComponentTest {
         assertEquals(GameplayRunPhase.RUNNING, advanced.phase)
         assertEquals(1, frameAudio.frames.size)
         assertEquals(listOf(GameplayModuleResult.RunStarted), frameResults.map { it.result })
+        assertEquals(advanced.revision, frameComponent.stateSnapshot().revision)
+        assertEquals(advanced.revision, frameComponent.renderSnapshot().revision)
+        assertSame(frameComponent.renderSnapshot(), frameComponent.renderSnapshot())
     }
 
     @Test
@@ -563,11 +776,12 @@ class GameComponentTest {
 private fun component(
     profile: TestProfilePort = TestProfilePort(),
     audio: GameplayAudioExecutor = RecordingGameplayAudioExecutor(),
+    content: kinetickk.ball.content.api.GameplayContentSnapshot = SyntheticGameplayContent,
     commandResultSink: (GameplayModuleResultDelivery) -> Unit = {},
 ): GameComponent {
     val component = GameComponent.create(
         runId = RunId(31),
-        content = SyntheticGameplayContent,
+        content = content,
         profilePort = profile,
         audioExecutor = audio,
         commandResultSink = commandResultSink,
@@ -606,6 +820,83 @@ private fun GameComponent.advanceUntilMatter() {
     error("Run earned no progress within the deterministic frame budget")
 }
 
+private fun GameComponent.advanceUntilItemChoice() {
+    repeat(7_200) { frameIndex ->
+        val render = checkNotNull(renderSnapshot().renderModel)
+        if (
+            render.phase == kinetickk.ball.gameplay.nucleus.render.GamePhase.CHOICE &&
+            render.choiceType == ChoiceType.ITEM &&
+            render.choices.isNotEmpty()
+        ) {
+            return
+        }
+        check(query(GameplayQuery.GetRunStatus).phase == GameplayRunPhase.RUNNING) {
+            "Run stopped before its first item choice at frame $frameIndex"
+        }
+        val pickupTarget = render.pickups.firstOrNull()?.let { pickup -> pickup.x to pickup.y }
+        val nearestEnemy = render.enemies.minByOrNull { enemy ->
+                val dx = enemy.x - render.coreX
+                val dy = enemy.y - render.coreY
+                dx * dx + dy * dy
+            }
+        val target = pickupTarget ?: nearestEnemy?.let { enemy ->
+            val awayX = render.coreX - enemy.x
+            val awayY = render.coreY - enemy.y
+            val length = kotlin.math.sqrt(awayX * awayX + awayY * awayY).coerceAtLeast(1f)
+            render.coreX + awayX / length * 600f to
+                render.coreY + awayY / length * 600f
+        }
+        if (target != null) {
+            val pointerX = (target.first - render.cameraX + render.screenWidth * 0.5f)
+                .coerceIn(0f, render.screenWidth)
+            val pointerY = (target.second - render.cameraY + render.screenHeight * 0.5f)
+                .coerceIn(0f, render.screenHeight)
+            assertIs<GameplayAcceptance.Accepted>(
+                accept(GameplayInteractionPulse.PointerMoved.fromValidated(pointerX, pointerY)),
+            )
+        }
+        if (frameIndex % 15 == 0) {
+            assertIs<GameplayAcceptance.Accepted>(
+                accept(GameplayInteractionPulse.DashRequested),
+            )
+        }
+        assertIs<GameplayAcceptance.Accepted>(
+            accept(GameplayInteractionPulse.FrameElapsed.fromValidated(1f / 60f)),
+        )
+    }
+    error("Run produced no item choice within the deterministic frame budget")
+}
+
+private fun resilientLocalDispatchProfile(): GameplayProfileSnapshot = PlayerProfile(
+    loadout = PlayerLoadout(
+        selectedWeapon = WeaponId.PRISM_RELAY,
+        unlockedWeapons = setOf(WeaponId.FLUX_WAKE, WeaponId.PRISM_RELAY),
+    ),
+    labProgress = LabProgress(List(MetaUpgradeId.entries.size) { 10 }),
+).toGameplaySnapshot()
+
+private val LocalDispatchGameplayContent by lazy {
+    val rebirth = SyntheticGameplayContent.rebirth
+    SyntheticGameplayContent.copy(
+        rebirth = rebirth.copy(
+            profiles = rebirth.profiles.map { profile ->
+                profile.copy(
+                    openingEnemyCount = 1,
+                    enemyCapMultiplier = 0.1f,
+                    spawnRateMultiplier = 1f,
+                    enemyHealthMultiplier = 0.01f,
+                    enemySpeedMultiplier = 0.25f,
+                    incomingDamageMultiplier = 0f,
+                    playerPowerMultiplier = 20f,
+                    maximumActiveEnemies = 8,
+                    minimumSpawnIntervalSeconds = 0.2f,
+                )
+            }.toImmutableList(),
+            minSpawnIntervalSeconds = 0.2f,
+        ),
+    )
+}
+
 private enum class ProfileMode {
     Accept,
     Refuse,
@@ -621,13 +912,16 @@ private data class ProfileCall(
     val causalDepth: Int,
 )
 
-private class TestProfilePort : GameplayProfileRoute {
+private class TestProfilePort(
+    private val eventSink: (String) -> Unit = {},
+) : GameplayProfileRoute {
     override val instanceId = LOCAL_PROFILE_INSTANCE_ID
     var snapshot: GameplayProfileSnapshot = PlayerProfile().toGameplaySnapshot()
     var bootstrapResult: ProfileRunBootstrapResult = ProfileRunBootstrapResult.Ready(snapshot)
     var mode: ProfileMode = ProfileMode.Accept
     var resultSink: (ProfileModuleResultDelivery) -> Unit = {}
     val calls = mutableListOf<ProfileCall>()
+    val deliveries = mutableListOf<ProfileModuleResultDelivery>()
     var bootstrapReadCount: Int = 0
     var preferencesReadCount: Int = 0
     private var revision = ProfileRevision(10)
@@ -638,6 +932,7 @@ private class TestProfilePort : GameplayProfileRoute {
         causalDepth: Int,
     ): ProfileCommandIngressResult {
         calls += ProfileCall(request, causalScope, causalDepth)
+        eventSink("profile:$causalScope:$causalDepth")
         val commandSource = ProfileCommandSourceToken(
             request.semanticHandle,
             request.targetInstance,
@@ -665,30 +960,30 @@ private class TestProfilePort : GameplayProfileRoute {
             ProfileMode.DeliverThenThrow,
             -> {
                 revision = ProfileRevision(revision.value + 1)
-                resultSink(
-                    ProfileModuleResultDelivery(
-                        commandSource = commandSource,
-                        resultSource = ProfileResultSourceToken(
-                            semanticHandle = request.semanticHandle,
-                            targetInstance = instanceId,
-                            targetRevision = if (mode == ProfileMode.ForgeRevision) {
-                                ProfileRevision(revision.value + 1)
-                            } else {
-                                revision
-                            },
-                            sourceOrdinal = 1,
-                            causalScope = causalScope,
-                            causalDepth = causalDepth + 1,
-                        ),
-                        effectiveProtocolIdentity = if (mode == ProfileMode.ForgeIdentity) {
-                            ProfileEffectiveProtocolIdentity.SESSION_MUTE
+                val delivery = ProfileModuleResultDelivery(
+                    commandSource = commandSource,
+                    resultSource = ProfileResultSourceToken(
+                        semanticHandle = request.semanticHandle,
+                        targetInstance = instanceId,
+                        targetRevision = if (mode == ProfileMode.ForgeRevision) {
+                            ProfileRevision(revision.value + 1)
                         } else {
-                            ProfileEffectiveProtocolIdentity.GAMEPLAY_PROGRESS
+                            revision
                         },
-                        result = ProfileModuleResult.GameplayProgressApplied,
-                        issuerProvenance = ProfileResultIssuerProvenance.LOCAL_PROFILE_STATIC_BINDING,
+                        sourceOrdinal = 1,
+                        causalScope = causalScope,
+                        causalDepth = causalDepth + 1,
                     ),
+                    effectiveProtocolIdentity = if (mode == ProfileMode.ForgeIdentity) {
+                        ProfileEffectiveProtocolIdentity.SESSION_MUTE
+                    } else {
+                        ProfileEffectiveProtocolIdentity.GAMEPLAY_PROGRESS
+                    },
+                    result = ProfileModuleResult.GameplayProgressApplied,
+                    issuerProvenance = ProfileResultIssuerProvenance.LOCAL_PROFILE_STATIC_BINDING,
                 )
+                deliveries += delivery
+                resultSink(delivery)
                 if (mode == ProfileMode.DeliverThenThrow) throw ProfileInvocationFault()
                 ProfileCommandIngressResult.Accepted(instanceId, revision)
             }
@@ -713,6 +1008,99 @@ private class TestProfilePort : GameplayProfileRoute {
 
 }
 
+private fun GameplayRenderModel.exactRenderWitness(): List<Any?> = listOf(
+    phase,
+    settings,
+    rebirthLevel,
+    screenWidth.toRawBits(),
+    screenHeight.toRawBits(),
+    uiScale.toRawBits(),
+    coreX.toRawBits(),
+    coreY.toRawBits(),
+    velocityX.toRawBits(),
+    velocityY.toRawBits(),
+    cameraX.toRawBits(),
+    cameraY.toRawBits(),
+    pointerX.toRawBits(),
+    pointerY.toRawBits(),
+    pointerActive,
+    braking,
+    elapsed.toRawBits(),
+    heat.toRawBits(),
+    overheated,
+    dashPhaseTime.toRawBits(),
+    hp.toRawBits(),
+    maxHp.toRawBits(),
+    shield.toRawBits(),
+    maxShield.toRawBits(),
+    level,
+    data,
+    nextLevelData,
+    keys,
+    kills,
+    combo,
+    comboTime.toRawBits(),
+    runMatter,
+    totalMatter,
+    lastImpact.toRawBits(),
+    lastImpactTime.toRawBits(),
+    damageFlash.toRawBits(),
+    runGrace.toRawBits(),
+    screenShake.toRawBits(),
+    message,
+    messageTime.toRawBits(),
+    mass.toRawBits(),
+    damageMultiplier.toRawBits(),
+    weaponPower.toRawBits(),
+    coolingRate.toRawBits(),
+    magnetStrength.toRawBits(),
+    dashImpulse.toRawBits(),
+    dashHeatCost.toRawBits(),
+    regenPerSecond.toRawBits(),
+    critChance.toRawBits(),
+    critMultiplier.toRawBits(),
+    pickupRadius.toRawBits(),
+    luck.toRawBits(),
+    dataGain.toRawBits(),
+    matterGain.toRawBits(),
+    attackSpeed.toRawBits(),
+    damageReduction.toRawBits(),
+    comboWindow.toRawBits(),
+    overdriveGain.toRawBits(),
+    dragCoefficient.toRawBits(),
+    polarityStability.toRawBits(),
+    weapon,
+    weaponLevel,
+    overdriveCharge.toRawBits(),
+    overdriveTime.toRawBits(),
+    rerollsRemaining,
+    acquiredItemCount,
+    recentItem,
+    equippedRelics.toList(),
+    morningstarAngle.toRawBits(),
+    morningstarX.toRawBits(),
+    morningstarY.toRawBits(),
+    weaponBeamTime.toRawBits(),
+    weaponBeamStartX.toRawBits(),
+    weaponBeamStartY.toRawBits(),
+    weaponBeamEndX.toRawBits(),
+    weaponBeamEndY.toRawBits(),
+    totem,
+    coreShape,
+    enemies.toList(),
+    projectiles.toList(),
+    pickups.toList(),
+    trail.toList(),
+    weaponNodes.toList(),
+    weaponOrbitals.toList(),
+    choices.toList(),
+    choiceType,
+    pendingRelicChoiceCount,
+    itemStacksSnapshot.toList(),
+    discoveredItemCount,
+    kinetickk.ball.content.api.RelicId.entries.map(::relicRank),
+)
+
 private fun PlayerProfile.toGameplaySnapshot(): GameplayProfileSnapshot = GameplayProfileSnapshot(
     preferences,
     economy,
@@ -732,12 +1120,14 @@ private fun gameplayFeature(profile: TestProfilePort): DefaultGameplayFeature =
 private class RecordingGameplayAudioExecutor(
     var throwOnAdvance: Boolean = false,
     var throwOnUnlock: Boolean = false,
+    private val eventSink: (String) -> Unit = {},
 ) : GameplayAudioExecutor {
     val frames = mutableListOf<Pair<Float, List<GameplayAudioCue>>>()
     var unlockCount = 0
 
     override fun advance(realDeltaSeconds: Float, cues: ImmutableList<GameplayAudioCue>) {
         frames += realDeltaSeconds to cues.toList()
+        eventSink("audio")
         if (throwOnAdvance) throw AudioResourceFault()
     }
 

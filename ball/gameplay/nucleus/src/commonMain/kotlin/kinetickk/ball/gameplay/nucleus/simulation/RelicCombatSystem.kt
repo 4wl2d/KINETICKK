@@ -191,28 +191,81 @@ internal fun MutableGameState.onQualifiedWeaponHit(enemy: Enemy, result: DamageR
     }
 }
 
-internal fun MutableGameState.isRelicTargetIsolated(enemy: Enemy, range: Float): Boolean = enemies.none {
-    it.id != enemy.id && !it.dead && it.hp > 0f && distanceSquared(enemy.x, enemy.y, it.x, it.y) <= range * range
+internal fun MutableGameState.isRelicTargetIsolated(enemy: Enemy, range: Float): Boolean {
+    val rangeSquared = range * range
+    for (index in enemies.indices) {
+        val candidate = enemies[index]
+        if (
+            candidate.id != enemy.id &&
+            !candidate.dead &&
+            candidate.hp > 0f &&
+            distanceSquared(enemy.x, enemy.y, candidate.x, candidate.y) <= rangeSquared
+        ) return false
+    }
+    return true
 }
 
-internal fun MutableGameState.nearestOtherEnemy(x: Float, y: Float, excludedId: Int, range: Float): Enemy? = enemies
-    .asSequence()
-    .filter { it.id != excludedId && !it.dead && it.hp > 0f && distanceSquared(x, y, it.x, it.y) <= range * range }
-    .minByOrNull { distanceSquared(x, y, it.x, it.y) }
+internal fun MutableGameState.nearestOtherEnemy(
+    x: Float,
+    y: Float,
+    excludedId: Int,
+    range: Float,
+): Enemy? {
+    var nearest: Enemy? = null
+    var nearestDistanceSquared = range * range
+    for (index in enemies.indices) {
+        val candidate = enemies[index]
+        if (candidate.id == excludedId || candidate.dead || !(candidate.hp > 0f)) continue
+        val candidateDistanceSquared = distanceSquared(x, y, candidate.x, candidate.y)
+        if (candidateDistanceSquared <= nearestDistanceSquared) {
+            if (nearest == null || candidateDistanceSquared < nearestDistanceSquared) {
+                nearest = candidate
+                nearestDistanceSquared = candidateDistanceSquared
+            }
+        }
+    }
+    return nearest
+}
 
 internal fun MutableGameState.chainRelicDamage(origin: Enemy, count: Int, range: Float, damage: Float) {
     require(count in 0..content.relicPolicy.maxRank) {
         "Relic chain work must remain within the captured Relic rank bound"
     }
-    val used = mutableSetOf(origin.id)
+    val usedEnemyIds = IntArray(count + 1)
+    usedEnemyIds[0] = origin.id
+    var usedEnemyCount = 1
     var fromX = origin.x
     var fromY = origin.y
     repeat(count) {
-        val target = enemies.asSequence()
-            .filter { it.id !in used && !it.dead && it.hp > 0f && distanceSquared(fromX, fromY, it.x, it.y) <= range * range }
-            .minByOrNull { distanceSquared(fromX, fromY, it.x, it.y) }
-            ?: return@repeat
-        used += target.id
+        var target: Enemy? = null
+        var targetDistanceSquared = range * range
+        for (enemyIndex in enemies.indices) {
+            val candidate = enemies[enemyIndex]
+            if (candidate.dead || !(candidate.hp > 0f)) continue
+            var alreadyUsed = false
+            for (usedIndex in 0 until usedEnemyCount) {
+                if (usedEnemyIds[usedIndex] == candidate.id) {
+                    alreadyUsed = true
+                    break
+                }
+            }
+            if (alreadyUsed) continue
+            val candidateDistanceSquared = distanceSquared(
+                fromX,
+                fromY,
+                candidate.x,
+                candidate.y,
+            )
+            if (
+                candidateDistanceSquared <= targetDistanceSquared &&
+                (target == null || candidateDistanceSquared < targetDistanceSquared)
+            ) {
+                target = candidate
+                targetDistanceSquared = candidateDistanceSquared
+            }
+        }
+        target ?: return@repeat
+        usedEnemyIds[usedEnemyCount++] = target.id
         damageEnemy(target, damage)
         addRelicArc(fromX, fromY, target.x, target.y)
         fromX = target.x
@@ -221,7 +274,8 @@ internal fun MutableGameState.chainRelicDamage(origin: Enemy, count: Int, range:
 }
 
 internal fun MutableGameState.areaRelicDamage(x: Float, y: Float, radius: Float, damage: Float, excludedId: Int = -1) {
-    enemies.forEach { target ->
+    for (index in enemies.indices) {
+        val target = enemies[index]
         if (target.id != excludedId && !target.dead && target.hp > 0f &&
             distanceSquared(x, y, target.x, target.y) <= square(radius + target.radius)
         ) {

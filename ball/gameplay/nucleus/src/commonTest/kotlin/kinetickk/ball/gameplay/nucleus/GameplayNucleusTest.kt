@@ -398,6 +398,14 @@ class GameplayNucleusTest {
         ).nextState
         assertTrue(first.pendingProfileCommand != null)
 
+        val retainedPending = checkNotNull(first.pendingProfileCommand)
+        val stateOnlyFrame = interaction(
+            first,
+            GameplayInteractionPulse.PointerMoved.fromValidated(900f, 360f),
+        )
+        assertTrue(stateOnlyFrame.outputs.isEmpty())
+        assertSame(retainedPending, stateOnlyFrame.nextState.pendingProfileCommand)
+
         val secondCandidate = first.engine!!.model.copyForReduction().apply { pendingBankedMatter = 4 }
         assertIntentRejection(
             first.copy(engine = EngineState(secondCandidate)),
@@ -512,6 +520,63 @@ class GameplayNucleusTest {
         assertNotEquals(state.revision, advanced.revision)
         assertSame(state.content, advanced.content)
         assertSame(state.content, GameplayNucleus.renderSnapshot(advanced).renderModel!!.content)
+    }
+
+    @Test
+    fun reusableRenderSnapshotMustMatchItsExactCommittedSource() {
+        val firstSource = start(initial(271)).nextState
+        val firstSnapshot = GameplayNucleus.renderSnapshot(firstSource)
+        val otherSource = start(initial(272)).nextState
+        val otherNext = interaction(
+            otherSource,
+            GameplayInteractionPulse.FrameElapsed.fromValidated(0.01f),
+        ).nextState
+
+        assertFailsWith<IllegalArgumentException> {
+            GameplayNucleus.renderSnapshot(
+                state = otherNext,
+                reusableState = otherSource,
+                reusableSnapshot = firstSnapshot,
+            )
+        }
+
+        val pausedBranch = interaction(
+            firstSource,
+            GameplayInteractionPulse.PauseToggled,
+        ).nextState
+        val runningBranch = interaction(
+            firstSource,
+            GameplayInteractionPulse.FrameElapsed.fromValidated(0.01f),
+        ).nextState
+        val runningNext = interaction(
+            runningBranch,
+            GameplayInteractionPulse.FrameElapsed.fromValidated(0.01f),
+        ).nextState
+        assertEquals(pausedBranch.instanceId, runningBranch.instanceId)
+        assertEquals(pausedBranch.revision, runningBranch.revision)
+        assertFailsWith<IllegalArgumentException> {
+            GameplayNucleus.renderSnapshot(
+                state = runningNext,
+                reusableState = runningBranch,
+                reusableSnapshot = GameplayNucleus.renderSnapshot(pausedBranch),
+            )
+        }
+
+        val firstNext = interaction(
+            firstSource,
+            GameplayInteractionPulse.FrameElapsed.fromValidated(0.01f),
+        ).nextState
+        val firstFollowing = interaction(
+            firstNext,
+            GameplayInteractionPulse.FrameElapsed.fromValidated(0.01f),
+        ).nextState
+        assertFailsWith<IllegalArgumentException> {
+            GameplayNucleus.renderSnapshot(
+                state = firstFollowing,
+                reusableState = firstNext,
+                reusableSnapshot = firstSnapshot,
+            )
+        }
     }
 
     private fun initial(runId: Long): GameplayState =

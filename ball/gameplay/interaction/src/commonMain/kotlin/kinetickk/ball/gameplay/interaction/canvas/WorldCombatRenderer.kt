@@ -46,7 +46,9 @@ internal fun DrawScope.drawWorld(
     drawWeaponNodes(engine, shakeX, shakeY)
     drawPickups(engine, shakeX, shakeY)
     drawProjectiles(engine, shakeX, shakeY)
-    engine.enemies.forEach { drawEnemy(engine, it, shakeX, shakeY) }
+    for (index in engine.enemies.indices) {
+        drawEnemy(engine, engine.enemies[index], shakeX, shakeY)
+    }
     drawWeapon(engine, core, shakeX, shakeY)
     drawWeaponArcs(engine, visualFx, shakeX, shakeY)
     drawParticles(engine, visualFx, shakeX, shakeY)
@@ -68,7 +70,8 @@ internal fun DrawScope.drawWorld(
 
     val settings = engine.settings
     if (settings.damageNumbers) {
-        visualFx.damageNumbers.forEach { number ->
+        for (index in visualFx.damageNumbers.indices) {
+            val number = visualFx.damageNumbers[index]
             val location = world(engine, number.x, number.y, shakeX, shakeY)
             val tier = damageNumberTier(number.amount, settings.damageNumberTierThreshold, number.critical)
             drawLabel(
@@ -92,9 +95,10 @@ internal fun DrawScope.drawMotionEchoes(
     shakeX: Float,
     shakeY: Float,
 ) {
-    visualFx.motionEchoes.forEach { echo ->
+    for (index in visualFx.motionEchoes.indices) {
+        val echo = visualFx.motionEchoes[index]
         val center = world(engine, echo.x, echo.y, shakeX, shakeY)
-        if (!isOnScreen(center, 60f)) return@forEach
+        if (!isOnScreen(center, 60f)) continue
         val life = clamp(echo.life / echo.maxLife, 0f, 1f)
         val alpha = life * life * echo.intensity
         val radius = GameplayRenderModel.CORE_RADIUS + (1f - life) * 9f
@@ -109,9 +113,10 @@ internal fun DrawScope.drawShockwaves(
     shakeX: Float,
     shakeY: Float,
 ) {
-    visualFx.shockwaves.forEach { wave ->
+    for (index in visualFx.shockwaves.indices) {
+        val wave = visualFx.shockwaves[index]
         val center = world(engine, wave.x, wave.y, shakeX, shakeY)
-        if (!isOnScreen(center, wave.maxRadius)) return@forEach
+        if (!isOnScreen(center, wave.maxRadius)) continue
         val life = clamp(wave.life / wave.maxLife, 0f, 1f)
         val progress = 1f - life
         val eased = 1f - (1f - progress) * (1f - progress)
@@ -125,7 +130,8 @@ internal fun DrawScope.drawShockwaves(
 internal fun DrawScope.drawTrail(engine: GameplayRenderModel, shakeX: Float, shakeY: Float) {
     var previousLocation: Offset? = null
     var previousLife = 0f
-    engine.trail.forEach { point ->
+    for (index in engine.trail.indices) {
+        val point = engine.trail[index]
         val location = world(engine, point.x, point.y, shakeX, shakeY)
         val life = clamp(1f - point.age / 2.25f, 0f, 1f)
         previousLocation?.let { previous ->
@@ -201,12 +207,14 @@ internal fun DrawScope.drawWeapon(engine: GameplayRenderModel, core: Offset, sha
         WeaponId.GRAVITY_MINES -> {
             drawCircle(Violet.copy(alpha = 0.22f), 29f, core, style = Stroke(1.5f, pathEffect = dashEffect))
         }
-        WeaponId.ION_SWARM -> engine.weaponOrbitals.forEach { orbital ->
+        WeaponId.ION_SWARM -> for (index in engine.weaponOrbitals.indices) {
+            val orbital = engine.weaponOrbitals[index]
             val point = world(engine, orbital.x, orbital.y, shakeX, shakeY)
             drawCircle(Cyan.copy(alpha = 0.14f), 14f, point)
             drawPolygon(point, 7f, 4, engine.elapsed * 2f + orbital.index, Cyan, Fill)
         }
-        WeaponId.RIFT_BLADES -> engine.weaponOrbitals.forEach { orbital ->
+        WeaponId.RIFT_BLADES -> for (index in engine.weaponOrbitals.indices) {
+            val orbital = engine.weaponOrbitals[index]
             val point = world(engine, orbital.x, orbital.y, shakeX, shakeY)
             drawPolygon(point, 16f, 4, engine.elapsed * 4.2f + orbital.index, Magenta, Fill)
             drawLine(Violet.copy(alpha = 0.25f), core, point, 1f, pathEffect = dashEffect)
@@ -248,7 +256,8 @@ internal fun DrawScope.drawWeapon(engine: GameplayRenderModel, core: Offset, sha
 }
 
 internal fun DrawScope.drawWeaponNodes(engine: GameplayRenderModel, shakeX: Float, shakeY: Float) {
-    engine.weaponNodes.forEach { node ->
+    for (index in engine.weaponNodes.indices) {
+        val node = engine.weaponNodes[index]
         if (node.type == WeaponNodeType.GRAVITY_MINE) {
             val point = world(engine, node.x, node.y, shakeX, shakeY)
             val ratio = clamp(node.life / node.maxLife, 0f, 1f)
@@ -265,7 +274,8 @@ internal fun DrawScope.drawWeaponArcs(
     shakeX: Float,
     shakeY: Float,
 ) {
-    visualFx.weaponArcs.forEachIndexed { index, arc ->
+    for (index in visualFx.weaponArcs.indices) {
+        val arc = visualFx.weaponArcs[index]
         val start = world(engine, arc.fromX, arc.fromY, shakeX, shakeY)
         val end = world(engine, arc.toX, arc.toY, shakeX, shakeY)
         val dx = end.x - start.x

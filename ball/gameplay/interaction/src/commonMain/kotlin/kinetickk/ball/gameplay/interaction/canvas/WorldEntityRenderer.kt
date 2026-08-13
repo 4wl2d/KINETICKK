@@ -180,9 +180,10 @@ internal fun DrawScope.drawEnemy(engine: GameplayRenderModel, enemy: EnemyProjec
 }
 
 internal fun DrawScope.drawProjectiles(engine: GameplayRenderModel, shakeX: Float, shakeY: Float) {
-    engine.projectiles.forEach { projectile ->
+    for (index in engine.projectiles.indices) {
+        val projectile = engine.projectiles[index]
         val center = world(engine, projectile.x, projectile.y, shakeX, shakeY)
-        if (!isOnScreen(center, projectile.radius + 28f)) return@forEach
+        if (!isOnScreen(center, projectile.radius + 28f)) continue
         val previous = world(engine, projectile.previousX, projectile.previousY, shakeX, shakeY)
         if (projectile.hostile) {
             drawLine(Red.copy(alpha = 0.24f), previous, center, projectile.radius * 1.25f, StrokeCap.Round)
@@ -200,9 +201,10 @@ internal fun DrawScope.drawProjectiles(engine: GameplayRenderModel, shakeX: Floa
 }
 
 internal fun DrawScope.drawPickups(engine: GameplayRenderModel, shakeX: Float, shakeY: Float) {
-    engine.pickups.forEach { pickup ->
+    for (index in engine.pickups.indices) {
+        val pickup = engine.pickups[index]
         val center = world(engine, pickup.x, pickup.y, shakeX, shakeY)
-        if (!isOnScreen(center, 28f)) return@forEach
+        if (!isOnScreen(center, 28f)) continue
         val previous = world(engine, pickup.previousX, pickup.previousY, shakeX, shakeY)
         when (pickup.type) {
             PickupType.DATA -> {
@@ -237,9 +239,10 @@ internal fun DrawScope.drawParticles(
     shakeX: Float,
     shakeY: Float,
 ) {
-    visualFx.particles.forEach { particle ->
+    for (index in visualFx.particles.indices) {
+        val particle = visualFx.particles[index]
         val center = world(engine, particle.x, particle.y, shakeX, shakeY)
-        if (!isOnScreen(center, 24f)) return@forEach
+        if (!isOnScreen(center, 24f)) continue
         val alpha = clamp(particle.life / particle.maxLife, 0f, 1f)
         val color = ParticleColors[particle.colorIndex.coerceIn(ParticleColors.indices)]
         val particleSpeed = kotlin.math.sqrt(particle.vx * particle.vx + particle.vy * particle.vy)

@@ -40,8 +40,8 @@ The cursor or touch point is both a magnetic target and a lethal singularity. Pu
 
 The same shared application composition, Pokeball authorities, deterministic
 gameplay simulation, content catalog, strict profile resource, and tests run
-across desktop (macOS, Windows, and Linux) and modern browsers through
-WebAssembly.
+across Android phones, desktop (macOS, Windows, and Linux), and modern browsers
+through WebAssembly.
 
 The repository is published as a working learning example for Kotlin
 Multiplatform, Compose Canvas rendering, deterministic simulation, progression
@@ -68,6 +68,7 @@ Magnetic Polarity saturates when the target stays far away in one direction. A s
 | `Q` | Reroll an item or weapon choice |
 | `L` / `A` / `B` / `C` / `S` | Lab, Armory, Rebirth, Codex, Settings |
 | `M` | Toggle sound and music |
+| `F3` | Toggle and reset the rolling performance HUD |
 | `R` | Restart after a completed run |
 
 Defeat **The Architect** on the current Rebirth tier to unlock the next one. Rebirth starts a fresh run build with a stronger threat profile while preserving permanent progression, unlocks, Codex discovery, and settings.
@@ -98,6 +99,19 @@ Open the local URL printed by Gradle. A production WebAssembly bundle can be bui
 
 The optimized bundle is written to `app/web/build/dist/wasmJs/productionExecutable`.
 
+### Android development
+
+Build the Android app and its Compose instrumentation tests with:
+
+```bash
+./gradlew :app:shared:assembleDebug :app:shared:assembleDebugAndroidTest
+```
+
+The debug package is `com.vladislavtomilov.kinetickk.debug`, isolated from the
+stable benchmark/release package so device tests cannot remove or overwrite
+gameplay data. The APK is written to
+`app/shared/build/outputs/apk/debug/app-shared-debug.apk`.
+
 ### Verification and packaging
 
 Pokeball architecture verification requires an immutable checkout of
@@ -109,9 +123,11 @@ Pokeball architecture verification requires an immutable checkout of
 | Goal | Command |
 |---|---|
 | Run desktop tests | `./gradlew desktopTest` |
+| Compile the Android app and Compose device tests | `./gradlew :app:shared:assembleDebug :app:shared:assembleBenchmark :app:shared:assembleDebugAndroidTest` |
 | Verify the module graph and Pokeball architecture/claim prerequisites | `./gradlew verifyArchitecture verifyPokeballArchitecture verifyPokeballConformance` |
 | Compile and run isolated Wasm browser tests | `CHROME_BIN=/path/to/chrome ./gradlew compileTestKotlinWasmJs wasmJsBrowserTest` |
 | Build the production web bundle | `./gradlew wasmJsBrowserDistribution` |
+| Run reproducible performance comparisons | See [`tools/performance`](tools/performance/README.md) |
 | Run the complete local gate | `./gradlew verifyArchitecture verifyPokeballArchitecture verifyPokeballConformance desktopTest compileTestKotlinWasmJs wasmJsBrowserTest wasmJsBrowserDistribution` |
 | List every available task | `./gradlew tasks` |
 
@@ -121,14 +137,14 @@ Pokeball architecture verification requires an immutable checkout of
 - **Buildcraft:** twelve movement-reactive weapons, forty rankable Relics, four Sovereign Relics, four bound Relic slots, and 400 deterministic items across twenty modifier families.
 - **Run progression:** Data leveling, stat evolutions, Elite Keys, two-stage Totems, weapon mastery, combo rewards, velocity tiers, Kinetic Overdrive, and a twenty-minute Architect finale.
 - **Persistent progression:** spendable Kinetic Matter, eight Lab upgrades, twelve Armory unlocks, three Core shapes, Codex discovery, and replayable Rebirth threat tiers.
-- **Presentation:** infinite procedural grid, camera tracking, trails, particles, screen shake, configurable damage numbers, and procedural synth audio on desktop and web.
+- **Presentation:** infinite procedural grid, camera tracking, trails, particles, screen shake, configurable damage numbers, and procedural synth audio on Android, desktop, and web.
 - **Opposition:** Drifter, Shooter, Charger, Interceptor, Weaver, Warden, Splitter, Elite, and Architect behaviors with projectiles and escalating wave mixes.
 
 ## Project layout
 
 | Path | Responsibility |
 |---|---|
-| `app/shared` | Thin Application Assembly: constructs fixed bindings and exact platform storage/audio brokers, transports Profile results by source identity, owns provider lifecycle, and delegates the shell to AppSession |
+| `app/shared` | Thin Application Assembly and Android host: constructs fixed bindings and exact platform storage/audio brokers, transports Profile results by source identity, owns provider lifecycle, and delegates the shell to AppSession |
 | `app/desktop` | Thin JVM/desktop host and native packaging; depends only on `app/shared` |
 | `app/web` | Thin Wasm browser host and production web bundle; depends only on `app/shared` |
 | `foundation/common`, `foundation/design` | Shared mechanical collections, random utilities, Canvas tokens, text, geometry, and UI primitives |
@@ -140,8 +156,8 @@ Pokeball architecture verification requires an immutable checkout of
 | `build-logic` | Gradle conventions plus deterministic module, ownership, route, bound, snapshot, manifest-drift, and conformance verification |
 
 The graph has exactly 22 leaf modules. Ball APIs and Nuclei are separate from
-Compose Interaction and provider-facing Resource roles; Desktop and Web depend
-only on `app/shared`. AppSession owns navigation and cross-authority workflow;
+Compose Interaction and provider-facing Resource roles; the Android host lives
+in `app/shared`, while Desktop and Web depend only on it. AppSession owns navigation and cross-authority workflow;
 `app/shared` is static construction and transport only. The build rejects
 legacy `core:*` and `feature:*` modules and dependencies, invalid role imports,
 unexpected graph endpoints, manifest drift, and any mismatch in the pinned

@@ -12,6 +12,10 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
+import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
+import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
+import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
+import kinetickk.ball.gameplay.interaction.layout.gameplayLayoutMode
 import kinetickk.ball.gameplay.nucleus.model.clamp
 import kinetickk.ball.gameplay.nucleus.model.formatRunTime
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
@@ -21,6 +25,11 @@ import kotlin.math.min
 import kotlin.math.sin
 
 internal fun DrawScope.drawHud(engine: GameplayRenderModel, textMeasurer: TextMeasurer) {
+    val layoutMode = gameplayLayoutMode(size.width, size.height, density)
+    if (layoutMode != GameplayLayoutMode.REGULAR) {
+        drawCompactHud(engine, textMeasurer, layoutMode)
+        return
+    }
     val narrow = size.width / density < 700f
     val panelX = d(if (narrow) 10f else 18f)
     val panelY = d(if (narrow) 10f else 18f)
@@ -132,6 +141,106 @@ internal fun DrawScope.drawHud(engine: GameplayRenderModel, textMeasurer: TextMe
         drawRect(Acid.copy(alpha = alpha * 0.65f), Offset(d(28f), size.height - d(21f)), Size(d(105f) * alpha, d(2f)))
     }
     drawControls(engine, textMeasurer)
+}
+
+private fun DrawScope.drawCompactHud(
+    engine: GameplayRenderModel,
+    textMeasurer: TextMeasurer,
+    layoutMode: GameplayLayoutMode,
+) {
+    val portrait = layoutMode == GameplayLayoutMode.COMPACT_PORTRAIT
+    val panelLeft = d(12f)
+    val panelTop = d(if (portrait) 70f else 10f)
+    val panelWidth = if (portrait) size.width - d(24f) else min(d(220f), size.width * 0.31f)
+    val panelHeight = d(92f)
+    val contentLeft = panelLeft + d(10f)
+    val barWidth = panelWidth - d(20f)
+    drawRect(Color(0xC4080A17), Offset(panelLeft, panelTop), Size(panelWidth, panelHeight))
+    drawRect(DarkLine, Offset(panelLeft, panelTop), Size(panelWidth, panelHeight), style = Stroke(d(1f)))
+    drawLabel(
+        textMeasurer,
+        "LV ${engine.level} // ${engine.currentWeaponDefinition.name.uppercase()}",
+        contentLeft,
+        panelTop + d(9f),
+        8f,
+        weaponColor(engine.weapon),
+        weight = FontWeight.Bold,
+        maxWidth = barWidth,
+    )
+    drawBar(contentLeft, panelTop + d(31f), barWidth, d(7f), engine.hp / engine.maxHp, Cyan, DarkLine)
+    drawLabel(textMeasurer, "HP ${engine.hp.toInt()}/${engine.maxHp.toInt()}", contentLeft, panelTop + d(41f), 7f, White)
+    val secondaryValue = if (engine.maxShield > 0f) engine.shield / engine.maxShield else engine.heat / GameplayRenderModel.MAX_HEAT
+    val secondaryColor = if (engine.maxShield > 0f) Violet else if (engine.overheated) Red else Orange
+    drawBar(contentLeft, panelTop + d(61f), barWidth, d(5f), secondaryValue, secondaryColor, DarkLine)
+    drawLabel(
+        textMeasurer,
+        if (engine.maxShield > 0f) "SHIELD ${engine.shield.toInt()} // HEAT ${engine.heat.toInt()}" else "HEAT ${engine.heat.toInt()}",
+        contentLeft,
+        panelTop + d(69f),
+        6f,
+        secondaryColor,
+        maxWidth = barWidth,
+    )
+
+    if (portrait) {
+        drawLabel(textMeasurer, formatRunTime(engine.elapsed), d(12f), d(14f), 18f, White, weight = FontWeight.Bold)
+        drawLabel(textMeasurer, "R${engine.rebirthLevel} // ${formatCompact(engine.runMatter)} MATTER", d(12f), d(42f), 7f, Acid)
+    } else {
+        drawLabel(textMeasurer, formatRunTime(engine.elapsed), size.width * 0.5f, d(13f), 18f, White, centered = true, weight = FontWeight.Bold)
+        drawLabel(textMeasurer, "R${engine.rebirthLevel} // ${formatCompact(engine.runMatter)} MATTER", size.width * 0.5f, d(42f), 7f, Acid, centered = true)
+        val progressWidth = min(d(220f), size.width * 0.28f)
+        drawBar(size.width * 0.5f - progressWidth * 0.5f, d(62f), progressWidth, d(4f), engine.runProgress, Violet, DarkLine)
+    }
+
+    forEachRunningControlBounds(
+        size.width,
+        size.height,
+        density,
+    ) { target, left, top, right, bottom ->
+        val center = Offset((left + right) * 0.5f, (top + bottom) * 0.5f)
+        when (target) {
+            RunningControlTarget.BRAKE -> {
+                drawCircle(Violet.copy(alpha = if (engine.braking) 0.28f else 0.12f), d(31f), center)
+                drawCircle(Violet, d(30f), center, style = Stroke(d(1.4f)))
+                drawLabel(textMeasurer, "BRAKE", center.x, center.y - d(6f), 8f, Violet, centered = true, weight = FontWeight.Bold)
+                drawLabel(textMeasurer, "HOLD", center.x, center.y + d(11f), 6f, White, centered = true)
+            }
+            RunningControlTarget.DASH -> {
+                val accent = if (engine.overheated) Red else Cyan
+                drawCircle(accent.copy(alpha = if (engine.dashReady) 0.18f else 0.08f), d(31f), center)
+                drawCircle(accent, d(30f), center, style = Stroke(d(1.4f)))
+                drawLabel(textMeasurer, "DASH", center.x, center.y - d(6f), 8f, accent, centered = true, weight = FontWeight.Bold)
+                drawLabel(textMeasurer, if (engine.overheated) "OFF" else if (engine.dashReady) "READY" else "WAIT", center.x, center.y + d(11f), 6f, White, centered = true)
+            }
+            RunningControlTarget.PERFORMANCE -> {
+                val topLeft = Offset(left, top)
+                val controlSize = Size(right - left, bottom - top)
+                drawRect(Color(0xC4080A17), topLeft, controlSize)
+                drawRect(Violet, topLeft, controlSize, style = Stroke(d(1f)))
+                drawLabel(textMeasurer, "PERF", center.x, center.y - d(5f), 7f, Violet, centered = true, weight = FontWeight.Bold)
+                drawLabel(textMeasurer, "METRICS", center.x, center.y + d(9f), 5f, Muted, centered = true)
+            }
+            RunningControlTarget.PAUSE -> {
+                val topLeft = Offset(left, top)
+                val controlSize = Size(right - left, bottom - top)
+                drawRect(Color(0xC4080A17), topLeft, controlSize)
+                drawRect(Cyan, topLeft, controlSize, style = Stroke(d(1f)))
+                drawLabel(textMeasurer, "Ⅱ", center.x, center.y - d(9f), 15f, Cyan, centered = true, weight = FontWeight.Bold)
+                drawLabel(textMeasurer, "PAUSE", center.x, center.y + d(10f), 5f, White, centered = true)
+            }
+        }
+    }
+
+    if (engine.combo >= 2 && engine.comboTime > 0f) {
+        drawLabel(textMeasurer, "CHAIN x${engine.combo}", size.width * 0.5f, size.height - d(51f), 11f, Acid, centered = true, weight = FontWeight.Bold)
+    }
+    if (engine.tetherDistance < 75f && engine.runGrace <= 0f) {
+        drawLabel(textMeasurer, "SINGULARITY CLOSE", size.width * 0.5f, size.height - d(24f), 8f, Red, centered = true, weight = FontWeight.Bold)
+    }
+    if (engine.messageTime > 0f) {
+        val alpha = clamp(engine.messageTime / 0.45f, 0f, 1f)
+        drawLabel(textMeasurer, engine.message, size.width * 0.5f, size.height * 0.44f, 15f, if (engine.message == "OVERHEAT") Red else White, centered = true, weight = FontWeight.Bold, alpha = alpha)
+    }
 }
 
 internal fun DrawScope.drawRelicMatrix(engine: GameplayRenderModel, textMeasurer: TextMeasurer, narrow: Boolean, right: Float) {

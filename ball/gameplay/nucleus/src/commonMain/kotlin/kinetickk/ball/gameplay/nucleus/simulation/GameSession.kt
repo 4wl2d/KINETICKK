@@ -153,6 +153,7 @@ internal fun MutableGameState.togglePause() {
     }
     updateBraking()
     accumulator = 0f
+    lastTransitionSteps = 0
 }
 
 internal fun MutableGameState.pauseForOverlay() {
@@ -160,6 +161,7 @@ internal fun MutableGameState.pauseForOverlay() {
         phase = GamePhase.PAUSED
         dashBufferTime = 0f
         accumulator = 0f
+        lastTransitionSteps = 0
     }
     keyboardBrakeActive = false
     secondaryBrakeActive = false
@@ -175,6 +177,7 @@ internal fun MutableGameState.exitRun() {
     touchBrakeActive = false
     dashBufferTime = 0f
     accumulator = 0f
+    lastTransitionSteps = 0
     updateBraking()
 }
 

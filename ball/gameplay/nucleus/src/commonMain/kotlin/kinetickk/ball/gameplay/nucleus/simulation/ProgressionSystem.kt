@@ -18,7 +18,8 @@ import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
-import kinetickk.foundation.collections.toImmutableSet
+import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.immutableListOf
 import kinetickk.ball.profile.api.GameplayProgressUpdate
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kotlin.math.floor
@@ -145,7 +146,8 @@ internal fun MutableGameState.buildRelicChoices() {
         selected += available[gameplayRandom.nextInt(available.size)]
     }
     choices = buildList {
-        selected.forEach { relic ->
+        for (relicIndex in selected.indices) {
+            val relic = selected[relicIndex]
             val currentRank = relicRank(relic.id)
             add(
                 ChoiceOption(
@@ -283,8 +285,9 @@ internal fun MutableGameState.clearRelicRuntime(id: RelicId) {
         RelicId.BORROWED_MOMENT -> borrowedMomentTime = 0f
         else -> Unit
     }
-    delayedRelicHits.removeAll { it.relicId == id }
-    enemies.forEach { enemy ->
+    delayedRelicHits.removeMatchingStable { delayedHit -> delayedHit.relicId == id }
+    for (enemyIndex in enemies.indices) {
+        val enemy = enemies[enemyIndex]
         enemy.relicCounters[index] = 0
         enemy.relicTimers[index] = 0f
         enemy.relicValues[index] = 0f
@@ -388,7 +391,7 @@ internal fun MutableGameState.resetWeaponRuntime() {
     weaponNodes.clear()
     weaponOrbitals.clear()
     emitVisualFx(VisualFxCue.ClearWeaponArcs)
-    projectiles.removeAll { !it.hostile }
+    projectiles.removeMatchingStable { projectile -> !projectile.hostile }
     trailLastX = coreX
     trailLastY = coreY
     trailDistanceCarry = 0f
@@ -436,14 +439,14 @@ internal fun MutableGameState.takeProgressUpdate(): GameplayProgressUpdate? {
     return update
 }
 
-internal fun MutableGameState.takeSoundCues(): List<GameplayAudioCue> {
-    if (soundCues.isEmpty()) return emptyList()
-    val result = soundCues.toList()
+internal fun MutableGameState.takeSoundCues(): ImmutableList<GameplayAudioCue> {
+    if (soundCues.isEmpty()) return immutableListOf()
+    val result = soundCues.toImmutableList()
     soundCues.clear()
     return result
 }
 
-internal fun MutableGameState.takeVisualFxCues(): List<VisualFxCue> = visualFxCues.drain()
+internal fun MutableGameState.takeVisualFxCues(): ImmutableList<VisualFxCue> = visualFxCues.drain()
 
 internal fun MutableGameState.emitSound(cue: GameplayAudioCue) {
     if (soundCues.size < MutableGameState.MAX_GAMEPLAY_SOUND_CUES) soundCues += cue

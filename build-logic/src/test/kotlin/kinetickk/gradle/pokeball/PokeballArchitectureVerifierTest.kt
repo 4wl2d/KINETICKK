@@ -358,6 +358,28 @@ class PokeballArchitectureVerifierTest {
                 "Foreign internal access" in it
             },
         )
+
+        val appSharedInteractionTestEdge = ProjectEdge(
+            ":app:shared",
+            "commonTestImplementation",
+            ":ball:gameplay:interaction",
+        )
+        val appSharedInteractionTestImport = SourceDocument(
+            "app/shared/src/commonTest/kotlin/kinetickk/app/shared/GameplayFixture.kt",
+            "import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput",
+        )
+        assertTrue(
+            foreignInternalAccessViolations(
+                setOf(appSharedInteractionTestEdge),
+                listOf(appSharedInteractionTestImport),
+            ).isEmpty(),
+        )
+        assertTrue(
+            foreignInternalAccessViolations(
+                setOf(appSharedInteractionTestEdge.copy(configuration = "commonMainImplementation")),
+                listOf(appSharedInteractionTestImport),
+            ).any { "is not an exact declared host/test edge" in it },
+        )
     }
 
     @Test
@@ -699,7 +721,7 @@ class PokeballArchitectureVerifierTest {
             it.path.endsWith("/GameplayRenderModelMapper.kt")
         }
         val projectileProjectionCopy = renderProjectionAnchor.tokens.single {
-            "pickups = pickups.map" in it
+            "projectiles = projectiles.reuseEmptyProjection" in it
         }
         val withDriftedRenderProjection = sources.toMutableMap().apply {
             val source = getValue(renderProjectionAnchor.path)
@@ -716,9 +738,32 @@ class PokeballArchitectureVerifierTest {
             },
         )
 
+        val gameplayOutputs = expectedBounds.single { it.id == "gameplay.outputs-per-decision" }
+        val fixedBatchAnchor = gameplayOutputs.sourceAnchors.single {
+            it.path.endsWith("/GameProtocol.kt")
+        }
+        val audioDeltaGuard = fixedBatchAnchor.tokens.single {
+            "audioRealDeltaSeconds.toRawBits()" in it
+        }
+        val withDriftedFixedBatch = sources.toMutableMap().apply {
+            val source = getValue(fixedBatchAnchor.path)
+            this[fixedBatchAnchor.path] = source.copy(
+                text = source.text.replace(audioDeltaGuard, ""),
+            )
+        }
+        assertTrue(
+            boundViolations(
+                withDriftedFixedBatch,
+                mapOf("policy.md" to requiredPolicyBoundRows.joinToString("\n")),
+            ).any { violation ->
+                "Bound gameplay.outputs-per-decision=3" in violation &&
+                    audioDeltaGuard in violation
+            },
+        )
+
         val particles = expectedBounds.single { it.id == "gameplay.interaction-particles" }
         val particleSnapshotCopy = particles.sourceAnchors.single().tokens.single {
-            "motionEchoes = motionEchoes.map" in it
+            "particles = if (particlesDirty)" in it
         }
         val withDriftedInteractionSnapshot = sources.toMutableMap().apply {
             val source = getValue(particles.sourceAnchors.single().path)
@@ -735,8 +780,16 @@ class PokeballArchitectureVerifierTest {
             },
         )
 
-        assertBoundTokenDrift("gameplay.visual-fx-cues", "/VisualFxProtocol.kt", "val result = buildList")
-        assertBoundTokenDrift("gameplay.sound-cues", "/ProgressionSystem.kt", "val result = soundCues.toList")
+        assertBoundTokenDrift(
+            "gameplay.visual-fx-cues",
+            "/VisualFxProtocol.kt",
+            "retainedCues.orEmpty().toImmutableListAppending",
+        )
+        assertBoundTokenDrift(
+            "gameplay.sound-cues",
+            "/ProgressionSystem.kt",
+            "val result = soundCues.toImmutableList",
+        )
         assertBoundTokenDrift("content.items", "/DefaultContentCatalog.kt", "private val items =")
         assertBoundTokenDrift("profile.retained-lab-ranks", "/ProfileNucleus.kt", "val ranks = state.profile")
         assertBoundTokenDrift(
@@ -804,8 +857,12 @@ class PokeballArchitectureVerifierTest {
         }
 
         val reducerCopies = mechanicallyDerivedBounds.single { it.id == "gameplay.reducer-copy-collections" }
-        val copyAnchor = reducerCopies.sourceAnchors.single()
-        val projectileCopy = copyAnchor.tokens.single { "target.projectiles.addAll" in it }
+        val copyAnchor = reducerCopies.sourceAnchors.single {
+            it.path.endsWith("/MutableGameState.kt")
+        }
+        val projectileCopy = copyAnchor.tokens.single {
+            "source.mapTo(ArrayList(source.size), Projectile::isolatedCopy)" in it
+        }
         val withDriftedCopy = sources.toMutableMap().apply {
             val source = getValue(copyAnchor.path)
             this[copyAnchor.path] = source.copy(text = source.text.replace(projectileCopy, ""))
@@ -870,6 +927,31 @@ class PokeballArchitectureVerifierTest {
             "gameplay.item-indexed-state",
             "/GameplayNucleus.kt",
             "itemStacks = state.engine",
+        )
+        assertDerivedTokenDrift(
+            "gameplay.render-projection-collections",
+            "/GameplayNucleus.kt",
+            "projectionSourceIdentity ===",
+        )
+        assertDerivedTokenDrift(
+            "gameplay.render-projection-collections",
+            "/GameplayRenderModelMapper.kt",
+            "enemies = enemies.reuseIfIdentical",
+        )
+        assertDerivedTokenDrift(
+            "gameplay.render-projection-collections",
+            "/CopyOnWriteStorage.kt",
+            "current.next() != retained.next()",
+        )
+        assertDerivedTokenDrift(
+            "gameplay.reducer-copy-collections",
+            "/MutableGameState.kt",
+            "soundCueStorage?.let",
+        )
+        assertDerivedTokenDrift(
+            "gameplay.stable-compaction",
+            "/EnemySystem.kt",
+            "internal inline fun <Element>",
         )
         assertDerivedTokenDrift(
             "content.closed-ui-catalogs",

@@ -20,6 +20,12 @@ ownership by itself.
 their distinct owner meanings. Equality or derivation never transfers
 ownership.
 
+Gameplay publishes its accepted State and matching immutable render snapshot
+through one `CommittedGameplayFrame`. The render snapshot's private
+projection-source token is mechanical provenance only: it authorizes reuse
+against that exact committed predecessor and carries no additional business
+fact or writing authority.
+
 ## Business-fact ownership
 
 | Fact or decision | Owner | Consumers and legal access |
@@ -35,6 +41,10 @@ ownership.
 | tone validation and bounded playback request selection | Audio Resource | receives only typed `ToneRequest` and a narrow playback capability; no provider acquisition |
 | platform storage/audio provider acquisition and mechanical execution | instance-owned platform capability brokers / Execution-Gate mechanics bound by AppAssembly | Profile/Audio retain Resource operation semantics; Assembly selects and binds only, gains no effect/policy authority, and broad provider types never enter a Resource constructor |
 
+The closed platform bindings are actuals inside the existing `app:shared` leaf:
+`androidMain` binds Android SharedPreferences/AudioTrack, `desktopMain` binds JVM providers, and
+`wasmJsMain` binds browser providers. Android adds no authority or graph leaf.
+
 Home and Codex may combine independent Profile and Gameplay reads only in
 Session Interaction and must label the result non-atomic. Assembly never joins
 those reads into a fabricated business snapshot.
@@ -49,7 +59,7 @@ those reads into a fabricated business snapshot.
 | Profile | `ball:profile:api`, `ball:profile:nucleus`, `ball:profile:resource`, `ball:profile:interaction`, `ball:profile:impl` |
 | GameplayRun | `ball:gameplay:api`, `ball:gameplay:nucleus`, `ball:gameplay:interaction`, `ball:gameplay:impl` |
 | AppSession Flow | `flow:session:api`, `flow:session:nucleus`, `flow:session:interaction`, `flow:session:impl` |
-| construction hosts | `app:shared`, `app:desktop`, `app:web` |
+| construction hosts | `app:shared` (shared Compose plus Android application host), `app:desktop`, `app:web` |
 
 Nucleus modules depend on neither Compose, platform APIs, nor Resource
 implementations. Assembly constructs components and binds declared routes; it
@@ -77,5 +87,8 @@ protocol defines acceptance.
 
 No acceptor is reentrant. Synchronous command completion enters the source only
 through the bounded Foundation completion deque after the target acceptor has
-returned. Resource outcomes become typed target-owned facts; an
+returned. A caller-owned Gameplay Interaction root is decided directly under
+the non-reentrant guard and uses a reusable causal-metadata carrier only while
+dispatching its outputs; the deque remains reserved for nested completions.
+Resource outcomes become typed target-owned facts; an
 `OutcomeUnknown` never rewrites the accepted frame.

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 2,
+  "capability": "kinetickk-incremental-performance-gate",
+  "rawReportSchemaVersion": 2,
+  "sourceContractVersion": 2,
+  "validationContractVersion": 1,
+  "sourceRoles": [
+    "adapter",
+    "harness",
+    "runner",
+    "comparator",
+    "provenanceEmitter"
+  ],
+  "crossSideSourcePolicy": "exact-five-role-identity",
+  "runOrder": [
+    "candidate",
+    "baseline",
+    "baseline",
+    "candidate"
+  ],
+  "gameplaySemanticContract": "outcome-fingerprint",
+  "profileSemanticContract": "exact-metadata",
+  "spdxFileCopyrightText": "2026 Vladislav Tomilov",
+  "spdxLicenseIdentifier": "GPL-3.0-or-later"
+}
