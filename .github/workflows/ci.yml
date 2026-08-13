@@ -1,0 +1,374 @@
+# SPDX-FileCopyrightText: 2026 Vladislav Tomilov
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  desktop-and-architecture:
+    name: Desktop and architecture
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      POKEBALL_SNAPSHOT_DIR: ${{ github.workspace }}/pokeball
+    defaults:
+      run:
+        shell: bash
+        working-directory: kinetickk
+
+    steps:
+      - name: Check out KINETICKK
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          path: kinetickk
+          persist-credentials: false
+
+      - name: Check out pinned Pokeball Core
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: 4wl2d/Pokeball
+          ref: de9ef7384795680c836d5e6c2c9b394286058670
+          path: pokeball
+          persist-credentials: false
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "17.0.20+8"
+
+      - name: Verify JDK
+        run: java -version
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@4733eaac7c1b0da527e4206b7671e0061de1ce37 # v6
+
+      - name: Verify architecture and run desktop tests
+        run: >-
+          ./gradlew
+          -PpokeballSnapshotDir="$POKEBALL_SNAPSHOT_DIR"
+          verifyArchitecture
+          verifyPokeballArchitecture
+          verifyPokeballConformance
+          desktopTest
+          -Pkinetickk.gradle.isolatedProfile=true
+          --isolated-projects
+          --no-daemon
+          --stacktrace
+
+  android-build:
+    name: Android app and instrumentation compile
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+        working-directory: kinetickk
+
+    steps:
+      - name: Check out KINETICKK
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: kinetickk
+          persist-credentials: false
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "17.0.20+8"
+
+      - name: Verify JDK
+        run: java -version
+
+      - name: Set up Android SDK 37
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        with:
+          cmdline-tools-version: "14742923"
+          packages: >-
+            platform-tools
+            platforms;android-37.0
+            build-tools;36.0.0
+
+      - name: Verify Android SDK
+        run: |
+          test -x "$ANDROID_SDK_ROOT/build-tools/36.0.0/aapt"
+          test -x "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner"
+          test -x "$ANDROID_SDK_ROOT/build-tools/36.0.0/zipalign"
+          test -f "$ANDROID_SDK_ROOT/platforms/android-37.0/android.jar"
+          sdkmanager --version
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@4733eaac7c1b0da527e4206b7671e0061de1ce37 # v6
+
+      - name: Build app APKs and compile instrumentation APK
+        run: |
+          set -o pipefail
+          mkdir -p build/ci
+          ./gradlew \
+            :app:android:assembleDebug \
+            :app:android:assembleBenchmark \
+            :app:android:assembleDebugAndroidTest \
+            -Pkinetickk.gradle.isolatedProfile=true \
+            --isolated-projects \
+            --console=plain \
+            --stacktrace |
+            tee build/ci/android-build.log
+
+          resource_tasks="$(
+            awk '
+              $1 == ">" && $2 == "Task" {
+                task = $3
+                module = task
+                sub(/:[^:]+$/, "", module)
+                name = task
+                sub(/^.*:/, "", name)
+                if (module != ":app:android") {
+                  if (name ~ /^(compile.*LibraryResources|package.*Resources|parse.*LocalResources|generate.*RFile|merge.*Resources)$/) {
+                    print task
+                  }
+                }
+              }
+            ' build/ci/android-build.log |
+              sort -u
+          )"
+          if [[ -n "$resource_tasks" ]]; then
+            printf 'Android resource tasks unexpectedly returned in resource-free libraries:\n%s\n' \
+              "$resource_tasks" >&2
+            exit 1
+          fi
+
+          ./gradlew \
+            :app:shared:assembleAndroidDeviceTest \
+            -Pkinetickk.gradle.isolatedProfile=true \
+            --isolated-projects \
+            --console=plain \
+            --stacktrace
+
+      - name: Verify APK identities and static benchmark viability
+        run: |
+          build_tools="$ANDROID_SDK_ROOT/build-tools/36.0.0"
+          aapt="$build_tools/aapt"
+          apksigner="$build_tools/apksigner"
+          zipalign="$build_tools/zipalign"
+          debug_apk="app/android/build/outputs/apk/debug/app-android-debug.apk"
+          benchmark_apk="app/android/build/outputs/apk/benchmark/app-android-benchmark.apk"
+          test_apk="app/android/build/outputs/apk/androidTest/debug/app-android-debug-androidTest.apk"
+          shared_test_apk="app/shared/build/outputs/apk/androidTest/app-shared-androidTest.apk"
+          mapping="app/android/build/outputs/mapping/benchmark/mapping.txt"
+          usage="app/android/build/outputs/mapping/benchmark/usage.txt"
+
+          for artifact in "$debug_apk" "$benchmark_apk" "$test_apk" "$shared_test_apk"; do
+            test -s "$artifact"
+          done
+
+          debug_badging=$("$aapt" dump badging "$debug_apk")
+          benchmark_badging=$("$aapt" dump badging "$benchmark_apk")
+          test_badging=$("$aapt" dump badging "$test_apk")
+          benchmark_manifest=$("$aapt" dump xmltree "$benchmark_apk" AndroidManifest.xml)
+          test_manifest=$("$aapt" dump xmltree "$test_apk" AndroidManifest.xml)
+
+          grep -Fq "package: name='com.vladislavtomilov.kinetickk.debug'" <<<"$debug_badging"
+          grep -Fq "package: name='com.vladislavtomilov.kinetickk'" <<<"$benchmark_badging"
+          grep -Fq "package: name='com.vladislavtomilov.kinetickk.debug.test'" <<<"$test_badging"
+          grep -Fq 'android:targetPackage(0x01010021)="com.vladislavtomilov.kinetickk.debug"' \
+            <<<"$test_manifest"
+
+          if grep -Fq 'application-debuggable' <<<"$benchmark_badging"; then
+            printf 'benchmark APK must not be debuggable\n' >&2
+            exit 1
+          fi
+          if ! grep -A1 -F 'E: profileable' <<<"$benchmark_manifest" |
+            grep -Eq 'android:shell.*0xffffffff'; then
+            printf 'benchmark APK must remain shell-profileable\n' >&2
+            exit 1
+          fi
+
+          test -s "$mapping"
+          test -s "$usage"
+
+          # The optimized app must contain exactly the selected SlotTable implementation. Keeping
+          # both blocks Compose Runtime devirtualization and defeats the release-only speedup.
+          true_rule_count=$(grep -cF 'isLinkBufferComposerEnabled return true;' \
+            app/android/build/outputs/mapping/benchmark/configuration.txt || true)
+          false_rule_count=$(grep -cF 'isLinkBufferComposerEnabled return false;' \
+            app/android/build/outputs/mapping/benchmark/configuration.txt || true)
+          test "$true_rule_count" -eq 1
+          test "$false_rule_count" -eq 0
+          grep -Eq '^androidx\.compose\.runtime\.LinkComposer( ->|:)' "$mapping"
+          grep -Eq '^androidx\.compose\.runtime\.composer\.linkbuffer\.SlotTable( ->|:)' "$mapping"
+          grep -Eq '^androidx\.compose\.runtime\.GapComposer$' "$usage"
+          grep -Eq '^androidx\.compose\.runtime\.composer\.gapbuffer\.SlotTable$' "$usage"
+          if grep -Eq '^androidx\.compose\.runtime\.GapComposer( ->|:)' "$mapping" ||
+            grep -Eq '^androidx\.compose\.runtime\.composer\.gapbuffer\.(SlotTable|SlotReader|SlotWriter)( ->|:)' "$mapping" ||
+            grep -Eq '^androidx\.compose\.runtime\.composer\.gapbuffer\.changelist\.(ChangeList|ComposerChangeListWriter|Operations)( ->|:)' "$mapping"; then
+            printf 'benchmark APK retained the Compose Runtime GapBuffer implementation\n' >&2
+            exit 1
+          fi
+
+          # LinkBuffer currently reuses these two implementation-neutral helpers from the legacy
+          # package. Fail closed if any other gapbuffer-namespaced class survives this exact RC.
+          gap_helper_classes=$(
+            sed -nE 's/^(androidx\.compose\.runtime\.composer\.gapbuffer\.[^ ]+) ->.*/\1/p' "$mapping"
+          )
+          expected_gap_helpers=$'androidx.compose.runtime.composer.gapbuffer.BitVector\nandroidx.compose.runtime.composer.gapbuffer.changelist.OperationErrorContext'
+          if [[ "$gap_helper_classes" != "$expected_gap_helpers" ]]; then
+            printf 'unexpected residual Compose Runtime gapbuffer classes:\n%s\n' \
+              "$gap_helper_classes" >&2
+            exit 1
+          fi
+
+          "$apksigner" verify --verbose "$benchmark_apk"
+          "$zipalign" -c -P 16 4 "$benchmark_apk"
+
+          {
+            printf '### Android artifact verification\n\n'
+            printf -- '- Benchmark APK: R8 evidence present, signed, 16 KiB aligned, non-debuggable, and shell-profileable.\n'
+            printf -- '- Instrumentation APK: compiled and target manifest verified; this job did not execute device tests.\n'
+            printf -- '- Shared Android-KMP capability-test APK: compiled; this job did not execute device tests.\n'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  wasm-and-browser:
+    name: Wasm and browser
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out KINETICKK
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "17.0.20+8"
+
+      - name: Verify JDK
+        run: java -version
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@4733eaac7c1b0da527e4206b7671e0061de1ce37 # v6
+
+      - name: Set up Chrome for Testing
+        id: chrome
+        uses: browser-actions/setup-chrome@086160e580d6e8c142ad5ba29009dcde677c6321 # v2
+        with:
+          chrome-version: 152.0.7977.42
+
+      - name: Verify Chrome
+        env:
+          CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          test -x "$CHROME_BIN"
+          "$CHROME_BIN" --version
+
+      - name: Allow Chrome user-namespace sandbox
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Compile and test Wasm, then build the browser distribution
+        env:
+          CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
+        run: >-
+          ./gradlew
+          wasmJsBrowserTest
+          wasmJsBrowserDistribution
+          --no-daemon
+          --max-workers=1
+          --stacktrace
+
+      - name: Verify production Wasm delivery invariants
+        env:
+          REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          dist="app/web/build/dist/wasmJs/productionExecutable"
+          application_wasm="app/web/build/compileSync/wasmJs/main/productionExecutable/optimized/kinetickk.wasm"
+          skiko="build/wasm/packages/kinetickk/kotlin/skiko.wasm"
+          inventory="build/ci/wasm-artifacts.json"
+
+          test -s "$application_wasm"
+          test -s "$skiko"
+          stale_application_maps=(
+            app/web/build/compileSync/wasmJs/main/productionExecutable/kotlin/kinetickk.wasm.map
+            app/web/build/compileSync/wasmJs/main/productionExecutable/optimized/kinetickk.wasm.map
+            build/wasm/packages/kinetickk/kotlin/kinetickk.wasm.map
+          )
+          for stale_map in "${stale_application_maps[@]}"; do
+            if [[ -e "$stale_map" ]]; then
+              printf 'stale production application source map remains: %s\n' "$stale_map" >&2
+              exit 1
+            fi
+          done
+          python3 tools/performance/collect_artifacts.py \
+            --root "$dist" \
+            --application-wasm-source "$application_wasm" \
+            --output "$inventory" \
+            --label ci-candidate \
+            --revision "$REVISION" \
+            --dirty false
+
+          python3 - "$inventory" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          inventory_path = pathlib.Path(sys.argv[1])
+          document = json.loads(inventory_path.read_text(encoding="utf-8"))
+          if document.get("schemaVersion") != 3:
+              raise SystemExit("production artifact inventory must use schema version 3")
+          source_maps = [
+              entry["path"]
+              for entry in document.get("files", [])
+              if entry.get("category") == "source-map"
+          ]
+          if source_maps:
+              raise SystemExit(f"production source maps are forbidden: {source_maps}")
+          provenance = document.get("applicationWasm", {})
+          if provenance.get("matchingMethod") != "sha256-and-byte-equality":
+              raise SystemExit("application Wasm must use explicit byte-equality provenance")
+          PY
+
+          if grep -aRFq \
+            --include='*.js' --include='*.mjs' --include='*.css' \
+            'sourceMappingURL=' "$dist"; then
+            printf 'production bundle contains a sourceMappingURL directive\n' >&2
+            exit 1
+          fi
+
+          skiko_matches=()
+          while IFS= read -r -d '' wasm_asset; do
+            if cmp -s "$skiko" "$wasm_asset"; then
+              skiko_matches+=("$wasm_asset")
+            fi
+          done < <(find "$dist" -type f -name '*.wasm' -print0)
+          if (( ${#skiko_matches[@]} != 1 )); then
+            printf 'expected exactly one byte-identical Skiko runtime in production, found %d\n' \
+              "${#skiko_matches[@]}" >&2
+            exit 1
+          fi
+          skiko_asset_name=${skiko_matches[0]##*/}
+          if ! grep -aRFq --include='*.js' --include='*.mjs' \
+            "$skiko_asset_name" "$dist"; then
+            printf 'packaged Skiko runtime is not referenced by production JavaScript\n' >&2
+            exit 1
+          fi

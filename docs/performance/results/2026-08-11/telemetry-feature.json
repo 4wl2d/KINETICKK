@@ -1,0 +1,994 @@
+{
+  "schemaVersion": 1,
+  "spdxFileCopyrightText": "2026 Vladislav Tomilov",
+  "spdxLicenseIdentifier": "GPL-3.0-or-later",
+  "suiteVersion": "gameplay-telemetry-v1",
+  "adapter": "feature-pokeball-full-refactor",
+  "label": "feature/pokeball-full-refactor",
+  "revision": "20a3e2f78988419f5263247085a9a4b3900f4a6e",
+  "dirty": true,
+  "fork": "1",
+  "generatedAt": "2026-08-11T18:08:12.151974Z",
+  "profile": {
+    "name": "standard",
+    "warmupIterations": 5,
+    "measurementIterations": 10,
+    "targetIterationMillis": 180
+  },
+  "environment": {
+    "osName": "Mac OS X",
+    "osVersion": "26.5.2",
+    "architecture": "aarch64",
+    "javaVersion": "21.0.11",
+    "javaVendor": "Eclipse Adoptium",
+    "vmName": "OpenJDK 64-Bit Server VM",
+    "availableProcessors": 18,
+    "maxHeapBytes": 1073741824,
+    "cpuTimeSupported": true,
+    "threadAllocationSupported": true,
+    "garbageCollectors": ["G1 Young Generation", "G1 Concurrent GC", "G1 Old Generation"],
+    "jvmArguments": ["-XX:+AlwaysPreTouch", "-XX:+UseG1GC", "-Xms1g", "-Xmx1g", "-Dfile.encoding=UTF-8", "-Duser.country=US", "-Duser.language=en", "-Duser.variant"]
+  },
+  "scenarios": [
+    {
+      "name": "telemetry_harness_control",
+      "category": "harness",
+      "description": "Counter and blackhole floor for telemetry observer scenarios.",
+      "operationsPerIteration": 5000000,
+      "metadata": {},
+      "summary": {
+        "wallNanosPerOperation": {"mean":0.479936680,"median":0.477241600,"p95":0.488836600,"min":0.474708400,"max":0.489916600,"coefficientOfVariation":0.011376712},
+        "cpuNanosPerOperation": {"mean":0.493280000,"median":0.478300000,"p95":0.554460000,"min":0.475200000,"max":0.607200000,"coefficientOfVariation":0.081918630},
+        "allocatedBytesPerOperation": {"mean":0.000250560,"median":0.000030400,"p95":0.001241280,"min":0.000030400,"max":0.002232000,"coefficientOfVariation":2.778604125},
+        "gcCollectionsPerOperation": {"mean":0.000000000,"median":0.000000000,"p95":0.000000000,"min":0.000000000,"max":0.000000000,"coefficientOfVariation":0.000000000},
+        "gcNanosPerOperation": {"mean":0.000000000,"median":0.000000000,"p95":0.000000000,"min":0.000000000,"max":0.000000000,"coefficientOfVariation":0.000000000}
+      },
+      "samples": [
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 0.481475000,
+          "cpuNanosPerOperation": 0.607200000,
+          "allocatedBytesPerOperation": 0.002232000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 0.487516600,
+          "cpuNanosPerOperation": 0.489600000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 0.474708400,
+          "cpuNanosPerOperation": 0.475600000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 0.476008400,
+          "cpuNanosPerOperation": 0.476800000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 0.476091800,
+          "cpuNanosPerOperation": 0.477200000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 0.489916600,
+          "cpuNanosPerOperation": 0.490000000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 0.477333200,
+          "cpuNanosPerOperation": 0.478400000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 0.477150000,
+          "cpuNanosPerOperation": 0.478200000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 0.483858400,
+          "cpuNanosPerOperation": 0.484600000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 0.475308400,
+          "cpuNanosPerOperation": 0.475200000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        }
+      ]
+    },
+    {
+      "name": "telemetry_disabled_guard",
+      "category": "disabled_overhead",
+      "description": "Disabled per-frame branch; it must not read the clock or mutate telemetry.",
+      "operationsPerIteration": 5000000,
+      "metadata": {"enabled":"false", "publicationIntervalMillis":"500", "windowCapacity":"600"},
+      "summary": {
+        "wallNanosPerOperation": {"mean":1.029019160,"median":1.020362500,"p95":1.101403260,"min":0.984491600,"max":1.131208200,"coefficientOfVariation":0.042475483},
+        "cpuNanosPerOperation": {"mean":1.011720000,"median":1.015900000,"p95":1.028370000,"min":0.986600000,"max":1.029000000,"coefficientOfVariation":0.015956023},
+        "allocatedBytesPerOperation": {"mean":0.000030400,"median":0.000030400,"p95":0.000030400,"min":0.000030400,"max":0.000030400,"coefficientOfVariation":0.000000000},
+        "gcCollectionsPerOperation": {"mean":0.000000000,"median":0.000000000,"p95":0.000000000,"min":0.000000000,"max":0.000000000,"coefficientOfVariation":0.000000000},
+        "gcNanosPerOperation": {"mean":0.000000000,"median":0.000000000,"p95":0.000000000,"min":0.000000000,"max":0.000000000,"coefficientOfVariation":0.000000000}
+      },
+      "samples": [
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 0.984491600,
+          "cpuNanosPerOperation": 0.986600000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 0.990850000,
+          "cpuNanosPerOperation": 0.991200000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 1.032633200,
+          "cpuNanosPerOperation": 1.029000000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 1.131208200,
+          "cpuNanosPerOperation": 1.027600000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 1.018483400,
+          "cpuNanosPerOperation": 1.019200000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 0.991933400,
+          "cpuNanosPerOperation": 0.992600000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 1.011483400,
+          "cpuNanosPerOperation": 1.012600000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 1.022241600,
+          "cpuNanosPerOperation": 1.009800000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 1.064975000,
+          "cpuNanosPerOperation": 1.024200000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 1.041891800,
+          "cpuNanosPerOperation": 1.024400000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        }
+      ]
+    },
+    {
+      "name": "telemetry_monotonic_timer_pair",
+      "category": "enabled_overhead",
+      "description": "Monotonic mark plus elapsed read used around dispatch and Canvas recording.",
+      "operationsPerIteration": 1000000,
+      "metadata": {"clockReads":"2", "publicationIntervalMillis":"500", "windowCapacity":"600"},
+      "summary": {
+        "wallNanosPerOperation": {"mean":17.526925100,"median":17.535541500,"p95":17.666125300,"min":17.398917000,"max":17.686000000,"coefficientOfVariation":0.005911930},
+        "cpuNanosPerOperation": {"mean":17.523800000,"median":17.528500000,"p95":17.665650000,"min":17.398000000,"max":17.685000000,"coefficientOfVariation":0.005934530},
+        "allocatedBytesPerOperation": {"mean":0.000152000,"median":0.000152000,"p95":0.000152000,"min":0.000152000,"max":0.000152000,"coefficientOfVariation":0.000000000},
+        "gcCollectionsPerOperation": {"mean":0.000000000,"median":0.000000000,"p95":0.000000000,"min":0.000000000,"max":0.000000000,"coefficientOfVariation":0.000000000},
+        "gcNanosPerOperation": {"mean":0.000000000,"median":0.000000000,"p95":0.000000000,"min":0.000000000,"max":0.000000000,"coefficientOfVariation":0.000000000}
+      },
+      "samples": [
+        {
+          "operations": 1000000,
+          "wallNanosPerOperation": 17.562625000,
+          "cpuNanosPerOperation": 17.559000000,
+          "allocatedBytesPerOperation": 0.000152000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 1000000,
+          "wallNanosPerOperation": 17.686000000,
+          "cpuNanosPerOperation": 17.685000000,
+          "allocatedBytesPerOperation": 0.000152000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 1000000,
+          "wallNanosPerOperation": 17.559125000,
+          "cpuNanosPerOperation": 17.542000000,
+          "allocatedBytesPerOperation": 0.000152000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 1000000,
+          "wallNanosPerOperation": 17.403417000,
+          "cpuNanosPerOperation": 17.398000000,
+          "allocatedBytesPerOperation": 0.000152000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 1000000,
+          "wallNanosPerOperation": 17.427250000,
+          "cpuNanosPerOperation": 17.422000000,
+          "allocatedBytesPerOperation": 0.000152000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 1000000,
+          "wallNanosPerOperation": 17.398917000,
+          "cpuNanosPerOperation": 17.398000000,
+          "allocatedBytesPerOperation": 0.000152000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 1000000,
+          "wallNanosPerOperation": 17.511958000,
+          "cpuNanosPerOperation": 17.515000000,
+          "allocatedBytesPerOperation": 0.000152000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 1000000,
+          "wallNanosPerOperation": 17.456250000,
+          "cpuNanosPerOperation": 17.457000000,
+          "allocatedBytesPerOperation": 0.000152000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 1000000,
+          "wallNanosPerOperation": 17.621875000,
+          "cpuNanosPerOperation": 17.620000000,
+          "allocatedBytesPerOperation": 0.000152000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 1000000,
+          "wallNanosPerOperation": 17.641834000,
+          "cpuNanosPerOperation": 17.642000000,
+          "allocatedBytesPerOperation": 0.000152000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        }
+      ]
+    },
+    {
+      "name": "telemetry_record_frame",
+      "category": "enabled_overhead",
+      "description": "Append one frame interval into an already full bounded rolling window.",
+      "operationsPerIteration": 2000000,
+      "metadata": {"distribution":"frame", "publicationIntervalMillis":"500", "windowCapacity":"600"},
+      "summary": {
+        "wallNanosPerOperation": {"mean":2.941739650,"median":2.943864250,"p95":2.973202325,"min":2.909062500,"max":2.986271000,"coefficientOfVariation":0.007376399},
+        "cpuNanosPerOperation": {"mean":2.944150000,"median":2.948000000,"p95":2.975275000,"min":2.912000000,"max":2.989000000,"coefficientOfVariation":0.007596239},
+        "allocatedBytesPerOperation": {"mean":0.000076000,"median":0.000076000,"p95":0.000076000,"min":0.000076000,"max":0.000076000,"coefficientOfVariation":0.000000000},
+        "gcCollectionsPerOperation": {"mean":0.000000000,"median":0.000000000,"p95":0.000000000,"min":0.000000000,"max":0.000000000,"coefficientOfVariation":0.000000000},
+        "gcNanosPerOperation": {"mean":0.000000000,"median":0.000000000,"p95":0.000000000,"min":0.000000000,"max":0.000000000,"coefficientOfVariation":0.000000000}
+      },
+      "samples": [
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.946458000,
+          "cpuNanosPerOperation": 2.954000000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.909062500,
+          "cpuNanosPerOperation": 2.912000000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.925333500,
+          "cpuNanosPerOperation": 2.926000000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.919271000,
+          "cpuNanosPerOperation": 2.918000000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.948396000,
+          "cpuNanosPerOperation": 2.950500000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.941270500,
+          "cpuNanosPerOperation": 2.945500000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.949333500,
+          "cpuNanosPerOperation": 2.951000000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.986271000,
+          "cpuNanosPerOperation": 2.989000000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.934771000,
+          "cpuNanosPerOperation": 2.937000000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.957229500,
+          "cpuNanosPerOperation": 2.958500000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        }
+      ]
+    },
+    {
+      "name": "telemetry_record_dispatch",
+      "category": "enabled_overhead",
+      "description": "Append one dispatch duration into an already full bounded rolling window.",
+      "operationsPerIteration": 2000000,
+      "metadata": {"distribution":"dispatch", "publicationIntervalMillis":"500", "windowCapacity":"600"},
+      "summary": {
+        "wallNanosPerOperation": {"mean":2.962856250,"median":2.940406250,"p95":3.091021800,"min":2.910229000,"max":3.144187500,"coefficientOfVariation":0.024410426},
+        "cpuNanosPerOperation": {"mean":2.961200000,"median":2.944750000,"p95":3.071825000,"min":2.912000000,"max":3.144500000,"coefficientOfVariation":0.023134253},
+        "allocatedBytesPerOperation": {"mean":0.000076000,"median":0.000076000,"p95":0.000076000,"min":0.000076000,"max":0.000076000,"coefficientOfVariation":0.000000000},
+        "gcCollectionsPerOperation": {"mean":0.000000000,"median":0.000000000,"p95":0.000000000,"min":0.000000000,"max":0.000000000,"coefficientOfVariation":0.000000000},
+        "gcNanosPerOperation": {"mean":0.000000000,"median":0.000000000,"p95":0.000000000,"min":0.000000000,"max":0.000000000,"coefficientOfVariation":0.000000000}
+      },
+      "samples": [
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.910333500,
+          "cpuNanosPerOperation": 2.917000000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.968291500,
+          "cpuNanosPerOperation": 2.972500000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 3.144187500,
+          "cpuNanosPerOperation": 3.144500000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.942812500,
+          "cpuNanosPerOperation": 2.945000000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.918167000,
+          "cpuNanosPerOperation": 2.918000000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.939250000,
+          "cpuNanosPerOperation": 2.946500000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.941562500,
+          "cpuNanosPerOperation": 2.944500000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.927687500,
+          "cpuNanosPerOperation": 2.929000000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.910229000,
+          "cpuNanosPerOperation": 2.912000000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 3.026041500,
+          "cpuNanosPerOperation": 2.983000000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        }
+      ]
+    },
+    {
+      "name": "telemetry_record_canvas",
+      "category": "enabled_overhead",
+      "description": "Append one Canvas CPU duration into an already full bounded rolling window.",
+      "operationsPerIteration": 2000000,
+      "metadata": {"distribution":"canvas", "publicationIntervalMillis":"500", "windowCapacity":"600"},
+      "summary": {
+        "wallNanosPerOperation": {"mean":2.931991600,"median":2.928593750,"p95":2.961277175,"min":2.907229000,"max":2.970146000,"coefficientOfVariation":0.006788107},
+        "cpuNanosPerOperation": {"mean":2.933100000,"median":2.928250000,"p95":2.963200000,"min":2.906000000,"max":2.969500000,"coefficientOfVariation":0.006922022},
+        "allocatedBytesPerOperation": {"mean":0.000076000,"median":0.000076000,"p95":0.000076000,"min":0.000076000,"max":0.000076000,"coefficientOfVariation":0.000000000},
+        "gcCollectionsPerOperation": {"mean":0.000000000,"median":0.000000000,"p95":0.000000000,"min":0.000000000,"max":0.000000000,"coefficientOfVariation":0.000000000},
+        "gcNanosPerOperation": {"mean":0.000000000,"median":0.000000000,"p95":0.000000000,"min":0.000000000,"max":0.000000000,"coefficientOfVariation":0.000000000}
+      },
+      "samples": [
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.970146000,
+          "cpuNanosPerOperation": 2.969500000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.950437500,
+          "cpuNanosPerOperation": 2.955500000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.921083500,
+          "cpuNanosPerOperation": 2.923000000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.907229000,
+          "cpuNanosPerOperation": 2.906000000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.917145500,
+          "cpuNanosPerOperation": 2.919000000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.937979000,
+          "cpuNanosPerOperation": 2.938500000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.910083000,
+          "cpuNanosPerOperation": 2.912000000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.927937500,
+          "cpuNanosPerOperation": 2.926500000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.948625000,
+          "cpuNanosPerOperation": 2.951000000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 2000000,
+          "wallNanosPerOperation": 2.929250000,
+          "cpuNanosPerOperation": 2.930000000,
+          "allocatedBytesPerOperation": 0.000076000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        }
+      ]
+    },
+    {
+      "name": "telemetry_record_entity_counts",
+      "category": "enabled_overhead",
+      "description": "Publish current and peak entity cardinalities after an accepted frame.",
+      "operationsPerIteration": 5000000,
+      "metadata": {"entities":"canonical-capacity", "publicationIntervalMillis":"500", "windowCapacity":"600"},
+      "summary": {
+        "wallNanosPerOperation": {"mean":1.888060000,"median":1.887604200,"p95":1.901220380,"min":1.877100000,"max":1.906166600,"coefficientOfVariation":0.004727691},
+        "cpuNanosPerOperation": {"mean":1.889580000,"median":1.888800000,"p95":1.902500000,"min":1.877800000,"max":1.907000000,"coefficientOfVariation":0.004886275},
+        "allocatedBytesPerOperation": {"mean":0.000030400,"median":0.000030400,"p95":0.000030400,"min":0.000030400,"max":0.000030400,"coefficientOfVariation":0.000000000},
+        "gcCollectionsPerOperation": {"mean":0.000000000,"median":0.000000000,"p95":0.000000000,"min":0.000000000,"max":0.000000000,"coefficientOfVariation":0.000000000},
+        "gcNanosPerOperation": {"mean":0.000000000,"median":0.000000000,"p95":0.000000000,"min":0.000000000,"max":0.000000000,"coefficientOfVariation":0.000000000}
+      },
+      "samples": [
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 1.886558400,
+          "cpuNanosPerOperation": 1.888400000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 1.878275000,
+          "cpuNanosPerOperation": 1.879200000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 1.877100000,
+          "cpuNanosPerOperation": 1.877800000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 1.889341600,
+          "cpuNanosPerOperation": 1.897000000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 1.879483400,
+          "cpuNanosPerOperation": 1.880800000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 1.888650000,
+          "cpuNanosPerOperation": 1.889200000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 1.894283200,
+          "cpuNanosPerOperation": 1.895400000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 1.895175000,
+          "cpuNanosPerOperation": 1.895400000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 1.885566800,
+          "cpuNanosPerOperation": 1.885600000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 5000000,
+          "wallNanosPerOperation": 1.906166600,
+          "cpuNanosPerOperation": 1.907000000,
+          "allocatedBytesPerOperation": 0.000030400,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        }
+      ]
+    },
+    {
+      "name": "telemetry_snapshot_empty",
+      "category": "publication",
+      "description": "Create the immutable HUD snapshot before any samples exist.",
+      "operationsPerIteration": 1000000,
+      "metadata": {"publicationIntervalMillis":"500", "samples":"0", "windowCapacity":"600"},
+      "summary": {
+        "wallNanosPerOperation": {"mean":2.431720900,"median":2.425187500,"p95":2.477887350,"min":2.388542000,"max":2.492250000,"coefficientOfVariation":0.013041908},
+        "cpuNanosPerOperation": {"mean":2.435900000,"median":2.431500000,"p95":2.480950000,"min":2.392000000,"max":2.494000000,"coefficientOfVariation":0.013334124},
+        "allocatedBytesPerOperation": {"mean":0.000152000,"median":0.000152000,"p95":0.000152000,"min":0.000152000,"max":0.000152000,"coefficientOfVariation":0.000000000},
+        "gcCollectionsPerOperation": {"mean":0.000000000,"median":0.000000000,"p95":0.000000000,"min":0.000000000,"max":0.000000000,"coefficientOfVariation":0.000000000},
+        "gcNanosPerOperation": {"mean":0.000000000,"median":0.000000000,"p95":0.000000000,"min":0.000000000,"max":0.000000000,"coefficientOfVariation":0.000000000}
+      },
+      "samples": [
+        {
+          "operations": 1000000,
+          "wallNanosPerOperation": 2.439167000,
+          "cpuNanosPerOperation": 2.451000000,
+          "allocatedBytesPerOperation": 0.000152000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 1000000,
+          "wallNanosPerOperation": 2.460333000,
+          "cpuNanosPerOperation": 2.465000000,
+          "allocatedBytesPerOperation": 0.000152000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 1000000,
+          "wallNanosPerOperation": 2.416750000,
+          "cpuNanosPerOperation": 2.421000000,
+          "allocatedBytesPerOperation": 0.000152000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 1000000,
+          "wallNanosPerOperation": 2.415834000,
+          "cpuNanosPerOperation": 2.419000000,
+          "allocatedBytesPerOperation": 0.000152000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 1000000,
+          "wallNanosPerOperation": 2.492250000,
+          "cpuNanosPerOperation": 2.494000000,
+          "allocatedBytesPerOperation": 0.000152000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 1000000,
+          "wallNanosPerOperation": 2.402708000,
+          "cpuNanosPerOperation": 2.401000000,
+          "allocatedBytesPerOperation": 0.000152000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 1000000,
+          "wallNanosPerOperation": 2.408333000,
+          "cpuNanosPerOperation": 2.411000000,
+          "allocatedBytesPerOperation": 0.000152000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 1000000,
+          "wallNanosPerOperation": 2.459667000,
+          "cpuNanosPerOperation": 2.463000000,
+          "allocatedBytesPerOperation": 0.000152000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 1000000,
+          "wallNanosPerOperation": 2.388542000,
+          "cpuNanosPerOperation": 2.392000000,
+          "allocatedBytesPerOperation": 0.000152000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 1000000,
+          "wallNanosPerOperation": 2.433625000,
+          "cpuNanosPerOperation": 2.442000000,
+          "allocatedBytesPerOperation": 0.000152000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        }
+      ]
+    },
+    {
+      "name": "telemetry_snapshot_full_window",
+      "category": "publication",
+      "description": "Copy, sort and summarize all three full 600-sample distributions.",
+      "operationsPerIteration": 14442,
+      "metadata": {"publicationIntervalMillis":"500", "samplesPerDistribution":"600", "windowCapacity":"600"},
+      "summary": {
+        "wallNanosPerOperation": {"mean":10438.515267968,"median":10423.400498546,"p95":10593.497538430,"min":10344.325578175,"max":10625.591400083,"coefficientOfVariation":0.008831478},
+        "cpuNanosPerOperation": {"mean":10410.787979504,"median":10392.224068689,"p95":10517.836864700,"min":10338.388034898,"max":10541.891704750,"coefficientOfVariation":0.006375226},
+        "allocatedBytesPerOperation": {"mean":16248.010524858,"median":16248.010524858,"p95":16248.010524858,"min":16248.010524858,"max":16248.010524858,"coefficientOfVariation":0.000000000},
+        "gcCollectionsPerOperation": {"mean":0.000020773,"median":0.000000000,"p95":0.000069242,"min":0.000000000,"max":0.000069242,"coefficientOfVariation":1.610152972},
+        "gcNanosPerOperation": {"mean":20.772746157,"median":0.000000000,"p95":69.242487190,"min":0.000000000,"max":69.242487190,"coefficientOfVariation":1.610152972}
+      },
+      "samples": [
+        {
+          "operations": 14442,
+          "wallNanosPerOperation": 10403.611549647,
+          "cpuNanosPerOperation": 10399.113696164,
+          "allocatedBytesPerOperation": 16248.010524858,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 14442,
+          "wallNanosPerOperation": 10373.970018003,
+          "cpuNanosPerOperation": 10367.885334441,
+          "allocatedBytesPerOperation": 16248.010524858,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 14442,
+          "wallNanosPerOperation": 10625.591400083,
+          "cpuNanosPerOperation": 10541.891704750,
+          "allocatedBytesPerOperation": 16248.010524858,
+          "gcCollectionsPerOperation": 0.000069242,
+          "gcNanosPerOperation": 69.242487190
+        },
+        {
+          "operations": 14442,
+          "wallNanosPerOperation": 10354.556155657,
+          "cpuNanosPerOperation": 10348.220468079,
+          "allocatedBytesPerOperation": 16248.010524858,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 14442,
+          "wallNanosPerOperation": 10469.914139316,
+          "cpuNanosPerOperation": 10385.334441213,
+          "allocatedBytesPerOperation": 16248.010524858,
+          "gcCollectionsPerOperation": 0.000069242,
+          "gcNanosPerOperation": 69.242487190
+        },
+        {
+          "operations": 14442,
+          "wallNanosPerOperation": 10363.716382772,
+          "cpuNanosPerOperation": 10357.568203850,
+          "allocatedBytesPerOperation": 16248.010524858,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 14442,
+          "wallNanosPerOperation": 10344.325578175,
+          "cpuNanosPerOperation": 10338.388034898,
+          "allocatedBytesPerOperation": 16248.010524858,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 14442,
+          "wallNanosPerOperation": 10554.271707520,
+          "cpuNanosPerOperation": 10488.436504639,
+          "allocatedBytesPerOperation": 16248.010524858,
+          "gcCollectionsPerOperation": 0.000069242,
+          "gcNanosPerOperation": 69.242487190
+        },
+        {
+          "operations": 14442,
+          "wallNanosPerOperation": 10443.189447445,
+          "cpuNanosPerOperation": 10435.673729400,
+          "allocatedBytesPerOperation": 16248.010524858,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 14442,
+          "wallNanosPerOperation": 10452.006301066,
+          "cpuNanosPerOperation": 10445.367677607,
+          "allocatedBytesPerOperation": 16248.010524858,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        }
+      ]
+    },
+    {
+      "name": "telemetry_hud_projection_full_window",
+      "category": "publication",
+      "description": "Format all immutable HUD lines from one full-window snapshot.",
+      "operationsPerIteration": 100000,
+      "metadata": {"publicationIntervalMillis":"500", "samplesPerDistribution":"600", "windowCapacity":"600"},
+      "summary": {
+        "wallNanosPerOperation": {"mean":182.488916000,"median":181.115830000,"p95":189.039061000,"min":178.915000000,"max":189.955000000,"coefficientOfVariation":0.021381165},
+        "cpuNanosPerOperation": {"mean":180.628000000,"median":180.030000000,"p95":183.447000000,"min":178.840000000,"max":184.680000000,"coefficientOfVariation":0.009646829},
+        "allocatedBytesPerOperation": {"mean":1416.001520000,"median":1416.001520000,"p95":1416.001520000,"min":1416.001520000,"max":1416.001520000,"coefficientOfVariation":0.000000000},
+        "gcCollectionsPerOperation": {"mean":0.000002000,"median":0.000000000,"p95":0.000010000,"min":0.000000000,"max":0.000010000,"coefficientOfVariation":2.108185107},
+        "gcNanosPerOperation": {"mean":2.000000000,"median":0.000000000,"p95":10.000000000,"min":0.000000000,"max":10.000000000,"coefficientOfVariation":2.108185107}
+      },
+      "samples": [
+        {
+          "operations": 100000,
+          "wallNanosPerOperation": 185.100420000,
+          "cpuNanosPerOperation": 184.680000000,
+          "allocatedBytesPerOperation": 1416.001520000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 100000,
+          "wallNanosPerOperation": 182.075410000,
+          "cpuNanosPerOperation": 181.940000000,
+          "allocatedBytesPerOperation": 1416.001520000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 100000,
+          "wallNanosPerOperation": 179.991670000,
+          "cpuNanosPerOperation": 180.030000000,
+          "allocatedBytesPerOperation": 1416.001520000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 100000,
+          "wallNanosPerOperation": 189.955000000,
+          "cpuNanosPerOperation": 180.490000000,
+          "allocatedBytesPerOperation": 1416.001520000,
+          "gcCollectionsPerOperation": 0.000010000,
+          "gcNanosPerOperation": 10.000000000
+        },
+        {
+          "operations": 100000,
+          "wallNanosPerOperation": 179.755830000,
+          "cpuNanosPerOperation": 179.710000000,
+          "allocatedBytesPerOperation": 1416.001520000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 100000,
+          "wallNanosPerOperation": 178.915000000,
+          "cpuNanosPerOperation": 178.840000000,
+          "allocatedBytesPerOperation": 1416.001520000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 100000,
+          "wallNanosPerOperation": 180.156250000,
+          "cpuNanosPerOperation": 180.030000000,
+          "allocatedBytesPerOperation": 1416.001520000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 100000,
+          "wallNanosPerOperation": 182.097500000,
+          "cpuNanosPerOperation": 181.650000000,
+          "allocatedBytesPerOperation": 1416.001520000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 100000,
+          "wallNanosPerOperation": 187.919580000,
+          "cpuNanosPerOperation": 180.010000000,
+          "allocatedBytesPerOperation": 1416.001520000,
+          "gcCollectionsPerOperation": 0.000010000,
+          "gcNanosPerOperation": 10.000000000
+        },
+        {
+          "operations": 100000,
+          "wallNanosPerOperation": 178.922500000,
+          "cpuNanosPerOperation": 178.900000000,
+          "allocatedBytesPerOperation": 1416.001520000,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        }
+      ]
+    }
+  ]
+}

@@ -11,7 +11,6 @@ private val legalDocumentPaths = listOf(
     "NOTICE",
     "docs/project/AUTHORS.md",
     "docs/project/CONTRIBUTING.md",
-    "docs/project/CONTRIBUTOR_LICENSE_AGREEMENT.md",
     "docs/project/GOVERNANCE.md",
     "docs/project/SOURCE.md",
     "docs/project/TRADEMARKS.md",
@@ -22,9 +21,10 @@ private val legalDocumentPaths = listOf(
 )
 
 internal fun Project.packageLegalDocuments() {
+    val repositoryRoot = rootDir
     tasks.withType(Copy::class.java).configureEach {
         if (name.endsWith("processResources", ignoreCase = true)) {
-            from(rootProject.projectDir) {
+            from(repositoryRoot) {
                 include(legalDocumentPaths)
                 into("META-INF")
             }

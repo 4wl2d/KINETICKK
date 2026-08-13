@@ -1,0 +1,1512 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kinetickk.local/contracts/android-device-benchmark-v1.schema.json",
+  "title": "KINETICKK Android physical-device benchmark",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "suite",
+    "status",
+    "runId",
+    "createdAtUtc",
+    "source",
+    "apk",
+    "tool",
+    "protocol",
+    "devices"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "android_device_benchmark.schema.json"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "suite": {
+      "const": "kinetickk-android-physical-device"
+    },
+    "status": {
+      "enum": ["running", "ok", "error"]
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "createdAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completedAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "apk": {
+      "$ref": "#/$defs/apk"
+    },
+    "tool": {
+      "type": "object",
+      "required": [
+        "scriptSha256",
+        "flowSha256",
+        "flowSchemaSha256",
+        "adbBinary",
+        "adbVersion",
+        "pythonVersion"
+      ],
+      "properties": {
+        "scriptSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "flowSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "flowPath": {
+          "type": "string",
+          "minLength": 1,
+          "not": {
+            "pattern": "^/"
+          }
+        },
+        "flowSchemaSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "adbBinary": {
+          "$ref": "#/$defs/toolBinary"
+        },
+        "aapt2Binary": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/toolBinary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schemaSha256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "adbVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pythonVersion": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "protocol": {
+      "$ref": "#/$defs/protocol"
+    },
+    "devices": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/device"
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "rate": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "sampleStatistics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sampleCount",
+        "rawSamples",
+        "minimum",
+        "maximum",
+        "mean",
+        "median",
+        "p90",
+        "p95",
+        "p99",
+        "standardDeviation",
+        "coefficientOfVariation"
+      ],
+      "properties": {
+        "sampleCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rawSamples": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "minimum": {
+          "type": ["number", "null"]
+        },
+        "maximum": {
+          "type": ["number", "null"]
+        },
+        "mean": {
+          "type": ["number", "null"]
+        },
+        "median": {
+          "type": ["number", "null"]
+        },
+        "p90": {
+          "type": ["number", "null"]
+        },
+        "p95": {
+          "type": ["number", "null"]
+        },
+        "p99": {
+          "type": ["number", "null"]
+        },
+        "standardDeviation": {
+          "type": ["number", "null"]
+        },
+        "coefficientOfVariation": {
+          "type": ["number", "null"]
+        }
+      }
+    },
+    "frameTimePercentiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["p50", "p90", "p95", "p99"],
+      "properties": {
+        "p50": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "p90": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "p95": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "p99": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "histogram": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[0-9]+ms$"
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "gfxinfoFullFlowSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "measurementScope",
+        "summarySelection",
+        "statsSinceNanos",
+        "totalFramesRendered",
+        "platformJankyFrames",
+        "platformJankyFrameRate",
+        "platformJankyFrameRateReported",
+        "frameTimePercentilesMillis",
+        "frameTimeHistogram",
+        "gpuFrameTimePercentilesMillis",
+        "gpuFrameTimeHistogram",
+        "counters"
+      ],
+      "properties": {
+        "measurementScope": {
+          "const": "full-measured-flow-since-gfxinfo-reset"
+        },
+        "summarySelection": {
+          "const": "first-process-level-summary"
+        },
+        "statsSinceNanos": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "totalFramesRendered": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "platformJankyFrames": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "platformJankyFrameRate": {
+          "$ref": "#/$defs/rate"
+        },
+        "platformJankyFrameRateReported": {
+          "$ref": "#/$defs/rate"
+        },
+        "frameTimePercentilesMillis": {
+          "$ref": "#/$defs/frameTimePercentiles"
+        },
+        "frameTimeHistogram": {
+          "$ref": "#/$defs/histogram"
+        },
+        "gpuFrameTimePercentilesMillis": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/frameTimePercentiles"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "gpuFrameTimeHistogram": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/histogram"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "counters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "missedVsync",
+            "highInputLatency",
+            "slowUiThread",
+            "slowBitmapUploads",
+            "slowIssueDrawCommands",
+            "frameDeadlineMissed",
+            "frameDeadlineMissedLegacy"
+          ],
+          "properties": {
+            "missedVsync": {
+              "type": ["integer", "null"],
+              "minimum": 0
+            },
+            "highInputLatency": {
+              "type": ["integer", "null"],
+              "minimum": 0
+            },
+            "slowUiThread": {
+              "type": ["integer", "null"],
+              "minimum": 0
+            },
+            "slowBitmapUploads": {
+              "type": ["integer", "null"],
+              "minimum": 0
+            },
+            "slowIssueDrawCommands": {
+              "type": ["integer", "null"],
+              "minimum": 0
+            },
+            "frameDeadlineMissed": {
+              "type": ["integer", "null"],
+              "minimum": 0
+            },
+            "frameDeadlineMissedLegacy": {
+              "type": ["integer", "null"],
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "terminalJank": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "available",
+        "unavailableReason",
+        "basis",
+        "deadlineSampleCount",
+        "deadlineMissCount",
+        "deadlineMissRate",
+        "completionDeadlineOverrunMillis"
+      ],
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "unavailableReason": {
+          "type": ["string", "null"]
+        },
+        "basis": {
+          "enum": ["FrameCompleted-minus-FrameDeadline", null]
+        },
+        "deadlineSampleCount": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "deadlineMissCount": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "deadlineMissRate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/rate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "completionDeadlineOverrunMillis": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sampleStatistics"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "terminalIntendedCadence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "available",
+        "unavailableReason",
+        "intervalMillis",
+        "producedFramesPerSecond",
+        "cadenceMissedVsyncCount",
+        "cadenceMissedVsyncRate"
+      ],
+      "properties": {
+        "available": {
+          "const": true
+        },
+        "unavailableReason": {
+          "type": "null"
+        },
+        "intervalMillis": {
+          "$ref": "#/$defs/sampleStatistics"
+        },
+        "producedFramesPerSecond": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "cadenceMissedVsyncCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cadenceMissedVsyncRate": {
+          "$ref": "#/$defs/rate"
+        }
+      }
+    },
+    "terminalDisplayCadence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "available",
+        "availabilityState",
+        "unavailableReason",
+        "intervalMillis",
+        "presentedFramesPerSecond",
+        "cadenceMissedVsyncCount",
+        "cadenceMissedVsyncRate"
+      ],
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "availabilityState": {
+          "enum": [
+            "available",
+            "column-absent",
+            "column-present-all-unset"
+          ],
+          "description": "Machine-readable DisplayPresentTime provenance. A column that is zero for every valid frame is platform-unavailable, not presented cadence data."
+        },
+        "unavailableReason": {
+          "type": ["string", "null"]
+        },
+        "intervalMillis": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sampleStatistics"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "presentedFramesPerSecond": {
+          "type": ["number", "null"],
+          "exclusiveMinimum": 0
+        },
+        "cadenceMissedVsyncCount": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "cadenceMissedVsyncRate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/rate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "available": {
+                "const": true
+              }
+            },
+            "required": ["available"]
+          },
+          "then": {
+            "properties": {
+              "availabilityState": {
+                "const": "available"
+              },
+              "unavailableReason": {
+                "type": "null"
+              },
+              "intervalMillis": {
+                "$ref": "#/$defs/sampleStatistics"
+              },
+              "presentedFramesPerSecond": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "cadenceMissedVsyncCount": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "cadenceMissedVsyncRate": {
+                "$ref": "#/$defs/rate"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "availabilityState": {
+                "enum": ["column-absent", "column-present-all-unset"]
+              },
+              "unavailableReason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "intervalMillis": {
+                "type": "null"
+              },
+              "presentedFramesPerSecond": {
+                "type": "null"
+              },
+              "cadenceMissedVsyncCount": {
+                "type": "null"
+              },
+              "cadenceMissedVsyncRate": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "terminalRawFrame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "intendedVsyncNanos",
+        "syncQueuedNanos",
+        "frameCompletedNanos",
+        "displayPresentTimeNanos",
+        "frameDeadlineNanos",
+        "completionLatencyMillis",
+        "uiSubmissionLatencyMillis",
+        "singleRefreshCompletionOverrun",
+        "doubleRefreshCompletionOverrun",
+        "deadlineMiss",
+        "completionDeadlineDeltaMillis"
+      ],
+      "properties": {
+        "intendedVsyncNanos": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "syncQueuedNanos": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "frameCompletedNanos": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "displayPresentTimeNanos": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "frameDeadlineNanos": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "completionLatencyMillis": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "uiSubmissionLatencyMillis": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "singleRefreshCompletionOverrun": {
+          "type": "boolean"
+        },
+        "doubleRefreshCompletionOverrun": {
+          "type": "boolean"
+        },
+        "deadlineMiss": {
+          "type": ["boolean", "null"]
+        },
+        "completionDeadlineDeltaMillis": {
+          "type": ["number", "null"]
+        }
+      }
+    },
+    "terminalFrameRing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "measurementScope",
+        "sourceRowCount",
+        "validFrameCount",
+        "malformedRowCount",
+        "excludedFlaggedRowCount",
+        "excludedIncompleteRowCount",
+        "refreshRateHz",
+        "frameBudgetMillis",
+        "frameCompletionLatencyMillis",
+        "uiSubmissionLatencyMillis",
+        "singleRefreshCompletionOverrunCount",
+        "singleRefreshCompletionOverrunRate",
+        "doubleRefreshCompletionOverrunCount",
+        "doubleRefreshCompletionOverrunRate",
+        "intendedVsyncCadence",
+        "displayPresentCadence",
+        "excludedUnpresentedTailRowCount",
+        "terminalJank",
+        "rawFrames"
+      ],
+      "properties": {
+        "measurementScope": {
+          "const": "terminal-framestats-ring-steady-state"
+        },
+        "sourceRowCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "validFrameCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "malformedRowCount": {
+          "const": 0
+        },
+        "excludedFlaggedRowCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "excludedIncompleteRowCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "refreshRateHz": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "frameBudgetMillis": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "frameCompletionLatencyMillis": {
+          "$ref": "#/$defs/sampleStatistics"
+        },
+        "uiSubmissionLatencyMillis": {
+          "$ref": "#/$defs/sampleStatistics"
+        },
+        "singleRefreshCompletionOverrunCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "singleRefreshCompletionOverrunRate": {
+          "$ref": "#/$defs/rate"
+        },
+        "doubleRefreshCompletionOverrunCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "doubleRefreshCompletionOverrunRate": {
+          "$ref": "#/$defs/rate"
+        },
+        "intendedVsyncCadence": {
+          "$ref": "#/$defs/terminalIntendedCadence"
+        },
+        "displayPresentCadence": {
+          "$ref": "#/$defs/terminalDisplayCadence"
+        },
+        "excludedUnpresentedTailRowCount": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Trailing terminal rows not yet carrying a valid presentation timestamp; null when presented cadence is unavailable for the platform."
+        },
+        "terminalJank": {
+          "$ref": "#/$defs/terminalJank"
+        },
+        "rawFrames": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/terminalRawFrame"
+          }
+        }
+      }
+    },
+    "gfxinfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fullFlowSummary", "terminalFrameRing"],
+      "properties": {
+        "fullFlowSummary": {
+          "$ref": "#/$defs/gfxinfoFullFlowSummary"
+        },
+        "terminalFrameRing": {
+          "$ref": "#/$defs/terminalFrameRing"
+        }
+      }
+    },
+    "toolBinary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["basename", "logicalPath", "sha256"],
+      "properties": {
+        "basename": {
+          "type": "string",
+          "minLength": 1
+        },
+        "logicalPath": {
+          "type": "string",
+          "minLength": 1,
+          "not": {
+            "pattern": "^/"
+          }
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "branch",
+        "revision",
+        "dirty",
+        "gitStatusSha256",
+        "gitStatusEntryCount"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "branch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "dirty": {
+          "type": "boolean"
+        },
+        "gitStatusSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "gitStatusEntryCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "apk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "bytes", "modifiedAtUnixNanos", "manifest"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "not": {
+            "pattern": "^/"
+          }
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "modifiedAtUnixNanos": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "manifest": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "inspectionStatus",
+            "package",
+            "minSdk",
+            "targetSdk",
+            "debuggableDeclared",
+            "profileableByShellDeclared"
+          ],
+          "properties": {
+            "inspectionStatus": {
+              "enum": ["observed", "tool-unavailable"]
+            },
+            "package": {
+              "type": ["string", "null"]
+            },
+            "minSdk": {
+              "type": ["integer", "null"]
+            },
+            "targetSdk": {
+              "type": ["integer", "null"]
+            },
+            "debuggableDeclared": {
+              "type": ["boolean", "null"]
+            },
+            "profileableByShellDeclared": {
+              "type": ["boolean", "null"]
+            }
+          }
+        }
+      }
+    },
+    "protocol": {
+      "type": "object",
+      "required": [
+        "serials",
+        "forks",
+        "minimumFramesPerFork",
+        "package",
+        "component",
+        "flow",
+        "deviceMutationPolicy"
+      ],
+      "properties": {
+        "serials": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "forks": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "minimumFramesPerFork": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "package": {
+          "type": "string",
+          "minLength": 1
+        },
+        "component": {
+          "type": "string",
+          "minLength": 1
+        },
+        "flow": {
+          "type": "object",
+          "required": [
+            "name",
+            "schemaVersion",
+            "measurementStartStep",
+            "stepCount",
+            "sha256",
+            "hierarchyReuseStepIndexes"
+          ],
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "schemaVersion": {
+              "const": 1
+            },
+            "measurementStartStep": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "stepCount": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "hierarchyReuseStepIndexes": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "deviceMutationPolicy": {
+          "type": "object",
+          "required": [
+            "applicationDataCleared",
+            "packageUninstalled",
+            "globalSettingsChanged",
+            "packageForceStoppedForColdStart",
+            "screenWakeKeySent"
+          ],
+          "properties": {
+            "applicationDataCleared": {
+              "const": false
+            },
+            "packageUninstalled": {
+              "const": false
+            },
+            "globalSettingsChanged": {
+              "const": false
+            },
+            "packageForceStoppedForColdStart": {
+              "const": true
+            },
+            "screenWakeKeySent": {
+              "const": true
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": true
+    },
+    "aggregateFullFlowSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "measurementScope",
+        "totalFramesRendered",
+        "platformJankyFrames",
+        "platformJankyFrameRate",
+        "frameTimePercentilesMillis"
+      ],
+      "properties": {
+        "measurementScope": {
+          "const": "full-measured-flow-since-gfxinfo-reset"
+        },
+        "totalFramesRendered": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "platformJankyFrames": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "platformJankyFrameRate": {
+          "$ref": "#/$defs/rate"
+        },
+        "frameTimePercentilesMillis": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["p50", "p90", "p95", "p99"],
+          "properties": {
+            "p50": {
+              "$ref": "#/$defs/sampleStatistics"
+            },
+            "p90": {
+              "$ref": "#/$defs/sampleStatistics"
+            },
+            "p95": {
+              "$ref": "#/$defs/sampleStatistics"
+            },
+            "p99": {
+              "$ref": "#/$defs/sampleStatistics"
+            }
+          }
+        }
+      }
+    },
+    "aggregateIntendedCadence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "available",
+        "intervalMillis",
+        "producedFramesPerSecond",
+        "cadenceMissedVsyncCount",
+        "cadenceMissedVsyncRate"
+      ],
+      "properties": {
+        "available": {
+          "const": true
+        },
+        "intervalMillis": {
+          "$ref": "#/$defs/sampleStatistics"
+        },
+        "producedFramesPerSecond": {
+          "$ref": "#/$defs/sampleStatistics"
+        },
+        "cadenceMissedVsyncCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cadenceMissedVsyncRate": {
+          "$ref": "#/$defs/rate"
+        }
+      }
+    },
+    "aggregateDisplayCadence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "available",
+        "availabilityState",
+        "unavailableReason",
+        "intervalMillis",
+        "presentedFramesPerSecond",
+        "cadenceMissedVsyncCount",
+        "cadenceMissedVsyncRate",
+        "excludedUnpresentedTailRowCount"
+      ],
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "availabilityState": {
+          "enum": [
+            "available",
+            "column-absent",
+            "column-present-all-unset"
+          ]
+        },
+        "unavailableReason": {
+          "type": ["string", "null"]
+        },
+        "intervalMillis": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sampleStatistics"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "presentedFramesPerSecond": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sampleStatistics"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cadenceMissedVsyncCount": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "cadenceMissedVsyncRate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/rate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "excludedUnpresentedTailRowCount": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "available": {
+                "const": true
+              }
+            },
+            "required": ["available"]
+          },
+          "then": {
+            "properties": {
+              "availabilityState": {
+                "const": "available"
+              },
+              "unavailableReason": {
+                "type": "null"
+              },
+              "intervalMillis": {
+                "$ref": "#/$defs/sampleStatistics"
+              },
+              "presentedFramesPerSecond": {
+                "$ref": "#/$defs/sampleStatistics"
+              },
+              "cadenceMissedVsyncCount": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "cadenceMissedVsyncRate": {
+                "$ref": "#/$defs/rate"
+              },
+              "excludedUnpresentedTailRowCount": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "availabilityState": {
+                "enum": ["column-absent", "column-present-all-unset"]
+              },
+              "unavailableReason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "intervalMillis": {
+                "type": "null"
+              },
+              "presentedFramesPerSecond": {
+                "type": "null"
+              },
+              "cadenceMissedVsyncCount": {
+                "type": "null"
+              },
+              "cadenceMissedVsyncRate": {
+                "type": "null"
+              },
+              "excludedUnpresentedTailRowCount": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "deviceAggregate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "forkCount",
+        "refreshRateHz",
+        "frameBudgetMillis",
+        "startupTotalTimeMillis",
+        "startupWaitTimeMillis",
+        "fullFlowGfxinfoSummary",
+        "terminalFrameCompletionLatencyMillis",
+        "terminalUiSubmissionLatencyMillis",
+        "terminalRawFrameSampleCount",
+        "terminalSingleRefreshCompletionOverrunCount",
+        "terminalSingleRefreshCompletionOverrunRate",
+        "terminalDoubleRefreshCompletionOverrunCount",
+        "terminalDoubleRefreshCompletionOverrunRate",
+        "terminalJank",
+        "terminalIntendedVsyncCadence",
+        "terminalDisplayPresentCadence",
+        "totalPssKibibytes",
+        "javaHeapPssKibibytes",
+        "nativeHeapPssKibibytes",
+        "graphicsPssKibibytes",
+        "measurementElapsedMillis"
+      ],
+      "properties": {
+        "forkCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "refreshRateHz": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "frameBudgetMillis": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "startupTotalTimeMillis": {
+          "$ref": "#/$defs/sampleStatistics"
+        },
+        "startupWaitTimeMillis": {
+          "$ref": "#/$defs/sampleStatistics"
+        },
+        "fullFlowGfxinfoSummary": {
+          "$ref": "#/$defs/aggregateFullFlowSummary"
+        },
+        "terminalFrameCompletionLatencyMillis": {
+          "$ref": "#/$defs/sampleStatistics"
+        },
+        "terminalUiSubmissionLatencyMillis": {
+          "$ref": "#/$defs/sampleStatistics"
+        },
+        "terminalRawFrameSampleCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "terminalSingleRefreshCompletionOverrunCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "terminalSingleRefreshCompletionOverrunRate": {
+          "$ref": "#/$defs/rate"
+        },
+        "terminalDoubleRefreshCompletionOverrunCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "terminalDoubleRefreshCompletionOverrunRate": {
+          "$ref": "#/$defs/rate"
+        },
+        "terminalJank": {
+          "$ref": "#/$defs/terminalJank"
+        },
+        "terminalIntendedVsyncCadence": {
+          "$ref": "#/$defs/aggregateIntendedCadence"
+        },
+        "terminalDisplayPresentCadence": {
+          "$ref": "#/$defs/aggregateDisplayCadence"
+        },
+        "totalPssKibibytes": {
+          "$ref": "#/$defs/sampleStatistics"
+        },
+        "javaHeapPssKibibytes": {
+          "$ref": "#/$defs/sampleStatistics"
+        },
+        "nativeHeapPssKibibytes": {
+          "$ref": "#/$defs/sampleStatistics"
+        },
+        "graphicsPssKibibytes": {
+          "$ref": "#/$defs/sampleStatistics"
+        },
+        "measurementElapsedMillis": {
+          "$ref": "#/$defs/sampleStatistics"
+        }
+      }
+    },
+    "device": {
+      "type": "object",
+      "required": ["serial", "status", "forks"],
+      "properties": {
+        "serial": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": ["running", "ok", "error"]
+        },
+        "environment": {
+          "$ref": "#/$defs/environment"
+        },
+        "installedPackage": {
+          "type": "object",
+          "required": [
+            "installedBaseApkSha256",
+            "profileableByShell",
+            "profileableByShellObserved",
+            "profileableByShellProvenance"
+          ],
+          "properties": {
+            "installedBaseApkSha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "profileableByShell": {
+              "type": ["boolean", "null"]
+            },
+            "profileableByShellObserved": {
+              "type": ["boolean", "null"]
+            },
+            "profileableByShellProvenance": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "effective",
+                "source",
+                "manifestDeclared",
+                "dumpsysObserved"
+              ],
+              "properties": {
+                "effective": {
+                  "type": ["boolean", "null"]
+                },
+                "source": {
+                  "enum": ["apk-manifest", "dumpsys-package", "unobserved"]
+                },
+                "manifestDeclared": {
+                  "type": ["boolean", "null"]
+                },
+                "dumpsysObserved": {
+                  "type": ["boolean", "null"]
+                }
+              }
+            }
+          },
+          "additionalProperties": true
+        },
+        "forks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fork"
+          }
+        },
+        "aggregate": {
+          "$ref": "#/$defs/deviceAggregate"
+        },
+        "error": {
+          "$ref": "#/$defs/error"
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "ok"
+              }
+            }
+          },
+          "then": {
+            "required": ["environment", "installedPackage", "aggregate"]
+          }
+        }
+      ]
+    },
+    "environment": {
+      "type": "object",
+      "required": [
+        "serial",
+        "manufacturer",
+        "model",
+        "androidRelease",
+        "apiLevel",
+        "display",
+        "navigation",
+        "battery",
+        "thermal",
+        "lowPowerModeEnabled"
+      ],
+      "properties": {
+        "serial": {
+          "type": "string"
+        },
+        "manufacturer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "androidRelease": {
+          "type": "string",
+          "minLength": 1
+        },
+        "apiLevel": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "display": {
+          "type": "object",
+          "required": [
+            "effectiveWidthPixels",
+            "effectiveHeightPixels",
+            "effectiveDensityDpi",
+            "activeRefreshRateHz",
+            "frameBudgetMillis"
+          ],
+          "properties": {
+            "activeRefreshRateHz": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "frameBudgetMillis": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "additionalProperties": true
+        },
+        "navigation": {
+          "type": "object",
+          "required": ["rawMode", "mode"],
+          "properties": {
+            "mode": {
+              "enum": ["three-button", "two-button", "gesture"]
+            }
+          },
+          "additionalProperties": true
+        },
+        "battery": {
+          "$ref": "#/$defs/battery"
+        },
+        "thermal": {
+          "$ref": "#/$defs/thermal"
+        },
+        "lowPowerModeEnabled": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": true
+    },
+    "battery": {
+      "type": "object",
+      "required": ["levelPercent", "statusCode", "temperatureCelsius"],
+      "properties": {
+        "levelPercent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "statusCode": {
+          "type": "integer"
+        },
+        "temperatureCelsius": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": true
+    },
+    "thermal": {
+      "type": "object",
+      "required": ["statusCode", "temperatures", "maximumSkinTemperatureCelsius"],
+      "properties": {
+        "statusCode": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "temperatures": {
+          "type": "array"
+        },
+        "maximumSkinTemperatureCelsius": {
+          "type": ["number", "null"]
+        }
+      },
+      "additionalProperties": true
+    },
+    "fork": {
+      "type": "object",
+      "required": ["fork", "status"],
+      "properties": {
+        "fork": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "enum": ["ok", "error"]
+        },
+        "processColdStart": {
+          "const": true
+        },
+        "startup": {
+          "type": "object",
+          "required": ["totalTimeMillis", "waitTimeMillis"],
+          "additionalProperties": true
+        },
+        "gfxinfo": {
+          "$ref": "#/$defs/gfxinfo"
+        },
+        "memory": {
+          "type": "object",
+          "required": [
+            "totalPssKibibytes",
+            "javaHeapPssKibibytes",
+            "nativeHeapPssKibibytes",
+            "graphicsPssKibibytes",
+            "viewCount",
+            "activityCount"
+          ],
+          "additionalProperties": true
+        },
+        "diagnostics": {
+          "type": "object",
+          "required": ["fatalExceptionCount", "anrCount", "crashSignalCount"],
+          "additionalProperties": true
+        },
+        "error": {
+          "$ref": "#/$defs/error"
+        }
+      },
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "ok"
+              }
+            }
+          },
+          "then": {
+            "required": ["startup", "gfxinfo", "memory", "diagnostics"]
+          },
+          "else": {
+            "required": ["error"]
+          }
+        }
+      ]
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "message"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: 2026 Vladislav Tomilov
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# Compose Runtime's consumer rules are excluded for the optimized application because they select
+# GapBuffer. Keep the other upstream rules here and select LinkBuffer with one unambiguous value.
+-assumenosideeffects public class androidx.compose.runtime.ComposerKt {
+    void sourceInformation(androidx.compose.runtime.Composer,java.lang.String);
+    void sourceInformationMarkerStart(androidx.compose.runtime.Composer,int,java.lang.String);
+    void sourceInformationMarkerEnd(androidx.compose.runtime.Composer);
+}
+
+-assumenosideeffects public class androidx.compose.runtime.Composer {
+    void <clinit>();
+}
+
+-assumenosideeffects public class androidx.compose.runtime.ComposerImpl {
+    void <clinit>();
+}
+
+-keepclassmembers,allowshrinking,allowobfuscation class androidx.compose.runtime.** {
+    static void throw*Exception(...);
+    static void throw*ExceptionForNullCheck(...);
+    static java.lang.Void throw*Exception(...);
+    static java.lang.Void throw*ExceptionForNullCheck(...);
+    static java.lang.String exceptionMessage*(...);
+    java.lang.String exceptionMessage*(...);
+    static void compose*RuntimeError(...);
+    static java.lang.Void compose*RuntimeError(...);
+}
+
+-assumevalues class androidx.compose.runtime.tooling.ComposeStackTraceMode {
+    private static boolean isMinified return true;
+}
+
+-assumevalues public class androidx.compose.runtime.ComposeRuntimeFlags {
+    static boolean isLinkBufferComposerEnabled return true;
+}

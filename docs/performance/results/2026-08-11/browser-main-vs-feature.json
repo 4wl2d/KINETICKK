@@ -1,0 +1,679 @@
+{
+  "schemaVersion": 1,
+  "spdxFileCopyrightText": "2026 Vladislav Tomilov",
+  "spdxLicenseIdentifier": "GPL-3.0-or-later",
+  "suite": "kinetickk-browser-comparison",
+  "baseline": {
+    "label": "main",
+    "revision": "fedceb8e2d9009d805d70249e10c77e424447945",
+    "branch": "",
+    "dirty": false,
+    "inputSource": {
+      "file": "browser-main.json",
+      "sha256": "3617dd8bf62298af25e6f58d6262dddf0a75307a5a0ae4be5d6ff2a325923135"
+    }
+  },
+  "candidate": {
+    "label": "feature/pokeball-full-refactor",
+    "revision": "20a3e2f78988419f5263247085a9a4b3900f4a6e",
+    "branch": "",
+    "dirty": false,
+    "inputSource": {
+      "file": "browser-feature.json",
+      "sha256": "549990a4dbe3ac6a09d4bbb3422a604191f2c15e69cbb50c8fa96d279397f44c"
+    }
+  },
+  "protocol": {
+    "browserSelection": "default",
+    "forks": 5,
+    "frameThresholdsMillis": [
+      16.67,
+      33.33
+    ],
+    "frameTimeoutMillis": 30000,
+    "headless": true,
+    "measureFrames": 600,
+    "navigationOrder": [
+      "cold-fresh-profile",
+      "warm-same-profile"
+    ],
+    "readySelector": "canvas",
+    "readyState": "attached",
+    "settleMillis": 1000,
+    "timeoutMillis": 90000,
+    "viewport": {
+      "deviceScaleFactor": 1,
+      "heightPixels": 720,
+      "widthPixels": 1280
+    },
+    "warmupFrames": 120
+  },
+  "browserVersions": [
+    "152.0.7977.8"
+  ],
+  "effectThresholdPercent": 5.0,
+  "bootstrapResamples": 10000,
+  "diagnostics": {
+    "baseline": {
+      "consoleErrors": 0,
+      "consoleMessages": 40,
+      "consoleWarnings": 40,
+      "httpErrors": 0,
+      "pageErrors": 0,
+      "requestFailures": 0
+    },
+    "candidate": {
+      "consoleErrors": 0,
+      "consoleMessages": 40,
+      "consoleWarnings": 40,
+      "httpErrors": 0,
+      "pageErrors": 0,
+      "requestFailures": 0
+    }
+  },
+  "metrics": [
+    {
+      "name": "cdp.after.JSHeapTotalSize",
+      "unit": "bytes",
+      "direction": "lower-is-better",
+      "baselineMedian": 25624576.0,
+      "candidateMedian": 25886720.0,
+      "absoluteDelta": 262144.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": 1.0230179028132993,
+      "bootstrap95Percent": [
+        -2.9484029484029484,
+        2.0671834625323
+      ],
+      "classification": "stable"
+    },
+    {
+      "name": "cdp.after.JSHeapUsedSize",
+      "unit": "bytes",
+      "direction": "lower-is-better",
+      "baselineMedian": 12735252.0,
+      "candidateMedian": 16117904.0,
+      "absoluteDelta": 3382652.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": 26.561327565406636,
+      "bootstrap95Percent": [
+        2.1634853688188445,
+        38.99240512965918
+      ],
+      "classification": "regression"
+    },
+    {
+      "name": "cdp.delta.LayoutDuration",
+      "unit": "seconds",
+      "direction": "lower-is-better",
+      "baselineMedian": 0.0,
+      "candidateMedian": 0.0,
+      "absoluteDelta": 0.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": 0.0,
+      "bootstrap95Percent": null,
+      "classification": "stable"
+    },
+    {
+      "name": "cdp.delta.RecalcStyleDuration",
+      "unit": "seconds",
+      "direction": "lower-is-better",
+      "baselineMedian": 0.0,
+      "candidateMedian": 0.0,
+      "absoluteDelta": 0.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": 0.0,
+      "bootstrap95Percent": null,
+      "classification": "stable"
+    },
+    {
+      "name": "cdp.delta.ScriptDuration",
+      "unit": "seconds",
+      "direction": "lower-is-better",
+      "baselineMedian": 0.504895,
+      "candidateMedian": 0.448978,
+      "absoluteDelta": -0.055916999999999994,
+      "zeroBaselineTransition": false,
+      "deltaPercent": -11.074975985105812,
+      "bootstrap95Percent": [
+        -31.905445686726942,
+        -2.9304964021929183
+      ],
+      "classification": "improvement"
+    },
+    {
+      "name": "cdp.delta.TaskDuration",
+      "unit": "seconds",
+      "direction": "lower-is-better",
+      "baselineMedian": 2.88404,
+      "candidateMedian": 2.7670850000000002,
+      "absoluteDelta": -0.11695499999999992,
+      "zeroBaselineTransition": false,
+      "deltaPercent": -4.055248886977987,
+      "bootstrap95Percent": [
+        -38.90410673915758,
+        -0.8808130261716303
+      ],
+      "classification": "stable"
+    },
+    {
+      "name": "coldNavigation.firstContentfulPaintMillis",
+      "unit": "ms",
+      "direction": "lower-is-better",
+      "baselineMedian": 472.0,
+      "candidateMedian": 408.0,
+      "absoluteDelta": -64.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": -13.559322033898304,
+      "bootstrap95Percent": [
+        -18.0327868852459,
+        -8.695652173913043
+      ],
+      "classification": "improvement"
+    },
+    {
+      "name": "coldNavigation.firstPaintMillis",
+      "unit": "ms",
+      "direction": "lower-is-better",
+      "baselineMedian": 16.0,
+      "candidateMedian": 12.0,
+      "absoluteDelta": -4.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": -25.0,
+      "bootstrap95Percent": [
+        -40.0,
+        0.0
+      ],
+      "classification": "inconclusive"
+    },
+    {
+      "name": "coldNavigation.navigation.domContentLoadedMillis",
+      "unit": "ms",
+      "direction": "lower-is-better",
+      "baselineMedian": 42.400000005960464,
+      "candidateMedian": 32.599999994039536,
+      "absoluteDelta": -9.800000011920929,
+      "zeroBaselineTransition": false,
+      "deltaPercent": -23.113207572036025,
+      "bootstrap95Percent": [
+        -30.786026189862515,
+        5.58375635400878
+      ],
+      "classification": "inconclusive"
+    },
+    {
+      "name": "coldNavigation.navigation.loadMillis",
+      "unit": "ms",
+      "direction": "lower-is-better",
+      "baselineMedian": 42.400000005960464,
+      "candidateMedian": 32.599999994039536,
+      "absoluteDelta": -9.800000011920929,
+      "zeroBaselineTransition": false,
+      "deltaPercent": -23.113207572036025,
+      "bootstrap95Percent": [
+        -30.786026189862515,
+        5.58375635400878
+      ],
+      "classification": "inconclusive"
+    },
+    {
+      "name": "coldNavigation.navigation.ttfbMillis",
+      "unit": "ms",
+      "direction": "lower-is-better",
+      "baselineMedian": 0.4000000059604645,
+      "candidateMedian": 0.29999999701976776,
+      "absoluteDelta": -0.10000000894069672,
+      "zeroBaselineTransition": false,
+      "deltaPercent": -25.00000186264512,
+      "bootstrap95Percent": [
+        -50.0,
+        24.99999813735488
+      ],
+      "classification": "inconclusive"
+    },
+    {
+      "name": "coldNavigation.resources.totals.decodedBodySizeBytes",
+      "unit": "bytes",
+      "direction": "lower-is-better",
+      "baselineMedian": 10646785.0,
+      "candidateMedian": 11103276.0,
+      "absoluteDelta": 456491.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": 4.287594799744712,
+      "bootstrap95Percent": [
+        4.287594799744712,
+        4.287594799744712
+      ],
+      "classification": "stable"
+    },
+    {
+      "name": "coldNavigation.resources.totals.transferSizeBytes",
+      "unit": "bytes",
+      "direction": "lower-is-better",
+      "baselineMedian": 10647685.0,
+      "candidateMedian": 11104176.0,
+      "absoluteDelta": 456491.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": 4.28723238901226,
+      "bootstrap95Percent": [
+        4.28723238901226,
+        4.28723238901226
+      ],
+      "classification": "stable"
+    },
+    {
+      "name": "coldNavigation.resources.wasm.decodedBodySizeBytes",
+      "unit": "bytes",
+      "direction": "lower-is-better",
+      "baselineMedian": 10312018.0,
+      "candidateMedian": 10767844.0,
+      "absoluteDelta": 455826.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": 4.420337512987273,
+      "bootstrap95Percent": [
+        4.420337512987273,
+        4.420337512987273
+      ],
+      "classification": "stable"
+    },
+    {
+      "name": "coldNavigation.resources.wasm.transferSizeBytes",
+      "unit": "bytes",
+      "direction": "lower-is-better",
+      "baselineMedian": 10312618.0,
+      "candidateMedian": 10768444.0,
+      "absoluteDelta": 455826.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": 4.420080332656557,
+      "bootstrap95Percent": [
+        4.420080332656557,
+        4.420080332656557
+      ],
+      "classification": "stable"
+    },
+    {
+      "name": "coldNavigation.wallNavigationMillis",
+      "unit": "ms",
+      "direction": "lower-is-better",
+      "baselineMedian": 46.0,
+      "candidateMedian": 35.0,
+      "absoluteDelta": -11.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": -23.91304347826087,
+      "bootstrap95Percent": [
+        -32.608695652173914,
+        7.142857142857142
+      ],
+      "classification": "inconclusive"
+    },
+    {
+      "name": "coldNavigation.wallReadyMillis",
+      "unit": "ms",
+      "direction": "lower-is-better",
+      "baselineMedian": 1540.0,
+      "candidateMedian": 1412.0,
+      "absoluteDelta": -128.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": -8.311688311688311,
+      "bootstrap95Percent": [
+        -9.922680412371134,
+        -6.8920676202860855
+      ],
+      "classification": "improvement"
+    },
+    {
+      "name": "frameMeasurement.heapDeltaBytes.usedJsHeapSizeBytes",
+      "unit": "bytes",
+      "direction": "lower-is-better",
+      "baselineMedian": 0.0,
+      "candidateMedian": 0.0,
+      "absoluteDelta": 0.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": 0.0,
+      "bootstrap95Percent": null,
+      "classification": "stable"
+    },
+    {
+      "name": "frameMeasurement.longTaskSummary.count",
+      "unit": "count",
+      "direction": "lower-is-better",
+      "baselineMedian": 0.0,
+      "candidateMedian": 0.0,
+      "absoluteDelta": 0.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": 0.0,
+      "bootstrap95Percent": null,
+      "classification": "stable"
+    },
+    {
+      "name": "frameMeasurement.longTaskSummary.maximumDurationMillis",
+      "unit": "ms",
+      "direction": "lower-is-better",
+      "baselineMedian": 0.0,
+      "candidateMedian": 0.0,
+      "absoluteDelta": 0.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": 0.0,
+      "bootstrap95Percent": null,
+      "classification": "stable"
+    },
+    {
+      "name": "frameMeasurement.longTaskSummary.totalDurationMillis",
+      "unit": "ms",
+      "direction": "lower-is-better",
+      "baselineMedian": 0.0,
+      "candidateMedian": 0.0,
+      "absoluteDelta": 0.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": 0.0,
+      "bootstrap95Percent": null,
+      "classification": "stable"
+    },
+    {
+      "name": "frameMeasurement.statistics.framesPerSecond",
+      "unit": "frames/s",
+      "direction": "higher-is-better",
+      "baselineMedian": 60.00240009600384,
+      "candidateMedian": 60.00180005400161,
+      "absoluteDelta": -0.0006000420022260755,
+      "zeroBaselineTransition": false,
+      "deltaPercent": -0.0010000300009099774,
+      "bootstrap95Percent": [
+        -0.49753224008915264,
+        0.167006680267188
+      ],
+      "classification": "stable"
+    },
+    {
+      "name": "frameMeasurement.statistics.maximum",
+      "unit": "ms",
+      "direction": "lower-is-better",
+      "baselineMedian": 16.80000000000109,
+      "candidateMedian": 16.80000000000109,
+      "absoluteDelta": 0.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": 0.0,
+      "bootstrap95Percent": [
+        -49.70059880239208,
+        297.0238095237827
+      ],
+      "classification": "stable"
+    },
+    {
+      "name": "frameMeasurement.statistics.mean",
+      "unit": "ms",
+      "direction": "lower-is-better",
+      "baselineMedian": 16.666,
+      "candidateMedian": 16.66616666666667,
+      "absoluteDelta": 0.0001666666666686467,
+      "zeroBaselineTransition": false,
+      "deltaPercent": 0.0010000400016119447,
+      "bootstrap95Percent": [
+        -0.16672823298022255,
+        0.5000200008000248
+      ],
+      "classification": "stable"
+    },
+    {
+      "name": "frameMeasurement.statistics.median",
+      "unit": "ms",
+      "direction": "lower-is-better",
+      "baselineMedian": 16.699999999999818,
+      "candidateMedian": 16.699999999999818,
+      "absoluteDelta": 0.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": 0.0,
+      "bootstrap95Percent": [
+        -5.4460760585205875e-12,
+        5.446076058520884e-12
+      ],
+      "classification": "stable"
+    },
+    {
+      "name": "frameMeasurement.statistics.onePercentLowFramesPerSecond",
+      "unit": "frames/s",
+      "direction": "higher-is-better",
+      "baselineMedian": 59.52380952380566,
+      "candidateMedian": 59.5238095238062,
+      "absoluteDelta": 5.400124791776761e-13,
+      "zeroBaselineTransition": false,
+      "deltaPercent": 9.072209650185548e-13,
+      "bootstrap95Percent": [
+        -33.11214333111943,
+        16.46825396825296
+      ],
+      "classification": "stable"
+    },
+    {
+      "name": "frameMeasurement.statistics.over16_67MillisProportion",
+      "unit": "ratio",
+      "direction": "lower-is-better",
+      "baselineMedian": 0.6233333333333333,
+      "candidateMedian": 0.6166666666666667,
+      "absoluteDelta": -0.006666666666666599,
+      "zeroBaselineTransition": false,
+      "deltaPercent": -1.0695187165775293,
+      "bootstrap95Percent": [
+        -2.1276595744680984,
+        2.4930747922437697
+      ],
+      "classification": "stable"
+    },
+    {
+      "name": "frameMeasurement.statistics.over33_33MillisProportion",
+      "unit": "ratio",
+      "direction": "lower-is-better",
+      "baselineMedian": 0.0,
+      "candidateMedian": 0.0,
+      "absoluteDelta": 0.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": 0.0,
+      "bootstrap95Percent": null,
+      "classification": "stable"
+    },
+    {
+      "name": "frameMeasurement.statistics.p95",
+      "unit": "ms",
+      "direction": "lower-is-better",
+      "baselineMedian": 16.700000000000728,
+      "candidateMedian": 16.705000000000652,
+      "absoluteDelta": 0.004999999999924398,
+      "zeroBaselineTransition": false,
+      "deltaPercent": 0.02994011976002503,
+      "bootstrap95Percent": [
+        -0.5952380952294591,
+        0.598802395200841
+      ],
+      "classification": "stable"
+    },
+    {
+      "name": "frameMeasurement.statistics.p99",
+      "unit": "ms",
+      "direction": "lower-is-better",
+      "baselineMedian": 16.80000000000019,
+      "candidateMedian": 16.800000000000182,
+      "absoluteDelta": -7.105427357601002e-15,
+      "zeroBaselineTransition": false,
+      "deltaPercent": -4.229421046191025e-14,
+      "bootstrap95Percent": [
+        -5.413658939124221e-12,
+        5.371364728662602e-12
+      ],
+      "classification": "stable"
+    },
+    {
+      "name": "warmNavigation.firstContentfulPaintMillis",
+      "unit": "ms",
+      "direction": "lower-is-better",
+      "baselineMedian": 312.0,
+      "candidateMedian": 268.0,
+      "absoluteDelta": -44.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": -14.102564102564102,
+      "bootstrap95Percent": [
+        -22.988505747126435,
+        -10.256410256410255
+      ],
+      "classification": "improvement"
+    },
+    {
+      "name": "warmNavigation.firstPaintMillis",
+      "unit": "ms",
+      "direction": "lower-is-better",
+      "baselineMedian": 12.0,
+      "candidateMedian": 12.0,
+      "absoluteDelta": 0.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": 0.0,
+      "bootstrap95Percent": [
+        -40.0,
+        66.66666666666666
+      ],
+      "classification": "stable"
+    },
+    {
+      "name": "warmNavigation.memory.usedJsHeapSizeBytes",
+      "unit": "bytes",
+      "direction": "lower-is-better",
+      "baselineMedian": 10600000.0,
+      "candidateMedian": 10000000.0,
+      "absoluteDelta": -600000.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": -5.660377358490567,
+      "bootstrap95Percent": [
+        -5.660377358490567,
+        0.0
+      ],
+      "classification": "inconclusive"
+    },
+    {
+      "name": "warmNavigation.navigation.domContentLoadedMillis",
+      "unit": "ms",
+      "direction": "lower-is-better",
+      "baselineMedian": 10.700000002980232,
+      "candidateMedian": 10.200000002980232,
+      "absoluteDelta": -0.5,
+      "zeroBaselineTransition": false,
+      "deltaPercent": -4.672897194960157,
+      "bootstrap95Percent": [
+        -36.64596274959043,
+        40.18691584880471
+      ],
+      "classification": "stable"
+    },
+    {
+      "name": "warmNavigation.navigation.loadMillis",
+      "unit": "ms",
+      "direction": "lower-is-better",
+      "baselineMedian": 10.900000005960464,
+      "candidateMedian": 10.300000011920929,
+      "absoluteDelta": -0.5999999940395355,
+      "zeroBaselineTransition": false,
+      "deltaPercent": -5.50458709827006,
+      "bootstrap95Percent": [
+        -36.41975302453031,
+        39.44954109878193
+      ],
+      "classification": "inconclusive"
+    },
+    {
+      "name": "warmNavigation.navigation.ttfbMillis",
+      "unit": "ms",
+      "direction": "lower-is-better",
+      "baselineMedian": 0.20000000298023224,
+      "candidateMedian": 0.20000000298023224,
+      "absoluteDelta": 0.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": 0.0,
+      "bootstrap95Percent": [
+        -7.450580485901527e-06,
+        100.00001490116207
+      ],
+      "classification": "stable"
+    },
+    {
+      "name": "warmNavigation.resources.totals.decodedBodySizeBytes",
+      "unit": "bytes",
+      "direction": "lower-is-better",
+      "baselineMedian": 10646785.0,
+      "candidateMedian": 11103276.0,
+      "absoluteDelta": 456491.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": 4.287594799744712,
+      "bootstrap95Percent": [
+        4.287594799744712,
+        4.287594799744712
+      ],
+      "classification": "stable"
+    },
+    {
+      "name": "warmNavigation.resources.totals.transferSizeBytes",
+      "unit": "bytes",
+      "direction": "lower-is-better",
+      "baselineMedian": 0.0,
+      "candidateMedian": 0.0,
+      "absoluteDelta": 0.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": 0.0,
+      "bootstrap95Percent": null,
+      "classification": "stable"
+    },
+    {
+      "name": "warmNavigation.resources.wasm.decodedBodySizeBytes",
+      "unit": "bytes",
+      "direction": "lower-is-better",
+      "baselineMedian": 10312018.0,
+      "candidateMedian": 10767844.0,
+      "absoluteDelta": 455826.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": 4.420337512987273,
+      "bootstrap95Percent": [
+        4.420337512987273,
+        4.420337512987273
+      ],
+      "classification": "stable"
+    },
+    {
+      "name": "warmNavigation.resources.wasm.transferSizeBytes",
+      "unit": "bytes",
+      "direction": "lower-is-better",
+      "baselineMedian": 0.0,
+      "candidateMedian": 0.0,
+      "absoluteDelta": 0.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": 0.0,
+      "bootstrap95Percent": null,
+      "classification": "stable"
+    },
+    {
+      "name": "warmNavigation.wallNavigationMillis",
+      "unit": "ms",
+      "direction": "lower-is-better",
+      "baselineMedian": 13.0,
+      "candidateMedian": 12.0,
+      "absoluteDelta": -1.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": -7.6923076923076925,
+      "bootstrap95Percent": [
+        -33.33333333333333,
+        30.76923076923077
+      ],
+      "classification": "inconclusive"
+    },
+    {
+      "name": "warmNavigation.wallReadyMillis",
+      "unit": "ms",
+      "direction": "lower-is-better",
+      "baselineMedian": 1322.0,
+      "candidateMedian": 1268.0,
+      "absoluteDelta": -54.0,
+      "zeroBaselineTransition": false,
+      "deltaPercent": -4.084720121028744,
+      "bootstrap95Percent": [
+        -5.794947994056463,
+        -3.177004538577912
+      ],
+      "classification": "stable"
+    }
+  ]
+}

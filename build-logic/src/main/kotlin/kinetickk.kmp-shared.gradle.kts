@@ -1,35 +1,27 @@
 // SPDX-FileCopyrightText: 2026 Vladislav Tomilov
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import org.gradle.api.tasks.compile.JavaCompile
-import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    id("kinetickk.base")
-    id("org.jetbrains.kotlin.multiplatform")
-}
-
-tasks.withType<JavaCompile>().configureEach {
-    sourceCompatibility = "17"
-    targetCompatibility = "17"
+    id("kinetickk.kmp-platforms")
+    id("com.android.kotlin.multiplatform.library")
 }
 
 kotlin {
-    jvm("desktop") {
+    android {
+        namespace = project.path.removePrefix(":").replace(':', '.').let { "kinetickk.$it" }
+        compileSdk = 37
+        minSdk = 26
+
+        // Android-KMP disables resources, Java, and both test components by default. Keep those
+        // lean defaults for every leaf; the few modules that need a capability opt in locally.
+        androidResources {
+            enable = false
+        }
+
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
-        }
-    }
-
-    @OptIn(ExperimentalWasmDsl::class)
-    wasmJs {
-        browser()
-    }
-
-    sourceSets {
-        commonTest.dependencies {
-            implementation(kotlin("test"))
         }
     }
 }

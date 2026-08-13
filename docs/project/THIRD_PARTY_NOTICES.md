@@ -16,7 +16,7 @@ release.
 
 | Component | Version | Files | License |
 |---|---:|---|---|
-| Gradle Wrapper | 8.14.3 | `gradlew`, `gradlew.bat`, `gradle/wrapper/gradle-wrapper.jar`, `gradle/wrapper/gradle-wrapper.properties` | [Apache License 2.0](https://github.com/gradle/gradle/blob/v8.14.3/LICENSE) |
+| Gradle Wrapper | 9.7.0 | `gradlew`, `gradlew.bat`, `gradle/wrapper/gradle-wrapper.jar`, `gradle/wrapper/gradle-wrapper.properties` | [Apache License 2.0](https://github.com/gradle/gradle/blob/v9.7.0/LICENSE) |
 
 The wrapper scripts contain their own Apache-2.0 headers, and
 `gradle-wrapper.jar` contains the full license at `META-INF/LICENSE`. Those
@@ -28,17 +28,21 @@ These components are fetched by Gradle and are not relicensed by KINETICKK:
 
 | Component family | Resolved version used by 0.1.0 | License / upstream |
 |---|---:|---|
-| Kotlin standard library and Gradle plugin | 2.3.20 | [Apache License 2.0](https://github.com/JetBrains/kotlin/blob/v2.3.20/license/LICENSE.txt) |
-| Compose Multiplatform | 1.11.0 | [Apache License 2.0](https://github.com/JetBrains/compose-multiplatform/blob/v1.11.0/LICENSE.txt) |
-| AndroidX Compose runtime | 1.11.1 | [Apache License 2.0](https://github.com/androidx/androidx/blob/androidx-main/LICENSE.txt) |
+| Android Gradle Plugin | 9.3.1 | [Apache License 2.0](https://android.googlesource.com/platform/tools/base/+/studio-main/LICENSE.txt) |
+| Kotlin standard library and Gradle plugin | 2.4.20-RC | [Apache License 2.0](https://github.com/JetBrains/kotlin/blob/v2.4.20-RC/license/LICENSE.txt) |
+| Compose Multiplatform | 1.12.0-rc01 | [Apache License 2.0](https://github.com/JetBrains/compose-multiplatform/blob/v1.12.0-rc01/LICENSE.txt) |
+| AndroidX Compose runtime | 1.12.0-rc01 | [Apache License 2.0](https://github.com/androidx/androidx/blob/androidx-main/LICENSE.txt) |
+| AndroidX Activity | 1.13.0 | [AndroidX licenses](https://github.com/androidx/androidx) |
+| AndroidX Test runner / rules / JUnit extension | 1.7.0 / 1.7.0 / 1.3.0 | [AndroidX licenses](https://github.com/android/android-test) |
 | AndroidX Collection / Annotation | 1.5.0 / 1.9.1 | [AndroidX licenses](https://github.com/androidx/androidx) |
-| AndroidX Lifecycle / Saved State / Navigation Event / Arch Core | 2.9.4 / 1.4.0 / 1.0.1 / 2.2.0 | [AndroidX licenses](https://github.com/androidx/androidx) |
-| JetBrains AndroidX Lifecycle / Saved State ports | 2.9.6 / 1.3.6 | [Compose Multiplatform dependencies](https://github.com/JetBrains/compose-multiplatform) |
+| AndroidX Lifecycle / Saved State / Navigation Event / Arch Core (Android) | 2.9.4 / 1.4.0 / 1.0.0 / 2.2.0 | [AndroidX licenses](https://github.com/androidx/androidx) |
+| AndroidX Lifecycle / Saved State / Navigation Event (Desktop) | 2.11.0 / 1.4.0 / 1.1.1 | [AndroidX licenses](https://github.com/androidx/androidx) |
+| JetBrains AndroidX Lifecycle / Saved State / Navigation Event ports | 2.9.6 / 1.3.6 / 1.1.0 | [Compose Multiplatform dependencies](https://github.com/JetBrains/compose-multiplatform) |
 | kotlinx.coroutines | 1.9.0 | [Apache License 2.0](https://github.com/Kotlin/kotlinx.coroutines/blob/1.9.0/LICENSE.txt) |
-| kotlinx.serialization | 1.7.3 | [Apache License 2.0](https://github.com/Kotlin/kotlinx.serialization/blob/v1.7.3/LICENSE.txt) |
+| kotlinx.serialization | 1.11.0 | [Apache License 2.0](https://github.com/Kotlin/kotlinx.serialization/blob/v1.11.0/LICENSE.txt) |
 | kotlinx.atomicfu | 0.28.0 | [Apache License 2.0](https://github.com/Kotlin/kotlinx-atomicfu/blob/0.28.0/LICENSE.txt) |
 | kotlinx-browser | 0.5.0 | [Apache License 2.0](https://github.com/Kotlin/kotlinx-browser/blob/master/LICENSE) |
-| Skiko | 0.144.6 | [Apache License 2.0](https://github.com/JetBrains/skiko/blob/v0.144.6/LICENSE) and its [NOTICE](https://github.com/JetBrains/skiko/blob/v0.144.6/NOTICE) |
+| Skiko | 0.150.1 | [Apache License 2.0](https://github.com/JetBrains/skiko/blob/v0.150.1/LICENSE) and its [NOTICE](https://github.com/JetBrains/skiko/blob/v0.150.1/NOTICE) |
 | Skia, used through Skiko | version bundled by Skiko | [BSD 3-Clause](https://github.com/google/skia/blob/main/LICENSE) |
 | JetBrains Annotations / JBR API | 23.0.0 / 1.9.0 | Terms and notices shipped by the corresponding JetBrains artifacts |
 | JSpecify annotations | 1.0.0 | [Apache License 2.0](https://github.com/jspecify/jspecify/blob/main/LICENSE) |
@@ -54,11 +58,11 @@ does not yet assemble a complete release-grade `LICENSES/` directory. Do not
 treat a development artifact as ready for public distribution until this gate
 is complete.
 
-Before distributing any desktop or web build:
+Before distributing any Android, desktop, or web build:
 
 1. publish or offer the complete corresponding source for the exact binary,
    including the build scripts and installation information required by GPLv3;
-2. regenerate both runtime graphs and identify every shipped artifact;
+2. regenerate every shipping runtime graph and identify every shipped artifact;
 3. retain all required third-party copyright and NOTICE text; and
 4. package the applicable third-party license texts under a `LICENSES/`
    directory in the build.
@@ -70,6 +74,7 @@ runtime, whose license and notices must be inventoried and shipped. At minimum,
 review:
 
 ```bash
+./gradlew :app:android:dependencies --configuration releaseRuntimeClasspath
 ./gradlew :app:desktop:dependencies --configuration runtimeClasspath
 ./gradlew :app:web:dependencies --configuration wasmJsRuntimeClasspath
 ```

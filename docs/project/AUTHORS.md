@@ -19,13 +19,12 @@ former title are asserted.
 
 Contributors keep copyright in their work unless a separate signed agreement
 transfers it. Accepted contributions are published in the public project under
-GPL-3.0-or-later. The
-[Contributor License Agreement](CONTRIBUTOR_LICENSE_AGREEMENT.md) also gives the
-maintainer the rights needed for platform exceptions and official store builds.
+GPL-3.0-or-later on the same inbound and outbound terms. No DCO sign-off or
+separate Contributor License Agreement is required, and the maintainer receives
+no special proprietary relicensing right.
 
 Add a contributor here after their first accepted copyrightable contribution.
-The Git history and signed contributor agreements are the detailed authorship
-record.
+The Git history is the detailed authorship record.
 
 This file does not claim authorship of the Gradle Wrapper, downloaded libraries,
 or any other third-party material. Those items remain under the licenses listed

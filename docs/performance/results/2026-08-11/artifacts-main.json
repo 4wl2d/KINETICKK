@@ -1,0 +1,590 @@
+{
+  "artifactRoot": "repository/fedceb8e2d9009d805d70249e10c77e424447945/build/dist/wasmJs/productionExecutable",
+  "compression": {
+    "aggregation": "sum of independently compressed file sizes",
+    "algorithm": "gzip",
+    "brotliAvailableInStandardLibrary": false,
+    "implementation": "Python stdlib zlib",
+    "level": 9
+  },
+  "environment": {
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "pythonVersion": "3.12.13",
+    "zlibVersion": "1.2.12"
+  },
+  "files": [
+    {
+      "category": "wasm",
+      "gzipBytes": 540364,
+      "gzipToRawRatio": 0.32565996640729855,
+      "path": "6b2d6a1f27c7f3964398.wasm",
+      "rawBytes": 1659289,
+      "sha256": "e26eda0951bc91be6424abbd6d1718e82ca1ca4a3c94bcf01a15fda102be3a83",
+      "suffix": ".wasm",
+      "wasm": {
+        "customSectionNames": [
+          "sourceMappingURL"
+        ],
+        "sectionCount": 12,
+        "sectionEntryCounts": {
+          "code": 5879,
+          "data": 27,
+          "element": 1,
+          "export": 6,
+          "function": 5879,
+          "global": 6394,
+          "import": 6042,
+          "memory": 1,
+          "type": 88
+        },
+        "sections": [
+          {
+            "entryCount": 88,
+            "id": 1,
+            "name": "type",
+            "payloadBytes": 55636
+          },
+          {
+            "entryCount": 6042,
+            "id": 2,
+            "name": "import",
+            "payloadBytes": 222610
+          },
+          {
+            "entryCount": 5879,
+            "id": 3,
+            "name": "function",
+            "payloadBytes": 11545
+          },
+          {
+            "entryCount": 1,
+            "id": 5,
+            "name": "memory",
+            "payloadBytes": 3
+          },
+          {
+            "entryCount": 6394,
+            "id": 6,
+            "name": "global",
+            "payloadBytes": 201190
+          },
+          {
+            "entryCount": 6,
+            "id": 7,
+            "name": "export",
+            "payloadBytes": 146
+          },
+          {
+            "id": 8,
+            "name": "start",
+            "payloadBytes": 2
+          },
+          {
+            "entryCount": 1,
+            "id": 9,
+            "name": "element",
+            "payloadBytes": 86
+          },
+          {
+            "id": 12,
+            "name": "data-count",
+            "payloadBytes": 1
+          },
+          {
+            "entryCount": 5879,
+            "id": 10,
+            "name": "code",
+            "payloadBytes": 1142009
+          },
+          {
+            "entryCount": 27,
+            "id": 11,
+            "name": "data",
+            "payloadBytes": 25981
+          },
+          {
+            "customName": "sourceMappingURL",
+            "id": 0,
+            "name": "custom",
+            "payloadBytes": 36
+          }
+        ],
+        "version": 1
+      }
+    },
+    {
+      "category": "wasm",
+      "gzipBytes": 3319858,
+      "gzipToRawRatio": 0.38367756577144624,
+      "path": "6e23e5428398b92da386.wasm",
+      "rawBytes": 8652729,
+      "sha256": "46caff5f783599bd1c5d3e5e87959d7cb5102c515aac671c9280664368e71dab",
+      "suffix": ".wasm",
+      "wasm": {
+        "customSectionNames": [],
+        "sectionCount": 12,
+        "sectionEntryCounts": {
+          "code": 14595,
+          "data": 4473,
+          "element": 1,
+          "export": 1043,
+          "function": 14595,
+          "global": 1,
+          "import": 191,
+          "memory": 1,
+          "table": 1,
+          "tag": 1,
+          "type": 309
+        },
+        "sections": [
+          {
+            "entryCount": 309,
+            "id": 1,
+            "name": "type",
+            "payloadBytes": 2924
+          },
+          {
+            "entryCount": 191,
+            "id": 2,
+            "name": "import",
+            "payloadBytes": 6342
+          },
+          {
+            "entryCount": 14595,
+            "id": 3,
+            "name": "function",
+            "payloadBytes": 14820
+          },
+          {
+            "entryCount": 1,
+            "id": 4,
+            "name": "table",
+            "payloadBytes": 7
+          },
+          {
+            "entryCount": 1,
+            "id": 5,
+            "name": "memory",
+            "payloadBytes": 7
+          },
+          {
+            "entryCount": 1,
+            "id": 13,
+            "name": "tag",
+            "payloadBytes": 3
+          },
+          {
+            "entryCount": 1,
+            "id": 6,
+            "name": "global",
+            "payloadBytes": 9
+          },
+          {
+            "entryCount": 1043,
+            "id": 7,
+            "name": "export",
+            "payloadBytes": 52574
+          },
+          {
+            "entryCount": 1,
+            "id": 9,
+            "name": "element",
+            "payloadBytes": 20550
+          },
+          {
+            "id": 12,
+            "name": "data-count",
+            "payloadBytes": 2
+          },
+          {
+            "entryCount": 14595,
+            "id": 10,
+            "name": "code",
+            "payloadBytes": 6693292
+          },
+          {
+            "entryCount": 4473,
+            "id": 11,
+            "name": "data",
+            "payloadBytes": 1862155
+          }
+        ],
+        "version": 1
+      }
+    },
+    {
+      "category": "legal-metadata",
+      "gzipBytes": 12124,
+      "gzipToRawRatio": 0.34493157700076815,
+      "path": "META-INF/LICENSE",
+      "rawBytes": 35149,
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "suffix": "<none>"
+    },
+    {
+      "category": "legal-metadata",
+      "gzipBytes": 1055,
+      "gzipToRawRatio": 0.5194485475135401,
+      "path": "META-INF/NOTICE",
+      "rawBytes": 2031,
+      "sha256": "82f44f44b247e4a93edc64336d2a10dad8a0c5a06d01a13996e5f2112adc57e0",
+      "suffix": "<none>"
+    },
+    {
+      "category": "legal-metadata",
+      "gzipBytes": 900,
+      "gzipToRawRatio": 0.5699810006333123,
+      "path": "META-INF/docs/project/ASSET_PROVENANCE.md",
+      "rawBytes": 1579,
+      "sha256": "16c1ebeb0c4f383cfb49510a8123f52febf30a21f2dd80fb7797642f9d417c61",
+      "suffix": ".md"
+    },
+    {
+      "category": "legal-metadata",
+      "gzipBytes": 795,
+      "gzipToRawRatio": 0.5786026200873362,
+      "path": "META-INF/docs/project/AUTHORS.md",
+      "rawBytes": 1374,
+      "sha256": "240afe62eb01ccd98e334ea4326fb74526d4ddc83b81a602682240e7b5a73450",
+      "suffix": ".md"
+    },
+    {
+      "category": "legal-metadata",
+      "gzipBytes": 1624,
+      "gzipToRawRatio": 0.48318952692650996,
+      "path": "META-INF/docs/project/CONTRIBUTING.md",
+      "rawBytes": 3361,
+      "sha256": "d604e548d99a6fbe8fb802e642d11c6cae37f3714de0879ebfa6bc8a8c4fe9a8",
+      "suffix": ".md"
+    },
+    {
+      "category": "legal-metadata",
+      "gzipBytes": 1703,
+      "gzipToRawRatio": 0.4184275184275184,
+      "path": "META-INF/docs/project/CONTRIBUTOR_LICENSE_AGREEMENT.md",
+      "rawBytes": 4070,
+      "sha256": "1b41622e4e28b0a1b5cf9a20aa20fb4faf65d660646c5e8d33fcc245eb89a7eb",
+      "suffix": ".md"
+    },
+    {
+      "category": "legal-metadata",
+      "gzipBytes": 884,
+      "gzipToRawRatio": 0.5370595382746051,
+      "path": "META-INF/docs/project/GOVERNANCE.md",
+      "rawBytes": 1646,
+      "sha256": "52c89b539ac8dbd46371a9e3171e581079b6eadb9ed39b46012c1aaca8e714f2",
+      "suffix": ".md"
+    },
+    {
+      "category": "legal-metadata",
+      "gzipBytes": 3004,
+      "gzipToRawRatio": 0.45425676697414186,
+      "path": "META-INF/docs/project/LEGAL.md",
+      "rawBytes": 6613,
+      "sha256": "8d21ac0ada276d0fdf14cf23159ef8748fd692b13a9a59970de012d216286063",
+      "suffix": ".md"
+    },
+    {
+      "category": "legal-metadata",
+      "gzipBytes": 660,
+      "gzipToRawRatio": 0.565068493150685,
+      "path": "META-INF/docs/project/PRIVACY.md",
+      "rawBytes": 1168,
+      "sha256": "41d4b0708a38ad9632fc0f01fe562a16cb2c0bafd2efcf54deac8367b49b57eb",
+      "suffix": ".md"
+    },
+    {
+      "category": "legal-metadata",
+      "gzipBytes": 1152,
+      "gzipToRawRatio": 0.5393258426966292,
+      "path": "META-INF/docs/project/SOURCE.md",
+      "rawBytes": 2136,
+      "sha256": "3a918780a2bdee6a3e9ab7bb881e901cf2198fd6d2cc2d3faa258e0262dc3934",
+      "suffix": ".md"
+    },
+    {
+      "category": "legal-metadata",
+      "gzipBytes": 1803,
+      "gzipToRawRatio": 0.3912760416666667,
+      "path": "META-INF/docs/project/THIRD_PARTY_NOTICES.md",
+      "rawBytes": 4608,
+      "sha256": "85638fecd7f47b95c849d87cbf85aa6c64d3ee305a99c8e9ed0b55a022609b84",
+      "suffix": ".md"
+    },
+    {
+      "category": "legal-metadata",
+      "gzipBytes": 1037,
+      "gzipToRawRatio": 0.4938095238095238,
+      "path": "META-INF/docs/project/TRADEMARKS.md",
+      "rawBytes": 2100,
+      "sha256": "33eb1a4cb1bfef83aa077f7fad053491f416e6fdd773c4768d3d2ee32ab4a7a1",
+      "suffix": ".md"
+    },
+    {
+      "category": "html",
+      "gzipBytes": 517,
+      "gzipToRawRatio": 0.5351966873706004,
+      "newlineCount": 24,
+      "path": "index.html",
+      "rawBytes": 966,
+      "sha256": "eb41cf73b7af7197ffd6f74ab235e78f3eda65bcd260da1897fed24589a0e6dd",
+      "suffix": ".html"
+    },
+    {
+      "category": "javascript",
+      "gzipBytes": 59426,
+      "gzipToRawRatio": 0.1775145100920939,
+      "newlineCount": 1,
+      "path": "kinetickk.js",
+      "rawBytes": 334767,
+      "sha256": "a7a6916d8b115ff38f3263480f92d036b47e6d77e8224f8795a631ac31ce0eb4",
+      "suffix": ".js"
+    },
+    {
+      "category": "source-map",
+      "gzipBytes": 138146,
+      "gzipToRawRatio": 0.16296317267754534,
+      "newlineCount": 0,
+      "path": "kinetickk.js.map",
+      "rawBytes": 847713,
+      "sha256": "765727912fd36e3b3d69baa3ea8b75d251e2251be9b6cf7ec5ccd7c93652f344",
+      "suffix": ".map"
+    }
+  ],
+  "generatedAtUtc": "2026-08-11T19:02:26.384980Z",
+  "schemaVersion": 1,
+  "selection": {
+    "excludes": [],
+    "includes": [],
+    "symlinksFollowed": false
+  },
+  "source": {
+    "branch": "",
+    "dirty": false,
+    "label": "main",
+    "repository": "repository/fedceb8e2d9009d805d70249e10c77e424447945",
+    "revision": "fedceb8e2d9009d805d70249e10c77e424447945"
+  },
+  "spdxFileCopyrightText": "2026 Vladislav Tomilov",
+  "spdxLicenseIdentifier": "GPL-3.0-or-later",
+  "suite": "kinetickk-artifact-inventory",
+  "summary": {
+    "archiveClassFileCount": 0,
+    "byCategory": {
+      "html": {
+        "fileCount": 1,
+        "gzipBytes": 517,
+        "gzipToRawRatio": 0.5351966873706004,
+        "rawBytes": 966
+      },
+      "javascript": {
+        "fileCount": 1,
+        "gzipBytes": 59426,
+        "gzipToRawRatio": 0.1775145100920939,
+        "rawBytes": 334767
+      },
+      "legal-metadata": {
+        "fileCount": 12,
+        "gzipBytes": 26741,
+        "gzipToRawRatio": 0.40618212197159564,
+        "rawBytes": 65835
+      },
+      "source-map": {
+        "fileCount": 1,
+        "gzipBytes": 138146,
+        "gzipToRawRatio": 0.16296317267754534,
+        "rawBytes": 847713
+      },
+      "wasm": {
+        "fileCount": 2,
+        "gzipBytes": 3860222,
+        "gzipToRawRatio": 0.37434205409649207,
+        "rawBytes": 10312018
+      }
+    },
+    "bySuffix": {
+      ".html": {
+        "fileCount": 1,
+        "gzipBytes": 517,
+        "gzipToRawRatio": 0.5351966873706004,
+        "rawBytes": 966
+      },
+      ".js": {
+        "fileCount": 1,
+        "gzipBytes": 59426,
+        "gzipToRawRatio": 0.1775145100920939,
+        "rawBytes": 334767
+      },
+      ".map": {
+        "fileCount": 1,
+        "gzipBytes": 138146,
+        "gzipToRawRatio": 0.16296317267754534,
+        "rawBytes": 847713
+      },
+      ".md": {
+        "fileCount": 10,
+        "gzipBytes": 13562,
+        "gzipToRawRatio": 0.47328563950444946,
+        "rawBytes": 28655
+      },
+      ".wasm": {
+        "fileCount": 2,
+        "gzipBytes": 3860222,
+        "gzipToRawRatio": 0.37434205409649207,
+        "rawBytes": 10312018
+      },
+      "<none>": {
+        "fileCount": 2,
+        "gzipBytes": 13179,
+        "gzipToRawRatio": 0.3544647660032275,
+        "rawBytes": 37180
+      }
+    },
+    "fileCount": 17,
+    "gzipBytes": 4085052,
+    "gzipToRawRatio": 0.3533384959596668,
+    "largestGzipFiles": [
+      {
+        "bytes": 3319858,
+        "path": "6e23e5428398b92da386.wasm"
+      },
+      {
+        "bytes": 540364,
+        "path": "6b2d6a1f27c7f3964398.wasm"
+      },
+      {
+        "bytes": 138146,
+        "path": "kinetickk.js.map"
+      },
+      {
+        "bytes": 59426,
+        "path": "kinetickk.js"
+      },
+      {
+        "bytes": 12124,
+        "path": "META-INF/LICENSE"
+      },
+      {
+        "bytes": 3004,
+        "path": "META-INF/docs/project/LEGAL.md"
+      },
+      {
+        "bytes": 1803,
+        "path": "META-INF/docs/project/THIRD_PARTY_NOTICES.md"
+      },
+      {
+        "bytes": 1703,
+        "path": "META-INF/docs/project/CONTRIBUTOR_LICENSE_AGREEMENT.md"
+      },
+      {
+        "bytes": 1624,
+        "path": "META-INF/docs/project/CONTRIBUTING.md"
+      },
+      {
+        "bytes": 1152,
+        "path": "META-INF/docs/project/SOURCE.md"
+      },
+      {
+        "bytes": 1055,
+        "path": "META-INF/NOTICE"
+      },
+      {
+        "bytes": 1037,
+        "path": "META-INF/docs/project/TRADEMARKS.md"
+      },
+      {
+        "bytes": 900,
+        "path": "META-INF/docs/project/ASSET_PROVENANCE.md"
+      },
+      {
+        "bytes": 884,
+        "path": "META-INF/docs/project/GOVERNANCE.md"
+      },
+      {
+        "bytes": 795,
+        "path": "META-INF/docs/project/AUTHORS.md"
+      },
+      {
+        "bytes": 660,
+        "path": "META-INF/docs/project/PRIVACY.md"
+      },
+      {
+        "bytes": 517,
+        "path": "index.html"
+      }
+    ],
+    "largestRawFiles": [
+      {
+        "bytes": 8652729,
+        "path": "6e23e5428398b92da386.wasm"
+      },
+      {
+        "bytes": 1659289,
+        "path": "6b2d6a1f27c7f3964398.wasm"
+      },
+      {
+        "bytes": 847713,
+        "path": "kinetickk.js.map"
+      },
+      {
+        "bytes": 334767,
+        "path": "kinetickk.js"
+      },
+      {
+        "bytes": 35149,
+        "path": "META-INF/LICENSE"
+      },
+      {
+        "bytes": 6613,
+        "path": "META-INF/docs/project/LEGAL.md"
+      },
+      {
+        "bytes": 4608,
+        "path": "META-INF/docs/project/THIRD_PARTY_NOTICES.md"
+      },
+      {
+        "bytes": 4070,
+        "path": "META-INF/docs/project/CONTRIBUTOR_LICENSE_AGREEMENT.md"
+      },
+      {
+        "bytes": 3361,
+        "path": "META-INF/docs/project/CONTRIBUTING.md"
+      },
+      {
+        "bytes": 2136,
+        "path": "META-INF/docs/project/SOURCE.md"
+      },
+      {
+        "bytes": 2100,
+        "path": "META-INF/docs/project/TRADEMARKS.md"
+      },
+      {
+        "bytes": 2031,
+        "path": "META-INF/NOTICE"
+      },
+      {
+        "bytes": 1646,
+        "path": "META-INF/docs/project/GOVERNANCE.md"
+      },
+      {
+        "bytes": 1579,
+        "path": "META-INF/docs/project/ASSET_PROVENANCE.md"
+      },
+      {
+        "bytes": 1374,
+        "path": "META-INF/docs/project/AUTHORS.md"
+      },
+      {
+        "bytes": 1168,
+        "path": "META-INF/docs/project/PRIVACY.md"
+      },
+      {
+        "bytes": 966,
+        "path": "index.html"
+      }
+    ],
+    "manifestSha256": "c86e5cf0001eab3af318f91d6aa91a2cf977a1f1550b32edd1f85a9f7e5cec41",
+    "rawBytes": 11561299,
+    "wasmDeclaredFunctionCount": 20474
+  }
+}

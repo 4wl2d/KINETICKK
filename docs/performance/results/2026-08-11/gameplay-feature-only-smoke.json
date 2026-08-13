@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "spdxFileCopyrightText": "2026 Vladislav Tomilov",
+  "spdxLicenseIdentifier": "GPL-3.0-or-later",
+  "suiteVersion": "gameplay-core-v1",
+  "adapter": "feature-pokeball-full-refactor",
+  "label": "feature/pokeball-full-refactor",
+  "revision": "20a3e2f78988419f5263247085a9a4b3900f4a6e",
+  "dirty": true,
+  "fork": "1",
+  "generatedAt": "2026-08-11T18:43:02.937306Z",
+  "profile": {
+    "name": "smoke",
+    "warmupIterations": 2,
+    "measurementIterations": 3,
+    "targetIterationMillis": 40
+  },
+  "environment": {
+    "osName": "Mac OS X",
+    "osVersion": "26.5.2",
+    "architecture": "aarch64",
+    "javaVersion": "21.0.11",
+    "javaVendor": "Eclipse Adoptium",
+    "vmName": "OpenJDK 64-Bit Server VM",
+    "availableProcessors": 18,
+    "maxHeapBytes": 1073741824,
+    "cpuTimeSupported": true,
+    "threadAllocationSupported": true,
+    "garbageCollectors": ["G1 Young Generation", "G1 Concurrent GC", "G1 Old Generation"],
+    "jvmArguments": ["-XX:+AlwaysPreTouch", "-XX:+UseG1GC", "-Xms1g", "-Xmx1g", "-Dfile.encoding=UTF-8", "-Duser.country=US", "-Duser.language=en", "-Duser.variant"]
+  },
+  "scenarios": [
+    {
+      "name": "fixed_step_budget_48_idle",
+      "category": "simulation",
+      "description": "Copy and drain the explicit maximum 48-step accumulator budget.",
+      "operationsPerIteration": 1037,
+      "metadata": {"enemies":"5", "fixedSteps":"48", "fixtureFingerprint":"1777510090541344289", "outcomeFingerprint":"2306250988776330279", "pickups":"0", "projectiles":"0", "seed":"731991", "simulationHz":"120", "trail":"0", "viewport":"1280x720@1"},
+      "summary": {
+        "wallNanosPerOperation": {"mean":12025.634844102,"median":11930.729990357,"p95":12584.755737705,"min":11488.749276760,"max":12657.425265188,"coefficientOfVariation":0.049069335},
+        "cpuNanosPerOperation": {"mean":12168.113146898,"median":11987.463837994,"p95":12532.497589200,"min":11923.818707811,"max":12593.056894889,"coefficientOfVariation":0.030356834},
+        "allocatedBytesPerOperation": {"mean":38305.686917390,"median":38322.198649952,"p95":38337.063837994,"min":38256.146576663,"max":38338.715525554,"coefficientOfVariation":0.001140583},
+        "gcCollectionsPerOperation": {"mean":0.000000000,"median":0.000000000,"p95":0.000000000,"min":0.000000000,"max":0.000000000,"coefficientOfVariation":0.000000000},
+        "gcNanosPerOperation": {"mean":0.000000000,"median":0.000000000,"p95":0.000000000,"min":0.000000000,"max":0.000000000,"coefficientOfVariation":0.000000000}
+      },
+      "samples": [
+        {
+          "operations": 1037,
+          "wallNanosPerOperation": 11488.749276760,
+          "cpuNanosPerOperation": 11987.463837994,
+          "allocatedBytesPerOperation": 38338.715525554,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 1037,
+          "wallNanosPerOperation": 12657.425265188,
+          "cpuNanosPerOperation": 12593.056894889,
+          "allocatedBytesPerOperation": 38322.198649952,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        },
+        {
+          "operations": 1037,
+          "wallNanosPerOperation": 11930.729990357,
+          "cpuNanosPerOperation": 11923.818707811,
+          "allocatedBytesPerOperation": 38256.146576663,
+          "gcCollectionsPerOperation": 0.000000000,
+          "gcNanosPerOperation": 0.000000000
+        }
+      ]
+    }
+  ]
+}

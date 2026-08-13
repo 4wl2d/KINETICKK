@@ -41,12 +41,14 @@ With JDK 17 or newer:
 ```bash
 ./gradlew desktopTest
 ./gradlew run
+./gradlew :app:android:assembleDebug
 ./gradlew wasmJsBrowserDistribution
 ```
 
-The desktop and web build details are documented in
-[README.md](../../README.md); the implementation is organized as application,
-core, and feature modules.
+The Android, desktop, and web build details are documented in
+[README.md](../../README.md); the implementation is organized into 23 leaf
+modules across Application Assembly, Foundation, Resource, Ball, and Flow
+roles.
 
 ## Forks and other distributors
 

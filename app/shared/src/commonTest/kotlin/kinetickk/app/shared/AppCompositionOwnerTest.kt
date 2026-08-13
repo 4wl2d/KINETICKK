@@ -4,435 +4,334 @@
 package kinetickk.app.shared
 
 import androidx.compose.runtime.Composable
-import kinetickk.core.audio.api.AudioCue
-import kinetickk.core.audio.api.AudioPreferences
-import kinetickk.core.audio.api.AudioService
-import kinetickk.core.collections.immutableListOf
-import kinetickk.core.collections.toImmutableSet
-import kinetickk.core.content.CoreShape
-import kinetickk.core.content.MetaUpgradeId
-import kinetickk.core.content.WeaponId
-import kinetickk.core.profile.api.GameplayProgressUpdate
-import kinetickk.core.profile.api.LabProfileSnapshot
-import kinetickk.core.profile.api.LabProgress
-import kinetickk.core.profile.api.LoadoutProfileSnapshot
-import kinetickk.core.profile.api.PlayerCollection
-import kinetickk.core.profile.api.PlayerEconomy
-import kinetickk.core.profile.api.PlayerLoadout
-import kinetickk.core.profile.api.PlayerPreferences
-import kinetickk.core.profile.api.PlayerProfile
-import kinetickk.core.profile.api.ProfileLoadResult
-import kinetickk.core.profile.api.ProfileMutationRejection
-import kinetickk.core.profile.api.ProfileMutationResult
-import kinetickk.core.profile.api.ProfilePersistResult
-import kinetickk.core.profile.api.ProfileProviderId
-import kinetickk.core.profile.api.ProfileStore
-import kinetickk.core.profile.api.RebirthProfileSnapshot
-import kinetickk.core.profile.api.RebirthProgress
-import kinetickk.feature.armory.api.ArmoryFeature
-import kinetickk.feature.armory.api.ArmoryOutput
-import kinetickk.feature.codex.api.CodexFeature
-import kinetickk.feature.codex.api.CodexOutput
-import kinetickk.feature.codex.api.CodexRunStacks
-import kinetickk.feature.gameplay.api.GameplayFeature
-import kinetickk.feature.gameplay.api.GameplayOutput
-import kinetickk.feature.gameplay.api.GameplayUiModel
-import kinetickk.feature.gameplay.api.GameplayUiPhase
-import kinetickk.feature.gameplay.api.RunConfiguration
-import kinetickk.feature.home.api.HomeFeature
-import kinetickk.feature.home.api.HomeOutput
-import kinetickk.feature.lab.api.LabFeature
-import kinetickk.feature.lab.api.LabOutput
-import kinetickk.feature.rebirth.api.RebirthFeature
-import kinetickk.feature.rebirth.api.RebirthOutput
-import kinetickk.feature.settings.api.SettingsFeature
-import kinetickk.feature.settings.api.SettingsOutput
+import kinetickk.ball.content.api.ContentCatalog
+import kinetickk.ball.content.api.GameplayContentSnapshot
+import kinetickk.ball.content.api.ProfilePolicySnapshot
+import kinetickk.ball.content.api.UiCatalogSnapshot
+import kinetickk.ball.content.impl.createContentCatalog
+import kinetickk.ball.gameplay.api.GameplayActiveWeaponProjection
+import kinetickk.ball.gameplay.api.GameplayCodexStacksProjection
+import kinetickk.ball.gameplay.api.GameplayCommandIngressResult
+import kinetickk.ball.gameplay.api.GameplayCommandSourceToken
+import kinetickk.ball.gameplay.api.GameplayEffectiveProtocolIdentity
+import kinetickk.ball.gameplay.api.GameplayInstanceId
+import kinetickk.ball.gameplay.api.GameplayModuleCommand
+import kinetickk.ball.gameplay.api.GameplayModuleCommandRequest
+import kinetickk.ball.gameplay.api.GameplayModuleResult
+import kinetickk.ball.gameplay.api.GameplayModuleResultDelivery
+import kinetickk.ball.gameplay.api.GameplayPresentationPort
+import kinetickk.ball.gameplay.api.GameplayQuery
+import kinetickk.ball.gameplay.api.GameplayResultIssuerProvenance
+import kinetickk.ball.gameplay.api.GameplayResultSourceToken
+import kinetickk.ball.gameplay.api.GameplayRevision
+import kinetickk.ball.gameplay.api.GameplayRunPhase
+import kinetickk.ball.gameplay.api.GameplayRunStatusProjection
+import kinetickk.ball.gameplay.api.GameplaySessionRunPort
+import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
+import kinetickk.ball.gameplay.impl.GameplayCompositionComponent
+import kinetickk.ball.profile.api.CollectionProjection
+import kinetickk.ball.profile.api.GameplayProfileSnapshot
+import kinetickk.ball.profile.api.HomeProgressProjection
+import kinetickk.ball.profile.api.LabProgressProjection
+import kinetickk.ball.profile.api.LoadoutProjection
+import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
+import kinetickk.ball.profile.api.PersistenceStatusProjection
+import kinetickk.ball.profile.api.PlayerPreferences
+import kinetickk.ball.profile.api.PlayerProfile
+import kinetickk.ball.profile.api.PreferencesProjection
+import kinetickk.ball.profile.api.ProfileAcceptance
+import kinetickk.ball.profile.api.ProfileBootstrapStatus
+import kinetickk.ball.profile.api.ProfileCommandIngressResult
+import kinetickk.ball.profile.api.ProfileModuleCommandRequest
+import kinetickk.ball.profile.api.ProfilePersistenceStatus
+import kinetickk.ball.profile.api.ProfilePulse
+import kinetickk.ball.profile.api.ProfileQuery
+import kinetickk.ball.profile.api.ProfileRevision
+import kinetickk.ball.profile.api.ProfileRunBootstrapResult
+import kinetickk.ball.profile.api.RebirthProgressProjection
+import kinetickk.ball.profile.api.RunBootstrapProjection
+import kinetickk.ball.profile.impl.ProfileComponent
+import kinetickk.flow.session.api.SessionAcceptance
+import kinetickk.flow.session.api.SessionInteractionPulse
+import kinetickk.foundation.collections.immutableListOf
+import kinetickk.resource.audio.api.AudioPreferences
+import kinetickk.resource.audio.api.AudioService
+import kinetickk.resource.audio.api.ToneRequest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
+import kotlin.test.assertIs
 
 class AppCompositionOwnerTest {
     @Test
-    fun openingOverlayPausesRunAndBackKeepsSameSessionPaused() {
-        val shell = testShell()
-        shell.owner.startNewRun()
+    fun assemblyCapturesContentOnceAndSessionAllocatesMonotonicRuns() {
+        val fixture = assemblyFixture()
 
-        assertTrue(shell.owner.handleShortcut(AppShortcut.LAB))
-        assertEquals(1, shell.gameplay.pauseCalls)
-        assertEquals(GameplayUiPhase.PAUSED, shell.gameplay.uiModel().phase)
-        assertEquals(
-            listOf(AppDestination.Gameplay, AppDestination.Lab),
-            shell.owner.backStack.entries,
+        assertEquals(1, fixture.content.profilePolicyCalls)
+        assertEquals(1, fixture.content.gameplayContentCalls)
+        assertEquals(1, fixture.content.uiCatalogCalls)
+
+        assertIs<SessionAcceptance.Accepted>(
+            fixture.owner.sessionPort.accept(SessionInteractionPulse.StartRunRequested),
+        )
+        fixture.gameplay.finishActiveRun()
+        assertIs<SessionAcceptance.Accepted>(
+            fixture.owner.sessionPort.accept(SessionInteractionPulse.RestartRunRequested),
         )
 
-        assertTrue(shell.owner.handleShortcut(AppShortcut.BACK))
-        assertEquals(listOf(AppDestination.Gameplay), shell.owner.backStack.entries)
-        assertEquals(GameplayUiPhase.PAUSED, shell.gameplay.uiModel().phase)
-        assertEquals(1, shell.gameplay.starts.size)
-        assertEquals(0, shell.gameplay.togglePauseCalls)
+        assertEquals(listOf(RunId(0L), RunId(1L)), fixture.gameplay.createdRunIds)
+        assertEquals(
+            listOf<GameplayModuleCommand>(
+                GameplayModuleCommand.StartRun,
+                GameplayModuleCommand.StartRun,
+            ),
+            fixture.gameplay.acceptedCommands,
+        )
+        assertEquals(1, fixture.content.profilePolicyCalls)
+        assertEquals(1, fixture.content.gameplayContentCalls)
+        assertEquals(1, fixture.content.uiCatalogCalls)
     }
 
     @Test
-    fun settingsPreferencesReachActiveRunOnlyWhenSettingsCloses() {
-        val shell = testShell()
-        shell.owner.startNewRun()
-        shell.owner.handleShortcut(AppShortcut.SETTINGS)
-        val changed = shell.store.profileSnapshot().preferences.copy(
-            simulationSpeed = 1.75f,
-            textScale = 1.5f,
+    fun assemblyOwnsTheAudioLifecycle() {
+        val fixture = assemblyFixture()
+
+        fixture.owner.close()
+
+        assertEquals(1, fixture.audio.closeCalls)
+    }
+
+    @Test
+    fun assemblySynchronizesLoadedProfileAudioBeforeAnyPulse() {
+        val preferences = PlayerPreferences(
             soundEnabled = false,
+            musicEnabled = false,
+            masterVolume = 0.4f,
         )
-        shell.store.setProfile(shell.store.profileSnapshot().copy(preferences = changed))
-
-        shell.owner.handleSettingsOutput(SettingsOutput.Cue(AudioCue.UI_CLICK))
-        assertTrue(shell.gameplay.appliedPreferences.isEmpty())
-
-        shell.owner.handleSettingsOutput(SettingsOutput.Back)
-
-        assertEquals(listOf(changed), shell.gameplay.appliedPreferences)
-        assertEquals(listOf(AppDestination.Gameplay), shell.owner.backStack.entries)
-    }
-
-    @Test
-    fun replacingSettingsOverlayAlsoFinalizesPersistedPreferences() {
-        val shell = testShell()
-        shell.owner.startNewRun()
-        shell.owner.handleShortcut(AppShortcut.SETTINGS)
-        val changed = shell.store.preferences().copy(textScale = 1.75f)
-        shell.store.setProfile(shell.store.profileSnapshot().copy(preferences = changed))
-
-        shell.owner.handleShortcut(AppShortcut.LAB)
-
-        assertEquals(listOf(changed), shell.gameplay.appliedPreferences)
-        assertEquals(AppDestination.Lab, shell.owner.backStack.overlay)
-    }
-
-    @Test
-    fun labAndArmoryChangesApplyToNextRunWithoutMutatingActiveRun() {
-        val shell = testShell(
-            profile = PlayerProfile(
-                economy = PlayerEconomy(matter = 500L, lifetimeMatter = 900L),
-            ),
-        )
-        shell.owner.startNewRun()
-        val activeConfiguration = shell.gameplay.starts.single()
-        val nextProfile = shell.store.profileSnapshot().copy(
-            loadout = PlayerLoadout(
-                coreShape = CoreShape.PRISM,
-                selectedWeapon = WeaponId.MORNINGSTAR,
-                unlockedWeapons = setOf(WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR).toImmutableSet(),
-            ),
-            labProgress = LabProgress(immutableListOf(2, 1, 0, 0, 0, 0, 0, 0)),
-        )
-
-        shell.owner.handleShortcut(AppShortcut.LAB)
-        shell.store.setProfile(nextProfile)
-        shell.owner.handleLabOutput(LabOutput.Back)
-        shell.owner.handleShortcut(AppShortcut.ARMORY)
-        shell.owner.handleArmoryOutput(ArmoryOutput.Back)
-
-        assertEquals(listOf(activeConfiguration), shell.gameplay.starts)
-        assertTrue(shell.gameplay.appliedPreferences.isEmpty())
-
-        shell.owner.handleGameplayOutput(GameplayOutput.RestartRun)
-
-        assertEquals(2, shell.gameplay.starts.size)
-        assertEquals(CoreShape.PRISM, shell.gameplay.starts.last().coreShape)
-        assertEquals(WeaponId.MORNINGSTAR, shell.gameplay.starts.last().startingWeapon)
-        assertEquals(nextProfile.labProgress.ranks, shell.gameplay.starts.last().metaRanks)
-    }
-
-    @Test
-    fun codexSnapshotContainsCurrentRunStacksOnlyDuringGameplay() {
-        val shell = testShell()
-        shell.gameplay.model = GameplayUiModel(
-            phase = GameplayUiPhase.RUNNING,
-            activeWeapon = WeaponId.FLUX_WAKE,
-            itemStacks = immutableListOf(2, 0, 5),
-        )
-
-        assertEquals(CodexRunStacks(), shell.owner.currentRunStacks())
-
-        shell.owner.startNewRun()
+        val fixture = assemblyFixture(PlayerProfile(preferences = preferences))
 
         assertEquals(
-            CodexRunStacks(immutableListOf(2, 0, 5)),
-            shell.owner.currentRunStacks(),
-        )
-    }
-
-    @Test
-    fun completedRebirthStartsFreshRunFromUpdatedProfile() {
-        val shell = testShell()
-        shell.owner.handleShortcut(AppShortcut.REBIRTH)
-        val advanced = RebirthProgress(level = 1, highestCleared = 0)
-        val nextProfile = shell.store.profileSnapshot().copy(
-            economy = PlayerEconomy(matter = 0L, lifetimeMatter = 1_500L),
-            rebirthProgress = advanced,
-        )
-        shell.store.setProfile(nextProfile)
-
-        shell.owner.handleRebirthOutput(RebirthOutput.CycleAdvanced(advanced))
-
-        assertEquals(listOf(AppDestination.Gameplay), shell.owner.backStack.entries)
-        assertEquals(1, shell.gameplay.starts.size)
-        assertEquals(1, shell.gameplay.starts.single().rebirthLevel)
-        assertEquals(0L, shell.gameplay.starts.single().matterAtStart)
-        assertEquals(1_500L, shell.gameplay.starts.single().lifetimeMatterAtStart)
-    }
-
-    @Test
-    fun globalShortcutRoutingCoversEveryOverlayAndBaseAction() {
-        val expectedDestinations = listOf(
-            AppShortcut.SETTINGS to AppDestination.Settings,
-            AppShortcut.LAB to AppDestination.Lab,
-            AppShortcut.ARMORY to AppDestination.Armory,
-            AppShortcut.REBIRTH to AppDestination.Rebirth,
-            AppShortcut.CODEX to AppDestination.Codex,
-        )
-
-        expectedDestinations.forEach { (shortcut, destination) ->
-            val shell = testShell()
-            assertTrue(shell.owner.handleShortcut(shortcut))
-            assertEquals(destination, shell.owner.backStack.overlay)
-        }
-
-        val homeShell = testShell()
-        assertFalse(homeShell.owner.handleShortcut(AppShortcut.BACK))
-        assertTrue(homeShell.owner.handleShortcut(AppShortcut.ENTER))
-        assertEquals(AppDestination.Gameplay, homeShell.owner.backStack.base)
-        assertFalse(homeShell.owner.handleShortcut(AppShortcut.ENTER))
-
-        val overlayShell = testShell()
-        overlayShell.owner.handleShortcut(AppShortcut.SETTINGS)
-        assertTrue(overlayShell.owner.handleShortcut(AppShortcut.ENTER))
-        assertEquals(AppDestination.Home, overlayShell.owner.backStack.active)
-
-        val muteShell = testShell()
-        assertTrue(muteShell.owner.handleShortcut(AppShortcut.MUTE))
-        assertFalse(muteShell.store.preferences().soundEnabled)
-        assertFalse(muteShell.store.preferences().musicEnabled)
-        assertEquals(
-            listOf(muteShell.store.preferences()),
-            muteShell.gameplay.appliedPreferences,
-        )
-    }
-
-    @Test
-    fun shellOwnsAudioPreferencesCuesUnlockAndCloseLifecycle() {
-        val initialPreferences = PlayerPreferences(masterVolume = 0.4f)
-        val shell = testShell(profile = PlayerProfile(preferences = initialPreferences))
-
-        assertEquals(listOf(initialPreferences.toExpectedAudioPreferences()), shell.audio.preferencesUpdates)
-
-        shell.owner.handleGameplayOutput(GameplayOutput.UserGestureObserved)
-        shell.owner.handleGameplayOutput(
-            GameplayOutput.AudioFrame(
-                realDeltaSeconds = 0.016f,
-                cues = immutableListOf(AudioCue.DASH),
+            listOf(
+                AudioPreferences(
+                    soundEnabled = false,
+                    musicEnabled = false,
+                    masterVolume = 0.4f,
+                ),
             ),
+            fixture.audio.preferenceUpdates,
         )
-        assertEquals(1, shell.audio.unlockCalls)
-        assertEquals(0.016f to listOf(AudioCue.DASH), shell.audio.advances.last())
-
-        val updatedPreferences = initialPreferences.copy(soundEnabled = false, masterVolume = 0.25f)
-        shell.store.setProfile(shell.store.profileSnapshot().copy(preferences = updatedPreferences))
-        shell.owner.handleSettingsOutput(SettingsOutput.Cue(AudioCue.UI_CLICK))
-
-        assertEquals(updatedPreferences.toExpectedAudioPreferences(), shell.audio.preferencesUpdates.last())
-        assertEquals(0f to listOf(AudioCue.UI_CLICK), shell.audio.advances.last())
-
-        shell.owner.close()
-        assertEquals(1, shell.audio.closeCalls)
     }
 }
 
-private data class TestShell(
+private data class AssemblyFixture(
     val owner: AppCompositionOwner,
-    val store: FakeProfileStore,
-    val gameplay: FakeGameplayFeature,
-    val audio: FakeAudioService,
+    val content: CountingContentCatalog,
+    val gameplay: RecordingGameplayComponent,
+    val audio: RecordingAudioService,
 )
 
-private fun testShell(
-    profile: PlayerProfile = PlayerProfile(),
-    gameplay: FakeGameplayFeature = FakeGameplayFeature(),
-): TestShell {
-    val store = FakeProfileStore(profile)
-    val audio = FakeAudioService()
+private fun assemblyFixture(profileValue: PlayerProfile = PlayerProfile()): AssemblyFixture {
+    val content = CountingContentCatalog()
+    val profile = ReadyProfileComponent(profileValue)
+    val gameplay = RecordingGameplayComponent()
+    val audio = RecordingAudioService()
     val owner = AppCompositionOwner(
-        profileStore = store,
+        contentCatalog = content,
+        profileComponent = profile,
         audioService = audio,
-        gameplayFeature = gameplay,
-        homeFeature = FakeHomeFeature(),
-        settingsFeature = FakeSettingsFeature(),
-        labFeature = FakeLabFeature(),
-        armoryFeature = FakeArmoryFeature(),
-        rebirthFeature = FakeRebirthFeature(),
-        codexFeature = FakeCodexFeature(),
+        gameplayComponent = gameplay,
     )
-    return TestShell(owner, store, gameplay, audio)
+    return AssemblyFixture(owner, content, gameplay, audio)
 }
 
-private class FakeGameplayFeature : GameplayFeature {
-    var model: GameplayUiModel = GameplayUiModel()
-    val starts = mutableListOf<RunConfiguration>()
-    val appliedPreferences = mutableListOf<PlayerPreferences>()
-    var pauseCalls = 0
-    var togglePauseCalls = 0
+private class CountingContentCatalog(
+    delegate: ContentCatalog = createContentCatalog(),
+) : ContentCatalog {
+    private val profilePolicySnapshot: ProfilePolicySnapshot = delegate.profilePolicy()
+    val gameplaySnapshot: GameplayContentSnapshot = delegate.gameplayContent()
+    private val uiCatalogSnapshot: UiCatalogSnapshot = delegate.uiCatalog()
 
-    override fun start(configuration: RunConfiguration) {
-        starts += configuration
-        model = model.copy(
-            phase = GameplayUiPhase.RUNNING,
-            activeWeapon = configuration.startingWeapon,
+    override val version = delegate.version
+
+    var profilePolicyCalls: Int = 0
+        private set
+    var gameplayContentCalls: Int = 0
+        private set
+    var uiCatalogCalls: Int = 0
+        private set
+
+    override fun profilePolicy(): ProfilePolicySnapshot {
+        profilePolicyCalls++
+        return profilePolicySnapshot
+    }
+
+    override fun gameplayContent(): GameplayContentSnapshot {
+        gameplayContentCalls++
+        return gameplaySnapshot
+    }
+
+    override fun uiCatalog(): UiCatalogSnapshot {
+        uiCatalogCalls++
+        return uiCatalogSnapshot
+    }
+}
+
+private class ReadyProfileComponent(
+    private val profile: PlayerProfile = PlayerProfile(),
+) : ProfileComponent {
+    override val instanceId = LOCAL_PROFILE_INSTANCE_ID
+    private val revision = ProfileRevision(1L)
+
+    override fun accept(pulse: ProfilePulse.Business): ProfileAcceptance = error("unused")
+
+    override fun acceptFromSession(
+        request: ProfileModuleCommandRequest,
+        causalScope: Long,
+        causalDepth: Int,
+    ): ProfileCommandIngressResult = error("unused")
+
+    override fun acceptFromGameplay(
+        request: ProfileModuleCommandRequest,
+        causalScope: Long,
+        causalDepth: Int,
+    ): ProfileCommandIngressResult = error("unused")
+
+    override fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection =
+        RunBootstrapProjection(
+            instanceId = instanceId,
+            revision = revision,
+            result = ProfileRunBootstrapResult.Ready(profile.toGameplaySnapshot()),
         )
-    }
 
-    override fun applyPreferences(preferences: PlayerPreferences) {
-        appliedPreferences += preferences
-    }
+    override fun query(query: ProfileQuery.GetPreferences): PreferencesProjection =
+        PreferencesProjection(instanceId, revision, profile.preferences)
 
-    override fun pauseForOverlay(): Boolean {
-        pauseCalls += 1
-        if (model.phase != GameplayUiPhase.RUNNING) return false
-        model = model.copy(phase = GameplayUiPhase.PAUSED)
-        return true
-    }
-
-    override fun togglePause() {
-        togglePauseCalls += 1
-        model = model.copy(
-            phase = if (model.phase == GameplayUiPhase.PAUSED) {
-                GameplayUiPhase.RUNNING
-            } else {
-                GameplayUiPhase.PAUSED
-            },
+    override fun query(query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection =
+        PersistenceStatusProjection(
+            instanceId = instanceId,
+            revision = revision,
+            bootstrap = ProfileBootstrapStatus.Ready,
+            persistence = ProfilePersistenceStatus.NotAttempted,
         )
+
+    override fun query(query: ProfileQuery.GetHomeProgress): HomeProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetLabProgress): LabProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetLoadout): LoadoutProjection = error("unused")
+    override fun query(query: ProfileQuery.GetCollection): CollectionProjection = error("unused")
+    override fun query(query: ProfileQuery.GetRebirthProgress): RebirthProgressProjection = error("unused")
+}
+
+private fun PlayerProfile.toGameplaySnapshot(): GameplayProfileSnapshot = GameplayProfileSnapshot(
+    preferences = preferences,
+    economy = economy,
+    loadout = loadout,
+    labProgress = labProgress,
+    collection = collection,
+    rebirthProgress = rebirthProgress,
+)
+
+private class RecordingGameplayComponent : GameplayCompositionComponent {
+    val createdRunIds = mutableListOf<RunId>()
+    val acceptedCommands = mutableListOf<GameplayModuleCommand>()
+    private var activeRunValue: RecordingGameplayRun? = null
+
+    fun finishActiveRun() {
+        checkNotNull(activeRunValue).phase = GameplayRunPhase.GAME_OVER
     }
 
-    override fun uiModel(): GameplayUiModel = model
+    override fun createRun(
+        runId: RunId,
+        commandResultSink: (GameplayModuleResultDelivery) -> Unit,
+    ): GameplaySessionRunPort {
+        createdRunIds += runId
+        return RecordingGameplayRun(runId, commandResultSink, acceptedCommands::add)
+            .also { activeRunValue = it }
+    }
+
+    override fun activeRun(): GameplaySessionRunPort? = activeRunValue
+
+    override fun activePresentation(): GameplayPresentationPort? = activeRunValue
+
+    override fun receiveProfileModuleResult(delivery: kinetickk.ball.profile.api.ProfileModuleResultDelivery) =
+        Unit
 
     @Composable
-    override fun Content(inputEnabled: Boolean, onOutput: (GameplayOutput) -> Unit) = Unit
+    override fun Content(
+        inputEnabled: Boolean,
+        onOutput: (GameplayInteractionOutput) -> Unit,
+    ) = Unit
 }
 
-private class FakeProfileStore(initialProfile: PlayerProfile) : ProfileStore {
-    private var profile = initialProfile
+private class RecordingGameplayRun(
+    runId: RunId,
+    private val commandResultSink: (GameplayModuleResultDelivery) -> Unit,
+    private val recordCommand: (GameplayModuleCommand) -> Unit,
+) : GameplaySessionRunPort, GameplayPresentationPort {
+    override val instanceId = GameplayInstanceId(runId)
+    private var revision = GameplayRevision.ZERO
+    var phase: GameplayRunPhase = GameplayRunPhase.CREATED
 
-    override val providerId = ProfileProviderId.PLATFORM_LOCAL
-    override val bootstrapResult: ProfileLoadResult = ProfileLoadResult.Loaded(initialProfile)
-
-    fun setProfile(value: PlayerProfile) {
-        profile = value
+    override fun acceptFromSession(
+        request: GameplayModuleCommandRequest,
+        causalScope: Long,
+        causalDepth: Int,
+    ): GameplayCommandIngressResult {
+        assertEquals(instanceId, request.targetInstance)
+        assertEquals(GameplayModuleCommand.StartRun, request.command)
+        recordCommand(request.command)
+        val commandSource = GameplayCommandSourceToken(
+            semanticHandle = request.semanticHandle,
+            targetInstance = request.targetInstance,
+            causalScope = causalScope,
+            causalDepth = causalDepth,
+        )
+        revision = GameplayRevision(revision.value + 1L)
+        phase = GameplayRunPhase.RUNNING
+        commandResultSink(
+            GameplayModuleResultDelivery(
+                commandSource = commandSource,
+                resultSource = GameplayResultSourceToken(
+                    semanticHandle = request.semanticHandle,
+                    targetInstance = instanceId,
+                    targetRevision = revision,
+                    sourceOrdinal = 0,
+                    causalScope = causalScope,
+                    causalDepth = causalDepth + 1,
+                ),
+                effectiveProtocolIdentity = GameplayEffectiveProtocolIdentity.SESSION_START,
+                result = GameplayModuleResult.RunStarted,
+                issuerProvenance = GameplayResultIssuerProvenance.GAMEPLAY_RUN_STATIC_BINDING,
+            ),
+        )
+        return GameplayCommandIngressResult.Accepted(instanceId, revision)
     }
 
-    override fun profileSnapshot(): PlayerProfile = profile
+    override fun query(query: GameplayQuery.GetRunStatus): GameplayRunStatusProjection =
+        GameplayRunStatusProjection(
+            instanceId = instanceId,
+            revision = revision,
+            phase = phase,
+            profileCommandPending = false,
+        )
 
-    override fun preferences(): PlayerPreferences = profile.preferences
+    override fun query(query: GameplayQuery.GetActiveWeapon): GameplayActiveWeaponProjection =
+        GameplayActiveWeaponProjection(instanceId, revision, weapon = null)
 
-    override fun updatePreferences(preferences: PlayerPreferences): ProfileMutationResult =
-        applied(profile.copy(preferences = preferences))
-
-    override fun labSnapshot(): LabProfileSnapshot = LabProfileSnapshot(
-        economy = profile.economy,
-        progress = profile.labProgress,
-    )
-
-    override fun purchaseMetaUpgrade(id: MetaUpgradeId): ProfileMutationResult = rejected()
-
-    override fun loadoutSnapshot(): LoadoutProfileSnapshot = LoadoutProfileSnapshot(
-        economy = profile.economy,
-        loadout = profile.loadout,
-    )
-
-    override fun selectCoreShape(shape: CoreShape): ProfileMutationResult = rejected()
-
-    override fun purchaseOrEquipWeapon(id: WeaponId): ProfileMutationResult = rejected()
-
-    override fun collectionSnapshot(): PlayerCollection = profile.collection
-
-    override fun rebirthSnapshot(): RebirthProfileSnapshot =
-        RebirthProfileSnapshot(profile.rebirthProgress)
-
-    override fun advanceRebirth(): ProfileMutationResult = rejected()
-
-    override fun applyGameplayProgress(update: GameplayProgressUpdate): ProfileMutationResult = rejected()
-
-    override fun replaceProfile(profile: PlayerProfile): ProfilePersistResult {
-        this.profile = profile
-        return ProfilePersistResult.Persisted
-    }
-
-    private fun applied(value: PlayerProfile): ProfileMutationResult {
-        profile = value
-        return ProfileMutationResult.Applied(ProfilePersistResult.Persisted)
-    }
-
-    private fun rejected(): ProfileMutationResult =
-        ProfileMutationResult.Rejected(ProfileMutationRejection.NO_CHANGE)
+    override fun query(query: GameplayQuery.GetCodexStacks): GameplayCodexStacksProjection =
+        GameplayCodexStacksProjection(instanceId, revision, immutableListOf())
 }
 
-private class FakeAudioService : AudioService {
-    val preferencesUpdates = mutableListOf<AudioPreferences>()
-    val advances = mutableListOf<Pair<Float, List<AudioCue>>>()
-    var unlockCalls = 0
+private class RecordingAudioService : AudioService {
     var closeCalls = 0
+    val preferenceUpdates = mutableListOf<AudioPreferences>()
 
     override fun updatePreferences(preferences: AudioPreferences) {
-        preferencesUpdates += preferences
+        preferenceUpdates += preferences
     }
-
-    override fun advance(realDeltaSeconds: Float, cues: List<AudioCue>) {
-        advances += realDeltaSeconds to cues.toList()
-    }
-
-    override fun ensureUnlocked() {
-        unlockCalls++
-    }
+    override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) = Unit
+    override fun ensureUnlocked() = Unit
 
     override fun close() {
         closeCalls++
     }
-}
-
-private fun PlayerPreferences.toExpectedAudioPreferences(): AudioPreferences = AudioPreferences(
-    soundEnabled = soundEnabled,
-    musicEnabled = musicEnabled,
-    masterVolume = masterVolume,
-)
-
-private class FakeHomeFeature : HomeFeature {
-    @Composable
-    override fun Content(inputEnabled: Boolean, onOutput: (HomeOutput) -> Unit) = Unit
-}
-
-private class FakeSettingsFeature : SettingsFeature {
-    @Composable
-    override fun Content(routeToken: Int, onOutput: (SettingsOutput) -> Unit) = Unit
-}
-
-private class FakeLabFeature : LabFeature {
-    @Composable
-    override fun Content(routeToken: Int, onOutput: (LabOutput) -> Unit) = Unit
-}
-
-private class FakeArmoryFeature : ArmoryFeature {
-    @Composable
-    override fun Content(activeRunWeapon: WeaponId?, onOutput: (ArmoryOutput) -> Unit) = Unit
-}
-
-private class FakeRebirthFeature : RebirthFeature {
-    @Composable
-    override fun Content(
-        routeToken: Int,
-        eligible: Boolean,
-        onOutput: (RebirthOutput) -> Unit,
-    ) = Unit
-}
-
-private class FakeCodexFeature : CodexFeature {
-    @Composable
-    override fun Content(runStacks: CodexRunStacks, onOutput: (CodexOutput) -> Unit) = Unit
 }

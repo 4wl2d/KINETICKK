@@ -12,8 +12,8 @@
 </p>
 
 <p align="center">
-  <img alt="Kotlin 2.3.20" src="https://img.shields.io/badge/Kotlin-2.3.20-7F52FF?logo=kotlin&logoColor=white">
-  <img alt="Compose Multiplatform 1.11.0" src="https://img.shields.io/badge/Compose_Multiplatform-1.11.0-4285F4?logo=jetpackcompose&logoColor=white">
+  <img alt="Kotlin 2.4.20 RC" src="https://img.shields.io/badge/Kotlin-2.4.20--RC-7F52FF?logo=kotlin&logoColor=white">
+  <img alt="Compose Multiplatform 1.12.0 RC1" src="https://img.shields.io/badge/Compose_Multiplatform-1.12.0--rc01-4285F4?logo=jetpackcompose&logoColor=white">
   <img alt="Desktop and WebAssembly" src="https://img.shields.io/badge/targets-Desktop_%2B_WebAssembly-42F5E9">
   <a href="LICENSE"><img alt="GNU GPL version 3 or later" src="https://img.shields.io/badge/license-GPLv3%2B-FF426D"></a>
 </p>
@@ -38,9 +38,10 @@
 
 The cursor or touch point is both a magnetic target and a lethal singularity. Pull it away from the Core to build speed, turn that momentum into impact damage, and never let the Core touch the singularity.
 
-The same shared application composition, vertical features, gameplay simulation,
-content catalogs, profile codec, and tests run across desktop (macOS, Windows,
-and Linux) and modern browsers through WebAssembly.
+The same shared application composition, Pokeball authorities, deterministic
+gameplay simulation, content catalog, strict profile resource, and tests run
+across Android phones, desktop (macOS, Windows, and Linux), and modern browsers
+through WebAssembly.
 
 The repository is published as a working learning example for Kotlin
 Multiplatform, Compose Canvas rendering, deterministic simulation, progression
@@ -49,9 +50,9 @@ whole game locally, experiment with it, and contribute changes under the GPL.
 
 ## At a glance
 
-| 400 items | 12 weapons | 40 Relics | 9 enemy archetypes | 7 vertical features |
+| 400 items | 12 weapons | 40 Relics | 9 enemy archetypes | 7 application routes |
 |:---:|:---:|:---:|:---:|:---:|
-| Deterministic catalog | Movement-reactive | Six aspects | Architect included | 26 leaf modules |
+| Deterministic catalog | Movement-reactive | Six aspects | Architect included | 23 leaf modules |
 
 ## How to play
 
@@ -67,6 +68,7 @@ Magnetic Polarity saturates when the target stays far away in one direction. A s
 | `Q` | Reroll an item or weapon choice |
 | `L` / `A` / `B` / `C` / `S` | Lab, Armory, Rebirth, Codex, Settings |
 | `M` | Toggle sound and music |
+| `F3` | Toggle and reset the rolling performance HUD |
 | `R` | Restart after a completed run |
 
 Defeat **The Architect** on the current Rebirth tier to unlock the next one. Rebirth starts a fresh run build with a stronger threat profile while preserving permanent progression, unlocks, Codex discovery, and settings.
@@ -97,14 +99,59 @@ Open the local URL printed by Gradle. A production WebAssembly bundle can be bui
 
 The optimized bundle is written to `app/web/build/dist/wasmJs/productionExecutable`.
 
+### Android development
+
+Build the Android app and its Compose instrumentation tests with:
+
+```bash
+./gradlew :app:android:assembleDebug :app:android:assembleDebugAndroidTest \
+  :app:shared:assembleAndroidDeviceTest
+```
+
+The debug package is `com.vladislavtomilov.kinetickk.debug`, isolated from the
+stable benchmark/release package so device tests cannot remove or overwrite
+gameplay data. The APK is written to
+`app/android/build/outputs/apk/debug/app-android-debug.apk`.
+
 ### Verification and packaging
+
+Pokeball architecture verification requires an immutable checkout of
+`4wl2d/Pokeball` at commit
+`de9ef7384795680c836d5e6c2c9b394286058670`. Supply it with
+`-PpokeballSnapshotDir=/absolute/path` or `POKEBALL_SNAPSHOT_DIR`; a sibling
+`../Pokeball` checkout is the local default.
 
 | Goal | Command |
 |---|---|
 | Run desktop tests | `./gradlew desktopTest` |
+| Compile the Android app and both device-test APKs | `./gradlew :app:android:assembleDebug :app:android:assembleBenchmark :app:android:assembleDebugAndroidTest :app:shared:assembleAndroidDeviceTest` |
+| Verify the module graph and Pokeball architecture/claim prerequisites | `./gradlew verifyArchitecture verifyPokeballArchitecture verifyPokeballConformance` |
+| Compile and run isolated Wasm browser tests | `CHROME_BIN=/path/to/chrome ./gradlew compileTestKotlinWasmJs wasmJsBrowserTest` |
 | Build the production web bundle | `./gradlew wasmJsBrowserDistribution` |
-| Verify architecture, tests, Wasm compilation, and the web bundle | `./gradlew verifyArchitecture desktopTest compileTestKotlinWasmJs wasmJsBrowserDistribution` |
+| Run reproducible performance comparisons | See [`tools/performance`](tools/performance/README.md) |
+| Run the complete local gate | Run both commands below: the strict Android/Desktop/architecture graph, then the normal Web graph |
 | List every available task | `./gradlew tasks` |
+
+Gradle 9.7 Isolated Projects is enabled for the Android, Desktop, and architecture CI graphs:
+
+```bash
+./gradlew \
+  verifyArchitecture verifyPokeballArchitecture verifyPokeballConformance desktopTest \
+  :app:android:assembleDebug :app:android:assembleBenchmark \
+  :app:android:assembleDebugAndroidTest :app:shared:assembleAndroidDeviceTest \
+  -Pkinetickk.gradle.isolatedProfile=true \
+  --isolated-projects \
+  --configuration-cache-problems=fail
+
+CHROME_BIN=/path/to/chrome ./gradlew \
+  compileTestKotlinWasmJs wasmJsBrowserTest wasmJsBrowserDistribution \
+  --configuration-cache-problems=fail
+```
+
+The strict profile omits Kotlin/Wasm targets because Kotlin's JS/Wasm Gradle plugins still access
+the root task graph under Isolated Projects
+([KT-80311](https://youtrack.jetbrains.com/issue/KT-80311)). Wasm tests and distributions use the
+normal profile without `--isolated-projects`; no Gradle problem is ignored or suppressed.
 
 ## Systems
 
@@ -112,53 +159,51 @@ The optimized bundle is written to `app/web/build/dist/wasmJs/productionExecutab
 - **Buildcraft:** twelve movement-reactive weapons, forty rankable Relics, four Sovereign Relics, four bound Relic slots, and 400 deterministic items across twenty modifier families.
 - **Run progression:** Data leveling, stat evolutions, Elite Keys, two-stage Totems, weapon mastery, combo rewards, velocity tiers, Kinetic Overdrive, and a twenty-minute Architect finale.
 - **Persistent progression:** spendable Kinetic Matter, eight Lab upgrades, twelve Armory unlocks, three Core shapes, Codex discovery, and replayable Rebirth threat tiers.
-- **Presentation:** infinite procedural grid, camera tracking, trails, particles, screen shake, configurable damage numbers, and procedural synth audio on desktop and web.
+- **Presentation:** infinite procedural grid, camera tracking, trails, particles, screen shake, configurable damage numbers, and procedural synth audio on Android, desktop, and web.
 - **Opposition:** Drifter, Shooter, Charger, Interceptor, Weaver, Warden, Splitter, Elite, and Architect behaviors with projectiles and escalating wave mixes.
 
 ## Project layout
 
 | Path | Responsibility |
 |---|---|
-| `app/shared` | Application composition root: navigation, back stack, global shortcuts, audio lifecycle, and preservation of the active gameplay session beneath overlay features |
+| `app/android` | Thin Android application host: manifest, activity, resources, build types, R8, and UI device tests; depends only on `app/shared` |
+| `app/shared` | Multiplatform Application Assembly and platform brokers; constructs fixed bindings, owns provider lifecycle, and delegates the shell to AppSession |
 | `app/desktop` | Thin JVM/desktop host and native packaging; depends only on `app/shared` |
 | `app/web` | Thin Wasm browser host and production web bundle; depends only on `app/shared` |
-| `core/common` | Small platform-independent collection and random utilities |
-| `core/content` | Shared persistent IDs, definitions, and content catalogs |
-| `core/design-system` | Canvas tokens, text, geometry, and reusable UI primitives |
-| `core/profile/api`, `core/profile/data` | Immutable profile slices and narrow capability contracts; atomic v2/v3 codec and platform storage |
-| `core/audio/api`, `core/audio/impl` | Audio contract and Desktop/Wasm implementations |
-| `feature/home/api`, `feature/home/impl` | Home route, render model, outputs, reducer, renderer, and input mapping |
-| `feature/gameplay/api`, `feature/gameplay/domain`, `feature/gameplay/presentation`, `feature/gameplay/impl` | Live-run configuration and outputs, simulation and run state, Canvas presentation and input mapping, and Compose orchestration |
-| `feature/settings/api`, `feature/settings/impl` | Persisted player preferences and local page state |
-| `feature/lab/api`, `feature/lab/impl` | Permanent meta-upgrade purchases |
-| `feature/armory/api`, `feature/armory/impl` | Weapon unlocks, loadout selection, and local pagination |
-| `feature/rebirth/api`, `feature/rebirth/impl` | Two-step Rebirth confirmation and cycle advancement |
-| `feature/codex/api`, `feature/codex/impl` | Collection browsing, local pagination, and a read-only snapshot of current run stacks |
-| `build-logic` | Gradle conventions plus `verifyArchitecture` dependency-boundary enforcement |
+| `foundation/common`, `foundation/design` | Shared mechanical collections, random utilities, Canvas tokens, text, geometry, and UI primitives |
+| `resource/audio/api`, `resource/audio/impl` | Bounded audio Resource contract and capability-driven mechanical service; platform authority stays in private `app/shared` brokers |
+| `ball/content/api`, `ball/content/impl` | Stable content types and the immutable Content authority role |
+| `ball/profile/api`, `ball/profile/nucleus`, `ball/profile/resource`, `ball/profile/interaction`, `ball/profile/impl` | Profile protocols, pure decisions, persistence edge, Settings/Lab/Armory/Rebirth UI, and the accepting component |
+| `ball/gameplay/api`, `ball/gameplay/nucleus`, `ball/gameplay/interaction`, `ball/gameplay/impl` | Run protocols, deterministic simulation, Canvas/input interaction, and accepted-effect execution |
+| `flow/session/api`, `flow/session/nucleus`, `flow/session/interaction`, `flow/session/impl` | Session protocols, navigation/workflow decisions, Home/Codex interaction, and orchestration role |
+| `build-logic` | Gradle conventions plus deterministic module, ownership, route, bound, snapshot, manifest-drift, and conformance verification |
 
-Each feature API exposes a Compose entry point, a small immutable render model,
-and feature-specific output events. Its implementation owns the corresponding
-actions, reducer, renderer, and input mapping. Features never navigate to one
-another directly: `app/shared` handles their outputs and supplies narrow core
-capabilities or snapshots. The build rejects `impl → impl`, `core → feature`,
-`feature → app`, and cross-feature dependencies. The root project contains no
-production sources.
+The graph has exactly 23 leaf modules. Ball APIs and Nuclei are separate from
+Compose Interaction and provider-facing Resource roles; the Android host lives
+in `app/android`, while Android, Desktop, and Web depend only on `app/shared`. AppSession owns navigation and cross-authority workflow;
+`app/shared` is static construction and transport only. The build rejects
+legacy `core:*` and `feature:*` modules and dependencies, invalid role imports,
+unexpected graph endpoints, manifest drift, and any mismatch in the pinned
+external Pokeball snapshot.
 
 ## Contributing
 
 Bug reports, ideas, tests, documentation, and pull requests are welcome. Read
 [the contribution guide](docs/project/CONTRIBUTING.md) before submitting code.
 
-Every commit in a pull request must include a Developer Certificate of Origin
-sign-off. Before a copyrightable contribution is merged, its author must also
-sign the [KINETICKK Contributor License Agreement](docs/project/CONTRIBUTOR_LICENSE_AGREEMENT.md).
-The CLA keeps the public contribution under GPL and lets the project owner
-prepare store builds without taking away the contributor's right to use their
-own work.
+Contributions use the same **GPL-3.0-or-later** terms as the project. Contributors
+keep their copyright; no Developer Certificate of Origin sign-off or separate
+Contributor License Agreement is required. By submitting material for inclusion,
+you confirm that you have the right to license it on those terms.
 
 ## Status
 
-KINETICKK is a playable `0.1.0` prototype. APIs, balance, content, and saved-progress formats may change while the game is in active development.
+KINETICKK is a playable `0.1.0` prototype. Until the `1.0.0` release, the
+current local profile schema is the only supported schema: development builds
+do not migrate, import, or clean up saves written by earlier builds. An absent
+or incompatible current profile starts from the current defaults. APIs,
+balance, content, and saved-progress formats may change while the game is in
+active development.
 
 ## License
 
@@ -180,7 +225,6 @@ or to imply endorsement by Vladislav Tomilov.
 - [Trademark and brand policy](docs/project/TRADEMARKS.md)
 - [Third-party notices](docs/project/THIRD_PARTY_NOTICES.md)
 - [Contribution policy](docs/project/CONTRIBUTING.md)
-- [Contributor License Agreement](docs/project/CONTRIBUTOR_LICENSE_AGREEMENT.md)
 - [Project governance](docs/project/GOVERNANCE.md)
 - [Corresponding source plan](docs/project/SOURCE.md)
 - [Asset provenance](docs/project/ASSET_PROVENANCE.md)

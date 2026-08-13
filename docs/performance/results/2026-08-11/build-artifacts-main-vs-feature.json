@@ -1,0 +1,816 @@
+{
+  "schemaVersion": 1,
+  "spdxFileCopyrightText": "2026 Vladislav Tomilov",
+  "spdxLicenseIdentifier": "GPL-3.0-or-later",
+  "suite": "kinetickk-build-artifact-comparison",
+  "buildProtocol": {
+    "order": "A-B-B-A",
+    "roleMapping": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "cycles": 1,
+    "nonOverlapping": true,
+    "distinctWorkingDirectories": true,
+    "environment": {
+      "os": "macOS-26.5.2-arm64-arm-64bit",
+      "architecture": "arm64",
+      "pythonVersion": "3.12.13",
+      "processorCount": 18
+    },
+    "semanticBuildCommand": {
+      "operationId": "app-web-wasm-production-distribution-v1",
+      "runner": "gradlew",
+      "tasks": [
+        "clean",
+        "app-web-wasm-production-distribution"
+      ],
+      "offline": true,
+      "daemon": "disabled",
+      "console": "plain"
+    },
+    "taskAliases": {
+      "baseline": "legacy-root",
+      "candidate": "app-web-module"
+    },
+    "measurementVariant": "waited-child-v1",
+    "runOrder": [
+      {
+        "sequence": 1,
+        "role": "candidate",
+        "source": {
+          "file": "build-01-feature.json",
+          "sha256": "364f32b61793ef3852ede5193cc6e5bca9d3abfa6057da337d02a758cfc619a9"
+        },
+        "startedAt": "2026-08-11T19:00:28.081555Z",
+        "finishedAt": "2026-08-11T19:00:57.747653Z",
+        "generatedAt": "2026-08-11T19:00:57.747738Z"
+      },
+      {
+        "sequence": 2,
+        "role": "baseline",
+        "source": {
+          "file": "build-02-main.json",
+          "sha256": "295269b45240eb47102d912cc43f0c34f55e581ec1f31a5f1bdc94ad9db89c0a"
+        },
+        "startedAt": "2026-08-11T19:01:05.337469Z",
+        "finishedAt": "2026-08-11T19:01:26.234337Z",
+        "generatedAt": "2026-08-11T19:01:26.234388Z"
+      },
+      {
+        "sequence": 3,
+        "role": "baseline",
+        "source": {
+          "file": "build-03-main.json",
+          "sha256": "1036a4d1b67bb003bc57de412fc975261455a1ea33a2b47cfecd6721b3569306"
+        },
+        "startedAt": "2026-08-11T19:01:29.899694Z",
+        "finishedAt": "2026-08-11T19:01:49.914700Z",
+        "generatedAt": "2026-08-11T19:01:49.914772Z"
+      },
+      {
+        "sequence": 4,
+        "role": "candidate",
+        "source": {
+          "file": "build-04-feature.json",
+          "sha256": "79fc41e2e1e7b6d977ad33243b61e3f0736afe785402ba1b7800e94a49e471b1"
+        },
+        "startedAt": "2026-08-11T19:01:53.920177Z",
+        "finishedAt": "2026-08-11T19:02:20.056280Z",
+        "generatedAt": "2026-08-11T19:02:20.056312Z"
+      }
+    ]
+  },
+  "artifactInventoryContract": {
+    "artifactRoots": {
+      "baseline": "build/dist/wasmJs/productionExecutable",
+      "candidate": "app/web/build/dist/wasmJs/productionExecutable"
+    },
+    "selection": {
+      "excludes": [],
+      "includes": [],
+      "symlinksFollowed": false
+    },
+    "compression": {
+      "aggregation": "sum of independently compressed file sizes",
+      "algorithm": "gzip",
+      "brotliAvailableInStandardLibrary": false,
+      "implementation": "Python stdlib zlib",
+      "level": 9
+    },
+    "environment": {
+      "platform": "macOS-26.5.2-arm64-arm-64bit",
+      "pythonVersion": "3.12.13",
+      "zlibVersion": "1.2.12"
+    }
+  },
+  "baseline": {
+    "build": {
+      "label": "main",
+      "revision": "fedceb8e2d9009d805d70249e10c77e424447945",
+      "dirty": false,
+      "environment": {
+        "os": "macOS-26.5.2-arm64-arm-64bit",
+        "architecture": "arm64",
+        "pythonVersion": "3.12.13",
+        "processorCount": 18
+      },
+      "semanticCommand": {
+        "operationId": "app-web-wasm-production-distribution-v1",
+        "runner": "gradlew",
+        "tasks": [
+          "clean",
+          "app-web-wasm-production-distribution"
+        ],
+        "offline": true,
+        "daemon": "disabled",
+        "console": "plain"
+      },
+      "taskAlias": "legacy-root",
+      "measurementVariant": "waited-child-v1",
+      "rawSamples": [
+        {
+          "source": {
+            "file": "build-02-main.json",
+            "sha256": "295269b45240eb47102d912cc43f0c34f55e581ec1f31a5f1bdc94ad9db89c0a"
+          },
+          "generatedAt": "2026-08-11T19:01:26.234388Z",
+          "sample": {
+            "index": 1,
+            "startedAt": "2026-08-11T19:01:05.337469Z",
+            "finishedAt": "2026-08-11T19:01:26.234337Z",
+            "wallNs": 20896552167,
+            "userCpuNs": 625629000,
+            "systemCpuNs": 108219000,
+            "exitCode": 0,
+            "timedOut": false,
+            "waitedChildCpuUtilizationPercent": 3.511813786960025
+          }
+        },
+        {
+          "source": {
+            "file": "build-03-main.json",
+            "sha256": "1036a4d1b67bb003bc57de412fc975261455a1ea33a2b47cfecd6721b3569306"
+          },
+          "generatedAt": "2026-08-11T19:01:49.914772Z",
+          "sample": {
+            "index": 1,
+            "startedAt": "2026-08-11T19:01:29.899694Z",
+            "finishedAt": "2026-08-11T19:01:49.914700Z",
+            "wallNs": 20014642208,
+            "userCpuNs": 663324000,
+            "systemCpuNs": 106443000,
+            "exitCode": 0,
+            "timedOut": false,
+            "waitedChildCpuUtilizationPercent": 3.8460192892797176
+          }
+        }
+      ],
+      "wallSeconds": [
+        20.896552167,
+        20.014642208
+      ],
+      "medianWallSeconds": 20.4555971875
+    },
+    "artifacts": {
+      "label": "main",
+      "revision": "fedceb8e2d9009d805d70249e10c77e424447945",
+      "dirty": false
+    },
+    "artifactInputSource": {
+      "file": "artifacts-main.json",
+      "sha256": "ae3d0e4d21601d7aafb1126ddf1b88f76b5c40f9a46ccc8e61e14dadf8e9f4a8"
+    },
+    "artifactGeneratedAtUtc": "2026-08-11T19:02:26.384980Z"
+  },
+  "candidate": {
+    "build": {
+      "label": "feature/pokeball-full-refactor",
+      "revision": "20a3e2f78988419f5263247085a9a4b3900f4a6e",
+      "dirty": false,
+      "environment": {
+        "os": "macOS-26.5.2-arm64-arm-64bit",
+        "architecture": "arm64",
+        "pythonVersion": "3.12.13",
+        "processorCount": 18
+      },
+      "semanticCommand": {
+        "operationId": "app-web-wasm-production-distribution-v1",
+        "runner": "gradlew",
+        "tasks": [
+          "clean",
+          "app-web-wasm-production-distribution"
+        ],
+        "offline": true,
+        "daemon": "disabled",
+        "console": "plain"
+      },
+      "taskAlias": "app-web-module",
+      "measurementVariant": "waited-child-v1",
+      "rawSamples": [
+        {
+          "source": {
+            "file": "build-01-feature.json",
+            "sha256": "364f32b61793ef3852ede5193cc6e5bca9d3abfa6057da337d02a758cfc619a9"
+          },
+          "generatedAt": "2026-08-11T19:00:57.747738Z",
+          "sample": {
+            "index": 1,
+            "startedAt": "2026-08-11T19:00:28.081555Z",
+            "finishedAt": "2026-08-11T19:00:57.747653Z",
+            "wallNs": 29665508292,
+            "userCpuNs": 922627000,
+            "systemCpuNs": 181853000,
+            "exitCode": 0,
+            "timedOut": false,
+            "waitedChildCpuUtilizationPercent": 3.7231116660079238
+          }
+        },
+        {
+          "source": {
+            "file": "build-04-feature.json",
+            "sha256": "79fc41e2e1e7b6d977ad33243b61e3f0736afe785402ba1b7800e94a49e471b1"
+          },
+          "generatedAt": "2026-08-11T19:02:20.056312Z",
+          "sample": {
+            "index": 1,
+            "startedAt": "2026-08-11T19:01:53.920177Z",
+            "finishedAt": "2026-08-11T19:02:20.056280Z",
+            "wallNs": 26135739750,
+            "userCpuNs": 688565000,
+            "systemCpuNs": 124005000,
+            "exitCode": 0,
+            "timedOut": false,
+            "waitedChildCpuUtilizationPercent": 3.1090376923423415
+          }
+        }
+      ],
+      "wallSeconds": [
+        29.665508292,
+        26.13573975
+      ],
+      "medianWallSeconds": 27.900624021
+    },
+    "artifacts": {
+      "label": "feature/pokeball-full-refactor",
+      "revision": "20a3e2f78988419f5263247085a9a4b3900f4a6e",
+      "dirty": false
+    },
+    "artifactInputSource": {
+      "file": "artifacts-feature.json",
+      "sha256": "b6b1f4d1deb7bd1f65613a61c67eebafe66fc6e39168bed615a6265d3096f349"
+    },
+    "artifactGeneratedAtUtc": "2026-08-11T19:02:26.434470Z"
+  },
+  "buildWallDeltaPercent": 36.396037550297,
+  "artifacts": {
+    "baselineSummary": {
+      "archiveClassFileCount": 0,
+      "byCategory": {
+        "html": {
+          "fileCount": 1,
+          "gzipBytes": 517,
+          "gzipToRawRatio": 0.5351966873706004,
+          "rawBytes": 966
+        },
+        "javascript": {
+          "fileCount": 1,
+          "gzipBytes": 59426,
+          "gzipToRawRatio": 0.1775145100920939,
+          "rawBytes": 334767
+        },
+        "legal-metadata": {
+          "fileCount": 12,
+          "gzipBytes": 26741,
+          "gzipToRawRatio": 0.40618212197159564,
+          "rawBytes": 65835
+        },
+        "source-map": {
+          "fileCount": 1,
+          "gzipBytes": 138146,
+          "gzipToRawRatio": 0.16296317267754534,
+          "rawBytes": 847713
+        },
+        "wasm": {
+          "fileCount": 2,
+          "gzipBytes": 3860222,
+          "gzipToRawRatio": 0.37434205409649207,
+          "rawBytes": 10312018
+        }
+      },
+      "bySuffix": {
+        ".html": {
+          "fileCount": 1,
+          "gzipBytes": 517,
+          "gzipToRawRatio": 0.5351966873706004,
+          "rawBytes": 966
+        },
+        ".js": {
+          "fileCount": 1,
+          "gzipBytes": 59426,
+          "gzipToRawRatio": 0.1775145100920939,
+          "rawBytes": 334767
+        },
+        ".map": {
+          "fileCount": 1,
+          "gzipBytes": 138146,
+          "gzipToRawRatio": 0.16296317267754534,
+          "rawBytes": 847713
+        },
+        ".md": {
+          "fileCount": 10,
+          "gzipBytes": 13562,
+          "gzipToRawRatio": 0.47328563950444946,
+          "rawBytes": 28655
+        },
+        ".wasm": {
+          "fileCount": 2,
+          "gzipBytes": 3860222,
+          "gzipToRawRatio": 0.37434205409649207,
+          "rawBytes": 10312018
+        },
+        "<none>": {
+          "fileCount": 2,
+          "gzipBytes": 13179,
+          "gzipToRawRatio": 0.3544647660032275,
+          "rawBytes": 37180
+        }
+      },
+      "fileCount": 17,
+      "gzipBytes": 4085052,
+      "gzipToRawRatio": 0.3533384959596668,
+      "largestGzipFiles": [
+        {
+          "bytes": 3319858,
+          "path": "6e23e5428398b92da386.wasm"
+        },
+        {
+          "bytes": 540364,
+          "path": "6b2d6a1f27c7f3964398.wasm"
+        },
+        {
+          "bytes": 138146,
+          "path": "kinetickk.js.map"
+        },
+        {
+          "bytes": 59426,
+          "path": "kinetickk.js"
+        },
+        {
+          "bytes": 12124,
+          "path": "META-INF/LICENSE"
+        },
+        {
+          "bytes": 3004,
+          "path": "META-INF/docs/project/LEGAL.md"
+        },
+        {
+          "bytes": 1803,
+          "path": "META-INF/docs/project/THIRD_PARTY_NOTICES.md"
+        },
+        {
+          "bytes": 1703,
+          "path": "META-INF/docs/project/CONTRIBUTOR_LICENSE_AGREEMENT.md"
+        },
+        {
+          "bytes": 1624,
+          "path": "META-INF/docs/project/CONTRIBUTING.md"
+        },
+        {
+          "bytes": 1152,
+          "path": "META-INF/docs/project/SOURCE.md"
+        },
+        {
+          "bytes": 1055,
+          "path": "META-INF/NOTICE"
+        },
+        {
+          "bytes": 1037,
+          "path": "META-INF/docs/project/TRADEMARKS.md"
+        },
+        {
+          "bytes": 900,
+          "path": "META-INF/docs/project/ASSET_PROVENANCE.md"
+        },
+        {
+          "bytes": 884,
+          "path": "META-INF/docs/project/GOVERNANCE.md"
+        },
+        {
+          "bytes": 795,
+          "path": "META-INF/docs/project/AUTHORS.md"
+        },
+        {
+          "bytes": 660,
+          "path": "META-INF/docs/project/PRIVACY.md"
+        },
+        {
+          "bytes": 517,
+          "path": "index.html"
+        }
+      ],
+      "largestRawFiles": [
+        {
+          "bytes": 8652729,
+          "path": "6e23e5428398b92da386.wasm"
+        },
+        {
+          "bytes": 1659289,
+          "path": "6b2d6a1f27c7f3964398.wasm"
+        },
+        {
+          "bytes": 847713,
+          "path": "kinetickk.js.map"
+        },
+        {
+          "bytes": 334767,
+          "path": "kinetickk.js"
+        },
+        {
+          "bytes": 35149,
+          "path": "META-INF/LICENSE"
+        },
+        {
+          "bytes": 6613,
+          "path": "META-INF/docs/project/LEGAL.md"
+        },
+        {
+          "bytes": 4608,
+          "path": "META-INF/docs/project/THIRD_PARTY_NOTICES.md"
+        },
+        {
+          "bytes": 4070,
+          "path": "META-INF/docs/project/CONTRIBUTOR_LICENSE_AGREEMENT.md"
+        },
+        {
+          "bytes": 3361,
+          "path": "META-INF/docs/project/CONTRIBUTING.md"
+        },
+        {
+          "bytes": 2136,
+          "path": "META-INF/docs/project/SOURCE.md"
+        },
+        {
+          "bytes": 2100,
+          "path": "META-INF/docs/project/TRADEMARKS.md"
+        },
+        {
+          "bytes": 2031,
+          "path": "META-INF/NOTICE"
+        },
+        {
+          "bytes": 1646,
+          "path": "META-INF/docs/project/GOVERNANCE.md"
+        },
+        {
+          "bytes": 1579,
+          "path": "META-INF/docs/project/ASSET_PROVENANCE.md"
+        },
+        {
+          "bytes": 1374,
+          "path": "META-INF/docs/project/AUTHORS.md"
+        },
+        {
+          "bytes": 1168,
+          "path": "META-INF/docs/project/PRIVACY.md"
+        },
+        {
+          "bytes": 966,
+          "path": "index.html"
+        }
+      ],
+      "manifestSha256": "c86e5cf0001eab3af318f91d6aa91a2cf977a1f1550b32edd1f85a9f7e5cec41",
+      "rawBytes": 11561299,
+      "wasmDeclaredFunctionCount": 20474
+    },
+    "candidateSummary": {
+      "archiveClassFileCount": 0,
+      "byCategory": {
+        "html": {
+          "fileCount": 1,
+          "gzipBytes": 517,
+          "gzipToRawRatio": 0.5351966873706004,
+          "rawBytes": 966
+        },
+        "javascript": {
+          "fileCount": 1,
+          "gzipBytes": 59560,
+          "gzipToRawRatio": 0.17756206921223974,
+          "rawBytes": 335432
+        },
+        "legal-metadata": {
+          "fileCount": 12,
+          "gzipBytes": 26792,
+          "gzipToRawRatio": 0.40635806588606443,
+          "rawBytes": 65932
+        },
+        "source-map": {
+          "fileCount": 1,
+          "gzipBytes": 138598,
+          "gzipToRawRatio": 0.16294681696552438,
+          "rawBytes": 850572
+        },
+        "wasm": {
+          "fileCount": 2,
+          "gzipBytes": 4026979,
+          "gzipToRawRatio": 0.3739819224721309,
+          "rawBytes": 10767844
+        }
+      },
+      "bySuffix": {
+        ".html": {
+          "fileCount": 1,
+          "gzipBytes": 517,
+          "gzipToRawRatio": 0.5351966873706004,
+          "rawBytes": 966
+        },
+        ".js": {
+          "fileCount": 1,
+          "gzipBytes": 59560,
+          "gzipToRawRatio": 0.17756206921223974,
+          "rawBytes": 335432
+        },
+        ".map": {
+          "fileCount": 1,
+          "gzipBytes": 138598,
+          "gzipToRawRatio": 0.16294681696552438,
+          "rawBytes": 850572
+        },
+        ".md": {
+          "fileCount": 10,
+          "gzipBytes": 13613,
+          "gzipToRawRatio": 0.47346271563717307,
+          "rawBytes": 28752
+        },
+        ".wasm": {
+          "fileCount": 2,
+          "gzipBytes": 4026979,
+          "gzipToRawRatio": 0.3739819224721309,
+          "rawBytes": 10767844
+        },
+        "<none>": {
+          "fileCount": 2,
+          "gzipBytes": 13179,
+          "gzipToRawRatio": 0.3544647660032275,
+          "rawBytes": 37180
+        }
+      },
+      "fileCount": 17,
+      "gzipBytes": 4252446,
+      "gzipToRawRatio": 0.3537589098047659,
+      "largestGzipFiles": [
+        {
+          "bytes": 3319858,
+          "path": "6e23e5428398b92da386.wasm"
+        },
+        {
+          "bytes": 707121,
+          "path": "a789c7d93979cfde544d.wasm"
+        },
+        {
+          "bytes": 138598,
+          "path": "kinetickk.js.map"
+        },
+        {
+          "bytes": 59560,
+          "path": "kinetickk.js"
+        },
+        {
+          "bytes": 12124,
+          "path": "META-INF/LICENSE"
+        },
+        {
+          "bytes": 3004,
+          "path": "META-INF/docs/project/LEGAL.md"
+        },
+        {
+          "bytes": 1810,
+          "path": "META-INF/docs/project/THIRD_PARTY_NOTICES.md"
+        },
+        {
+          "bytes": 1703,
+          "path": "META-INF/docs/project/CONTRIBUTOR_LICENSE_AGREEMENT.md"
+        },
+        {
+          "bytes": 1624,
+          "path": "META-INF/docs/project/CONTRIBUTING.md"
+        },
+        {
+          "bytes": 1196,
+          "path": "META-INF/docs/project/SOURCE.md"
+        },
+        {
+          "bytes": 1055,
+          "path": "META-INF/NOTICE"
+        },
+        {
+          "bytes": 1037,
+          "path": "META-INF/docs/project/TRADEMARKS.md"
+        },
+        {
+          "bytes": 900,
+          "path": "META-INF/docs/project/ASSET_PROVENANCE.md"
+        },
+        {
+          "bytes": 884,
+          "path": "META-INF/docs/project/GOVERNANCE.md"
+        },
+        {
+          "bytes": 795,
+          "path": "META-INF/docs/project/AUTHORS.md"
+        },
+        {
+          "bytes": 660,
+          "path": "META-INF/docs/project/PRIVACY.md"
+        },
+        {
+          "bytes": 517,
+          "path": "index.html"
+        }
+      ],
+      "largestRawFiles": [
+        {
+          "bytes": 8652729,
+          "path": "6e23e5428398b92da386.wasm"
+        },
+        {
+          "bytes": 2115115,
+          "path": "a789c7d93979cfde544d.wasm"
+        },
+        {
+          "bytes": 850572,
+          "path": "kinetickk.js.map"
+        },
+        {
+          "bytes": 335432,
+          "path": "kinetickk.js"
+        },
+        {
+          "bytes": 35149,
+          "path": "META-INF/LICENSE"
+        },
+        {
+          "bytes": 6613,
+          "path": "META-INF/docs/project/LEGAL.md"
+        },
+        {
+          "bytes": 4625,
+          "path": "META-INF/docs/project/THIRD_PARTY_NOTICES.md"
+        },
+        {
+          "bytes": 4070,
+          "path": "META-INF/docs/project/CONTRIBUTOR_LICENSE_AGREEMENT.md"
+        },
+        {
+          "bytes": 3361,
+          "path": "META-INF/docs/project/CONTRIBUTING.md"
+        },
+        {
+          "bytes": 2216,
+          "path": "META-INF/docs/project/SOURCE.md"
+        },
+        {
+          "bytes": 2100,
+          "path": "META-INF/docs/project/TRADEMARKS.md"
+        },
+        {
+          "bytes": 2031,
+          "path": "META-INF/NOTICE"
+        },
+        {
+          "bytes": 1646,
+          "path": "META-INF/docs/project/GOVERNANCE.md"
+        },
+        {
+          "bytes": 1579,
+          "path": "META-INF/docs/project/ASSET_PROVENANCE.md"
+        },
+        {
+          "bytes": 1374,
+          "path": "META-INF/docs/project/AUTHORS.md"
+        },
+        {
+          "bytes": 1168,
+          "path": "META-INF/docs/project/PRIVACY.md"
+        },
+        {
+          "bytes": 966,
+          "path": "index.html"
+        }
+      ],
+      "manifestSha256": "983db23b0838ff3fb093ea635352a7318b2f93eae679f944d31f84453e9c98d5",
+      "rawBytes": 12020746,
+      "wasmDeclaredFunctionCount": 22596
+    },
+    "rawDeltaPercent": 3.9740084570081615,
+    "gzipDeltaPercent": 4.097720175899842,
+    "declaredFunctionDeltaPercent": 10.364364559929667,
+    "categories": [
+      {
+        "category": "html",
+        "baseline": {
+          "fileCount": 1,
+          "gzipBytes": 517,
+          "gzipToRawRatio": 0.5351966873706004,
+          "rawBytes": 966
+        },
+        "candidate": {
+          "fileCount": 1,
+          "gzipBytes": 517,
+          "gzipToRawRatio": 0.5351966873706004,
+          "rawBytes": 966
+        },
+        "rawDeltaPercent": 0.0,
+        "gzipDeltaPercent": 0.0
+      },
+      {
+        "category": "javascript",
+        "baseline": {
+          "fileCount": 1,
+          "gzipBytes": 59426,
+          "gzipToRawRatio": 0.1775145100920939,
+          "rawBytes": 334767
+        },
+        "candidate": {
+          "fileCount": 1,
+          "gzipBytes": 59560,
+          "gzipToRawRatio": 0.17756206921223974,
+          "rawBytes": 335432
+        },
+        "rawDeltaPercent": 0.19864562516616036,
+        "gzipDeltaPercent": 0.2254905260323764
+      },
+      {
+        "category": "legal-metadata",
+        "baseline": {
+          "fileCount": 12,
+          "gzipBytes": 26741,
+          "gzipToRawRatio": 0.40618212197159564,
+          "rawBytes": 65835
+        },
+        "candidate": {
+          "fileCount": 12,
+          "gzipBytes": 26792,
+          "gzipToRawRatio": 0.40635806588606443,
+          "rawBytes": 65932
+        },
+        "rawDeltaPercent": 0.14733804207488418,
+        "gzipDeltaPercent": 0.19071837253655435
+      },
+      {
+        "category": "source-map",
+        "baseline": {
+          "fileCount": 1,
+          "gzipBytes": 138146,
+          "gzipToRawRatio": 0.16296317267754534,
+          "rawBytes": 847713
+        },
+        "candidate": {
+          "fileCount": 1,
+          "gzipBytes": 138598,
+          "gzipToRawRatio": 0.16294681696552438,
+          "rawBytes": 850572
+        },
+        "rawDeltaPercent": 0.3372603699601162,
+        "gzipDeltaPercent": 0.3271900742692514
+      },
+      {
+        "category": "wasm",
+        "baseline": {
+          "fileCount": 2,
+          "gzipBytes": 3860222,
+          "gzipToRawRatio": 0.37434205409649207,
+          "rawBytes": 10312018
+        },
+        "candidate": {
+          "fileCount": 2,
+          "gzipBytes": 4026979,
+          "gzipToRawRatio": 0.3739819224721309,
+          "rawBytes": 10767844
+        },
+        "rawDeltaPercent": 4.420337512987273,
+        "gzipDeltaPercent": 4.319881084559386
+      }
+    ],
+    "applicationWasm": {
+      "baseline": {
+        "path": "6b2d6a1f27c7f3964398.wasm",
+        "rawBytes": 1659289,
+        "gzipBytes": 540364,
+        "declaredFunctionCount": 5879
+      },
+      "candidate": {
+        "path": "a789c7d93979cfde544d.wasm",
+        "rawBytes": 2115115,
+        "gzipBytes": 707121,
+        "declaredFunctionCount": 8001
+      },
+      "rawDeltaPercent": 27.47116385391574,
+      "gzipDeltaPercent": 30.86012391647112,
+      "declaredFunctionDeltaPercent": 36.094573907127064
+    },
+    "sharedWasmHashes": [
+      "46caff5f783599bd1c5d3e5e87959d7cb5102c515aac671c9280664368e71dab"
+    ]
+  }
+}
