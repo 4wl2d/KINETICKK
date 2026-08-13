@@ -11,7 +11,6 @@ private val legalDocumentPaths = listOf(
     "NOTICE",
     "docs/project/AUTHORS.md",
     "docs/project/CONTRIBUTING.md",
-    "docs/project/CONTRIBUTOR_LICENSE_AGREEMENT.md",
     "docs/project/GOVERNANCE.md",
     "docs/project/SOURCE.md",
     "docs/project/TRADEMARKS.md",

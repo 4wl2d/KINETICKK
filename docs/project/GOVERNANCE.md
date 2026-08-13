@@ -22,17 +22,18 @@ Issues and pull requests are public. The maintainer may accept, reject, revise,
 or defer a proposal based on project scope, quality, maintenance cost, security,
 compatibility, or release plans.
 
-Copyrightable contributions require the DCO sign-off and Contributor License
-Agreement described in [CONTRIBUTING.md](CONTRIBUTING.md). Contributors keep
-copyright in their work. Git history and signed agreements record the rights
-chain.
+Copyrightable contributions use the same GPL-3.0-or-later terms as the public
+project, as described in [CONTRIBUTING.md](CONTRIBUTING.md). Contributors keep
+copyright in their work. No DCO sign-off or separate CLA is required; Git
+history and the project authorship records document the contribution chain.
 
 ## Licensing decisions
 
-The public project remains available under GPL-3.0-or-later. The maintainer may
-also license an official build or integration on separate terms only when he
-holds or has been granted every right needed to do so. A separate license does
-not revoke GPL rights already granted for a public revision.
+The public project and accepted contributions remain available under
+GPL-3.0-or-later. No contribution agreement gives the maintainer unilateral
+relicensing authority. A different license or platform exception is possible
+only when every relevant copyright holder grants the rights needed; it cannot
+revoke GPL rights already granted for a public revision.
 
-Any transfer of the official project, signing keys, trademark administration,
-or contributor agreements should be written, dated, and announced in this file.
+Any transfer of the official project, signing keys, or trademark administration
+should be written, dated, and announced in this file.

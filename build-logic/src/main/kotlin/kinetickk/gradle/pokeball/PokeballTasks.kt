@@ -661,9 +661,6 @@ internal fun validateStrictAttestation(
     if (commitMessage.lineSequence().firstOrNull() != "docs(architecture): attest Pokeball conformance") {
         add("Attestation commit title must be exactly `docs(architecture): attest Pokeball conformance`")
     }
-    if (!commitMessage.lineSequence().any { it.startsWith("Signed-off-by: ") }) {
-        add("Attestation commit lacks DCO Signed-off-by trailer")
-    }
 }.distinct().sorted()
 
 internal fun parseStrictConformanceMetadata(record: String): Map<String, String> = parseSingleMetadataBlock(

@@ -432,7 +432,7 @@ private fun DrawScope.drawCompactHome(
     if (!landscape) {
         drawLabel(
             textMeasurer,
-            "GPL-3.0+ // SOURCE: GITHUB.COM/4WL2D/KINETICKK",
+            "GPLV3+ // SOURCE: GITHUB.COM/4WL2D/KINETICKK",
             size.width * 0.5f,
             size.height - d(8f),
             4.5f,

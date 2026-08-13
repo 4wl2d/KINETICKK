@@ -21,6 +21,19 @@ despite the older proprietary notices in those revisions.
 Third-party components keep their own licenses. See
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
+## Why GPL-3.0-or-later
+
+KINETICKK is a distributed client game, so GPL-3.0 provides strong copyleft for
+the source and binaries that users receive. Version 3 also contains the current
+GPL patent, installation-information, and violation-cure provisions. The
+`or-later` choice lets contributors and recipients use a future GPL version
+without collecting a new agreement from every copyright holder.
+
+AGPL is not used because KINETICKK has no server component. The WebAssembly and
+JavaScript web build is delivered to each browser and is already distribution
+under GPL. If a network game server is added later, reassess whether GPL or AGPL
+best matches that component before accepting contributions to it.
+
 ## What anyone may do
 
 Subject to the GPL, anyone may:
@@ -74,33 +87,29 @@ into thinking that Vladislav Tomilov published or endorsed it. See
 
 ## Contributions and future licensing
 
-Every pull-request commit must carry a Developer Certificate of Origin sign-off.
-Before copyrightable work is merged, its author must also sign the
-[Contributor License Agreement](CONTRIBUTOR_LICENSE_AGREEMENT.md).
+Contributions use the same GPL-3.0-or-later terms as the public project
+(`inbound=outbound`). Contributors retain copyright, and neither a DCO sign-off
+nor a separate CLA is required. Submitting a contribution does not grant the
+maintainer an additional right to distribute it under proprietary terms.
 
-The contributor keeps copyright. The CLA gives Vladislav Tomilov a broad right
-to license accepted work under the public GPL and under separate store or
-platform terms. A DCO alone confirms the right to submit a patch but does not
-grant that relicensing right.
-
-The CLA in this repository is a project template. Before the first outside
-contribution is merged, a lawyer should review it for the contributor's and
-maintainer's countries and set up a valid electronic-signature process.
+The `or-later` grant supplies the planned upgrade path: any contributor or
+recipient may choose a later version published by the Free Software Foundation,
+as GPLv3 section 14 permits. A different license, a platform exception, or a
+proprietary build containing outside contributions would require permission from
+every relevant copyright holder.
 
 ## Steam and other stores
 
 Valve warns that copyleft licenses such as GPL can be incompatible with a
-combined Steamworks SDK build. Before adding Steamworks, choose and review one
-of these paths:
+combined Steamworks SDK build. The current project grants no Steamworks or DRM
+exception. A GPL build may be distributed without linking the Steamworks SDK;
+before adding the SDK, obtain a license-compatibility review and permission from
+every relevant copyright holder for any needed exception.
 
-1. ship the GPL game without linking the Steamworks SDK;
-2. grant a narrow, lawyer-reviewed GPL compatibility exception; or
-3. distribute an official Steam build under separate terms using rights held by
-   Vladislav Tomilov and granted through signed contributor agreements.
-
-Do not assume that a normal GPL pull request can later be relicensed. Do not add
-third-party GPL-only code to a build intended for separate store licensing
-without checking that every required right is available.
+Do not assume that the maintainer can add an exception or relicense a normal GPL
+pull request later. Do not add third-party GPL-only code to a build intended for
+separate store licensing without checking that every required right is
+available.
 
 An EULA or store rule attached to a GPL-covered copy must not remove the GPL
 rights or add a further restriction. A separately licensed official build is a
@@ -120,8 +129,8 @@ Before a public desktop, web, Steam, or other store release:
 6. clear the KINETICKK name and logo in the target markets;
 7. update the privacy note for telemetry, accounts, payments, cloud saves, or
    other data flows; and
-8. archive the signed contributor agreements, editable asset sources, receipts,
-   release source, binaries, and hashes.
+8. archive the authorship and provenance records, editable asset sources,
+   receipts, release source, binaries, and hashes.
 
 See [SOURCE.md](SOURCE.md) for the corresponding-source plan and
 [GOVERNANCE.md](GOVERNANCE.md) for control of the official project.
@@ -131,8 +140,8 @@ See [SOURCE.md](SOURCE.md) for the corresponding-source plan and
 - [Open Source Initiative: GPL-3.0](https://opensource.org/license/gpl-3-0)
 - [GNU: GPLv3 text and application guide](https://www.gnu.org/licenses/gpl-3.0.html)
 - [GNU: GPL frequently asked questions](https://www.gnu.org/licenses/gpl-faq.html)
+- [GNU: license recommendations](https://www.gnu.org/licenses/license-recommendations.html)
 - [Steamworks: distributing open-source applications](https://partner.steamgames.com/doc/sdk/uploading/distributing_opensource)
-- [Developer Certificate of Origin 1.1](https://developercertificate.org/)
 - [WIPO: copyright protection](https://www.wipo.int/en/web/copyright/protection)
 - [WIPO: trademark protection](https://www.wipo.int/en/web/trademarks/protection)
 

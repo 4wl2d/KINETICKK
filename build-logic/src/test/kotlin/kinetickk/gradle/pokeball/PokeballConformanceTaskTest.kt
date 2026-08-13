@@ -481,13 +481,7 @@ class PokeballConformanceTaskTest {
 
     private fun commitAll(root: Path, title: String) {
         runGit(root, "add", ".")
-        runGit(
-            root,
-            "commit",
-            "--quiet",
-            "-m",
-            "$title\n\nSigned-off-by: Verifier Test <verifier@example.invalid>",
-        )
+        runGit(root, "commit", "--quiet", "-m", title)
     }
 
     private fun write(root: Path, relativePath: String, text: String) {

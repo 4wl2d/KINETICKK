@@ -19,13 +19,11 @@
 
 <!-- Report link, command, non-applicability reason, and accepted tradeoffs. -->
 
-## Rights checklist
+## Contribution terms
 
-- [ ] Every commit has a `Signed-off-by` line for DCO 1.1.
-- [ ] I created this work or listed every outside source and its license.
-- [ ] I disclosed generated or adapted material whose origin affects its rights.
-- [ ] I kept existing notices and added accurate SPDX authorship where needed.
-- [ ] I have signed the KINETICKK CLA, or this change contains no copyrightable
-      contribution.
-- [ ] My employer, client, or coauthors have approved the contribution if their
-      rights may apply.
+By submitting this pull request, I confirm that I have the right to contribute
+its contents. Except for clearly identified third-party material under its own
+license, I license my contribution under GPL-3.0-or-later. No DCO sign-off or
+separate CLA is required.
+
+<!-- List the source and license of any outside, generated, or adapted material. -->

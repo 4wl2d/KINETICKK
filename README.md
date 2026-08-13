@@ -191,12 +191,10 @@ external Pokeball snapshot.
 Bug reports, ideas, tests, documentation, and pull requests are welcome. Read
 [the contribution guide](docs/project/CONTRIBUTING.md) before submitting code.
 
-Every commit in a pull request must include a Developer Certificate of Origin
-sign-off. Before a copyrightable contribution is merged, its author must also
-sign the [KINETICKK Contributor License Agreement](docs/project/CONTRIBUTOR_LICENSE_AGREEMENT.md).
-The CLA keeps the public contribution under GPL and lets the project owner
-prepare store builds without taking away the contributor's right to use their
-own work.
+Contributions use the same **GPL-3.0-or-later** terms as the project. Contributors
+keep their copyright; no Developer Certificate of Origin sign-off or separate
+Contributor License Agreement is required. By submitting material for inclusion,
+you confirm that you have the right to license it on those terms.
 
 ## Status
 
@@ -227,7 +225,6 @@ or to imply endorsement by Vladislav Tomilov.
 - [Trademark and brand policy](docs/project/TRADEMARKS.md)
 - [Third-party notices](docs/project/THIRD_PARTY_NOTICES.md)
 - [Contribution policy](docs/project/CONTRIBUTING.md)
-- [Contributor License Agreement](docs/project/CONTRIBUTOR_LICENSE_AGREEMENT.md)
 - [Project governance](docs/project/GOVERNANCE.md)
 - [Corresponding source plan](docs/project/SOURCE.md)
 - [Asset provenance](docs/project/ASSET_PROVENANCE.md)
