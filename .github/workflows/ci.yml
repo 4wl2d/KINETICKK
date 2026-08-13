@@ -102,7 +102,7 @@ jobs:
           cmdline-tools-version: "14742923"
           packages: >-
             platform-tools
-            platforms;android-37
+            platforms;android-37.0
             build-tools;36.0.0
 
       - name: Verify Android SDK
@@ -110,7 +110,7 @@ jobs:
           test -x "$ANDROID_SDK_ROOT/build-tools/36.0.0/aapt"
           test -x "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner"
           test -x "$ANDROID_SDK_ROOT/build-tools/36.0.0/zipalign"
-          test -f "$ANDROID_SDK_ROOT/platforms/android-37/android.jar"
+          test -f "$ANDROID_SDK_ROOT/platforms/android-37.0/android.jar"
           sdkmanager --version
 
       - name: Set up Gradle
