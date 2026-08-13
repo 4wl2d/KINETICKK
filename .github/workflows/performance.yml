@@ -182,7 +182,7 @@ jobs:
 
           expected = (
               ("gameplay-core-v2", Path("build/performance/ci/gameplay.json")),
-              ("profile-persistence-v2", Path("build/performance/ci/profile.json")),
+              ("profile-persistence-current-schema-v2", Path("build/performance/ci/profile.json")),
           )
           for suite_version, path in expected:
               runs = compare_results.load_runs([path])
