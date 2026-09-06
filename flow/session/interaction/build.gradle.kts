@@ -7,6 +7,16 @@ plugins {
 
 kotlin {
     sourceSets {
+        desktopTest.dependencies {
+            implementation(libs.compose.ui.test.junit4)
+            val os = when {
+                System.getProperty("os.name").startsWith("Mac") -> "macos"
+                System.getProperty("os.name").startsWith("Windows") -> "windows"
+                else -> "linux"
+            }
+            val arch = if (System.getProperty("os.arch") in setOf("aarch64", "arm64")) "arm64" else "x64"
+            runtimeOnly("org.jetbrains.skiko:skiko-awt-runtime-$os-$arch:${libs.versions.skiko.get()}")
+        }
         commonMain.dependencies {
             api(libs.compose.runtime)
             api(projects.flow.session.api)

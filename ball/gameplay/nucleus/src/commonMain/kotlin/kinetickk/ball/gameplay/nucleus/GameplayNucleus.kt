@@ -3,8 +3,10 @@
 
 package kinetickk.ball.gameplay.nucleus
 
+import kinetickk.ball.gameplay.nucleus.simulation.buildSummary
+
 import kinetickk.ball.gameplay.api.GameplayActiveWeaponProjection
-import kinetickk.ball.gameplay.api.GameplayCodexStacksProjection
+import kinetickk.ball.gameplay.api.GameplayBuildSummaryProjection
 import kinetickk.ball.gameplay.api.GameplayCommandSourceToken
 import kinetickk.ball.gameplay.api.GameplayConfigurationRejection
 import kinetickk.ball.gameplay.api.GameplayExitProgressResult
@@ -188,13 +190,9 @@ object GameplayNucleus {
             weapon = state.engine?.model?.weapon,
         )
 
-    fun query(state: GameplayState, query: GameplayQuery.GetCodexStacks): GameplayCodexStacksProjection =
-        GameplayCodexStacksProjection(
-            instanceId = state.instanceId,
-            revision = state.revision,
-            itemStacks = state.engine?.model?.itemStacks?.toImmutableList()
-                ?: immutableListOf(),
-        )
+    fun query(state: GameplayState, query: GameplayQuery.GetBuildSummary): GameplayBuildSummaryProjection =
+        state.engine?.model?.buildSummary(state.instanceId, state.revision)
+            ?: GameplayBuildSummaryProjection(state.instanceId, state.revision, immutableListOf())
 
     private fun decideModuleCommand(
         state: GameplayState,

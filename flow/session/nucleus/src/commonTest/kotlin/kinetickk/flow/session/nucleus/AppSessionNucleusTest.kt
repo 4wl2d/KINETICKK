@@ -6,7 +6,6 @@ package kinetickk.flow.session.nucleus
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.gameplay.api.GameplayCommandBoundaryResponse
 import kinetickk.ball.gameplay.api.GameplayCommandSourceToken
-import kinetickk.ball.gameplay.api.GameplayEffectiveProtocolIdentity
 import kinetickk.ball.gameplay.api.GameplayExitProgressResult
 import kinetickk.ball.gameplay.api.GameplayInstanceId
 import kinetickk.ball.gameplay.api.GameplayModuleCommand
@@ -20,9 +19,10 @@ import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.GameplayRunStatusProjection
 import kinetickk.ball.gameplay.api.GameplayTargetBoundaryProvenance
 import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.api.effectiveProtocolIdentity
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
-import kinetickk.ball.profile.api.LabProgress
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
+import kinetickk.ball.profile.api.LabProgress
 import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
@@ -48,6 +48,7 @@ import kinetickk.ball.profile.api.RebirthProfileSnapshot
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.RebirthProgressProjection
 import kinetickk.ball.profile.api.RunBootstrapProjection
+import kinetickk.ball.profile.api.effectiveProtocolIdentity
 import kinetickk.flow.session.api.AppDestination
 import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.flow.session.api.SessionInteractionPulse
@@ -274,6 +275,23 @@ class AppSessionNucleusTest {
             ).accepted()
             assertEquals(destination, opened.nextState.overlay)
             assertEquals(GameplayRunPhase.PAUSED, opened.nextState.gameplayPhase)
+        }
+    }
+
+    @Test
+    fun codexPreservesPausedOrPendingRewardPhaseWhenClosed() {
+        listOf(GameplayRunPhase.PAUSED, GameplayRunPhase.CHOICE).forEach { phase ->
+            val state = gameplayState(phase)
+            val opened = decide(state, SessionInteractionPulse.OpenOverlay(AppDestination.Codex),
+                AppSessionContext(gameplayStatus = gameplayStatus(state, phase))).accepted()
+            assertEquals(AppDestination.Codex, opened.nextState.overlay)
+            assertEquals(phase, opened.nextState.gameplayPhase)
+            assertTrue(opened.outputs.isEmpty())
+            val closed = decide(opened.nextState, SessionInteractionPulse.CloseOverlay,
+                AppSessionContext(gameplayStatus = gameplayStatus(state, phase))).accepted()
+            assertNull(closed.nextState.overlay)
+            assertEquals(phase, closed.nextState.gameplayPhase)
+            assertTrue(closed.outputs.isEmpty())
         }
     }
 
@@ -781,7 +799,7 @@ private fun gameplayResult(
             causalScope = causalScope,
             causalDepth = resultDepth,
         ),
-        effectiveProtocolIdentity = request.command.effectiveIdentity,
+        effectiveProtocolIdentity = request.command.effectiveProtocolIdentity(),
         result = result,
         issuerProvenance = GameplayResultIssuerProvenance.GAMEPLAY_RUN_STATIC_BINDING,
     )
@@ -811,7 +829,7 @@ private fun profileResult(
             causalScope = causalScope,
             causalDepth = resultDepth,
         ),
-        effectiveProtocolIdentity = request.command.effectiveIdentity,
+        effectiveProtocolIdentity = request.command.effectiveProtocolIdentity(),
         result = result,
         issuerProvenance = issuer,
     )
@@ -820,7 +838,7 @@ private fun profileResult(
 private fun gameplayRefusal(
     request: GameplayModuleCommandRequest,
 ): GameplayCommandRejectedBeforeAcceptance {
-    val identity = request.command.effectiveIdentity
+    val identity = request.command.effectiveProtocolIdentity()
     return GameplayCommandRejectedBeforeAcceptance(
         commandSource = GameplayCommandSourceToken(
             request.semanticHandle,
@@ -842,7 +860,7 @@ private fun gameplayRefusal(
 private fun profileRefusal(
     request: ProfileModuleCommandRequest,
 ): ProfileCommandRejectedBeforeAcceptance {
-    val identity = request.command.effectiveIdentity
+    val identity = request.command.effectiveProtocolIdentity()
     return ProfileCommandRejectedBeforeAcceptance(
         commandSource = ProfileCommandSourceToken(
             request.semanticHandle,
@@ -858,22 +876,6 @@ private fun profileRefusal(
         ),
     )
 }
-
-private val GameplayModuleCommand.effectiveIdentity: GameplayEffectiveProtocolIdentity
-    get() = when (this) {
-        GameplayModuleCommand.StartRun -> GameplayEffectiveProtocolIdentity.SESSION_START
-        GameplayModuleCommand.PauseForOverlay -> GameplayEffectiveProtocolIdentity.SESSION_PAUSE
-        GameplayModuleCommand.ApplyPreferences -> GameplayEffectiveProtocolIdentity.SESSION_PREFERENCES
-        GameplayModuleCommand.ExitRun -> GameplayEffectiveProtocolIdentity.SESSION_EXIT
-    }
-
-private val ProfileModuleCommand.effectiveIdentity: ProfileEffectiveProtocolIdentity
-    get() = when (this) {
-        is ProfileModuleCommand.SelectCoreShape -> ProfileEffectiveProtocolIdentity.SESSION_CORE_SHAPE
-        ProfileModuleCommand.ToggleMute -> ProfileEffectiveProtocolIdentity.SESSION_MUTE
-        ProfileModuleCommand.AdvanceRebirth -> ProfileEffectiveProtocolIdentity.SESSION_REBIRTH
-        is ProfileModuleCommand.ApplyGameplayProgress -> error("Not a Session mapping")
-    }
 
 private fun runBootstrap(
     rebirthProgress: RebirthProgress = RebirthProgress(),

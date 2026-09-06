@@ -89,7 +89,7 @@ class GameComponentTest {
         assertNull(render.renderModel)
         assertSame(SyntheticGameplayContent, component.stateSnapshot().content)
         assertNull(component.query(GameplayQuery.GetActiveWeapon).weapon)
-        assertTrue(component.query(GameplayQuery.GetCodexStacks).itemStacks.isEmpty())
+        assertTrue(component.query(GameplayQuery.GetBuildSummary).itemStacks.isEmpty())
         assertTrue(component.visualFxSnapshot().particles.isEmpty())
     }
 
@@ -836,7 +836,7 @@ private fun GameComponent.advanceUntilItemChoice() {
             return
         }
         check(query(GameplayQuery.GetRunStatus).phase == GameplayRunPhase.RUNNING) {
-            "Run stopped before its first item choice at frame $frameIndex"
+            "Run stopped before its first item choice at frame $frameIndex: ${render.phase} / ${render.choiceType}"
         }
         val pickupTarget = render.pickups.firstOrNull()?.let { pickup -> pickup.x to pickup.y }
         val nearestEnemy = render.enemies.minByOrNull { enemy ->
@@ -883,6 +883,8 @@ private fun resilientLocalDispatchProfile(): GameplayProfileSnapshot = PlayerPro
 private val LocalDispatchGameplayContent by lazy {
     val rebirth = SyntheticGameplayContent.rebirth
     SyntheticGameplayContent.copy(
+        // This fixture exercises dispatch ordering; a single pickup reaches its item-choice boundary.
+        tempo = SyntheticGameplayContent.tempo.copy(dataPickupMultiplier = 20f),
         rebirth = rebirth.copy(
             profiles = rebirth.profiles.map { profile ->
                 profile.copy(

@@ -9,6 +9,7 @@ import kinetickk.ball.content.api.WeaponId
 import kinetickk.foundation.collections.ImmutableSet
 import kinetickk.foundation.collections.immutableSetOf
 import kinetickk.foundation.collections.toImmutableSet
+import kinetickk.foundation.common.localization.AppLanguage
 
 enum class PreferenceAdjustmentDirection {
     DECREASE,
@@ -17,6 +18,7 @@ enum class PreferenceAdjustmentDirection {
 
 /** Closed settings operation interpreted only by Profile Nucleus. */
 sealed interface ProfilePreferenceAdjustment {
+    data class SetLanguage(val language: AppLanguage) : ProfilePreferenceAdjustment
     data object ToggleSoundEffects : ProfilePreferenceAdjustment
     data object ToggleMusic : ProfilePreferenceAdjustment
     data class StepMasterVolume(val direction: PreferenceAdjustmentDirection) : ProfilePreferenceAdjustment
@@ -34,12 +36,23 @@ data class GameplayProgressUpdate(
     val bankedMatter: Long = 0L,
     val discoveredItemIds: ImmutableSet<Int> = immutableSetOf(),
     val clearedRebirthLevel: Int? = null,
+    val eliteKills: Int = 0,
+    val dashHits: Int = 0,
+    val completedOrbits: Int = 0,
+    val architectDefeatedWith: CoreShape? = null,
 ) {
     constructor(
         bankedMatter: Long = 0L,
         discoveredItemIds: Set<Int>,
         clearedRebirthLevel: Int? = null,
-    ) : this(bankedMatter, discoveredItemIds.toImmutableSet(), clearedRebirthLevel)
+        eliteKills: Int = 0,
+        dashHits: Int = 0,
+        completedOrbits: Int = 0,
+        architectDefeatedWith: CoreShape? = null,
+    ) : this(
+        bankedMatter, discoveredItemIds.toImmutableSet(), clearedRebirthLevel,
+        eliteKills, dashHits, completedOrbits, architectDefeatedWith,
+    )
 }
 
 /** Closed local Interaction intent inventory. */
@@ -67,6 +80,14 @@ sealed interface ProfileModuleCommand {
     data class ApplyGameplayProgress(val update: GameplayProgressUpdate) : ProfileModuleCommand
 }
 
+/** Target-owned mapping shared by the two legs of each statically bound command route. */
+fun ProfileModuleCommand.effectiveProtocolIdentity(): ProfileEffectiveProtocolIdentity = when (this) {
+        is ProfileModuleCommand.SelectCoreShape -> ProfileEffectiveProtocolIdentity.SESSION_CORE_SHAPE
+        ProfileModuleCommand.ToggleMute -> ProfileEffectiveProtocolIdentity.SESSION_MUTE
+        ProfileModuleCommand.AdvanceRebirth -> ProfileEffectiveProtocolIdentity.SESSION_REBIRTH
+        is ProfileModuleCommand.ApplyGameplayProgress -> ProfileEffectiveProtocolIdentity.GAMEPLAY_PROGRESS
+    }
+
 /** Canonical accepted-source ModuleCommandRequest retained in a caller frame. */
 data class ProfileModuleCommandRequest(
     val semanticHandle: ProfileSemanticHandle,
@@ -90,6 +111,8 @@ data class ProfileModuleCommandPulse(
 )
 
 sealed interface ProfileGameplayProgressRejection {
+    data object NegativeAchievementProgress : ProfileGameplayProgressRejection
+    data object VictoryCharacterLocked : ProfileGameplayProgressRejection
     data object NegativeBankedMatter : ProfileGameplayProgressRejection
     data class UnknownItem(val itemId: Int) : ProfileGameplayProgressRejection
     data object TooManyDiscoveries : ProfileGameplayProgressRejection
@@ -139,6 +162,25 @@ sealed interface ProfileModuleResult {
     data class RebirthAdvanced(val progress: RebirthProgress) : ProfileModuleResult
     data object GameplayProgressApplied : ProfileModuleResult
 }
+
+/** Schema matching only; each binding still verifies issuer and accepted-frame correlation. */
+fun ProfileEffectiveProtocolIdentity.acceptsResult(result: ProfileModuleResult): Boolean = when (this) {
+    ProfileEffectiveProtocolIdentity.SESSION_CORE_SHAPE -> result is ProfileModuleResult.CoreShapeSelected
+    ProfileEffectiveProtocolIdentity.SESSION_MUTE -> result is ProfileModuleResult.PreferencesChanged
+    ProfileEffectiveProtocolIdentity.SESSION_REBIRTH -> result is ProfileModuleResult.RebirthAdvanced
+    ProfileEffectiveProtocolIdentity.GAMEPLAY_PROGRESS -> result == ProfileModuleResult.GameplayProgressApplied
+}
+
+/** Checks the requested shape as well as the result family; frame provenance is binding-owned. */
+fun ProfileModuleCommand.acceptsResult(result: ProfileModuleResult): Boolean =
+    effectiveProtocolIdentity().acceptsResult(result) && when (this) {
+        is ProfileModuleCommand.SelectCoreShape ->
+            result is ProfileModuleResult.CoreShapeSelected && result.shape == shape
+        ProfileModuleCommand.ToggleMute,
+        ProfileModuleCommand.AdvanceRebirth,
+        is ProfileModuleCommand.ApplyGameplayProgress,
+        -> true
+    }
 
 /** Canonical target output, created only inside an accepted Profile Decision. */
 data class ProfileModuleResultOutput(

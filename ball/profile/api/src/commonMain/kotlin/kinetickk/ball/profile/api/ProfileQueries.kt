@@ -3,6 +3,10 @@
 
 package kinetickk.ball.profile.api
 
+import kinetickk.ball.content.api.CoreShape
+import kinetickk.foundation.collections.ImmutableSet
+import kinetickk.foundation.collections.immutableSetOf
+
 sealed interface ProfileQuery {
     data object GetRunBootstrap : ProfileQuery
     data object GetPreferences : ProfileQuery
@@ -67,6 +71,8 @@ data class HomeProgressProjection(
     val collection: PlayerCollection,
     val rebirthProgress: RebirthProgress,
     val canAdvanceRebirth: Boolean,
+    val characterAchievements: CharacterAchievementProgress = CharacterAchievementProgress(),
+    val unlockedCoreShapes: ImmutableSet<CoreShape> = immutableSetOf(CoreShape.ORB),
 ) : ProfileProjection
 
 data class LabProgressProjection(

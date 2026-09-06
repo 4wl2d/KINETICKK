@@ -3,6 +3,8 @@
 
 package kinetickk.ball.profile.interaction.settings.impl
 
+import kinetickk.foundation.common.localization.AppLanguage
+import androidx.compose.ui.geometry.Rect
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
@@ -49,6 +51,40 @@ internal fun resolveSettingsPress(
     if (x !in right - d(190f)..right - d(20f)) return null
     val rowTop = startY + spacing * visibleIndex
     if (y > rowTop + spacing - d(4f)) return null
+    if (SettingsRow.entries[rowIndex] == SettingsRow.LANGUAGE) {
+        return SettingsAction.SelectLanguage(
+            if (x < right - d(105f)) AppLanguage.Russian else AppLanguage.English,
+        )
+    }
     val direction = if (x < right - d(105f)) -1 else 1
     return SettingsAction.Adjust(SettingsRow.entries[rowIndex], direction)
+}
+
+internal data class SettingsLanguageOption(val language: AppLanguage, val bounds: Rect)
+
+/** The two explicit choices share the canvas row's geometry and do not depend on translated text. */
+internal fun settingsLanguageOptions(
+    screenWidth: Float,
+    screenHeight: Float,
+    density: Float,
+    page: Int,
+): List<SettingsLanguageOption> {
+    if (screenWidth <= 0f || screenHeight <= 0f) return emptyList()
+    val scale = density.coerceAtLeast(1f)
+    fun d(value: Float): Float = value * scale
+    val width = min(d(640f), screenWidth - d(30f))
+    val height = min(d(620f), screenHeight - d(30f))
+    val right = (screenWidth + width) * 0.5f
+    val startY = (screenHeight - height) * 0.5f + d(72f)
+    val availableHeight = height - d(136f)
+    val rowsPerPage = settingsRowsPerPage(availableHeight, scale)
+    val maxPage = SettingsRow.entries.lastIndex / rowsPerPage
+    if (page.coerceIn(0, maxPage) != 0) return emptyList()
+    val visibleCount = min(rowsPerPage, SettingsRow.entries.size)
+    val spacing = min(d(48f), availableHeight / visibleCount)
+    if (spacing <= d(12f)) return emptyList()
+    return AppLanguage.entries.mapIndexed { index, language ->
+        val left = right - d(190f) + d(85f) * index
+        SettingsLanguageOption(language, Rect(left, startY + d(4f), left + d(85f), startY + spacing - d(8f)))
+    }
 }

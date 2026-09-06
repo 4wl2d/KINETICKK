@@ -47,6 +47,30 @@ data class ChoiceOption(
     val relicId: RelicId? = null,
     val relicAction: RelicChoiceAction? = null,
     val relicSlot: Int? = null,
+    val rewardFocus: kinetickk.ball.content.api.RewardFocus? = null,
+)
+
+data class CharacterLatticePoint(val x: Float, val y: Float)
+data class CharacterAbilityProjection(
+    val charge: Float = 0f,
+    val barrier: Float = 0f,
+    val ringRadius: Float = 55f,
+    val parryWindow: Float = 0f,
+    val lattice: ImmutableList<CharacterLatticePoint> = kinetickk.foundation.collections.immutableListOf(),
+)
+
+data class PointOfInterestProjection(
+    val kind: kinetickk.ball.content.api.PointOfInterestKind,
+    val name: String,
+    val x: Float,
+    val y: Float,
+    val active: Boolean,
+    val remaining: Float,
+    val nextBeacon: Int,
+    val progress: Float,
+    val defenderIds: ImmutableList<Int>,
+    val warningRemaining: Float,
+    val volleyAngle: Float,
 )
 
 data class EnemyProjection(
@@ -202,9 +226,13 @@ class GameplayRenderModel(
     internal val itemStacks: ImmutableList<Int>,
     internal val discoveredItemIds: ImmutableSet<Int>,
     internal val relicRanks: ImmutableList<Int>,
+    val pointsOfInterest: ImmutableList<PointOfInterestProjection> = kinetickk.foundation.collections.immutableListOf(),
+    val directedChoice: Boolean = false,
+    val characterAbility: CharacterAbilityProjection = CharacterAbilityProjection(),
+    val effectiveWeaponPower: Float = weaponPower,
 ) {
     val speed: Float get() = vectorLength(velocityX, velocityY)
-    val runProgress: Float get() = (elapsed / RUN_DURATION_SECONDS).coerceIn(0f, 1f)
+    val runProgress: Float get() = content.tempo.progress(elapsed)
     val tetherDistance: Float
         get() {
             val targetX = cameraX + pointerX - screenWidth * 0.5f
@@ -233,7 +261,7 @@ class GameplayRenderModel(
                 (next.minimumLevel - current.minimumLevel)).coerceIn(0f, 1f)
         }
     val choicesCanReroll: Boolean
-        get() = phase == GamePhase.CHOICE && rerollsRemaining > 0 && when (choiceType) {
+        get() = phase == GamePhase.CHOICE && !directedChoice && rerollsRemaining > 0 && when (choiceType) {
             ChoiceType.ITEM, ChoiceType.WEAPON, ChoiceType.RELIC -> true
             ChoiceType.TOTEM, ChoiceType.RELIC_BIND -> false
         }
@@ -243,7 +271,6 @@ class GameplayRenderModel(
     fun itemStack(itemId: Int): Int = itemStacks.getOrElse(itemId) { 0 }
 
     companion object {
-        const val RUN_DURATION_SECONDS = 20f * 60f
         const val MAX_HEAT = 100f
         const val CORE_RADIUS = 16f
         const val FIXED_STEP = 1f / 120f

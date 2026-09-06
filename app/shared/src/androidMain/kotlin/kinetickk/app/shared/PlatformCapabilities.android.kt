@@ -23,7 +23,7 @@ import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.sin
 
-private const val ANDROID_PROFILE_PREFERENCES = "kinetickk.profile"
+private const val ANDROID_PROFILE_PREFERENCES = "kinetickk.profile.v2"
 private const val ANDROID_SNAPSHOT = "snapshot"
 
 internal actual fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability {
@@ -203,6 +203,11 @@ private class AndroidTonePlaybackCapability : TonePlaybackCapability {
             check(written == samples.size) { "Android tone AudioTrack accepted $written samples" }
             track.play()
             Thread.sleep((request.durationSeconds * 1_000f).toLong().coerceAtLeast(1L))
+        } catch (failure: InterruptedException) {
+            // Closing the app cancels an in-flight tone through shutdownNow().
+            // Preserve cancellation without allowing the audio worker to crash the process.
+            Thread.currentThread().interrupt()
+            if (!executor.isShutdown) throw failure
         } finally {
             track.release()
         }

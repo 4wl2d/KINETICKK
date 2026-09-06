@@ -24,6 +24,7 @@ class ContentBootstrapValidationTest {
         assertEquals(ContentBounds.MAX_WEAPONS, gameplay.weapons.size)
         assertEquals(ContentBounds.MAX_META_UPGRADES, gameplay.metaUpgrades.size)
         assertEquals(ContentBounds.MAX_RELICS, gameplay.relics.size)
+        assertEquals(12, gameplay.synergies.size)
         assertEquals(
             ContentBounds.MAX_REBIRTH_LEVEL - ContentBounds.MIN_REBIRTH_LEVEL + 1,
             gameplay.rebirth.profiles.size,
@@ -70,6 +71,12 @@ class ContentBootstrapValidationTest {
         val extra = data.relics.first().copy(id = RelicId.KINETIC_FLYWHEEL)
 
         assertRejected(data.copy(relics = data.relics + extra), "relics size 41")
+    }
+
+    @Test
+    fun synergyBoundRejectsNPlusOne() {
+        val data = defaultContentBootstrapData()
+        assertRejected(data.copy(synergies = data.synergies + data.synergies.first()), "synergies size 13")
     }
 
     @Test

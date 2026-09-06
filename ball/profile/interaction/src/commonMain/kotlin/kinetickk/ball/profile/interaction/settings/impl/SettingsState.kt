@@ -3,6 +3,7 @@
 
 package kinetickk.ball.profile.interaction.settings.impl
 
+import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.ball.profile.api.PreferenceAdjustmentDirection
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.ProfilePreferenceAdjustment
@@ -11,6 +12,7 @@ import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
 import kinetickk.ball.profile.interaction.settings.api.SettingsRenderModel
 
 internal enum class SettingsRow {
+    LANGUAGE,
     SFX,
     MUSIC,
     MASTER_VOLUME,
@@ -25,6 +27,7 @@ internal enum class SettingsRow {
 }
 
 internal sealed interface SettingsAction {
+    data class SelectLanguage(val language: AppLanguage) : SettingsAction
     data class Adjust(val row: SettingsRow, val direction: Int) : SettingsAction
     data class PageSelected(val page: Int) : SettingsAction
     data object Back : SettingsAction
@@ -51,8 +54,16 @@ internal data class SettingsReduction(
 
 internal object SettingsReducer {
     fun reduce(state: SettingsState, action: SettingsAction): SettingsReduction = when (action) {
+        is SettingsAction.SelectLanguage -> if (state.model.preferences.language == action.language) {
+            SettingsReduction(state)
+        } else {
+            SettingsReduction(state, listOf(
+                SettingsEffect.AdjustPreference(ProfilePreferenceAdjustment.SetLanguage(action.language)),
+                SettingsEffect.PlayAudio(ProfileAudioCue.UI_CLICK),
+            ))
+        }
         is SettingsAction.Adjust -> {
-            if (action.direction != -1 && action.direction != 1) {
+            if (action.row == SettingsRow.LANGUAGE || (action.direction != -1 && action.direction != 1)) {
                 SettingsReduction(state)
             } else {
                 SettingsReduction(
@@ -91,6 +102,7 @@ private fun SettingsRow.toAdjustment(direction: Int): ProfilePreferenceAdjustmen
         PreferenceAdjustmentDirection.INCREASE
     }
     return when (this) {
+        SettingsRow.LANGUAGE -> error("Language selection uses a typed SelectLanguage action")
         SettingsRow.SFX -> ProfilePreferenceAdjustment.ToggleSoundEffects
         SettingsRow.MUSIC -> ProfilePreferenceAdjustment.ToggleMusic
         SettingsRow.MASTER_VOLUME -> ProfilePreferenceAdjustment.StepMasterVolume(adjustmentDirection)

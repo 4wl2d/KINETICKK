@@ -226,15 +226,15 @@ internal fun choiceLayoutGeometry(
     if (mode == GameplayLayoutMode.COMPACT_LANDSCAPE) {
         val margin = d(12f)
         val gap = d(10f)
-        val top = d(128f)
+        val top = d(152f)
         val rerollHeight = d(48f)
         val bottom = if (canReroll) height - d(68f) else height - d(12f)
         val cardWidth = (width - margin * 2f - gap * (count - 1)) / count
         val cardHeight = (bottom - top).coerceAtLeast(d(136f))
         return ChoiceLayoutGeometry(
             mode,
-            titleY = d(14f),
-            subtitleY = d(45f),
+            titleY = d(58f),
+            subtitleY = d(94f),
             cards = List(count) { index ->
                 val left = margin + index * (cardWidth + gap)
                 Rect(left, top, left + cardWidth, top + cardHeight)
@@ -247,14 +247,14 @@ internal fun choiceLayoutGeometry(
     val gap = d(10f)
     val columns = min(2, count)
     val rows = ceil(count / columns.toDouble()).toInt()
-    val top = maxOf(d(118f), height * 0.16f)
+    val top = maxOf(d(154f), height * 0.19f)
     val bottom = if (canReroll) height - d(76f) else height - d(12f)
     val cardWidth = (width - margin * 2f - gap * (columns - 1)) / columns
     val cardHeight = min(d(260f), (bottom - top - gap * (rows - 1)) / rows)
     return ChoiceLayoutGeometry(
         mode,
-        titleY = d(38f),
-        subtitleY = d(76f),
+        titleY = d(62f),
+        subtitleY = d(108f),
         cards = List(count) { index ->
             val row = index / columns
             val column = index % columns

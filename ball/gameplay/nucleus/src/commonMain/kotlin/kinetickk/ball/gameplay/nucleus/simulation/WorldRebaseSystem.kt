@@ -54,6 +54,12 @@ internal fun MutableGameState.rebaseWorldIfNeeded() {
         orbital.x -= shiftX
         orbital.y -= shiftY
     }
+    characterRuntime = characterRuntime.copy(
+        dashOrigin = characterRuntime.dashOrigin?.let { it.copy(x = it.x - shiftX, y = it.y - shiftY) },
+        lattice = characterRuntime.lattice.map { it.copy(x = it.x - shiftX, y = it.y - shiftY) },
+    )
+    pointsOfInterest = pointsOfInterest.map { it.copy(x = it.x - shiftX, y = it.y - shiftY) }
+    rebaseSynergyEffects(shiftX, shiftY)
     totem?.let { it.x -= shiftX; it.y -= shiftY }
     morningstarX -= shiftX
     morningstarY -= shiftY

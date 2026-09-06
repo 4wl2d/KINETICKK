@@ -8,7 +8,6 @@ import kinetickk.foundation.design.*
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
-import kinetickk.ball.gameplay.interaction.layout.ChoiceLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.PauseLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.TerminalLayoutGeometry
 import kotlin.math.cos
@@ -22,7 +21,6 @@ internal fun DrawScope.drawGameplay(
     textMeasurer: TextMeasurer,
     renderTime: Float,
     pauseLayout: PauseLayoutGeometry?,
-    choiceLayout: ChoiceLayoutGeometry?,
     terminalLayout: TerminalLayoutGeometry?,
 ) {
     drawRect(SpaceBlack)
@@ -35,16 +33,12 @@ internal fun DrawScope.drawGameplay(
     drawScreenFx(engine, renderTime)
     if (shouldDrawRunningPresentation(engine.phase)) {
         drawHud(engine, textMeasurer)
+        drawBuildNotifications(visualFx, textMeasurer)
     }
 
     when (engine.phase) {
         GamePhase.PAUSED -> drawPause(textMeasurer, requireNotNull(pauseLayout))
-        GamePhase.CHOICE -> drawChoice(
-            engine,
-            textMeasurer,
-            renderTime,
-            requireNotNull(choiceLayout),
-        )
+        GamePhase.CHOICE -> Unit // Reward cards and reroll are visible Compose controls.
         GamePhase.GAME_OVER -> drawEnd(
             engine,
             textMeasurer,

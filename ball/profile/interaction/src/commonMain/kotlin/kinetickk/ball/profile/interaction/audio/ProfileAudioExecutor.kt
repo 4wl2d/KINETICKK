@@ -19,10 +19,7 @@ internal class ProfileAudioExecutor(
     private val audioService: AudioService,
 ) {
     fun play(cue: ProfileAudioCue) {
-        val requests = listOf(cue)
-            .sortedByDescending(ProfileAudioCue::priority)
-            .map(ProfileAudioCue::toToneRequest)
-        audioService.advance(0f, requests)
+        audioService.advance(0f, listOf(cue.toToneRequest()))
     }
 
     fun updatePreferences(preferences: PlayerPreferences) {
@@ -40,9 +37,3 @@ private fun ProfileAudioCue.toToneRequest(): ToneRequest = when (this) {
     ProfileAudioCue.UI_CLICK -> ToneRequest(520f, 0.035f, 0.11f, ToneWave.SINE)
     ProfileAudioCue.PURCHASE -> ToneRequest(490f, 0.1f, 0.16f, ToneWave.SINE)
 }
-
-private val ProfileAudioCue.priority: Int
-    get() = when (this) {
-        ProfileAudioCue.PURCHASE -> 60
-        ProfileAudioCue.UI_CLICK -> 20
-    }

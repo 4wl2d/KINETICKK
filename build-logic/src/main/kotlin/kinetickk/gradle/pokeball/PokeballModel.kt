@@ -6,7 +6,6 @@ package kinetickk.gradle.pokeball
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
-import java.security.MessageDigest
 import java.util.SortedSet
 
 internal data class ProjectEdge(
@@ -148,23 +147,6 @@ internal data class ClosedForeignOperationUseException(
     val operationToken: String,
     val requiredGuardTokensByPath: Map<String, List<String>>,
 )
-
-internal fun <T, K> requireUniqueKeys(
-    label: String,
-    values: List<T>,
-    key: (T) -> K,
-) {
-    val duplicates = values.groupingBy(key).eachCount().filterValues { count -> count > 1 }.keys
-    require(duplicates.isEmpty()) { "$label contains duplicate keys: ${duplicates.joinToString()}" }
-}
-
-internal fun <K, V> uniqueLinkedMap(
-    label: String,
-    entries: List<Pair<K, V>>,
-): LinkedHashMap<K, V> {
-    requireUniqueKeys(label, entries, Pair<K, V>::first)
-    return LinkedHashMap<K, V>().apply { entries.forEach { (key, value) -> put(key, value) } }
-}
 
 internal object PokeballBaseline {
     const val CORE_COMMIT = "de9ef7384795680c836d5e6c2c9b394286058670"
@@ -355,41 +337,17 @@ private const val CUMULATIVE_FANOUT_POLICY_PATH =
 private const val ARCHITECTURE_VERIFIER_TEST_PATH =
     "build-logic/src/test/kotlin/kinetickk/gradle/pokeball/PokeballArchitectureVerifierTest.kt"
 
-internal val expectedLeafProjects = sortedSetOf(
-    ":app:android",
-    ":app:desktop",
-    ":app:shared",
-    ":app:web",
-    ":foundation:common",
-    ":foundation:design",
-    ":resource:audio:api",
-    ":resource:audio:impl",
-    ":ball:content:api",
-    ":ball:content:impl",
-    ":ball:profile:api",
-    ":ball:profile:nucleus",
-    ":ball:profile:resource",
-    ":ball:profile:interaction",
-    ":ball:profile:impl",
-    ":ball:gameplay:api",
-    ":ball:gameplay:nucleus",
-    ":ball:gameplay:interaction",
-    ":ball:gameplay:impl",
-    ":flow:session:api",
-    ":flow:session:nucleus",
-    ":flow:session:interaction",
-    ":flow:session:impl",
-)
-
-internal val expectedCommandRoutes = sortedSetOf(
-    "gameplay-profile-progress",
-    "session-gameplay-exit",
-    "session-gameplay-pause",
-    "session-gameplay-preferences",
-    "session-gameplay-start",
-    "session-profile-core-shape",
-    "session-profile-mute",
-    "session-profile-rebirth",
+private val gameplayReductionCopyAnchor = BoundAnchor(
+    GAMEPLAY_STATE_PATH,
+    listOf(
+        "internal fun MutableGameState.copyForReduction(): MutableGameState",
+        "MutableGameState(content = content, reductionSource = this)",
+        "internal fun MutableGameState.copyForScalarInputReduction(): MutableGameState",
+        "shareStableReductionStorage = true",
+        "var equippedRelics: List<EquippedRelic> = reductionSource?.equippedRelics ?: emptyList()",
+        "var choices: List<ChoiceOption> = reductionSource?.choices ?: emptyList()",
+        "if (reductionSource == null && startingWeapon !in unlockedWeaponSet)",
+    ),
 )
 
 internal val commandRouteProjections = listOf(
@@ -444,6 +402,8 @@ internal val commandRouteProjections = listOf(
 ).sortedBy(CommandRouteProjection::id).also { routes ->
     requireUniqueKeys("commandRouteProjections", routes, CommandRouteProjection::id)
 }
+
+internal val expectedCommandRoutes = commandRouteProjections.map(CommandRouteProjection::id).toSortedSet()
 
 internal val commandOutcomeFamilies = listOf(
     CommandOutcomeFamily(
@@ -896,7 +856,11 @@ internal val foreignApplicationSurfacePolicies = listOf(
     ForeignApplicationSurfacePolicy(
         sourceRoot = "ball/gameplay/api/",
         ownPackage = "kinetickk.ball.gameplay.api",
-        allowedForeignImports = setOf("kinetickk.ball.content.api.WeaponId"),
+        allowedForeignImports = setOf(
+            "kinetickk.ball.content.api.WeaponId",
+            "kinetickk.ball.content.api.CoreShape",
+            "kinetickk.ball.content.api.EquippedRelic",
+        ),
     ),
     ForeignApplicationSurfacePolicy(
         sourceRoot = "flow/session/api/",
@@ -935,15 +899,11 @@ internal val closedForeignOperationUseExceptions = listOf(
         targetAuthority = "Profile",
         operationToken = "ProfileModuleCommand.ApplyGameplayProgress",
         requiredGuardTokensByPath = mapOf(
-            SESSION_NUCLEUS_PATH to listOf(
-                "is ProfileModuleCommand.ApplyGameplayProgress",
-                "error(\"Gameplay progress is not a Session mapping\")",
-            ),
             SESSION_IMPL_PATH to listOf(
                 "is ProfileModuleCommand.ApplyGameplayProgress",
                 "error(\"Gameplay progress cannot enter Profile through Session\")",
                 "error(\"Gameplay progress is not a Session command mapping\")",
-                "is ProfileModuleCommand.ApplyGameplayProgress -> false",
+                "check(request.command !is ProfileModuleCommand.ApplyGameplayProgress)",
             ),
         ),
     ),
@@ -973,23 +933,6 @@ internal val canonicalProtocolEvidenceAnchors = listOf(
         BoundAnchor(path, listOf(exception.operationToken) + tokens)
     }
 }
-
-internal val expectedReadRoutes = sortedSetOf(
-    "gameplay-content-bootstrap",
-    "gameplay-profile-preferences",
-    "gameplay-profile-run-bootstrap",
-    "profile-content-policy",
-    "session-content-ui",
-    "session-gameplay-codex",
-    "session-gameplay-status",
-    "session-gameplay-weapon",
-    "session-profile-collection",
-    "session-profile-home",
-    "session-profile-persistence",
-    "session-profile-preferences",
-    "session-profile-rebirth-progress",
-    "session-profile-run-bootstrap",
-)
 
 internal val readRouteProjections = listOf(
     ReadRouteProjection(
@@ -1046,11 +989,13 @@ internal val readRouteProjections = listOf(
     ),
     ReadRouteProjection(
         "session-gameplay-codex", "AppSession", "GameplayRun", GAMEPLAY_QUERY_PATH,
-        "GameplayQuery.GetCodexStacks", "GameplayCodexStacksProjection", SESSION_CONTENT_PATH,
+        "GameplayQuery.GetBuildSummary", "GameplayBuildSummaryProjection", SESSION_CONTENT_PATH,
     ),
 ).sortedBy(ReadRouteProjection::id).also { routes ->
     requireUniqueKeys("readRouteProjections", routes, ReadRouteProjection::id)
 }
+
+internal val expectedReadRoutes = readRouteProjections.map(ReadRouteProjection::id).toSortedSet()
 
 internal val expectedSemanticDirectControlEdges: SortedSet<String> = buildSet {
     readRouteProjections.forEach { add("${it.sourceAuthority} -> ${it.targetAuthority}") }
@@ -1068,6 +1013,80 @@ internal val expectedRouteInventory = listOf(
 ).also { routes -> requireUniqueKeys("expectedRouteInventory", routes) { it } }
 
 internal val expectedBounds = listOf(
+    BoundProjection(
+        "content.synergies", "12",
+        CONTENT_CATALOG_PATH,
+        "requireBound(\"synergies\", data.synergies.size, 12)",
+        CONTENT_BOUNDS_TEST_PATH, "synergyBoundRejectsNPlusOne", "exactCatalogBoundsAreAccepted",
+        additionalRequiredTokens = listOf("private val synergies = data.synergies.toImmutableList()"),
+    ),
+    BoundProjection(
+        "profile.character-achievements", "nonnegative saturating Long totals / at most 6 winners",
+        "ball/profile/nucleus/src/commonMain/kotlin/kinetickk/ball/profile/nucleus/ProfileNucleus.kt",
+        "if (update.eliteKills < 0 || update.dashHits < 0 || update.completedOrbits < 0)",
+        "ball/profile/nucleus/src/commonTest/kotlin/kinetickk/ball/profile/nucleus/ProfileNucleusTest.kt",
+        "achievementCountersSaturateWithoutOverflowAndTheDecisionIsDeterministic",
+        "achievementThresholdsAccumulateAcrossRunsAndUnlockAllSixShapes",
+        additionalSourceAnchors = listOf(
+            BoundAnchor(PROFILE_CODEC_PATH, "achievements.victoriousCharacters.size <= CoreShape.entries.size"),
+            BoundAnchor(PROFILE_CODEC_TEST_PATH, "everyCharacterAndCumulativeAchievementRoundTripsAndRejectsInvalidProgress"),
+        ),
+    ),
+
+    BoundProjection(
+        "gameplay.poi-offered", "2",
+        "ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/simulation/PointOfInterestSystem.kt",
+        "pointsOfInterest = List(2)",
+        "ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/PointOfInterestTest.kt",
+        "scheduleOffersTwoWorldFixedPointsAndNeverReplacesSkippedOffer",
+        additionalRequiredTokens = listOf("pointsOfInterest.isEmpty()"),
+    ),
+    BoundProjection(
+        "gameplay.poi-active", "1",
+        "ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/simulation/PointOfInterestSystem.kt",
+        "pointsOfInterest = listOf(point.copy(active = true",
+        "ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/RunFeatureBoundsTest.kt",
+        "activationClosesAlternativeAndNeverRetainsTwoActiveTrials",
+    ),
+    BoundProjection(
+        "gameplay.poi-defenders", "3 inside existing enemy cap",
+        "ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/simulation/PointOfInterestSystem.kt",
+        "repeat(3)",
+        "ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/PointOfInterestTest.kt",
+        "defendersReserveThreeExistingEnemySlotsAndRequireTheirDeaths",
+        additionalRequiredTokens = listOf("enemies.size + 3 > content.rebirth.maxActiveEnemies"),
+    ),
+    BoundProjection(
+        "gameplay.directed-rewards", "6 per run",
+        "ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/simulation/PointOfInterestSystem.kt",
+        "check(pendingDirectedRewards.size < 6)",
+        "ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/RunFeatureBoundsTest.kt",
+        "sixthRewardFitsAndSeventhCannotPublishIntoSourceSnapshot",
+    ),
+    BoundProjection(
+        "gameplay.character-lattice", "4 collapse vertices / at most 3 retained",
+        "ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/simulation/CharacterSystem.kt",
+        "if (next.size == 4)",
+        "ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/RunFeatureBoundsTest.kt",
+        "fourthSeparatedDashCollapsesInsteadOfGrowingRetainedLattice",
+        additionalRequiredTokens = listOf("ability = ability.copy(lattice = emptyList(), latticeTime = 0f, dashRecorded = true)"),
+    ),
+    BoundProjection(
+        "gameplay.synergy-effects", "32",
+        "ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/simulation/SynergySystem.kt",
+        "MAX_SYNERGY_EFFECTS = 32",
+        "ball/gameplay/nucleus/src/commonTest/kotlin/kinetickk/ball/gameplay/nucleus/simulation/SynergySystemTest.kt",
+        "effectBoundAndDependencyRemovalPreserveIsolatedSnapshots",
+        additionalRequiredTokens = listOf("else if (synergyEffects.size < MAX_SYNERGY_EFFECTS) synergyEffects = synergyEffects + effect"),
+    ),
+    BoundProjection(
+        "interaction.build-notifications", "3 latest groups",
+        "ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/fx/InteractionFxReducer.kt",
+        "trimFront(buildNotifications, 3)",
+        "ball/gameplay/interaction/src/commonTest/kotlin/kinetickk/ball/gameplay/interaction/fx/InteractionFxReducerTest.kt",
+        "buildNotificationsAreGroupedBoundedDetachedAndExpireOnlyWhenEffectsAdvance",
+    ),
+
     BoundProjection(
         "profile.outputs-per-decision", "2",
         "ball/profile/nucleus/src/commonMain/kotlin/kinetickk/ball/profile/nucleus/ProfileDecision.kt",
@@ -1277,10 +1296,11 @@ internal val expectedBounds = listOf(
                 GAMEPLAY_IMPL_PATH,
                 listOf(
                     "private val localOutputItem = GameplayWorkItem.reusableLocalOutputItem()",
-                    "localOutputItem.bindLocalCausalScope(causalScope)",
-                    "val rootAcceptance = when (",
+                    "localOutputItem.bindLocalCausalScope(allocateLocalCausalScope())",
+                    "drainAcceptedFrame(decision.frame, localOutputItem)",
                     "while (!completions.isEmpty)",
-                    "val item = checkNotNull(completions.removeFirstOrNull())",
+                    "val completion = checkNotNull(completions.removeFirstOrNull())",
+                    "GameplayNucleus.decide(before, completion.pulse, completion.context)",
                 ),
             ),
         ),
@@ -1794,10 +1814,10 @@ internal val expectedBounds = listOf(
             "field = value",
         ),
         additionalSourceAnchors = listOf(
+            gameplayReductionCopyAnchor,
             BoundAnchor(
                 GAMEPLAY_RENDER_MODEL_MAPPER_PATH,
                 listOf(
-                    "target.choices = choices",
                     "choices = choices.reuseIfIdentical(identitySource?.choices, reusableCollections?.choices)",
                     "?: choices.reuseIfContentEqual(reusableCollections?.choices)",
                     "?: choices.toImmutableList()",
@@ -1988,12 +2008,22 @@ internal val expectedBounds = listOf(
         ),
     ),
     BoundProjection(
-        "codex.page-slice-items", "10", SESSION_CODEX_STATE_PATH,
-        "CODEX_PAGE_SIZE = 10", SESSION_CODEX_TEST_PATH,
-        "pageSliceReturnsTenForExactAndFirstNPlusOneInputs",
-        additionalRequiredTokens = listOf("codexPageSlice"),
+        "codex.catalog-items", "400", SESSION_CODEX_STATE_PATH,
+        "CODEX_CATALOG_LIMIT = 400", SESSION_CODEX_TEST_PATH,
+        "catalogAcceptsFourHundredAndRejectsFourHundredOne",
+        additionalRequiredTokens = listOf("require(items.size <= CODEX_CATALOG_LIMIT)"),
         additionalSourceAnchors = listOf(
-            BoundAnchor(SESSION_CODEX_PATH, "codexPageSlice(engine.items, page)"),
+            BoundAnchor(SESSION_CODEX_PATH, "CodexReducer(uiCatalog.items)"),
+            BoundAnchor(SESSION_CODEX_PATH, "LazyVerticalGrid(GridCells.Adaptive(80.dp)"),
+        ),
+    ),
+    BoundProjection(
+        "codex.search-characters", "128", SESSION_CODEX_STATE_PATH,
+        "CODEX_SEARCH_LIMIT = 128", SESSION_CODEX_TEST_PATH,
+        "searchAccepts128AndClamps129",
+        additionalRequiredTokens = listOf("input.take(CODEX_SEARCH_LIMIT)"),
+        additionalSourceAnchors = listOf(
+            BoundAnchor(SESSION_CODEX_PATH, "codexSearchInput(it)"),
         ),
     ),
     BoundProjection(
@@ -2366,13 +2396,12 @@ internal val expectedBounds = listOf(
             ),
             BoundAnchor(
                 GAMEPLAY_NUCLEUS_PATH,
-                "itemStacks = state.engine?.model?.itemStacks?.toImmutableList()",
+                "state.engine?.model?.buildSummary(state.instanceId, state.revision)",
             ),
+            gameplayReductionCopyAnchor,
             BoundAnchor(
                 GAMEPLAY_RENDER_MODEL_MAPPER_PATH,
                 listOf(
-                    "copyForReduction(shareStableStorage = false)",
-                    "copyForReduction(shareStableStorage = true)",
                     "itemStacks = itemStacks.reuseIfStorageShared(",
                     ") ?: itemStacks.reuseIfContentEqual(reusableCollections?.itemStacks)",
                     "?: itemStacks.toImmutableList()",
@@ -2616,10 +2645,10 @@ internal val expectedBounds = listOf(
                         "        equippedRelics = updated.toList()",
                 ),
             ),
+            gameplayReductionCopyAnchor,
             BoundAnchor(
                 GAMEPLAY_RENDER_MODEL_MAPPER_PATH,
                 listOf(
-                    "target.equippedRelics = equippedRelics",
                     "equippedRelics = equippedRelics.reuseIfIdentical(",
                     ") ?: equippedRelics.reuseIfContentEqual(reusableCollections?.equippedRelics)",
                     "?: equippedRelics.toImmutableList()",
@@ -2934,13 +2963,12 @@ internal val mechanicallyDerivedBounds = listOf(
             ),
             BoundAnchor(
                 GAMEPLAY_NUCLEUS_PATH,
-                "itemStacks = state.engine?.model?.itemStacks?.toImmutableList()",
+                "state.engine?.model?.buildSummary(state.instanceId, state.revision)",
             ),
+            gameplayReductionCopyAnchor,
             BoundAnchor(
                 GAMEPLAY_RENDER_MODEL_MAPPER_PATH,
                 listOf(
-                    "copyForReduction(shareStableStorage = false)",
-                    "copyForReduction(shareStableStorage = true)",
                     "itemStacks = itemStacks.reuseIfStorageShared(",
                     ") ?: itemStacks.reuseIfContentEqual(reusableCollections?.itemStacks)",
                     "?: itemStacks.toImmutableList()",
@@ -3159,19 +3187,7 @@ internal val mechanicallyDerivedBounds = listOf(
                 "write-detaching storage forks; scalar-only pulses may share exhaustive stable storage; " +
                 "nullable pending-output storage is copied only when materialized",
         sourceAnchors = listOf(
-            BoundAnchor(
-                GAMEPLAY_RENDER_MODEL_MAPPER_PATH,
-                listOf(
-                    "internal fun MutableGameState.copyForReduction(): MutableGameState",
-                    "copyForReduction(shareStableStorage = false)",
-                    "internal fun MutableGameState.copyForScalarInputReduction(): MutableGameState",
-                    "copyForReduction(shareStableStorage = true)",
-                    "reductionSource = this",
-                    "shareStableReductionStorage = shareStableStorage",
-                    "target.equippedRelics = equippedRelics",
-                    "target.choices = choices",
-                ),
-            ),
+            gameplayReductionCopyAnchor,
             BoundAnchor(
                 GAMEPLAY_STATE_PATH,
                 listOf(
@@ -3212,6 +3228,7 @@ internal val mechanicallyDerivedBounds = listOf(
             BoundAnchor(
                 GAMEPLAY_REDUCTION_ISOLATION_TEST_PATH,
                 listOf(
+                    "candidateForksPreserveSelectedLoadoutAndPendingChoiceWithoutApplyingBootstrapDefaults",
                     "everyScalarCowIntentLeavesTheCompleteCommittedSourceFingerprintUnchanged",
                     "fullReductionAfterScalarCowDoesNotMutateSourceOrSiblingBranch",
                     "scalarReductionDrainsCopiedPendingOutputsWithoutMutatingSourceOrSiblings",
@@ -3258,15 +3275,15 @@ internal val mechanicallyDerivedBounds = listOf(
                 GAMEPLAY_IMPL_PATH,
                 listOf(
                     "private var committedFrame: CommittedGameplayFrame",
-                    "localOutputItem.bindLocalCausalScope(causalScope)",
-                    "GameplayNucleus.decide(\n                    beforeRoot,",
-                    "renderModelNeutralTransition =\n                            pulse === GameplayInteractionPulse.DashRequested,",
+                    "localOutputItem.bindLocalCausalScope(allocateLocalCausalScope())",
+                    "GameplayNucleus.decide(\n                before,",
+                    "renderModelNeutralTransition = pulse === GameplayInteractionPulse.DashRequested,",
                     "next.engine === before.engine ||",
                     "renderModelNeutralTransition",
                     "GameplayNucleus.reuseRenderSnapshot(",
                     "GameplayNucleus.renderSnapshot(",
                     "reusableSnapshot = committedRenderSnapshot",
-                    "publish(decision.frame.nextState, renderSnapshot)",
+                    "publish(frame.nextState, renderSnapshot)",
                     "committedFrame = CommittedGameplayFrame(state, renderSnapshot)",
                 ),
             ),
@@ -3420,7 +3437,7 @@ internal val mechanicallyDerivedBounds = listOf(
             BoundAnchor(
                 GAMEPLAY_PROGRESSION_SYSTEM_PATH,
                 listOf(
-                    "delayedRelicHits.removeMatchingStable { delayedHit -> delayedHit.relicId == id }",
+                    "delayedRelicHits.removeMatchingStable { delayedHit ->\n        delayedHit.relicId == id || id == RelicId.VOLTAIC_FILAMENT && delayedHit.linkedEnemyId >= 0",
                     "projectiles.removeMatchingStable { projectile -> !projectile.hostile }",
                 ),
             ),
@@ -3504,10 +3521,10 @@ internal val mechanicallyDerivedBounds = listOf(
     ),
     MechanicallyDerivedBoundProjection(
         id = "content.closed-ui-catalogs",
-        value = "CoreShape 3 / WeaponMastery 4",
+        value = "CoreShape 6 / WeaponMastery 4",
         derivation = "Content bootstrap requires exact stable enum order",
         sourceAnchors = listOf(
-            BoundAnchor(CONTENT_IDS_PATH, "enum class CoreShape { ORB, PRISM, SHARD }"),
+            BoundAnchor(CONTENT_IDS_PATH, "enum class CoreShape { ORB, PRISM, SHARD, RING, DIAMOND, TESSERACT }"),
             BoundAnchor(
                 CONTENT_DEFINITIONS_PATH,
                 listOf(
@@ -3541,7 +3558,7 @@ internal val mechanicallyDerivedBounds = listOf(
             ClosedEnumInventory(
                 path = CONTENT_IDS_PATH,
                 declaration = "enum class CoreShape",
-                expectedEntries = listOf("ORB", "PRISM", "SHARD"),
+                expectedEntries = listOf("ORB", "PRISM", "SHARD", "RING", "DIAMOND", "TESSERACT"),
             ),
             ClosedEnumInventory(
                 path = CONTENT_DEFINITIONS_PATH,
@@ -3550,7 +3567,7 @@ internal val mechanicallyDerivedBounds = listOf(
             ),
         ),
         policyRow =
-            "| `content.closed-ui-catalogs` | CoreShape 3 / WeaponMastery 4 | " +
+            "| `content.closed-ui-catalogs` | CoreShape 6 / WeaponMastery 4 | " +
                 "bootstrap requires exact stable order |",
     ),
     MechanicallyDerivedBoundProjection(
@@ -3570,7 +3587,7 @@ internal val mechanicallyDerivedBounds = listOf(
             BoundAnchor(
                 SESSION_CODEX_PATH,
                 listOf(
-                    "private val reducer = CodexReducer(uiCatalog.items)",
+                    "private val uiCatalog: UiCatalogSnapshot",
                     "profilePort.query(ProfileQuery.GetCollection)",
                 ),
             ),
@@ -3585,7 +3602,7 @@ internal val mechanicallyDerivedBounds = listOf(
                 SESSION_HOME_PATH,
                 listOf(
                     "coreShapes = uiCatalog.coreShapes",
-                    "engine.coreShapes.forEachIndexed",
+                    "action.target.coreShapeOrNull()?.let { shape ->",
                 ),
             ),
             BoundAnchor(
@@ -3663,59 +3680,11 @@ internal val mechanicallyDerivedBounds = listOf(
     )
 }
 
-internal val authorityModules = uniqueLinkedMap("authorityModules", listOf(
-    "AppAssembly" to listOf(":app:android", ":app:desktop", ":app:shared", ":app:web"),
-    "AppSession" to listOf(
-        ":flow:session:api",
-        ":flow:session:nucleus",
-        ":flow:session:interaction",
-        ":flow:session:impl",
-    ),
-    "GameplayRun" to listOf(
-        ":ball:gameplay:api",
-        ":ball:gameplay:nucleus",
-        ":ball:gameplay:interaction",
-        ":ball:gameplay:impl",
-    ),
-    "Profile" to listOf(
-        ":ball:profile:api",
-        ":ball:profile:nucleus",
-        ":ball:profile:resource",
-        ":ball:profile:interaction",
-        ":ball:profile:impl",
-    ),
-    "ContentCatalog" to listOf(":ball:content:api", ":ball:content:impl"),
-    "AudioResource" to listOf(":resource:audio:api", ":resource:audio:impl"),
-    "Foundation" to listOf(":foundation:common", ":foundation:design"),
-))
-
 internal val authorityWriters = uniqueLinkedMap("authorityWriters", listOf(
     "Profile" to "ball/profile/impl/src/commonMain/kotlin/kinetickk/ball/profile/impl/DefaultProfileComponent.kt",
     "GameplayRun" to "ball/gameplay/impl/src/commonMain/kotlin/kinetickk/ball/gameplay/impl/GameComponent.kt",
     "AppSession" to "flow/session/impl/src/commonMain/kotlin/kinetickk/flow/session/impl/DefaultAppSessionComponent.kt",
     "ContentCatalog" to "immutable-bootstrap-only",
-))
-
-internal val applicationSurfaces = uniqueLinkedMap("applicationSurfaces", listOf(
-    "ContentCatalog" to ":ball:content:api",
-    "Profile" to ":ball:profile:api",
-    "GameplayRun" to ":ball:gameplay:api",
-    "AppSession" to ":flow:session:api",
-))
-
-internal val internalProjectPackages = uniqueLinkedMap("internalProjectPackages", listOf(
-    ":ball:content:impl" to "kinetickk.ball.content.impl",
-    ":ball:gameplay:nucleus" to "kinetickk.ball.gameplay.nucleus",
-    ":ball:gameplay:interaction" to "kinetickk.ball.gameplay.interaction",
-    ":ball:gameplay:impl" to "kinetickk.ball.gameplay.impl",
-    ":ball:profile:nucleus" to "kinetickk.ball.profile.nucleus",
-    ":ball:profile:resource" to "kinetickk.ball.profile.resource",
-    ":ball:profile:interaction" to "kinetickk.ball.profile.interaction",
-    ":ball:profile:impl" to "kinetickk.ball.profile.impl",
-    ":flow:session:nucleus" to "kinetickk.flow.session.nucleus",
-    ":flow:session:interaction" to "kinetickk.flow.session.interaction",
-    ":flow:session:impl" to "kinetickk.flow.session.impl",
-    ":resource:audio:impl" to "kinetickk.resource.audio.impl",
 ))
 
 internal val allowedForeignInternalProjectEdges = setOf(
@@ -3738,17 +3707,6 @@ internal val expectedAndroidHostProductionEdges = setOf(
 )
 
 internal val expectedAndroidHostProductionSources = setOf(ANDROID_HOST_ACTIVITY_PATH)
-
-internal fun authorityFor(projectPath: String): String = when {
-    projectPath.startsWith(":app:") -> "AppAssembly"
-    projectPath.startsWith(":flow:session:") -> "AppSession"
-    projectPath.startsWith(":ball:gameplay:") -> "GameplayRun"
-    projectPath.startsWith(":ball:profile:") -> "Profile"
-    projectPath.startsWith(":ball:content:") -> "ContentCatalog"
-    projectPath.startsWith(":resource:audio:") -> "AudioResource"
-    projectPath.startsWith(":foundation:") -> "Foundation"
-    else -> error("Unknown project authority: $projectPath")
-}
 
 internal fun semanticDirectControlEdges(): SortedSet<String> =
     expectedSemanticDirectControlEdges.toSortedSet()
@@ -3934,21 +3892,6 @@ internal fun jsonEscape(value: String): String = buildString {
             }
         }
     }
-}
-
-internal fun sha256Hex(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256")
-    .digest(bytes)
-    .joinToString("") { "%02x".format(it) }
-
-internal fun digestPathAndBytes(entries: List<Pair<String, ByteArray>>): String {
-    val digest = MessageDigest.getInstance("SHA-256")
-    entries.sortedBy { it.first }.forEach { (relativePath, bytes) ->
-        digest.update(relativePath.toByteArray(StandardCharsets.UTF_8))
-        digest.update(0.toByte())
-        digest.update(bytes)
-        digest.update(0.toByte())
-    }
-    return digest.digest().joinToString("") { "%02x".format(it) }
 }
 
 internal fun readUtf8(path: Path): String = Files.readString(path, StandardCharsets.UTF_8)

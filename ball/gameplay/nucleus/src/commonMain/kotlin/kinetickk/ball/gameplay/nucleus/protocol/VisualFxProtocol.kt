@@ -21,6 +21,9 @@ object VisualFxCueLimits {
  * into gameplay reductions and carry no behavior-authoritative random result.
  */
 sealed interface VisualFxCue {
+    /** A grouped acquisition result, produced only by an accepted build transition. */
+    data class BuildChanged(val title: String, val details: ImmutableList<String>) : VisualFxCue
+
     data object ClearAll : VisualFxCue
     data object ClearWeaponArcs : VisualFxCue
 
@@ -169,6 +172,7 @@ internal class BoundedVisualFxCueAccumulator private constructor(
         is VisualFxCue.WorldRebased,
         is VisualFxCue.VisualCuesDropped,
         -> true
+        is VisualFxCue.BuildChanged,
         is VisualFxCue.Burst,
         is VisualFxCue.DirectionalBurst,
         is VisualFxCue.ShockwaveAdded,

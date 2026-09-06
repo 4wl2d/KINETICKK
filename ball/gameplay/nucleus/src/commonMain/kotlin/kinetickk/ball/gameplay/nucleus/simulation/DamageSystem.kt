@@ -65,6 +65,7 @@ internal fun MutableGameState.dealWeaponDamage(
     val overtakeRank = relicRank(RelicId.OVERTAKE_PROTOCOL)
     if (overtakeRank > 0 && length(enemy.vx, enemy.vy) >= 170f) multiplier += 0.07f * overtakeRank
     if (qualified && brakepointCharge > 0f) multiplier += brakepointCharge
+    if (qualified) multiplier += synergyManeuverCharge
     val polarityRank = relicRank(RelicId.POLARITY_SLING)
     if (polarityRank > 0) multiplier += 0.08f * polarityRank * (1f - polarityStability)
     val distanceFromCore = length(enemy.x - coreX, enemy.y - coreY)
@@ -109,7 +110,10 @@ internal fun MutableGameState.dealWeaponDamage(
     )
     if (qualified && result.amount > 0f) {
         if (cadence == WeaponHitCadence.CONTINUOUS) enemy.relicQualificationCooldown = 0.22f
+        onSynergyPrimaryHit(enemy, result, brakepointCharge)
+        synergyManeuverCharge = 0f
         if (brakepointCharge > 0f) brakepointCharge = 0f
+        onCharacterPrimaryHit(enemy)
         onQualifiedWeaponHit(enemy, result, sourceWeapon)
     }
     return result

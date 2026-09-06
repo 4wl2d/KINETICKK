@@ -20,11 +20,47 @@ import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.ProfileSnapshotRejection
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
+import kinetickk.foundation.common.localization.AppLanguage
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
 class ProfileCodecTest {
+    @Test
+    fun bothLanguageCodesRoundTripAndUnsupportedCodesAreRejected() {
+        assertEquals(listOf("ru", "en"), AppLanguage.entries.map { it.code })
+        AppLanguage.entries.forEach { language ->
+            val snapshot = testSnapshot(PlayerProfile(preferences = PlayerPreferences(language = language)))
+            assertEquals(snapshot, assertIs<ProfileDecodeResult.Decoded>(
+                ProfileCodec.decode(requireEncoded(snapshot)),
+            ).snapshot)
+        }
+        listOf("de", "RU", "", "Russian").forEach { invalid ->
+            val payload = DEFAULT_GOLDEN.replace("\"languageCode\":\"ru\"", "\"languageCode\":\"$invalid\"")
+            assertEquals(ProfileSnapshotRejection.INVALID_STABLE_ID, decodeRejection(payload), invalid)
+        }
+    }
+
+    @Test
+    fun profilesPredatingLanguageSelectionKeepProgressAndDefaultToRussian() {
+        val profile = PlayerProfile(
+            economy = PlayerEconomy(matter = 150L, lifetimeMatter = 900L),
+            collection = PlayerCollection(setOf(1, 3, 5)),
+            rebirthProgress = RebirthProgress(2, 1),
+        )
+        val snapshot = testSnapshot(profile, revision = 37L)
+        val oldPayload = requireEncoded(snapshot).replace(",\"languageCode\":\"ru\"", "")
+
+        assertEquals(snapshot, assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(oldPayload)).snapshot)
+        assertEquals(ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD, decodeRejection(" $oldPayload"))
+        assertEquals(ProfileSnapshotRejection.MALFORMED_JSON, decodeRejection(
+            oldPayload.replace("\"soundEnabled\":true,", ""),
+        ))
+        assertEquals(ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD, decodeRejection(
+            DEFAULT_GOLDEN.replace("\"languageCode\":\"ru\"", "\"languageCode\":null"),
+        ))
+    }
+
     @Test
     fun defaultProfileHasCanonicalGoldenAndRoundTrips() {
         val snapshot = testSnapshot()
@@ -231,8 +267,8 @@ class ProfileCodecTest {
         assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(DEFAULT_GOLDEN))
 
         val adjacentSimulationSpeed = DEFAULT_GOLDEN.replace(
-            "\"simulationSpeedPercent\":115",
-            "\"simulationSpeedPercent\":116",
+            "\"simulationSpeedPercent\":100",
+            "\"simulationSpeedPercent\":101",
         )
         val adjacentTierThreshold = DEFAULT_GOLDEN.replace(
             "\"damageNumberTierThreshold\":50",
@@ -280,6 +316,28 @@ class ProfileCodecTest {
         assertEquals(1.42f, decoded.profile.preferences.textScale)
     }
 
+    @Test
+    fun everyCharacterAndCumulativeAchievementRoundTripsAndRejectsInvalidProgress() {
+        CoreShape.entries.forEach { shape ->
+            val achievements = kinetickk.ball.profile.api.CharacterAchievementProgress(
+                eliteKills = Long.MAX_VALUE,
+                dashHits = 20,
+                completedOrbits = 1,
+                architectVictories = 6,
+                victoriousCharacters = kinetickk.foundation.collections.ImmutableSet.copyOf(CoreShape.entries),
+            )
+            val snapshot = testSnapshot(PlayerProfile(
+                loadout = PlayerLoadout(coreShape = shape),
+                characterAchievements = achievements,
+            ))
+            assertEquals(snapshot, assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(requireEncoded(snapshot))).snapshot)
+        }
+        val negative = DEFAULT_GOLDEN.replace("\"eliteKills\":\"0\"", "\"eliteKills\":\"-1\"")
+        assertEquals(ProfileSnapshotRejection.INVALID_DECIMAL, decodeRejection(negative))
+        val inconsistent = DEFAULT_GOLDEN.replace("\"victoriousCharacterIds\":[]", "\"victoriousCharacterIds\":[\"ORB\"]")
+        assertEquals(ProfileSnapshotRejection.INCONSISTENT_PROFILE, decodeRejection(inconsistent))
+    }
+
     private fun decodeRejection(payload: String): ProfileSnapshotRejection =
         assertIs<ProfileDecodeResult.Rejected>(
             ProfileCodec.decode(payload),
@@ -315,9 +373,9 @@ private val RANK_ID = Regex("\\{\\\"id\\\":\\\"([^\\\"]+)\\\",\\\"rank\\\":")
 private const val DEFAULT_GOLDEN: String =
     "{\"revision\":\"0\",\"profile\":{" +
         "\"preferences\":{\"soundEnabled\":true,\"musicEnabled\":true,\"masterVolumePercent\":65," +
-        "\"simulationSpeedPercent\":115,\"textScalePercent\":125,\"screenShake\":true," +
+        "\"simulationSpeedPercent\":100,\"textScalePercent\":125,\"screenShake\":true," +
         "\"particleDensityId\":\"NORMAL\",\"damageNumbers\":true,\"damageNumberSizeId\":\"NORMAL\"," +
-        "\"damageNumberFormatId\":\"COMPACT\",\"damageNumberTierThreshold\":50}," +
+        "\"damageNumberFormatId\":\"COMPACT\",\"damageNumberTierThreshold\":50,\"languageCode\":\"ru\"}," +
         "\"economy\":{\"matter\":\"0\",\"lifetimeMatter\":\"0\"}," +
         "\"loadout\":{\"coreShapeId\":\"ORB\",\"selectedWeaponId\":\"FLUX_WAKE\"," +
         "\"unlockedWeaponIds\":[\"FLUX_WAKE\"]},\"labProgress\":{\"ranks\":[" +
@@ -326,4 +384,6 @@ private const val DEFAULT_GOLDEN: String =
         "{\"id\":\"DATA_ARCHIVE\",\"rank\":0},{\"id\":\"KINETIC_AMPLIFIER\",\"rank\":0}," +
         "{\"id\":\"MAGNETIC_RESONANCE\",\"rank\":0},{\"id\":\"SALVAGE_PROTOCOL\",\"rank\":0}]}," +
         "\"collection\":{\"discoveredItemIds\":[]}," +
-        "\"rebirthProgress\":{\"level\":0,\"highestCleared\":-1}}}"
+        "\"rebirthProgress\":{\"level\":0,\"highestCleared\":-1}," +
+        "\"characterAchievements\":{\"eliteKills\":\"0\",\"dashHits\":\"0\",\"completedOrbits\":\"0\"," +
+        "\"architectVictories\":\"0\",\"victoriousCharacterIds\":[]}}}"

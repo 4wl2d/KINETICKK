@@ -59,6 +59,7 @@ internal fun testDefaultProfile(policy: ProfilePolicySnapshot = TestProfilePolic
 
 internal fun representativeProfile(policy: ProfilePolicySnapshot = TestProfilePolicy): PlayerProfile =
     testDefaultProfile(policy).copy(
+        characterAchievements = kinetickk.ball.profile.api.CharacterAchievementProgress(eliteKills = 3, dashHits = 20),
         preferences = PlayerPreferences(
             soundEnabled = true,
             musicEnabled = false,
@@ -99,6 +100,7 @@ internal fun queriedProfile(component: DefaultProfileComponent): PlayerProfile {
         labProgress = lab.snapshot.progress,
         collection = collection.collection,
         rebirthProgress = rebirth.snapshot.progress,
+        characterAchievements = component.query(ProfileQuery.GetHomeProgress).characterAchievements,
     )
 }
 
@@ -166,9 +168,7 @@ internal class RecordingProfileResource(
 private fun profilePolicyFixture(): ProfilePolicySnapshot = ProfilePolicySnapshot(
     version = ContentVersion("test-content"),
     itemCount = 400,
-    coreShapes = listOf(0L, 25L, 90L).mapIndexed { index, cost ->
-        CoreShapeDefinition(CoreShape.entries[index], cost)
-    }.toImmutableList(),
+    coreShapes = CoreShape.entries.map { CoreShapeDefinition(it) }.toImmutableList(),
     weapons = intArrayOf(0, 25, 55, 95, 145, 215, 305, 430, 610, 860, 1_200, 1_650)
         .mapIndexed { index, cost ->
             WeaponDefinition(

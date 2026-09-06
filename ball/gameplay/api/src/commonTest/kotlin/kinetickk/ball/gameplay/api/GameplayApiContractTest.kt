@@ -103,7 +103,7 @@ class GameplayApiContractTest {
         val projections: List<GameplayProjection> = listOf(
             GameplayRunStatusProjection(instance, revision, GameplayRunPhase.CREATED, false),
             GameplayActiveWeaponProjection(instance, revision, WeaponId.FLUX_WAKE),
-            GameplayCodexStacksProjection(instance, revision, immutableListOf(1, 2)),
+            GameplayBuildSummaryProjection(instance, revision, immutableListOf(1, 2)),
         )
 
         projections.forEach { projection ->
@@ -112,6 +112,31 @@ class GameplayApiContractTest {
         }
         val weapon = assertIs<GameplayActiveWeaponProjection>(projections[1])
         assertEquals(WeaponId.FLUX_WAKE, weapon.weapon)
+    }
+
+    @Test
+    fun commandMappingsAcceptOnlyTheirOwnResultIncludingEveryExitOutcome() {
+        val mappings = listOf(
+            Triple(GameplayModuleCommand.StartRun, GameplayEffectiveProtocolIdentity.SESSION_START,
+                GameplayModuleResult.RunStarted),
+            Triple(GameplayModuleCommand.PauseForOverlay, GameplayEffectiveProtocolIdentity.SESSION_PAUSE,
+                GameplayModuleResult.OverlayPaused),
+            Triple(GameplayModuleCommand.ApplyPreferences, GameplayEffectiveProtocolIdentity.SESSION_PREFERENCES,
+                GameplayModuleResult.PreferencesApplied),
+            Triple(GameplayModuleCommand.ExitRun, GameplayEffectiveProtocolIdentity.SESSION_EXIT,
+                GameplayModuleResult.RunExited(GameplayExitProgressResult.NoProgress)),
+            Triple(GameplayModuleCommand.ExitRun, GameplayEffectiveProtocolIdentity.SESSION_EXIT,
+                GameplayModuleResult.RunExited(GameplayExitProgressResult.Applied)),
+            Triple(GameplayModuleCommand.ExitRun, GameplayEffectiveProtocolIdentity.SESSION_EXIT,
+                GameplayModuleResult.RunExited(GameplayExitProgressResult.NotApplied)),
+        )
+
+        mappings.forEach { (command, identity, result) ->
+            assertEquals(identity, command.effectiveProtocolIdentity())
+            GameplayEffectiveProtocolIdentity.entries.forEach { candidate ->
+                assertEquals(candidate == identity, candidate.acceptsResult(result), "$candidate / $result")
+            }
+        }
     }
 
     @Test

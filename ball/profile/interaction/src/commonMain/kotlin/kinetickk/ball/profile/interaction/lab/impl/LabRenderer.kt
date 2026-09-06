@@ -3,6 +3,9 @@
 
 package kinetickk.ball.profile.interaction.lab.impl
 
+import kinetickk.foundation.common.localization.text
+import kinetickk.ball.profile.interaction.localization.ProfileText
+import kinetickk.ball.content.api.localizedContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -27,8 +30,8 @@ internal fun DrawScope.drawLab(model: LabRenderModel, textMeasurer: TextMeasurer
     drawRect(Color(0xD9050610))
     val bounds = overlayBounds()
     drawOverlayFrame(bounds, Acid)
-    drawLabel(textMeasurer, "KINETIC LAB", bounds.left + d(25f), bounds.top + d(24f), 20f, Acid, weight = FontWeight.Bold)
-    drawLabel(textMeasurer, "PERMANENT RESEARCH // MATTER ${formatCompact(model.matter)}", bounds.right - d(25f), bounds.top + d(30f), 8f, White, alignRight = true)
+    drawLabel(textMeasurer, textMeasurer.language.text(ProfileText.LabTitle), bounds.left + d(25f), bounds.top + d(24f), 20f, Acid, weight = FontWeight.Bold)
+    drawLabel(textMeasurer, textMeasurer.language.text(ProfileText.LabSummary, formatCompact(model.matter, textMeasurer.language)), bounds.right - d(25f), bounds.top + d(30f), 8f, White, alignRight = true)
     val contentTop = bounds.top + d(88f)
     val contentWidth = bounds.width - d(50f)
     val columnWidth = contentWidth * 0.5f
@@ -54,8 +57,8 @@ private fun DrawScope.drawMetaCard(
     val accent = if (upgrade.isMaxed) Acid else if (upgrade.isAffordable) Cyan else Muted
     drawRect(Color(0x99101225), Offset(x, y), Size(width, height))
     drawRect(accent.copy(alpha = 0.7f), Offset(x, y), Size(width, height), style = Stroke(d(1f)))
-    drawLabel(textMeasurer, upgrade.name.uppercase(), x + d(14f), y + d(12f), 9f, accent, weight = FontWeight.Bold)
-    drawLabel(textMeasurer, "RANK ${upgrade.rank}/${upgrade.maxRanks}", x + width - d(14f), y + d(12f), 8f, White, alignRight = true)
-    drawLabel(textMeasurer, upgrade.description, x + d(14f), y + d(36f), 7f, Muted, maxWidth = width - d(28f), maxLines = 2)
-    drawLabel(textMeasurer, if (upgrade.isMaxed) "MAXIMUM SYNCHRONY" else "BUY ${formatCompact(upgrade.nextCost)} MATTER", x + width - d(14f), y + height - d(24f), 8f, accent, alignRight = true, weight = FontWeight.Bold)
+    drawLabel(textMeasurer, upgrade.name.localizedContent(textMeasurer.language).uppercase(), x + d(14f), y + d(12f), 9f, accent, weight = FontWeight.Bold)
+    drawLabel(textMeasurer, textMeasurer.language.text(ProfileText.Rank, upgrade.rank, upgrade.maxRanks), x + width - d(14f), y + d(12f), 8f, White, alignRight = true)
+    drawLabel(textMeasurer, upgrade.description.localizedContent(textMeasurer.language), x + d(14f), y + d(36f), 7f, Muted, maxWidth = width - d(28f), maxLines = 2)
+    drawLabel(textMeasurer, if (upgrade.isMaxed) textMeasurer.language.text(ProfileText.MaximumSynchrony) else textMeasurer.language.text(ProfileText.BuyMatter, formatCompact(upgrade.nextCost, textMeasurer.language)), x + width - d(14f), y + height - d(24f), 8f, accent, alignRight = true, weight = FontWeight.Bold)
 }

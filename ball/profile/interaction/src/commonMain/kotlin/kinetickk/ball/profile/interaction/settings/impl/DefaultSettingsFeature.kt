@@ -4,8 +4,26 @@
 package kinetickk.ball.profile.interaction.settings.impl
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.focusable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import kotlin.math.roundToInt
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.fillMaxSize
+import kinetickk.foundation.design.LocalAppLanguage
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -41,10 +59,15 @@ class DefaultSettingsFeature(
                 profilePort.query(ProfileQuery.GetPreferences).preferences.toRenderModel(),
             )
         }
+        val focusRequester = remember { FocusRequester() }
+        val localDensity = LocalDensity.current
+        var viewportValue by remember { mutableStateOf(IntSize.Zero) }
         var pageValue by rememberSaveable(routeToken) { mutableIntStateOf(0) }
+        LaunchedEffect(pageValue) { focusRequester.requestFocus() }
         val composeTextMeasurer = rememberTextMeasurer(cacheSize = 64)
         val textMeasurer = CanvasTextMeasurer(
             delegate = composeTextMeasurer,
+            language = LocalAppLanguage.current,
             scale = renderModelValue.preferences.textScale,
         )
 
@@ -64,6 +87,7 @@ class DefaultSettingsFeature(
                             .preferences
                             .toRenderModel()
                         audioExecutor.updatePreferences(renderModelValue.preferences)
+                        onOutput(SettingsOutput.LanguageChanged(renderModelValue.preferences.language))
                     }
                     is SettingsEffect.PlayAudio -> audioExecutor.play(effect.cue)
                     is SettingsEffect.Emit -> onOutput(effect.output)
@@ -71,27 +95,49 @@ class DefaultSettingsFeature(
             }
         }
 
-        Canvas(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(routeToken, renderModelValue, pageValue, onOutput) {
-                    detectTapGestures { position ->
-                        resolveSettingsPress(
-                            screenWidth = size.width.toFloat(),
-                            screenHeight = size.height.toFloat(),
-                            density = density,
-                            page = pageValue,
-                            x = position.x,
-                            y = position.y,
-                        )?.let(::dispatch)
-                    }
-                },
-        ) {
-            drawSettings(
-                model = renderModelValue,
-                page = pageValue,
-                textMeasurer = textMeasurer,
-            )
+        Box(Modifier.fillMaxSize().focusRequester(focusRequester).focusable().onSizeChanged { viewportValue = it }) {
+            Canvas(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(routeToken, renderModelValue, pageValue, onOutput) {
+                        detectTapGestures { position ->
+                            resolveSettingsPress(
+                                screenWidth = size.width.toFloat(),
+                                screenHeight = size.height.toFloat(),
+                                density = density,
+                                page = pageValue,
+                                x = position.x,
+                                y = position.y,
+                            )?.let(::dispatch)
+                        }
+                    },
+            ) {
+                drawSettings(
+                    model = renderModelValue,
+                    page = pageValue,
+                    textMeasurer = textMeasurer,
+                )
+            }
+            settingsLanguageOptions(
+                viewportValue.width.toFloat(), viewportValue.height.toFloat(),
+                localDensity.density, pageValue,
+            ).forEach { option ->
+                Box(
+                    Modifier
+                        .offset { IntOffset(option.bounds.left.roundToInt(), option.bounds.top.roundToInt()) }
+                        .requiredSize(
+                            with(localDensity) { option.bounds.width.toDp() },
+                            with(localDensity) { option.bounds.height.toDp() },
+                        )
+                        .testTag("kinetickk.settings.language.${option.language.code}")
+                        .semantics { contentDescription = option.language.nativeName }
+                        .selectable(
+                            selected = renderModelValue.preferences.language == option.language,
+                            role = Role.RadioButton,
+                            onClick = { dispatch(SettingsAction.SelectLanguage(option.language)) },
+                        ),
+                )
+            }
         }
     }
 }

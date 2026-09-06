@@ -1099,36 +1099,6 @@ private fun substringBeforeTopLevel(text: String, delimiter: Char): String =
 private fun hasTopLevelDelimiter(text: String, delimiter: Char): Boolean =
     splitAtTopLevel(text, delimiter).size > 1
 
-private fun lastTopLevelDelimiter(text: String, delimiter: Char): Int {
-    var result = -1
-    var roundDepth = 0
-    var angleDepth = 0
-    var squareDepth = 0
-    var curlyDepth = 0
-    var backticked = false
-    text.forEachIndexed { index, character ->
-        when {
-            character == '`' -> backticked = !backticked
-            backticked -> Unit
-            character == '(' -> roundDepth += 1
-            character == ')' -> roundDepth -= 1
-            character == '<' && roundDepth == 0 && squareDepth == 0 && curlyDepth == 0 -> angleDepth += 1
-            character == '>' && roundDepth == 0 && squareDepth == 0 && curlyDepth == 0 &&
-                text.getOrNull(index - 1) != '-' -> if (angleDepth > 0) angleDepth -= 1
-            character == '[' -> squareDepth += 1
-            character == ']' -> squareDepth -= 1
-            character == '{' -> curlyDepth += 1
-            character == '}' -> curlyDepth -= 1
-            character == delimiter -> if (
-                roundDepth == 0 && angleDepth == 0 && squareDepth == 0 && curlyDepth == 0
-            ) {
-                result = index
-            }
-        }
-    }
-    return result
-}
-
 private fun topLevelDelimiterIndices(text: String, delimiter: Char): List<Int> = buildList {
     var roundDepth = 0
     var angleDepth = 0

@@ -13,6 +13,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.RunWith
+import kinetickk.resource.audio.api.ToneRequest
+import kinetickk.resource.audio.api.ToneWave
+import java.util.concurrent.atomic.AtomicReference
 
 @RunWith(AndroidJUnit4::class)
 class PlatformCapabilitiesAndroidTest {
@@ -20,7 +23,7 @@ class PlatformCapabilitiesAndroidTest {
     fun persistenceCapabilityUsesTheCurrentSnapshotKeyAndLeavesHistoricalKeysUntouched() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext
         AndroidApplicationContext.install(context)
-        val preferences = context.getSharedPreferences("kinetickk.profile", 0)
+        val preferences = context.getSharedPreferences("kinetickk.profile.v2", 0)
         preferences.edit()
             .remove("snapshot")
             .putString("snapshot_v4", "historical-snapshot")
@@ -57,6 +60,37 @@ class PlatformCapabilitiesAndroidTest {
         first.close()
         first.close()
         second.close()
+    }
+
+    @Test
+    fun closingDuringPlaybackCancelsWithoutAnUncaughtWorkerFailure() {
+        val existing = Thread.getAllStackTraces().keys
+        val playback = createPlatformTonePlaybackCapability()
+        val failure = AtomicReference<Throwable?>()
+        try {
+            playback.play(ToneRequest(440f, 1f, 0.01f, ToneWave.SINE))
+            var worker: Thread? = null
+            repeat(100) {
+                if (worker == null) {
+                    worker = Thread.getAllStackTraces().keys.firstOrNull {
+                        it !in existing && it.name == AndroidAudioExecutionPolicy.THREAD_NAME
+                    }
+                    if (worker == null) Thread.sleep(5)
+                }
+            }
+            val activeWorker = checkNotNull(worker) { "Audio worker never started" }
+            activeWorker.uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, error -> failure.set(error) }
+            repeat(100) {
+                if (activeWorker.state != Thread.State.TIMED_WAITING) Thread.sleep(5)
+            }
+            assertEquals(Thread.State.TIMED_WAITING, activeWorker.state)
+            playback.close()
+            activeWorker.join(2_000)
+            assertTrue("Audio worker should stop on close", !activeWorker.isAlive)
+            assertEquals(null, failure.get())
+        } finally {
+            playback.close()
+        }
     }
 
     @Test

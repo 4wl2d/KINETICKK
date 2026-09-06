@@ -26,6 +26,8 @@ import kinetickk.ball.profile.api.PreferenceAdjustmentDirection
 import kinetickk.ball.profile.api.PreferencesProjection
 import kinetickk.ball.profile.api.ProfileBootstrapStatus
 import kinetickk.ball.profile.api.ProfileEffectRef
+import kinetickk.ball.profile.api.ProfileCommandSourceToken
+import kinetickk.ball.profile.api.CharacterAchievementProgress
 import kinetickk.ball.profile.api.ProfileGameplayProgressRejection
 import kinetickk.ball.profile.api.ProfilePersistenceStatus
 import kinetickk.ball.profile.api.ProfilePreferenceAdjustment
@@ -44,6 +46,7 @@ import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.RebirthProgressProjection
 import kinetickk.ball.profile.api.RunBootstrapProjection
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
+import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kotlin.math.abs
@@ -55,12 +58,11 @@ object ProfileNucleus {
     fun decide(
         state: ProfileState,
         pulse: ProfileNucleusPulse,
-        context: ProfileContext = ProfileContext,
     ): ProfileDecision {
         return when (pulse) {
             is ProfileNucleusPulse.Intent -> {
                 mutationGate(state)?.let { return rejected(it) }
-                decideMutation(state, pulse.intent, null)
+                decideMutation(state, pulse.intent)
             }
             is ProfileNucleusPulse.ModuleCommand -> decideModuleCommand(state, pulse.pulse)
             is ProfileNucleusPulse.WriteCompleted ->
@@ -72,17 +74,15 @@ object ProfileNucleus {
         state: ProfileState,
         pulse: kinetickk.ball.profile.api.ProfileModuleCommandPulse,
     ): ProfileDecision {
-        val completion = ProfileCommandCompletion(
-            commandSource = pulse.commandSource,
-        )
+        val commandSource = pulse.commandSource
         mutationGate(state)?.let { return rejected(it) }
         return when (val command = pulse.command) {
             is ProfileModuleCommand.SelectCoreShape ->
-                selectCoreShape(state, command.shape, completion)
-            ProfileModuleCommand.ToggleMute -> toggleMute(state, completion)
-            ProfileModuleCommand.AdvanceRebirth -> advanceRebirth(state, completion)
+                selectCoreShape(state, command.shape, commandSource)
+            ProfileModuleCommand.ToggleMute -> toggleMute(state, commandSource)
+            ProfileModuleCommand.AdvanceRebirth -> advanceRebirth(state, commandSource)
             is ProfileModuleCommand.ApplyGameplayProgress ->
-                applyGameplayProgress(state, command.update, completion)
+                applyGameplayProgress(state, command.update, commandSource)
         }
     }
 
@@ -109,6 +109,8 @@ object ProfileNucleus {
             collection = state.profile.collection,
             rebirthProgress = state.profile.rebirthProgress,
             canAdvanceRebirth = canAdvanceRebirth(state),
+            characterAchievements = state.profile.characterAchievements,
+            unlockedCoreShapes = unlockedCoreShapes(state.profile, state.policy),
         )
 
     fun query(state: ProfileState, query: ProfileQuery.GetLabProgress): LabProgressProjection =
@@ -147,20 +149,19 @@ object ProfileNucleus {
     private fun decideMutation(
         state: ProfileState,
         pulse: ProfilePulse.Business,
-        completion: ProfileCommandCompletion?,
     ): ProfileDecision = when (pulse) {
-        is ProfilePulse.AdjustPreference -> adjustPreference(state, pulse.adjustment, completion)
-        is ProfilePulse.PurchaseMetaUpgrade -> purchaseMetaUpgrade(state, pulse.id, completion)
-        is ProfilePulse.PurchaseOrEquipWeapon -> purchaseOrEquipWeapon(state, pulse.id, completion)
+        is ProfilePulse.AdjustPreference -> adjustPreference(state, pulse.adjustment)
+        is ProfilePulse.PurchaseMetaUpgrade -> purchaseMetaUpgrade(state, pulse.id)
+        is ProfilePulse.PurchaseOrEquipWeapon -> purchaseOrEquipWeapon(state, pulse.id)
     }
 
     private fun adjustPreference(
         state: ProfileState,
         adjustment: ProfilePreferenceAdjustment,
-        completion: ProfileCommandCompletion?,
     ): ProfileDecision {
         val current = state.profile.preferences
         val next = when (adjustment) {
+            is ProfilePreferenceAdjustment.SetLanguage -> current.copy(language = adjustment.language)
             ProfilePreferenceAdjustment.ToggleSoundEffects ->
                 current.copy(soundEnabled = !current.soundEnabled)
             ProfilePreferenceAdjustment.ToggleMusic ->
@@ -219,27 +220,26 @@ object ProfileNucleus {
         return acceptedMutation(
             state = state,
             nextProfile = state.profile.copy(preferences = next),
-            completion = completion,
-            commandResult = ProfileModuleResult.PreferencesChanged(next),
         )
     }
 
-    private fun toggleMute(state: ProfileState, completion: ProfileCommandCompletion?): ProfileDecision {
+    private fun toggleMute(
+        state: ProfileState,
+        commandSource: ProfileCommandSourceToken,
+    ): ProfileDecision {
         val current = state.profile.preferences
         val enable = !current.soundEnabled && !current.musicEnabled
         val next = current.copy(soundEnabled = enable, musicEnabled = enable)
         return acceptedMutation(
             state = state,
             nextProfile = state.profile.copy(preferences = next),
-            completion = completion,
-            commandResult = ProfileModuleResult.PreferencesChanged(next),
+            commandOutput = commandSource.complete(ProfileModuleResult.PreferencesChanged(next)),
         )
     }
 
     private fun purchaseMetaUpgrade(
         state: ProfileState,
         id: MetaUpgradeId,
-        completion: ProfileCommandCompletion?,
     ): ProfileDecision {
         val definition = state.policy.metaUpgrade(id)
         val currentRank = state.profile.labProgress.rank(id)
@@ -255,17 +255,15 @@ object ProfileNucleus {
                 economy = state.profile.economy.copy(matter = state.profile.economy.matter - cost),
                 labProgress = LabProgress(ranks),
             ),
-            completion = completion,
-            commandResult = null,
         )
     }
 
     private fun selectCoreShape(
         state: ProfileState,
         shape: kinetickk.ball.content.api.CoreShape,
-        completion: ProfileCommandCompletion?,
+        commandSource: ProfileCommandSourceToken,
     ): ProfileDecision {
-        if (state.profile.economy.lifetimeMatter < state.policy.coreShape(shape).unlockLifetimeMatter) {
+        if (!isCoreShapeUnlocked(state.profile, state.policy.coreShape(shape))) {
             return rejected(ProfileRejection.CoreShapeLocked)
         }
         if (shape == state.profile.loadout.coreShape) return rejected(ProfileRejection.NoChange)
@@ -274,15 +272,13 @@ object ProfileNucleus {
             nextProfile = state.profile.copy(
                 loadout = state.profile.loadout.copy(coreShape = shape),
             ),
-            completion = completion,
-            commandResult = ProfileModuleResult.CoreShapeSelected(shape),
+            commandOutput = commandSource.complete(ProfileModuleResult.CoreShapeSelected(shape)),
         )
     }
 
     private fun purchaseOrEquipWeapon(
         state: ProfileState,
         id: kinetickk.ball.content.api.WeaponId,
-        completion: ProfileCommandCompletion?,
     ): ProfileDecision {
         val unlocked = state.profile.loadout.unlockedWeapons.toMutableSet()
         var economy = state.profile.economy
@@ -304,14 +300,12 @@ object ProfileNucleus {
                     unlockedWeapons = unlocked,
                 ),
             ),
-            completion = completion,
-            commandResult = null,
         )
     }
 
     private fun advanceRebirth(
         state: ProfileState,
-        completion: ProfileCommandCompletion?,
+        commandSource: ProfileCommandSourceToken,
     ): ProfileDecision {
         val progress = state.profile.rebirthProgress
         if (progress.level >= state.policy.rebirth.maximumLevel) {
@@ -324,15 +318,14 @@ object ProfileNucleus {
         return acceptedMutation(
             state = state,
             nextProfile = state.profile.copy(rebirthProgress = next),
-            completion = completion,
-            commandResult = ProfileModuleResult.RebirthAdvanced(next),
+            commandOutput = commandSource.complete(ProfileModuleResult.RebirthAdvanced(next)),
         )
     }
 
     private fun applyGameplayProgress(
         state: ProfileState,
         update: kinetickk.ball.profile.api.GameplayProgressUpdate,
-        completion: ProfileCommandCompletion?,
+        commandSource: ProfileCommandSourceToken,
     ): ProfileDecision {
         validateGameplayProgress(state, update)?.let {
             return rejected(ProfileRejection.InvalidGameplayProgress(it))
@@ -354,7 +347,16 @@ object ProfileNucleus {
                 highestCleared = max(state.profile.rebirthProgress.highestCleared, cleared),
             )
         } ?: state.profile.rebirthProgress
+        val previousAchievements = state.profile.characterAchievements
+        val achievements = CharacterAchievementProgress(
+            eliteKills = saturatedAdd(previousAchievements.eliteKills, update.eliteKills.toLong()),
+            dashHits = saturatedAdd(previousAchievements.dashHits, update.dashHits.toLong()),
+            completedOrbits = saturatedAdd(previousAchievements.completedOrbits, update.completedOrbits.toLong()),
+            architectVictories = saturatedAdd(previousAchievements.architectVictories, if (update.architectDefeatedWith != null) 1L else 0L),
+            victoriousCharacters = (previousAchievements.victoriousCharacters + listOfNotNull(update.architectDefeatedWith)).toImmutableSet(),
+        )
         val next = state.profile.copy(
+            characterAchievements = achievements,
             economy = economy,
             collection = PlayerCollection(discoveries),
             rebirthProgress = rebirth,
@@ -363,16 +365,14 @@ object ProfileNucleus {
         return acceptedMutation(
             state = state,
             nextProfile = next,
-            completion = completion,
-            commandResult = ProfileModuleResult.GameplayProgressApplied,
+            commandOutput = commandSource.complete(ProfileModuleResult.GameplayProgressApplied),
         )
     }
 
     private fun acceptedMutation(
         state: ProfileState,
         nextProfile: PlayerProfile,
-        completion: ProfileCommandCompletion?,
-        commandResult: ProfileModuleResult?,
+        commandOutput: ProfileOutput.CompleteCommand? = null,
     ): ProfileDecision {
         check(state.persistence !is ProfilePersistenceStatus.Pending) {
             "Inline Profile cannot accept another mutation while a Resource effect is pending"
@@ -394,20 +394,11 @@ object ProfileNucleus {
                 profile = nextProfile,
             ),
         )
-        val outputs = completion?.let { command ->
-            checkNotNull(commandResult) { "Every admitted Profile command must define a result" }
-            immutableListOf(
-                persist,
-                ProfileOutput.CompleteCommand(
-                    ProfileModuleResultOutput(
-                        semanticHandle = command.commandSource.semanticHandle,
-                        sourceOrdinal = 1,
-                        commandSource = command.commandSource,
-                        result = commandResult,
-                    ),
-                ),
-            )
-        } ?: immutableListOf(persist)
+        val outputs = if (commandOutput == null) {
+            immutableListOf(persist)
+        } else {
+            immutableListOf(persist, commandOutput)
+        }
         return accepted(nextState, outputs)
     }
 
@@ -431,6 +422,14 @@ object ProfileNucleus {
         state: ProfileState,
         update: kinetickk.ball.profile.api.GameplayProgressUpdate,
     ): ProfileGameplayProgressRejection? {
+        if (update.eliteKills < 0 || update.dashHits < 0 || update.completedOrbits < 0) {
+            return ProfileGameplayProgressRejection.NegativeAchievementProgress
+        }
+        update.architectDefeatedWith?.let { character ->
+            if (!isCoreShapeUnlocked(state.profile, state.policy.coreShape(character))) {
+                return ProfileGameplayProgressRejection.VictoryCharacterLocked
+            }
+        }
         if (update.bankedMatter < 0L) return ProfileGameplayProgressRejection.NegativeBankedMatter
         if (update.discoveredItemIds.size > state.policy.itemCount) {
             return ProfileGameplayProgressRejection.TooManyDiscoveries
@@ -504,9 +503,15 @@ object ProfileNucleus {
 
 private const val PROFILE_RESOURCE_OUTPUT_ORDINAL: Int = 0
 
-private data class ProfileCommandCompletion(
-    val commandSource: kinetickk.ball.profile.api.ProfileCommandSourceToken,
-)
+private fun ProfileCommandSourceToken.complete(result: ProfileModuleResult): ProfileOutput.CompleteCommand =
+    ProfileOutput.CompleteCommand(
+        ProfileModuleResultOutput(
+            semanticHandle = semanticHandle,
+            sourceOrdinal = 1,
+            commandSource = this,
+            result = result,
+        ),
+    )
 
 private val PreferenceAdjustmentDirection.delta: Int
     get() = when (this) {

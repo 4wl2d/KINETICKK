@@ -10,6 +10,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import kinetickk.foundation.common.localization.AppLanguage
 
 val SpaceBlack = Color(0xFF050610)
 val OverlayPanel = Color(0xE60B0D1D)
@@ -39,6 +40,7 @@ fun textStyle(size: Float, color: Color = White, weight: FontWeight = FontWeight
 class CanvasTextMeasurer(
     val delegate: ComposeTextMeasurer,
     val scale: Float,
+    val language: AppLanguage = AppLanguage.English,
 )
 
 typealias TextMeasurer = CanvasTextMeasurer

@@ -3,6 +3,18 @@
 
 package kinetickk.ball.gameplay.interaction
 
+import kinetickk.ball.gameplay.interaction.localization.GameplayText
+import kinetickk.foundation.common.localization.text
+import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.design.LocalAppLanguage
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -63,12 +75,12 @@ import kinetickk.ball.gameplay.interaction.input.resolveGameplayPress
 import kinetickk.ball.gameplay.interaction.layout.PauseTarget
 import kinetickk.ball.gameplay.interaction.layout.PauseLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
-import kinetickk.ball.gameplay.interaction.layout.ChoiceLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.TerminalLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.choiceLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.terminalLayoutGeometry
+import kinetickk.ball.gameplay.interaction.rewards.RewardContent
 import kinetickk.ball.gameplay.interaction.performance.GameplayPerformanceSnapshot
 import kinetickk.ball.gameplay.interaction.performance.GameplayPerformanceTelemetry
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
@@ -88,6 +100,7 @@ fun GameplayContent(
     inputEnabled: Boolean,
     onOutput: (GameplayInteractionOutput) -> Unit,
 ) {
+    val language = LocalAppLanguage.current
     val focusRequester = remember(component) { FocusRequester() }
     val composeTextMeasurer = rememberTextMeasurer(cacheSize = 64)
     val localDensity = LocalDensity.current
@@ -181,7 +194,7 @@ fun GameplayContent(
         }
     }
 
-    SideEffect(component, inputEnabled) {
+    SideEffect(component, inputEnabled, renderModelValue.phase) {
         if (inputEnabled) focusRequester.requestFocus()
     }
 
@@ -217,10 +230,11 @@ fun GameplayContent(
     }
 
     val textScale = renderModelValue.settings.textScale
-    val textMeasurer = remember(composeTextMeasurer, textScale) {
+    val textMeasurer = remember(composeTextMeasurer, textScale, language) {
         CanvasTextMeasurer(
             delegate = composeTextMeasurer,
             scale = textScale,
+            language = language,
         )
     }
     val layoutDimensions = remember(
@@ -278,8 +292,8 @@ fun GameplayContent(
         null
     }
     val performanceHudProjection = if (performanceEnabledValue) {
-        remember(performanceSnapshotValue) {
-            performanceSnapshotValue.toPerformanceHudProjection()
+        remember(performanceSnapshotValue, language) {
+            performanceSnapshotValue.toPerformanceHudProjection(language)
         }
     } else {
         null
@@ -291,7 +305,7 @@ fun GameplayContent(
             .background(Color(0xFF050610))
             .testTag(GAMEPLAY_ROOT_TAG)
             .semantics {
-                contentDescription = "KINETICKK gameplay"
+                contentDescription = language.text(GameplayText.Gameplay)
             }
             .focusRequester(focusRequester)
             .focusable()
@@ -417,6 +431,11 @@ fun GameplayContent(
                             val position = event.changes.firstOrNull()?.position
                             val pressed = event.changes.any { it.pressed }
                             val currentRenderModel = renderModelValue
+                            if (currentRenderModel.phase == GamePhase.CHOICE) {
+                                wasPressedValue = false
+                                hudGestureActiveValue = false
+                                continue
+                            }
                             val validatedMove = position?.let { pointerPosition ->
                                 when (
                                     val result = interactionValidator.pointerMoved(
@@ -478,7 +497,6 @@ fun GameplayContent(
                 textMeasurer = textMeasurer,
                 renderTime = renderTimeSecondsValue,
                 pauseLayout = pauseLayout,
-                choiceLayout = choiceLayout,
                 terminalLayout = terminalLayout,
             )
             if (drawStartedAt != null) {
@@ -497,13 +515,38 @@ fun GameplayContent(
                 )
             }
         }
+        if (renderModelValue.phase == GamePhase.CHOICE) {
+            RewardContent(
+                engine = renderModelValue,
+                layout = requireNotNull(choiceLayout),
+                renderTime = renderTimeSecondsValue,
+                enabled = inputEnabled,
+                onSelect = { index ->
+                    dispatch(GameplayInteractionPulse.UserGestureObserved)
+                    dispatchValidated(interactionValidator.choiceSelected(index))
+                },
+                onReroll = {
+                    dispatch(GameplayInteractionPulse.UserGestureObserved)
+                    dispatch(GameplayInteractionPulse.ChoicesRerolled)
+                },
+            )
+        }
+        if (inputEnabled && (renderModelValue.phase == GamePhase.RUNNING || renderModelValue.phase == GamePhase.PAUSED || renderModelValue.phase == GamePhase.CHOICE)) {
+            BasicText(
+                text = language.text(GameplayText.Build),
+                modifier = Modifier.align(if (renderModelValue.phase != GamePhase.RUNNING) Alignment.TopStart else Alignment.BottomCenter).padding(8.dp)
+                    .background(Color(0xEE142338))
+                    .clickable(role = Role.Button) { onOutput(GameplayInteractionOutput.OpenCodex) }
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                style = TextStyle(color = Color(0xFF4FE9F5), fontSize = (12f * renderModelValue.settings.textScale).sp),
+            )
+        }
         if (inputEnabled) {
             GameplaySemanticControls(
                 engine = renderModelValue,
                 density = localDensity,
                 performanceEnabled = performanceEnabledValue,
                 pauseLayout = pauseLayout,
-                choiceLayout = choiceLayout,
                 terminalLayout = terminalLayout,
                 onInput = { input ->
                     dispatch(GameplayInteractionPulse.UserGestureObserved)
@@ -529,11 +572,11 @@ private fun GameplaySemanticControls(
     density: Density,
     performanceEnabled: Boolean,
     pauseLayout: PauseLayoutGeometry?,
-    choiceLayout: ChoiceLayoutGeometry?,
     terminalLayout: TerminalLayoutGeometry?,
     onInput: (GameplayInput) -> Unit,
     onBrakeChanged: (Boolean) -> Unit,
 ) {
+    val language = LocalAppLanguage.current
     when (engine.phase) {
         GamePhase.RUNNING -> forEachRunningControlBounds(
             width = engine.screenWidth,
@@ -552,11 +595,11 @@ private fun GameplaySemanticControls(
                     bounds = bounds,
                     density = density,
                     tag = "kinetickk.gameplay.dash",
-                    description = "Dash",
+                    description = language.text(GameplayText.DashDescription),
                     state = when {
-                        engine.overheated -> "offline"
-                        engine.dashReady -> "ready"
-                        else -> "cooling"
+                        engine.overheated -> language.text(GameplayText.OfflineState)
+                        engine.dashReady -> language.text(GameplayText.ReadyState)
+                        else -> language.text(GameplayText.CoolingState)
                     },
                     onClick = {
                         onInput(GameplayInput.Action(GameplayInteractionPulse.DashRequested))
@@ -572,7 +615,7 @@ private fun GameplaySemanticControls(
                     bounds = bounds,
                     density = density,
                     tag = "kinetickk.gameplay.pause",
-                    description = "Pause game",
+                    description = language.text(GameplayText.PauseDescription),
                     onClick = {
                         onInput(GameplayInput.Action(GameplayInteractionPulse.PauseToggled))
                     },
@@ -585,7 +628,7 @@ private fun GameplaySemanticControls(
                     bounds = action.bounds,
                     density = density,
                     tag = "kinetickk.gameplay.resume",
-                    description = "Resume game",
+                    description = language.text(GameplayText.ResumeDescription),
                     onClick = {
                         onInput(GameplayInput.Action(GameplayInteractionPulse.PauseToggled))
                     },
@@ -594,7 +637,7 @@ private fun GameplaySemanticControls(
                     bounds = action.bounds,
                     density = density,
                     tag = "kinetickk.gameplay.settings",
-                    description = "Open gameplay settings",
+                    description = language.text(GameplayText.SettingsDescription),
                     onClick = { onInput(GameplayInput.OpenSettings) },
                 )
                 PauseTarget.PERFORMANCE -> PerformanceSemanticAction(
@@ -607,47 +650,19 @@ private fun GameplaySemanticControls(
                     bounds = action.bounds,
                     density = density,
                     tag = "kinetickk.gameplay.exit",
-                    description = "Exit to home",
+                    description = language.text(GameplayText.ExitDescription),
                     onClick = { onInput(GameplayInput.ExitToHome) },
                 )
             }
         }
-        GamePhase.CHOICE -> {
-            val layout = requireNotNull(choiceLayout)
-            engine.choices.forEachIndexed { index, choice ->
-                GameplaySemanticAction(
-                    bounds = layout.cards[index],
-                    density = density,
-                    tag = "kinetickk.gameplay.choice.${index + 1}",
-                    description = "Select choice ${index + 1}: ${choice.title}",
-                    onClick = {
-                        onInput(
-                            GameplayInput.Action(
-                                GameplayInteractionPulse.ChoiceSelected.fromValidated(index),
-                            ),
-                        )
-                    },
-                )
-            }
-            layout.reroll?.let { bounds ->
-                GameplaySemanticAction(
-                    bounds = bounds,
-                    density = density,
-                    tag = "kinetickk.gameplay.reroll",
-                    description = "Reroll choices. ${engine.rerollsRemaining} remaining",
-                    onClick = {
-                        onInput(GameplayInput.Action(GameplayInteractionPulse.ChoicesRerolled))
-                    },
-                )
-            }
-        }
+        GamePhase.CHOICE -> Unit // RewardContent owns the visible Compose actions.
         GamePhase.GAME_OVER, GamePhase.VICTORY -> {
             val layout = requireNotNull(terminalLayout)
             GameplaySemanticAction(
                 bounds = layout.restart,
                 density = density,
                 tag = "kinetickk.gameplay.restart",
-                description = "Restart run",
+                description = language.text(GameplayText.RestartDescription),
                 onClick = { onInput(GameplayInput.RestartRun) },
             )
             layout.rebirth?.let { bounds ->
@@ -655,7 +670,7 @@ private fun GameplaySemanticControls(
                     bounds = bounds,
                     density = density,
                     tag = "kinetickk.gameplay.rebirth",
-                    description = "Start next rebirth cycle",
+                    description = language.text(GameplayText.RebirthDescription),
                     onClick = { onInput(GameplayInput.OpenRebirth) },
                 )
             }
@@ -663,7 +678,7 @@ private fun GameplaySemanticControls(
                 bounds = layout.exit,
                 density = density,
                 tag = "kinetickk.gameplay.exit",
-                description = "Exit to home",
+                description = language.text(GameplayText.ExitDescription),
                 onClick = { onInput(GameplayInput.ExitToHome) },
             )
         }
@@ -678,12 +693,13 @@ private fun PerformanceSemanticAction(
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
+    val language = LocalAppLanguage.current
     GameplaySemanticAction(
         bounds = bounds,
         density = density,
         tag = "kinetickk.gameplay.performance",
-        description = "Performance metrics",
-        state = if (enabled) "on" else "off",
+        description = language.text(GameplayText.PerformanceDescription),
+        state = if (enabled) language.text(GameplayText.OnState) else language.text(GameplayText.OffState),
         onClick = onClick,
     )
 }
@@ -724,6 +740,7 @@ private fun BrakeSemanticControl(
     active: Boolean,
     onPressedChange: (Boolean) -> Unit,
 ) {
+    val language = LocalAppLanguage.current
     Box(
         Modifier
             .placeInGameplayBounds(bounds, density)
@@ -735,9 +752,9 @@ private fun BrakeSemanticControl(
             }
             .semantics(mergeDescendants = true) {
                 role = Role.Button
-                contentDescription = GAMEPLAY_BRAKE_DESCRIPTION
-                stateDescription = gameplayBrakeStateDescription(active)
-                onClick(label = GAMEPLAY_BRAKE_SEMANTIC_ACTION_LABEL) {
+                contentDescription = language.text(GameplayText.BrakeDescription)
+                stateDescription = gameplayBrakeStateDescription(active, language)
+                onClick(label = language.text(GameplayText.BrakeAction)) {
                     onPressedChange(gameplayBrakeSemanticToggleState(active))
                     true
                 }
@@ -757,11 +774,11 @@ private fun Modifier.placeInGameplayBounds(bounds: Rect, density: Density): Modi
         )
 
 private const val GAMEPLAY_ROOT_TAG = "kinetickk.gameplay"
-internal const val GAMEPLAY_BRAKE_DESCRIPTION = "Brake"
-internal const val GAMEPLAY_BRAKE_SEMANTIC_ACTION_LABEL = "Toggle brake"
+internal val GAMEPLAY_BRAKE_DESCRIPTION = GameplayText.BrakeDescription.english
+internal val GAMEPLAY_BRAKE_SEMANTIC_ACTION_LABEL = GameplayText.BrakeAction.english
 
-internal fun gameplayBrakeStateDescription(active: Boolean): String =
-    if (active) "pressed" else "released"
+internal fun gameplayBrakeStateDescription(active: Boolean, language: AppLanguage = AppLanguage.English): String =
+    if (active) language.text(GameplayText.PressedState) else language.text(GameplayText.ReleasedState)
 
 /** Accessibility activation is a latch: only another explicit action releases it. */
 internal fun gameplayBrakeSemanticToggleState(active: Boolean): Boolean = !active

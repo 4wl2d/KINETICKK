@@ -47,6 +47,7 @@ import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.RebirthProgressProjection
 import kinetickk.ball.profile.api.RunBootstrapProjection
 import kinetickk.foundation.collections.toImmutableList
+import kinetickk.foundation.common.localization.AppLanguage
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -55,6 +56,43 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class ProfileNucleusTest {
+    @Test
+    fun languageSelectionOwnsPreferenceAndSnapshotWithoutChangingOtherProfileFacts() {
+        AppLanguage.entries.forEach { language ->
+            val previousLanguage = AppLanguage.entries.first { it != language }
+            val default = defaultPlayerProfile(TestProfilePolicy)
+            val state = readyState(profile = default.copy(
+                preferences = default.preferences.copy(language = previousLanguage),
+            ))
+            val pulse = ProfileNucleusPulse.Intent(ProfilePulse.AdjustPreference(
+                ProfilePreferenceAdjustment.SetLanguage(language),
+            ))
+
+            val decision = ProfileNucleus.decide(state, pulse)
+            assertEquals(decision, ProfileNucleus.decide(state, pulse))
+            val frame = decision.acceptedFrame()
+            val expected = state.profile.copy(preferences = state.profile.preferences.copy(language = language))
+            assertEquals(expected, frame.nextState.profile)
+            assertEquals(expected, assertIs<ProfileOutput.PersistSnapshot>(frame.outputs.single()).snapshot.profile)
+            assertEquals(language, ProfileNucleus.query(frame.nextState, ProfileQuery.GetPreferences).preferences.language)
+            assertEquals(previousLanguage, state.profile.preferences.language)
+        }
+    }
+
+    @Test
+    fun selectingCurrentLanguageRejectsWithoutChangingStateOrPublishingSnapshot() {
+        val state = readyState()
+        val before = ProfileNucleus.query(state, ProfileQuery.GetPreferences)
+
+        assertEquals(ProfileRejection.NoChange, ProfileNucleus.decide(
+            state,
+            ProfileNucleusPulse.Intent(ProfilePulse.AdjustPreference(
+                ProfilePreferenceAdjustment.SetLanguage(AppLanguage.Russian),
+            )),
+        ).rejection())
+        assertEquals(before, ProfileNucleus.query(state, ProfileQuery.GetPreferences))
+    }
+
     @Test
     fun defaultProfileUsesOnlyCapturedPolicyDefaults() {
         val policy = TestProfilePolicy.copy(
@@ -331,6 +369,79 @@ class ProfileNucleusTest {
         assertEquals(state.profile.collection, assertIs<CollectionProjection>(projections[5]).collection)
         assertTrue(assertIs<RebirthProgressProjection>(projections[6]).canAdvance)
         assertEquals(state.persistence, assertIs<PersistenceStatusProjection>(projections[7]).persistence)
+    }
+
+    @Test
+    fun achievementThresholdsAccumulateAcrossRunsAndUnlockAllSixShapes() {
+        var state = readyState()
+        fun record(update: GameplayProgressUpdate) {
+            val frame = decideCommand(state, ProfileModuleCommand.ApplyGameplayProgress(update)).acceptedFrame()
+            // Every next attempt reconstructs Profile from the accepted persisted value.
+            state = constructedProfile(frame.nextState.profile, frame.nextState.revision.value)
+        }
+        fun unlocked() = ProfileNucleus.query(state, ProfileQuery.GetHomeProgress).unlockedCoreShapes
+
+        assertEquals(setOf(CoreShape.ORB), unlocked())
+        record(GameplayProgressUpdate(eliteKills = 2, dashHits = 19))
+        assertEquals(setOf(CoreShape.ORB), unlocked())
+        record(GameplayProgressUpdate(eliteKills = 1, dashHits = 1, completedOrbits = 1))
+        assertEquals(setOf(CoreShape.ORB, CoreShape.PRISM, CoreShape.SHARD, CoreShape.RING), unlocked())
+        record(GameplayProgressUpdate(architectDefeatedWith = CoreShape.ORB))
+        assertTrue(CoreShape.DIAMOND in unlocked())
+        record(GameplayProgressUpdate(architectDefeatedWith = CoreShape.ORB))
+        record(GameplayProgressUpdate(architectDefeatedWith = CoreShape.PRISM))
+        assertFalse(CoreShape.TESSERACT in unlocked())
+        record(GameplayProgressUpdate(architectDefeatedWith = CoreShape.SHARD))
+        assertEquals(CoreShape.entries.toSet(), unlocked())
+        assertEquals(4, state.profile.characterAchievements.architectVictories)
+        assertEquals(3, state.profile.characterAchievements.victoriousCharacters.size)
+        assertEquals(0L, state.profile.economy.lifetimeMatter)
+        repeat(3) { assertEquals(CoreShape.entries.toSet(), unlocked()) }
+    }
+
+    @Test
+    fun malformedAchievementDeltaAndLockedCharacterVictoryPreserveProfile() {
+        val state = readyState()
+        listOf(
+            GameplayProgressUpdate(eliteKills = -1),
+            GameplayProgressUpdate(dashHits = -1),
+            GameplayProgressUpdate(completedOrbits = -1),
+        ).forEach { update ->
+            assertEquals(
+                ProfileRejection.InvalidGameplayProgress(ProfileGameplayProgressRejection.NegativeAchievementProgress),
+                decideCommand(state, ProfileModuleCommand.ApplyGameplayProgress(update)).rejection(),
+            )
+        }
+        assertEquals(
+            ProfileRejection.InvalidGameplayProgress(ProfileGameplayProgressRejection.VictoryCharacterLocked),
+            decideCommand(state, ProfileModuleCommand.ApplyGameplayProgress(
+                GameplayProgressUpdate(architectDefeatedWith = CoreShape.TESSERACT),
+            )).rejection(),
+        )
+        assertEquals(defaultPlayerProfile(TestProfilePolicy), state.profile)
+    }
+
+    @Test
+    fun achievementCountersSaturateWithoutOverflowAndTheDecisionIsDeterministic() {
+        val state = readyState(profile = defaultPlayerProfile(TestProfilePolicy).copy(
+            characterAchievements = kinetickk.ball.profile.api.CharacterAchievementProgress(
+                eliteKills = Long.MAX_VALUE - 1,
+                dashHits = Long.MAX_VALUE - 1,
+                completedOrbits = Long.MAX_VALUE - 1,
+            ),
+        ))
+        val command = ProfileModuleCommand.ApplyGameplayProgress(GameplayProgressUpdate(
+            eliteKills = Int.MAX_VALUE,
+            dashHits = Int.MAX_VALUE,
+            completedOrbits = Int.MAX_VALUE,
+        ))
+        val first = decideCommand(state, command).acceptedFrame()
+        val second = decideCommand(state, command).acceptedFrame()
+        assertEquals(first, second)
+        assertEquals(Long.MAX_VALUE, first.nextState.profile.characterAchievements.eliteKills)
+        assertEquals(Long.MAX_VALUE, first.nextState.profile.characterAchievements.dashHits)
+        assertEquals(Long.MAX_VALUE, first.nextState.profile.characterAchievements.completedOrbits)
+        assertEquals(Long.MAX_VALUE - 1, state.profile.characterAchievements.eliteKills)
     }
 
     private fun readyState(

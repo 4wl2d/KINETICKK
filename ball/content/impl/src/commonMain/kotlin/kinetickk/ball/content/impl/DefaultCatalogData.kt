@@ -229,7 +229,7 @@ internal fun defaultMetaUpgrades(): ImmutableList<MetaUpgradeDefinition> =
         MetaUpgradeDefinition(MetaUpgradeId.DASH_CAPACITOR, "Dash Capacitor", "+5% dash impulse at the start of every run.", 8, 30, ItemModifier(ItemEffect.DASH_POWER, 0.05f)),
         MetaUpgradeDefinition(MetaUpgradeId.SALVAGE_PROTOCOL, "Salvage Protocol", "+5% Kinetic Matter gained during runs.", 10, 34, ItemModifier(ItemEffect.MATTER_GAIN, 0.05f)),
         MetaUpgradeDefinition(MetaUpgradeId.DATA_ARCHIVE, "Data Archive", "+5% Data gained during runs.", 10, 38, ItemModifier(ItemEffect.DATA_GAIN, 0.05f)),
-        MetaUpgradeDefinition(MetaUpgradeId.ARMORY_LICENSE, "Armory License", "+4% power for every unlocked weapon.", 12, 45, ItemModifier(ItemEffect.WEAPON_POWER, 0.04f)),
+        MetaUpgradeDefinition(MetaUpgradeId.ARMORY_LICENSE, "Armory License", "+4% weapon power per rank.", 12, 45, ItemModifier(ItemEffect.WEAPON_POWER, 0.04f)),
     ).toImmutableList().also(::validateMetaUpgrades)
 
 private fun validateMetaUpgrades(upgrades: List<MetaUpgradeDefinition>) {

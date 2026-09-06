@@ -8,12 +8,37 @@ import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.ProfilePreferenceAdjustment
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
+import kinetickk.foundation.common.localization.AppLanguage
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class SettingsReducerTest {
+    @Test
+    fun languageSelectionRequestsAcceptedProfileChangeAndSameLanguageIsInert() {
+        val initial = SettingsState(PlayerPreferences(language = AppLanguage.Russian).toRenderModel(), 0)
+        val changed = SettingsReducer.reduce(initial, SettingsAction.SelectLanguage(AppLanguage.English))
+        assertEquals(initial, changed.state)
+        assertEquals(ProfilePreferenceAdjustment.SetLanguage(AppLanguage.English),
+            assertIs<SettingsEffect.AdjustPreference>(changed.effects.first()).adjustment)
+        assertEquals(changed, SettingsReducer.reduce(initial, SettingsAction.SelectLanguage(AppLanguage.English)))
+        assertTrue(SettingsReducer.reduce(initial, SettingsAction.SelectLanguage(AppLanguage.Russian)).effects.isEmpty())
+        assertTrue(SettingsReducer.reduce(initial, SettingsAction.Adjust(SettingsRow.LANGUAGE, 1)).effects.isEmpty())
+    }
+
+    @Test
+    fun textualSettingsUseTheSelectedLanguage() {
+        val russian = PlayerPreferences(language = AppLanguage.Russian, soundEnabled = false)
+        val english = russian.copy(language = AppLanguage.English)
+        assertEquals("ВЫКЛ", settingValue(russian, SettingsRow.SFX))
+        assertEquals("OFF", settingValue(english, SettingsRow.SFX))
+        assertEquals("НОРМА", settingValue(russian, SettingsRow.PARTICLES))
+        assertEquals("NORMAL", settingValue(english, SettingsRow.PARTICLES))
+        assertEquals("КРАТКО", settingValue(russian, SettingsRow.DAMAGE_NUMBER_FORMAT))
+        assertEquals("COMPACT", settingValue(english, SettingsRow.DAMAGE_NUMBER_FORMAT))
+    }
+
     @Test
     fun rowsMapToClosedProfileAdjustmentsWithoutOptimisticStateChanges() {
         val initial = SettingsState(PlayerPreferences().toRenderModel(), page = 0)
@@ -96,6 +121,7 @@ class SettingsReducerTest {
         assertEquals(2f, model.preferences.simulationSpeed)
         assertEquals(1f, model.preferences.textScale)
         assertEquals("65%", settingValue(PlayerPreferences(), SettingsRow.MASTER_VOLUME))
-        assertEquals("50/200/1K", settingValue(PlayerPreferences(), SettingsRow.DAMAGE_COLOR_THRESHOLDS))
+        assertEquals("50/200/1 тыс.", settingValue(PlayerPreferences(), SettingsRow.DAMAGE_COLOR_THRESHOLDS))
+        assertEquals("50/200/1K", settingValue(PlayerPreferences(language = AppLanguage.English), SettingsRow.DAMAGE_COLOR_THRESHOLDS))
     }
 }

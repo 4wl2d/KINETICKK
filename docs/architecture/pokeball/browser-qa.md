@@ -31,12 +31,12 @@ result, and observed evidence; transient files are not product source.
 Browser automation may use page evaluation only to prepare and inspect the
 fresh temporary profile on the loopback origin:
 
-1. current-value scenarios may set only `kinetickk_profile` before reload;
+1. current-value scenarios may set only `kinetickk_profile_v2` before reload;
 2. incompatible-current scenarios set a malformed, non-canonical, or otherwise
    rejected payload at that exact key and then prove the application reaches
    Home with default Profile state;
 3. provider-read-failure scenarios wrap `Storage.prototype.getItem` so a read
-   of exactly `kinetickk_profile` throws
+   of exactly `kinetickk_profile_v2` throws
    `new DOMException("QA profile read failure", "SecurityError")`, then prove
    the blocking `PROFILE UNAVAILABLE` UI is rendered and consumes input;
 4. old-key isolation scenarios may set `kinetickk_progress_v2`,
@@ -55,7 +55,7 @@ reset, purge, migration, or retry control to exercise.
 | Scenario | Visible evidence and storage assertion |
 |---|---|
 | fresh launch | Home renders and no blocking UI is present |
-| valid current snapshot | `kinetickk_profile` is decoded as `ProfileSnapshot` and its state is visible |
+| valid current snapshot | `kinetickk_profile_v2` is decoded as `ProfileSnapshot` and its state is visible |
 | incompatible current payload | Home renders with default Profile state; no old or unrelated key is changed |
 | provider read failure | `PROFILE UNAVAILABLE` blocks the app, pointer input is consumed, and storage is unchanged |
 | old-key isolation | old and unrelated sentinels are ignored and remain untouched across launch and a current Profile write |

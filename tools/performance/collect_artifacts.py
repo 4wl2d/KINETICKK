@@ -14,7 +14,6 @@ import json
 import os
 import pathlib
 import platform
-import subprocess
 import sys
 import zipfile
 import zlib
@@ -55,21 +54,6 @@ def logical_repository_path(
 
 def utc_now() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
-
-
-def git_output(repository: pathlib.Path, *arguments: str) -> str | None:
-    try:
-        result = subprocess.run(
-            ["git", *arguments],
-            cwd=repository,
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
-        return None
-    return result.stdout.strip()
 
 
 def classify(relative_path: str) -> str:

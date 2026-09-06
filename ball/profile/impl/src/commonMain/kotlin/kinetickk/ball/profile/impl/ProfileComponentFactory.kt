@@ -39,10 +39,10 @@ interface ProfileComponent : ProfilePort, SessionProfileRoute, GameplayProfileRo
 
 /** Closed physical key contract implemented only by platform composition. */
 object ProfilePersistenceContract {
-    const val DESKTOP_PROFILE_NODE: String = "kinetickk/profile"
+    const val DESKTOP_PROFILE_NODE: String = "kinetickk/profile-v2"
     const val DESKTOP_SNAPSHOT: String = "snapshot"
 
-    const val WEB_SNAPSHOT: String = "kinetickk_profile"
+    const val WEB_SNAPSHOT: String = "kinetickk_profile_v2"
 }
 
 fun createProfileComponent(

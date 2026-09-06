@@ -3,6 +3,8 @@
 
 package kinetickk.gradle
 
+import kinetickk.gradle.pokeball.ProjectEdge
+import kinetickk.gradle.pokeball.expectedLeafProjects
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.file.ConfigurableFileCollection
@@ -36,11 +38,11 @@ abstract class VerifyArchitectureTask : DefaultTask() {
             reportFiles = architectureEdgeReportFiles.files,
             expectedSourceProjectPaths = actualLeafProjects,
         )
-            .map(DeclaredProjectDependency::decode)
-            .sortedWith(compareBy(DeclaredProjectDependency::source, DeclaredProjectDependency::configuration))
+            .map(ProjectEdge::decode)
+            .sortedWith(compareBy(ProjectEdge::source, ProjectEdge::configuration))
         val violations = buildList {
             addModuleSetViolations(actualLeafProjects)
-            addDependencyViolations(dependencies)
+            addAll(architectureDependencyViolations(dependencies))
 
             val sourceFiles = rootSourceFiles.files
                 .filter { it.isFile }
@@ -73,34 +75,16 @@ abstract class VerifyArchitectureTask : DefaultTask() {
     }
 }
 
-private data class DeclaredProjectDependency(
-    val source: String,
-    val configuration: String,
-    val target: String,
-) {
-    val displayName: String
-        get() = "$source [$configuration] -> $target"
-
-    companion object {
-        fun decode(encoded: String): DeclaredProjectDependency {
-            val parts = encoded.split(EDGE_SEPARATOR, limit = 3)
-            require(parts.size == 3) { "Malformed architecture dependency edge: $encoded" }
-            return DeclaredProjectDependency(
-                source = parts[0],
-                configuration = parts[1],
-                target = parts[2],
-            )
-        }
-    }
-}
+private val ProjectEdge.displayName: String
+    get() = "$source [$configuration] -> $target"
 
 private fun MutableList<String>.addModuleSetViolations(actualLeafProjects: Set<String>) {
-    val missing = EXPECTED_LEAF_PROJECTS - actualLeafProjects
+    val missing = expectedLeafProjects - actualLeafProjects
     if (missing.isNotEmpty()) {
         add("Missing required leaf modules: ${missing.sorted().joinToString()}")
     }
 
-    val unexpected = actualLeafProjects - EXPECTED_LEAF_PROJECTS
+    val unexpected = actualLeafProjects - expectedLeafProjects
     if (unexpected.isNotEmpty()) {
         add("Unexpected leaf modules: ${unexpected.sorted().joinToString()}")
     }
@@ -111,15 +95,15 @@ private fun MutableList<String>.addModuleSetViolations(actualLeafProjects: Set<S
     }
 }
 
-private fun MutableList<String>.addDependencyViolations(dependencies: List<DeclaredProjectDependency>) {
+internal fun architectureDependencyViolations(dependencies: List<ProjectEdge>): List<String> = buildList {
     HOST_PROJECTS.forEach { host ->
         val targets = dependencies.asSequence()
-            .filter { it.source == host }
+            .filter { it.source == host && !it.isTest }
             .map { it.target }
             .toSet()
         if (targets != setOf(APP_SHARED_PROJECT)) {
             add(
-                "$host must have exactly one project dependency target, $APP_SHARED_PROJECT; " +
+                "$host must have exactly one production project dependency target, $APP_SHARED_PROJECT; " +
                     "found ${targets.sorted().joinToString().ifEmpty { "none" }}",
             )
         }
@@ -134,8 +118,11 @@ private fun MutableList<String>.addDependencyViolations(dependencies: List<Decla
             add("Legacy core/feature dependency is forbidden: ${dependency.displayName}")
         }
 
-        if (dependency.source !in EXPECTED_LEAF_PROJECTS || dependency.target !in EXPECTED_LEAF_PROJECTS) {
-            add("Dependency endpoint is outside the declared 23-module graph: ${dependency.displayName}")
+        if (dependency.source !in expectedLeafProjects || dependency.target !in expectedLeafProjects) {
+            add(
+                "Dependency endpoint is outside the declared ${expectedLeafProjects.size}-module graph: " +
+                    dependency.displayName,
+            )
         }
     }
 }
@@ -145,37 +132,10 @@ private fun String.isImplementationProject(): Boolean = endsWith(":impl")
 private fun isLegacyModule(path: String): Boolean =
     path.startsWith(":core:") || path.startsWith(":feature:")
 
-private const val EDGE_SEPARATOR = '\t'
 private const val APP_SHARED_PROJECT = ":app:shared"
 
 private val HOST_PROJECTS = setOf(
     ":app:android",
     ":app:desktop",
     ":app:web",
-)
-
-private val EXPECTED_LEAF_PROJECTS = setOf(
-    ":app:android",
-    ":app:desktop",
-    ":app:shared",
-    ":app:web",
-    ":foundation:common",
-    ":foundation:design",
-    ":resource:audio:api",
-    ":resource:audio:impl",
-    ":ball:content:api",
-    ":ball:content:impl",
-    ":ball:profile:api",
-    ":ball:profile:nucleus",
-    ":ball:profile:resource",
-    ":ball:profile:interaction",
-    ":ball:profile:impl",
-    ":ball:gameplay:api",
-    ":ball:gameplay:nucleus",
-    ":ball:gameplay:interaction",
-    ":ball:gameplay:impl",
-    ":flow:session:api",
-    ":flow:session:nucleus",
-    ":flow:session:interaction",
-    ":flow:session:impl",
 )

@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.api.BrakeSource
@@ -20,6 +21,7 @@ import kinetickk.ball.gameplay.nucleus.reducer.EngineState
 import kinetickk.ball.gameplay.nucleus.reducer.GameReducer
 import kinetickk.ball.gameplay.nucleus.reducer.GameReductionResult
 import kinetickk.ball.gameplay.nucleus.render.PickupType
+import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.test.Test
@@ -31,6 +33,48 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class GameplayReductionIsolationTest {
+    @Test
+    fun candidateForksPreserveSelectedLoadoutAndPendingChoiceWithoutApplyingBootstrapDefaults() {
+        val source = MutableGameState(canonicalGameplayContent, seed = 12_003, initialMatter = 57).apply {
+            unlockedWeaponSet += WeaponId.MORNINGSTAR
+            unlockedWeaponView = unlockedWeaponSet.toSet()
+            startingWeapon = WeaponId.MORNINGSTAR
+            coreShape = CoreShape.PRISM
+            settings = settings.copy(soundEnabled = false, masterVolume = 0.25f)
+            startRun()
+            acquireItemForTesting(0)
+            acquireRelicForTesting(RelicId.ECHO_CHAMBER)
+            openItemChoice()
+            pendingBindingRelic = RelicId.ECHO_CHAMBER
+            pendingRelicBindAction = RelicChoiceAction.MELD
+            pendingClearedRebirthLevel = 3
+            totem = Totem(81f, 29f, 0.5f)
+            velocityX = -0f
+            weaponBeamTime = Float.fromBits(0x7fc00001)
+        }
+
+        listOf(source.copyForReduction(), source.copyForScalarInputReduction()).forEach { fork ->
+            assertEquivalentSimulation(source, fork)
+            val projection = fork.toRenderModel()
+            assertEquals(WeaponId.MORNINGSTAR, projection.weapon)
+            assertEquals(CoreShape.PRISM, projection.coreShape)
+            assertEquals(source.settings, projection.settings)
+            assertEquals(source.choices, projection.choices)
+        }
+
+        // A later cleared value must stay cleared, including fields with no bootstrap value.
+        val cleared = source.copyForReduction().apply {
+            pendingBindingRelic = null
+            pendingRelicBindAction = null
+            pendingClearedRebirthLevel = null
+            recentItem = null
+            totem = null
+        }
+        listOf(cleared.copyForReduction(), cleared.copyForScalarInputReduction()).forEach { fork ->
+            assertEquivalentSimulation(cleared, fork)
+        }
+    }
+
     @Test
     fun everyScalarCowIntentLeavesTheCompleteCommittedSourceFingerprintUnchanged() {
         val source = MutableGameState(

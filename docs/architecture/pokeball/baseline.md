@@ -41,8 +41,8 @@ blocks overlays; Game Over and Victory allow only Rebirth. Closing Settings
 propagates the persisted preferences to an active run. Restart and completed
 Rebirth start a fresh run from the latest Profile snapshot.
 
-The existing keyboard mapping remains `S/L/A/B/C/M/Escape/Enter` for Settings,
-Lab, Armory, Rebirth, Codex, mute, back, and contextual enter.
+The existing keyboard mapping remains `S/L/A/B/C/I/M/Escape/Enter` for Settings,
+Lab, Armory, Rebirth, Codex (C or I), mute, back, and contextual enter.
 
 ### Profile
 
@@ -63,12 +63,16 @@ bootstrap semantics.
 Seeded gameplay remains deterministic for an equal captured bootstrap, seed,
 and pulse trace. Simulation stays at 120 Hz with at most 48 fixed steps per
 render frame. Current caps remain enemies `120`, projectiles `650`, pickups
-`420`, trail points `110`, and visual-FX cues `2048`. Gameplay, balance,
-weapons, items, relic behavior, Rebirth tuning, and the 20-minute victory clock
-are unchanged.
+`420`, trail points `110`, and visual-FX cues `2048`. Content now owns the
+12-minute boss clock and its encounter/progression profile. Active-time goals
+are 12–15 minutes including the boss; no hard defeat timer is introduced.
+Fatigue recovers from actual sustained turns or low-speed Brake, while lateral
+and counter-thrust remain available at exhaustion. Gameplay owns six character
+abilities, optional world-fixed trials and bounded relic synergies. Codex reads
+one coherent immutable build summary and preserves pause/reward selection.
 
 The catalog remains exactly 400 items, 12 weapons, 8 meta upgrades, 40 relics,
-and Rebirth levels `0..10`. Existing stable declaration order is captured as
+six characters, and Rebirth levels `0..10`. Existing stable declaration order is captured as
 explicit stable IDs during the migration; consumers receive immutable versioned
 snapshots instead of reaching global catalog objects.
 
@@ -90,9 +94,9 @@ only `readSnapshot` and `writeSnapshot`; there is no reset, import, quarantine,
 purge, or bulk-clear operation.
 
 Platform composition owns the only physical storage authority. Android uses
-SharedPreferences `kinetickk.profile` key `snapshot`; Desktop uses Preferences
-node `kinetickk/profile` key `snapshot`; Web uses local-storage key
-`kinetickk_profile`. All other keys are outside the application contract: they
+SharedPreferences `kinetickk.profile.v2` key `snapshot`; Desktop uses Preferences
+node `kinetickk/profile-v2` key `snapshot`; Web uses local-storage key
+`kinetickk_profile_v2`. All other keys are outside the application contract: they
 are ignored and remain untouched.
 
 An absent current value, a strict codec rejection, or a decoded snapshot that

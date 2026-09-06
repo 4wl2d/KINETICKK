@@ -145,9 +145,9 @@ class ContentCatalogTest {
     @Test
     fun coreShapeUnlockPolicyIsCapturedInStableIdOrder() {
         assertEquals(CoreShape.entries.toList(), profile.coreShapes.map { definition -> definition.id })
-        assertEquals(0L, profile.coreShape(CoreShape.ORB).unlockLifetimeMatter)
-        assertEquals(25L, profile.coreShape(CoreShape.PRISM).unlockLifetimeMatter)
-        assertEquals(90L, profile.coreShape(CoreShape.SHARD).unlockLifetimeMatter)
+        assertEquals(0, profile.coreShape(CoreShape.ORB).unlockTarget)
+        assertEquals(3, profile.coreShape(CoreShape.PRISM).unlockTarget)
+        assertEquals(20, profile.coreShape(CoreShape.SHARD).unlockTarget)
     }
 
     private fun mechanicalSignature(item: ItemDefinition): List<Pair<Int, Int>> {

@@ -72,6 +72,7 @@ internal fun MutableGameState.toRenderModel(
         mass = mass,
         damageMultiplier = damageMultiplier,
         weaponPower = weaponPower,
+        effectiveWeaponPower = effectiveWeaponPower(),
         coolingRate = coolingRate,
         magnetStrength = magnetStrength,
         dashImpulse = dashImpulse,
@@ -268,6 +269,20 @@ internal fun MutableGameState.toRenderModel(
             ?: choices.toImmutableList(),
         choiceType = activeChoiceType,
         pendingRelicChoiceCount = pendingRelicChoices,
+        directedChoice = directedReward != null,
+        characterAbility = CharacterAbilityProjection(characterRuntime.charge, characterRuntime.barrier,
+            characterRuntime.ringRadius, characterRuntime.parryWindow,
+            characterRuntime.lattice.map { CharacterLatticePoint(it.x, it.y) }.toImmutableList()),
+        pointsOfInterest = pointsOfInterest.map { point ->
+            PointOfInterestProjection(point.kind, content.pointsOfInterest.definition(point.kind).name,
+                point.x, point.y, point.active,
+                if (point.active) point.remaining else (point.expiresAt - elapsed).coerceAtLeast(0f),
+                point.nextBeacon, when (point.kind) {
+                    kinetickk.ball.content.api.PointOfInterestKind.RESONANT_CIRCUIT -> (point.nextBeacon - 1) / 3f
+                    kinetickk.ball.content.api.PointOfInterestKind.SEALED_ANOMALY -> point.defeatedDefenders / 3f
+                    kinetickk.ball.content.api.PointOfInterestKind.COLLAPSING_ORBIT -> point.orbitSeconds / content.pointsOfInterest.orbitRequiredSeconds
+                }, point.defenderIds, point.warningRemaining, point.volleyAngle)
+        }.toImmutableList(),
         itemStacks = itemStacks.reuseIfStorageShared(
             identitySource?.itemStacks,
             reusableCollections?.itemStacks,
@@ -334,149 +349,3 @@ private fun <Element> CopyOnWriteMutableSet<Element>.reuseIfStorageShared(
     previousProjection: ImmutableSet<Element>?,
 ): ImmutableSet<Element>? =
     previousProjection?.takeIf { previousSource != null && sharesStorageWith(previousSource) }
-
-/**
- * Produces an isolated reducer candidate. Committed instances are never mutated again;
- * all mutation happens on this private copy during reduction.
- */
-internal fun MutableGameState.copyForReduction(): MutableGameState =
-    copyForReduction(shareStableStorage = false)
-
-internal fun MutableGameState.copyForScalarInputReduction(): MutableGameState =
-    copyForReduction(shareStableStorage = true)
-
-private fun MutableGameState.copyForReduction(
-    shareStableStorage: Boolean,
-): MutableGameState {
-    val target = MutableGameState(
-        content = content,
-        seed = 0,
-        initialMatter = 0,
-        initialRebirthLevel = rebirthLevel,
-        reductionSource = this,
-        shareStableReductionStorage = shareStableStorage,
-    )
-
-    target.nextEntityId = nextEntityId
-    target.spawnClock = spawnClock
-    target.nextEliteAt = nextEliteAt
-    target.dashBufferTime = dashBufferTime
-    target.bossSpawned = bossSpawned
-    target.keyboardBrakeActive = keyboardBrakeActive
-    target.secondaryBrakeActive = secondaryBrakeActive
-    target.touchBrakeActive = touchBrakeActive
-    target.uiScale = uiScale
-    target.accumulator = accumulator
-    target.lastTransitionSteps = lastTransitionSteps
-    target.previousCoreX = previousCoreX
-    target.previousCoreY = previousCoreY
-    target.previousSingularityX = previousSingularityX
-    target.previousSingularityY = previousSingularityY
-    target.trailLastX = trailLastX
-    target.trailLastY = trailLastY
-    target.trailDistanceCarry = trailDistanceCarry
-    target.weaponClock = weaponClock
-    target.weaponSecondaryClock = weaponSecondaryClock
-    target.pendingLevelChoices = pendingLevelChoices
-    target.pendingRelicChoices = pendingRelicChoices
-    target.pendingBindingRelic = pendingBindingRelic
-    target.pendingRelicBindAction = pendingRelicBindAction
-    target.slipstreamRelayTime = slipstreamRelayTime
-    target.borrowedMomentTime = borrowedMomentTime
-    target.brakepointCharge = brakepointCharge
-    target.dataFraction = dataFraction
-    target.matterFraction = matterFraction
-    target.shieldRechargeDelay = shieldRechargeDelay
-    target.overheatHoldTime = overheatHoldTime
-    target.saturationHeadingX = saturationHeadingX
-    target.saturationHeadingY = saturationHeadingY
-    target.timeSinceDamage = timeSinceDamage
-    target.hurtCooldown = hurtCooldown
-    target.lastAimDirectionX = lastAimDirectionX
-    target.lastAimDirectionY = lastAimDirectionY
-    target.bankedThisRun = bankedThisRun
-    target.activeChoiceType = activeChoiceType
-
-    target.phase = phase
-    target.settings = settings
-    target.rebirthLevel = rebirthLevel
-    target.screenWidth = screenWidth
-    target.screenHeight = screenHeight
-    target.coreX = coreX
-    target.coreY = coreY
-    target.velocityX = velocityX
-    target.velocityY = velocityY
-    target.cameraX = cameraX
-    target.cameraY = cameraY
-    target.pointerX = pointerX
-    target.pointerY = pointerY
-    target.pointerActive = pointerActive
-    target.braking = braking
-    target.elapsed = elapsed
-    target.heat = heat
-    target.overheated = overheated
-    target.dashPhaseTime = dashPhaseTime
-    target.hp = hp
-    target.maxHp = maxHp
-    target.shield = shield
-    target.maxShield = maxShield
-    target.level = level
-    target.data = data
-    target.nextLevelData = nextLevelData
-    target.keys = keys
-    target.kills = kills
-    target.combo = combo
-    target.comboTime = comboTime
-    target.runMatter = runMatter
-    target.totalMatter = totalMatter
-    target.lifetimeMatter = lifetimeMatter
-    target.lastImpact = lastImpact
-    target.lastImpactTime = lastImpactTime
-    target.damageFlash = damageFlash
-    target.runGrace = runGrace
-    target.screenShake = screenShake
-    target.message = message
-    target.messageTime = messageTime
-    target.mass = mass
-    target.damageMultiplier = damageMultiplier
-    target.weaponPower = weaponPower
-    target.coolingRate = coolingRate
-    target.magnetStrength = magnetStrength
-    target.dashImpulse = dashImpulse
-    target.dashHeatCost = dashHeatCost
-    target.regenPerSecond = regenPerSecond
-    target.critChance = critChance
-    target.critMultiplier = critMultiplier
-    target.pickupRadius = pickupRadius
-    target.luck = luck
-    target.dataGain = dataGain
-    target.matterGain = matterGain
-    target.attackSpeed = attackSpeed
-    target.damageReduction = damageReduction
-    target.comboWindow = comboWindow
-    target.overdriveGain = overdriveGain
-    target.dragCoefficient = dragCoefficient
-    target.polarityStability = polarityStability
-    target.weapon = weapon
-    target.startingWeapon = startingWeapon
-    target.weaponLevel = weaponLevel
-    target.overdriveCharge = overdriveCharge
-    target.overdriveTime = overdriveTime
-    target.rerollsRemaining = rerollsRemaining
-    target.acquiredItemCount = acquiredItemCount
-    target.recentItem = recentItem
-    target.equippedRelics = equippedRelics
-    target.morningstarAngle = morningstarAngle
-    target.morningstarX = morningstarX
-    target.morningstarY = morningstarY
-    target.weaponBeamTime = weaponBeamTime
-    target.weaponBeamStartX = weaponBeamStartX
-    target.weaponBeamStartY = weaponBeamStartY
-    target.weaponBeamEndX = weaponBeamEndX
-    target.weaponBeamEndY = weaponBeamEndY
-    target.totem = if (shareStableStorage) totem else totem?.copy()
-    target.coreShape = coreShape
-
-    target.choices = choices
-    return target
-}

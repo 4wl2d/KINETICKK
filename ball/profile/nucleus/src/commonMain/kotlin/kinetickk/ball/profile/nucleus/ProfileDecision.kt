@@ -14,9 +14,6 @@ import kinetickk.foundation.collections.ImmutableList
 
 const val MAX_PROFILE_OUTPUTS_PER_DECISION: Int = 2
 
-/** Profile currently has no per-Pulse semantic context. */
-data object ProfileContext
-
 sealed interface ProfileNucleusPulse {
     data class Intent(val intent: ProfilePulse.Business) : ProfileNucleusPulse
     data class ModuleCommand(val pulse: ProfileModuleCommandPulse) : ProfileNucleusPulse

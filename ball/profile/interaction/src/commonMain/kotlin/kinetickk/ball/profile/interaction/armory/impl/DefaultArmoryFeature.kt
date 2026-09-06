@@ -3,9 +3,13 @@
 
 package kinetickk.ball.profile.interaction.armory.impl
 
+import kinetickk.foundation.common.localization.text
+import kinetickk.ball.profile.interaction.localization.ProfileText
+import kinetickk.ball.content.api.localizedContent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.fillMaxSize
+import kinetickk.foundation.design.LocalAppLanguage
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -47,17 +51,20 @@ import kotlin.math.min
 class DefaultArmoryFeature(
     private val profilePort: ProfilePort,
     private val weapons: ImmutableList<WeaponDefinition>,
-    weaponMasteries: ImmutableList<WeaponMastery>,
+    private val weaponMasteries: ImmutableList<WeaponMastery>,
     audioService: AudioService,
 ) : ArmoryFeature {
     private val reducer = ArmoryReducer(weapons)
     private val audioExecutor = ProfileAudioExecutor(audioService)
-    private val weaponMasteryProgressionLabel = weaponMasteries.drop(1).joinToString("  ") {
-        "L${it.minimumLevel} ${it.displayLabel.uppercase()}"
-    }
 
     @Composable
     override fun Content(activeRunWeapon: WeaponId?, onOutput: (ArmoryOutput) -> Unit) {
+        val language = LocalAppLanguage.current
+        val weaponMasteryProgressionLabel = remember(weaponMasteries, language) {
+            weaponMasteries.drop(1).joinToString("  ") {
+                language.text(ProfileText.MasteryLevel, it.minimumLevel, it.displayLabel.localizedContent(language).uppercase())
+            }
+        }
         val density = LocalDensity.current.density
         val composeTextMeasurer = rememberTextMeasurer(cacheSize = 64)
         var pageValue by rememberSaveable { mutableIntStateOf(0) }
@@ -69,7 +76,8 @@ class DefaultArmoryFeature(
         val model = reducer.renderModel(loadoutProjectionValue.snapshot, activeRunWeapon)
         val textMeasurer = CanvasTextMeasurer(
             composeTextMeasurer,
-            profilePort.query(ProfileQuery.GetPreferences).preferences.textScale,
+            language = LocalAppLanguage.current,
+            scale = profilePort.query(ProfileQuery.GetPreferences).preferences.textScale,
         )
 
         fun dispatch(action: ArmoryAction) {
@@ -146,8 +154,8 @@ private fun DrawScope.drawArmory(
     drawRect(Color(0xD9050610))
     val bounds = overlayBounds()
     drawOverlayFrame(bounds, Cyan)
-    drawLabel(textMeasurer, "WEAPON ARMORY", bounds.left + d(25f), bounds.top + d(24f), 20f, Cyan, weight = FontWeight.Bold)
-    drawLabel(textMeasurer, "${weapons.size} SYSTEMS // ${engine.unlockedWeapons.size} UNLOCKED // MATTER ${formatCompact(engine.totalMatter)}", bounds.right - d(25f), bounds.top + d(30f), 8f, White, alignRight = true)
+    drawLabel(textMeasurer, textMeasurer.language.text(ProfileText.ArmoryTitle), bounds.left + d(25f), bounds.top + d(24f), 20f, Cyan, weight = FontWeight.Bold)
+    drawLabel(textMeasurer, textMeasurer.language.text(ProfileText.ArmorySummary, weapons.size, engine.unlockedWeapons.size, formatCompact(engine.totalMatter, textMeasurer.language)), bounds.right - d(25f), bounds.top + d(30f), 8f, White, alignRight = true)
     val cardWidth = min(d(245f), (bounds.width - d(80f)) / 3f)
     val gap = d(16f)
     val total = cardWidth * 3f + gap * 2f
@@ -200,16 +208,16 @@ private fun DrawScope.drawWeaponCard(
         renderTime,
         accent,
     )
-    drawLabel(textMeasurer, definition.name.uppercase(), x + width * 0.5f, y + d(139f), 11f, accent, centered = true, weight = FontWeight.Bold)
-    drawLabel(textMeasurer, definition.tags.joinToString(" / "), x + width * 0.5f, y + d(164f), 7f, Muted, centered = true)
-    drawLabel(textMeasurer, definition.description, x + d(14f), y + d(193f), 7f, White, maxWidth = width - d(28f), maxLines = 3)
+    drawLabel(textMeasurer, definition.name.localizedContent(textMeasurer.language).uppercase(), x + width * 0.5f, y + d(139f), 11f, accent, centered = true, weight = FontWeight.Bold)
+    drawLabel(textMeasurer, definition.tags.joinToString(" / ") { it.localizedContent(textMeasurer.language) }, x + width * 0.5f, y + d(164f), 7f, Muted, centered = true)
+    drawLabel(textMeasurer, definition.description.localizedContent(textMeasurer.language), x + d(14f), y + d(193f), 7f, White, maxWidth = width - d(28f), maxLines = 3)
     drawLabel(textMeasurer, weaponMasteryProgressionLabel, x + width * 0.5f, y + d(274f), 6f, accent, centered = true, maxWidth = width - d(20f), maxLines = 2)
-    drawLabel(textMeasurer, "MILESTONES BOOST DAMAGE + ACTIVATION", x + width * 0.5f, y + d(295f), 6f, Muted, centered = true)
+    drawLabel(textMeasurer, textMeasurer.language.text(ProfileText.Milestones), x + width * 0.5f, y + d(295f), 6f, Muted, centered = true)
     val state = when {
-        equipped -> "EQUIPPED LOADOUT"
-        active -> "ACTIVE THIS RUN"
-        unlocked -> "EQUIP"
-        else -> "UNLOCK ${formatCompact(definition.permanentUnlockCost.toLong())}"
+        equipped -> textMeasurer.language.text(ProfileText.Equipped)
+        active -> textMeasurer.language.text(ProfileText.ActiveRun)
+        unlocked -> textMeasurer.language.text(ProfileText.Equip)
+        else -> textMeasurer.language.text(ProfileText.Unlock, formatCompact(definition.permanentUnlockCost.toLong(), textMeasurer.language))
     }
     drawLabel(textMeasurer, state, x + width * 0.5f, y + height - d(34f), 9f, if (equipped) Acid else accent, centered = true, weight = FontWeight.Bold)
 }

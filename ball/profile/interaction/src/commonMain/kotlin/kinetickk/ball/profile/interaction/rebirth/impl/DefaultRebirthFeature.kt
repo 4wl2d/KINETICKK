@@ -6,6 +6,7 @@ package kinetickk.ball.profile.interaction.rebirth.impl
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.fillMaxSize
+import kinetickk.foundation.design.LocalAppLanguage
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -56,6 +57,7 @@ class DefaultRebirthFeature(
         val composeTextMeasurer = rememberTextMeasurer(cacheSize = 64)
         val textMeasurer = CanvasTextMeasurer(
             delegate = composeTextMeasurer,
+            language = LocalAppLanguage.current,
             scale = textScale,
         )
 

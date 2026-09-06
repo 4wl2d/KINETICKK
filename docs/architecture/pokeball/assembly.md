@@ -64,7 +64,7 @@ not appear in the semantic direct-control graph above.
 | `session-profile-persistence` | AppSession -> Profile | `ProfileQuery.GetPersistenceStatus` -> `PersistenceStatusProjection` | one Profile query snapshot per call |
 | `session-gameplay-status` | AppSession -> GameplayRun | `GameplayQuery.GetRunStatus` -> `GameplayRunStatusProjection` | exact active `RunId` is validated by Session admission |
 | `session-gameplay-weapon` | AppSession -> GameplayRun | `GameplayQuery.GetActiveWeapon` -> `GameplayActiveWeaponProjection` | explicitly non-atomic UI projection |
-| `session-gameplay-codex` | AppSession -> GameplayRun | `GameplayQuery.GetCodexStacks` -> `GameplayCodexStacksProjection` | explicitly non-atomic UI projection |
+| `session-gameplay-codex` | AppSession -> GameplayRun | `GameplayQuery.GetBuildSummary` -> `GameplayBuildSummaryProjection` | immutable coherent build at one Gameplay revision; Profile discovery remains an independent UI read |
 | `gameplay-content-bootstrap` | GameplayRun -> ContentCatalog | `ContentCatalog.gameplayContent` -> `GameplayContentSnapshot` | captured at accepted `StartRun`; no later global lookup |
 | `gameplay-profile-run-bootstrap` | GameplayRun -> Profile | `ProfileQuery.GetRunBootstrap` -> `RunBootstrapProjection` | validated trusted start Context for the exact Profile instance/revision |
 | `gameplay-profile-preferences` | GameplayRun -> Profile | `ProfileQuery.GetPreferences` -> `PreferencesProjection` | validated trusted preferences Context for the exact Profile instance/revision |
@@ -205,3 +205,11 @@ overlay: Settings | Lab | Armory | Rebirth | Codex
 `AppShellProjection` is immutable. Its projection revision produces a route
 lifecycle token. It does not become a new destination, business owner, or
 composition identity.
+
+The build projection exposes Content-owned `CoreShape` and immutable `EquippedRelic`
+values through Gameplay's existing Content dependency. Gameplay owns effective
+stats, their contributions, eligible acquisitions and active/missing synergies;
+the UI formats these values without evaluating combat rules. The existing
+Gameplay-to-Profile command now carries elite defeats, Dash hits, completed
+orbits and the victorious character. Profile owns cumulative achievement totals,
+distinct winning characters and unlock decisions. This adds no route or authority.

@@ -8,7 +8,6 @@ import kinetickk.ball.gameplay.api.GameplayCommandIngressResult
 import kinetickk.ball.gameplay.api.GameplayCommandIssuerProvenance
 import kinetickk.ball.gameplay.api.GameplayCommandRefusalEvidence
 import kinetickk.ball.gameplay.api.GameplayCommandSourceToken
-import kinetickk.ball.gameplay.api.GameplayEffectiveProtocolIdentity
 import kinetickk.ball.gameplay.api.GameplayExitProgressResult
 import kinetickk.ball.gameplay.api.GameplayInstanceId
 import kinetickk.ball.gameplay.api.GameplayModuleCommand
@@ -24,6 +23,7 @@ import kinetickk.ball.gameplay.api.GameplayRunStatusProjection
 import kinetickk.ball.gameplay.api.GameplaySessionRunPort
 import kinetickk.ball.gameplay.api.GameplayTargetBoundaryProvenance
 import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.api.effectiveProtocolIdentity
 import kinetickk.ball.gameplay.interaction.GameplaySessionHost
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.PersistenceStatusProjection
@@ -35,7 +35,6 @@ import kinetickk.ball.profile.api.ProfileCommandBoundaryResponse
 import kinetickk.ball.profile.api.ProfileCommandIngressResult
 import kinetickk.ball.profile.api.ProfileCommandRefusalEvidence
 import kinetickk.ball.profile.api.ProfileCommandSourceToken
-import kinetickk.ball.profile.api.ProfileEffectiveProtocolIdentity
 import kinetickk.ball.profile.api.ProfileModuleCommand
 import kinetickk.ball.profile.api.ProfileModuleCommandRequest
 import kinetickk.ball.profile.api.ProfileModuleResult
@@ -47,11 +46,12 @@ import kinetickk.ball.profile.api.ProfileResultSourceToken
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileRunBootstrapResult
 import kinetickk.ball.profile.api.ProfileTargetBoundaryProvenance
-import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.RebirthProfileSnapshot
+import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.RebirthProgressProjection
 import kinetickk.ball.profile.api.RunBootstrapProjection
 import kinetickk.ball.profile.api.SessionProfileRoute
+import kinetickk.ball.profile.api.effectiveProtocolIdentity
 
 internal class AppSessionTestRig(
     val profile: FakeSessionProfileRoute = FakeSessionProfileRoute(),
@@ -144,7 +144,7 @@ internal class FakeSessionProfileRoute(
                         causalScope = call.causalScope,
                         causalDepth = resultDepth,
                     ),
-                    effectiveProtocolIdentity = call.request.command.effectiveIdentity,
+                    effectiveProtocolIdentity = call.request.command.effectiveProtocolIdentity(),
                     result = result,
                     issuerProvenance = ProfileResultIssuerProvenance.LOCAL_PROFILE_STATIC_BINDING,
                 ),
@@ -161,11 +161,11 @@ internal class FakeSessionProfileRoute(
         ProfileCommandIngressResult.RejectedBeforeAcceptance(
             ProfileCommandRefusalEvidence(
                 commandSource = commandSource(call),
-                effectiveProtocolIdentity = call.request.command.effectiveIdentity,
+                effectiveProtocolIdentity = call.request.command.effectiveProtocolIdentity(),
                 boundaryResponse = response,
                 targetBoundaryProvenance = ProfileTargetBoundaryProvenance(
                     instanceId,
-                    call.request.command.effectiveIdentity,
+                    call.request.command.effectiveProtocolIdentity(),
                 ),
             ),
         )
@@ -334,7 +334,7 @@ internal class FakeGameplaySessionRunPort(
                         causalScope = call.causalScope,
                         causalDepth = call.causalDepth + if (nestedExit) 3 else 1,
                     ),
-                    effectiveProtocolIdentity = call.request.command.effectiveIdentity,
+                    effectiveProtocolIdentity = call.request.command.effectiveProtocolIdentity(),
                     result = result,
                     issuerProvenance = GameplayResultIssuerProvenance.GAMEPLAY_RUN_STATIC_BINDING,
                 ),
@@ -351,11 +351,11 @@ internal class FakeGameplaySessionRunPort(
         GameplayCommandIngressResult.RejectedBeforeAcceptance(
             GameplayCommandRefusalEvidence(
                 commandSource = commandSource(call),
-                effectiveProtocolIdentity = call.request.command.effectiveIdentity,
+                effectiveProtocolIdentity = call.request.command.effectiveProtocolIdentity(),
                 boundaryResponse = response,
                 targetBoundaryProvenance = GameplayTargetBoundaryProvenance(
                     instanceId,
-                    call.request.command.effectiveIdentity,
+                    call.request.command.effectiveProtocolIdentity(),
                 ),
             ),
         )
@@ -394,19 +394,3 @@ internal fun PlayerProfile.toGameplaySnapshot(): GameplayProfileSnapshot = Gamep
     collection = collection,
     rebirthProgress = rebirthProgress,
 )
-
-private val ProfileModuleCommand.effectiveIdentity: ProfileEffectiveProtocolIdentity
-    get() = when (this) {
-        is ProfileModuleCommand.SelectCoreShape -> ProfileEffectiveProtocolIdentity.SESSION_CORE_SHAPE
-        ProfileModuleCommand.ToggleMute -> ProfileEffectiveProtocolIdentity.SESSION_MUTE
-        ProfileModuleCommand.AdvanceRebirth -> ProfileEffectiveProtocolIdentity.SESSION_REBIRTH
-        is ProfileModuleCommand.ApplyGameplayProgress -> ProfileEffectiveProtocolIdentity.GAMEPLAY_PROGRESS
-    }
-
-private val GameplayModuleCommand.effectiveIdentity: GameplayEffectiveProtocolIdentity
-    get() = when (this) {
-        GameplayModuleCommand.StartRun -> GameplayEffectiveProtocolIdentity.SESSION_START
-        GameplayModuleCommand.PauseForOverlay -> GameplayEffectiveProtocolIdentity.SESSION_PAUSE
-        GameplayModuleCommand.ApplyPreferences -> GameplayEffectiveProtocolIdentity.SESSION_PREFERENCES
-        GameplayModuleCommand.ExitRun -> GameplayEffectiveProtocolIdentity.SESSION_EXIT
-    }

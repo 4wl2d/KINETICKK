@@ -3,9 +3,13 @@
 
 package kinetickk.flow.session.interaction.profile.impl
 
+import kinetickk.foundation.common.localization.text
+import kinetickk.flow.session.interaction.localization.SessionText
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.pointer.pointerInput
@@ -13,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import kinetickk.flow.session.interaction.profile.api.ProfileUnavailableFeature
 import kinetickk.foundation.design.CanvasTextMeasurer
+import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.Red
 import kinetickk.foundation.design.SpaceBlack
 import kinetickk.foundation.design.TextMeasurer
@@ -24,10 +29,15 @@ import kinetickk.foundation.design.drawOverlayFrame
 class DefaultProfileUnavailableFeature : ProfileUnavailableFeature {
     @Composable
     override fun Content() {
-        val textMeasurer = CanvasTextMeasurer(rememberTextMeasurer(cacheSize = 8), scale = 1f)
+        val language = LocalAppLanguage.current
+        val textMeasurer = CanvasTextMeasurer(rememberTextMeasurer(cacheSize = 8), scale = 1f, language = language)
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
+                .semantics {
+                    contentDescription = language.text(SessionText.PROFILE_UNAVAILABLE) + ". " +
+                        language.text(SessionText.PROFILE_UNAVAILABLE_BODY)
+                }
                 .pointerInput(Unit) {
                     awaitPointerEventScope {
                         while (true) {
@@ -42,6 +52,7 @@ class DefaultProfileUnavailableFeature : ProfileUnavailableFeature {
 }
 
 private fun DrawScope.drawProfileUnavailable(textMeasurer: TextMeasurer) {
+    val language = textMeasurer.language
     drawRect(SpaceBlack.copy(alpha = 0.94f))
     val width = minOf(d(720f), size.width - d(30f))
     val height = minOf(d(300f), size.height - d(30f))
@@ -51,7 +62,7 @@ private fun DrawScope.drawProfileUnavailable(textMeasurer: TextMeasurer) {
     drawOverlayFrame(bounds, Red)
     drawLabel(
         textMeasurer,
-        "PROFILE UNAVAILABLE",
+        language.text(SessionText.PROFILE_UNAVAILABLE),
         bounds.left + d(32f),
         bounds.top + d(34f),
         20f,
@@ -60,7 +71,7 @@ private fun DrawScope.drawProfileUnavailable(textMeasurer: TextMeasurer) {
     )
     drawLabel(
         textMeasurer,
-        "THE LOCAL PROFILE COULD NOT BE READ SAFELY. NO LOCAL DATA WAS CHANGED. RESTART THE APPLICATION TO TRY AGAIN.",
+        language.text(SessionText.PROFILE_UNAVAILABLE_BODY),
         bounds.left + d(40f),
         bounds.top + d(112f),
         10f,

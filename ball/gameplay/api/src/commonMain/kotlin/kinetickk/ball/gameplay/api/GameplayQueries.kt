@@ -4,12 +4,15 @@
 package kinetickk.ball.gameplay.api
 
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.EquippedRelic
+import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.ImmutableList
 
 sealed interface GameplayQuery {
     data object GetRunStatus : GameplayQuery
     data object GetActiveWeapon : GameplayQuery
-    data object GetCodexStacks : GameplayQuery
+    data object GetBuildSummary : GameplayQuery
 }
 
 sealed interface GameplayProjection {
@@ -30,11 +33,38 @@ data class GameplayActiveWeaponProjection(
     val weapon: WeaponId?,
 ) : GameplayProjection
 
-data class GameplayCodexStacksProjection(
+data class GameplayBuildSummaryProjection(
     override val instanceId: GameplayInstanceId,
     override val revision: GameplayRevision,
     val itemStacks: ImmutableList<Int>,
+    val character: CoreShape? = null,
+    val characterName: String = "",
+    val characterMechanic: String = "",
+    val weapon: WeaponId? = null,
+    val weaponName: String = "",
+    val weaponLevel: Int = 0,
+    val mastery: String = "",
+    val relics: ImmutableList<EquippedRelic> = immutableListOf(),
+    val stats: ImmutableList<BuildStatSummary> = immutableListOf(),
+    val synergies: ImmutableList<BuildSynergySummary> = immutableListOf(),
+    val eligibleItemIds: ImmutableList<Int> = immutableListOf(),
 ) : GameplayProjection
+
+enum class BuildStatSource { CHARACTER, LAB, ITEMS, RELICS, SYNERGIES, MASTERY, TEMPORARY }
+data class BuildStatContribution(val source: BuildStatSource, val amount: Float)
+data class BuildStatSummary(
+    val name: String,
+    val value: Float,
+    val unit: String,
+    val contributions: ImmutableList<BuildStatContribution>,
+)
+data class BuildSynergySummary(
+    val id: String,
+    val name: String,
+    val description: String,
+    val active: Boolean,
+    val missingComponents: ImmutableList<String>,
+)
 
 /** AppSession's source-bound command route and sole workflow read. */
 interface GameplaySessionRunPort {
@@ -54,5 +84,5 @@ interface GameplayPresentationPort {
     val instanceId: GameplayInstanceId
 
     fun query(query: GameplayQuery.GetActiveWeapon): GameplayActiveWeaponProjection
-    fun query(query: GameplayQuery.GetCodexStacks): GameplayCodexStacksProjection
+    fun query(query: GameplayQuery.GetBuildSummary): GameplayBuildSummaryProjection
 }

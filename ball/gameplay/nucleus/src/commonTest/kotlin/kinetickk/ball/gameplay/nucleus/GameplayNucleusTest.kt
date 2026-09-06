@@ -78,7 +78,7 @@ class GameplayNucleusTest {
         assertNull(GameplayNucleus.renderSnapshot(state).renderModel)
         val status = GameplayNucleus.query(state, GameplayQuery.GetRunStatus)
         val weapon = GameplayNucleus.query(state, GameplayQuery.GetActiveWeapon)
-        val codex = GameplayNucleus.query(state, GameplayQuery.GetCodexStacks)
+        val codex = GameplayNucleus.query(state, GameplayQuery.GetBuildSummary)
         assertEquals(GameplayRunPhase.CREATED, status.phase)
         assertFalse(status.profileCommandPending)
         assertNull(weapon.weapon)
@@ -506,7 +506,7 @@ class GameplayNucleusTest {
     fun retainedRenderAndQueryCollectionsStayImmutable() {
         val state = start(initial(27)).nextState
         val retainedRender = GameplayNucleus.renderSnapshot(state).renderModel!!
-        val retainedStacks = GameplayNucleus.query(state, GameplayQuery.GetCodexStacks).itemStacks
+        val retainedStacks = GameplayNucleus.query(state, GameplayQuery.GetBuildSummary).itemStacks
         val retainedCoreX = retainedRender.coreX
         val advanced = interaction(
             state,

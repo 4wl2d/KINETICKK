@@ -3,153 +3,172 @@
 
 package kinetickk.ball.gameplay.nucleus.characterization
 
-import kinetickk.ball.gameplay.api.*
-import kinetickk.ball.gameplay.nucleus.render.*
-import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.simulation.*
-import kotlin.test.assertTrue
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class TetherSaturationTest {
     @Test
-    fun heldEdgeExhaustsPullAndThenSlowsTheCore() {
-        val engine = runningEngine(seed = 60)
-        engine.updatePointer(SCREEN_WIDTH, SCREEN_HEIGHT * 0.5f)
-
-        val saturationStartedAt = engine.elapsed
-        advanceUntil(engine, timeoutSeconds = 4f) { engine.polarityStability <= 0.001f }
-        val saturationTime = engine.elapsed - saturationStartedAt
-        val speedAtExhaustion = engine.speed
-
-        assertTrue(
-            saturationTime in 2.45f..2.60f,
-            "Held edge should exhaust polarity in about 2.5 simulated seconds, took $saturationTime",
-        )
-        assertTrue(engine.tetherAuthority < 0.0001f, "Tether retained authority: ${engine.tetherAuthority}")
-        assertTrue(speedAtExhaustion > 500f, "The Core never built meaningful momentum: $speedAtExhaustion")
-
-        advanceBy(engine, seconds = 3f)
-
-        assertTrue(engine.phase == GamePhase.RUNNING)
-        assertTrue(engine.polarityStability <= 0.001f)
-        assertTrue(
-            engine.speed < speedAtExhaustion * 0.5f,
-            "A saturated tether sustained edge-flight: $speedAtExhaustion -> ${engine.speed}",
-        )
+    fun cursorOscillationCannotRecoverStabilityDuringStraightFlight() {
+        for (width in listOf(640f, 1_280f, 2_560f)) {
+            for (frequency in listOf(30, 60, 120, 240)) {
+                val engine = runningEngine().apply { resize(width, width * 0.5625f) }
+                val delta = 1f / frequency
+                repeat(frequency * 3) { index ->
+                    val angle = if (index % 2 == 0) 1.3f else -1.3f
+                    engine.updatePointer(width * (0.5f + 0.49f * cos(angle)), engine.screenHeight * (0.5f + 0.49f * sin(angle)))
+                    engine.velocityX = 700f
+                    engine.velocityY = 0f
+                    engine.updatePolarityStability(0f, delta)
+                }
+                assertEquals(0.2f, engine.polarityStability, "width=$width frequency=$frequency")
+                // Axial in/out motion and a centered cursor also award nothing.
+                repeat(frequency) { index ->
+                    engine.updatePointer(width * if (index % 2 == 0) 0.51f else 0.99f, engine.screenHeight * 0.5f)
+                    engine.updatePolarityStability(0f, delta)
+                }
+                assertEquals(0.2f, engine.polarityStability)
+            }
+        }
     }
 
     @Test
-    fun ninetyDegreeTurnRelievesSaturation() {
-        val engine = saturatedEngine(seed = 61)
-        val stabilityBeforeTurn = engine.polarityStability
-
-        engine.updatePointer(SCREEN_WIDTH * 0.5f, SCREEN_HEIGHT)
-        step(engine)
-
-        assertTrue(engine.phase == GamePhase.RUNNING)
-        assertTrue(
-            engine.polarityStability > stabilityBeforeTurn + 0.65f,
-            "A deliberate turn did not restore polarity: $stabilityBeforeTurn -> ${engine.polarityStability}",
-        )
-        assertTrue(engine.tetherAuthority > 0.4f, "Turn left too little tether authority: ${engine.tetherAuthority}")
+    fun realTurnRequiresSmoothingAndHoldThenAwardsFortyPercentOnce() {
+        val engine = runningEngine()
+        repeat(120) { engine.updatePolarityStability(0f, STEP) }
+        engine.velocityX = 0f
+        engine.velocityY = 700f
+        repeat(24) { engine.updatePolarityStability(0f, STEP) }
+        assertEquals(0.2f, engine.polarityStability, "Turning the core must be sustained after smoothing")
+        repeat(36) { engine.updatePolarityStability(0f, STEP) }
+        assertEquals(0.6f, engine.polarityStability, 0.0001f)
+        repeat(300) { engine.updatePolarityStability(0f, STEP) }
+        assertEquals(0.6f, engine.polarityStability, 0.0001f, "One changed heading must not repeatedly recharge")
     }
 
     @Test
-    fun bringingAimInwardRecoversSaturation() {
-        val engine = saturatedEngine(seed = 62)
-
-        // Let ordinary drag reduce the edge-flight camera lag before moving the lethal
-        // singularity inward, then brake while the polarity field recovers.
-        advanceBy(engine, seconds = 3f)
-        engine.setBrake(true)
-        engine.updatePointer(SCREEN_WIDTH * 0.61f, SCREEN_HEIGHT * 0.5f)
-
-        advanceBy(engine, seconds = 1.75f)
-
-        assertTrue(engine.phase == GamePhase.RUNNING)
-        assertTrue(
-            engine.polarityStability > 0.9f,
-            "Inward aim did not restore polarity: ${engine.polarityStability}",
-        )
-        assertTrue(engine.tetherAuthority > 0.8f)
+    fun lowSpeedTurnsAndShortActualOscillationDoNotCount() {
+        val engine = runningEngine().apply { velocityX = 100f }
+        repeat(600) { index ->
+            engine.velocityX = if (index % 2 == 0) 100f else -100f
+            engine.updatePolarityStability(0f, STEP)
+        }
+        assertEquals(0.2f, engine.polarityStability)
+        engine.velocityX = 700f
+        repeat(120) { engine.updatePolarityStability(0f, STEP) }
+        repeat(600) { index ->
+            engine.velocityY = if (index % 2 == 0) 700f else -700f
+            engine.updatePolarityStability(0f, STEP)
+        }
+        assertEquals(0.2f, engine.polarityStability)
     }
 
     @Test
-    fun dashKeepsItsAuthorityWhileTetherIsSaturated() {
-        val engine = saturatedEngine(seed = 63)
-        engine.setVelocityForTesting(0f, 0f)
-
-        engine.requestDash()
-        step(engine)
-
-        assertTrue(engine.phase == GamePhase.RUNNING)
-        assertTrue(engine.polarityStability <= 0.001f)
-        assertTrue(engine.speed > 570f, "Saturation incorrectly weakened Dash: ${engine.speed}")
-        assertTrue(engine.heat > 30f)
+    fun recoveryCooldownPreventsRepeatedFastTurns() {
+        val engine = runningEngine()
+        repeat(120) { engine.updatePolarityStability(0f, STEP) }
+        engine.velocityX = 0f
+        engine.velocityY = 700f
+        repeat(60) { engine.updatePolarityStability(0f, STEP) }
+        val recovered = engine.polarityStability
+        engine.velocityX = -700f
+        engine.velocityY = 0f
+        repeat(60) { engine.updatePolarityStability(0f, STEP) }
+        assertEquals(recovered, engine.polarityStability)
     }
 
     @Test
-    fun saturatedTetherDoesNotCapExistingVelocity() {
-        val engine = saturatedEngine(seed = 64)
-        engine.setVelocityForTesting(5_000f, 320f)
-        val speedBeforeStep = engine.speed
-
-        step(engine)
-
-        assertTrue(engine.polarityStability <= 0.001f)
-        assertTrue(engine.speed > 4_000f, "Physical velocity was capped at ${engine.speed}")
-        assertTrue(
-            engine.speed > speedBeforeStep * 0.98f,
-            "Saturation added momentum-killing drag: $speedBeforeStep -> ${engine.speed}",
-        )
-        assertTrue(engine.velocityX.isFinite())
-        assertTrue(engine.velocityY.isFinite())
+    fun brakingRecoversAtLowActualSpeedOnlyAndAtConfiguredRate() {
+        val engine = runningEngine().apply { braking = true }
+        repeat(30) { engine.updatePolarityStability(0f, STEP) }
+        assertEquals(0.2f, engine.polarityStability)
+        engine.velocityX = 250f
+        repeat(60) { engine.updatePolarityStability(2_000f, STEP) }
+        assertEquals(0.6f, engine.polarityStability, 0.0001f)
+        engine.braking = false
+        engine.velocityX = 0f
+        repeat(60) { engine.updatePolarityStability(0f, STEP) }
+        assertEquals(0.6f, engine.polarityStability, 0.0001f)
     }
 
-    private fun saturatedEngine(seed: Int): GameScenario = runningEngine(seed).apply {
-        updatePointer(SCREEN_WIDTH, SCREEN_HEIGHT * 0.5f)
-        advanceUntil(this, timeoutSeconds = 4f) { polarityStability <= 0.001f }
-        assertTrue(polarityStability <= 0.001f, "Test setup failed to saturate tether: $polarityStability")
+    @Test
+    fun exhaustionPreservesLateralControlCounterThrustDashAndUncappedMomentum() {
+        val lateral = runningEngine().apply {
+            polarityStability = 0f
+            updatePointer(screenWidth * 0.5f, screenHeight)
+        }
+        lateral.updateCore(STEP)
+        assertTrue(lateral.velocityY > 10f, "Zero stability must retain lateral steering")
+        val reverse = runningEngine().apply {
+            polarityStability = 0f
+            updatePointer(0f, screenHeight * 0.5f)
+        }
+        reverse.updateCore(STEP)
+        assertTrue(reverse.velocityX < 680f, "Zero stability must retain counter-thrust")
+        val momentum = runningEngine().apply {
+            polarityStability = 0f
+            velocityX = 5_000f
+            updatePointer(screenWidth, screenHeight * 0.5f)
+        }
+        momentum.updateCore(STEP)
+        assertTrue(momentum.speed > 4_900f, "No speed ceiling or extra fatigue drag")
+        val beforeDash = momentum.speed
+        momentum.performDash()
+        assertTrue(momentum.speed > beforeDash + 580f)
     }
 
-    private fun runningEngine(seed: Int): GameScenario = gameScenario(seed = seed, initialMatter = 0).apply {
-        resize(SCREEN_WIDTH, SCREEN_HEIGHT)
+    @Test
+    fun exhaustedCoreCanPerformRealManeuverWithoutDash() {
+        val engine = runningEngine().apply {
+            polarityStability = 0f
+            smoothedVelocityX = 700f
+            turnHeadingEstablished = true
+            updatePointer(screenWidth * 0.5f, screenHeight)
+        }
+        repeat(90) {
+            engine.cameraX = engine.coreX
+            engine.cameraY = engine.coreY
+            engine.updateCore(STEP)
+        }
+        assertTrue(engine.velocityY > 300f)
+        assertTrue(engine.polarityStability > 0.05f, "Actual maneuver must recover from total exhaustion")
+    }
+
+    @Test
+    fun movementRecoveryStateIsIsolatedInReductionCopiesAndResetForNextRun() {
+        val engine = runningEngine().apply {
+            smoothedVelocityX = 300f
+            smoothedVelocityY = 500f
+            turnHoldTime = 0.13f
+            turnDirection = -1
+            turnRecoveryCooldown = 0.45f
+            turnHeadingEstablished = true
+        }
+        val fork = engine.copyForReduction()
+        assertEquals(engine.smoothedVelocityX, fork.smoothedVelocityX)
+        assertEquals(engine.smoothedVelocityY, fork.smoothedVelocityY)
+        assertEquals(engine.turnHoldTime, fork.turnHoldTime)
+        assertEquals(engine.turnDirection, fork.turnDirection)
+        assertEquals(engine.turnRecoveryCooldown, fork.turnRecoveryCooldown)
+        fork.updatePolarityStability(0f, STEP)
+        assertEquals(0.45f, engine.turnRecoveryCooldown)
+        fork.startRun()
+        assertEquals(0f, fork.turnRecoveryCooldown)
+        assertEquals(0f, fork.smoothedVelocityX)
+        assertTrue(!fork.turnHeadingEstablished)
+    }
+
+    private fun runningEngine(): GameScenario = gameScenario(initialMatter = 0).apply {
         startRun()
-        clearHazards(this)
-    }
-
-    private fun advanceUntil(
-        engine: GameScenario,
-        timeoutSeconds: Float,
-        condition: () -> Boolean,
-    ) {
-        val deadline = engine.elapsed + timeoutSeconds
-        while (!condition() && engine.phase == GamePhase.RUNNING && engine.elapsed < deadline) {
-            step(engine)
-        }
-        assertTrue(condition(), "Condition was not reached within $timeoutSeconds simulated seconds")
-    }
-
-    private fun advanceBy(engine: GameScenario, seconds: Float) {
-        val targetElapsed = engine.elapsed + seconds
-        while (engine.phase == GamePhase.RUNNING && engine.elapsed < targetElapsed) {
-            step(engine)
-        }
-    }
-
-    private fun step(engine: GameScenario) {
-        clearHazards(engine)
-        engine.update(GameScenario.FIXED_STEP)
-        clearHazards(engine)
-    }
-
-    private fun clearHazards(engine: GameScenario) {
-        engine.enemies.clear()
-        engine.projectiles.clear()
+        runGrace = 100f
+        polarityStability = 0.2f
+        velocityX = 700f
     }
 
     private companion object {
-        const val SCREEN_WIDTH = 1_280f
-        const val SCREEN_HEIGHT = 720f
+        const val STEP = 1f / 120f
     }
 }

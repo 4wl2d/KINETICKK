@@ -11,6 +11,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class ProfileApiContractTest {
     @Test
@@ -71,6 +72,46 @@ class ProfileApiContractTest {
         assertFailsWith<IllegalArgumentException> {
             request.copy(sourceOrdinal = handle.sourceOrdinal + 1)
         }
+    }
+
+    @Test
+    fun eachCommandOwnsOneProtocolAndOnlyItsMatchingResultFamily() {
+        val cases = listOf(
+            Triple(
+                ProfileModuleCommand.SelectCoreShape(CoreShape.SHARD),
+                ProfileEffectiveProtocolIdentity.SESSION_CORE_SHAPE,
+                ProfileModuleResult.CoreShapeSelected(CoreShape.SHARD),
+            ),
+            Triple(
+                ProfileModuleCommand.ToggleMute,
+                ProfileEffectiveProtocolIdentity.SESSION_MUTE,
+                ProfileModuleResult.PreferencesChanged(PlayerPreferences()),
+            ),
+            Triple(
+                ProfileModuleCommand.AdvanceRebirth,
+                ProfileEffectiveProtocolIdentity.SESSION_REBIRTH,
+                ProfileModuleResult.RebirthAdvanced(RebirthProgress()),
+            ),
+            Triple(
+                ProfileModuleCommand.ApplyGameplayProgress(GameplayProgressUpdate()),
+                ProfileEffectiveProtocolIdentity.GAMEPLAY_PROGRESS,
+                ProfileModuleResult.GameplayProgressApplied,
+            ),
+        )
+        cases.forEach { (command, identity, result) ->
+            assertEquals(identity, command.effectiveProtocolIdentity())
+            assertTrue(identity.acceptsResult(result))
+            assertTrue(command.acceptsResult(result))
+            cases.filter { it.second != identity }.forEach { (_, _, foreignResult) ->
+                assertFalse(identity.acceptsResult(foreignResult))
+                assertFalse(command.acceptsResult(foreignResult))
+            }
+        }
+        assertFalse(
+            ProfileModuleCommand.SelectCoreShape(CoreShape.SHARD).acceptsResult(
+                ProfileModuleResult.CoreShapeSelected(CoreShape.PRISM),
+            ),
+        )
     }
 
     @Test

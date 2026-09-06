@@ -69,7 +69,12 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
             0f,
             combined,
         )
-        if (enemy.contactCooldown <= 0f && sweptHit) {
+        if (enemy.contactCooldown <= 0f && sweptHit && !enemy.dead && enemy.hp > 0f) {
+            val parried = tryCharacterParry(
+                enemy.previousX, enemy.previousY, enemy.vx, enemy.vy,
+                previousCoreX, previousCoreY,
+            )
+            onCharacterDashContact(enemy)
             val relativeX = velocityX - enemy.vx
             val relativeY = velocityY - enemy.vy
             val impactSpeed = length(relativeX, relativeY)
@@ -83,6 +88,7 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
                     rebirthProfile.playerPowerMultiplier,
             )
             damageEnemy(enemy, damage, canCrit = true, relicKillProcsEligible = true)
+            if (dashPhaseTime <= 0f) onCharacterPrimaryHit(enemy)
             lastImpact = damage
             lastImpactTime = 0.72f
             enemy.contactCooldown = 0.26f
@@ -93,7 +99,7 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
             shockwave(enemy.x, enemy.y, 0.26f, min(150f, 55f + damage * 0.9f), 3)
             directionalBurst(enemy.x, enemy.y, 8, 3, dx / distance, dy / distance)
             emitSound(GameplayAudioCue.IMPACT)
-            if (coreImpactSpeed < 190f && dashPhaseTime <= 0f) takeDamage(7f + enemy.radius * 0.18f)
+            if (!parried && coreImpactSpeed < 190f && dashPhaseTime <= 0f) takeDamage(7f + enemy.radius * 0.18f)
         }
     }
 }
@@ -218,7 +224,13 @@ internal fun MutableGameState.resolveProjectileHits() {
         )
         if (hit) {
             projectiles.removeAt(hostileIndex)
-            if (dashPhaseTime <= 0f) {
+            if (tryCharacterParry(
+                    projectile.previousX, projectile.previousY, projectile.vx, projectile.vy,
+                    previousCoreX, previousCoreY,
+                )
+            ) {
+                burst(projectile.x, projectile.y, 6, 2)
+            } else if (dashPhaseTime <= 0f) {
                 takeDamage(12f)
                 screenShake = max(screenShake, 6f)
             } else {
@@ -345,7 +357,7 @@ internal fun MutableGameState.resolvePickupCollection() {
         ) {
             pickups.removeAt(pickupIndex)
             when (pickup.type) {
-                PickupType.DATA -> gainData(dataGain)
+                PickupType.DATA -> gainData(dataGain * content.tempo.dataPickupMultiplier)
                 PickupType.KEY -> {
                     keys++
                     message = "ELITE KEY ACQUIRED"
@@ -377,7 +389,12 @@ internal fun MutableGameState.gainData(amount: Float) {
         data -= nextLevelData
         level++
         pendingLevelChoices++
-        nextLevelData = 18 + level * 8 + (level * level) / 8
+        nextLevelData = content.tempo.dataRequiredForLevel(level)
+        if (content.tempo.grantsWeaponAmplification(level) && weaponLevel < content.tempo.maximumAutomaticWeaponLevel) {
+            val before = captureBuildChange()
+            amplifyCurrentWeapon()
+            emitBuildChange(before, currentWeaponDefinition.name + " mastery advanced")
+        }
     }
     openNextPendingChoice()
 }

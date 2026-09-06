@@ -215,30 +215,6 @@ def deep_get(value: dict[str, Any], dotted_path: str) -> Any:
     return current
 
 
-def git_output(repository: pathlib.Path, *arguments: str) -> str | None:
-    try:
-        result = subprocess.run(
-            ["git", *arguments],
-            cwd=repository,
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
-        return None
-    return result.stdout.strip()
-
-
-def resolve_dirty(mode: str, repository: pathlib.Path) -> bool | None:
-    if mode == "true":
-        return True
-    if mode == "false":
-        return False
-    status = git_output(repository, "status", "--porcelain")
-    return bool(status) if status is not None else None
-
-
 def resolve_pwcli(explicit_path: str | None) -> pathlib.Path:
     candidates: list[pathlib.Path] = []
     if explicit_path:

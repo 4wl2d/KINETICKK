@@ -9,6 +9,10 @@ the authority for protocols and behavior. The generated
 [`resolved-manifest.json`](resolved-manifest.json) is a checked projection, not
 a second source of truth.
 
+Development guidance lives in the current Pokeball skills, required by
+[AGENTS.md](../../../AGENTS.md). This directory retains project-specific
+decisions and verification inputs.
+
 Before KINETICKK `1.0.0`, persisted Profile data has one current schema, not a
 version family. The authoritative value is `ProfileSnapshot`; its Profile data
 is the `ProfileSnapshot.profile` field, and persistence is accessed only through

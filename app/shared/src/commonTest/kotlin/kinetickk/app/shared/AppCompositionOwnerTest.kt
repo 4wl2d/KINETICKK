@@ -10,7 +10,7 @@ import kinetickk.ball.content.api.ProfilePolicySnapshot
 import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.ball.content.impl.createContentCatalog
 import kinetickk.ball.gameplay.api.GameplayActiveWeaponProjection
-import kinetickk.ball.gameplay.api.GameplayCodexStacksProjection
+import kinetickk.ball.gameplay.api.GameplayBuildSummaryProjection
 import kinetickk.ball.gameplay.api.GameplayCommandIngressResult
 import kinetickk.ball.gameplay.api.GameplayCommandSourceToken
 import kinetickk.ball.gameplay.api.GameplayEffectiveProtocolIdentity
@@ -317,8 +317,8 @@ private class RecordingGameplayRun(
     override fun query(query: GameplayQuery.GetActiveWeapon): GameplayActiveWeaponProjection =
         GameplayActiveWeaponProjection(instanceId, revision, weapon = null)
 
-    override fun query(query: GameplayQuery.GetCodexStacks): GameplayCodexStacksProjection =
-        GameplayCodexStacksProjection(instanceId, revision, immutableListOf())
+    override fun query(query: GameplayQuery.GetBuildSummary): GameplayBuildSummaryProjection =
+        GameplayBuildSummaryProjection(instanceId, revision, immutableListOf())
 }
 
 private class RecordingAudioService : AudioService {

@@ -69,17 +69,6 @@ class ImmutableSet<out Element> private constructor(
 
     override fun iterator(): Iterator<Element> = ImmutableListIterator(elements, startIndex = 0)
 
-    /** Compares set contents through indexed owned storage without creating an iterator. */
-    fun hasSameElementsAs(other: Set<Any?>): Boolean {
-        if (size != other.size) return false
-        var index = 0
-        while (index < elements.size) {
-            if (elements[index] !in other) return false
-            index++
-        }
-        return true
-    }
-
     companion object {
         /** Copies distinct values from [elements], retaining their first-occurrence order. */
         fun <Element> copyOf(elements: Iterable<Element>): ImmutableSet<Element> {

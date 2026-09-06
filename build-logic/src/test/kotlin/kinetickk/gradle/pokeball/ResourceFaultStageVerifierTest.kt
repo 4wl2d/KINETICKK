@@ -304,493 +304,171 @@ class ResourceFaultStageVerifierTest {
 
     @Test
     fun sameStackFaultPreservationMayDeferTheFirstFaultUntilAfterDrain() {
-        val source = SourceDocument(
-            PROFILE_IMPL_PATH,
-            """
-                fun dispatchLocal() = guard.dispatch {
-                    var deferredFault: Throwable? = null
-                    while (!completions.isEmpty) {
-                        val item = checkNotNull(completions.removeFirstOrNull())
-                        val before = committedState
-                        when (val decision = ProfileNucleus.decide(before, item.pulse)) {
-                            is ProfileDecision.Rejected -> Unit
-                            is ProfileDecision.Accepted -> {
-                                for (output in decision.frame.outputs) {
-                                    try {
-                                        this.execute(output, item)
-                                    } catch (failure: Throwable) {
-                                        if (deferredFault == null) deferredFault = failure
-                                    }
-                                }
-                            }
-                        }
-                        root = false
-                    }
-                    val failure = deferredFault
-                    if (failure != null) throw failure
-                }
-            """.trimIndent(),
+        val violations = resourceFaultStageFixtureViolations(
+            listOf(SourceDocument(PROFILE_IMPL_PATH, profileDrainFixture())),
         )
-
-        val violations = resourceFaultStageFixtureViolations(listOf(source))
-
         assertTrue(violations.isEmpty(), violations.joinToString("\n"))
     }
 
     @Test
-    fun acceptedBranchPreludePinsPreflightBeforeCommitAndRejectsExtraWork() {
-        val local = """
-            preflight(before, item, decision.frame)
-            committedState = decision.frame.nextState
-            if (root) {
-                rootAcceptance = ProfileAcceptance.Accepted(
-                    instanceId = committedState.instanceId,
-                    revision = committedState.revision,
-                )
+    fun acceptedDrainRejectsPublicationOrderingFaultLossAndSkippedWork() {
+        val valid = profileDrainFixture()
+        val changes = listOf(
+            "preflight(committedState, item, frame)\n        committedState = frame.nextState" to
+                "committedState = frame.nextState\n        preflight(committedState, item, frame)",
+            "preflight(committedState, item, frame)" to "",
+            "committedState = frame.nextState" to "committedState = frame.nextState\nreplay(frame, item)",
+            "if (deferredFault == null) deferredFault = failure" to "deferredFault = failure",
+            "if (deferredFault == null) deferredFault = failure" to "throw failure",
+            "deferredFault?.let { throw it }" to "consume(deferredFault)",
+            "deferredFault?.let { throw it }" to "if (false) deferredFault?.let { throw it }",
+            "deferredFault?.let { throw it }" to "val unused = { deferredFault?.let { throw it } }",
+            "deferredFault?.let { throw it }" to "if (skipFault) return\ndeferredFault?.let { throw it }",
+            "deferredFault?.let { throw it }" to
+                "\"${'$'}{run { throw IllegalStateException() }}\"\ndeferredFault?.let { throw it }",
+            "for (output in frame.outputs)" to "for (output in frame.outputs.take(1))",
+            "for (output in frame.outputs)" to "if (false) for (output in frame.outputs)",
+            "for (output in frame.outputs)" to "if (false) drain@ for (output in frame.outputs)",
+            "for (output in frame.outputs)" to "if (false) Unit else for (output in frame.outputs)",
+            "for (output in frame.outputs)" to
+                "for (extra in frame.outputs) execute(extra, item)\nfor (output in frame.outputs)",
+            "while (true)" to "if (false) while (true)",
+            "while (true)" to "if (false) drain@ while (true)",
+            "while (true)" to "if (false) @Suppress(\"unused\") while (true)",
+            "item = completions.removeFirstOrNull() ?: break" to "break",
+            "item = completions.removeFirstOrNull() ?: break" to
+                "item = completions.removeFirstOrNull() ?: break\nif (skip) continue",
+            "item = completions.removeFirstOrNull() ?: break" to
+                "val unused = { completions.removeFirstOrNull() }\nitem = completions.removeFirstOrNull() ?: break",
+            "frame = when" to "if (false) frame = when",
+            "is ProfileDecision.Accepted -> decision.frame" to "is ProfileDecision.Accepted -> rootFrame",
+            "execute(output, item)" to "execute(output, rootItem)",
+            "try {" to "val `}` = Unit\ntry {",
+        )
+        changes.forEachIndexed { index, (before, after) ->
+            assertTrue(before in valid, "Mutation $index does not exercise its intended source")
+            val violations = resourceFaultStageFixtureViolations(
+                listOf(SourceDocument(PROFILE_IMPL_PATH, valid.replaceFirst(before, after))),
+            )
+            assertViolation(violations, "canonical accepted-output")
+        }
+    }
+
+    @Test
+    fun profileDispatchesRequireOneGuardedWriterAndExecutedAdmission() {
+        val valid = profileComponentFixture()
+        val validViolations = resourceFaultStageViolations(listOf(SourceDocument(PROFILE_IMPL_PATH, valid)))
+        assertTrue(validViolations.isEmpty(), validViolations.joinToString("\n"))
+
+        val changes = listOf(
+            "fun dispatchAccepted" to "fun renamedDrain",
+            "dispatchGuard.dispatch" to "unrelatedScope.run",
+            "when (val decision = ProfileNucleus.decide" to
+                "if (false) when (val decision = ProfileNucleus.decide",
+            "when (val decision = ProfileNucleus.decide" to
+                "return@dispatch\nwhen (val decision = ProfileNucleus.decide",
+            "dispatchAccepted(item, frame)" to "if (false) dispatchAccepted(item, frame)",
+            "dispatchAccepted(item, decision.frame)" to "if (false) dispatchAccepted(item, decision.frame)",
+            "dispatchAccepted(item, decision.frame)" to "val unused = { dispatchAccepted(item, decision.frame) }",
+            "if (refusal != null)" to "if (false)",
+            "return@dispatch refused(" to "if (false) return@dispatch refused(",
+            "activeCommandRoute = null" to "check(false)\nactiveCommandRoute = null",
+            "decision is ProfileDecision.Rejected" to "false",
+            "deepestReservedLevel(item, decision.frame) >= MAX_PROFILE_CAUSAL_DEPTH" to "false",
+            "fun unrelatedQuery() = Unit" to "fun unrelatedQuery() { committedState = stolenState }",
+            "fun unrelatedQuery() = Unit" to "fun unrelatedQuery() { execute(extra, item) }",
+            "fun unrelatedQuery() = Unit" to "fun unrelatedQuery() { val replay = ::execute }",
+        )
+        changes.forEachIndexed { index, (before, after) ->
+            assertTrue(before in valid, "Mutation $index does not exercise its intended source")
+            val violations = resourceFaultStageViolations(
+                listOf(SourceDocument(PROFILE_IMPL_PATH, valid.replaceFirst(before, after))),
+            )
+            assertViolation(violations, "Core §6.13")
+        }
+    }
+
+    @Test
+    fun unrelatedProfileReadChangesDoNotRequireReauthoringTheDispatchContract() {
+        val source = profileComponentFixture().replace(
+            "fun unrelatedQuery() = Unit",
+            "fun unrelatedQuery(): Int = 42\nfun anotherPureQuery(): String = \"new read\"",
+        )
+        val violations = resourceFaultStageViolations(listOf(SourceDocument(PROFILE_IMPL_PATH, source)))
+        assertTrue(violations.isEmpty(), violations.joinToString("\n"))
+    }
+
+    @Test
+    fun missingProfileDrainFailsClosedAndDeferredCatchingStaysProfileOwned() {
+        assertViolation(
+            resourceFaultStageViolations(listOf(SourceDocument(PROFILE_IMPL_PATH, "class Empty"))),
+            "canonical accepted-output drain is missing",
+        )
+        assertViolation(
+            resourceFaultStageFixtureViolations(listOf(SourceDocument(PROFILE_RESOURCE_PATH, profileDrainFixture()))),
+            "broad `Throwable` catch",
+        )
+    }
+
+    private fun profileDrainFixture(): String = """
+        fun dispatchAccepted(rootItem: ProfileWorkItem, rootFrame: ProfileAcceptedFrame) {
+            var item = rootItem
+            var frame = rootFrame
+            var deferredFault: Throwable? = null
+            while (true) {
+                preflight(committedState, item, frame)
+                committedState = frame.nextState
+                for (output in frame.outputs) {
+                    try {
+                        execute(output, item)
+                    } catch (failure: Throwable) {
+                        if (deferredFault == null) deferredFault = failure
+                    }
+                }
+                item = completions.removeFirstOrNull() ?: break
+                frame = when (val decision = ProfileNucleus.decide(committedState, item.pulse)) {
+                    is ProfileDecision.Accepted -> decision.frame
+                    is ProfileDecision.Rejected -> error("Resource completion rejected: " + decision.reason,)
+                }
             }
-        """.trimIndent()
-        val command = """
-            if (root && deepestReservedLevel(item, decision.frame) >= MAX_PROFILE_CAUSAL_DEPTH) {
+            deferredFault?.let { throw it }
+        }
+    """.trimIndent()
+
+    private fun profileComponentFixture(): String = """
+        fun dispatchLocal() = dispatchGuard.dispatch {
+            when (val decision = ProfileNucleus.decide(committedState, item.pulse)) {
+                is ProfileDecision.Accepted -> {
+                    dispatchAccepted(item, decision.frame)
+                }
+                is ProfileDecision.Rejected -> rejection(decision.reason)
+            }
+        }
+        fun dispatchCommand() = dispatchGuard.dispatch {
+            val decision = ProfileNucleus.decide(committedState, item.pulse)
+            val refusal = when {
+                decision is ProfileDecision.Rejected ->
+                    ProfileCommandBoundaryResponse.DecisionRejected(decision.reason)
+                decision is ProfileDecision.Accepted &&
+                    deepestReservedLevel(item, decision.frame) >= MAX_PROFILE_CAUSAL_DEPTH ->
+                    causalBudgetFailure(pulse.commandSource)
+                else -> null
+            }
+            if (refusal != null) {
                 activeCommandRoute = null
                 return@dispatch refused(
                     commandSource = pulse.commandSource,
                     effectiveProtocolIdentity = pulse.effectiveProtocolIdentity,
-                    response = causalBudgetFailure(pulse.commandSource),
+                    response = refusal,
                 )
             }
-            preflight(before, item, decision.frame)
-            committedState = decision.frame.nextState
-            if (root) acceptedTargetRevision = committedState.revision
-        """.trimIndent()
-
-        assertTrue(exactProfileAcceptedBranchPrelude("dispatchLocal", local))
-        assertTrue(exactProfileAcceptedBranchPrelude("dispatchCommand", command))
-        assertTrue(
-            !exactProfileAcceptedBranchPrelude(
-                "dispatchLocal",
-                local.replace(
-                    "preflight(before, item, decision.frame)\n" +
-                        "committedState = decision.frame.nextState",
-                    "committedState = decision.frame.nextState\n" +
-                        "preflight(before, item, decision.frame)",
-                ),
-            ),
-        )
-        assertTrue(
-            !exactProfileAcceptedBranchPrelude(
-                "dispatchLocal",
-                local.replace(
-                    "committedState = decision.frame.nextState",
-                    "committedState = decision.frame.nextState\nreplay(decision, item)",
-                ),
-            ),
-        )
-    }
-
-    @Test
-    fun deferredFaultMustRemainFirstAndReachRethrowAfterDrain() {
-        val valid = """
-            fun dispatchLocal() = guard.dispatch {
-                var deferredFault: Throwable? = null
-                while (!completions.isEmpty) {
-                    val item = checkNotNull(completions.removeFirstOrNull())
-                        val before = committedState
-                    when (val decision = ProfileNucleus.decide(before, item.pulse)) {
-                        is ProfileDecision.Rejected -> Unit
-                        is ProfileDecision.Accepted -> {
-                            for (output in decision.frame.outputs) {
-                                try {
-                                    this.execute(output, item)
-                                } catch (failure: Throwable) {
-                                    if (deferredFault == null) deferredFault = failure
-                                }
-                            }
-                        }
-                    }
-                    root = false
-                }
-                val failure = deferredFault
-                if (failure != null) throw failure
-            }
-        """.trimIndent()
-        val rethrow = "val failure = deferredFault\n    if (failure != null) throw failure"
-        val invalidSources = listOf(
-            valid.replace(rethrow, "consume(deferredFault)"),
-            valid.replace(
-                "if (deferredFault == null) deferredFault = failure",
-                "deferredFault = failure",
-            ),
-            valid.replace(
-                "if (deferredFault == null) deferredFault = failure",
-                "throw failure",
-            ),
-            valid.replace(
-                rethrow,
-                "if (skipFault) return@dispatch\n    $rethrow",
-            ),
-            valid.replace(
-                rethrow,
-                "val neverInvoked = { $rethrow }",
-            ),
-            valid.replace(
-                rethrow,
-                "if (false) { $rethrow }",
-            ),
-            valid.replace(
-                rethrow,
-                "\"${'$'}{run { throw IllegalStateException() }}\"\n    $rethrow",
-            ),
-            valid.replace(
-                Regex(
-                    """val\s+item\s*=\s*checkNotNull\s*\(\s*completions\.removeFirstOrNull\s*""" +
-                        """\(\s*\)\s*\)\s*val\s+before\s*=\s*committedState""",
-                ),
-                "val neverInvoked = { completions.removeFirstOrNull() }\n" +
-                    "        val item = checkNotNull(completions.removeFirstOrNull())\n" +
-                    "        val before = committedState",
-            ),
-            valid.replace(
-                "for (output in decision.frame.outputs) {",
-                "if (shouldAbort()) return@dispatch\n" +
-                    "        for (output in decision.frame.outputs) {",
-            ),
-            """
-                fun dispatchLocal() = guard.dispatch {
-                    var deferredFault: Throwable? = null
-                    val failure = deferredFault
-                    if (failure != null) throw failure
-                    while (!completions.isEmpty) {
-                        val item = checkNotNull(completions.removeFirstOrNull())
-                        val before = committedState
-                        for (output in decision.frame.outputs) {
-                            try {
-                                this.execute(output, item)
-                            } catch (failure: Throwable) {
-                                if (deferredFault == null) deferredFault = failure
-                            }
-                        }
-                    }
-                }
-            """.trimIndent(),
-            """
-                fun dispatchLocal() = guard.dispatch {
-                    var deferredFault: Throwable? = null
-                    drain@ while (!completions.isEmpty) {
-                        val item = checkNotNull(completions.removeFirstOrNull())
-                        val before = committedState
-                        for (output in decision.frame.outputs) {
-                            try {
-                                this.execute(output, item)
-                            } catch (failure: Throwable) {
-                                if (deferredFault == null) deferredFault = failure
-                            }
-                            continue@drain
-                        }
-                    }
-                    val failure = deferredFault
-                    if (failure != null) throw failure
-                }
-            """.trimIndent(),
-        )
-
-        invalidSources.forEachIndexed { index, code ->
-            val violations = resourceFaultStageFixtureViolations(
-                listOf(SourceDocument(PROFILE_IMPL_PATH, code)),
-            )
-            assertTrue(
-                violations.any { violation -> "broad `Throwable` catch" in violation },
-                "case $index unexpectedly passed:\n$code\n${violations.joinToString("\n")}",
-            )
+            val frame = (decision as ProfileDecision.Accepted).frame
+            dispatchAccepted(item, frame)
         }
-    }
-
-    @Test
-    fun deferredCommandAdmissionReturnsMustBelongToTheirExecutedBranches() {
-        val valid = """
-            fun dispatchCommand() = guard.dispatch {
-                var deferredFault: Throwable? = null
-                while (!completions.isEmpty) {
-                    val item = checkNotNull(completions.removeFirstOrNull())
-                        val before = committedState
-                    when (val decision = ProfileNucleus.decide(before, item.pulse)) {
-                        is ProfileDecision.Rejected -> {
-                            check(root) { "rejected: " + decision.reason }
-                            activeCommandRoute = null
-                            return@dispatch refused(
-                                response = ProfileCommandBoundaryResponse.DecisionRejected(reason),
-                            )
-                        }
-                        is ProfileDecision.Accepted -> {
-                            if (root && deepestReservedLevel(item, decision.frame) >= MAX_PROFILE_CAUSAL_DEPTH) {
-                                activeCommandRoute = null
-                                return@dispatch refused(
-                                    response = causalBudgetFailure(source),
-                                )
-                            }
-                            for (output in decision.frame.outputs) {
-                                try {
-                                    this.execute(output, item)
-                                } catch (failure: Throwable) {
-                                    if (deferredFault == null) deferredFault = failure
-                                }
-                            }
-                        }
-                    }
-                    root = false
-                }
-                val failure = deferredFault
-                if (failure != null) throw failure
-            }
-        """.trimIndent()
-        val validViolations = resourceFaultStageFixtureViolations(
-            listOf(SourceDocument(PROFILE_IMPL_PATH, valid)),
-        )
-        assertTrue(validViolations.isEmpty(), validViolations.joinToString("\n"))
-
-        val drifted = valid
-            .replace("return@dispatch refused(", "refused(")
-            .replace(
-                "for (output in decision.frame.outputs) {",
-                """
-                    val fakeRejected = dispatch@ {
-                        return@dispatch refused(
-                            response = ProfileCommandBoundaryResponse.DecisionRejected(reason),
-                        )
-                    }
-                    val fakeBudget = dispatch@ {
-                        return@dispatch refused(response = causalBudgetFailure(source))
-                    }
-                    for (output in decision.frame.outputs) {
-                """.trimIndent(),
-            )
-        val violations = resourceFaultStageFixtureViolations(
-            listOf(SourceDocument(PROFILE_IMPL_PATH, drifted)),
-        )
-
-        assertViolation(violations, "broad `Throwable` catch")
-
-        val conditional = valid.replace(
-            "return@dispatch refused(",
-            "if (false) return@dispatch refused(",
-        )
-        val conditionalViolations = resourceFaultStageFixtureViolations(
-            listOf(SourceDocument(PROFILE_IMPL_PATH, conditional)),
-        )
-        assertViolation(conditionalViolations, "broad `Throwable` catch")
-
-        val unreachable = valid.replace(
-            "activeCommandRoute = null",
-            "check(false)\n                activeCommandRoute = null",
-        )
-        val unreachableViolations = resourceFaultStageFixtureViolations(
-            listOf(SourceDocument(PROFILE_IMPL_PATH, unreachable)),
-        )
-        assertViolation(unreachableViolations, "broad `Throwable` catch")
-    }
-
-    @Test
-    fun profileDispatchesRequireTheCanonicalDeferredAcceptedOutputDrain() {
-        val missingDispatches = """
-            internal class RenamedProfileComponent {
-                fun drainLocal() {
-                    for (output in decision.frame.outputs) { this.execute(output, item) }
-                }
-            }
-        """.trimIndent()
-        val missingViolations = resourceFaultStageViolations(
-            listOf(SourceDocument(PROFILE_IMPL_PATH, missingDispatches)),
-        )
-        assertViolation(missingViolations, "canonical accepted-output drain is missing")
-
-        val canonical = """
-            fun dispatchLocal() = guard.dispatch {
-                var deferredFault: Throwable? = null
-                while (!completions.isEmpty) {
-                    val item = checkNotNull(completions.removeFirstOrNull())
-                        val before = committedState
-                    when (val decision = ProfileNucleus.decide(before, item.pulse)) {
-                        is ProfileDecision.Rejected -> Unit
-                        is ProfileDecision.Accepted -> {
-                            for (output in decision.frame.outputs) {
-                                try {
-                                    this.execute(output, item)
-                                } catch (failure: Throwable) {
-                                    if (deferredFault == null) deferredFault = failure
-                                }
-                            }
-                        }
-                    }
-                    root = false
-                }
-                val failure = deferredFault
-                if (failure != null) throw failure
-            }
-        """.trimIndent()
-        val drifts = listOf(
-            canonical.replace(
-                Regex(
-                    """try\s*\{\s*this\.execute\s*\(\s*output\s*,\s*item\s*\)\s*\}\s*""" +
-                        """catch\s*\(\s*failure\s*:\s*Throwable\s*\)\s*\{\s*""" +
-                        """if\s*\(\s*deferredFault\s*==\s*null\s*\)\s*""" +
-                        """deferredFault\s*=\s*failure\s*\}""",
-                ),
-                "this.execute(output, item)",
-            ),
-            canonical
-                .replace(
-                    Regex(
-                        """val\s+item\s*=\s*checkNotNull\s*\(\s*completions\.removeFirstOrNull\s*""" +
-                            """\(\s*\)\s*\)\s*val\s+before\s*=\s*committedState""",
-                    ),
-                    "val item = checkNotNull(completions.removeFirstOrNull())\n" +
-                        "        val before = committedState\n" +
-                        "        val acceptedOutputs = decision.frame.outputs",
-                )
-                .replace(
-                    "for (output in decision.frame.outputs)",
-                    "for (output in acceptedOutputs)",
-                ),
-            canonical.replace(
-                "try {",
-                "val `}` = Unit\n            try {",
-            ).replace(
-                "if (deferredFault == null) deferredFault = failure",
-                "throw failure",
-            ),
-            canonical.replace(
-                "for (output in decision.frame.outputs) {",
-                "for (extra in decision.frame.outputs) this.execute(extra, item)\n" +
-                    "            for (output in decision.frame.outputs) {",
-            ),
-            canonical.replace(
-                "for (output in decision.frame.outputs) {",
-                "if (false)\n                for (output in decision.frame.outputs) {",
-            ),
-            canonical.replace(
-                "for (output in decision.frame.outputs) {",
-                "if (false)\n                drain@ for (output in decision.frame.outputs) {",
-            ),
-            canonical.replace(
-                "for (output in decision.frame.outputs) {",
-                "if (false) Unit else for (output in decision.frame.outputs) {",
-            ),
-            canonical.replace(
-                "for (output in decision.frame.outputs) {",
-                "if (false)\n                @Suppress(\"UNUSED_VARIABLE\") " +
-                    "for (output in decision.frame.outputs) {",
-            ),
-            canonical.replace(
-                "while (!completions.isEmpty) {",
-                "if (false)\n        while (!completions.isEmpty) {",
-            ),
-            canonical.replace(
-                "while (!completions.isEmpty) {",
-                "if (false)\n        drain@ while (!completions.isEmpty) {",
-            ),
-            canonical.replace(
-                "while (!completions.isEmpty) {",
-                "if (false) Unit else while (!completions.isEmpty) {",
-            ),
-            canonical.replace(
-                "while (!completions.isEmpty) {",
-                "if (false)\n        @Suppress(\"UNUSED_VARIABLE\") " +
-                    "while (!completions.isEmpty) {",
-            ),
-            canonical.replace(
-                "when (val decision = ProfileNucleus.decide(before, item.pulse)) {",
-                "if (false) when (val decision = ProfileNucleus.decide(before, item.pulse)) {",
-            ),
-            canonical.replace(
-                "for (output in decision.frame.outputs) {",
-                "val (_, extraOutputs) = decision.frame\n" +
-                    "            val executor = this::execute\n" +
-                    "            for (extra in extraOutputs) executor(extra, item)\n" +
-                    "            for (output in decision.frame.outputs) {",
-            ),
-            canonical.replace("root = false", ""),
-            """
-                fun dispatchLocal() = guard.dispatch {
-                    var deferredFault: Throwable? = null
-                    while (!completions.isEmpty) {
-                        val item = checkNotNull(completions.removeFirstOrNull())
-                        val before = committedState
-                        if (shouldDispatchOutputs()) {
-                            for (output in decision.frame.outputs) {
-                                try {
-                                    this.execute(output, item)
-                                } catch (failure: Throwable) {
-                                    if (deferredFault == null) deferredFault = failure
-                                }
-                            }
-                        }
-                    }
-                    val failure = deferredFault
-                    if (failure != null) throw failure
-                }
-            """.trimIndent(),
-        )
-
-        drifts.forEachIndexed { index, code ->
-            val violations = resourceFaultStageFixtureViolations(
-                listOf(SourceDocument(PROFILE_IMPL_PATH, code)),
-            )
-            assertTrue(
-                violations.any { violation -> "canonical accepted-output" in violation },
-                "case $index unexpectedly passed:\n$code\n${violations.joinToString("\n")}",
-            )
-        }
-    }
-
-    @Test
-    fun profileCriticalAcceptedOutputFunctionsAreFailClosed() {
-        val source = SourceDocument(
-            PROFILE_IMPL_PATH,
-            """
-                fun dispatchLocal() {
-                    return
-                }
-
-                fun dispatchCommand() = Unit
-
-                fun preflight(frame: ProfileAcceptedFrame) {
-                    frame.outputs.forEach { output -> replayBeforeCommit(output) }
-                }
-            """.trimIndent(),
-        )
-
-        val violations = resourceFaultStageViolations(listOf(source))
-
-        assertViolation(violations, "semantic source changed")
-    }
-
-    @Test
-    fun deferredDrainExceptionIsLimitedToTheProfileComponentDispatches() {
-        val source = SourceDocument(
-            PROFILE_RESOURCE_PATH,
-            """
-                fun dispatchLocal() = guard.dispatch {
-                    var deferredFault: Throwable? = null
-                    while (!completions.isEmpty) {
-                        val item = checkNotNull(completions.removeFirstOrNull())
-                        val before = committedState
-                        for (output in decision.frame.outputs) {
-                            try {
-                                this.execute(output, item)
-                            } catch (failure: Throwable) {
-                                if (deferredFault == null) deferredFault = failure
-                            }
-                        }
-                    }
-                    val failure = deferredFault
-                    if (failure != null) throw failure
-                }
-            """.trimIndent(),
-        )
-
-        val violations = resourceFaultStageFixtureViolations(listOf(source))
-
-        assertViolation(violations, "broad `Throwable` catch")
-    }
+        fun execute(output: ProfileOutput, item: ProfileWorkItem) { }
+        fun unrelatedQuery() = Unit
+        ${profileDrainFixture()}
+    """.trimIndent()
 
     @Test
     fun directRethrowMustBeTheEntireCatchBody() {

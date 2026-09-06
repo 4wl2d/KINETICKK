@@ -63,6 +63,62 @@ class AudioFaultStageVerifierTest {
     }
 
     @Test
+    fun androidWorkerCancellationRequiresExactShutdownGuardAndInterruptRestoration() {
+        listOf<(String) -> String>(
+            { it.replace("if (!executor.isShutdown) throw failure", "") },
+            { it.replace("if (!executor.isShutdown) throw failure", "if (executor.isShutdown) throw failure") },
+            { it.replace("Thread.currentThread().interrupt()", "") },
+            { it.replace("if (!executor.isShutdown) throw failure", "if (!executor.isShutdown) return") },
+        ).forEach { transform ->
+            assertViolation(audioRuntimeFaultStageViolations(mutate(ANDROID_PATH, transform)),
+                "synchronous `InterruptedException` catch")
+        }
+    }
+
+    @Test
+    fun androidWorkerCancellationCannotBroadenToProviderFaultsOrSuppressCleanup() {
+        listOf("Throwable", "Exception", "IllegalStateException", "RuntimeException").forEach { type ->
+            val sources = mutate(ANDROID_PATH) { it.replace("failure: InterruptedException", "failure: $type") }
+            assertViolation(audioRuntimeFaultStageViolations(sources), "synchronous `$type` catch")
+        }
+        val providerCatch = mutate(ANDROID_PATH) { code ->
+            code.replace("track.play()", "try { track.play() } catch (_: IllegalStateException) { Unit }")
+        }
+        assertViolation(audioRuntimeFaultStageViolations(providerCatch), "synchronous `IllegalStateException` catch")
+        val conditionalCleanup = mutate(ANDROID_PATH) { code ->
+            code.replace("track.release()", "if (!executor.isShutdown) track.release()")
+        }
+        assertViolation(audioRuntimeFaultStageViolations(conditionalCleanup), "synchronous `InterruptedException` catch")
+    }
+
+    @Test
+    fun shutdownCancellationCatchCannotMoveToSynchronousPlayCloseOrResource() {
+        listOf(
+            ANDROID_PATH to "executor.execute { synthesize(request) }",
+            ANDROID_PATH to "executor.shutdownNow()",
+            AUDIO_RESOURCE_PATH to "platform.close()",
+            AUDIO_RESOURCE_PATH to "play(request)",
+        ).forEach { (path, call) ->
+            val sources = mutate(path) { code ->
+                code.replace(call, "try { $call } catch (failure: InterruptedException) { " +
+                    "Thread.currentThread().interrupt(); if (!executor.isShutdown) throw failure }")
+            }
+            assertViolation(audioRuntimeFaultStageViolations(sources), "synchronous `InterruptedException` catch")
+        }
+    }
+
+    @Test
+    fun androidCancellationWorkerMustRemainPrivateAndOnlyExecutorInvoked() {
+        val publicWorker = mutate(ANDROID_PATH) { it.replace("private fun synthesize", "fun synthesize") }
+        val synchronousCall = mutate(ANDROID_PATH) {
+            it.replace("executor.shutdownNow()", "executor.shutdownNow(); synthesize(request)")
+        }
+        listOf(publicWorker, synchronousCall).forEach { sources ->
+            assertViolation(audioRuntimeFaultStageViolations(sources), "synchronous `InterruptedException` catch")
+        }
+    }
+
+    @Test
     fun webKotlinWrapperCannotCatchSynchronousInvocationFault() {
         val sources = mutate(WEB_PATH) { code ->
             code.replace(
@@ -200,8 +256,17 @@ class AudioFaultStageVerifierTest {
                     private fun synthesize(request: ToneRequest) {
                         val track = AudioTrack.Builder()
                         val samples = ShortArray(1)
-                        val written = track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
-                        track.release()
+                        try {
+                            val written = track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
+                            check(written == samples.size)
+                            track.play()
+                            Thread.sleep((request.durationSeconds * 1_000f).toLong().coerceAtLeast(1L))
+                        } catch (failure: InterruptedException) {
+                            Thread.currentThread().interrupt()
+                            if (!executor.isShutdown) throw failure
+                        } finally {
+                            track.release()
+                        }
                     }
                 }
             """.trimIndent(),
@@ -256,7 +321,7 @@ class AudioFaultStageVerifierTest {
         ),
         SourceDocument(
             ANDROID_TEST_PATH,
-            listOf(ANDROID_TEST_TOKEN, ANDROID_QUEUE_TEST_TOKEN, ANDROID_BUFFER_TEST_TOKEN).joinToString("\n"),
+            listOf(ANDROID_TEST_TOKEN, ANDROID_QUEUE_TEST_TOKEN, ANDROID_BUFFER_TEST_TOKEN, ANDROID_CANCEL_TEST_TOKEN).joinToString("\n"),
         ),
         SourceDocument(WEB_TEST_PATH, WEB_TEST_TOKEN),
     )
@@ -273,6 +338,9 @@ class AudioFaultStageVerifierTest {
             Synchronous Audio Resource and platform calls propagate under runtime-fault policy
             Android and Desktop synthesis faults escape their detached executor `Runnable` to the runtime
             no caller-propagation claim
+            Only Android worker InterruptedException during executor shutdown is expected cancellation
+            restore the interrupt flag and rethrow unless executor.isShutdown
+            AudioTrack.release remains in finally
             `.catch(() => undefined)`
             post-acceptance mechanical projection loss
             synchronous JavaScript invocation and graph faults still propagate
@@ -323,6 +391,7 @@ class AudioFaultStageVerifierTest {
         const val ANDROID_TEST_TOKEN = "androidAudioBrokerIsInstanceOwnedAndCloseIsIdempotent"
         const val ANDROID_QUEUE_TEST_TOKEN = "androidWorkerAndDiscardOldestQueueEnforceOneAndTwentyFour"
         const val ANDROID_BUFFER_TEST_TOKEN = "androidSynthesisBufferAcceptsMaximumDurationAndRejectsNext"
+        const val ANDROID_CANCEL_TEST_TOKEN = "closingDuringPlaybackCancelsWithoutAnUncaughtWorkerFailure"
         const val WEB_TEST_TOKEN =
             "webAudioSynchronousProviderFaultsPropagateWithoutFabricatingClosedState"
     }

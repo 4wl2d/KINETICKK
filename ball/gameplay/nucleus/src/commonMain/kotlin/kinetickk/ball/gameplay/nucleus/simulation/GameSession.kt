@@ -16,6 +16,7 @@ import kotlin.math.max
 
 internal fun MutableGameState.startRun() {
     phase = GamePhase.RUNNING
+    characterRuntime = CharacterRuntime()
     enemies.clear()
     projectiles.clear()
     pickups.clear()
@@ -38,12 +39,13 @@ internal fun MutableGameState.startRun() {
     slipstreamRelayTime = 0f
     borrowedMomentTime = 0f
     brakepointCharge = 0f
+    resetSynergyRuntime()
     itemStacks.fill(0)
     familyStacks.fill(0)
     totem = null
     nextEntityId = 1
     spawnClock = 0.2f
-    nextEliteAt = rebirthProfile.eliteInterval(38f)
+    nextEliteAt = rebirthProfile.eliteInterval(content.tempo.firstEliteAtSeconds)
     bossSpawned = false
     accumulator = 0f
     coreX = 0f
@@ -68,6 +70,12 @@ internal fun MutableGameState.startRun() {
     dashBufferTime = 0f
     saturationHeadingX = 1f
     saturationHeadingY = 0f
+    smoothedVelocityX = 0f
+    smoothedVelocityY = 0f
+    turnHeadingEstablished = false
+    turnHoldTime = 0f
+    turnRecoveryCooldown = 0f
+    turnDirection = 0
     elapsed = 0f
     heat = 0f
     overheated = false
@@ -76,7 +84,7 @@ internal fun MutableGameState.startRun() {
     level = 1
     data = 0
     dataFraction = 0f
-    nextLevelData = 18
+    nextLevelData = content.tempo.dataRequiredForLevel(1)
     pendingLevelChoices = 0
     keys = 0
     kills = 0
@@ -102,12 +110,13 @@ internal fun MutableGameState.startRun() {
     resetRunStats()
     weapon = startingWeapon
     resetWeaponRuntime()
+    resetPointsOfInterest()
     emitSound(GameplayAudioCue.UI_CLICK)
     repeat(rebirthProfile.openingEnemyCount) {
         val openingType = if (rebirthLevel == 0) {
             EnemyType.DRIFTER
         } else {
-            enemyTypeForElapsed(threatElapsed, gameplayRandom.nextFloat())
+            enemyTypeForElapsed(threatElapsed, gameplayRandom.nextFloat(), content.tempo)
         }
         spawnEnemy(openingType)
     }
@@ -116,7 +125,7 @@ internal fun MutableGameState.startRun() {
 internal fun MutableGameState.resetRunStats() {
     mass = 1f
     damageMultiplier = 1f + metaLevel(MetaUpgradeId.KINETIC_AMPLIFIER) * 0.05f
-    weaponPower = 1f + metaLevel(MetaUpgradeId.ARMORY_LICENSE) * 0.04f * unlockedWeaponSet.size
+    weaponPower = 1f + metaLevel(MetaUpgradeId.ARMORY_LICENSE) * 0.04f
     coolingRate = 19f * (1f + metaLevel(MetaUpgradeId.CRYO_VENTS) * 0.05f)
     magnetStrength = 4.65f * (1f + metaLevel(MetaUpgradeId.MAGNETIC_RESONANCE) * 0.04f)
     dashImpulse = 590f * (1f + metaLevel(MetaUpgradeId.DASH_CAPACITOR) * 0.05f)
@@ -229,6 +238,8 @@ internal fun MutableGameState.requestDash() {
 internal fun MutableGameState.choose(index: Int) {
     if (phase != GamePhase.CHOICE || index !in choices.indices) return
     val option = choices[index]
+    option.rewardFocus?.let { selectRewardFocus(it); return }
+    val before = captureBuildChange()
     val sound = when (option.type) {
         ChoiceType.ITEM -> {
             val itemId = option.itemId ?: return
@@ -286,10 +297,16 @@ internal fun MutableGameState.choose(index: Int) {
             GameplayAudioCue.WEAPON_ACQUIRED
         }
     }
+    emitBuildChange(before, option.title)
     finishChoice(sound)
 }
 
 internal fun MutableGameState.finishChoice(sound: GameplayAudioCue) {
+    if (directedReward == kinetickk.ball.content.api.DirectedReward.ITEM_AND_REPAIR) {
+        hp = minOf(maxHp, hp + 25f)
+    }
+    directedReward = null
+    selectedRewardFocus = null
     choices = emptyList()
     phase = GamePhase.RUNNING
     runGrace = max(runGrace, 0.5f)

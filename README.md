@@ -12,8 +12,8 @@
 </p>
 
 <p align="center">
-  <img alt="Kotlin 2.4.20 RC" src="https://img.shields.io/badge/Kotlin-2.4.20--RC-7F52FF?logo=kotlin&logoColor=white">
-  <img alt="Compose Multiplatform 1.12.0 RC1" src="https://img.shields.io/badge/Compose_Multiplatform-1.12.0--rc01-4285F4?logo=jetpackcompose&logoColor=white">
+  <img alt="Kotlin 2.4.20 RC3" src="https://img.shields.io/badge/Kotlin-2.4.20--RC3-7F52FF?logo=kotlin&logoColor=white">
+  <img alt="Compose Multiplatform 1.12.0" src="https://img.shields.io/badge/Compose_Multiplatform-1.12.0-4285F4?logo=jetpackcompose&logoColor=white">
   <img alt="Desktop and WebAssembly" src="https://img.shields.io/badge/targets-Desktop_%2B_WebAssembly-42F5E9">
   <a href="LICENSE"><img alt="GNU GPL version 3 or later" src="https://img.shields.io/badge/license-GPLv3%2B-FF426D"></a>
 </p>
@@ -56,7 +56,9 @@ whole game locally, experiment with it, and contribute changes under the GPL.
 
 ## How to play
 
-Magnetic Polarity saturates when the target stays far away in one direction. A saturated tether stops adding thrust: turn decisively or bring the target inward to recover before enemies intercept your line.
+Sustained forward thrust fatigues Magnetic Polarity. Recover by turning the Core through a real arc or using Brake down to a low speed. Lateral steering and braking thrust remain available at full fatigue; moving the cursor alone does not restore stability.
+
+Fresh profiles start at 1× speed. The Architect arrives after 12 minutes of active play. Reward choices and pauses stop that clock. Choose optional world-fixed anomaly trials for directed weapon, relic or item rewards; skipping them remains possible. Six characters share all Lab upgrades and can use every weapon.
 
 | Input | Action |
 |---|---|
@@ -66,16 +68,21 @@ Magnetic Polarity saturates when the target stays far away in one direction. A s
 | `P` / `Esc` | Pause or return |
 | `1`–`4` | Select an item, weapon, or Relic option |
 | `Q` | Reroll an item or weapon choice |
-| `L` / `A` / `B` / `C` / `S` | Lab, Armory, Rebirth, Codex, Settings |
+| `L` / `A` / `B` / `C` or `I` / `S` | Lab, Armory, Rebirth, build Codex, Settings |
 | `M` | Toggle sound and music |
 | `F3` | Toggle and reset the rolling performance HUD |
 | `R` | Restart after a completed run |
+
+The Codex contains Build, Catalog and Synergies tabs. Opening it preserves your pause or pending reward. New-format progression uses separate storage on every platform; previous saves remain untouched.
 
 Defeat **The Architect** on the current Rebirth tier to unlock the next one. Rebirth starts a fresh run build with a stronger threat profile while preserving permanent progression, unlocks, Codex discovery, and settings.
 
 ## Development
 
 Requirements: JDK 17 or newer. The Gradle wrapper downloads the matching Gradle distribution automatically.
+
+Development must use the current Pokeball skills as required by the
+[project instructions](AGENTS.md).
 
 ```bash
 git clone https://github.com/4wl2d/KINETICKK.git
@@ -132,7 +139,7 @@ Pokeball architecture verification requires an immutable checkout of
 | Run the complete local gate | Run both commands below: the strict Android/Desktop/architecture graph, then the normal Web graph |
 | List every available task | `./gradlew tasks` |
 
-Gradle 9.7 Isolated Projects is enabled for the Android, Desktop, and architecture CI graphs:
+Gradle 9.7.1 Isolated Projects is enabled for the Android, Desktop, and architecture CI graphs:
 
 ```bash
 ./gradlew \
@@ -157,7 +164,7 @@ normal profile without `--isolated-projects`; no Gradle problem is ignored or su
 
 - **Kinetic combat:** fixed-step simulation at 120 Hz, uncapped magnetic acceleration, swept high-speed collisions, mass-based impact damage, recoil, Gravity Brake, and Polarity saturation.
 - **Buildcraft:** twelve movement-reactive weapons, forty rankable Relics, four Sovereign Relics, four bound Relic slots, and 400 deterministic items across twenty modifier families.
-- **Run progression:** Data leveling, stat evolutions, Elite Keys, two-stage Totems, weapon mastery, combo rewards, velocity tiers, Kinetic Overdrive, and a twenty-minute Architect finale.
+- **Run progression:** Data leveling, stat evolutions, Elite Keys, two-stage Totems, weapon mastery, combo rewards, velocity tiers, Kinetic Overdrive, and a twelve-minute Architect finale.
 - **Persistent progression:** spendable Kinetic Matter, eight Lab upgrades, twelve Armory unlocks, three Core shapes, Codex discovery, and replayable Rebirth threat tiers.
 - **Presentation:** infinite procedural grid, camera tracking, trails, particles, screen shake, configurable damage numbers, and procedural synth audio on Android, desktop, and web.
 - **Opposition:** Drifter, Shooter, Charger, Interceptor, Weaver, Warden, Splitter, Elite, and Architect behaviors with projectiles and escalating wave mixes.
@@ -198,7 +205,7 @@ you confirm that you have the right to license it on those terms.
 
 ## Status
 
-KINETICKK is a playable `0.1.0` prototype. Until the `1.0.0` release, the
+KINETICKK is a playable `0.2.0` prototype. Until the `1.0.0` release, the
 current local profile schema is the only supported schema: development builds
 do not migrate, import, or clean up saves written by earlier builds. An absent
 or incompatible current profile starts from the current defaults. APIs,

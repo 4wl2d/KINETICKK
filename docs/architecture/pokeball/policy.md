@@ -108,6 +108,11 @@ trusted Impl boundary.
 | projectile hit-history IDs | 120 | projectile-local sorted bounded identity array, merge-reclaimed against sorted live enemies |
 | Gameplay sound cues / weapon nodes / orbitals / choices | 32 / 8 / 8 / 4 | Gameplay-owned bounded insertion or atomic validation |
 | Arc Coil targets / generated item, weapon, or Relic reward choices | 6 / 3 | deployed weapon and three reward-generator paths |
+| POI offered / active / defenders | 2 / 1 / 3 inside the existing enemy cap | closed two-point construction, activation replaces the offer pair, defender pre-reservation |
+| POI directed rewards | 6 per run | six Content schedule windows and checked queue growth before candidate publication |
+| Character lattice | 4 collapse vertices / at most 3 retained | fourth distinct Dash position collapses the lattice; nearby positions add nothing |
+| Synergy transient effects | 32 | source-owned effects replace equivalent entries or suppress a new effect at capacity; relic replacement removes dependent effects |
+| Build notifications | 3 latest groups | Interaction-only six-second presentation queue replaces the oldest visible group |
 | Gameplay trail samples per update | 32 | bounded per-update sampling loop |
 | visual-FX cues per projection | 2048 | Gameplay bounded accumulator |
 | Interaction particles / motion echoes / shockwaves | 700 / 36 / 48 | Interaction-ephemeral bounded reducers |
@@ -119,7 +124,8 @@ trusted Impl boundary.
 | authoritative Gameplay viewport pixels / density | `1..32768` / `0.5..8` | target-owned Gameplay API factory validates both dimensions and density before the Nucleus can receive the Pulse |
 | authoritative Gameplay pointer | `0..current viewport` | Gameplay Nucleus validates both pointer coordinates against committed viewport state |
 | Gameplay / Home / Armory presentation delta seconds | `0.1` / `0.1` / `0.1` | Interaction-owned presentation clocks clamp the first larger representable delta |
-| Codex / Armory visible page slice | 10 / 3 | deployed draw paths select only the bounded current-page slice |
+| Codex catalog entries / search characters | 400 / 128 | Interaction rejects catalog overflow; bounded local name search feeds a lazy grid in original catalog order |
+| Armory visible page slice | 3 | deployed draw path selects only the bounded current-page slice |
 | accepted caller effect ToneRequests per advance | 32 | Audio Resource rejects an oversized caller batch atomically |
 | caller effect ToneRequests selected per advance | 3 | Audio Resource preserves caller order/deduplication within the accepted batch |
 | music clock advance delta seconds | `0.1` | Audio Resource clamps finite caller time before advancing its internal music clock |
@@ -128,10 +134,11 @@ trusted Impl boundary.
 | Desktop synthesis samples / PCM bytes per tone | 22050 / 44100 | validated one-second maximum buffer shape |
 | Android audio workers / queued tasks | 1 / 24 | fixed executor and discard-oldest queue policy |
 | Android synthesis samples / PCM bytes per tone | 22050 / 44100 | validated one-second maximum PCM16 buffer shape |
-| items / weapons / upgrades / relics | 400 / 12 / 8 / 40 | Content bootstrap validation |
+| items / weapons / upgrades / relics / synergies | 400 / 12 / 8 / 40 / 12 | Content bootstrap validation |
 | Rebirth level | `0..10` | Content typed policy plus Profile/Gameplay validation |
 | equipped Relic slots / rank | 4 / `1..5` | captured Content Relic policy plus Gameplay retention/saturation |
 | Profile retained Lab rank slots / each rank | captured upgrade count (at most 8) / `0..captured maxRanks` | Profile bootstrap compatibility plus policy-free Resource schema validation |
+| Profile character achievement totals / distinct winners | non-negative saturating `Long` / six stable character IDs | Profile validates deltas, persists cumulative progress and owns unlock evaluation |
 | Profile retained discoveries | captured `itemCount` (at most 400) | Profile bootstrap compatibility plus policy-free Resource schema validation |
 | Profile master volume / text scale | `0..1` / `1..1.75` | Profile and Gameplay normalized compatibility plus Resource ingress validation |
 | Profile simulation speed / damage-tier threshold | exact declared option sets | API declarations consumed by Profile Nucleus, Gameplay Nucleus, and Resource validation |
@@ -171,7 +178,7 @@ outputs, and drains reset storage to null without sharing mutable ownership.
 | `gameplay.stable-compaction` | retained cardinality <= bounded source; stable survivor order | forward survivor compaction/reverse-tail deletion or index-stable removal |
 | `profile.codec-temporary-collections` | unlocked <=12; ranks =8; discoveries <=400 | materialized after schema validation |
 | `session.shell-entries` | 1..2 | one base plus one nullable overlay |
-| `content.closed-ui-catalogs` | CoreShape 3 / WeaponMastery 4 | bootstrap requires exact stable order |
+| `content.closed-ui-catalogs` | CoreShape 6 / WeaponMastery 4 | bootstrap requires exact stable order |
 | `ui.catalog-backed-sources` | Codex items <=400; Armory weapons <=12; Lab upgrades <=8; mastery closed | validated immutable Content plus bounded Profile state |
 | `audio.music-notes` | 8 | fixed literal array with modulo-only indexing |
 | `foundation.immutable-set-copy` | list = input cardinality; set <= input cardinality | safe immutable reuse or owned copy; stable first-occurrence set semantics |
@@ -259,9 +266,9 @@ The exact broker classifies an 8193-unit value before invocation as
 `OutcomeUnknown`, and never rolls back the already accepted Profile frame.
 
 Platform composition is the sole physical storage authority and selects one
-current location per target: Android SharedPreferences `kinetickk.profile` key
-`snapshot`, Desktop Preferences node `kinetickk/profile` key `snapshot`, and Web
-local-storage key `kinetickk_profile`. The Resource, Ball, Flow, and
+current location per target: Android SharedPreferences `kinetickk.profile.v2` key
+`snapshot`, Desktop Preferences node `kinetickk/profile-v2` key `snapshot`, and Web
+local-storage key `kinetickk_profile_v2`. The Resource, Ball, Flow, and
 Interactions cannot choose another root, node, or key.
 
 There is no pre-`1.0.0` migration or backward-compatibility inventory. Keys
@@ -308,6 +315,12 @@ includes synchronous Web `AudioContext` invocation and graph construction calls.
 Desktop synthesis run inside detached executor workers.
 Android and Desktop synthesis faults escape their detached executor `Runnable` to the runtime.
 This is a worker-runtime escape with no caller-propagation claim.
+Only Android worker InterruptedException during executor shutdown is expected cancellation:
+restore the interrupt flag and rethrow unless executor.isShutdown. This exception is restricted to
+private `synthesize` submitted by the bounded executor; synchronous `play`, `close`, Resource calls,
+provider failures and unrelated interruptions keep the existing runtime-fault policy.
+AudioTrack.release remains in finally, including cancellation. The targeted device test
+`closingDuringPlaybackCancelsWithoutAnUncaughtWorkerFailure` exercises this shutdown order.
 
 Web native `resume()` and `close()` Promise rejections are explicitly observed and consumed only by
 `.catch(() => undefined)` as non-semantic post-acceptance mechanical projection loss. Those sinks do

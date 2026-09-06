@@ -215,16 +215,16 @@ class TotemEnemySystemsTest {
 
     @Test
     fun enemyTypeTiersChangeAtExactElapsedBoundaries() {
-        assertEquals(EnemyType.DRIFTER, enemyTypeForElapsed(37.999f, 0.999f))
-        assertEquals(EnemyType.SHOOTER, enemyTypeForElapsed(38f, 0.999f))
-        assertEquals(EnemyType.SHOOTER, enemyTypeForElapsed(89.999f, 0.999f))
-        assertEquals(EnemyType.INTERCEPTOR, enemyTypeForElapsed(90f, 0.999f))
-        assertEquals(EnemyType.INTERCEPTOR, enemyTypeForElapsed(149.999f, 0.999f))
-        assertEquals(EnemyType.WEAVER, enemyTypeForElapsed(150f, 0.999f))
-        assertEquals(EnemyType.WEAVER, enemyTypeForElapsed(239.999f, 0.999f))
-        assertEquals(EnemyType.WARDEN, enemyTypeForElapsed(240f, 0.999f))
-        assertEquals(EnemyType.WARDEN, enemyTypeForElapsed(359.999f, 0.999f))
-        assertEquals(EnemyType.WARDEN, enemyTypeForElapsed(360f, 0.999f))
+        assertEquals(EnemyType.DRIFTER, tempoEnemyTypeForElapsed(37.999f, 0.999f))
+        assertEquals(EnemyType.SHOOTER, tempoEnemyTypeForElapsed(38f, 0.999f))
+        assertEquals(EnemyType.SHOOTER, tempoEnemyTypeForElapsed(89.999f, 0.999f))
+        assertEquals(EnemyType.INTERCEPTOR, tempoEnemyTypeForElapsed(90f, 0.999f))
+        assertEquals(EnemyType.INTERCEPTOR, tempoEnemyTypeForElapsed(149.999f, 0.999f))
+        assertEquals(EnemyType.WEAVER, tempoEnemyTypeForElapsed(150f, 0.999f))
+        assertEquals(EnemyType.WEAVER, tempoEnemyTypeForElapsed(239.999f, 0.999f))
+        assertEquals(EnemyType.WARDEN, tempoEnemyTypeForElapsed(240f, 0.999f))
+        assertEquals(EnemyType.WARDEN, tempoEnemyTypeForElapsed(359.999f, 0.999f))
+        assertEquals(EnemyType.WARDEN, tempoEnemyTypeForElapsed(360f, 0.999f))
     }
 
     @Test
@@ -295,7 +295,7 @@ class TotemEnemySystemsTest {
 
     private fun assertTier(elapsed: Float, vararg expected: Pair<Float, EnemyType>) {
         expected.forEach { (roll, type) ->
-            assertEquals(type, enemyTypeForElapsed(elapsed, roll), "elapsed=$elapsed roll=$roll")
+            assertEquals(type, tempoEnemyTypeForElapsed(elapsed, roll), "elapsed=$elapsed roll=$roll")
         }
     }
 
@@ -307,3 +307,6 @@ class TotemEnemySystemsTest {
         engine.updatePointer(640f, 360f)
     }
 }
+
+private fun tempoEnemyTypeForElapsed(elapsed: Float, roll: Float): EnemyType =
+    enemyTypeForElapsed(elapsed, roll, kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent.tempo)

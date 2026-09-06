@@ -3,6 +3,10 @@
 
 package kinetickk.flow.session.interaction.home.impl
 
+import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.text
+import kinetickk.flow.session.interaction.localization.SessionText
+import kinetickk.ball.content.api.localizedContent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -79,6 +83,7 @@ class DefaultHomeFeature(
 
     @Composable
     override fun Content(inputEnabled: Boolean, onOutput: (HomeOutput) -> Unit) {
+        val language = LocalAppLanguage.current
         val localDensity = LocalDensity.current
         val density = localDensity.density
         val composeTextMeasurer = rememberTextMeasurer(cacheSize = 64)
@@ -89,10 +94,11 @@ class DefaultHomeFeature(
         revisionValue
         val uiModel = reducer.uiModel(profilePort.query(ProfileQuery.GetHomeProgress))
         val textScale = profilePort.query(ProfileQuery.GetPreferences).preferences.textScale
-        val textMeasurer = remember(composeTextMeasurer, textScale) {
+        val textMeasurer = remember(composeTextMeasurer, textScale, language) {
             CanvasTextMeasurer(
                 delegate = composeTextMeasurer,
                 scale = textScale,
+                language = language,
             )
         }
 
@@ -140,7 +146,7 @@ class DefaultHomeFeature(
                 .background(SpaceBlack)
                 .testTag(HOME_ROOT_TAG)
                 .semantics {
-                    contentDescription = "KINETICKK home"
+                    contentDescription = language.text(SessionText.HOME_DESCRIPTION)
                 }
                 .onSizeChanged { size ->
                     viewportValue = HomeViewport(size.width.toFloat(), size.height.toFloat(), density)
@@ -178,7 +184,8 @@ private fun HomeSemanticAction(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    val description = action.target.homeContentDescription()
+    val language = LocalAppLanguage.current
+    val description = action.target.homeContentDescription(language)
     Box(
         Modifier
             .placeInHomeBounds(action.bounds, density)
@@ -195,7 +202,7 @@ private fun HomeSemanticAction(
                 contentDescription = description
                 if (action.target.coreShapeOrNull() != null) {
                     this.selected = selected
-                    stateDescription = if (selected) "Selected" else if (enabled) "Available" else "Locked"
+                    stateDescription = if (selected) language.text(SessionText.SELECTED_STATE) else if (enabled) language.text(SessionText.AVAILABLE_STATE) else language.text(SessionText.LOCKED_STATE)
                 }
                 if (enabled) {
                     onClick(label = description) {
@@ -224,6 +231,9 @@ private fun HomeLayoutTarget.homeTestTag(): String = when (this) {
     HomeLayoutTarget.CORE_ORB -> "kinetickk.home.core.orb"
     HomeLayoutTarget.CORE_PRISM -> "kinetickk.home.core.prism"
     HomeLayoutTarget.CORE_SHARD -> "kinetickk.home.core.shard"
+    HomeLayoutTarget.CORE_RING -> "kinetickk.home.core.ring"
+    HomeLayoutTarget.CORE_DIAMOND -> "kinetickk.home.core.diamond"
+    HomeLayoutTarget.CORE_TESSERACT -> "kinetickk.home.core.tesseract"
     HomeLayoutTarget.START -> "kinetickk.home.start"
     HomeLayoutTarget.LAB -> "kinetickk.home.lab"
     HomeLayoutTarget.ARMORY -> "kinetickk.home.armory"
@@ -232,16 +242,19 @@ private fun HomeLayoutTarget.homeTestTag(): String = when (this) {
     HomeLayoutTarget.SETTINGS -> "kinetickk.home.settings"
 }
 
-private fun HomeLayoutTarget.homeContentDescription(): String = when (this) {
-    HomeLayoutTarget.CORE_ORB -> "Select Orb core"
-    HomeLayoutTarget.CORE_PRISM -> "Select Prism core"
-    HomeLayoutTarget.CORE_SHARD -> "Select Shard core"
-    HomeLayoutTarget.START -> "Start run"
-    HomeLayoutTarget.LAB -> "Open Kinetic Lab"
-    HomeLayoutTarget.ARMORY -> "Open Armory"
-    HomeLayoutTarget.REBIRTH -> "Open Rebirth"
-    HomeLayoutTarget.CODEX -> "Open Codex"
-    HomeLayoutTarget.SETTINGS -> "Open Settings"
+private fun HomeLayoutTarget.homeContentDescription(language: AppLanguage): String = when (this) {
+    HomeLayoutTarget.CORE_ORB -> language.text(SessionText.SELECT_CIRCLE)
+    HomeLayoutTarget.CORE_PRISM -> language.text(SessionText.SELECT_SQUARE)
+    HomeLayoutTarget.CORE_SHARD -> language.text(SessionText.SELECT_TRIANGLE)
+    HomeLayoutTarget.CORE_RING -> language.text(SessionText.SELECT_RING)
+    HomeLayoutTarget.CORE_DIAMOND -> language.text(SessionText.SELECT_DIAMOND)
+    HomeLayoutTarget.CORE_TESSERACT -> language.text(SessionText.SELECT_TESSERACT)
+    HomeLayoutTarget.START -> language.text(SessionText.START_DESCRIPTION)
+    HomeLayoutTarget.LAB -> language.text(SessionText.LAB_DESCRIPTION)
+    HomeLayoutTarget.ARMORY -> language.text(SessionText.ARMORY_DESCRIPTION)
+    HomeLayoutTarget.REBIRTH -> language.text(SessionText.REBIRTH_DESCRIPTION)
+    HomeLayoutTarget.CODEX -> language.text(SessionText.CODEX_DESCRIPTION)
+    HomeLayoutTarget.SETTINGS -> language.text(SessionText.SETTINGS_DESCRIPTION)
 }
 
 private const val HOME_ROOT_TAG = "kinetickk.home"
@@ -267,7 +280,7 @@ internal const val MAX_HOME_PRESENTATION_FRAME_DELTA_SECONDS: Float = 0.1f
 internal fun selectHomePresentationFrameDeltaSeconds(frameDeltaSeconds: Float): Float =
     frameDeltaSeconds.coerceAtMost(MAX_HOME_PRESENTATION_FRAME_DELTA_SECONDS)
 
-private val MenuNavLabels = listOf("LAB [L]", "ARMORY [A]", "REBIRTH [B]", "CODEX [C]", "SETTINGS [S]")
+private val MenuNavLabels = listOf(SessionText.NAV_LAB, SessionText.NAV_ARMORY, SessionText.NAV_REBIRTH, SessionText.NAV_CODEX, SessionText.NAV_SETTINGS)
 
 private fun DrawScope.drawHome(
     engine: HomeUiModel,
@@ -275,6 +288,7 @@ private fun DrawScope.drawHome(
     renderTime: Float,
     layout: HomeLayoutGeometry,
 ) {
+    val language = textMeasurer.language
     if (layout.mode != HomeLayoutMode.REGULAR) {
         drawCompactHome(engine, textMeasurer, renderTime, layout)
         return
@@ -295,33 +309,22 @@ private fun DrawScope.drawHome(
     drawCircle(Cyan.copy(alpha = 0.12f), d(22f), counterPoint)
     drawCircle(White, d(8f), counterPoint)
     drawLabel(textMeasurer, "KINETICKK", size.width * 0.5f, size.height * 0.205f, titleSize, Cyan, centered = true, weight = FontWeight.Bold)
-    drawLabel(textMeasurer, "YOUR MOVEMENT IS THE WEAPON. YOUR CURSOR IS THE THREAT.", size.width * 0.5f, size.height * 0.37f, if (narrow) 9f else 12f, Muted, centered = true)
+    drawLabel(textMeasurer, language.text(SessionText.HOME_SLOGAN), size.width * 0.5f, size.height * 0.37f, if (narrow) 9f else 12f, Muted, centered = true)
     drawLine(Violet.copy(alpha = 0.35f), Offset(size.width * 0.25f, size.height * 0.41f), Offset(size.width * 0.75f, size.height * 0.41f), 1f, pathEffect = dashEffect)
-    drawLabel(textMeasurer, "LEAD THE CORE  //  BUILD MOMENTUM  //  NEVER TOUCH THE SINGULARITY", size.width * 0.5f, size.height * 0.45f, if (narrow) 8f else 10f, White, centered = true)
-    drawLabel(textMeasurer, "SELECT CORE", size.width * 0.5f, size.height * 0.51f, 10f, Muted, centered = true)
+    drawLabel(textMeasurer, language.text(SessionText.HOME_INSTRUCTIONS), size.width * 0.5f, size.height * 0.45f, if (narrow) 8f else 10f, White, centered = true)
+    drawLabel(textMeasurer, language.text(SessionText.SELECT_CORE), size.width * 0.5f, size.height * 0.51f, 10f, Muted, centered = true)
 
-    val centers = listOf(size.width * 0.5f - d(130f), size.width * 0.5f, size.width * 0.5f + d(130f))
-    engine.coreShapes.forEachIndexed { index, definition ->
-        val shape = definition.id
-        val cardCenter = Offset(centers[index], size.height * 0.62f)
-        val selected = engine.coreShape == shape
-        val unlocked = engine.isCoreShapeUnlocked(shape)
-        drawRect(if (selected) CyanSoft else Color(0x88101225), Offset(cardCenter.x - d(60f), cardCenter.y - d(55f)), Size(d(120f), d(110f)))
-        drawRect(if (selected) Cyan else DarkLine, Offset(cardCenter.x - d(60f), cardCenter.y - d(55f)), Size(d(120f), d(110f)), style = Stroke(d(if (selected) 2f else 1f)))
-        when (shape) {
-            CoreShape.ORB -> drawCircle(if (unlocked) Cyan else Muted, d(13f), Offset(cardCenter.x, cardCenter.y - d(12f)))
-            CoreShape.PRISM -> drawPolygon(Offset(cardCenter.x, cardCenter.y - d(12f)), d(17f), 4, (PI / 4).toFloat(), if (unlocked) Violet else Muted, Fill)
-            CoreShape.SHARD -> drawPolygon(Offset(cardCenter.x, cardCenter.y - d(12f)), d(18f), 3, -(PI / 2).toFloat(), if (unlocked) Magenta else Muted, Fill)
+    layout.actions.forEach { action ->
+        action.target.coreShapeOrNull()?.let { shape ->
+            drawCompactCoreCard(engine, textMeasurer, shape, action.bounds)
         }
-        drawLabel(textMeasurer, shape.name, cardCenter.x, cardCenter.y + d(17f), 9f, if (selected) White else Muted, centered = true, weight = FontWeight.Bold)
-        if (!unlocked) drawLabel(textMeasurer, "${formatCompact(definition.unlockLifetimeMatter)} LIFETIME", cardCenter.x, cardCenter.y + d(34f), 7f, Orange, centered = true)
     }
 
     val buttonY = size.height * 0.78f
     drawRect(Cyan.copy(alpha = 0.12f), Offset(size.width * 0.5f - d(150f), buttonY - d(31f)), Size(d(300f), d(62f)))
     drawRect(Cyan, Offset(size.width * 0.5f - d(150f), buttonY - d(31f)), Size(d(300f), d(62f)), style = Stroke(d(2f)))
-    drawLabel(textMeasurer, "START RUN", size.width * 0.5f, buttonY - d(12f), 15f, White, centered = true, weight = FontWeight.Bold)
-    drawLabel(textMeasurer, "CLICK / TAP / ENTER", size.width * 0.5f, buttonY + d(14f), 8f, Cyan, centered = true)
+    drawLabel(textMeasurer, language.text(SessionText.START_RUN), size.width * 0.5f, buttonY - d(12f), 15f, White, centered = true, weight = FontWeight.Bold)
+    drawLabel(textMeasurer, language.text(SessionText.CLICK_TAP_ENTER), size.width * 0.5f, buttonY + d(14f), 8f, Cyan, centered = true)
     val navY = size.height * 0.9f
     val spacing = min(d(132f), size.width * 0.19f)
     val navStart = size.width * 0.5f - spacing * (MenuNavLabels.lastIndex * 0.5f)
@@ -339,14 +342,14 @@ private fun DrawScope.drawHome(
         }
         drawRect(Color(0x99101225), Offset(centerX - spacing * 0.44f, navY - d(20f)), Size(spacing * 0.88f, d(40f)))
         drawRect(accent, Offset(centerX - spacing * 0.44f, navY - d(20f)), Size(spacing * 0.88f, d(40f)), style = Stroke(d(1f)))
-        drawLabel(textMeasurer, label, centerX, navY - d(5f), if (narrow) 6f else 8f, labelColor, centered = true, weight = FontWeight.Bold)
+        drawLabel(textMeasurer, language.text(label), centerX, navY - d(5f), if (narrow) 6f else 8f, labelColor, centered = true, weight = FontWeight.Bold)
     }
-    drawLabel(textMeasurer, "KINETIC MATTER ${formatCompact(engine.totalMatter)} // REBIRTH ${engine.rebirthLevel}", d(20f), d(20f), 9f, Acid)
-    drawLabel(textMeasurer, "DISCOVERED ${engine.discoveredItemCount}/${engine.itemCount}  //  WEAPONS ${engine.unlockedWeaponCount}/${engine.weaponCount}", d(20f), d(39f), 7f, Muted)
-    drawLabel(textMeasurer, "DIRECTIVE ${engine.rebirthProfile.directive.displayName.uppercase()}", d(20f), d(56f), 7f, Orange)
-    drawLabel(textMeasurer, "KINETICKK 0.1.0 // COPYRIGHT (C) 2026 VLADISLAV TOMILOV // GNU GPL V3+", size.width * 0.5f, size.height - d(24f), if (narrow) 5f else 6f, Muted, centered = true)
-    drawLabel(textMeasurer, "YOU MAY REDISTRIBUTE UNDER GPL V3+ // NO WARRANTY", size.width * 0.5f, size.height - d(14f), if (narrow) 4f else 5f, Muted, centered = true)
-    drawLabel(textMeasurer, "SOURCE + LICENSE: GITHUB.COM/4WL2D/KINETICKK", size.width * 0.5f, size.height - d(6f), if (narrow) 4f else 5f, Muted, centered = true)
+    drawLabel(textMeasurer, language.text(SessionText.MATTER_REBIRTH, formatCompact(engine.totalMatter, language), engine.rebirthLevel), d(20f), d(20f), 9f, Acid)
+    drawLabel(textMeasurer, language.text(SessionText.COLLECTION_COUNTS, engine.discoveredItemCount, engine.itemCount, engine.unlockedWeaponCount, engine.weaponCount), d(20f), d(39f), 7f, Muted)
+    drawLabel(textMeasurer, language.text(SessionText.DIRECTIVE, engine.rebirthProfile.directive.displayName.localizedContent(language).uppercase()), d(20f), d(56f), 7f, Orange)
+    drawLabel(textMeasurer, language.text(SessionText.COPYRIGHT), size.width * 0.5f, size.height - d(24f), if (narrow) 5f else 6f, Muted, centered = true)
+    drawLabel(textMeasurer, language.text(SessionText.LICENSE_NOTICE), size.width * 0.5f, size.height - d(14f), if (narrow) 4f else 5f, Muted, centered = true)
+    drawLabel(textMeasurer, language.text(SessionText.SOURCE_LICENSE), size.width * 0.5f, size.height - d(6f), if (narrow) 4f else 5f, Muted, centered = true)
 }
 
 private fun DrawScope.drawCompactHome(
@@ -355,6 +358,7 @@ private fun DrawScope.drawCompactHome(
     renderTime: Float,
     layout: HomeLayoutGeometry,
 ) {
+    val language = textMeasurer.language
     val landscape = layout.mode == HomeLayoutMode.COMPACT_LANDSCAPE
     val firstCore = layout.bounds(HomeLayoutTarget.CORE_ORB)
     val lastCore = layout.bounds(HomeLayoutTarget.CORE_SHARD)
@@ -374,7 +378,8 @@ private fun DrawScope.drawCompactHome(
         "KINETICKK",
         titleCenter.x,
         titleCenter.y - d(if (landscape) 18f else 14f),
-        if (landscape) 27f else 34f,
+        minOf(if (landscape) 27f else 34f,
+            ((if (landscape) firstCore.left else size.width) / density - 24f) / (5.8f * textMeasurer.scale)),
         Cyan,
         centered = true,
         weight = FontWeight.Bold,
@@ -382,7 +387,7 @@ private fun DrawScope.drawCompactHome(
     if (landscape) {
         drawLabel(
             textMeasurer,
-            "MOVE THE SINGULARITY. BUILD MOMENTUM.",
+            language.text(SessionText.COMPACT_SLOGAN),
             titleCenter.x,
             titleCenter.y + d(32f),
             7f,
@@ -391,36 +396,39 @@ private fun DrawScope.drawCompactHome(
             maxWidth = firstCore.left - d(28f),
             maxLines = 2,
         )
-        drawLabel(textMeasurer, "MATTER ${formatCompact(engine.totalMatter)}", titleCenter.x, size.height * 0.56f, 8f, Acid, centered = true, weight = FontWeight.Bold)
-        drawLabel(textMeasurer, "REBIRTH ${engine.rebirthLevel}", titleCenter.x, size.height * 0.63f, 7f, Orange, centered = true)
-        drawLabel(textMeasurer, "SELECT CORE", (firstCore.left + lastCore.right) * 0.5f, firstCore.top - d(25f), 9f, Muted, centered = true, weight = FontWeight.Bold)
+        drawLabel(textMeasurer, language.text(SessionText.MATTER, formatCompact(engine.totalMatter, language)), titleCenter.x, size.height * 0.56f, 8f, Acid, centered = true, weight = FontWeight.Bold)
+        drawLabel(textMeasurer, language.text(SessionText.REBIRTH_LEVEL, engine.rebirthLevel), titleCenter.x, size.height * 0.63f, 7f, Orange, centered = true)
+        drawLabel(textMeasurer, language.text(SessionText.SELECT_CORE), (firstCore.left + lastCore.right) * 0.5f, firstCore.top - d(25f), 9f, Muted, centered = true, weight = FontWeight.Bold)
     } else {
-        drawLabel(textMeasurer, "YOUR TOUCH IS THE THREAT", size.width * 0.5f, size.height * 0.25f, 9f, Muted, centered = true)
-        drawLabel(textMeasurer, "LEAD THE CORE // BUILD MOMENTUM", size.width * 0.5f, size.height * 0.31f, 8f, White, centered = true)
-        drawLabel(textMeasurer, "MATTER ${formatCompact(engine.totalMatter)} // REBIRTH ${engine.rebirthLevel}", size.width * 0.5f, size.height * 0.39f, 8f, Acid, centered = true, weight = FontWeight.Bold)
-        drawLabel(textMeasurer, "SELECT CORE", size.width * 0.5f, firstCore.top - d(25f), 9f, Muted, centered = true, weight = FontWeight.Bold)
+        drawLabel(textMeasurer, language.text(SessionText.TOUCH_SLOGAN), size.width * 0.5f, size.height * 0.25f, 9f, Muted, centered = true)
+        drawLabel(textMeasurer, language.text(SessionText.COMPACT_INSTRUCTIONS), size.width * 0.5f, size.height * 0.31f, 8f, White, centered = true)
+        drawLabel(textMeasurer, language.text(SessionText.COMPACT_MATTER_REBIRTH, formatCompact(engine.totalMatter, language), engine.rebirthLevel), size.width * 0.5f, firstCore.top - d(63f), 8f, Acid, centered = true, weight = FontWeight.Bold)
+        drawLabel(textMeasurer, language.text(SessionText.SELECT_CORE), size.width * 0.5f, firstCore.top - d(25f), 9f, Muted, centered = true, weight = FontWeight.Bold)
     }
 
     listOf(
         CoreShape.ORB to HomeLayoutTarget.CORE_ORB,
         CoreShape.PRISM to HomeLayoutTarget.CORE_PRISM,
         CoreShape.SHARD to HomeLayoutTarget.CORE_SHARD,
+        CoreShape.RING to HomeLayoutTarget.CORE_RING,
+        CoreShape.DIAMOND to HomeLayoutTarget.CORE_DIAMOND,
+        CoreShape.TESSERACT to HomeLayoutTarget.CORE_TESSERACT,
     ).forEach { (shape, target) ->
         drawCompactCoreCard(engine, textMeasurer, shape, layout.bounds(target))
     }
     drawCompactHomeButton(
         textMeasurer,
         layout.bounds(HomeLayoutTarget.START),
-        "START RUN",
+        language.text(SessionText.START_RUN),
         Cyan,
         prominent = true,
     )
     listOf(
-        HomeLayoutTarget.LAB to "LAB",
-        HomeLayoutTarget.ARMORY to "ARMORY",
-        HomeLayoutTarget.REBIRTH to "REBIRTH",
-        HomeLayoutTarget.CODEX to "CODEX",
-        HomeLayoutTarget.SETTINGS to "SETTINGS",
+        HomeLayoutTarget.LAB to language.text(SessionText.LAB),
+        HomeLayoutTarget.ARMORY to language.text(SessionText.ARMORY),
+        HomeLayoutTarget.REBIRTH to language.text(SessionText.REBIRTH),
+        HomeLayoutTarget.CODEX to language.text(SessionText.CODEX),
+        HomeLayoutTarget.SETTINGS to language.text(SessionText.SETTINGS),
     ).forEach { (target, label) ->
         val accent = when (target) {
             HomeLayoutTarget.LAB -> Violet
@@ -432,7 +440,7 @@ private fun DrawScope.drawCompactHome(
     if (!landscape) {
         drawLabel(
             textMeasurer,
-            "GPLV3+ // SOURCE: GITHUB.COM/4WL2D/KINETICKK",
+            language.text(SessionText.COMPACT_LICENSE),
             size.width * 0.5f,
             size.height - d(8f),
             4.5f,
@@ -449,31 +457,42 @@ private fun DrawScope.drawCompactCoreCard(
     shape: CoreShape,
     bounds: Rect,
 ) {
+    val language = textMeasurer.language
     val selected = engine.coreShape == shape
     val unlocked = engine.isCoreShapeUnlocked(shape)
     val accent = when (shape) {
         CoreShape.ORB -> Cyan
         CoreShape.PRISM -> Violet
         CoreShape.SHARD -> Magenta
+        CoreShape.RING -> Acid
+        CoreShape.DIAMOND -> Orange
+        CoreShape.TESSERACT -> Violet
     }
     drawRect(if (selected) accent.copy(alpha = 0.17f) else Color(0x99101225), bounds.topLeft, bounds.size)
     drawRect(if (selected) accent else DarkLine, bounds.topLeft, bounds.size, style = Stroke(d(if (selected) 2f else 1f)))
-    val center = Offset(bounds.center.x, bounds.top + bounds.height * 0.38f)
+    val center = Offset(bounds.center.x, bounds.top + bounds.height * 0.25f)
     when (shape) {
         CoreShape.ORB -> drawCircle(if (unlocked) accent else Muted, d(12f), center)
         CoreShape.PRISM -> drawPolygon(center, d(15f), 4, (PI / 4).toFloat(), if (unlocked) accent else Muted, Fill)
         CoreShape.SHARD -> drawPolygon(center, d(16f), 3, -(PI / 2).toFloat(), if (unlocked) accent else Muted, Fill)
+        CoreShape.RING -> drawCircle(if (unlocked) accent else Muted, d(12f), center, style = Stroke(d(3f)))
+        CoreShape.DIAMOND -> drawPolygon(center, d(15f), 4, 0f, if (unlocked) accent else Muted, Fill)
+        CoreShape.TESSERACT -> {
+            drawPolygon(center, d(15f), 4, (PI / 4).toFloat(), if (unlocked) accent else Muted, Stroke(d(1.5f)))
+            drawPolygon(center, d(8f), 4, (PI / 4).toFloat(), if (unlocked) accent else Muted, Stroke(d(1.5f)))
+        }
     }
-    drawLabel(textMeasurer, shape.name, bounds.center.x, bounds.top + bounds.height * 0.61f, 8f, if (selected) White else Muted, centered = true, weight = FontWeight.Bold)
+    drawLabel(textMeasurer, engine.coreShape(shape).displayName.localizedContent(language).uppercase(), bounds.center.x, bounds.top + bounds.height * 0.53f, 7f, if (selected) White else Muted, centered = true, weight = FontWeight.Bold)
     drawLabel(
         textMeasurer,
-        if (unlocked) if (selected) "SELECTED" else "SELECT" else "LOCKED",
+        if (unlocked) if (selected) language.text(SessionText.SELECTED) else language.text(SessionText.SELECT) else shortUnlockLabel(engine.coreShape(shape), language),
         bounds.center.x,
-        bounds.bottom - d(19f),
-        6f,
+        bounds.bottom - d(12f),
+        5f,
         if (unlocked) accent else Orange,
         centered = true,
         weight = FontWeight.Bold,
+        maxWidth = bounds.width - d(8f),
     )
 }
 
@@ -484,13 +503,14 @@ private fun DrawScope.drawCompactHomeButton(
     accent: Color,
     prominent: Boolean = false,
 ) {
+    val language = textMeasurer.language
     drawRect(accent.copy(alpha = if (prominent) 0.15f else 0.08f), bounds.topLeft, bounds.size)
     drawRect(accent, bounds.topLeft, bounds.size, style = Stroke(d(if (prominent) 1.8f else 1f)))
     drawLabel(
         textMeasurer,
         label,
         bounds.center.x,
-        bounds.center.y - d(if (prominent) 9f else 6f),
+        if (prominent) bounds.top + d(7f) else bounds.center.y - d(6f),
         if (prominent) 13f else 7f,
         if (prominent) White else accent,
         centered = true,
@@ -498,6 +518,17 @@ private fun DrawScope.drawCompactHomeButton(
         maxWidth = bounds.width - d(8f),
     )
     if (prominent) {
-        drawLabel(textMeasurer, "TAP TO ENTER", bounds.center.x, bounds.center.y + d(11f), 6f, Cyan, centered = true)
+        drawLabel(textMeasurer, language.text(SessionText.TAP_ENTER), bounds.center.x, bounds.bottom - d(13f), 6f, Cyan, centered = true)
     }
 }
+
+
+private fun shortUnlockLabel(definition: kinetickk.ball.content.api.CoreShapeDefinition, language: AppLanguage): String =
+    when (definition.unlockRequirement) {
+        kinetickk.ball.content.api.CharacterUnlockRequirement.AVAILABLE -> language.text(SessionText.AVAILABLE)
+        kinetickk.ball.content.api.CharacterUnlockRequirement.ELITE_KILLS -> language.text(SessionText.ELITES_TARGET, definition.unlockTarget)
+        kinetickk.ball.content.api.CharacterUnlockRequirement.DASH_HITS -> language.text(SessionText.DASH_TARGET, definition.unlockTarget)
+        kinetickk.ball.content.api.CharacterUnlockRequirement.COMPLETED_ORBITS -> language.text(SessionText.ORBIT_CLEAR)
+        kinetickk.ball.content.api.CharacterUnlockRequirement.ARCHITECT_VICTORIES -> language.text(SessionText.ARCHITECT_WIN)
+        kinetickk.ball.content.api.CharacterUnlockRequirement.DISTINCT_CHARACTER_VICTORIES -> language.text(SessionText.FORMS_TARGET, definition.unlockTarget)
+    }

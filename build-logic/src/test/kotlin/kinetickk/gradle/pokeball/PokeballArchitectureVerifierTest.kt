@@ -11,6 +11,19 @@ import kotlin.test.assertTrue
 
 class PokeballArchitectureVerifierTest {
     @Test
+    fun sharedIconGeometryAdmitsMechanicalDrawingAndRejectsDomainMappings() {
+        val geometry = SourceDocument(
+            "foundation/design/src/commonMain/kotlin/kinetickk/foundation/design/CanvasRunes.kt",
+            "enum class CanvasRuneStyle { RING, CROSS }\nfun drawRuneMedallion() = Unit",
+        )
+        assertTrue(foundationAndRegistryViolations(listOf(geometry)).isEmpty())
+        listOf("ItemEffect", "ItemRarity", "RelicId").forEach { domainType ->
+            val leaked = geometry.copy(text = geometry.text + "\nfun map(value: $domainType) = Unit")
+            assertTrue(foundationAndRegistryViolations(listOf(leaked)).any { domainType in it })
+        }
+    }
+
+    @Test
     fun staticCumulativeFanoutCeilingAcceptsExact9840AndRejects9841() {
         assertEquals(
             9_840,
@@ -493,8 +506,6 @@ class PokeballArchitectureVerifierTest {
 
     @Test
     fun gameplayProgressClosedVariantMayAppearInSessionOnlyAsExactGuardedExhaustiveness() {
-        val sessionNucleusPath =
-            "flow/session/nucleus/src/commonMain/kotlin/kinetickk/flow/session/nucleus/AppSessionNucleus.kt"
         val sessionImplPath =
             "flow/session/impl/src/commonMain/kotlin/kinetickk/flow/session/impl/DefaultAppSessionComponent.kt"
         val profileProtocol = SourceDocument(
@@ -507,25 +518,41 @@ class PokeballArchitectureVerifierTest {
         )
         val guardedSources = mapOf(
             PROFILE_PROTOCOL_PATH to profileProtocol,
-            sessionNucleusPath to SourceDocument(
-                sessionNucleusPath,
-                """
-                    is ProfileModuleCommand.ApplyGameplayProgress
-                    error("Gameplay progress is not a Session mapping")
-                """.trimIndent(),
-            ),
             sessionImplPath to SourceDocument(
                 sessionImplPath,
                 """
                     is ProfileModuleCommand.ApplyGameplayProgress
                     error("Gameplay progress cannot enter Profile through Session")
                     error("Gameplay progress is not a Session command mapping")
-                    is ProfileModuleCommand.ApplyGameplayProgress -> false
+                    check(request.command !is ProfileModuleCommand.ApplyGameplayProgress)
                 """.trimIndent(),
             ),
         )
 
         assertTrue(productionProtocolUseViolations(guardedSources).isEmpty())
+
+        val withoutAdmissionGuard = guardedSources.toMutableMap().apply {
+            this[sessionImplPath] = getValue(sessionImplPath).copy(
+                text = getValue(sessionImplPath).text.replace(
+                    "check(request.command !is ProfileModuleCommand.ApplyGameplayProgress)",
+                    "",
+                ),
+            )
+        }
+        assertTrue(
+            productionProtocolUseViolations(withoutAdmissionGuard).any { sessionImplPath in it },
+        )
+
+        val nucleusPath =
+            "flow/session/nucleus/src/commonMain/kotlin/kinetickk/flow/session/nucleus/AppSessionNucleus.kt"
+        val obsoleteNucleusGuard = guardedSources + (
+            nucleusPath to SourceDocument(
+                nucleusPath,
+                "is ProfileModuleCommand.ApplyGameplayProgress\n" +
+                    "error(\"Gameplay progress is not a Session mapping\")",
+            )
+        )
+        assertTrue(productionProtocolUseViolations(obsoleteNucleusGuard).any { nucleusPath in it })
 
         val unguardedPath =
             "flow/session/impl/src/commonMain/kotlin/kinetickk/flow/session/impl/UnmappedGameplayProgress.kt"
@@ -803,6 +830,9 @@ class PokeballArchitectureVerifierTest {
         )
         assertBoundTokenDrift("content.relic-slots", "/ProgressionSystem.kt", "updated[slot] = EquippedRelic")
         assertBoundTokenDrift("audio.desktop-synthesis-bytes", "/PlatformCapabilities.desktop.kt", "ByteArray")
+        assertBoundTokenDrift("codex.catalog-items", "/CodexState.kt", "require(items.size <= CODEX_CATALOG_LIMIT)")
+        assertBoundTokenDrift("codex.search-characters", "/CodexState.kt", "input.take(CODEX_SEARCH_LIMIT)")
+        assertBoundTokenDrift("armory.page-slice-weapons", "/ArmoryState.kt", "ARMORY_PAGE_SIZE = 3")
     }
 
     @Test
@@ -839,7 +869,9 @@ class PokeballArchitectureVerifierTest {
             tokenFragment: String,
         ) {
             val projection = mechanicallyDerivedBounds.single { it.id == projectionId }
-            val anchor = projection.sourceAnchors.single { it.path.endsWith(pathSuffix) }
+            val anchor = projection.sourceAnchors.single {
+                it.path.endsWith(pathSuffix) && it.tokens.any { tokenFragment in it }
+            }
             val token = anchor.tokens.single { tokenFragment in it }
             val drifted = sources.toMutableMap().apply {
                 val source = getValue(anchor.path)
@@ -857,7 +889,9 @@ class PokeballArchitectureVerifierTest {
 
         val reducerCopies = mechanicallyDerivedBounds.single { it.id == "gameplay.reducer-copy-collections" }
         val copyAnchor = reducerCopies.sourceAnchors.single {
-            it.path.endsWith("/MutableGameState.kt")
+            it.path.endsWith("/MutableGameState.kt") && it.tokens.any { token ->
+                "source.mapTo(ArrayList(source.size), Projectile::isolatedCopy)" in token
+            }
         }
         val projectileCopy = copyAnchor.tokens.single {
             "source.mapTo(ArrayList(source.size), Projectile::isolatedCopy)" in it
@@ -925,7 +959,7 @@ class PokeballArchitectureVerifierTest {
         assertDerivedTokenDrift(
             "gameplay.item-indexed-state",
             "/GameplayNucleus.kt",
-            "itemStacks = state.engine",
+            "state.engine?.model?.buildSummary",
         )
         assertDerivedTokenDrift(
             "gameplay.render-projection-collections",

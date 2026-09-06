@@ -13,6 +13,8 @@ import kotlinx.browser.document
 fun main() {
     enableKinetickkComposeRuntimeOptimizations()
     ComposeViewport(document.body!!) {
-        KinetickkApp()
+        KinetickkApp(onLanguageChanged = { languageCode ->
+            document.documentElement?.setAttribute("lang", languageCode)
+        })
     }
 }

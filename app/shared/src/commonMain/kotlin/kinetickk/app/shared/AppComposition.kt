@@ -39,12 +39,12 @@ import kinetickk.resource.audio.impl.TonePlaybackCapability
 
 /** The single UI entry point used by Android, Desktop, and Web hosts. */
 @Composable
-fun KinetickkApp() {
+fun KinetickkApp(onLanguageChanged: (String) -> Unit = {}) {
     val ownerValue = remember { AppCompositionOwner() }
     DisposableEffect(ownerValue) {
         onDispose(ownerValue::close)
     }
-    ownerValue.Content()
+    ownerValue.Content(onLanguageChanged)
 }
 
 /** Static Assembly: constructs components and binds the two declared result routes. */
@@ -136,8 +136,10 @@ internal class AppCompositionOwner(
 
     @Composable
     @NonRestartableComposable
-    fun Content() {
+    fun Content(onLanguageChanged: (String) -> Unit = {}) {
         AppSessionContent(
+            profileReadPort = profilePort,
+            onLanguageChanged = { language -> onLanguageChanged(language.code) },
             sessionPort = appSessionComponent,
             audioExecutor = sessionAudioExecutor,
             gameplayPresentation = gameplayComponent,

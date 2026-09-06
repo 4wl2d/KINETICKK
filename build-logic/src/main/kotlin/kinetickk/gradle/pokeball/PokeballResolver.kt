@@ -1265,6 +1265,12 @@ internal val requiredPolicyBoundRows = listOf(
     "| projectile hit-history IDs | 120 |",
     "| Gameplay sound cues / weapon nodes / orbitals / choices | 32 / 8 / 8 / 4 |",
     "| Arc Coil targets / generated item, weapon, or Relic reward choices | 6 / 3 |",
+    "| POI offered / active / defenders | 2 / 1 / 3 inside the existing enemy cap |",
+    "| POI directed rewards | 6 per run |",
+    "| Character lattice | 4 collapse vertices / at most 3 retained |",
+    "| Synergy transient effects | 32 |",
+    "| Build notifications | 3 latest groups |",
+    "| Profile character achievement totals / distinct winners | non-negative saturating `Long` / six stable character IDs |",
     "| Gameplay trail samples per update | 32 |",
     "| visual-FX cues per projection | 2048 |",
     "| Interaction particles / motion echoes / shockwaves | 700 / 36 / 48 |",
@@ -1276,14 +1282,15 @@ internal val requiredPolicyBoundRows = listOf(
     "| authoritative Gameplay viewport pixels / density | `1..32768` / `0.5..8` |",
     "| authoritative Gameplay pointer | `0..current viewport` |",
     "| Gameplay / Home / Armory presentation delta seconds | `0.1` / `0.1` / `0.1` |",
-    "| Codex / Armory visible page slice | 10 / 3 |",
+    "| Codex catalog entries / search characters | 400 / 128 |",
+    "| Armory visible page slice | 3 |",
     "| accepted caller effect ToneRequests per advance | 32 |",
     "| caller effect ToneRequests selected per advance | 3 |",
     "| music clock advance delta seconds | `0.1` |",
     "| ToneRequest frequency Hz / duration seconds / gain | `20..20000` / `0.001..1` / `0..1` |",
     "| Desktop audio workers / queued tasks | 1 / 24 |",
     "| Desktop synthesis samples / PCM bytes per tone | 22050 / 44100 |",
-    "| items / weapons / upgrades / relics | 400 / 12 / 8 / 40 |",
+    "| items / weapons / upgrades / relics / synergies | 400 / 12 / 8 / 40 / 12 |",
     "| Rebirth level | `0..10` |",
     "| equipped Relic slots / rank | 4 / `1..5` |",
     "| Profile retained Lab rank slots / each rank | captured upgrade count (at most 8) / `0..captured maxRanks` |",
@@ -1358,10 +1365,19 @@ private fun MutableList<String>.addRecordViolations(records: Map<String, String>
     }
 }
 
-internal fun verifySnapshot(snapshotRoot: Path): SnapshotVerification {
-    require(Files.isDirectory(snapshotRoot.resolve(".git"))) {
+internal fun requireSnapshotCheckout(snapshotRoot: Path) {
+    val gitEntry = snapshotRoot.resolve(".git")
+    require(Files.isDirectory(gitEntry) || Files.isRegularFile(gitEntry)) {
         "Pokeball snapshot is not a Git checkout: $snapshotRoot"
     }
+    val checkoutRoot = Path.of(runGit(snapshotRoot, "rev-parse", "--show-toplevel").trim())
+    require(checkoutRoot.toRealPath() == snapshotRoot.toRealPath()) {
+        "Pokeball snapshot must name its Git checkout root: $snapshotRoot"
+    }
+}
+
+internal fun verifySnapshot(snapshotRoot: Path): SnapshotVerification {
+    requireSnapshotCheckout(snapshotRoot)
     val head = runGit(snapshotRoot, "rev-parse", "HEAD").trim()
     require(head == PokeballBaseline.CORE_COMMIT) {
         "Pokeball HEAD mismatch: expected ${PokeballBaseline.CORE_COMMIT}, found $head"

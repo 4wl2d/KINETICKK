@@ -8,7 +8,6 @@ import kinetickk.ball.gameplay.api.GameplayCommandBoundaryResponse
 import kinetickk.ball.gameplay.api.GameplayCommandIngressResult
 import kinetickk.ball.gameplay.api.GameplayCommandSource
 import kinetickk.ball.gameplay.api.GameplayCommandSourceToken
-import kinetickk.ball.gameplay.api.GameplayEffectiveProtocolIdentity
 import kinetickk.ball.gameplay.api.GameplayExitProgressResult
 import kinetickk.ball.gameplay.api.GameplayModuleCommand
 import kinetickk.ball.gameplay.api.GameplayModuleCommandRequest
@@ -16,6 +15,8 @@ import kinetickk.ball.gameplay.api.GameplayModuleResult
 import kinetickk.ball.gameplay.api.GameplayModuleResultDelivery
 import kinetickk.ball.gameplay.api.GameplayQuery
 import kinetickk.ball.gameplay.api.GameplayResultIssuerProvenance
+import kinetickk.ball.gameplay.api.acceptsResult
+import kinetickk.ball.gameplay.api.effectiveProtocolIdentity
 import kinetickk.ball.gameplay.interaction.GameplaySessionHost
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.PlayerPreferences
@@ -25,7 +26,6 @@ import kinetickk.ball.profile.api.ProfileCommandBoundaryResponse
 import kinetickk.ball.profile.api.ProfileCommandIngressResult
 import kinetickk.ball.profile.api.ProfileCommandSource
 import kinetickk.ball.profile.api.ProfileCommandSourceToken
-import kinetickk.ball.profile.api.ProfileEffectiveProtocolIdentity
 import kinetickk.ball.profile.api.ProfileModuleCommand
 import kinetickk.ball.profile.api.ProfileModuleCommandRequest
 import kinetickk.ball.profile.api.ProfileModuleResult
@@ -35,6 +35,8 @@ import kinetickk.ball.profile.api.ProfileResultIssuerProvenance
 import kinetickk.ball.profile.api.RebirthProgressProjection
 import kinetickk.ball.profile.api.RunBootstrapProjection
 import kinetickk.ball.profile.api.SessionProfileRoute
+import kinetickk.ball.profile.api.acceptsResult
+import kinetickk.ball.profile.api.effectiveProtocolIdentity
 import kinetickk.flow.session.api.AppDestination
 import kinetickk.flow.session.api.AppSessionInstanceId
 import kinetickk.flow.session.api.AppSessionQuery
@@ -242,6 +244,9 @@ internal class DefaultAppSessionComponent private constructor(
         check(request.semanticHandle.sourceInstance == ProfileCommandSource.LocalSession)
         check(request.semanticHandle.sourceRevision == next.revision.value)
         check(request.targetInstance == profileRoute.instanceId)
+        check(request.command !is ProfileModuleCommand.ApplyGameplayProgress) {
+            "Gameplay progress is not a Session command mapping"
+        }
     }
 
     private fun preflightGameplayCommand(
@@ -437,13 +442,13 @@ internal class DefaultAppSessionComponent private constructor(
         check(delivery.commandSource == route.commandSource(profileRoute)) {
             "Profile result command-source correlation mismatch"
         }
-        check(delivery.effectiveProtocolIdentity == route.request.command.effectiveIdentity)
+        check(delivery.effectiveProtocolIdentity == route.request.command.effectiveProtocolIdentity())
         check(delivery.issuerProvenance == ProfileResultIssuerProvenance.LOCAL_PROFILE_STATIC_BINDING)
         check(delivery.resultSource.semanticHandle == route.request.semanticHandle)
         check(delivery.resultSource.targetInstance == route.request.targetInstance)
         check(delivery.resultSource.causalScope == route.causalScope)
         check(delivery.resultSource.sourceOrdinal == route.request.command.expectedResultOrdinal)
-        check(delivery.result.matches(route.request.command)) {
+        check(route.request.command.acceptsResult(delivery.result)) {
             "Profile result payload contradicted the closed Session mapping"
         }
     }
@@ -475,13 +480,13 @@ internal class DefaultAppSessionComponent private constructor(
         check(delivery.commandSource == route.commandSource()) {
             "Gameplay result command-source correlation mismatch"
         }
-        check(delivery.effectiveProtocolIdentity == route.request.command.effectiveIdentity)
+        check(delivery.effectiveProtocolIdentity == route.request.command.effectiveProtocolIdentity())
         check(delivery.issuerProvenance == GameplayResultIssuerProvenance.GAMEPLAY_RUN_STATIC_BINDING)
         check(delivery.resultSource.semanticHandle == route.request.semanticHandle)
         check(delivery.resultSource.targetInstance == route.request.targetInstance)
         check(delivery.resultSource.sourceOrdinal == 0)
         check(delivery.resultSource.causalScope == route.causalScope)
-        check(delivery.result.matches(route.request.command)) {
+        check(route.request.command.effectiveProtocolIdentity().acceptsResult(delivery.result)) {
             "Gameplay result payload contradicted the closed Session mapping"
         }
     }
@@ -508,7 +513,7 @@ internal class DefaultAppSessionComponent private constructor(
     ) {
         val refusal = ingress.refusal
         check(refusal.commandSource == route.commandSource(profileRoute))
-        check(refusal.effectiveProtocolIdentity == route.request.command.effectiveIdentity)
+        check(refusal.effectiveProtocolIdentity == route.request.command.effectiveProtocolIdentity())
         check(refusal.targetBoundaryProvenance.targetInstance == profileRoute.instanceId)
         check(
             refusal.targetBoundaryProvenance.effectiveProtocolIdentity ==
@@ -525,7 +530,7 @@ internal class DefaultAppSessionComponent private constructor(
     ) {
         val refusal = ingress.refusal
         check(refusal.commandSource == route.commandSource())
-        check(refusal.effectiveProtocolIdentity == route.request.command.effectiveIdentity)
+        check(refusal.effectiveProtocolIdentity == route.request.command.effectiveProtocolIdentity())
         check(refusal.targetBoundaryProvenance.targetInstance == route.request.targetInstance)
         check(
             refusal.targetBoundaryProvenance.effectiveProtocolIdentity ==
@@ -757,15 +762,6 @@ private data class GameplayRouteReservation(
     )
 }
 
-private val ProfileModuleCommand.effectiveIdentity: ProfileEffectiveProtocolIdentity
-    get() = when (this) {
-        is ProfileModuleCommand.SelectCoreShape -> ProfileEffectiveProtocolIdentity.SESSION_CORE_SHAPE
-        ProfileModuleCommand.ToggleMute -> ProfileEffectiveProtocolIdentity.SESSION_MUTE
-        ProfileModuleCommand.AdvanceRebirth -> ProfileEffectiveProtocolIdentity.SESSION_REBIRTH
-        is ProfileModuleCommand.ApplyGameplayProgress ->
-            error("Gameplay progress is not a Session command mapping")
-    }
-
 private val ProfileModuleCommand.expectedResultOrdinal: Int
     get() = when (this) {
         is ProfileModuleCommand.SelectCoreShape,
@@ -775,29 +771,6 @@ private val ProfileModuleCommand.expectedResultOrdinal: Int
         is ProfileModuleCommand.ApplyGameplayProgress ->
             error("Gameplay progress is not a Session command mapping")
     }
-
-private fun ProfileModuleResult.matches(command: ProfileModuleCommand): Boolean = when (command) {
-    is ProfileModuleCommand.SelectCoreShape ->
-        this is ProfileModuleResult.CoreShapeSelected && shape == command.shape
-    ProfileModuleCommand.ToggleMute -> this is ProfileModuleResult.PreferencesChanged
-    ProfileModuleCommand.AdvanceRebirth -> this is ProfileModuleResult.RebirthAdvanced
-    is ProfileModuleCommand.ApplyGameplayProgress -> false
-}
-
-private val GameplayModuleCommand.effectiveIdentity: GameplayEffectiveProtocolIdentity
-    get() = when (this) {
-        GameplayModuleCommand.StartRun -> GameplayEffectiveProtocolIdentity.SESSION_START
-        GameplayModuleCommand.PauseForOverlay -> GameplayEffectiveProtocolIdentity.SESSION_PAUSE
-        GameplayModuleCommand.ApplyPreferences -> GameplayEffectiveProtocolIdentity.SESSION_PREFERENCES
-        GameplayModuleCommand.ExitRun -> GameplayEffectiveProtocolIdentity.SESSION_EXIT
-    }
-
-private fun GameplayModuleResult.matches(command: GameplayModuleCommand): Boolean = when (command) {
-    GameplayModuleCommand.StartRun -> this == GameplayModuleResult.RunStarted
-    GameplayModuleCommand.PauseForOverlay -> this == GameplayModuleResult.OverlayPaused
-    GameplayModuleCommand.ApplyPreferences -> this == GameplayModuleResult.PreferencesApplied
-    GameplayModuleCommand.ExitRun -> this is GameplayModuleResult.RunExited
-}
 
 private val AppSessionOutput.dispatchOrder: Int
     get() = when (this) {

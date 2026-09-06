@@ -16,6 +16,11 @@ internal fun MutableGameState.takeDamage(rawAmount: Float) {
     if (hurtCooldown > 0f) return
     var amount = rawAmount * rebirthProfile.incomingDamageMultiplier *
         (1f - damageReduction.coerceIn(0f, 0.65f))
+    if (characterRuntime.barrier > 0f) {
+        val absorbed = min(characterRuntime.barrier, amount)
+        characterRuntime = characterRuntime.copy(barrier = characterRuntime.barrier - absorbed)
+        amount -= absorbed
+    }
     if (shield > 0f) {
         val absorbed = min(shield, amount)
         shield -= absorbed

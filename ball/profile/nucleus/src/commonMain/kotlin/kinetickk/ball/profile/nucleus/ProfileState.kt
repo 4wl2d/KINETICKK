@@ -119,11 +119,17 @@ private fun isPolicyCompatibleAtConstruction(
     if (profile.economy.matter < 0L || profile.economy.lifetimeMatter < profile.economy.matter) {
         return false
     }
+    val achievements = profile.characterAchievements
+    if (achievements.eliteKills < 0L || achievements.dashHits < 0L ||
+        achievements.completedOrbits < 0L || achievements.architectVictories < 0L ||
+        achievements.victoriousCharacters.size > achievements.architectVictories
+    ) return false
     val allowedShapes = policy.coreShapes.map { it.id }
+    if (achievements.victoriousCharacters.any { it !in allowedShapes }) return false
     val allowedWeapons = policy.weapons.map { it.id }
     if (
         profile.loadout.coreShape !in allowedShapes ||
-        profile.economy.lifetimeMatter < policy.coreShape(profile.loadout.coreShape).unlockLifetimeMatter ||
+        !isCoreShapeUnlocked(profile, policy.coreShape(profile.loadout.coreShape)) ||
         profile.loadout.selectedWeapon !in allowedWeapons ||
         profile.loadout.selectedWeapon !in profile.loadout.unlockedWeapons ||
         policy.weapons.first().id !in profile.loadout.unlockedWeapons ||

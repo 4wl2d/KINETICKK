@@ -6,7 +6,6 @@ package kinetickk.ball.profile.impl
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.PlayerEconomy
-import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.ProfileAcceptance
 import kinetickk.ball.profile.api.ProfileBootstrapBlockReason
 import kinetickk.ball.profile.api.ProfileBootstrapStatus
@@ -35,6 +34,7 @@ import kinetickk.ball.profile.api.ProfileSnapshotRejection
 import kinetickk.ball.profile.api.ProfileWriteFailure
 import kinetickk.ball.profile.api.ProfileWriteOutcomeUnknownReason
 import kinetickk.ball.profile.api.ProfileWriteResult
+import kinetickk.foundation.common.localization.AppLanguage
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -45,37 +45,26 @@ import kotlin.test.assertTrue
 
 class DefaultProfileComponentTest {
     @Test
-    fun effectiveProtocolIdentityRejectsForeignProfileResultFamilies() {
-        assertTrue(
-            profileResultMatches(
-                ProfileEffectiveProtocolIdentity.SESSION_MUTE,
-                ProfileModuleResult.PreferencesChanged(PlayerPreferences()),
-            ),
-        )
-        assertTrue(
-            profileResultMatches(
-                ProfileEffectiveProtocolIdentity.GAMEPLAY_PROGRESS,
-                ProfileModuleResult.GameplayProgressApplied,
-            ),
-        )
-        assertFalse(
-            profileResultMatches(
-                ProfileEffectiveProtocolIdentity.SESSION_MUTE,
-                ProfileModuleResult.GameplayProgressApplied,
-            ),
-        )
-        assertFalse(
-            profileResultMatches(
-                ProfileEffectiveProtocolIdentity.GAMEPLAY_PROGRESS,
-                ProfileModuleResult.PreferencesChanged(PlayerPreferences()),
-            ),
-        )
-        assertFalse(
-            profileResultMatches(
-                ProfileEffectiveProtocolIdentity.SESSION_REBIRTH,
-                ProfileModuleResult.CoreShapeSelected(CoreShape.SHARD),
-            ),
-        )
+    fun selectedLanguageIsPersistedRestoredAndPublishedThroughPreferenceQuery() {
+        val resource = RecordingProfileResource()
+        val component = testProfileComponent(resource)
+        val selectEnglish = ProfilePulse.AdjustPreference(ProfilePreferenceAdjustment.SetLanguage(AppLanguage.English))
+
+        assertIs<ProfileAcceptance.Accepted>(component.accept(selectEnglish))
+        assertEquals(AppLanguage.English, component.query(ProfileQuery.GetPreferences).preferences.language)
+        val persisted = resource.writes.single()
+        assertEquals(AppLanguage.English, persisted.profile.preferences.language)
+        assertEquals(ProfileRejection.NoChange, assertIs<ProfileAcceptance.Rejected>(
+            component.accept(selectEnglish),
+        ).reason)
+        assertEquals(1, resource.writes.size)
+
+        val restored = testProfileComponent(RecordingProfileResource(ProfileSnapshotReadResult.Observed(persisted)))
+        assertEquals(AppLanguage.English, restored.query(ProfileQuery.GetPreferences).preferences.language)
+        assertIs<ProfileAcceptance.Accepted>(restored.accept(ProfilePulse.AdjustPreference(
+            ProfilePreferenceAdjustment.SetLanguage(AppLanguage.Russian),
+        )))
+        assertEquals(AppLanguage.Russian, restored.query(ProfileQuery.GetPreferences).preferences.language)
     }
 
     @Test
@@ -291,6 +280,68 @@ class DefaultProfileComponentTest {
             delivery.issuerProvenance,
         )
         assertEquals(ProfileRevision(3L), component.query(ProfileQuery.GetPreferences).revision)
+    }
+
+    @Test
+    fun resultSinkFaultDrainsAcceptedWriteCompletionBeforeEscapingAndReleasesTheRoute() {
+        val resource = RecordingProfileResource()
+        var deliveries = 0
+        val fault = IllegalStateException("result observer failed")
+        val component = testProfileComponent(resource) {
+            deliveries++
+            if (deliveries == 1) throw fault
+        }
+
+        val thrown = assertFailsWith<IllegalStateException> {
+            component.acceptTestCommand(
+                request(component, ProfileModuleCommand.ToggleMute),
+                causalScope = 20L,
+                causalDepth = 0,
+            )
+        }
+
+        assertEquals(fault, thrown)
+        assertEquals(1, deliveries)
+        assertEquals(ProfileRevision(3L), component.stateSnapshot().revision)
+        assertEquals(
+            ProfilePersistenceStatus.Persisted(ProfileRevision(2L)),
+            component.query(ProfileQuery.GetPersistenceStatus).persistence,
+        )
+        val next = assertIs<ProfileCommandIngressResult.Accepted>(
+            component.acceptTestCommand(
+                request(component, ProfileModuleCommand.ToggleMute, sourceRevision = 8L),
+                causalScope = 21L,
+                causalDepth = 0,
+            ),
+        )
+        assertEquals(ProfileRevision(4L), next.targetRevision)
+        assertEquals(2, deliveries)
+        assertEquals(2, resource.writes.size)
+    }
+
+    @Test
+    fun resourceProgrammingFaultStillDispatchesAcceptedResultAndPreservesPendingState() {
+        val fault = IllegalStateException("provider violated its result contract")
+        val resource = RecordingProfileResource().apply { writeBehavior = { throw fault } }
+        val deliveries = mutableListOf<ProfileModuleResultDelivery>()
+        val component = testProfileComponent(resource) { deliveries += it }
+
+        val thrown = assertFailsWith<IllegalStateException> {
+            component.acceptTestCommand(
+                request(component, ProfileModuleCommand.ToggleMute),
+                causalScope = 30L,
+                causalDepth = 0,
+            )
+        }
+
+        assertEquals(fault, thrown)
+        assertEquals(ProfileRevision(2L), component.stateSnapshot().revision)
+        assertEquals(ProfileRevision(2L), deliveries.single().resultSource.targetRevision)
+        assertIs<ProfileModuleResult.PreferencesChanged>(deliveries.single().result)
+        assertIs<ProfilePersistenceStatus.Pending>(
+            component.query(ProfileQuery.GetPersistenceStatus).persistence,
+        )
+        assertEquals(1, resource.writes.size)
     }
 
     @Test

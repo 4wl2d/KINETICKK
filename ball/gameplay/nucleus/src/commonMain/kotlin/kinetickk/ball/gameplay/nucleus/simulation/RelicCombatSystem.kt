@@ -42,9 +42,11 @@ internal fun MutableGameState.onQualifiedWeaponHit(enemy: Enemy, result: DamageR
         enemy.relicCounters[index] = min(5, enemy.relicCounters[index] + 1)
     }
 
+    var savedDischargeLink = -1
     val filamentRank = relicRank(RelicId.VOLTAIC_FILAMENT)
     if (filamentRank > 0 && relicCooldowns[RelicId.VOLTAIC_FILAMENT.ordinal] <= 0f) {
         nearestOtherEnemy(enemy.x, enemy.y, enemy.id, 440f)?.let { target ->
+            if (hasSynergy(kinetickk.ball.content.api.SynergyId.LINKED_ECHO)) savedDischargeLink = target.id
             damageEnemy(target, result.amount * 0.16f * filamentRank)
             addRelicArc(enemy.x, enemy.y, target.x, target.y)
             relicCooldowns[RelicId.VOLTAIC_FILAMENT.ordinal] = 0.28f
@@ -97,7 +99,7 @@ internal fun MutableGameState.onQualifiedWeaponHit(enemy: Enemy, result: DamageR
 
     val echoRank = relicRank(RelicId.ECHO_CHAMBER)
     if (echoRank > 0 && delayedRelicHits.size < MutableGameState.MAX_DELAYED_RELIC_HITS) {
-        delayedRelicHits += DelayedRelicHit(RelicId.ECHO_CHAMBER, enemy.id, 0.45f, result.amount * 0.12f * echoRank)
+        delayedRelicHits += DelayedRelicHit(RelicId.ECHO_CHAMBER, enemy.id, 0.45f, result.amount * 0.12f * echoRank, savedDischargeLink)
     }
     val palimpsestRank = relicRank(RelicId.PALIMPSEST_ROUND)
     if (palimpsestRank > 0) {
@@ -113,8 +115,11 @@ internal fun MutableGameState.onQualifiedWeaponHit(enemy: Enemy, result: DamageR
         val index = RelicId.FRACTURE_GATE.ordinal
         enemy.relicCounters[index]++
         if (enemy.relicCounters[index] % 6 == 0 && enemy.hp > 0f) {
+            val departureX = enemy.x
+            val departureY = enemy.y
             enemy.x = coreX - (enemy.x - coreX)
             enemy.y = coreY - (enemy.y - coreY)
+            onSynergyFracture(departureX, departureY, enemy.x, enemy.y)
             enemy.previousX = enemy.x
             enemy.previousY = enemy.y
             damageEnemy(enemy, 12f * fractureRank)

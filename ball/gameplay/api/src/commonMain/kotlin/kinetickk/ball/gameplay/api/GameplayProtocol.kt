@@ -140,6 +140,22 @@ sealed interface GameplayModuleResult {
     data class RunExited(val progress: GameplayExitProgressResult) : GameplayModuleResult
 }
 
+/** Target-owned mapping shared by command ingress and its callers. */
+fun GameplayModuleCommand.effectiveProtocolIdentity(): GameplayEffectiveProtocolIdentity = when (this) {
+    GameplayModuleCommand.StartRun -> GameplayEffectiveProtocolIdentity.SESSION_START
+    GameplayModuleCommand.PauseForOverlay -> GameplayEffectiveProtocolIdentity.SESSION_PAUSE
+    GameplayModuleCommand.ApplyPreferences -> GameplayEffectiveProtocolIdentity.SESSION_PREFERENCES
+    GameplayModuleCommand.ExitRun -> GameplayEffectiveProtocolIdentity.SESSION_EXIT
+}
+
+/** Payload compatibility only; the binding still verifies source, revision and provenance. */
+fun GameplayEffectiveProtocolIdentity.acceptsResult(result: GameplayModuleResult): Boolean = when (this) {
+    GameplayEffectiveProtocolIdentity.SESSION_START -> result == GameplayModuleResult.RunStarted
+    GameplayEffectiveProtocolIdentity.SESSION_PAUSE -> result == GameplayModuleResult.OverlayPaused
+    GameplayEffectiveProtocolIdentity.SESSION_PREFERENCES -> result == GameplayModuleResult.PreferencesApplied
+    GameplayEffectiveProtocolIdentity.SESSION_EXIT -> result is GameplayModuleResult.RunExited
+}
+
 /** Gameplay-owned workflow meaning; exact Profile payloads stay inside Gameplay Nucleus inputs. */
 sealed interface GameplayExitProgressResult {
     data object NoProgress : GameplayExitProgressResult

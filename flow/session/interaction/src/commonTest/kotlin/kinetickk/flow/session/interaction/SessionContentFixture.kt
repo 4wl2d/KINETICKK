@@ -16,9 +16,7 @@ import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.toImmutableList
 
 internal val TestCoreShapes: ImmutableList<CoreShapeDefinition> =
-    listOf(0L, 25L, 90L).mapIndexed { index, cost ->
-        CoreShapeDefinition(CoreShape.entries[index], cost)
-    }.toImmutableList()
+    CoreShape.entries.map { CoreShapeDefinition(it) }.toImmutableList()
 
 internal val TestRebirthPolicy: RebirthPolicySnapshot = RebirthPolicySnapshot(
     minimumLevel = 0,

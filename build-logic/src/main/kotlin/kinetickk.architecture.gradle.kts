@@ -35,7 +35,7 @@ dependencies {
 
 val verifyArchitectureTask = tasks.register<VerifyArchitectureTask>("verifyArchitecture") {
     group = "verification"
-    description = "Verifies the declared 23-module Pokeball role graph without resolving classpaths."
+    description = "Verifies the declared Pokeball role graph without resolving classpaths."
     leafProjectPaths.set(leafProjectPathValues)
     architectureEdgeReportFiles.from(architectureEdgeReports)
     rootSourceFiles.from(rootProject.fileTree("src"))
@@ -87,7 +87,7 @@ val generatePokeballManifestTask = tasks.register<GeneratePokeballResolvedManife
     outputFile.set(generatedManifestFile)
 }
 
-tasks.register<Copy>("updatePokeballResolvedManifest") {
+val updatePokeballManifestTask = tasks.register<Copy>("updatePokeballResolvedManifest") {
     group = "build setup"
     description = "Updates the checked generated Pokeball projection after explicit review."
     dependsOn(generatePokeballManifestTask)
@@ -103,6 +103,7 @@ val verifyPokeballManifestTask = tasks.register<VerifyPokeballManifestDriftTask>
     dependsOn(generatePokeballManifestTask)
     generatedManifest.set(generatedManifestFile)
     checkedManifest.set(checkedManifestFile)
+    mustRunAfter(updatePokeballManifestTask)
 }
 
 val snapshotPath = providers.gradleProperty("pokeballSnapshotDir")
@@ -121,6 +122,7 @@ val verifyPokeballSnapshotTask = tasks.register<VerifyPokeballSnapshotTask>("ver
     snapshotDirectory.set(configuredSnapshotDirectory)
     baselineRecord.set(rootProject.layout.projectDirectory.file("docs/architecture/pokeball/baseline.md"))
     reportFile.set(rootProject.layout.buildDirectory.file("reports/pokeball/snapshot-integrity.json"))
+    mustRunAfter(updatePokeballManifestTask)
 }
 
 val verifyPokeballArchitectureTask = tasks.register<VerifyPokeballArchitectureTask>(
@@ -140,6 +142,7 @@ val verifyPokeballArchitectureTask = tasks.register<VerifyPokeballArchitectureTa
     architectureRecordFiles.from(architectureRecords)
     repositoryRoot.set(rootProject.layout.projectDirectory)
     reportFile.set(rootProject.layout.buildDirectory.file("reports/pokeball/architecture.json"))
+    mustRunAfter(updatePokeballManifestTask)
 }
 
 tasks.register<VerifyPokeballConformanceTask>("verifyPokeballConformance") {

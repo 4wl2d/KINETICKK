@@ -81,7 +81,7 @@ class ProfileComponentCharacterizationTest {
         assertTrue(preferences.soundEnabled)
         assertTrue(preferences.musicEnabled)
         assertEquals(0.66f, preferences.masterVolume)
-        assertEquals(1.35f, preferences.simulationSpeed)
+        assertEquals(1.15f, preferences.simulationSpeed)
         assertEquals(1.26f, preferences.textScale)
         assertFalse(preferences.screenShake)
         assertEquals(ParticleDensity.HIGH, preferences.particleDensity)
@@ -119,9 +119,10 @@ class ProfileComponentCharacterizationTest {
     }
 
     @Test
-    fun coreShapeSelectionUsesLifetimeUnlocksWithoutSpendingMatter() {
+    fun coreShapeSelectionUsesAchievementsWithoutSpendingMatter() {
         val initial = testDefaultProfile().copy(
             economy = PlayerEconomy(matter = 70L, lifetimeMatter = 90L),
+            characterAchievements = kinetickk.ball.profile.api.CharacterAchievementProgress(eliteKills = 3, dashHits = 20),
         )
         val resource = loadedResource(initial)
         val component = testProfileComponent(resource)
@@ -305,14 +306,7 @@ class ProfileComponentCharacterizationTest {
             version = ContentVersion("custom-policy"),
             itemCount = 2,
             coreShapes = TestProfilePolicy.coreShapes.map { definition ->
-                CoreShapeDefinition(
-                    definition.id,
-                    when (definition.id) {
-                        CoreShape.ORB -> 0L
-                        CoreShape.PRISM -> 500L
-                        CoreShape.SHARD -> 900L
-                    },
-                )
+                definition.copy(unlockTarget = if (definition.id == CoreShape.ORB) 0 else 500)
             }.toImmutableList(),
             weapons = TestProfilePolicy.weapons.map { definition ->
                 if (definition.id == WeaponId.MORNINGSTAR) {

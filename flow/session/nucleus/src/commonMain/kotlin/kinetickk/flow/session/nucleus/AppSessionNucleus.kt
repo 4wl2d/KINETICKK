@@ -5,7 +5,6 @@ package kinetickk.flow.session.nucleus
 
 import kinetickk.ball.gameplay.api.GameplayCommandIssuerProvenance
 import kinetickk.ball.gameplay.api.GameplayCommandSource
-import kinetickk.ball.gameplay.api.GameplayEffectiveProtocolIdentity
 import kinetickk.ball.gameplay.api.GameplayInstanceId
 import kinetickk.ball.gameplay.api.GameplayModuleCommand
 import kinetickk.ball.gameplay.api.GameplayModuleCommandRequest
@@ -14,16 +13,17 @@ import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.GameplayRunStatusProjection
 import kinetickk.ball.gameplay.api.GameplaySemanticHandle
 import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.api.effectiveProtocolIdentity
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.ProfileCommandIssuerProvenance
 import kinetickk.ball.profile.api.ProfileCommandSource
-import kinetickk.ball.profile.api.ProfileEffectiveProtocolIdentity
 import kinetickk.ball.profile.api.ProfileModuleCommand
 import kinetickk.ball.profile.api.ProfileModuleCommandRequest
 import kinetickk.ball.profile.api.ProfileModuleResult
 import kinetickk.ball.profile.api.ProfileRunBootstrapResult
 import kinetickk.ball.profile.api.ProfileSemanticHandle
+import kinetickk.ball.profile.api.effectiveProtocolIdentity
 import kinetickk.flow.session.api.AppDestination
 import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.flow.session.api.AppShellProjection
@@ -173,8 +173,9 @@ object AppSessionNucleus {
         if (state.base == AppDestination.Gameplay) {
             val phase = checkNotNull(status).phase
             when (phase) {
-                GameplayRunPhase.CHOICE ->
+                GameplayRunPhase.CHOICE -> if (destination != AppDestination.Codex) {
                     return rejected(SessionRejection.OverlayUnavailable(destination))
+                }
                 GameplayRunPhase.GAME_OVER,
                 GameplayRunPhase.VICTORY,
                 -> if (destination != AppDestination.Rebirth) {
@@ -302,7 +303,8 @@ object AppSessionNucleus {
         SessionShortcut.LAB -> openOverlay(state, AppDestination.Lab, context)
         SessionShortcut.ARMORY -> openOverlay(state, AppDestination.Armory, context)
         SessionShortcut.REBIRTH -> openOverlay(state, AppDestination.Rebirth, context)
-        SessionShortcut.CODEX -> openOverlay(state, AppDestination.Codex, context)
+        SessionShortcut.CODEX -> if (state.overlay == AppDestination.Codex) closeOverlay(state, context)
+            else openOverlay(state, AppDestination.Codex, context)
         SessionShortcut.MUTE -> toggleMute(state)
         SessionShortcut.BACK -> if (state.overlay != null) {
             closeOverlay(state, context)
@@ -794,7 +796,7 @@ private fun requireProfileCorrelation(
     // Impl has already verified the full target evidence. Nucleus retains only the semantic
     // correlation and closed mapping needed to interpret the accepted workflow result.
     check(pulse.commandSource.semanticHandle == request.semanticHandle)
-    check(pulse.effectiveProtocolIdentity == request.command.effectiveIdentity)
+    check(pulse.effectiveProtocolIdentity == request.command.effectiveProtocolIdentity())
 }
 
 private fun requireGameplayCorrelation(
@@ -803,7 +805,7 @@ private fun requireGameplayCorrelation(
 ) {
     // Raw source/target/revision/ordinal/provenance/causal evidence is an Impl concern.
     check(pulse.commandSource.semanticHandle == request.semanticHandle)
-    check(pulse.effectiveProtocolIdentity == request.command.effectiveIdentity)
+    check(pulse.effectiveProtocolIdentity == request.command.effectiveProtocolIdentity())
 }
 
 private fun requireProfileRefusalCorrelation(
@@ -811,7 +813,7 @@ private fun requireProfileRefusalCorrelation(
     pulse: ProfileCommandRejectedBeforeAcceptance,
 ) {
     check(pulse.commandSource.semanticHandle == request.semanticHandle)
-    check(pulse.effectiveProtocolIdentity == request.command.effectiveIdentity)
+    check(pulse.effectiveProtocolIdentity == request.command.effectiveProtocolIdentity())
 }
 
 private fun requireGameplayRefusalCorrelation(
@@ -819,24 +821,8 @@ private fun requireGameplayRefusalCorrelation(
     pulse: GameplayCommandRejectedBeforeAcceptance,
 ) {
     check(pulse.commandSource.semanticHandle == request.semanticHandle)
-    check(pulse.effectiveProtocolIdentity == request.command.effectiveIdentity)
+    check(pulse.effectiveProtocolIdentity == request.command.effectiveProtocolIdentity())
 }
-
-private val ProfileModuleCommand.effectiveIdentity: ProfileEffectiveProtocolIdentity
-    get() = when (this) {
-        is ProfileModuleCommand.SelectCoreShape -> ProfileEffectiveProtocolIdentity.SESSION_CORE_SHAPE
-        ProfileModuleCommand.ToggleMute -> ProfileEffectiveProtocolIdentity.SESSION_MUTE
-        ProfileModuleCommand.AdvanceRebirth -> ProfileEffectiveProtocolIdentity.SESSION_REBIRTH
-        is ProfileModuleCommand.ApplyGameplayProgress -> error("Gameplay progress is not a Session mapping")
-    }
-
-private val GameplayModuleCommand.effectiveIdentity: GameplayEffectiveProtocolIdentity
-    get() = when (this) {
-        GameplayModuleCommand.StartRun -> GameplayEffectiveProtocolIdentity.SESSION_START
-        GameplayModuleCommand.PauseForOverlay -> GameplayEffectiveProtocolIdentity.SESSION_PAUSE
-        GameplayModuleCommand.ApplyPreferences -> GameplayEffectiveProtocolIdentity.SESSION_PREFERENCES
-        GameplayModuleCommand.ExitRun -> GameplayEffectiveProtocolIdentity.SESSION_EXIT
-    }
 
 private fun AppSessionState.nextRevision(): SessionRevision {
     check(revision.value < Long.MAX_VALUE) { "Session revision exhausted before acceptance" }

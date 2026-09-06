@@ -4,11 +4,9 @@
 package kinetickk.ball.gameplay.nucleus.model
 
 import kotlin.math.abs
-import kotlin.math.cos
 import kotlin.math.ln
 import kotlin.math.PI
 import kotlin.math.roundToLong
-import kotlin.math.sin
 import kotlin.math.sqrt
 
 const val TAU: Float = (PI * 2.0).toFloat()
@@ -111,15 +109,3 @@ fun abbreviateNumber(value: Long): String {
     val number = if (fraction == 0L) whole.toString() else "$whole.$fraction"
     return number + NUMBER_SUFFIXES[suffixIndex]
 }
-
-fun angleVector(angle: Float, magnitude: Float): Pair<Float, Float> =
-    Pair(cos(angle) * magnitude, sin(angle) * magnitude)
-
-fun shortestAngle(from: Float, to: Float): Float {
-    var delta = (to - from) % TAU
-    if (delta > PI) delta -= TAU
-    if (delta < -PI) delta += TAU
-    return delta
-}
-
-fun nearlyEqual(a: Float, b: Float, epsilon: Float = 0.001f): Boolean = abs(a - b) <= epsilon

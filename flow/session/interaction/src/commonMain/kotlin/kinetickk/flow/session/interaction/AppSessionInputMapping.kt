@@ -20,7 +20,7 @@ internal fun Key.toSessionShortcut(): SessionShortcut? = when (this) {
     Key.L -> SessionShortcut.LAB
     Key.A -> SessionShortcut.ARMORY
     Key.B -> SessionShortcut.REBIRTH
-    Key.C -> SessionShortcut.CODEX
+    Key.C, Key.I -> SessionShortcut.CODEX
     Key.M -> SessionShortcut.MUTE
     Key.Escape -> SessionShortcut.BACK
     Key.Enter -> SessionShortcut.ENTER
@@ -38,6 +38,7 @@ internal fun HomeOutput.toSessionPulse(): SessionInteractionPulse = when (this) 
 }
 
 internal fun GameplayInteractionOutput.toSessionPulse(): SessionInteractionPulse = when (this) {
+    GameplayInteractionOutput.OpenCodex -> SessionInteractionPulse.OpenOverlay(AppDestination.Codex)
     GameplayInteractionOutput.OpenSettings ->
         SessionInteractionPulse.OpenOverlay(AppDestination.Settings)
     GameplayInteractionOutput.OpenRebirth ->
@@ -46,7 +47,8 @@ internal fun GameplayInteractionOutput.toSessionPulse(): SessionInteractionPulse
     GameplayInteractionOutput.RestartRun -> SessionInteractionPulse.RestartRunRequested
 }
 
-internal fun SettingsOutput.toSessionPulse(): SessionInteractionPulse = when (this) {
+internal fun SettingsOutput.toSessionPulse(): SessionInteractionPulse? = when (this) {
+    is SettingsOutput.LanguageChanged -> null
     SettingsOutput.Back -> SessionInteractionPulse.CloseOverlay
 }
 

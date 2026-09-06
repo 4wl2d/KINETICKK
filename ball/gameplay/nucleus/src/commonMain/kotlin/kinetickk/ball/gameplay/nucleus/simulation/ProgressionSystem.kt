@@ -31,6 +31,12 @@ internal const val MAX_GENERATED_REWARD_CHOICES: Int = 3
 internal fun MutableGameState.openItemChoice() {
     activeChoiceType = ChoiceType.ITEM
     buildItemChoices()
+    if (choices.isEmpty()) {
+        grantMatter(8f)
+        message = "CATALOG COMPLETE // MATTER SALVAGED"
+        messageTime = 1.5f
+        return
+    }
     dashBufferTime = 0f
     phase = GamePhase.CHOICE
 }
@@ -39,11 +45,11 @@ internal fun MutableGameState.buildItemChoices() {
     val lifetimeUnlock = (1L + lifetimeMatter / 40L).coerceAtMost(80L).toInt()
     val catalogLevel = max(level, lifetimeUnlock)
     val unlocked = content.items.filter { it.unlockLevel <= catalogLevel }
-    val eligible = unlocked.filter { itemStacks[it.id] < it.maxStacks }
+    val eligible = unlocked.filter { hasUsefulItemEffect(it) }
     val selected = mutableListOf<ItemDefinition>()
     repeat(MAX_GENERATED_REWARD_CHOICES) itemChoiceLoop@{
         val preferred = eligible.filter { candidate -> selected.none { it.id == candidate.id } }
-        val available = preferred.ifEmpty { unlocked.filter { candidate -> selected.none { it.id == candidate.id } } }
+        val available = preferred
         if (available.isEmpty()) return@itemChoiceLoop
         val rarity = rollRarity()
         val rarityPool = available.filter { it.rarity == rarity }.ifEmpty { available }
@@ -276,6 +282,7 @@ internal fun MutableGameState.meldRelic(slot: Int) {
 }
 
 internal fun MutableGameState.clearRelicRuntime(id: RelicId) {
+    clearDependentSynergyEffects(id)
     val index = id.ordinal
     relicCooldowns[index] = 0f
     relicCounters[index] = 0
@@ -285,7 +292,9 @@ internal fun MutableGameState.clearRelicRuntime(id: RelicId) {
         RelicId.BORROWED_MOMENT -> borrowedMomentTime = 0f
         else -> Unit
     }
-    delayedRelicHits.removeMatchingStable { delayedHit -> delayedHit.relicId == id }
+    delayedRelicHits.removeMatchingStable { delayedHit ->
+        delayedHit.relicId == id || id == RelicId.VOLTAIC_FILAMENT && delayedHit.linkedEnemyId >= 0
+    }
     for (enemyIndex in enemies.indices) {
         val enemy = enemies[enemyIndex]
         enemy.relicCounters[index] = 0
@@ -300,6 +309,23 @@ internal fun MutableGameState.openNextPendingChoice() {
         pendingLevelChoices > 0 -> {
             pendingLevelChoices--
             openItemChoice()
+            while (phase == GamePhase.RUNNING && pendingLevelChoices > 0) {
+                pendingLevelChoices--
+                openItemChoice()
+            }
+            if (phase == GamePhase.RUNNING && pendingDirectedRewards.isNotEmpty()) {
+                val reward = pendingDirectedRewards.first()
+                pendingDirectedRewards = pendingDirectedRewards.drop(1)
+                openDirectedReward(reward)
+            } else if (phase == GamePhase.RUNNING && pendingRelicChoices > 0) {
+                pendingRelicChoices--
+                openRelicChoice()
+            }
+        }
+        pendingDirectedRewards.isNotEmpty() -> {
+            val reward = pendingDirectedRewards.first()
+            pendingDirectedRewards = pendingDirectedRewards.drop(1)
+            openDirectedReward(reward)
         }
         pendingRelicChoices > 0 -> {
             pendingRelicChoices--
@@ -424,7 +450,8 @@ internal fun MutableGameState.takeProgressUpdate(): GameplayProgressUpdate? {
     if (
         pendingBankedMatter == 0L &&
         pendingDiscoveredItemIds.isEmpty() &&
-        pendingClearedRebirthLevel == null
+        pendingClearedRebirthLevel == null && pendingEliteKills == 0 && pendingDashHits == 0 &&
+        pendingCompletedOrbits == 0 && pendingArchitectDefeatedWith == null
     ) {
         return null
     }
@@ -432,10 +459,16 @@ internal fun MutableGameState.takeProgressUpdate(): GameplayProgressUpdate? {
         bankedMatter = pendingBankedMatter,
         discoveredItemIds = pendingDiscoveredItemIds.toImmutableSet(),
         clearedRebirthLevel = pendingClearedRebirthLevel,
+        eliteKills = pendingEliteKills, dashHits = pendingDashHits,
+        completedOrbits = pendingCompletedOrbits, architectDefeatedWith = pendingArchitectDefeatedWith,
     )
     pendingBankedMatter = 0L
     pendingDiscoveredItemIds.clear()
     pendingClearedRebirthLevel = null
+    pendingEliteKills = 0
+    pendingDashHits = 0
+    pendingCompletedOrbits = 0
+    pendingArchitectDefeatedWith = null
     return update
 }
 

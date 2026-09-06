@@ -23,13 +23,6 @@ private const val PROFILE_COMPONENT_PATH =
     "ball/profile/impl/src/commonMain/kotlin/kinetickk/ball/profile/impl/ProfileComponentFactory.kt"
 private const val PROFILE_COMPONENT_IMPL_PATH =
     "ball/profile/impl/src/commonMain/kotlin/kinetickk/ball/profile/impl/DefaultProfileComponent.kt"
-/**
- * Fail-closed proof for the accepted-output critical path. The digest covers the whole
- * comment-stripped, whitespace-canonical source so imports, literals, helper bodies, and name
- * resolution cannot drift around the structural dispatch checks without explicit re-review.
- */
-private const val CANONICAL_PROFILE_COMPONENT_SEMANTIC_DIGEST =
-    "c163a82a5ea8662f509b6af11dce00733cd5814df4b2d2681d8d2a322fc2feff"
 private const val GAMEPLAY_COMPONENT_PATH =
     "ball/gameplay/impl/src/commonMain/kotlin/kinetickk/ball/gameplay/impl/GameplayCompositionComponent.kt"
 private const val GAMEPLAY_COMPONENT_IMPL_PATH =
@@ -240,9 +233,9 @@ private val kotlinControlKeywords = setOf(
 )
 
 private val exactProfilePersistenceConstants = linkedMapOf(
-    "DESKTOP_PROFILE_NODE" to "kinetickk/profile",
+    "DESKTOP_PROFILE_NODE" to "kinetickk/profile-v2",
     "DESKTOP_SNAPSHOT" to "snapshot",
-    "WEB_SNAPSHOT" to "kinetickk_profile",
+    "WEB_SNAPSHOT" to "kinetickk_profile_v2",
 )
 
 internal fun platformCapabilityBoundaryViolations(
@@ -484,7 +477,7 @@ private fun resourceFaultStageViolations(
             broadRuntimeFaultCatchBlocks(kotlinCode).forEach { caught ->
                 val evidence = semanticProviderEvidenceConstruction.find(caught.body)?.groupValues?.get(1)
                 val requiresDeferredDrain = source.relativePath == PROFILE_COMPONENT_IMPL_PATH &&
-                    enclosingAcceptedOutputBatch(structuralCode, caught.declarationStart) != null
+                    enclosingFunctionBlock(structuralCode, caught.declarationStart)?.name == "dispatchAccepted"
                 val rethrowsSameFault = caught.parameter != "_" && if (requiresDeferredDrain) {
                     preservesDeferredFaultUntilRethrow(structuralCode, code, caught)
                 } else {
@@ -610,7 +603,13 @@ internal fun audioRuntimeFaultStageViolations(
             }
     }
 
-    fun verifyDirectScope(path: String, label: String, scope: String?, requiredTokens: List<String>) {
+    fun verifyDirectScope(
+        path: String,
+        label: String,
+        scope: String?,
+        requiredTokens: List<String>,
+        allowAndroidWorkerCancellation: Boolean = false,
+    ) {
         if (scope == null) {
             add("Core §9.13 Audio live-Projection fault-stage scope `$label` is missing in $path")
             return
@@ -629,6 +628,9 @@ internal fun audioRuntimeFaultStageViolations(
             )
         }
         kotlinCatchBlocks(scope).forEach { caught ->
+            if (allowAndroidWorkerCancellation && path == ANDROID_PLATFORM_BROKER_PATH &&
+                isExactAndroidWorkerShutdownCancellation(scope, caught)
+            ) return@forEach
             add(
                 "Core §9.13 Audio live-Projection fault-stage violation at $path:${caught.line} `$label`: " +
                     "synchronous `${caught.type}` catch must not replace runtime-fault propagation",
@@ -688,7 +690,9 @@ internal fun audioRuntimeFaultStageViolations(
                 "val track = AudioTrack.Builder()",
                 "val written = track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)",
                 "track.release()",
+                "Thread.sleep((request.durationSeconds * 1_000f).toLong().coerceAtLeast(1L))",
             ),
+            allowAndroidWorkerCancellation = true,
         )
     }
 
@@ -799,6 +803,7 @@ private val audioRuntimeFaultEvidenceAnchors = listOf(
             "androidAudioBrokerIsInstanceOwnedAndCloseIsIdempotent",
             "androidWorkerAndDiscardOldestQueueEnforceOneAndTwentyFour",
             "androidSynthesisBufferAcceptsMaximumDurationAndRejectsNext",
+            "closingDuringPlaybackCancelsWithoutAnUncaughtWorkerFailure",
         ),
     ),
     BoundAnchor(
@@ -817,6 +822,9 @@ internal fun audioProjectionPolicyViolations(
         "Synchronous Audio Resource and platform calls propagate under runtime-fault policy",
         "Android and Desktop synthesis faults escape their detached executor `Runnable` to the runtime",
         "no caller-propagation claim",
+        "Only Android worker InterruptedException during executor shutdown is expected cancellation",
+        "restore the interrupt flag and rethrow unless executor.isShutdown",
+        "AudioTrack.release remains in finally",
         "`.catch(() => undefined)`",
         "post-acceptance mechanical projection loss",
         "synchronous JavaScript invocation and graph faults still propagate",
@@ -1199,7 +1207,7 @@ private fun androidBrokerSourceViolations(code: String): List<String> = buildLis
     }
     requireRegexCount(
         code,
-        Regex("private\\s+const\\s+val\\s+ANDROID_PROFILE_PREFERENCES\\s*=\\s*\"kinetickk\\.profile\""),
+        Regex("private\\s+const\\s+val\\s+ANDROID_PROFILE_PREFERENCES\\s*=\\s*\"kinetickk\\.profile\\.v2\""),
         1,
         "fixed Android profile preferences name",
         ANDROID_PLATFORM_BROKER_PATH,
@@ -1822,17 +1830,6 @@ private fun declarationHeaderAt(code: String, start: Int): String {
     return code.substring(start)
 }
 
-private fun primaryConstructorPropertyNames(code: String, typeName: String): List<String> {
-    val declaration = Regex("\\bdata\\s+class\\s+${Regex.escape(typeName)}\\s*\\(").find(code)
-        ?: return emptyList()
-    val open = code.indexOf('(', declaration.range.first)
-    val close = closingDelimiter(code, open, '(', ')') ?: return emptyList()
-    return Regex("\\bval\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*:")
-        .findAll(code.substring(open + 1, close))
-        .map { match -> match.groupValues[1] }
-        .toList()
-}
-
 private fun declarationBodyForCapability(code: String, declaration: String): String? {
     val declarationIndex = code.indexOf(declaration)
     if (declarationIndex < 0) return null
@@ -1894,6 +1891,28 @@ private fun broadRuntimeFaultCatchBlocks(code: String): List<KotlinCatchBlock> =
         caught.type.substringAfterLast('.') in broadRuntimeFaultTypes
     }
 
+/** The sole non-fault Kotlin Audio catch: expected cancellation of this detached worker. */
+private fun isExactAndroidWorkerShutdownCancellation(scope: String, caught: KotlinCatchBlock): Boolean {
+    if (caught.type != "InterruptedException" || caught.parameter != "failure") return false
+    val body = caught.body.filterNot(Char::isWhitespace)
+    if (body != "Thread.currentThread().interrupt()if(!executor.isShutdown)throwfailure") return false
+    val structural = scope.maskKotlinNonCode()
+    val owner = enclosingFunctionBlock(structural, caught.declarationStart) ?: return false
+    if (owner.name != "synthesize") return false
+    val declaration = Regex(
+        """\bprivate\s+fun\s+synthesize\s*\(\s*request\s*:\s*ToneRequest\s*\)\s*\{""",
+    ).findAll(structural).singleOrNull() ?: return false
+    if (declaration.range.last != owner.open) return false
+    if (nearestEnclosingCurlyOpen(structural, owner.open, caught.declarationStart) != owner.open) return false
+    // A declaration and one executor submission are the only uses; no synchronous alias or call.
+    if (Regex("""\bsynthesize\b""").findAll(structural).count() != 2 ||
+        "executor.execute { synthesize(request) }" !in structural.squashWhitespace()
+    ) return false
+    // Cleanup is unconditional, outside the catch. No provider-failure branch is admitted here.
+    return structural.substring(caught.bodyEnd + 1, owner.close).filterNot(Char::isWhitespace) ==
+        "finally{track.release()}"
+}
+
 private fun directlyRethrowsCaughtFault(caught: KotlinCatchBlock): Boolean =
     Regex("""\s*throw\s+${Regex.escape(caught.parameter)}\s*;?\s*""").matches(caught.body)
 
@@ -1932,150 +1951,143 @@ private fun runtimeFaultAliasViolations(code: String): List<String> {
     return (importAliases + typeAliases).map { alias -> alias.removeSurrounding("`") }.toList()
 }
 
+/**
+ * Pin the acceptance transaction itself, not the entire component source. Query, route, and
+ * business additions do not change this grammar; changes to the writer/drain require its tests.
+ * Literals are masked, while interpolation is rejected so it cannot hide executable work.
+ */
+private val profileAcceptedDrainBody = """
+    var item = rootItem
+    var frame = rootFrame
+    var deferredFault: Throwable? = null
+    while (true) {
+        preflight(committedState, item, frame)
+        committedState = frame.nextState
+        for (output in frame.outputs) {
+            try {
+                execute(output, item)
+            } catch (failure: Throwable) {
+                if (deferredFault == null) deferredFault = failure
+            }
+        }
+        item = completions.removeFirstOrNull() ?: break
+        frame = when (val decision = ProfileNucleus.decide(committedState, item.pulse)) {
+            is ProfileDecision.Accepted -> decision.frame
+            is ProfileDecision.Rejected -> error(
+                "Resource completion rejected: " + decision.reason,
+            )
+        }
+    }
+    deferredFault?.let { throw it }
+""".maskKotlinNonCode().filterNot(Char::isWhitespace)
+
+private val profileCommandAdmissionBody = """
+    val decision = ProfileNucleus.decide(committedState, item.pulse)
+    val refusal = when {
+        decision is ProfileDecision.Rejected ->
+            ProfileCommandBoundaryResponse.DecisionRejected(decision.reason)
+        decision is ProfileDecision.Accepted &&
+            deepestReservedLevel(item, decision.frame) >= MAX_PROFILE_CAUSAL_DEPTH ->
+            causalBudgetFailure(pulse.commandSource)
+        else -> null
+    }
+    if (refusal != null) {
+        activeCommandRoute = null
+        return@dispatch refused(
+            commandSource = pulse.commandSource,
+            effectiveProtocolIdentity = pulse.effectiveProtocolIdentity,
+            response = refusal,
+        )
+    }
+    val frame = (decision as ProfileDecision.Accepted).frame
+""".filterNot(Char::isWhitespace)
+
 private fun profileDeferredOutputDrainViolations(
     code: String,
     rawCode: String,
     requireCanonicalFunctions: Boolean,
 ): List<String> = buildList {
-    if (requireCanonicalFunctions) {
-        val actualDigest = canonicalCodeDigest(rawCode)
-        if (actualDigest != CANONICAL_PROFILE_COMPONENT_SEMANTIC_DIGEST) {
-            add(
-                "Core §6.13 fault-stage violation in $PROFILE_COMPONENT_IMPL_PATH: " +
-                    "Profile component semantic source changed; expected " +
-                    "$CANONICAL_PROFILE_COMPONENT_SEMANTIC_DIGEST but found $actualDigest",
-            )
+    val functions = functionBlocks(code)
+    val drains = functions.filter { it.name == "dispatchAccepted" }
+    if (drains.isEmpty()) {
+        if (requireCanonicalFunctions) {
+            add("Core §6.13 fault-stage violation: Profile canonical accepted-output drain is missing")
         }
+        return@buildList
     }
-    val exactCanonicalFileInventory = !requireCanonicalFunctions ||
-        (Regex("""\bexecute\b""").findAll(code).count() == 3 &&
-            Regex("""\bdecision\.frame\b""").findAll(code).count() == 7)
-    setOf("dispatchLocal", "dispatchCommand").forEach { functionName ->
-        val functions = functionBlocks(code).filter { function -> function.name == functionName }
-        if (functions.isEmpty()) {
-            if (requireCanonicalFunctions) {
-                add(
-                    "Core §6.13 fault-stage violation in $PROFILE_COMPONENT_IMPL_PATH: " +
-                        "Profile `$functionName` canonical accepted-output drain is missing",
-                )
-            }
-            return@forEach
+    val drain = drains.singleOrNull()
+    if (drain == null || !isCanonicalProfileAcceptedDrain(code, rawCode, drain)) {
+        add(
+            "Core §6.13 fault-stage violation: Profile canonical accepted-output/completion drain " +
+                "must preflight before publication, dispatch every ordered output, drain completions, " +
+                "and then rethrow the first runtime fault",
+        )
+    }
+    if (!requireCanonicalFunctions || drain == null) return@buildList
+
+    // There is one publication site and no parallel output-dispatch route outside that writer.
+    val writes = Regex("""\bcommittedState\s*=(?!=)""").findAll(code).toList()
+    val identifiers = Regex("""\b(?:dispatchAccepted|execute)\b""").findAll(code)
+        .groupingBy { it.value }.eachCount()
+    if (writes.size != 1 || writes.single().range.first !in drain.open until drain.close ||
+        identifiers["dispatchAccepted"] != 3 || identifiers["execute"] != 2
+    ) {
+        add("Core §6.13 fault-stage violation: Profile must have one writer and one accepted-output executor")
+    }
+    listOf("dispatchLocal", "dispatchCommand").forEach { name ->
+        val entry = functions.singleOrNull { it.name == name }
+        val call = entry?.let { function ->
+            Regex("""\bdispatchAccepted\s*\(\s*item\s*,\s*(?:decision\.)?frame\s*\)""")
+                .findAll(code, function.open + 1)
+                .takeWhile { it.range.first < function.close }
+                .singleOrNull()
         }
-        val function = functions.singleOrNull()
-        if (function == null) {
-            add(
-                "Core §6.13 fault-stage violation in $PROFILE_COMPONENT_IMPL_PATH: " +
-                    "Profile `$functionName` must have one canonical accepted-output drain",
-            )
-            return@forEach
-        }
-        val batches = acceptedOutputBatches(code).filter { batch ->
-            batch.open in (function.open + 1) until function.close && batch.close < function.close
-        }
-        val batch = batches.singleOrNull()
-        val drain = batch?.let { acceptedBatch ->
-            enclosingCompletionDrain(code, acceptedBatch.open)
-        }
-        val acceptedBranchOpen = batch?.let { acceptedBatch ->
-            drain?.let { completionDrain ->
-                nearestEnclosingCurlyOpen(code, completionDrain.open, acceptedBatch.open)
-            }
-        }
-        val acceptedBranchClose = acceptedBranchOpen?.let { open ->
-            closingDelimiter(code, open, '{', '}')
-        }
-        val directlyInsideAcceptedBranch = acceptedBranchOpen?.let { open ->
+        val guarded = entry != null && Regex("""=\s*dispatchGuard\.dispatch\s*$""")
+            .containsMatchIn(code.substring(entry.declarationStart, entry.open))
+        val callOwner = if (entry != null && call != null) {
+            nearestEnclosingCurlyOpen(code, entry.open, call.range.first)
+        } else null
+        val acceptedLocalBranch = name != "dispatchLocal" || callOwner != null &&
             Regex("""is\s+ProfileDecision\.Accepted\s*->\s*\{\s*$""")
-                .containsMatchIn(code.substring(drain!!.open + 1, open + 1))
-        } == true
-        val unconditionallyExecutedBatch = batch != null && acceptedBranchOpen != null &&
-            !isOwnedByUnbracedControl(code, batch.declarationStart, acceptedBranchOpen + 1)
-        val catches = batch?.let { acceptedBatch ->
-            broadRuntimeFaultCatchBlocks(code).filter { caught ->
-                caught.declarationStart in (acceptedBatch.open + 1) until acceptedBatch.close
-            }
-        }.orEmpty()
-        val executeCalls = Regex("""\bexecute\s*\(""").findAll(code, function.open + 1)
-            .takeWhile { match -> match.range.first < function.close }
-            .count()
-        val executeIdentifiers = Regex("""\bexecute\b""").findAll(code, function.open + 1)
-            .takeWhile { match -> match.range.first < function.close }
-            .count()
-        val acceptedOutputReferences = Regex("""\bdecision\.frame\.outputs\b""")
-            .findAll(code, function.open + 1)
-            .takeWhile { match -> match.range.first < function.close }
-            .count()
-        val decisionFrameReferences = Regex("""\bdecision\.frame\b""")
-            .findAll(code, function.open + 1)
-            .takeWhile { match -> match.range.first < function.close }
-            .count()
-        val exactProductionReferences = !requireCanonicalFunctions || when (functionName) {
-            "dispatchLocal" -> executeIdentifiers == 1 && decisionFrameReferences == 3
-            "dispatchCommand" -> executeIdentifiers == 1 && decisionFrameReferences == 4
-            else -> false
+                .containsMatchIn(code.substring(entry!!.open, callOwner + 1)) &&
+            code.substring(callOwner + 1, call!!.range.first).isBlank() &&
+            curlyDepthBetween(code, entry.open + 1, call.range.first) == 2
+        val directCall = entry != null && call != null && callOwner != null &&
+            !isOwnedByUnbracedControl(code, call.range.first, callOwner + 1) &&
+            (name != "dispatchCommand" || callOwner == entry.open)
+        val commandAdmission = name != "dispatchCommand" || entry != null && call != null && run {
+            val decision = Regex("""\bval\s+decision\s*=\s*ProfileNucleus\.decide""")
+                .find(code, entry.open + 1)
+            decision != null && decision.range.first < call.range.first &&
+                code.substring(decision.range.first, call.range.first)
+                    .filterNot(Char::isWhitespace) == profileCommandAdmissionBody
         }
-        val exactAcceptedBranch = !requireCanonicalFunctions ||
-            (batch != null && acceptedBranchOpen != null && acceptedBranchClose != null &&
-                exactProfileAcceptedBranchPrelude(
-                    functionName,
-                    code.substring(acceptedBranchOpen + 1, batch.declarationStart),
-                ) &&
-                code.substring(batch.close + 1, acceptedBranchClose).isBlank())
-        if (batch == null || drain == null ||
-            curlyDepthBetween(code, drain.open + 1, batch.open) != 2 ||
-            !directlyInsideAcceptedBranch ||
-            !unconditionallyExecutedBatch ||
-            executeCalls != 1 ||
-            executeIdentifiers != 1 ||
-            acceptedOutputReferences != 1 ||
-            !exactProductionReferences ||
-            !exactCanonicalFileInventory ||
-            !exactAcceptedBranch ||
-            catches.size != 1 ||
-            !preservesDeferredFaultUntilRethrow(code, rawCode, catches.single())
-        ) {
-            add(
-                "Core §6.13 fault-stage violation in $PROFILE_COMPONENT_IMPL_PATH: " +
-                    "Profile `$functionName` must preserve the first runtime fault until its " +
-                    "canonical accepted-output/completion drain finishes",
-            )
+        val localDecision = name != "dispatchLocal" || entry != null && run {
+            val decisions = Regex(
+                """\bwhen\s*\(\s*val\s+decision\s*=\s*ProfileNucleus\.decide\s*""" +
+                    """\(\s*committedState\s*,\s*item\.pulse\s*\)\s*\)""",
+            ).findAll(code, entry.open + 1).takeWhile { it.range.first < entry.close }.toList()
+            val decision = decisions.singleOrNull()
+            decision != null &&
+                curlyDepthBetween(code, entry.open + 1, decision.range.first) == 0 &&
+                !isOwnedByUnbracedControl(code, decision.range.first, entry.open + 1) &&
+                !Regex("""\breturn(?:@\w+)?\b""")
+                    .containsMatchIn(code.substring(entry.open + 1, entry.close))
+        }
+        if (!guarded || !acceptedLocalBranch || !directCall || !commandAdmission || !localDecision) {
+            add("Core §6.13 fault-stage violation: Profile `$name` must reach the shared drain under its dispatch guard")
         }
     }
 }
 
-private fun canonicalCodeDigest(code: String): String {
-    val canonical = code.replace(Regex("""\s+"""), " ").trim()
-    return java.security.MessageDigest.getInstance("SHA-256")
-        .digest(canonical.encodeToByteArray())
-        .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
-}
-
-internal fun exactProfileAcceptedBranchPrelude(functionName: String, code: String): Boolean {
-    val preflightAndCommit =
-        """preflight\s*\(\s*before\s*,\s*item\s*,\s*decision\.frame\s*\)\s*""" +
-            """committedState\s*=\s*decision\.frame\.nextState\s*"""
-    val pattern = when (functionName) {
-        "dispatchLocal" ->
-            preflightAndCommit +
-                """if\s*\(\s*root\s*\)\s*\{\s*""" +
-                """rootAcceptance\s*=\s*ProfileAcceptance\.Accepted\s*\(\s*""" +
-                """instanceId\s*=\s*committedState\.instanceId\s*,\s*""" +
-                """revision\s*=\s*committedState\.revision\s*,\s*\)\s*\}\s*"""
-        "dispatchCommand" ->
-            """if\s*\(\s*root\s*&&\s*deepestReservedLevel\s*\(\s*item\s*,\s*""" +
-                """decision\.frame\s*\)\s*>=\s*MAX_PROFILE_CAUSAL_DEPTH\s*\)\s*\{\s*""" +
-                """activeCommandRoute\s*=\s*null\s*""" +
-                """return@dispatch\s+refused\s*\(\s*""" +
-                """commandSource\s*=\s*pulse\.commandSource\s*,\s*""" +
-                """effectiveProtocolIdentity\s*=\s*pulse\.effectiveProtocolIdentity\s*,\s*""" +
-                """response\s*=\s*causalBudgetFailure\s*\(\s*pulse\.commandSource\s*\)\s*,\s*""" +
-                """\)\s*\}\s*""" +
-                preflightAndCommit +
-                """if\s*\(\s*root\s*\)\s*acceptedTargetRevision\s*=\s*""" +
-                """committedState\.revision\s*"""
-        else -> return false
-    }
-    return Regex("""\s*(?:$pattern)""").matches(code)
+private fun isCanonicalProfileAcceptedDrain(
+    code: String,
+    rawCode: String,
+    function: FunctionBlock,
+): Boolean {
+    val body = code.substring(function.open + 1, function.close)
+    return '$' !in rawCode.substring(function.open + 1, function.close) &&
+        body.filterNot(Char::isWhitespace) == profileAcceptedDrainBody
 }
 
 private fun preservesDeferredFaultUntilRethrow(
@@ -2083,173 +2095,8 @@ private fun preservesDeferredFaultUntilRethrow(
     rawCode: String,
     caught: KotlinCatchBlock,
 ): Boolean {
-    val parameter = caught.parameter.takeUnless { it == "_" } ?: return false
-    val assignment = Regex(
-        """\s*if\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*==\s*null\s*\)\s*""" +
-            """\1\s*=\s*${Regex.escape(parameter)}\s*;?\s*""",
-    ).matchEntire(caught.body) ?: return false
-    val deferred = assignment.groupValues[1]
     val function = enclosingFunctionBlock(code, caught.declarationStart) ?: return false
-    if (function.name !in setOf("dispatchLocal", "dispatchCommand")) return false
-    val declaration = Regex(
-        """\bvar\s+${Regex.escape(deferred)}\s*:\s*(?:kotlin\.)?Throwable\s*\?\s*=\s*null\b""",
-    )
-    val declarations = declaration.findAll(code, function.open + 1)
-        .takeWhile { match -> match.range.first < function.close }
-        .toList()
-    if (declarations.size != 1 ||
-        curlyDepthBetween(code, function.open + 1, declarations.single().range.first) != 0
-    ) {
-        return false
-    }
-
-    val rethrows = Regex(
-        """\bval\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*${Regex.escape(deferred)}\s*""" +
-            """if\s*\(\s*\1\s*!=\s*null\s*\)\s*throw\s+\1\b""",
-    ).findAll(code, caught.bodyEnd)
-        .takeWhile { match -> match.range.first < function.close }
-        .toList()
-    if (rethrows.size != 1) return false
-    val rethrow = rethrows.single()
-    if (curlyDepthBetween(code, function.open + 1, rethrow.range.first) != 0) return false
-
-    val drain = enclosingCompletionDrain(code, caught.declarationStart) ?: return false
-    val outputBatch = enclosingAcceptedOutputBatch(code, caught.declarationStart) ?: return false
-    val drainBody = code.substring(drain.open + 1, drain.close)
-    val rawFunctionBody = rawCode.substring(function.open + 1, function.close)
-    val removals = Regex(
-        """\bval\s+item\s*=\s*checkNotNull\s*\(\s*completions\.removeFirstOrNull\s*""" +
-            """\(\s*\)\s*\)""",
-    ).findAll(code, drain.open + 1)
-        .takeWhile { match -> match.range.first < drain.close }
-        .toList()
-    val decisions = Regex(
-        """\bwhen\s*\(\s*val\s+decision\s*=\s*ProfileNucleus\.decide\s*""" +
-            """\(\s*before\s*,\s*item\.pulse\s*\)\s*\)\s*\{""",
-    ).findAll(code, drain.open + 1)
-        .takeWhile { match -> match.range.first < drain.close }
-        .toList()
-    val exactOutputBatch = Regex(
-        """\s*try\s*\{\s*this\.execute\s*\(\s*output\s*,\s*item\s*\)\s*\}\s*""" +
-            """catch\s*\(\s*${Regex.escape(parameter)}\s*:\s*Throwable\s*\)\s*\{\s*""" +
-            """if\s*\(\s*${Regex.escape(deferred)}\s*==\s*null\s*\)\s*""" +
-            """${Regex.escape(deferred)}\s*=\s*${Regex.escape(parameter)}\s*\}\s*""",
-    ).matches(code.substring(outputBatch.open + 1, outputBatch.close))
-    val remainingDrain = code.substring(caught.bodyEnd, drain.close)
-    val removalToOutput = removals.singleOrNull()?.let { removal ->
-        code.substring(removal.range.last + 1, outputBatch.open)
-    }.orEmpty()
-    val removalToDecision = if (removals.size == 1 && decisions.size == 1) {
-        code.substring(removals.single().range.last + 1, decisions.single().range.first)
-    } else {
-        ""
-    }
-    val hasExactAdmissionReturns = hasExactDispatchAdmissionReturns(
-        code = code,
-        drain = drain,
-        functionName = function.name,
-        admissionCode = removalToOutput,
-        admissionStart = removals.singleOrNull()?.range?.last?.plus(1) ?: 0,
-    )
-    if (drain.queue != "completions" ||
-        isOwnedByUnbracedControl(code, drain.declarationStart, function.open + 1) ||
-        outputBatch.open !in (drain.open + 1) until drain.close ||
-        outputBatch.close >= drain.close ||
-        drain.close >= rethrow.range.first ||
-        code.substring(drain.close + 1, rethrow.range.first).isNotBlank() ||
-        removals.size != 1 ||
-        decisions.size != 1 ||
-        code.substring(drain.open + 1, removals.single().range.first).isNotBlank() ||
-        removals.single().range.first >= outputBatch.open ||
-        curlyDepthBetween(code, drain.open + 1, removals.single().range.first) != 0 ||
-        decisions.single().range.first >= outputBatch.open ||
-        curlyDepthBetween(code, drain.open + 1, decisions.single().range.first) != 0 ||
-        !Regex("""\s*val\s+before\s*=\s*committedState\s*""").matches(removalToDecision) ||
-        Regex("""\bcompletions\.removeFirstOrNull\s*\(""").findAll(drainBody).count() != 1 ||
-        '$' in rawFunctionBody ||
-        Regex("""\b${Regex.escape(deferred)}\b""")
-            .findAll(code, function.open + 1)
-            .takeWhile { match -> match.range.first < function.close }
-            .count() != 4 ||
-        Regex(
-            """\b(?:throw|break|continue|""" +
-                """error\s*\(|TODO\s*\()""",
-        ).containsMatchIn(removalToOutput) ||
-        !hasExactAdmissionReturns ||
-        !exactOutputBatch ||
-        !Regex("""(?:\s*\}\s*)+root\s*=\s*false\s*""").matches(remainingDrain)
-    ) {
-        return false
-    }
-    val beforeRethrow = code.substring(caught.bodyEnd, rethrow.range.first)
-    if (Regex("""\breturn(?:@[A-Za-z_][A-Za-z0-9_]*)?\b""").containsMatchIn(beforeRethrow)) {
-        return false
-    }
-
-    val assignments = Regex(
-        """(?<![=!<>])\b${Regex.escape(deferred)}\s*=(?!=)""",
-    ).findAll(code, function.open + 1).takeWhile { match -> match.range.first < function.close }.toList()
-    val catches = broadRuntimeFaultCatchBlocks(code).filter { other ->
-        other.declarationStart in (function.open + 1) until function.close
-    }
-    return assignments.isNotEmpty() && assignments.all { write ->
-        catches.any { other ->
-            write.range.first in other.bodyStart until other.bodyEnd &&
-                Regex(
-                    """\s*if\s*\(\s*${Regex.escape(deferred)}\s*==\s*null\s*\)\s*""" +
-                        """${Regex.escape(deferred)}\s*=\s*${Regex.escape(other.parameter)}\s*;?\s*""",
-                ).matches(other.body)
-        }
-    }
-}
-
-private fun hasExactDispatchAdmissionReturns(
-    code: String,
-    drain: CompletionDrainBlock,
-    functionName: String?,
-    admissionCode: String,
-    admissionStart: Int,
-): Boolean {
-    val returns = Regex("""\breturn(?:@[A-Za-z_][A-Za-z0-9_]*)?\b""")
-        .findAll(admissionCode)
-        .map { match ->
-            val absoluteStart = admissionStart + match.range.first
-            match to absoluteStart
-        }
-        .toList()
-    if (functionName == "dispatchLocal") return returns.isEmpty()
-    if (functionName != "dispatchCommand" || returns.size != 2) return false
-
-    val branches = returns.mapNotNull { (_, absoluteStart) ->
-        if (!Regex("""return@dispatch\s+refused\s*\(""").matchesAt(code, absoluteStart)) {
-            return@mapNotNull null
-        }
-        val open = nearestEnclosingCurlyOpen(code, drain.open, absoluteStart)
-            ?: return@mapNotNull null
-        if (curlyDepthBetween(code, open + 1, absoluteStart) != 0) return@mapNotNull null
-        val close = closingDelimiter(code, open, '{', '}') ?: return@mapNotNull null
-        val prefix = code.substring(drain.open + 1, open + 1)
-        val beforeReturn = code.substring(open + 1, absoluteStart)
-        val body = code.substring(open + 1, close)
-        val routeClear = Regex("""activeCommandRoute\s*=\s*null\s*$""")
-            .find(beforeReturn) ?: return@mapNotNull null
-        val beforeRouteClear = beforeReturn.substring(0, routeClear.range.first)
-        when {
-            Regex("""is\s+ProfileDecision\.Rejected\s*->\s*\{\s*$""")
-                .containsMatchIn(prefix) &&
-                Regex(
-                    """\s*check\s*\(\s*root\s*\)\s*\{\s*\+\s*decision\.reason\s*\}\s*""",
-                ).matches(beforeRouteClear) &&
-                "ProfileCommandBoundaryResponse.DecisionRejected" in body -> "rejected"
-            Regex(
-                """if\s*\(\s*root\s*&&\s*deepestReservedLevel\s*\(\s*item\s*,\s*""" +
-                    """decision\.frame\s*\)\s*>=\s*MAX_PROFILE_CAUSAL_DEPTH\s*\)\s*\{\s*$""",
-            ).containsMatchIn(prefix) && beforeRouteClear.isBlank() &&
-                "causalBudgetFailure" in body -> "causal-budget"
-            else -> null
-        }
-    }
-    return branches.toSet() == setOf("rejected", "causal-budget")
+    return function.name == "dispatchAccepted" && isCanonicalProfileAcceptedDrain(code, rawCode, function)
 }
 
 private fun nearestEnclosingCurlyOpen(code: String, start: Int, position: Int): Int? {
@@ -2327,13 +2174,6 @@ private data class FunctionBlock(
     val declarationStart: Int = open,
 )
 
-private data class CompletionDrainBlock(
-    val queue: String,
-    val open: Int,
-    val close: Int,
-    val declarationStart: Int,
-)
-
 private fun enclosingFunctionBlock(code: String, position: Int): FunctionBlock? {
     return functionBlocks(code)
         .filter { function -> position in (function.open + 1) until function.close }
@@ -2353,30 +2193,6 @@ private fun functionBlocks(code: String): List<FunctionBlock> {
         FunctionBlock(open, close, declaration.groupValues[1], declaration.range.first)
     }
 }
-
-private fun enclosingCompletionDrain(code: String, position: Int): CompletionDrainBlock? =
-    Regex(
-        """\bwhile\s*\(\s*!\s*([A-Za-z_][A-Za-z0-9_]*)\.isEmpty\s*\)\s*\{""",
-    ).findAll(code).mapNotNull { declaration ->
-        val open = declaration.range.last
-        val close = closingDelimiter(code, open, '{', '}') ?: return@mapNotNull null
-        CompletionDrainBlock(declaration.groupValues[1], open, close, declaration.range.first)
-            .takeIf { position in (open + 1) until close }
-    }.maxByOrNull(CompletionDrainBlock::open)
-
-private fun enclosingAcceptedOutputBatch(code: String, position: Int): FunctionBlock? =
-    acceptedOutputBatches(code).filter { batch ->
-        position in (batch.open + 1) until batch.close
-    }.maxByOrNull(FunctionBlock::open)
-
-private fun acceptedOutputBatches(code: String): List<FunctionBlock> =
-    Regex(
-        """\bfor\s*\(\s*output\s+in\s+decision\.frame\.outputs\s*\)\s*\{""",
-    ).findAll(code).mapNotNull { declaration ->
-        val open = declaration.range.last
-        val close = closingDelimiter(code, open, '{', '}') ?: return@mapNotNull null
-        FunctionBlock(open, close, declarationStart = declaration.range.first)
-    }.toList()
 
 private fun isOwnedByUnbracedControl(code: String, statementStart: Int, lowerBound: Int): Boolean {
     var index = statementStart - 1

@@ -47,9 +47,9 @@ The closed platform bindings are actuals inside the `app:shared` KMP leaf:
 application/packaging host with exactly one production project edge to
 `app:shared`; it adds no authority, business fact, writer, or semantic route.
 For Profile persistence, those mutually exclusive platform bindings select
-exactly one current location: Android preferences `kinetickk.profile` key
-`snapshot`, Desktop node `kinetickk/profile` key `snapshot`, or Web key
-`kinetickk_profile`. No Ball or Flow can select another storage root or key.
+exactly one current location: Android preferences `kinetickk.profile.v2` key
+`snapshot`, Desktop node `kinetickk/profile-v2` key `snapshot`, or Web key
+`kinetickk_profile_v2`. No Ball or Flow can select another storage root or key.
 
 Home and Codex may combine independent Profile and Gameplay reads only in
 Session Interaction and must label the result non-atomic. Assembly never joins

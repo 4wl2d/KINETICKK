@@ -86,7 +86,9 @@ class HomeReducerTest {
 
         assertEquals(
             HomeAction.SelectCoreShape(CoreShape.PRISM),
-            resolveHomePress(viewport, 640f, 720f * 0.62f),
+            homeLayoutGeometry(1_280f, 720f, 1f).bounds(HomeLayoutTarget.CORE_PRISM).center.let {
+                resolveHomePress(viewport, it.x, it.y)
+            },
         )
         assertEquals(HomeAction.StartRun, resolveHomePress(viewport, 640f, 720f * 0.78f))
         assertEquals(HomeAction.OpenRebirth, resolveHomePress(viewport, 640f, 720f * 0.9f))
@@ -114,4 +116,5 @@ private fun homeProjection(
     collection = collection,
     rebirthProgress = rebirth,
     canAdvanceRebirth = canAdvanceRebirth,
+    unlockedCoreShapes = kinetickk.foundation.collections.immutableSetOf(CoreShape.ORB, CoreShape.PRISM, CoreShape.SHARD),
 )

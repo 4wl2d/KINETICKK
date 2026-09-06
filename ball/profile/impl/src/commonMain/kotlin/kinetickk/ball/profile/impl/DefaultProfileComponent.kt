@@ -24,7 +24,6 @@ import kinetickk.ball.profile.api.ProfileInstanceId
 import kinetickk.ball.profile.api.ProfileModuleCommand
 import kinetickk.ball.profile.api.ProfileModuleCommandPulse
 import kinetickk.ball.profile.api.ProfileModuleCommandRequest
-import kinetickk.ball.profile.api.ProfileModuleResult
 import kinetickk.ball.profile.api.ProfileModuleResultDelivery
 import kinetickk.ball.profile.api.ProfileModuleResultOutput
 import kinetickk.ball.profile.api.ProfilePersistenceStatus
@@ -33,11 +32,12 @@ import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.api.ProfileResultIssuerProvenance
 import kinetickk.ball.profile.api.ProfileResultSourceToken
 import kinetickk.ball.profile.api.ProfileRevision
-import kinetickk.ball.profile.api.ProfileSnapshotReadResult
 import kinetickk.ball.profile.api.ProfileTargetBoundaryProvenance
 import kinetickk.ball.profile.api.ProfileWriteResult
 import kinetickk.ball.profile.api.RebirthProgressProjection
 import kinetickk.ball.profile.api.RunBootstrapProjection
+import kinetickk.ball.profile.api.acceptsResult
+import kinetickk.ball.profile.api.effectiveProtocolIdentity
 import kinetickk.ball.profile.nucleus.MAX_PROFILE_OUTPUTS_PER_DECISION
 import kinetickk.ball.profile.nucleus.ProfileAcceptedFrame
 import kinetickk.ball.profile.nucleus.ProfileDecision
@@ -59,7 +59,7 @@ internal class DefaultProfileComponent(
     private val completions = profileCompletionDeque<ProfileWorkItem>()
     private var committedState: ProfileState = ProfileState.initial(
         policy = policy,
-        snapshotReadResult = readConstructionSnapshot(resource),
+        snapshotReadResult = resource.readSnapshot(),
     )
     private var activeCommandRoute: ProfileCommandRouteReservation? = null
     private var nextLocalCausalScope: Long = 1L
@@ -110,7 +110,7 @@ internal class DefaultProfileComponent(
         val binding = bindingFor(request, ingressSource)
             ?: return refused(
                 commandSource = commandSource,
-                effectiveProtocolIdentity = fallbackIdentity(request.command),
+                effectiveProtocolIdentity = request.command.effectiveProtocolIdentity(),
                 response = ProfileCommandBoundaryResponse.ValidationFailure(
                     ProfileCommandValidationFailureReason.WRONG_SOURCE_KIND,
                 ),
@@ -197,123 +197,93 @@ internal class DefaultProfileComponent(
     private fun dispatchLocal(pulse: ProfilePulse.Business): ProfileAcceptance = dispatchGuard.dispatch {
         check(activeCommandRoute == null) { "A local Profile intent crossed an active command route" }
         check(completions.isEmpty) { "Profile completion deque leaked across dispatches" }
-        check(committedState.revision.value <= Long.MAX_VALUE - MAX_LOCAL_REVISIONS_PER_DISPATCH) {
+        check(hasProfileCommandRevisionCapacity(committedState.revision)) {
             "Profile local revision capacity exhausted before Intent construction"
         }
-        val causalScope = allocateLocalCausalScope()
-        check(
-            completions.tryAddLast(
-                ProfileWorkItem(ProfileNucleusPulse.Intent(pulse), causalScope, causalDepth = 0),
-            ),
+        val item = ProfileWorkItem(
+            pulse = ProfileNucleusPulse.Intent(pulse),
+            causalScope = allocateLocalCausalScope(),
+            causalDepth = 0,
         )
-
-        var rootAcceptance: ProfileAcceptance? = null
-        var root = true
-        var deferredFault: Throwable? = null
-        while (!completions.isEmpty) {
-            val item = checkNotNull(completions.removeFirstOrNull())
-            val before = committedState
-            when (val decision = ProfileNucleus.decide(before, item.pulse)) {
-                is ProfileDecision.Rejected -> {
-                    check(root) { "A trusted Profile Resource completion was rejected: " + decision.reason }
-                    rootAcceptance = ProfileAcceptance.Rejected(
-                        instanceId = before.instanceId,
-                        observedRevision = before.revision,
-                        reason = decision.reason,
-                    )
-                }
-                is ProfileDecision.Accepted -> {
-                    preflight(before, item, decision.frame)
-                    committedState = decision.frame.nextState
-                    if (root) {
-                        rootAcceptance = ProfileAcceptance.Accepted(
-                            instanceId = committedState.instanceId,
-                            revision = committedState.revision,
-                        )
-                    }
-                    for (output in decision.frame.outputs) {
-                        try {
-                            this.execute(output, item)
-                        } catch (failure: Throwable) {
-                            if (deferredFault == null) deferredFault = failure
-                        }
-                    }
-                }
+        when (val decision = ProfileNucleus.decide(committedState, item.pulse)) {
+            is ProfileDecision.Rejected -> ProfileAcceptance.Rejected(
+                instanceId = committedState.instanceId,
+                observedRevision = committedState.revision,
+                reason = decision.reason,
+            )
+            is ProfileDecision.Accepted -> {
+                dispatchAccepted(item, decision.frame)
+                check(activeCommandRoute == null)
+                ProfileAcceptance.Accepted(
+                    instanceId = decision.frame.nextState.instanceId,
+                    revision = decision.frame.nextState.revision,
+                )
             }
-            root = false
         }
-        val failure = deferredFault
-        if (failure != null) throw failure
-        check(activeCommandRoute == null)
-        checkNotNull(rootAcceptance)
     }
 
     private fun dispatchCommand(pulse: ProfileModuleCommandPulse): ProfileCommandIngressResult =
         dispatchGuard.dispatch {
             check(completions.isEmpty) { "Profile completion deque leaked across dispatches" }
-            val targetDepth = pulse.commandSource.causalDepth + 1
-            check(
-                completions.tryAddLast(
-                    ProfileWorkItem(
-                        pulse = ProfileNucleusPulse.ModuleCommand(pulse),
-                        causalScope = pulse.commandSource.causalScope,
-                        causalDepth = targetDepth,
-                    ),
-                ),
+            val item = ProfileWorkItem(
+                pulse = ProfileNucleusPulse.ModuleCommand(pulse),
+                causalScope = pulse.commandSource.causalScope,
+                causalDepth = pulse.commandSource.causalDepth + 1,
             )
-
-            var acceptedTargetRevision: ProfileRevision? = null
-            var root = true
-            var deferredFault: Throwable? = null
-            while (!completions.isEmpty) {
-                val item = checkNotNull(completions.removeFirstOrNull())
-                val before = committedState
-                when (val decision = ProfileNucleus.decide(before, item.pulse)) {
-                    is ProfileDecision.Rejected -> {
-                        check(root) {
-                            "A trusted Profile Resource completion was rejected: " + decision.reason
-                        }
-                        activeCommandRoute = null
-                        return@dispatch refused(
-                            commandSource = pulse.commandSource,
-                            effectiveProtocolIdentity = pulse.effectiveProtocolIdentity,
-                            response = ProfileCommandBoundaryResponse.DecisionRejected(decision.reason),
-                        )
-                    }
-                    is ProfileDecision.Accepted -> {
-                        if (root && deepestReservedLevel(item, decision.frame) >= MAX_PROFILE_CAUSAL_DEPTH) {
-                            activeCommandRoute = null
-                            return@dispatch refused(
-                                commandSource = pulse.commandSource,
-                                effectiveProtocolIdentity = pulse.effectiveProtocolIdentity,
-                                response = causalBudgetFailure(pulse.commandSource),
-                            )
-                        }
-                        preflight(before, item, decision.frame)
-                        committedState = decision.frame.nextState
-                        if (root) acceptedTargetRevision = committedState.revision
-                        for (output in decision.frame.outputs) {
-                            try {
-                                this.execute(output, item)
-                            } catch (failure: Throwable) {
-                                if (deferredFault == null) deferredFault = failure
-                            }
-                        }
-                    }
-                }
-                root = false
+            val decision = ProfileNucleus.decide(committedState, item.pulse)
+            val refusal = when {
+                decision is ProfileDecision.Rejected ->
+                    ProfileCommandBoundaryResponse.DecisionRejected(decision.reason)
+                decision is ProfileDecision.Accepted &&
+                    deepestReservedLevel(item, decision.frame) >= MAX_PROFILE_CAUSAL_DEPTH ->
+                    causalBudgetFailure(pulse.commandSource)
+                else -> null
+            }
+            if (refusal != null) {
+                activeCommandRoute = null
+                return@dispatch refused(
+                    commandSource = pulse.commandSource,
+                    effectiveProtocolIdentity = pulse.effectiveProtocolIdentity,
+                    response = refusal,
+                )
             }
 
-            val failure = deferredFault
-            if (failure != null) throw failure
+            val frame = (decision as ProfileDecision.Accepted).frame
+            dispatchAccepted(item, frame)
             check(activeCommandRoute == null) {
                 "Accepted inline Profile command completed without its one-shot result"
             }
             ProfileCommandIngressResult.Accepted(
-                targetInstance = committedState.instanceId,
-                targetRevision = checkNotNull(acceptedTargetRevision),
+                targetInstance = frame.nextState.instanceId,
+                targetRevision = frame.nextState.revision,
             )
         }
+
+    /** One writer and drain path for both ingress kinds and every accepted Resource completion. */
+    private fun dispatchAccepted(rootItem: ProfileWorkItem, rootFrame: ProfileAcceptedFrame) {
+        var item = rootItem
+        var frame = rootFrame
+        var deferredFault: Throwable? = null
+        while (true) {
+            preflight(committedState, item, frame)
+            committedState = frame.nextState
+            for (output in frame.outputs) {
+                try {
+                    execute(output, item)
+                } catch (failure: Throwable) {
+                    if (deferredFault == null) deferredFault = failure
+                }
+            }
+            item = completions.removeFirstOrNull() ?: break
+            frame = when (val decision = ProfileNucleus.decide(committedState, item.pulse)) {
+                is ProfileDecision.Accepted -> decision.frame
+                is ProfileDecision.Rejected -> error(
+                    "A trusted Profile Resource completion was rejected: " + decision.reason,
+                )
+            }
+        }
+        deferredFault?.let { throw it }
+    }
 
     private fun preflight(
         before: ProfileState,
@@ -330,6 +300,9 @@ internal class DefaultProfileComponent(
         check(frame.outputs.size <= MAX_PROFILE_OUTPUTS_PER_DECISION) {
             "Profile output limit exceeded"
         }
+        check(frame.outputs.count { it is ProfileOutput.CompleteCommand } ==
+            if (activeCommandRoute == null) 0 else 1
+        ) { "Profile must accept exactly one result for its reserved command route" }
 
         val synchronousCompletions = frame.outputs.count { output ->
             output is ProfileOutput.PersistSnapshot
@@ -358,7 +331,7 @@ internal class DefaultProfileComponent(
                     val route = checkNotNull(activeCommandRoute)
                     check(route.commandSource == output.result.commandSource)
                     check(route.commandSource.causalScope == item.causalScope)
-                    check(profileResultMatches(route.effectiveProtocolIdentity, output.result.result)) {
+                    check(route.effectiveProtocolIdentity.acceptsResult(output.result.result)) {
                         "Profile result does not match its effective protocol identity"
                     }
                 }
@@ -394,7 +367,7 @@ internal class DefaultProfileComponent(
         check(route.commandSource.causalScope == item.causalScope) {
             "Profile result changed its causal scope"
         }
-        check(profileResultMatches(route.effectiveProtocolIdentity, output.result)) {
+        check(route.effectiveProtocolIdentity.acceptsResult(output.result)) {
             "Profile result does not match its effective protocol identity"
         }
         activeCommandRoute = null
@@ -462,49 +435,30 @@ internal class DefaultProfileComponent(
     private fun bindingFor(
         request: ProfileModuleCommandRequest,
         ingressSource: ProfileIngressSource,
-    ): ProfileCommandBinding? = when (ingressSource) {
-        ProfileIngressSource.Session -> when (request.command) {
-            is ProfileModuleCommand.SelectCoreShape -> request.sessionBinding(
-                ProfileEffectiveProtocolIdentity.SESSION_CORE_SHAPE,
-            )
-            ProfileModuleCommand.ToggleMute -> request.sessionBinding(
-                ProfileEffectiveProtocolIdentity.SESSION_MUTE,
-            )
-            ProfileModuleCommand.AdvanceRebirth -> request.sessionBinding(
-                ProfileEffectiveProtocolIdentity.SESSION_REBIRTH,
-            )
-            is ProfileModuleCommand.ApplyGameplayProgress -> null
-        }
-        ProfileIngressSource.Gameplay -> when (request.command) {
-            is ProfileModuleCommand.ApplyGameplayProgress ->
-                if (request.semanticHandle.sourceInstance is ProfileCommandSource.GameplayRun) {
-                    ProfileCommandBinding(
-                        ProfileEffectiveProtocolIdentity.GAMEPLAY_PROGRESS,
-                        ProfileCommandIssuerProvenance.GAMEPLAY_RUN_STATIC_BINDING,
-                    )
+    ): ProfileCommandBinding? {
+        val provenance = when (ingressSource) {
+            ProfileIngressSource.Session -> when (request.command) {
+                is ProfileModuleCommand.SelectCoreShape,
+                ProfileModuleCommand.ToggleMute,
+                ProfileModuleCommand.AdvanceRebirth,
+                -> if (request.semanticHandle.sourceInstance == ProfileCommandSource.LocalSession) {
+                    ProfileCommandIssuerProvenance.LOCAL_SESSION_STATIC_BINDING
                 } else null
-            is ProfileModuleCommand.SelectCoreShape,
-            ProfileModuleCommand.ToggleMute,
-            ProfileModuleCommand.AdvanceRebirth,
-            -> null
-        }
+                is ProfileModuleCommand.ApplyGameplayProgress -> null
+            }
+            ProfileIngressSource.Gameplay -> when (request.command) {
+                is ProfileModuleCommand.ApplyGameplayProgress ->
+                    if (request.semanticHandle.sourceInstance is ProfileCommandSource.GameplayRun) {
+                        ProfileCommandIssuerProvenance.GAMEPLAY_RUN_STATIC_BINDING
+                    } else null
+                is ProfileModuleCommand.SelectCoreShape,
+                ProfileModuleCommand.ToggleMute,
+                ProfileModuleCommand.AdvanceRebirth,
+                -> null
+            }
+        } ?: return null
+        return ProfileCommandBinding(request.command.effectiveProtocolIdentity(), provenance)
     }
-
-    private fun ProfileModuleCommandRequest.sessionBinding(
-        identity: ProfileEffectiveProtocolIdentity,
-    ): ProfileCommandBinding? = if (semanticHandle.sourceInstance == ProfileCommandSource.LocalSession) {
-        ProfileCommandBinding(identity, ProfileCommandIssuerProvenance.LOCAL_SESSION_STATIC_BINDING)
-    } else {
-        null
-    }
-
-    private fun fallbackIdentity(command: ProfileModuleCommand): ProfileEffectiveProtocolIdentity =
-        when (command) {
-            is ProfileModuleCommand.SelectCoreShape -> ProfileEffectiveProtocolIdentity.SESSION_CORE_SHAPE
-            ProfileModuleCommand.ToggleMute -> ProfileEffectiveProtocolIdentity.SESSION_MUTE
-            ProfileModuleCommand.AdvanceRebirth -> ProfileEffectiveProtocolIdentity.SESSION_REBIRTH
-            is ProfileModuleCommand.ApplyGameplayProgress -> ProfileEffectiveProtocolIdentity.GAMEPLAY_PROGRESS
-        }
 
     private fun refused(
         commandSource: ProfileCommandSourceToken,
@@ -540,20 +494,6 @@ internal class DefaultProfileComponent(
 
 }
 
-internal fun profileResultMatches(
-    identity: ProfileEffectiveProtocolIdentity,
-    result: ProfileModuleResult,
-): Boolean = when (identity) {
-    ProfileEffectiveProtocolIdentity.SESSION_CORE_SHAPE ->
-        result is ProfileModuleResult.CoreShapeSelected
-    ProfileEffectiveProtocolIdentity.SESSION_MUTE ->
-        result is ProfileModuleResult.PreferencesChanged
-    ProfileEffectiveProtocolIdentity.SESSION_REBIRTH ->
-        result is ProfileModuleResult.RebirthAdvanced
-    ProfileEffectiveProtocolIdentity.GAMEPLAY_PROGRESS ->
-        result == ProfileModuleResult.GameplayProgressApplied
-}
-
 internal fun <T> profileCompletionDeque(): BoundedCompletionDeque<T> =
     BoundedCompletionDeque(PROFILE_COMPLETION_CAPACITY)
 
@@ -579,9 +519,6 @@ internal fun hasProfileCommandRevisionCapacity(
     revision: ProfileRevision,
 ): Boolean = revision.value <= Long.MAX_VALUE - MAX_ORDINARY_REVISIONS_PER_DISPATCH
 
-private fun readConstructionSnapshot(resource: ProfileResource): ProfileSnapshotReadResult =
-    resource.readSnapshot()
-
 private data class ProfileWorkItem(
     val pulse: ProfileNucleusPulse,
     val causalScope: Long,
@@ -602,5 +539,4 @@ private data class ProfileCommandRouteReservation(
 
 private const val PROFILE_COMPLETION_CAPACITY: Int = 8
 private const val MAX_PROFILE_CAUSAL_DEPTH: Int = 8
-private const val MAX_LOCAL_REVISIONS_PER_DISPATCH: Long = 2L
 private const val MAX_ORDINARY_REVISIONS_PER_DISPATCH: Long = 2L

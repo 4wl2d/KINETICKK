@@ -3,6 +3,11 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
+import kinetickk.ball.content.api.localizedContent
+
+import kinetickk.ball.gameplay.interaction.localization.GameplayText
+import kinetickk.foundation.common.localization.text
+
 import kinetickk.foundation.design.*
 
 import androidx.compose.ui.geometry.Offset
@@ -24,14 +29,14 @@ internal fun DrawScope.drawPause(
 ) {
     drawRect(pauseOverlayScrimColor(layout.mode))
     if (layout.mode != GameplayLayoutMode.REGULAR) {
-        drawLabel(textMeasurer, "SYSTEM PAUSED", size.width * 0.5f, layout.titleY, 20f, White, centered = true, weight = FontWeight.Bold)
+        drawLabel(textMeasurer, textMeasurer.language.text(GameplayText.SystemPaused), size.width * 0.5f, layout.titleY, 20f, White, centered = true, weight = FontWeight.Bold)
         for (index in layout.actions.indices) {
             val action = layout.actions[index]
             val label = when (action.target) {
-                PauseTarget.RESUME -> "RESUME"
-                PauseTarget.SETTINGS -> "SETTINGS"
-                PauseTarget.PERFORMANCE -> "PERFORMANCE METRICS"
-                PauseTarget.EXIT -> "RETURN TO HOME"
+                PauseTarget.RESUME -> textMeasurer.language.text(GameplayText.Resume)
+                PauseTarget.SETTINGS -> textMeasurer.language.text(GameplayText.Settings)
+                PauseTarget.PERFORMANCE -> textMeasurer.language.text(GameplayText.PerformanceMetrics)
+                PauseTarget.EXIT -> textMeasurer.language.text(GameplayText.ReturnHome)
             }
             val accent = when (action.target) {
                 PauseTarget.RESUME -> Cyan
@@ -44,10 +49,10 @@ internal fun DrawScope.drawPause(
         }
         return
     }
-    drawLabel(textMeasurer, "SYSTEM PAUSED", size.width * 0.5f, size.height * 0.30f, 28f, White, centered = true, weight = FontWeight.Bold)
-    drawPauseButton(textMeasurer, "RESUME [P / ESC]", size.height * 0.5f, Cyan)
-    drawPauseButton(textMeasurer, "SETTINGS [S]", size.height * 0.62f, Violet)
-    drawPauseButton(textMeasurer, "RETURN TO MENU", size.height * 0.74f, Red)
+    drawLabel(textMeasurer, textMeasurer.language.text(GameplayText.SystemPaused), size.width * 0.5f, size.height * 0.30f, 28f, White, centered = true, weight = FontWeight.Bold)
+    drawPauseButton(textMeasurer, textMeasurer.language.text(GameplayText.ResumeKey), size.height * 0.5f, Cyan)
+    drawPauseButton(textMeasurer, textMeasurer.language.text(GameplayText.SettingsKey), size.height * 0.62f, Violet)
+    drawPauseButton(textMeasurer, textMeasurer.language.text(GameplayText.ReturnMenu), size.height * 0.74f, Red)
 }
 
 internal fun DrawScope.drawPauseButton(textMeasurer: TextMeasurer, label: String, top: Float, accent: Color) {
@@ -69,28 +74,28 @@ internal fun DrawScope.drawEnd(
         drawCompactEnd(engine, textMeasurer, victory, color, layout)
         return
     }
-    drawLabel(textMeasurer, if (victory) "RUN CONQUERED" else engine.message, size.width * 0.5f, size.height * 0.25f, if (size.width / density < 700f) 28f else 42f, color, centered = true, weight = FontWeight.Bold)
-    drawLabel(textMeasurer, if (victory) "THE ARCHITECT HAS FALLEN" else "THE SINGULARITY REMEMBERS", size.width * 0.5f, size.height * 0.36f, 10f, Muted, centered = true)
+    drawLabel(textMeasurer, if (victory) textMeasurer.language.text(GameplayText.RunConquered) else engine.message.localizedContent(textMeasurer.language), size.width * 0.5f, size.height * 0.25f, if (size.width / density < 700f) 28f else 42f, color, centered = true, weight = FontWeight.Bold)
+    drawLabel(textMeasurer, if (victory) textMeasurer.language.text(GameplayText.ArchitectFallen) else textMeasurer.language.text(GameplayText.SingularityRemembers), size.width * 0.5f, size.height * 0.36f, 10f, Muted, centered = true)
     val statY = size.height * 0.47f
-    drawLabel(textMeasurer, "TIME ${formatRunTime(engine.elapsed)}", size.width * 0.5f - d(165f), statY, 13f, White, centered = true)
-    drawLabel(textMeasurer, "KILLS ${engine.kills}", size.width * 0.5f, statY, 13f, White, centered = true)
-    drawLabel(textMeasurer, "MATTER ${formatCompact(engine.runMatter)}", size.width * 0.5f + d(165f), statY, 13f, Acid, centered = true)
-    drawLabel(textMeasurer, "WEAPON ${engine.currentWeaponDefinition.name.uppercase()} // LV ${engine.weaponLevel}", size.width * 0.5f, statY + d(38f), 10f, weaponColor(engine.weapon), centered = true)
-    drawLabel(textMeasurer, "ITEMS ${engine.acquiredItemCount}   DISCOVERIES ${engine.discoveredItemCount}/${engine.content.items.size}   PEAK ${VelocityNames[engine.velocityTier.coerceIn(VelocityNames.indices)]}", size.width * 0.5f, statY + d(64f), 9f, Muted, centered = true)
+    drawLabel(textMeasurer, textMeasurer.language.text(GameplayText.Time, formatRunTime(engine.elapsed)), size.width * 0.5f - d(165f), statY, 13f, White, centered = true)
+    drawLabel(textMeasurer, textMeasurer.language.text(GameplayText.Kills, engine.kills), size.width * 0.5f, statY, 13f, White, centered = true)
+    drawLabel(textMeasurer, textMeasurer.language.text(GameplayText.Matter, formatCompact(engine.runMatter, textMeasurer.language)), size.width * 0.5f + d(165f), statY, 13f, Acid, centered = true)
+    drawLabel(textMeasurer, textMeasurer.language.text(GameplayText.WeaponLevel, engine.currentWeaponDefinition.name.localizedContent(textMeasurer.language).uppercase(), engine.weaponLevel), size.width * 0.5f, statY + d(38f), 10f, weaponColor(engine.weapon), centered = true)
+    drawLabel(textMeasurer, textMeasurer.language.text(GameplayText.DiscoveriesPeak, engine.acquiredItemCount, engine.discoveredItemCount, engine.content.items.size, VelocityNames[engine.velocityTier.coerceIn(VelocityNames.indices)].localizedContent(textMeasurer.language)), size.width * 0.5f, statY + d(64f), 9f, Muted, centered = true)
     val buttonY = size.height * 0.72f
     drawRect(color.copy(alpha = 0.1f), Offset(size.width * 0.5f - d(155f), buttonY - d(38f)), Size(d(310f), d(76f)))
     drawRect(color, Offset(size.width * 0.5f - d(155f), buttonY - d(38f)), Size(d(310f), d(76f)), style = Stroke(d(2f)))
-    drawLabel(textMeasurer, "RE-ENTER [R]", size.width * 0.5f, buttonY - d(10f), 15f, White, centered = true, weight = FontWeight.Bold)
+    drawLabel(textMeasurer, textMeasurer.language.text(GameplayText.ReenterKey), size.width * 0.5f, buttonY - d(10f), 15f, White, centered = true, weight = FontWeight.Bold)
     if (victory) {
         val rebirthTop = buttonY + d(50f)
         val rebirthAccent = Acid
-        val rebirthLabel = "REBIRTH [B] // NEXT CYCLE"
+        val rebirthLabel = textMeasurer.language.text(GameplayText.RebirthNextKey)
         drawRect(rebirthAccent.copy(alpha = 0.1f), Offset(size.width * 0.5f - d(120f), rebirthTop), Size(d(240f), d(40f)))
         drawRect(rebirthAccent, Offset(size.width * 0.5f - d(120f), rebirthTop), Size(d(240f), d(40f)), style = Stroke(d(1.4f)))
         drawLabel(textMeasurer, rebirthLabel, size.width * 0.5f, rebirthTop + d(12f), 9f, rebirthAccent, centered = true, weight = FontWeight.Bold)
     }
     val menuHintY = buttonY + d(if (victory) 104f else 65f)
-    drawLabel(textMeasurer, "TAP BELOW FOR CORE SELECT // BANK ${formatCompact(engine.totalMatter)}", size.width * 0.5f, menuHintY, 8f, Muted, centered = true)
+    drawLabel(textMeasurer, textMeasurer.language.text(GameplayText.CoreSelectHint, formatCompact(engine.totalMatter, textMeasurer.language)), size.width * 0.5f, menuHintY, 8f, Muted, centered = true)
 }
 
 private fun DrawScope.drawCompactEnd(
@@ -103,7 +108,7 @@ private fun DrawScope.drawCompactEnd(
     val landscape = layout.mode == GameplayLayoutMode.COMPACT_LANDSCAPE
     drawLabel(
         textMeasurer,
-        if (victory) "RUN CONQUERED" else engine.message,
+        if (victory) textMeasurer.language.text(GameplayText.RunConquered) else engine.message.localizedContent(textMeasurer.language),
         size.width * 0.5f,
         layout.titleY,
         if (landscape) 23f else 27f,
@@ -114,7 +119,7 @@ private fun DrawScope.drawCompactEnd(
     )
     drawLabel(
         textMeasurer,
-        if (victory) "THE ARCHITECT HAS FALLEN" else "THE SINGULARITY REMEMBERS",
+        if (victory) textMeasurer.language.text(GameplayText.ArchitectFallen) else textMeasurer.language.text(GameplayText.SingularityRemembers),
         size.width * 0.5f,
         layout.subtitleY,
         8f,
@@ -123,7 +128,7 @@ private fun DrawScope.drawCompactEnd(
     )
     drawLabel(
         textMeasurer,
-        "TIME ${formatRunTime(engine.elapsed)} // KILLS ${engine.kills} // MATTER ${formatCompact(engine.runMatter)}",
+        textMeasurer.language.text(GameplayText.RunStats, formatRunTime(engine.elapsed), engine.kills, formatCompact(engine.runMatter, textMeasurer.language)),
         size.width * 0.5f,
         layout.statsY,
         if (landscape) 9f else 10f,
@@ -133,7 +138,7 @@ private fun DrawScope.drawCompactEnd(
     )
     drawLabel(
         textMeasurer,
-        "${engine.currentWeaponDefinition.name.uppercase()} LV ${engine.weaponLevel} // BANK ${formatCompact(engine.totalMatter)}",
+        textMeasurer.language.text(GameplayText.WeaponBank, engine.currentWeaponDefinition.name.localizedContent(textMeasurer.language).uppercase(), engine.weaponLevel, formatCompact(engine.totalMatter, textMeasurer.language)),
         size.width * 0.5f,
         layout.statsY + d(26f),
         7f,
@@ -141,9 +146,9 @@ private fun DrawScope.drawCompactEnd(
         centered = true,
         maxWidth = size.width - d(24f),
     )
-    drawActionButton(textMeasurer, layout.restart, "RE-ENTER", accent)
-    layout.rebirth?.let { drawActionButton(textMeasurer, it, "REBIRTH // NEXT CYCLE", Acid) }
-    drawActionButton(textMeasurer, layout.exit, "RETURN TO HOME", Red)
+    drawActionButton(textMeasurer, layout.restart, textMeasurer.language.text(GameplayText.Reenter), accent)
+    layout.rebirth?.let { drawActionButton(textMeasurer, it, textMeasurer.language.text(GameplayText.RebirthNext), Acid) }
+    drawActionButton(textMeasurer, layout.exit, textMeasurer.language.text(GameplayText.ReturnHome), Red)
 }
 
 internal fun pauseOverlayScrimColor(mode: GameplayLayoutMode): Color =
