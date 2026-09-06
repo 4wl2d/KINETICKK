@@ -322,6 +322,8 @@ private const val FOUNDATION_COMPLETION_DEQUE_PATH =
     "foundation/common/src/commonMain/kotlin/kinetickk/foundation/dispatch/BoundedCompletionDeque.kt"
 private const val CONTENT_CATALOG_PATH =
     "ball/content/impl/src/commonMain/kotlin/kinetickk/ball/content/impl/DefaultContentCatalog.kt"
+private const val CONTENT_SNAPSHOTS_PATH =
+    "ball/content/api/src/commonMain/kotlin/kinetickk/ball/content/api/ContentSnapshots.kt"
 private const val CONTENT_CATALOG_TEST_PATH =
     "ball/content/impl/src/commonTest/kotlin/kinetickk/ball/content/impl/ContentCatalogTest.kt"
 private const val CONTENT_IDS_PATH =
@@ -2383,8 +2385,12 @@ internal val expectedBounds = listOf(
                     "owner.pendingDiscoveredItemIdStorage = CopyOnWriteMutableSet(mutableSetOf(itemId))",
                     "owner.pendingDiscoveredItemIdStorage = null",
                     "?: CopyOnWriteIntArray(IntArray(content.items.size))",
-                    "?: CopyOnWriteIntArray(IntArray(content.items.maxOfOrNull { it.id / 20 + 1 } ?: 0))",
+                    "?: CopyOnWriteIntArray(IntArray(content.itemFamilyCount))",
                 ),
+            ),
+            BoundAnchor(
+                CONTENT_SNAPSHOTS_PATH,
+                "val itemFamilyCount: Int = items.maxOfOrNull { it.id / 20 + 1 } ?: 0",
             ),
             BoundAnchor(
                 GAMEPLAY_PROGRESSION_SYSTEM_PATH,
@@ -2950,8 +2956,12 @@ internal val mechanicallyDerivedBounds = listOf(
                     "owner.pendingDiscoveredItemIdStorage = CopyOnWriteMutableSet(mutableSetOf(itemId))",
                     "owner.pendingDiscoveredItemIdStorage = null",
                     "?: CopyOnWriteIntArray(IntArray(content.items.size))",
-                    "?: CopyOnWriteIntArray(IntArray(content.items.maxOfOrNull { it.id / 20 + 1 } ?: 0))",
+                    "?: CopyOnWriteIntArray(IntArray(content.itemFamilyCount))",
                 ),
+            ),
+            BoundAnchor(
+                CONTENT_SNAPSHOTS_PATH,
+                "val itemFamilyCount: Int = items.maxOfOrNull { it.id / 20 + 1 } ?: 0",
             ),
             BoundAnchor(
                 GAMEPLAY_PROGRESSION_SYSTEM_PATH,

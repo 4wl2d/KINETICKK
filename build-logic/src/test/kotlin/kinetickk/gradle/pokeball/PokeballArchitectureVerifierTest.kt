@@ -687,7 +687,9 @@ class PokeballArchitectureVerifierTest {
             tokenFragment: String,
         ) {
             val bound = expectedBounds.single { it.id == boundId }
-            val anchor = bound.sourceAnchors.single { it.path.endsWith(pathSuffix) }
+            val anchor = bound.sourceAnchors.single {
+                it.path.endsWith(pathSuffix) && it.tokens.any { tokenFragment in it }
+            }
             val token = anchor.tokens.single { tokenFragment in it }
             val drifted = sources.toMutableMap().apply {
                 val source = getValue(anchor.path)
@@ -817,6 +819,8 @@ class PokeballArchitectureVerifierTest {
             "val result = soundCues.toImmutableList",
         )
         assertBoundTokenDrift("content.items", "/DefaultContentCatalog.kt", "private val items =")
+        assertBoundTokenDrift("content.items", "/ContentSnapshots.kt", "val itemFamilyCount:")
+        assertBoundTokenDrift("content.items", "/MutableGameState.kt", "IntArray(content.itemFamilyCount)")
         assertBoundTokenDrift("profile.retained-lab-ranks", "/ProfileNucleus.kt", "val ranks = state.profile")
         assertBoundTokenDrift(
             "profile.retained-meta-upgrade-rank",
@@ -960,6 +964,16 @@ class PokeballArchitectureVerifierTest {
             "gameplay.item-indexed-state",
             "/GameplayNucleus.kt",
             "state.engine?.model?.buildSummary",
+        )
+        assertDerivedTokenDrift(
+            "gameplay.item-indexed-state",
+            "/ContentSnapshots.kt",
+            "val itemFamilyCount:",
+        )
+        assertDerivedTokenDrift(
+            "gameplay.item-indexed-state",
+            "/MutableGameState.kt",
+            "IntArray(content.itemFamilyCount)",
         )
         assertDerivedTokenDrift(
             "gameplay.render-projection-collections",
