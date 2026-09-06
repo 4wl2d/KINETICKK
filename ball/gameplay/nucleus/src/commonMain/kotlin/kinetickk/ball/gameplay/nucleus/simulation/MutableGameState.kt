@@ -108,7 +108,7 @@ internal class MutableGameState(
     internal val familyStacks: CopyOnWriteIntArray = reductionSource?.familyStacks?.let {
         if (shareStableReductionStorage) it else it.fork()
     }
-        ?: CopyOnWriteIntArray(IntArray(content.items.maxOfOrNull { it.id / 20 + 1 } ?: 0))
+        ?: CopyOnWriteIntArray(IntArray(content.itemFamilyCount))
     internal var soundCueStorage: MutableList<GameplayAudioCue>? =
         reductionSource?.soundCueStorage?.let { source -> ArrayList(source) }
     internal val soundCues: PendingSoundCueBuffer

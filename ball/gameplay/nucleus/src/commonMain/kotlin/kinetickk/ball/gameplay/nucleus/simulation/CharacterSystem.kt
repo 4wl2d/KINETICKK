@@ -14,14 +14,27 @@ internal fun MutableGameState.updateCharacterRuntime(delta: Float) {
     val heading = atan2(smoothedVelocityY, smoothedVelocityX)
     val angle = atan2(sin(heading - ability.previousHeading), cos(heading - ability.previousHeading))
     val brakingStarted = braking && !ability.wasBraking
-    ability = ability.copy(
-        barrierTime = max(0f, ability.barrierTime - delta),
-        parryWindow = max(0f, ability.parryWindow - delta),
-        parryCooldown = max(0f, ability.parryCooldown - delta),
-        latticeTime = max(0f, ability.latticeTime - delta),
-    )
-    if (ability.barrierTime <= 0f) ability = ability.copy(barrier = 0f)
-    if (ability.latticeTime <= 0f) ability = ability.copy(lattice = emptyList())
+    val barrierTime = max(0f, ability.barrierTime - delta)
+    val parryWindow = max(0f, ability.parryWindow - delta)
+    val parryCooldown = max(0f, ability.parryCooldown - delta)
+    val latticeTime = max(0f, ability.latticeTime - delta)
+    val barrier = if (barrierTime <= 0f) 0f else ability.barrier
+    val lattice = if (latticeTime <= 0f) emptyList() else ability.lattice
+    if (barrierTime.toRawBits() != ability.barrierTime.toRawBits() ||
+        parryWindow.toRawBits() != ability.parryWindow.toRawBits() ||
+        parryCooldown.toRawBits() != ability.parryCooldown.toRawBits() ||
+        latticeTime.toRawBits() != ability.latticeTime.toRawBits() ||
+        barrier.toRawBits() != ability.barrier.toRawBits() || lattice !== ability.lattice
+    ) {
+        ability = ability.copy(
+            barrierTime = barrierTime,
+            parryWindow = parryWindow,
+            parryCooldown = parryCooldown,
+            latticeTime = latticeTime,
+            barrier = barrier,
+            lattice = lattice,
+        )
+    }
     for (enemy in enemies) if (enemy.characterMarkTime > 0f) enemy.characterMarkTime = max(0f, enemy.characterMarkTime - delta)
     when (coreShape) {
         CoreShape.ORB -> {
@@ -32,7 +45,9 @@ internal fun MutableGameState.updateCharacterRuntime(delta: Float) {
                 val earned = if (abs(arc) >= 0.698f && distance >= 100f) abs(angle) / PI.toFloat() else 0f
                 ability = ability.copy(turnArc = arc.coerceIn(-TAU, TAU), turnDistance = min(2_000f, distance),
                     charge = min(1f, ability.charge + earned))
-            } else ability = ability.copy(turnArc = 0f, turnDistance = 0f)
+            } else if (ability.turnArc.toRawBits() != 0 || ability.turnDistance.toRawBits() != 0) {
+                ability = ability.copy(turnArc = 0f, turnDistance = 0f)
+            }
         }
         CoreShape.PRISM -> {
             val lostSpeed = max(0f, ability.previousSpeed - currentSpeed)

@@ -70,6 +70,9 @@ data class GameplayContentSnapshot(
     val synergies: ImmutableList<SynergyDefinition> = defaultSynergyDefinitions(),
     val coreShapes: ImmutableList<CoreShapeDefinition> = defaultCoreShapeDefinitions(),
 ) {
+    /** Derived once per immutable catalog snapshot, rather than once per gameplay state. */
+    val itemFamilyCount: Int = items.maxOfOrNull { it.id / 20 + 1 } ?: 0
+
     fun coreShape(id: CoreShape): CoreShapeDefinition = coreShapes.first { it.id == id }
 
     fun item(id: Int): ItemDefinition? = items.getOrNull(id)?.takeIf { item -> item.id == id }

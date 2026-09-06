@@ -13,6 +13,7 @@ import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
+import kinetickk.foundation.collections.immutableListOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -26,6 +27,17 @@ class ContentCatalogTest {
     private val gameplay = catalog.gameplayContent()
     private val profile = catalog.profilePolicy()
     private val ui = catalog.uiCatalog()
+
+    @Test
+    fun itemFamilyCapacityFollowsTheCapturedItemsWhenTheSnapshotIsCopied() {
+        assertEquals(20, gameplay.itemFamilyCount)
+        assertEquals(0, gameplay.copy(items = immutableListOf()).itemFamilyCount)
+        assertEquals(
+            3,
+            gameplay.copy(items = immutableListOf(gameplay.items.first().copy(id = 40))).itemFamilyCount,
+        )
+        assertEquals(20, gameplay.itemFamilyCount)
+    }
 
     @Test
     fun authorityPublishesOneVersionedSetOfCachedQuerySnapshots() {

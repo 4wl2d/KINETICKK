@@ -12,6 +12,27 @@ import kotlin.test.*
 class CharacterAbilityTest {
     private fun game(shape: CoreShape) = MutableGameState(canonicalGameplayContent).apply { startRun(); enemies.clear(); coreShape = shape }
 
+    @Test fun expiringAbilityTimersClearBarrierAndLatticeWithoutChangingTheSource() {
+        val source = game(CoreShape.ORB)
+        source.characterRuntime = CharacterRuntime(
+            barrier = 20f, barrierTime = 0.1f, parryWindow = 0.1f, parryCooldown = 0.3f,
+            lattice = listOf(WorldPoint(10f, 20f)), latticeTime = 0.1f,
+            turnArc = 0.5f, turnDistance = 50f,
+        )
+        val fork = source.copyForReduction()
+        fork.updateCharacterRuntime(0.1f)
+        assertEquals(0f, fork.characterRuntime.barrier)
+        assertEquals(0f, fork.characterRuntime.barrierTime)
+        assertEquals(0f, fork.characterRuntime.parryWindow)
+        assertEquals(0.2f, fork.characterRuntime.parryCooldown, 0.0001f)
+        assertEquals(0f, fork.characterRuntime.latticeTime)
+        assertTrue(fork.characterRuntime.lattice.isEmpty())
+        assertEquals(0f, fork.characterRuntime.turnArc)
+        assertEquals(0f, fork.characterRuntime.turnDistance)
+        assertEquals(20f, source.characterRuntime.barrier)
+        assertEquals(1, source.characterRuntime.lattice.size)
+    }
+
     @Test fun allSixCharactersCanUseEveryWeaponWithoutStationaryBrakeCharge() {
         for (shape in CoreShape.entries) for (weapon in WeaponId.entries) {
             val game = game(shape)
