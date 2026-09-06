@@ -4,6 +4,10 @@
   "rawReportSchemaVersion": 2,
   "sourceContractVersion": 2,
   "validationContractVersion": 1,
+  "suiteVersions": {
+    "gameplay": "gameplay-core-v3",
+    "profile": "profile-persistence-current-schema-v3"
+  },
   "sourceRoles": [
     "adapter",
     "harness",

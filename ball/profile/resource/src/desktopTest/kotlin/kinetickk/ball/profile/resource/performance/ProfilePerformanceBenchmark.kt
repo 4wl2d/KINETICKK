@@ -9,6 +9,7 @@ import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
+import kinetickk.ball.profile.api.CharacterAchievementProgress
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
 import kinetickk.ball.profile.api.LabProgress
@@ -38,18 +39,20 @@ import kinetickk.performance.BenchmarkSuiteIdentity
 import kinetickk.performance.BenchmarkValidation
 import kinetickk.performance.BenchmarkValidationContext
 import kinetickk.performance.runBenchmarkSuite
+import kinetickk.foundation.collections.toImmutableSet
+import kinetickk.foundation.common.localization.AppLanguage
 
 internal const val PROFILE_PERSISTENCE_BENCHMARK_SUITE_VERSION =
-    "profile-persistence-current-schema-v2"
+    "profile-persistence-current-schema-v3"
 
 fun main() {
     runBenchmarkSuite(
         identity = BenchmarkSuiteIdentity(
             suiteVersion = PROFILE_PERSISTENCE_BENCHMARK_SUITE_VERSION,
-            adapter = "feature-pokeball-full-refactor",
+            adapter = "kinetickk-0.2.0",
             label = System.getProperty(
                 "kinetickk.benchmark.label",
-                "feature/pokeball-full-refactor",
+                "current",
             ),
             revision = System.getProperty("kinetickk.benchmark.revision", "unknown"),
             dirty = System.getProperty("kinetickk.benchmark.dirty", "false").toBoolean(),
@@ -311,7 +314,7 @@ private class ProfileBenchmarkFixtures {
         value * 2_862_933_555_777_941_757L + 3_037_000_493L
 }
 
-private fun maximumBusinessSnapshot(): ProfileSnapshot = ProfileSnapshot(
+internal fun maximumBusinessSnapshot(): ProfileSnapshot = ProfileSnapshot(
     revision = ProfileRevision(Long.MAX_VALUE),
     profile = PlayerProfile(
         preferences = PlayerPreferences(
@@ -326,6 +329,7 @@ private fun maximumBusinessSnapshot(): ProfileSnapshot = ProfileSnapshot(
             damageNumberSize = DamageNumberSize.HUGE,
             damageNumberFormat = DamageNumberFormat.FULL,
             damageNumberTierThreshold = DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS.last(),
+            language = AppLanguage.English,
         ),
         economy = PlayerEconomy(Long.MAX_VALUE - 1L, Long.MAX_VALUE),
         loadout = PlayerLoadout(
@@ -338,6 +342,13 @@ private fun maximumBusinessSnapshot(): ProfileSnapshot = ProfileSnapshot(
         rebirthProgress = RebirthProgress(
             level = ContentBounds.MAX_REBIRTH_LEVEL,
             highestCleared = ContentBounds.MAX_REBIRTH_LEVEL,
+        ),
+        characterAchievements = CharacterAchievementProgress(
+            eliteKills = Long.MAX_VALUE,
+            dashHits = Long.MAX_VALUE,
+            completedOrbits = Long.MAX_VALUE,
+            architectVictories = Long.MAX_VALUE,
+            victoriousCharacters = CoreShape.entries.reversed().toImmutableSet(),
         ),
     ),
 )
@@ -369,6 +380,11 @@ private fun payloadMetadata(
     "unlockedWeapons" to snapshot.profile.loadout.unlockedWeapons.size.toString(),
     "labRanks" to snapshot.profile.labProgress.ranks.size.toString(),
     "discoveries" to snapshot.profile.collection.discoveredItemIds.size.toString(),
+    "language" to snapshot.profile.preferences.language.code,
+    "victoriousCharacters" to snapshot.profile.characterAchievements.victoriousCharacters.size.toString(),
+    "achievementCounters" to snapshot.profile.characterAchievements.let {
+        "${it.eliteKills},${it.dashHits},${it.completedOrbits},${it.architectVictories}"
+    },
 )
 
 private fun rejectionMetadata(
@@ -430,7 +446,7 @@ private fun BenchmarkValidationContext.validated(result: Long): Long {
     return result
 }
 
-private fun snapshotSignature(snapshot: ProfileSnapshot): Long {
+internal fun snapshotSignature(snapshot: ProfileSnapshot): Long {
     val profile = snapshot.profile
     var result = snapshot.revision.value
     result = result * 31L + profile.loadout.unlockedWeapons.size
@@ -438,6 +454,13 @@ private fun snapshotSignature(snapshot: ProfileSnapshot): Long {
     result = result * 31L + profile.collection.discoveredItemIds.sumOf(Int::toLong)
     result = result * 31L + profile.economy.matter
     result = result * 31L + profile.economy.lifetimeMatter
+    result = result * 31L + profile.preferences.language.code.hashCode()
+    val achievements = profile.characterAchievements
+    result = result * 31L + achievements.eliteKills
+    result = result * 31L + achievements.dashHits
+    result = result * 31L + achievements.completedOrbits
+    result = result * 31L + achievements.architectVictories
+    result = result * 31L + achievements.victoriousCharacters.sumOf { 1L shl it.ordinal }
     return result
 }
 

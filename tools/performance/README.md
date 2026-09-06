@@ -43,6 +43,21 @@ Each cycle launches fresh JVMs in feature-baseline-baseline-feature order.
 
 ## Reproduce a branch comparison
 
+Release 0.2.0 uses `gameplay-core-v3` and
+`profile-persistence-current-schema-v3` workloads with the unchanged raw-schema-v2
+harness. Gameplay witnesses now include fatigue, character abilities, points of
+interest, directed rewards, synergies and pending achievements. The profile
+business maximum includes language and all character achievements. These are
+different semantic workloads from the pre-0.2.0 main branch; their fingerprints
+and encoded payloads must not be treated as equivalent.
+
+The capability marker records both workload versions. The release PR records
+strict candidate-only bootstrap evidence against a base with the previous
+contract. Once the new contract is in the base, the blocking A-B-B-A gate resumes
+automatically. Bootstrap is not a claim that the release has no regressions
+relative to the older mechanics. For optimization evidence within the release,
+compare clean commits that share these updated adapters.
+
 Only compare revisions that both implement the exact raw-schema-v2 harness,
 five-role source provenance, and semantic validation contract. Run the complete
 gameplay and profile A-B-B-A matrix against an exact compatible base SHA:

@@ -4,18 +4,66 @@
 package kinetickk.ball.profile.resource.performance
 
 import kinetickk.ball.profile.resource.MAX_PROFILE_PAYLOAD_BYTES
+import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.profile.api.CharacterAchievementProgress
+import kinetickk.ball.profile.api.PlayerProfile
+import kinetickk.ball.profile.api.ProfileRevision
+import kinetickk.ball.profile.api.ProfileSnapshot
+import kinetickk.ball.profile.resource.ProfileCodec
+import kinetickk.ball.profile.resource.ProfileDecodeResult
+import kinetickk.ball.profile.resource.ProfileEncodeResult
+import kinetickk.foundation.collections.toImmutableSet
+import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.performance.validateBenchmarkScenario
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class ProfilePerformanceBenchmarkTest {
     @Test
-    fun suiteIdentityDeclaresTheHarnessContractWithoutVersioningTheSaveSchema() {
+    fun suiteIdentityVersionsTheWorkloadWithoutVersioningTheSaveSchema() {
         assertEquals(
-            "profile-persistence-current-schema-v2",
+            "profile-persistence-current-schema-v3",
             PROFILE_PERSISTENCE_BENCHMARK_SUITE_VERSION,
         )
+    }
+
+    @Test
+    fun businessMaximumCoversLanguageAndEveryCharacterAchievementAndRoundTrips() {
+        val snapshot = maximumBusinessSnapshot()
+        assertEquals(AppLanguage.English, snapshot.profile.preferences.language)
+        assertEquals(
+            CharacterAchievementProgress(
+                Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE,
+                CoreShape.entries.toImmutableSet(),
+            ),
+            snapshot.profile.characterAchievements,
+        )
+        val payload = assertIs<ProfileEncodeResult.Encoded>(ProfileCodec.encode(snapshot)).payload
+        val decoded = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(payload)).snapshot
+        assertEquals(snapshot, decoded)
+        assertEquals(snapshotSignature(snapshot), snapshotSignature(decoded))
+    }
+
+    @Test
+    fun snapshotWitnessDetectsLanguageAndIndividualAchievementChanges() {
+        val snapshot = ProfileSnapshot(ProfileRevision.ZERO, PlayerProfile())
+        val profile = snapshot.profile
+        val changed = listOf(
+            profile.copy(preferences = profile.preferences.copy(language = AppLanguage.English)),
+            profile.copy(characterAchievements = CharacterAchievementProgress(eliteKills = 1)),
+            profile.copy(characterAchievements = CharacterAchievementProgress(dashHits = 1)),
+            profile.copy(characterAchievements = CharacterAchievementProgress(completedOrbits = 1)),
+            profile.copy(characterAchievements = CharacterAchievementProgress(architectVictories = 1)),
+            profile.copy(characterAchievements = CharacterAchievementProgress(
+                victoriousCharacters = setOf(CoreShape.SHARD).toImmutableSet(),
+            )),
+        )
+        changed.forEach { changedProfile ->
+            assertNotEquals(snapshotSignature(snapshot), snapshotSignature(snapshot.copy(profile = changedProfile)))
+        }
     }
 
     @Test

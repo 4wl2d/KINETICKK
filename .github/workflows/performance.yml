@@ -103,7 +103,7 @@ jobs:
               if (( status != 3 )); then
                 exit "$status"
               fi
-              printf 'Exact PR base predates the incremental suite; recording candidate-only bootstrap evidence.\n'
+              printf 'Exact PR base does not share the current suite contract; recording candidate-only bootstrap evidence.\n'
             fi
           fi
           printf 'PERFORMANCE_GATE_MODE=%s\n' "$mode" >> "$GITHUB_ENV"
@@ -176,15 +176,17 @@ jobs:
         run: |
           PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=tools/performance python3 - <<'PY'
           from pathlib import Path
+          import json
           import os
 
           import compare_results
 
-          expected = (
-              ("gameplay-core-v2", Path("build/performance/ci/gameplay.json")),
-              ("profile-persistence-current-schema-v2", Path("build/performance/ci/profile.json")),
-          )
-          for suite_version, path in expected:
+          suite_versions = json.loads(
+              Path("tools/performance/contracts/incremental-gate-v2.json").read_text(),
+          )["suiteVersions"]
+          for suite in ("gameplay", "profile"):
+              suite_version = suite_versions[suite]
+              path = Path(f"build/performance/ci/{suite}.json")
               runs = compare_results.load_runs([path])
               compare_results.validate_run_group(runs, suite_version)
               compare_results.validate_expected_run_identity(
@@ -248,7 +250,7 @@ jobs:
                 fi
               done
               printf '\n'
-              printf '> No branch-relative verdict is emitted until both sides implement the exact v2 source and validation contracts.\n\n'
+              printf '> No branch-relative verdict is emitted until both sides implement the same suite source and semantic validation contracts.\n\n'
             fi
             for report in "${reports[@]}"; do
               if [[ -f "$report" ]]; then

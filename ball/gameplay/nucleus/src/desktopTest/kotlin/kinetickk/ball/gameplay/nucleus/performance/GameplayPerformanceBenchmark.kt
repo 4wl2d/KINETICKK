@@ -42,7 +42,7 @@ import kinetickk.performance.BenchmarkSuiteIdentity
 import kinetickk.performance.BenchmarkValidation
 import kinetickk.performance.runBenchmarkSuite
 
-private const val SUITE_VERSION = "gameplay-core-v2"
+internal const val GAMEPLAY_BENCHMARK_SUITE_VERSION = "gameplay-core-v3"
 private const val DEFAULT_SEED = 731_991
 private const val MAX_ENEMIES = 120
 private const val MAX_PROJECTILES = 650
@@ -60,18 +60,20 @@ private const val SEMANTIC_COMMAND_COMPLETION = 5
 
 fun main() {
     val seed = System.getProperty("kinetickk.benchmark.seed")?.toIntOrNull() ?: DEFAULT_SEED
-    val fixtures = GameplayBenchmarkFixtures(seed)
     runBenchmarkSuite(
         identity = BenchmarkSuiteIdentity(
-            suiteVersion = SUITE_VERSION,
-            adapter = "feature-pokeball-full-refactor",
-            label = System.getProperty("kinetickk.benchmark.label", "feature/pokeball-full-refactor"),
+            suiteVersion = GAMEPLAY_BENCHMARK_SUITE_VERSION,
+            adapter = "kinetickk-0.2.0",
+            label = System.getProperty("kinetickk.benchmark.label", "current"),
             revision = System.getProperty("kinetickk.benchmark.revision", "unknown"),
             dirty = System.getProperty("kinetickk.benchmark.dirty", "false").toBoolean(),
         ),
-        scenarios = fixtures.scenarios(),
+        scenarios = gameplayBenchmarkScenarios(seed),
     )
 }
+
+internal fun gameplayBenchmarkScenarios(seed: Int = DEFAULT_SEED): List<BenchmarkScenario> =
+    GameplayBenchmarkFixtures(seed).scenarios()
 
 private class GameplayBenchmarkFixtures(private val seed: Int) {
     private val frame60 = GameplayInteractionPulse.FrameElapsed.fromValidated(1f / 60f)
@@ -647,7 +649,7 @@ private fun stateSignature(state: MutableGameState): Long {
     return signature
 }
 
-private fun canonicalStateFingerprint(state: MutableGameState): Long {
+internal fun canonicalStateFingerprint(state: MutableGameState): Long {
     var signature = stateSignature(state)
     signature = mix(signature, state.level)
     signature = mix(signature, state.data)
@@ -657,6 +659,37 @@ private fun canonicalStateFingerprint(state: MutableGameState): Long {
     signature = mix(signature, state.screenHeight.toRawBits())
     signature = mix(signature, state.pointerX.toRawBits())
     signature = mix(signature, state.pointerY.toRawBits())
+    // Release 0.2.0 changed accepted mechanics. Include their retained facts in the witness;
+    // a matching adapter file alone does not make the old gameplay outcome comparable.
+    signature = mix(signature, state.coreShape.ordinal)
+    signature = mix(signature, state.characterRuntime.toString().hashCode())
+    signature = mix(signature, state.nextEliteAt.toRawBits())
+    signature = mix(signature, state.nextLevelData)
+    signature = mix(signature, state.smoothedVelocityX.toRawBits())
+    signature = mix(signature, state.smoothedVelocityY.toRawBits())
+    signature = mix(signature, if (state.turnHeadingEstablished) 1 else 0)
+    signature = mix(signature, state.turnHoldTime.toRawBits())
+    signature = mix(signature, state.turnRecoveryCooldown.toRawBits())
+    signature = mix(signature, state.turnDirection)
+    signature = mix(signature, state.pendingEliteKills)
+    signature = mix(signature, state.pendingDashHits)
+    signature = mix(signature, state.pendingCompletedOrbits)
+    signature = mix(signature, state.pendingArchitectDefeatedWith?.ordinal ?: -1)
+    signature = mix(signature, state.pointsOfInterest.toString().hashCode())
+    signature = mix(signature, state.nextPointOfferIndex)
+    signature = mix(signature, state.pendingDirectedRewards.toString().hashCode())
+    signature = mix(signature, state.directedReward?.ordinal ?: -1)
+    signature = mix(signature, state.selectedRewardFocus?.ordinal ?: -1)
+    signature = mix(signature, state.synergyEffects.toString().hashCode())
+    state.synergyCooldowns.forEach { signature = mix(signature, it.toRawBits()) }
+    signature = mix(signature, state.synergyManeuverCharge.toRawBits())
+    signature = mix(signature, if (state.ghostDashPending) 1 else 0)
+    signature = mix(signature, state.ghostDashStartX.toRawBits())
+    signature = mix(signature, state.ghostDashStartY.toRawBits())
+    state.enemies.forEach {
+        signature = mix(signature, it.characterMarkTime.toRawBits())
+        signature = mix(signature, it.lastCharacterDash)
+    }
     return mixLong(signature, fixtureFingerprint(state))
 }
 
@@ -702,6 +735,12 @@ private fun canonicalRenderFingerprint(state: MutableGameState): Long {
     signature = mix(signature, render.overdriveTime.toRawBits())
     signature = mix(signature, render.rerollsRemaining)
     signature = mix(signature, render.acquiredItemCount)
+    signature = mix(signature, render.coreShape.ordinal)
+    signature = mix(signature, render.characterAbility.toString().hashCode())
+    signature = mix(signature, render.pointsOfInterest.toString().hashCode())
+    signature = mix(signature, if (render.directedChoice) 1 else 0)
+    signature = mix(signature, render.effectiveWeaponPower.toRawBits())
+    signature = mix(signature, render.runProgress.toRawBits())
     render.itemStacksSnapshot.forEach { stack -> signature = mix(signature, stack) }
     return mixLong(signature, fixtureFingerprint(state))
 }
@@ -841,6 +880,7 @@ private fun baseMetadata(seed: Int, vararg values: Pair<String, String>): Map<St
     put("seed", seed.toString())
     put("viewport", "1280x720@1")
     put("simulationHz", "120")
+    put("gameplayContract", "release-0.2.0")
     putAll(values)
 }
 
