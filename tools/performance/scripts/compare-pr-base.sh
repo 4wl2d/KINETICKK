@@ -240,7 +240,7 @@ prime_benchmark_runtime() {
         -PbenchmarkDirty=false \
         -PbenchmarkFork=1 \
         -PbenchmarkScenarios="$scenario" \
-        "${extra_properties[@]}")
+        ${extra_properties[@]+"${extra_properties[@]}"})
 }
 
 prime_benchmark_runtime "$repository_root" candidate "$candidate_revision" gameplay
@@ -298,7 +298,7 @@ run_benchmark() {
         -PbenchmarkRevision="$revision" \
         -PbenchmarkDirty=false \
         -PbenchmarkFork="$fork_number" \
-        "${extra_properties[@]}")
+        ${extra_properties[@]+"${extra_properties[@]}"})
 }
 
 run_suite() {
