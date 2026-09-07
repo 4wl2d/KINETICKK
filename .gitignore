@@ -5,7 +5,7 @@ build/
 out/
 kotlin-js-store/
 node_modules/
-output/playwright/
+/output/
 .playwright-cli/
 __pycache__/
 *.py[cod]
