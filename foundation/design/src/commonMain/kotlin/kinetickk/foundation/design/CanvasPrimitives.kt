@@ -21,7 +21,6 @@ import androidx.compose.ui.unit.Constraints
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.sin
 
 private const val TAU = 6.2831855f
@@ -38,12 +37,6 @@ fun DrawScope.drawFooterBack(textMeasurer: TextMeasurer, bounds: Rect, accent: C
     drawLabel(textMeasurer, textMeasurer.language.text(NavigationText.Back), bounds.center.x, top + d(13f), 10f, White, centered = true)
 }
 
-fun DrawScope.drawStripFooter(textMeasurer: TextMeasurer, bounds: Rect, accent: Color) {
-    val top = bounds.bottom - d(55f)
-    drawLine(DarkLine, Offset(bounds.left, top), Offset(bounds.right, top), d(1f))
-    drawLabel(textMeasurer, textMeasurer.language.text(NavigationText.Back), bounds.center.x, top + d(18f), 10f, White, centered = true)
-}
-
 fun DrawScope.drawPagedFooter(textMeasurer: TextMeasurer, bounds: Rect, page: Int, maxPage: Int, accent: Color) {
     val top = bounds.bottom - d(55f)
     val closeRight = bounds.left + bounds.width * 0.45f
@@ -54,14 +47,6 @@ fun DrawScope.drawPagedFooter(textMeasurer: TextMeasurer, bounds: Rect, page: In
     drawLabel(textMeasurer, textMeasurer.language.text(NavigationText.BackEscape), bounds.left + d(25f), top + d(18f), 9f, accent, weight = FontWeight.Bold)
     drawLabel(textMeasurer, textMeasurer.language.text(NavigationText.Page, page + 1, maxPage + 1), (closeRight + nextLeft) * 0.5f, top + d(18f), 9f, if (page > 0) White else Muted, centered = true)
     drawLabel(textMeasurer, textMeasurer.language.text(NavigationText.Next), bounds.right - d(42f), top + d(18f), 8f, if (page < maxPage) White else Muted, centered = true)
-}
-
-fun DrawScope.overlayBounds(maxWidth: Float = 900f, maxHeight: Float = 650f): Rect {
-    val width = min(d(maxWidth), size.width - d(30f))
-    val height = min(d(maxHeight), size.height - d(30f))
-    val left = (size.width - width) * 0.5f
-    val top = (size.height - height) * 0.5f
-    return Rect(left, top, left + width, top + height)
 }
 
 enum class SystemGlyphStyle {

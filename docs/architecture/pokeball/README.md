@@ -30,8 +30,6 @@ The record is split by ownership:
   interfaces and runtime wiring own the bindings.
 - `applicability.md` records triggered Core concerns, exclusions, and the
   absence-proof scopes that may be used only by the final conformance claim.
-- `browser-qa.md` defines the isolated production-Wasm rendered smoke and its
-  relationship to the automated Chromium suite.
 - `resolved-manifest.json` deterministically projects modules, compile and
   direct-control edges, Application Surfaces, inspectable source evidence, and
   the executed behavior suites. It contains no handwritten operation registry.

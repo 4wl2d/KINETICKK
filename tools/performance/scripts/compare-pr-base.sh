@@ -52,7 +52,7 @@ require_clean_worktree() {
     fi
 }
 
-script_directory="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
+script_directory="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)"
 repository_root="$(git -C "$script_directory" rev-parse --show-toplevel)"
 comparison_script="$repository_root/tools/performance/compare_results.py"
 base_revision=""
@@ -186,7 +186,7 @@ elif [[ "$output_option" != /* ]]; then
     output_option="$repository_root/$output_option"
 fi
 mkdir -p "$output_option"
-output_directory="$(CDPATH= cd -- "$output_option" && pwd -P)"
+output_directory="$(CDPATH='' cd -- "$output_option" && pwd -P)"
 if find "$output_directory" -mindepth 1 -maxdepth 1 -print -quit | grep -q .; then
     fail "Output directory must be empty: $output_directory"
 fi

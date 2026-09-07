@@ -10,14 +10,11 @@ private val legalDocumentPaths = listOf(
     "LICENSE",
     "NOTICE",
     "docs/project/AUTHORS.md",
-    "docs/project/CONTRIBUTING.md",
-    "docs/project/GOVERNANCE.md",
     "docs/project/SOURCE.md",
     "docs/project/TRADEMARKS.md",
     "docs/project/THIRD_PARTY_NOTICES.md",
     "docs/project/ASSET_PROVENANCE.md",
     "docs/project/PRIVACY.md",
-    "docs/project/LEGAL.md",
 )
 
 internal fun Project.packageLegalDocuments() {

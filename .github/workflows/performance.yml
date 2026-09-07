@@ -115,8 +115,6 @@ jobs:
             jsonschema==4.26.0
           scripts=(
             tools/performance/playwright_cli.sh
-            tools/performance/scripts/compare-main-refactor.sh
-            tools/performance/scripts/compare-main-refactor-profile.sh
             tools/performance/scripts/compare-pr-base.sh
           )
           for script in "${scripts[@]}"; do

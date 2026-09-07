@@ -42,8 +42,6 @@ class DesktopCrashHandler private constructor(private val showDialogs: Boolean) 
         runCatching { if (::reporter.isInitialized) reporter.checkpoint() }
     }, "kinetickk-crash-shutdown")
 
-    val reportsDirectory: Path get() = reporter.root
-
     fun verifyRuntime() {
         // Resolve the current command and persistence API classes before starting a run.
         criticalRuntimeClasses.forEach { javaClass.classLoader.loadClass(it) }

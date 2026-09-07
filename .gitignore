@@ -64,6 +64,9 @@ SKILL.md
 /docs/pokeball-*.md
 /spec/pokeball-architecture-core.md
 
+# Generated benchmark reports belong in build/, not the source tree
+/docs/performance/results/
+
 # Logs, diagnostics, and operating-system files
 *.log
 *.hprof

@@ -31,7 +31,7 @@ val buildInfo = tasks.register<WriteDesktopBuildInfoTask>("writeDesktopBuildInfo
     repositoryDirectory.set(rootDir)
     buildSources.from(fileTree(rootDir) {
         include("**/src/**/*.kt", "**/*.gradle.kts", "gradle/libs.versions.toml", "gradle.properties")
-        exclude("**/build/**", "**/.gradle/**", "tools/performance/compat/**")
+        exclude("**/build/**", "**/.gradle/**")
     })
     outputDirectory.set(layout.buildDirectory.dir("generated/crash-build-info"))
 }

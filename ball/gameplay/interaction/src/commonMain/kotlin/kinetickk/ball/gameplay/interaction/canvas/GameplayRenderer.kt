@@ -13,8 +13,6 @@ import kinetickk.ball.gameplay.interaction.terminal.drawCoreDeath
 import kotlin.math.cos
 import kotlin.math.sin
 
-internal val VelocityNames = listOf("DRIFT", "SURGE", "HYPER", "OVERDRIVE", "TRANSCENDENT")
-
 internal fun DrawScope.drawGameplay(
     engine: GameplayRenderModel,
     visualFx: VisualFxProjection,
