@@ -55,6 +55,29 @@ separate package from the release. Build the production web bundle with
 `./gradlew :app:web:wasmJsBrowserDistribution`; its output is
 `app/web/build/dist/wasmJs/productionExecutable/`.
 
+### Automatic web releases
+
+[Publish web release](.github/workflows/web-release.yml) builds and tests the
+latest stable GitHub release, then attaches its browser files and
+`kinetickk-web.json` to that release. The game at
+[tomilov.tech/game/](https://tomilov.tech/game/) picks up the ready build
+automatically, without republishing the portfolio. Prereleases are excluded.
+The workflow runs on release publication and edits, checks hourly for missed
+updates, and can be started manually with **Run workflow**.
+
+Files are verified before the readiness manifest is uploaded. Published web
+builds are never overwritten; use a new release tag to change the game. Tags
+must be 1–64 letters, digits, dots, underscores or hyphens, beginning with a
+letter or digit. GitHub release immutability must remain off until the build
+assets have been attached. Only the publication job needs `contents: write`;
+no personal token or Sites credential is needed in GitHub Actions.
+
+The site keeps each session on a fixed release URL under the same origin and
+checks for a newer ready release at most once a minute per active server
+instance. During a build or GitHub outage it serves the last successful build
+available to that instance, with the bundled build as a fallback. Existing
+sessions continue on their selected release; reopen the game to update.
+
 ### Verification
 
 ```bash
