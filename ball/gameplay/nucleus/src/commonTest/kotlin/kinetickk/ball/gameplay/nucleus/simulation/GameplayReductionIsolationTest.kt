@@ -4,17 +4,26 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.DirectedReward
+import kinetickk.ball.content.api.PointOfInterestKind
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RewardFocus
+import kinetickk.ball.content.api.SynergyId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.nucleus.model.DelayedRelicHit
+import kinetickk.ball.gameplay.nucleus.model.CharacterRuntime
 import kinetickk.ball.gameplay.nucleus.model.Pickup
+import kinetickk.ball.gameplay.nucleus.model.PointOfInterestState
 import kinetickk.ball.gameplay.nucleus.model.Projectile
+import kinetickk.ball.gameplay.nucleus.model.SynergyEffect
+import kinetickk.ball.gameplay.nucleus.model.SynergyEffectKind
 import kinetickk.ball.gameplay.nucleus.model.Totem
 import kinetickk.ball.gameplay.nucleus.model.TrailPoint
 import kinetickk.ball.gameplay.nucleus.model.WeaponNode
 import kinetickk.ball.gameplay.nucleus.model.WeaponOrbital
+import kinetickk.ball.gameplay.nucleus.model.WorldPoint
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.reducer.EngineState
@@ -24,11 +33,14 @@ import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
+import kinetickk.foundation.collections.immutableListOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotSame
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -51,6 +63,7 @@ class GameplayReductionIsolationTest {
             totem = Totem(81f, 29f, 0.5f)
             velocityX = -0f
             weaponBeamTime = Float.fromBits(0x7fc00001)
+            populateAdditionalRetainedState()
         }
 
         listOf(source.copyForReduction(), source.copyForScalarInputReduction()).forEach { fork ->
@@ -69,6 +82,10 @@ class GameplayReductionIsolationTest {
             pendingClearedRebirthLevel = null
             recentItem = null
             totem = null
+            characterRuntime = characterRuntime.copy(dashOrigin = null)
+            pendingArchitectDefeatedWith = null
+            directedReward = null
+            selectedRewardFocus = null
         }
         listOf(cleared.copyForReduction(), cleared.copyForScalarInputReduction()).forEach { fork ->
             assertEquivalentSimulation(cleared, fork)
@@ -308,8 +325,14 @@ class GameplayReductionIsolationTest {
         val source = MutableGameState(canonicalGameplayContent, seed = 6_101).apply {
             pendingBankedMatter = 7L
             pendingDiscoveredItemIds += 0
+            pendingEliteKills = 2
+            pendingDashHits = 3
+            pendingCompletedOrbits = 4
+            pendingArchitectDefeatedWith = CoreShape.PRISM
             emitSound(GameplayAudioCue.UI_CLICK)
             emitVisualFx(VisualFxCue.EffectsAdvanced(0.125f))
+            emitVisualFx(VisualFxCue.ClearWeaponArcs)
+            emitVisualFx(VisualFxCue.EffectsAdvanced(0.25f))
         }
         val reducer = GameReducer()
         val sourceEngine = EngineState(source)
@@ -327,6 +350,19 @@ class GameplayReductionIsolationTest {
             assertFalse(reduction.state.model.hasPendingReductionOutputs())
             assertSame(source.metaRanks, reduction.state.model.metaRanks)
             assertSame(source.enemies, reduction.state.model.enemies)
+            assertEquals(
+                listOf(
+                    VisualFxCue.EffectsAdvanced(0.125f),
+                    VisualFxCue.ClearWeaponArcs,
+                    VisualFxCue.EffectsAdvanced(0.25f),
+                ),
+                reduction.outputs.visualFxCuesOrNull?.toList(),
+            )
+            val progress = assertNotNull(reduction.outputs.progressUpdate)
+            assertEquals(2, progress.eliteKills)
+            assertEquals(3, progress.dashHits)
+            assertEquals(4, progress.completedOrbits)
+            assertEquals(CoreShape.PRISM, progress.architectDefeatedWith)
         }
         assertEquals(reductions[0].outputs, reductions[1].outputs)
         assertEquals(reductions[1].outputs, reductions[2].outputs)
@@ -334,11 +370,80 @@ class GameplayReductionIsolationTest {
         // The committed source remains independently drainable after every sibling reduction.
         assertTrue(source.hasPendingReductionOutputs())
         assertEquals(listOf(GameplayAudioCue.UI_CLICK), source.takeSoundCues())
-        assertTrue(source.takeVisualFxCues().isNotEmpty())
+        assertEquals(
+            listOf(
+                VisualFxCue.EffectsAdvanced(0.125f),
+                VisualFxCue.ClearWeaponArcs,
+                VisualFxCue.EffectsAdvanced(0.25f),
+            ),
+            source.takeVisualFxCues().toList(),
+        )
         val progress = source.takeProgressUpdate()
         assertEquals(7L, progress?.bankedMatter)
         assertTrue(0 in requireNotNull(progress).discoveredItemIds)
+        assertEquals(2, progress.eliteKills)
+        assertEquals(3, progress.dashHits)
+        assertEquals(4, progress.completedOrbits)
+        assertEquals(CoreShape.PRISM, progress.architectDefeatedWith)
         assertFalse(source.hasPendingReductionOutputs())
+    }
+
+    @Test
+    fun unchangedPointerDrainsAchievementOnlyProgressWithoutMutatingSource() {
+        assertAchievementOnlyProgressIsDrained { source ->
+            source.updatePointer(source.pointerX, source.pointerY, source.pointerActive)
+            GameplayInteractionPulse.PointerMoved.fromValidated(
+                source.pointerX,
+                source.pointerY,
+                source.pointerActive,
+            )
+        }
+    }
+
+    @Test
+    fun pausedFrameDrainsAchievementOnlyProgressWithoutMutatingSource() {
+        assertAchievementOnlyProgressIsDrained { source ->
+            source.togglePause()
+            GameplayInteractionPulse.FrameElapsed.fromValidated(1f / 60f)
+        }
+    }
+
+    private fun assertAchievementOnlyProgressIsDrained(
+        preparePulse: (MutableGameState) -> GameplayInteractionPulse,
+    ) {
+        val cases: List<Pair<String, MutableGameState.() -> Unit>> = listOf(
+            "eliteKills" to { pendingEliteKills = 2 },
+            "dashHits" to { pendingDashHits = 3 },
+            "completedOrbits" to { pendingCompletedOrbits = 4 },
+            "architectDefeatedWith" to { pendingArchitectDefeatedWith = CoreShape.PRISM },
+        )
+        cases.forEach { (name, retainProgress) ->
+            val source = MutableGameState(canonicalGameplayContent, seed = 6_102).apply(retainProgress)
+            val pulse = preparePulse(source)
+            val retainedFingerprint = source.exactSimulationFingerprint()
+            // The expected result is explicit owner data, not a copy/drain of the source.
+            val expected = kinetickk.ball.profile.api.GameplayProgressUpdate(
+                bankedMatter = 0L,
+                discoveredItemIds = emptySet(),
+                eliteKills = if (name == "eliteKills") 2 else 0,
+                dashHits = if (name == "dashHits") 3 else 0,
+                completedOrbits = if (name == "completedOrbits") 4 else 0,
+                architectDefeatedWith = CoreShape.PRISM.takeIf { name == "architectDefeatedWith" },
+            )
+
+            val reducer = GameReducer()
+            val accepted = assertIs<GameReductionResult.Accepted>(
+                reducer.reduce(EngineState(source), pulse),
+                name,
+            )
+
+            assertEquals(retainedFingerprint, source.exactSimulationFingerprint(), name)
+            assertEquals(expected, accepted.outputs.progressUpdate, "$name must be delivered")
+            assertFalse(accepted.state.model.hasPendingReductionOutputs(), "$name must be drained")
+            val repeated = assertIs<GameReductionResult.Accepted>(reducer.reduce(accepted.state, pulse))
+            assertNull(repeated.outputs.progressUpdate, "$name must not be delivered twice")
+            assertEquals(retainedFingerprint, source.exactSimulationFingerprint(), name)
+        }
     }
 
     @Test
@@ -499,11 +604,13 @@ class GameplayReductionIsolationTest {
             // Ensure the trace covers both entity and per-run relic/progression storage.
             addEnemyForTesting(x = 120f, y = 15f)
             trail += TrailPoint(120f, 15f)
+            populateAdditionalRetainedState()
             drainReferenceOutputs()
         }
 
         var production = EngineState(newTraceState())
         val eagerReference = newTraceState()
+        val retained = mutableListOf<Pair<MutableGameState, List<Pair<String, Any?>>>>()
         val reducer = GameReducer()
         repeat(240) { index ->
             val pulse = when {
@@ -518,12 +625,99 @@ class GameplayReductionIsolationTest {
                 )
                 else -> GameplayInteractionPulse.FrameElapsed.fromValidated(MutableGameState.FIXED_STEP)
             }
+            val precedingState = production.model
+            val precedingFingerprint = precedingState.exactSimulationFingerprint()
+            if (index % 30 == 0) retained += precedingState to precedingFingerprint
             production = assertIs<GameReductionResult.Accepted>(
                 reducer.reduce(production, pulse),
             ).state
             eagerReference.applyReferencePulse(pulse)
             eagerReference.drainReferenceOutputs()
+            assertEquals(
+                precedingFingerprint,
+                precedingState.exactSimulationFingerprint(),
+                "transition $index mutated the preceding State",
+            )
             assertEquivalentSimulation(production.model, eagerReference)
+        }
+        retained.forEachIndexed { index, (state, fingerprint) ->
+            assertEquals(fingerprint, state.exactSimulationFingerprint(), "retained State $index")
+        }
+    }
+
+    private fun MutableGameState.populateAdditionalRetainedState() {
+        characterRuntime = CharacterRuntime(
+            charge = 0.3f,
+            barrier = 4f,
+            barrierTime = 0.8f,
+            previousSpeed = 123f,
+            previousHeading = 0.4f,
+            turnArc = 0.7f,
+            turnDistance = 50f,
+            wasBraking = true,
+            parryWindow = 0.2f,
+            parryCooldown = 0.6f,
+            ringRadius = 58f,
+            dashSequence = 2,
+            dashOrigin = WorldPoint(4f, -0f),
+            dashRecorded = true,
+            ramPower = 0.9f,
+            lattice = listOf(WorldPoint(-1f, 2f), WorldPoint(3f, -4f)),
+            latticeTime = 0.5f,
+        )
+        pendingEliteKills = 2
+        pendingDashHits = 3
+        pendingCompletedOrbits = 4
+        pendingArchitectDefeatedWith = CoreShape.PRISM
+        pointsOfInterest = listOf(
+            PointOfInterestState(
+                offerId = 1,
+                kind = PointOfInterestKind.SEALED_ANOMALY,
+                x = 400f,
+                y = 300f,
+                expiresAt = 100f,
+                remaining = 20f,
+                nextBeacon = 2,
+                orbitSeconds = 1f,
+                defenderIds = immutableListOf(11, 13),
+                defeatedDefenders = 1,
+                volleyClock = 1.8f,
+                warningRemaining = 0.3f,
+                volleyAngle = 0.4f,
+            ),
+        )
+        nextPointOfferIndex = 2
+        pendingDirectedRewards = listOf(DirectedReward.ITEM_AND_REPAIR, DirectedReward.WEAPON)
+        directedReward = DirectedReward.RELIC
+        selectedRewardFocus = RewardFocus.CONTROL
+        synergyEffects = listOf(
+            SynergyEffect(
+                synergy = SynergyId.FRACTURE_DECAY,
+                kind = SynergyEffectKind.TRAIL,
+                remaining = 1f,
+                damage = 2f,
+                enemyId = 11,
+                x = 200f,
+                y = 300f,
+                endX = 400f,
+                endY = 500f,
+                radius = 70f,
+            ),
+        )
+        synergyCooldowns[SynergyId.FRACTURE_DECAY.ordinal] = 0.7f
+        synergyManeuverCharge = 0.4f
+        ghostDashPending = true
+        ghostDashStartX = 12f
+        ghostDashStartY = 13f
+        smoothedVelocityX = 14f
+        smoothedVelocityY = 15f
+        turnHeadingEstablished = true
+        turnHoldTime = 0.2f
+        turnRecoveryCooldown = 0.3f
+        turnDirection = -1
+        enemies.firstOrNull()?.apply {
+            characterMarkTime = 0.75f
+            lastCharacterDash = 2
         }
     }
 
@@ -556,7 +750,11 @@ class GameplayReductionIsolationTest {
             !visualFxCues.isEmpty() ||
             pendingBankedMatter != 0L ||
             pendingDiscoveredItemIds.isNotEmpty() ||
-            pendingClearedRebirthLevel != null
+            pendingClearedRebirthLevel != null ||
+            pendingEliteKills != 0 ||
+            pendingDashHits != 0 ||
+            pendingCompletedOrbits != 0 ||
+            pendingArchitectDefeatedWith != null
 
     private fun assertEquivalentSimulation(
         actual: MutableGameState,
@@ -577,8 +775,10 @@ class GameplayReductionIsolationTest {
     }
 
     /**
-     * Complete mutable-simulation fingerprint. Every Float is reduced to raw IEEE-754 bits so
-     * NaN payloads and signed zero cannot hide a differential behind ordinary value equality.
+     * Snapshot of every directly readable simulation fact, independent of production copy helpers.
+     * Every Float is reduced to raw IEEE-754 bits so NaN payloads and signed zero stay distinct.
+     * The private visual accumulator is checked through explicit ordered drain expectations above;
+     * copying it here would make a broken accumulator copy part of the isolation oracle itself.
      */
     private fun MutableGameState.exactSimulationFingerprint(): List<Pair<String, Any?>> =
         ExactFingerprint().apply {
@@ -593,16 +793,64 @@ class GameplayReductionIsolationTest {
             ints("itemStacks", itemStacks)
             ints("familyStacks", familyStacks)
             value("soundCues", soundCues.toList())
-            value(
-                "hasPendingReductionOutputs",
-                soundCues.isNotEmpty() ||
-                    !visualFxCues.isEmpty() ||
-                    pendingBankedMatter != 0L ||
-                    pendingDiscoveredItemIds.isNotEmpty() ||
-                    pendingClearedRebirthLevel != null,
-            )
+            value("pendingDiscoveredItemIdStorage.present", pendingDiscoveredItemIdStorage != null)
+            value("soundCueStorage.present", soundCueStorage != null)
+            value("visualFxCueStorage.present", visualFxCueStorage != null)
+            value("visualFxCueStorage.empty", visualFxCueStorage?.isEmpty())
+            value("hasPendingReductionOutputs", hasPendingReductionOutputs())
             value("pendingBankedMatter", pendingBankedMatter)
             value("pendingClearedRebirthLevel", pendingClearedRebirthLevel)
+            value("pendingEliteKills", pendingEliteKills)
+            value("pendingDashHits", pendingDashHits)
+            value("pendingCompletedOrbits", pendingCompletedOrbits)
+            value("pendingArchitectDefeatedWith", pendingArchitectDefeatedWith)
+            float("characterRuntime.charge", characterRuntime.charge)
+            float("characterRuntime.barrier", characterRuntime.barrier)
+            float("characterRuntime.barrierTime", characterRuntime.barrierTime)
+            float("characterRuntime.previousSpeed", characterRuntime.previousSpeed)
+            float("characterRuntime.previousHeading", characterRuntime.previousHeading)
+            float("characterRuntime.turnArc", characterRuntime.turnArc)
+            float("characterRuntime.turnDistance", characterRuntime.turnDistance)
+            value("characterRuntime.wasBraking", characterRuntime.wasBraking)
+            float("characterRuntime.parryWindow", characterRuntime.parryWindow)
+            float("characterRuntime.parryCooldown", characterRuntime.parryCooldown)
+            float("characterRuntime.ringRadius", characterRuntime.ringRadius)
+            value("characterRuntime.dashSequence", characterRuntime.dashSequence)
+            value("characterRuntime.dashOrigin.present", characterRuntime.dashOrigin != null)
+            characterRuntime.dashOrigin?.let { origin ->
+                float("characterRuntime.dashOrigin.x", origin.x)
+                float("characterRuntime.dashOrigin.y", origin.y)
+            }
+            value("characterRuntime.dashRecorded", characterRuntime.dashRecorded)
+            float("characterRuntime.ramPower", characterRuntime.ramPower)
+            value("characterRuntime.lattice.size", characterRuntime.lattice.size)
+            characterRuntime.lattice.forEachIndexed { index, point ->
+                float("characterRuntime.lattice[$index].x", point.x)
+                float("characterRuntime.lattice[$index].y", point.y)
+            }
+            float("characterRuntime.latticeTime", characterRuntime.latticeTime)
+            value("pointsOfInterest.size", pointsOfInterest.size)
+            pointsOfInterest.forEachIndexed { index, point ->
+                val prefix = "pointsOfInterest[$index]"
+                value("$prefix.offerId", point.offerId)
+                value("$prefix.kind", point.kind)
+                float("$prefix.x", point.x)
+                float("$prefix.y", point.y)
+                float("$prefix.expiresAt", point.expiresAt)
+                value("$prefix.active", point.active)
+                float("$prefix.remaining", point.remaining)
+                value("$prefix.nextBeacon", point.nextBeacon)
+                float("$prefix.orbitSeconds", point.orbitSeconds)
+                value("$prefix.defenderIds", point.defenderIds.toList())
+                value("$prefix.defeatedDefenders", point.defeatedDefenders)
+                float("$prefix.volleyClock", point.volleyClock)
+                float("$prefix.warningRemaining", point.warningRemaining)
+                float("$prefix.volleyAngle", point.volleyAngle)
+            }
+            value("nextPointOfferIndex", nextPointOfferIndex)
+            value("pendingDirectedRewards", pendingDirectedRewards.toList())
+            value("directedReward", directedReward)
+            value("selectedRewardFocus", selectedRewardFocus)
 
             value("nextEntityId", nextEntityId)
             float("spawnClock", spawnClock)
@@ -636,12 +884,37 @@ class GameplayReductionIsolationTest {
             float("slipstreamRelayTime", slipstreamRelayTime)
             float("borrowedMomentTime", borrowedMomentTime)
             float("brakepointCharge", brakepointCharge)
+            value("synergyEffects.size", synergyEffects.size)
+            synergyEffects.forEachIndexed { index, effect ->
+                val prefix = "synergyEffects[$index]"
+                value("$prefix.synergy", effect.synergy)
+                value("$prefix.kind", effect.kind)
+                float("$prefix.remaining", effect.remaining)
+                float("$prefix.damage", effect.damage)
+                value("$prefix.enemyId", effect.enemyId)
+                float("$prefix.x", effect.x)
+                float("$prefix.y", effect.y)
+                float("$prefix.endX", effect.endX)
+                float("$prefix.endY", effect.endY)
+                float("$prefix.radius", effect.radius)
+            }
+            floats("synergyCooldowns", synergyCooldowns)
+            float("synergyManeuverCharge", synergyManeuverCharge)
+            value("ghostDashPending", ghostDashPending)
+            float("ghostDashStartX", ghostDashStartX)
+            float("ghostDashStartY", ghostDashStartY)
             float("dataFraction", dataFraction)
             float("matterFraction", matterFraction)
             float("shieldRechargeDelay", shieldRechargeDelay)
             float("overheatHoldTime", overheatHoldTime)
             float("saturationHeadingX", saturationHeadingX)
             float("saturationHeadingY", saturationHeadingY)
+            float("smoothedVelocityX", smoothedVelocityX)
+            float("smoothedVelocityY", smoothedVelocityY)
+            value("turnHeadingEstablished", turnHeadingEstablished)
+            float("turnHoldTime", turnHoldTime)
+            float("turnRecoveryCooldown", turnRecoveryCooldown)
+            value("turnDirection", turnDirection)
             float("timeSinceDamage", timeSinceDamage)
             float("hurtCooldown", hurtCooldown)
             float("lastAimDirectionX", lastAimDirectionX)
@@ -661,6 +934,8 @@ class GameplayReductionIsolationTest {
             value("settings.damageNumberSize", settings.damageNumberSize)
             value("settings.damageNumberFormat", settings.damageNumberFormat)
             value("settings.damageNumberTierThreshold", settings.damageNumberTierThreshold)
+            value("settings.language", settings.language)
+            value("settings.runStatisticsOnLeft", settings.runStatisticsOnLeft)
             value("rebirthLevel", rebirthLevel)
             float("screenWidth", screenWidth)
             float("screenHeight", screenHeight)
@@ -687,6 +962,14 @@ class GameplayReductionIsolationTest {
             value("nextLevelData", nextLevelData)
             value("keys", keys)
             value("kills", kills)
+            value("damageDealt", damageDealt)
+            value("damageTaken", damageTaken)
+            value("damageAbsorbed", damageAbsorbed)
+            value("dataCollected", dataCollected)
+            value("pickupsCollected", pickupsCollected)
+            value("keysCollected", keysCollected)
+            value("eliteKills", eliteKills)
+            value("bestCombo", bestCombo)
             value("combo", combo)
             float("comboTime", comboTime)
             value("runMatter", runMatter)
@@ -729,7 +1012,7 @@ class GameplayReductionIsolationTest {
             value("rerollsRemaining", rerollsRemaining)
             value("acquiredItemCount", acquiredItemCount)
             value("recentItem", recentItem)
-            value("equippedRelics", equippedRelics)
+            value("equippedRelics", equippedRelics.toList())
             float("morningstarAngle", morningstarAngle)
             float("morningstarX", morningstarX)
             float("morningstarY", morningstarY)
@@ -739,7 +1022,7 @@ class GameplayReductionIsolationTest {
             float("weaponBeamEndX", weaponBeamEndX)
             float("weaponBeamEndY", weaponBeamEndY)
             value("coreShape", coreShape)
-            value("choices", choices)
+            value("choices", choices.toList())
 
             value("delayedRelicHits.size", delayedRelicHits.size)
             delayedRelicHits.forEachIndexed { index, hit ->
@@ -747,6 +1030,7 @@ class GameplayReductionIsolationTest {
                 value("delayedRelicHits[$index].enemyId", hit.enemyId)
                 float("delayedRelicHits[$index].delay", hit.delay)
                 float("delayedRelicHits[$index].damage", hit.damage)
+                value("delayedRelicHits[$index].linkedEnemyId", hit.linkedEnemyId)
             }
 
             value("enemies.size", enemies.size)
@@ -770,6 +1054,8 @@ class GameplayReductionIsolationTest {
                 value("$prefix.dead", enemy.dead)
                 value("$prefix.relicKillProcsEligible", enemy.relicKillProcsEligible)
                 float("$prefix.relicQualificationCooldown", enemy.relicQualificationCooldown)
+                float("$prefix.characterMarkTime", enemy.characterMarkTime)
+                value("$prefix.lastCharacterDash", enemy.lastCharacterDash)
                 ints("$prefix.relicCounters", enemy.relicCounters)
                 floats("$prefix.relicTimers", enemy.relicTimers)
                 floats("$prefix.relicValues", enemy.relicValues)

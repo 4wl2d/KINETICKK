@@ -3,29 +3,29 @@
 
 package kinetickk.flow.session.impl
 
-import kinetickk.ball.gameplay.api.GameplayModuleResultDelivery
-import kinetickk.ball.gameplay.interaction.GameplaySessionHost
+import kinetickk.ball.gameplay.interaction.GameplayRunHost
 import kinetickk.ball.profile.api.PlayerPreferences
-import kinetickk.ball.profile.api.ProfileModuleResultDelivery
-import kinetickk.ball.profile.api.SessionProfileRoute
+import kinetickk.ball.profile.api.ProfileReadPort
+import kinetickk.ball.profile.api.ProfileSettings
+import kinetickk.ball.profile.api.ProfileRebirth
+import kinetickk.ball.profile.api.ProfileLoadout
 import kinetickk.flow.session.api.AppSessionPort
 
-/** Assembly-facing singleton Session owner plus its two statically bound result sinks. */
-interface AppSessionComponent : AppSessionPort {
-    fun receiveProfileModuleResult(delivery: ProfileModuleResultDelivery)
-
-    fun receiveGameplayModuleResult(delivery: GameplayModuleResultDelivery)
-}
-
 fun createAppSessionComponent(
-    profileRoute: SessionProfileRoute,
-    gameplaySessionHost: GameplaySessionHost,
+    profilePort: ProfileReadPort,
+    profileSettings: ProfileSettings,
+    profileLoadout: ProfileLoadout,
+    profileRebirth: ProfileRebirth,
+    gameplayRunHost: GameplayRunHost,
     updateAudioPreferences: (PlayerPreferences) -> Unit,
     playMuteFeedback: () -> Unit,
     playRebirthAcceptedFeedback: () -> Unit,
-): AppSessionComponent = DefaultAppSessionComponent.create(
-    profileRoute = profileRoute,
-    gameplaySessionHost = gameplaySessionHost,
+): AppSessionPort = DefaultAppSessionComponent.create(
+    profilePort = profilePort,
+    profileSettings = profileSettings,
+    profileLoadout = profileLoadout,
+    profileRebirth = profileRebirth,
+    gameplayRunHost = gameplayRunHost,
     updateAudioPreferences = updateAudioPreferences,
     playMuteFeedback = playMuteFeedback,
     playRebirthAcceptedFeedback = playRebirthAcceptedFeedback,

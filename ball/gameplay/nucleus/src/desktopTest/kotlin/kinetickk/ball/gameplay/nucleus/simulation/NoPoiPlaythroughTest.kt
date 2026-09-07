@@ -101,7 +101,6 @@ private fun report(value: String) {
 private class NoPoiBot {
     private var cursorAngle = 0f
     private var braking = false
-    private var recovering = false
 
     fun control(s: MutableGameState) {
         val boss = s.enemies.firstOrNull { it.type == EnemyType.ARCHITECT }
@@ -183,16 +182,17 @@ private class NoPoiBot {
         val offsetY = s.coreY - s.cameraY
         val ux = cos(cursorAngle)
         val uy = sin(cursorAngle)
-        val availableX = if (ux > 0f) (s.screenWidth * 0.5f - 10f - offsetX) / ux else if (ux < 0f) (-s.screenWidth * 0.5f + 10f - offsetX) / ux else 10_000f
-        val availableY = if (uy > 0f) (s.screenHeight * 0.5f - 10f - offsetY) / uy else if (uy < 0f) (-s.screenHeight * 0.5f + 10f - offsetY) / uy else 10_000f
+        // Ordinary steering now recovers polarity; keep the cursor inside that area.
+        val normalHalfWidth = s.screenWidth * 0.5f * s.content.tempo.fatigue.edgeStrainStart - 10f
+        val normalHalfHeight = s.screenHeight * 0.5f * s.content.tempo.fatigue.edgeStrainStart - 10f
+        val availableX = if (ux > 0f) (normalHalfWidth - offsetX) / ux else if (ux < 0f) (-normalHalfWidth - offsetX) / ux else 10_000f
+        val availableY = if (uy > 0f) (normalHalfHeight - offsetY) / uy else if (uy < 0f) (-normalHalfHeight - offsetY) / uy else 10_000f
         val neededTether = ((length(ax, ay) - 92f) / s.magnetStrength).coerceIn(65f, 400f)
         val tether = min(neededTether, min(availableX, availableY)).coerceAtLeast(65f)
         s.updatePointer(s.screenWidth * 0.5f + offsetX + ux * tether, s.screenHeight * 0.5f + offsetY + uy * tether)
-        if (s.polarityStability < 0.20f) recovering = true
-        if (s.polarityStability > 0.85f) recovering = false
         if (s.speed > 900f) braking = true
         if (s.speed < 600f) braking = false
-        s.setBrake(braking || recovering)
+        s.setBrake(braking)
         val threat = s.projectiles.any {
             if (!it.hostile) false else {
                 val px = it.x - s.coreX

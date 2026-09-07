@@ -31,6 +31,8 @@ internal fun MutableGameState.damageEnemy(
         !canCrit -> baseAmount * (1f + effectiveCritChance * (effectiveCritDamage - 1f))
         else -> baseAmount
     }
+    // Count removed integrity, excluding overkill and repeated hits on defeated enemies.
+    damageDealt += minOf(amount, enemy.hp).toDouble()
     enemy.hp -= amount
     if (enemy.hp <= 0f) enemy.relicKillProcsEligible = relicKillProcsEligible
     enemy.flash = max(enemy.flash, if (amount >= 5f) 1f else 0.16f)

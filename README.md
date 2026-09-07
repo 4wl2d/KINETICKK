@@ -56,7 +56,7 @@ whole game locally, experiment with it, and contribute changes under the GPL.
 
 ## How to play
 
-Sustained forward thrust fatigues Magnetic Polarity. Recover by turning the Core through a real arc or using Brake down to a low speed. Lateral steering and braking thrust remain available at full fatigue; moving the cursor alone does not restore stability.
+Magnetic Polarity recovers during normal steering, even at high speed. Holding the cursor in the outer 10% of any screen edge drains it, increasingly toward the edge; bring the cursor back inward to recover. Real turns and low-speed Brake use accelerate recovery away from the edges. Low Polarity weakens forward pull while preserving inertia, lateral steering and braking thrust. Build speed to increase kinetic impact damage.
 
 Fresh profiles start at 1× speed. The Architect arrives after 12 minutes of active play. Reward choices and pauses stop that clock. Choose optional world-fixed anomaly trials for directed weapon, relic or item rewards; skipping them remains possible. Six characters share all Lab upgrades and can use every weapon.
 
@@ -91,6 +91,46 @@ cd KINETICKK
 ```
 
 On Windows, use `gradlew.bat run`.
+
+### Desktop crash reports
+
+Desktop saves crash reports locally in `~/.kinetickk/crashes/` (on Windows,
+`%USERPROFILE%\.kinetickk\crashes`). `latest.md` opens the latest report;
+`latest.txt` contains its absolute path. The crash dialog can copy a ready agent
+prompt or open the report folder. You can also tell an agent **“исправь последний
+краш”**: the repository instructions point it to this index.
+
+```bash
+bash tools/crashes/latest.sh          # Print the agent prompt
+bash tools/crashes/latest.sh --path   # Print the report path
+```
+
+Reports include the exception with causes/suppressed errors, thread stacks,
+build version/revision/dirty source fingerprint, JVM/OS and classpath hashes,
+published gameplay context (including speed, seed, build and entities), recent
+inputs/actions, bounded console logs, and copies of the game's loaded/attempted/
+confirmed save payloads. Save copies are diagnostic evidence, not automatic
+recovery. Nothing is uploaded. Ten crash reports and three completed session
+logs are retained. Context is checkpointed every second; native JVM crashes and
+abrupt termination are detected on the next launch using the last checkpoint,
+with no invented exception stack or guarantee of a complete replay.
+
+`run` copies its runtime into a unique temporary directory before starting Java,
+so rebuilding the project cannot replace JARs inside the running game. Successful
+runs remove that copy; failed runs retain it for investigation. Use
+`-PcrashDir=/absolute/path` to override report storage (`KINETICKK_CRASH_DIR` for
+the helper script).
+
+```bash
+./gradlew :app:desktop:run --args="--verify-runtime --no-crash-dialog"
+./gradlew :app:desktop:run --args="--crash-test=compose --no-crash-dialog"
+```
+
+The deliberate crash exits nonzero and writes under `crashes/self-tests`, keeping
+the real latest report intact. Other self-test sources are `main`, `awt`,
+`worker`, and `halt` (abrupt process exit; report recovered on the next self-test
+launch). Managed handlers are installed by the desktop host; Android and Web
+currently use the no-op diagnostics sink.
 
 ### Browser development
 

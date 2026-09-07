@@ -9,7 +9,7 @@ class BoundedCompletionDeque<T>(val capacity: Int) {
         require(capacity > 0) { "Completion capacity must be positive" }
     }
 
-    private val values: ArrayDeque<T> = ArrayDeque(capacity)
+    private val values: ArrayDeque<() -> T> = ArrayDeque(capacity)
 
     val size: Int
         get() = values.size
@@ -20,11 +20,26 @@ class BoundedCompletionDeque<T>(val capacity: Int) {
     val isEmpty: Boolean
         get() = values.isEmpty()
 
-    fun tryAddLast(value: T): Boolean {
+    fun tryAddLast(value: T): Boolean = tryAddLastPreparation { value }
+
+    internal fun tryAddLastPreparation(prepare: () -> T): Boolean {
         if (values.size == capacity) return false
-        values.addLast(value)
+        values.addLast(prepare)
         return true
     }
 
-    fun removeFirstOrNull(): T? = if (values.isEmpty()) null else values.removeFirst()
+    /** Preparation may fail; the accepted completion remains at the head until consumed. */
+    fun peekFirstOrNull(): T? = values.firstOrNull()?.invoke()
+
+    fun removeFirstOrNull(): T? {
+        val prepare = values.firstOrNull() ?: return null
+        val value = prepare()
+        values.removeFirst()
+        return value
+    }
+
+    @PublishedApi
+    internal fun removePreparedFirst() {
+        values.removeFirst()
+    }
 }

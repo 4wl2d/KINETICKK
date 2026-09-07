@@ -4,33 +4,35 @@
 package kinetickk.ball.gameplay.nucleus.characterization
 
 import kinetickk.ball.gameplay.nucleus.simulation.*
-import kotlin.math.cos
-import kotlin.math.sin
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class TetherSaturationTest {
     @Test
-    fun cursorOscillationCannotRecoverStabilityDuringStraightFlight() {
+    fun cursorOscillationAtTheEdgeCannotRecoverStabilityDuringStraightFlight() {
         for (width in listOf(640f, 1_280f, 2_560f)) {
             for (frequency in listOf(30, 60, 120, 240)) {
-                val engine = runningEngine().apply { resize(width, width * 0.5625f) }
+                val engine = runningEngine().apply {
+                    resize(width, width * 0.5625f)
+                    polarityStability = 1f
+                }
                 val delta = 1f / frequency
                 repeat(frequency * 3) { index ->
-                    val angle = if (index % 2 == 0) 1.3f else -1.3f
-                    engine.updatePointer(width * (0.5f + 0.49f * cos(angle)), engine.screenHeight * (0.5f + 0.49f * sin(angle)))
+                    engine.updatePointer(width, engine.screenHeight * if (index % 2 == 0) 0.1f else 0.9f)
                     engine.velocityX = 700f
                     engine.velocityY = 0f
-                    engine.updatePolarityStability(0f, delta)
+                    engine.updatePolarityStability(delta)
                 }
-                assertEquals(0.2f, engine.polarityStability, "width=$width frequency=$frequency")
-                // Axial in/out motion and a centered cursor also award nothing.
+                assertEquals(0f, engine.polarityStability, "width=$width frequency=$frequency")
+                // Moving in and out only earns time-based recovery, never a turn bonus.
+                engine.polarityStability = 0.2f
                 repeat(frequency) { index ->
-                    engine.updatePointer(width * if (index % 2 == 0) 0.51f else 0.99f, engine.screenHeight * 0.5f)
-                    engine.updatePolarityStability(0f, delta)
+                    engine.updatePointer(width * if (index % 2 == 0) 0.51f else 1f, engine.screenHeight * 0.5f)
+                    engine.updatePolarityStability(delta)
                 }
-                assertEquals(0.2f, engine.polarityStability)
+                assertEquals(0.15f, engine.polarityStability, 0.0001f)
+                assertEquals(0f, engine.turnRecoveryCooldown)
             }
         }
     }
@@ -38,60 +40,66 @@ class TetherSaturationTest {
     @Test
     fun realTurnRequiresSmoothingAndHoldThenAwardsFortyPercentOnce() {
         val engine = runningEngine()
-        repeat(120) { engine.updatePolarityStability(0f, STEP) }
+        repeat(120) { engine.updatePolarityStability(STEP) }
+        engine.polarityStability = 0.2f
         engine.velocityX = 0f
         engine.velocityY = 700f
-        repeat(24) { engine.updatePolarityStability(0f, STEP) }
-        assertEquals(0.2f, engine.polarityStability, "Turning the core must be sustained after smoothing")
-        repeat(36) { engine.updatePolarityStability(0f, STEP) }
-        assertEquals(0.6f, engine.polarityStability, 0.0001f)
-        repeat(300) { engine.updatePolarityStability(0f, STEP) }
-        assertEquals(0.6f, engine.polarityStability, 0.0001f, "One changed heading must not repeatedly recharge")
+        repeat(24) { engine.updatePolarityStability(STEP) }
+        assertEquals(0.26f, engine.polarityStability, 0.0001f, "Only normal recovery before the turn is sustained")
+        repeat(36) { engine.updatePolarityStability(STEP) }
+        assertEquals(0.75f, engine.polarityStability, 0.0001f)
+        engine.polarityStability = 0.1f
+        repeat(300) { engine.updatePolarityStability(STEP) }
+        assertEquals(0.85f, engine.polarityStability, 0.0001f, "One changed heading must not repeatedly award a turn bonus")
     }
 
     @Test
     fun lowSpeedTurnsAndShortActualOscillationDoNotCount() {
         val engine = runningEngine().apply { velocityX = 100f }
-        repeat(600) { index ->
+        repeat(120) { index ->
             engine.velocityX = if (index % 2 == 0) 100f else -100f
-            engine.updatePolarityStability(0f, STEP)
+            engine.updatePolarityStability(STEP)
         }
-        assertEquals(0.2f, engine.polarityStability)
+        assertEquals(0.5f, engine.polarityStability, 0.0001f)
+        assertEquals(0f, engine.turnRecoveryCooldown)
         engine.velocityX = 700f
-        repeat(120) { engine.updatePolarityStability(0f, STEP) }
-        repeat(600) { index ->
+        repeat(120) { engine.updatePolarityStability(STEP) }
+        engine.polarityStability = 0.2f
+        repeat(120) { index ->
             engine.velocityY = if (index % 2 == 0) 700f else -700f
-            engine.updatePolarityStability(0f, STEP)
+            engine.updatePolarityStability(STEP)
         }
-        assertEquals(0.2f, engine.polarityStability)
+        assertEquals(0.5f, engine.polarityStability, 0.0001f)
+        assertEquals(0f, engine.turnRecoveryCooldown)
     }
 
     @Test
     fun recoveryCooldownPreventsRepeatedFastTurns() {
         val engine = runningEngine()
-        repeat(120) { engine.updatePolarityStability(0f, STEP) }
+        repeat(120) { engine.updatePolarityStability(STEP) }
+        engine.polarityStability = 0.2f
         engine.velocityX = 0f
         engine.velocityY = 700f
-        repeat(60) { engine.updatePolarityStability(0f, STEP) }
+        repeat(60) { engine.updatePolarityStability(STEP) }
         val recovered = engine.polarityStability
         engine.velocityX = -700f
         engine.velocityY = 0f
-        repeat(60) { engine.updatePolarityStability(0f, STEP) }
-        assertEquals(recovered, engine.polarityStability)
+        repeat(60) { engine.updatePolarityStability(STEP) }
+        assertEquals(recovered + 0.15f, engine.polarityStability, 0.0001f)
     }
 
     @Test
-    fun brakingRecoversAtLowActualSpeedOnlyAndAtConfiguredRate() {
+    fun brakingAcceleratesNormalRecoveryAtLowActualSpeedOnly() {
         val engine = runningEngine().apply { braking = true }
-        repeat(30) { engine.updatePolarityStability(0f, STEP) }
-        assertEquals(0.2f, engine.polarityStability)
+        repeat(30) { engine.updatePolarityStability(STEP) }
+        assertEquals(0.275f, engine.polarityStability, 0.0001f)
         engine.velocityX = 250f
-        repeat(60) { engine.updatePolarityStability(2_000f, STEP) }
-        assertEquals(0.6f, engine.polarityStability, 0.0001f)
+        repeat(60) { engine.updatePolarityStability(STEP) }
+        assertEquals(0.675f, engine.polarityStability, 0.0001f)
         engine.braking = false
         engine.velocityX = 0f
-        repeat(60) { engine.updatePolarityStability(0f, STEP) }
-        assertEquals(0.6f, engine.polarityStability, 0.0001f)
+        repeat(60) { engine.updatePolarityStability(STEP) }
+        assertEquals(0.825f, engine.polarityStability, 0.0001f)
     }
 
     @Test
@@ -121,12 +129,12 @@ class TetherSaturationTest {
     }
 
     @Test
-    fun exhaustedCoreCanPerformRealManeuverWithoutDash() {
+    fun exhaustedCoreCanRecenterAndPerformRealManeuverWithoutDash() {
         val engine = runningEngine().apply {
             polarityStability = 0f
             smoothedVelocityX = 700f
             turnHeadingEstablished = true
-            updatePointer(screenWidth * 0.5f, screenHeight)
+            updatePointer(screenWidth * 0.5f, screenHeight * 0.8f)
         }
         repeat(90) {
             engine.cameraX = engine.coreX
@@ -153,7 +161,7 @@ class TetherSaturationTest {
         assertEquals(engine.turnHoldTime, fork.turnHoldTime)
         assertEquals(engine.turnDirection, fork.turnDirection)
         assertEquals(engine.turnRecoveryCooldown, fork.turnRecoveryCooldown)
-        fork.updatePolarityStability(0f, STEP)
+        fork.updatePolarityStability(STEP)
         assertEquals(0.45f, engine.turnRecoveryCooldown)
         fork.startRun()
         assertEquals(0f, fork.turnRecoveryCooldown)

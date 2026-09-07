@@ -3,18 +3,11 @@
 
 package kinetickk.ball.profile.interaction.lab.impl
 
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.fillMaxSize
-import kinetickk.foundation.design.LocalAppLanguage
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.text.rememberTextMeasurer
 import kinetickk.ball.content.api.MetaUpgradeDefinition
 import kinetickk.ball.profile.api.ProfileAcceptance
 import kinetickk.ball.profile.api.ProfilePort
@@ -25,7 +18,6 @@ import kinetickk.ball.profile.interaction.audio.ProfileAudioExecutor
 import kinetickk.ball.profile.interaction.lab.api.LabFeature
 import kinetickk.ball.profile.interaction.lab.api.LabOutput
 import kinetickk.foundation.collections.ImmutableList
-import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.resource.audio.api.AudioService
 
 class DefaultLabFeature(
@@ -51,13 +43,6 @@ class DefaultLabFeature(
         val textScale = remember(profilePort, routeToken) {
             profilePort.query(ProfileQuery.GetPreferences).preferences.textScale
         }
-        val composeTextMeasurer = rememberTextMeasurer(cacheSize = 64)
-        val textMeasurer = CanvasTextMeasurer(
-            delegate = composeTextMeasurer,
-            language = LocalAppLanguage.current,
-            scale = textScale,
-        )
-
         fun dispatch(action: LabAction) {
             val reduction = LabReducer.reduce(LabState(renderModelValue), action)
             renderModelValue = reduction.state.model
@@ -79,23 +64,6 @@ class DefaultLabFeature(
             }
         }
 
-        Canvas(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(routeToken, renderModelValue, onOutput) {
-                    detectTapGestures { position ->
-                        resolveLabPress(
-                            model = renderModelValue,
-                            screenWidth = size.width.toFloat(),
-                            screenHeight = size.height.toFloat(),
-                            density = density,
-                            x = position.x,
-                            y = position.y,
-                        )?.let(::dispatch)
-                    }
-                },
-        ) {
-            drawLab(renderModelValue, textMeasurer)
-        }
+        LabContent(renderModelValue, textScale, ::dispatch)
     }
 }

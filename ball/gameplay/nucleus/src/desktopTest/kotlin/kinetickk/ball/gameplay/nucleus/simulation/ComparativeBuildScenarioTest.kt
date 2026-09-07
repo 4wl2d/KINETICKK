@@ -262,9 +262,16 @@ private fun runEncounter(
         }
         val desiredHeading = atan2(accelerationY, accelerationX)
         heading += atan2(sin(desiredHeading - heading), cos(desiredHeading - heading)).coerceIn(-0.08f, 0.08f)
-        val distance = ((length(accelerationX, accelerationY) - 92f) / game.magnetStrength / (if (game.overdriveTime > 0f) 1.3f else 1f)).coerceIn(90f, 480f)
-        game.updatePointer(game.coreX + cos(heading) * distance - game.cameraX + game.screenWidth / 2f,
-            game.coreY + sin(heading) * distance - game.cameraY + game.screenHeight / 2f)
+        // Full polarity needs a shorter tether for tight orbits than the old fatigued thrust did.
+        val distance = ((length(accelerationX, accelerationY) - 92f) / game.magnetStrength / (if (game.overdriveTime > 0f) 1.3f else 1f)).coerceIn(65f, 480f)
+        // Use the ordinary recovery area instead of straining the field at screen edges.
+        val edgeMargin = (1f - game.content.tempo.fatigue.edgeStrainStart) * 0.5f
+        game.updatePointer(
+            (game.coreX + cos(heading) * distance - game.cameraX + game.screenWidth / 2f)
+                .coerceIn(game.screenWidth * edgeMargin, game.screenWidth * (1f - edgeMargin)),
+            (game.coreY + sin(heading) * distance - game.cameraY + game.screenHeight / 2f)
+                .coerceIn(game.screenHeight * edgeMargin, game.screenHeight * (1f - edgeMargin)),
+        )
         val brake = when (shape) {
             CoreShape.PRISM -> frame % 180 in 120..160
             CoreShape.SHARD -> frame % 140 in 16..38 // Recover after a through-target dash before the revealing hit.

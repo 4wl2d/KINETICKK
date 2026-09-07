@@ -454,20 +454,20 @@ class GameplayCollectionBoundsTest {
     @Test
     fun arcCoilTargetsSixNearestAndLeavesSeventhUntouched() {
         val state = newState(seed = 909).apply {
-            weaponLevel = 9
+            weaponLevel = 18
         }
-        val candidates = List(MAX_ARC_COIL_TARGETS + 1) { index ->
+        val candidates = List(7) { index ->
             state.addEnemyForTesting(x = (index + 1) * 50f, y = 0f)
         }
 
         state.fireArcCoil(baseDamage = 25f)
 
-        candidates.take(MAX_ARC_COIL_TARGETS).forEach { enemy ->
+        candidates.take(6).forEach { enemy ->
             assertTrue(enemy.hp < enemy.maxHp)
         }
         assertEquals(candidates.last().maxHp, candidates.last().hp)
         assertEquals(
-            MAX_ARC_COIL_TARGETS,
+            6,
             state.takeVisualFxCues().count { cue -> cue is VisualFxCue.WeaponArcAdded },
         )
     }

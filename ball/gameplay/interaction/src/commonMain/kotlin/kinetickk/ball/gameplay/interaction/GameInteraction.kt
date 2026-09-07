@@ -7,8 +7,16 @@ import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.LocalAppLanguage
+import kinetickk.foundation.design.InterfaceGlyph
+import kinetickk.foundation.design.drawInterfaceGlyph
+import kinetickk.foundation.design.White
+import kinetickk.foundation.design.Muted
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Alignment
@@ -22,6 +30,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.NonRestartableComposable
@@ -62,6 +71,8 @@ import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayAcceptance
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.foundation.design.CanvasTextMeasurer
+import kinetickk.foundation.design.LocalCrashDiagnostics
+import kinetickk.foundation.diagnostics.CrashDiagnostics
 import kinetickk.ball.gameplay.interaction.canvas.drawGameplay
 import kinetickk.ball.gameplay.interaction.canvas.drawPerformanceHud
 import kinetickk.ball.gameplay.interaction.canvas.shouldDrawRunningPresentation
@@ -75,12 +86,12 @@ import kinetickk.ball.gameplay.interaction.input.resolveGameplayPress
 import kinetickk.ball.gameplay.interaction.layout.PauseTarget
 import kinetickk.ball.gameplay.interaction.layout.PauseLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
-import kinetickk.ball.gameplay.interaction.layout.TerminalLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.choiceLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
-import kinetickk.ball.gameplay.interaction.layout.terminalLayoutGeometry
 import kinetickk.ball.gameplay.interaction.rewards.RewardContent
+import kinetickk.ball.gameplay.interaction.terminal.TerminalContent
+import kinetickk.ball.gameplay.interaction.terminal.terminalActionsReady
 import kinetickk.ball.gameplay.interaction.performance.GameplayPerformanceSnapshot
 import kinetickk.ball.gameplay.interaction.performance.GameplayPerformanceTelemetry
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
@@ -101,6 +112,7 @@ fun GameplayContent(
     onOutput: (GameplayInteractionOutput) -> Unit,
 ) {
     val language = LocalAppLanguage.current
+    val diagnostics = LocalCrashDiagnostics.current
     val focusRequester = remember(component) { FocusRequester() }
     val composeTextMeasurer = rememberTextMeasurer(cacheSize = 64)
     val localDensity = LocalDensity.current
@@ -125,15 +137,29 @@ fun GameplayContent(
         collectPerformance: Boolean = performanceEnabledValue,
     ) {
         val dispatchStartedAt = if (collectPerformance) TimeSource.Monotonic.markNow() else null
+        if (diagnostics !== CrashDiagnostics.None) {
+            val before = component.renderSnapshot()
+            diagnostics.context("gameplay.before-input") { before.crashContext() }
+            diagnostics.context("gameplay.input") { pulse.crashDescription() }
+            diagnostics.event("gameplay.input", pulse.crashDescription(),
+                highFrequency = pulse is GameplayInteractionPulse.FrameElapsed ||
+                    pulse is GameplayInteractionPulse.PointerMoved)
+        }
         val acceptance = try {
             component.accept(pulse)
         } catch (failure: Throwable) {
-            val committed = component.renderSnapshot()
             // A target can publish atomically and then surface a deferred side-effect fault.
             // Republishing the immutable values is also harmless for a pre-commit fault because
             // Compose suppresses equal assignments, so the hot success path needs no pre-query.
-            renderModelValue = requireNotNull(committed.renderModel)
-            visualFxProjectionValue = component.visualFxSnapshot()
+            try {
+                val committed = component.renderSnapshot()
+                renderModelValue = requireNotNull(committed.renderModel)
+                visualFxProjectionValue = component.visualFxSnapshot()
+                diagnostics.context("gameplay.committed") { committed.crashContext() }
+            } catch (snapshotFailure: Throwable) {
+                if (snapshotFailure !== failure) failure.addSuppressed(snapshotFailure)
+            }
+            diagnostics.event("gameplay.failure", failure.toString())
             throw failure
         }
         when (acceptance) {
@@ -142,6 +168,10 @@ fun GameplayContent(
                 visualFxProjectionValue = component.visualFxSnapshot()
             }
             is GameplayAcceptance.Rejected -> Unit
+        }
+        if (diagnostics !== CrashDiagnostics.None) {
+            val committed = component.renderSnapshot()
+            diagnostics.context("gameplay.committed") { committed.crashContext() }
         }
         if (dispatchStartedAt != null) {
             performanceTelemetry.recordDispatchPipelineMillis(
@@ -276,21 +306,10 @@ fun GameplayContent(
     } else {
         null
     }
-    val terminalLayout = if (
-        renderModelValue.phase == GamePhase.GAME_OVER ||
-        renderModelValue.phase == GamePhase.VICTORY
-    ) {
-        remember(layoutDimensions, renderModelValue.phase) {
-            terminalLayoutGeometry(
-                layoutDimensions.width,
-                layoutDimensions.height,
-                layoutDimensions.scale,
-                victory = renderModelValue.phase == GamePhase.VICTORY,
-            )
-        }
-    } else {
-        null
-    }
+    val terminal = renderModelValue.phase == GamePhase.GAME_OVER || renderModelValue.phase == GamePhase.VICTORY
+    val terminalStartedAt = remember(component, renderModelValue.phase) { renderTimeSecondsValue }
+    val terminalElapsed = if (terminal) (renderTimeSecondsValue - terminalStartedAt).coerceAtLeast(0f) else 0f
+    val terminalReady = terminalActionsReady(terminalElapsed, renderModelValue.phase == GamePhase.VICTORY)
     val performanceHudProjection = if (performanceEnabledValue) {
         remember(performanceSnapshotValue, language) {
             performanceSnapshotValue.toPerformanceHudProjection(language)
@@ -323,6 +342,7 @@ fun GameplayContent(
                     return@onKeyEvent keyDown(event.type, ::togglePerformanceTelemetry)
                 }
                 if (!inputEnabled) return@onKeyEvent false
+                if (terminal && !terminalReady) return@onKeyEvent true
                 if (event.type == KeyEventType.KeyDown) {
                     dispatch(GameplayInteractionPulse.UserGestureObserved)
                 }
@@ -431,7 +451,10 @@ fun GameplayContent(
                             val position = event.changes.firstOrNull()?.position
                             val pressed = event.changes.any { it.pressed }
                             val currentRenderModel = renderModelValue
-                            if (currentRenderModel.phase == GamePhase.CHOICE) {
+                            if (currentRenderModel.phase == GamePhase.CHOICE ||
+                                currentRenderModel.phase == GamePhase.GAME_OVER ||
+                                currentRenderModel.phase == GamePhase.VICTORY
+                            ) {
                                 wasPressedValue = false
                                 hudGestureActiveValue = false
                                 continue
@@ -497,7 +520,7 @@ fun GameplayContent(
                 textMeasurer = textMeasurer,
                 renderTime = renderTimeSecondsValue,
                 pauseLayout = pauseLayout,
-                terminalLayout = terminalLayout,
+                terminalElapsed = terminalElapsed,
             )
             if (drawStartedAt != null) {
                 // State writes can invalidate the draw scope before recomposition publishes the
@@ -513,6 +536,12 @@ fun GameplayContent(
                 performanceTelemetry.recordCanvasDrawMillis(
                     drawStartedAt.elapsedNow().toDouble(DurationUnit.MILLISECONDS),
                 )
+            }
+        }
+        if (terminal) {
+            TerminalContent(renderModelValue, terminalElapsed, inputEnabled) { input ->
+                dispatch(GameplayInteractionPulse.UserGestureObserved)
+                dispatchInput(input)
             }
         }
         if (renderModelValue.phase == GamePhase.CHOICE) {
@@ -532,13 +561,14 @@ fun GameplayContent(
             )
         }
         if (inputEnabled && (renderModelValue.phase == GamePhase.RUNNING || renderModelValue.phase == GamePhase.PAUSED || renderModelValue.phase == GamePhase.CHOICE)) {
-            BasicText(
-                text = language.text(GameplayText.Build),
-                modifier = Modifier.align(if (renderModelValue.phase != GamePhase.RUNNING) Alignment.TopStart else Alignment.BottomCenter).padding(8.dp)
-                    .background(Color(0xEE142338))
-                    .clickable(role = Role.Button) { onOutput(GameplayInteractionOutput.OpenCodex) }
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                style = TextStyle(color = Color(0xFF4FE9F5), fontSize = (12f * renderModelValue.settings.textScale).sp),
+            BuildButton(
+                modifier = Modifier.align(when {
+                    renderModelValue.phase != GamePhase.RUNNING -> Alignment.TopStart
+                    kinetickk.ball.gameplay.interaction.layout.gameplayLayoutMode(renderModelValue.screenWidth, renderModelValue.screenHeight, density) == kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode.REGULAR -> Alignment.BottomStart
+                    else -> Alignment.BottomCenter
+                }).padding(12.dp),
+                textScale = renderModelValue.settings.textScale,
+                onClick = { onOutput(GameplayInteractionOutput.OpenCodex) },
             )
         }
         if (inputEnabled) {
@@ -547,7 +577,6 @@ fun GameplayContent(
                 density = localDensity,
                 performanceEnabled = performanceEnabledValue,
                 pauseLayout = pauseLayout,
-                terminalLayout = terminalLayout,
                 onInput = { input ->
                     dispatch(GameplayInteractionPulse.UserGestureObserved)
                     dispatchInput(input)
@@ -572,7 +601,6 @@ private fun GameplaySemanticControls(
     density: Density,
     performanceEnabled: Boolean,
     pauseLayout: PauseLayoutGeometry?,
-    terminalLayout: TerminalLayoutGeometry?,
     onInput: (GameplayInput) -> Unit,
     onBrakeChanged: (Boolean) -> Unit,
 ) {
@@ -656,32 +684,8 @@ private fun GameplaySemanticControls(
             }
         }
         GamePhase.CHOICE -> Unit // RewardContent owns the visible Compose actions.
-        GamePhase.GAME_OVER, GamePhase.VICTORY -> {
-            val layout = requireNotNull(terminalLayout)
-            GameplaySemanticAction(
-                bounds = layout.restart,
-                density = density,
-                tag = "kinetickk.gameplay.restart",
-                description = language.text(GameplayText.RestartDescription),
-                onClick = { onInput(GameplayInput.RestartRun) },
-            )
-            layout.rebirth?.let { bounds ->
-                GameplaySemanticAction(
-                    bounds = bounds,
-                    density = density,
-                    tag = "kinetickk.gameplay.rebirth",
-                    description = language.text(GameplayText.RebirthDescription),
-                    onClick = { onInput(GameplayInput.OpenRebirth) },
-                )
-            }
-            GameplaySemanticAction(
-                bounds = layout.exit,
-                density = density,
-                tag = "kinetickk.gameplay.exit",
-                description = language.text(GameplayText.ExitDescription),
-                onClick = { onInput(GameplayInput.ExitToHome) },
-            )
-        }
+        GamePhase.GAME_OVER, GamePhase.VICTORY -> Unit // TerminalContent owns native buttons.
+
     }
 }
 
@@ -812,4 +816,28 @@ private inline fun keyDown(type: KeyEventType, action: () -> Unit): Boolean {
 
 private fun reportInvalidInteractionInput(failure: ValidationFailure) {
     println("KINETICKK interaction input dropped: ${failure.code}")
+}
+
+@Composable
+private fun BuildButton(modifier: Modifier, textScale: Float, onClick: () -> Unit) {
+    val label = LocalAppLanguage.current.text(GameplayText.Build)
+    val interactions = remember { MutableInteractionSource() }
+    val focused by interactions.collectIsFocusedAsState()
+    val hovered by interactions.collectIsHoveredAsState()
+    Box(modifier) {
+        Box(Modifier.size(48.dp).background(if (focused || hovered) Color(0xFF292D34) else Color(0xE6101216))
+            .testTag("kinetickk.gameplay.build")
+            .semantics { contentDescription = label }
+            .hoverable(interactions)
+            .clickable(interactionSource = interactions, indication = null, role = Role.Button, onClick = onClick)) {
+            Canvas(Modifier.fillMaxSize().padding(13.dp)) {
+                drawInterfaceGlyph(InterfaceGlyph.LAYERS, center.copy(y = center.y - 3.dp.toPx()), 9.dp.toPx(), White)
+            }
+            BasicText("I", Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp), TextStyle(color = Muted, fontSize = 8.sp))
+        }
+        if (focused || hovered) {
+            BasicText(label, Modifier.offset(x = 54.dp).background(Color(0xFF191C22)).padding(10.dp),
+                TextStyle(color = White, fontSize = (11f * textScale).sp))
+        }
+    }
 }

@@ -24,7 +24,7 @@ data class GameplayRunStatusProjection(
     override val instanceId: GameplayInstanceId,
     override val revision: GameplayRevision,
     val phase: GameplayRunPhase,
-    val profileCommandPending: Boolean,
+    val progressPending: Boolean,
 ) : GameplayProjection
 
 data class GameplayActiveWeaponProjection(
@@ -66,16 +66,9 @@ data class BuildSynergySummary(
     val missingComponents: ImmutableList<String>,
 )
 
-/** AppSession's source-bound command route and sole workflow read. */
-interface GameplaySessionRunPort {
+/** Lifecycle, settings and status capabilities of one bound GameplayRun. */
+interface GameplayRunPort : GameplaySettings, GameplayLifecycle {
     val instanceId: GameplayInstanceId
-
-    fun acceptFromSession(
-        request: GameplayModuleCommandRequest,
-        causalScope: Long,
-        causalDepth: Int,
-    ): GameplayCommandIngressResult
-
     fun query(query: GameplayQuery.GetRunStatus): GameplayRunStatusProjection
 }
 

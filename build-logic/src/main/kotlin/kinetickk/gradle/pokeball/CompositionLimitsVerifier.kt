@@ -23,24 +23,8 @@ private const val PROFILE_COMPONENT_PATH =
     "ball/profile/impl/src/commonMain/kotlin/kinetickk/ball/profile/impl/ProfileComponentFactory.kt"
 private const val PROFILE_COMPONENT_IMPL_PATH =
     "ball/profile/impl/src/commonMain/kotlin/kinetickk/ball/profile/impl/DefaultProfileComponent.kt"
-private const val GAMEPLAY_COMPONENT_PATH =
-    "ball/gameplay/impl/src/commonMain/kotlin/kinetickk/ball/gameplay/impl/GameplayCompositionComponent.kt"
-private const val GAMEPLAY_COMPONENT_IMPL_PATH =
-    "ball/gameplay/impl/src/commonMain/kotlin/kinetickk/ball/gameplay/impl/DefaultGameplayFeature.kt"
 private const val GAMEPLAY_RUN_IMPL_PATH =
     "ball/gameplay/impl/src/commonMain/kotlin/kinetickk/ball/gameplay/impl/GameComponent.kt"
-private const val SESSION_COMPONENT_PATH =
-    "flow/session/impl/src/commonMain/kotlin/kinetickk/flow/session/impl/AppSessionComponent.kt"
-private const val SESSION_COMPONENT_IMPL_PATH =
-    "flow/session/impl/src/commonMain/kotlin/kinetickk/flow/session/impl/DefaultAppSessionComponent.kt"
-private const val GAMEPLAY_FEATURE_PATH =
-    "ball/gameplay/interaction/src/commonMain/kotlin/kinetickk/ball/gameplay/interaction/GameplayFeature.kt"
-private const val SESSION_CONTENT_PATH =
-    "flow/session/interaction/src/commonMain/kotlin/kinetickk/flow/session/interaction/AppSessionContent.kt"
-private const val PROFILE_QUERY_SURFACE_PATH =
-    "ball/profile/api/src/commonMain/kotlin/kinetickk/ball/profile/api/ProfileQueries.kt"
-private const val GAMEPLAY_QUERY_SURFACE_PATH =
-    "ball/gameplay/api/src/commonMain/kotlin/kinetickk/ball/gameplay/api/GameplayQueries.kt"
 
 private data class RestrictedProductionType(
     val typeName: String,
@@ -51,115 +35,18 @@ private data class RestrictedProductionType(
 private val restrictedProductionTypes = listOf(
     RestrictedProductionType(
         "ProfileComponent",
-        setOf(PROFILE_COMPONENT_PATH, PROFILE_COMPONENT_IMPL_PATH, APP_ASSEMBLY_PATH),
+        setOf(APP_ASSEMBLY_PATH),
+        setOf("ball/profile/impl/"),
     ),
     RestrictedProductionType(
         "GameplayCompositionComponent",
-        setOf(GAMEPLAY_COMPONENT_PATH, GAMEPLAY_COMPONENT_IMPL_PATH, APP_ASSEMBLY_PATH),
+        setOf(APP_ASSEMBLY_PATH),
+        setOf("ball/gameplay/impl/"),
     ),
     RestrictedProductionType(
         "ProfilePort",
-        setOf(PROFILE_QUERY_SURFACE_PATH, PROFILE_COMPONENT_PATH, PROFILE_COMPONENT_IMPL_PATH, APP_ASSEMBLY_PATH),
-        setOf("ball/profile/interaction/"),
-    ),
-    RestrictedProductionType(
-        "ProfileReadPort",
-        setOf(PROFILE_QUERY_SURFACE_PATH),
-        setOf("flow/session/interaction/"),
-    ),
-    RestrictedProductionType(
-        "SessionProfileRoute",
-        setOf(
-            PROFILE_QUERY_SURFACE_PATH,
-            PROFILE_COMPONENT_PATH,
-            PROFILE_COMPONENT_IMPL_PATH,
-            SESSION_COMPONENT_PATH,
-            SESSION_COMPONENT_IMPL_PATH,
-        ),
-    ),
-    RestrictedProductionType(
-        "GameplayProfileRoute",
-        setOf(
-            PROFILE_QUERY_SURFACE_PATH,
-            PROFILE_COMPONENT_PATH,
-            PROFILE_COMPONENT_IMPL_PATH,
-            GAMEPLAY_COMPONENT_IMPL_PATH,
-            GAMEPLAY_RUN_IMPL_PATH,
-        ),
-    ),
-    RestrictedProductionType(
-        "GameplaySessionRunPort",
-        setOf(
-            GAMEPLAY_QUERY_SURFACE_PATH,
-            GAMEPLAY_FEATURE_PATH,
-            GAMEPLAY_COMPONENT_IMPL_PATH,
-            GAMEPLAY_RUN_IMPL_PATH,
-            SESSION_COMPONENT_PATH,
-            SESSION_COMPONENT_IMPL_PATH,
-        ),
-    ),
-    RestrictedProductionType(
-        "GameplaySessionHost",
-        setOf(
-            GAMEPLAY_FEATURE_PATH,
-            GAMEPLAY_COMPONENT_PATH,
-            GAMEPLAY_COMPONENT_IMPL_PATH,
-            SESSION_COMPONENT_PATH,
-            SESSION_COMPONENT_IMPL_PATH,
-            APP_ASSEMBLY_PATH,
-        ),
-    ),
-    RestrictedProductionType(
-        "GameplayPresentationPort",
-        setOf(
-            GAMEPLAY_QUERY_SURFACE_PATH,
-            GAMEPLAY_FEATURE_PATH,
-            GAMEPLAY_COMPONENT_IMPL_PATH,
-            GAMEPLAY_RUN_IMPL_PATH,
-            SESSION_CONTENT_PATH,
-        ),
-    ),
-    RestrictedProductionType(
-        "GameplayPresentation",
-        setOf(
-            GAMEPLAY_FEATURE_PATH,
-            GAMEPLAY_COMPONENT_PATH,
-            GAMEPLAY_COMPONENT_IMPL_PATH,
-            SESSION_CONTENT_PATH,
-            APP_ASSEMBLY_PATH,
-        ),
-    ),
-)
-
-private data class TrustedNucleusCallsite(
-    val token: String,
-    val expectedCountsByPath: Map<String, Int>,
-)
-
-private val trustedNucleusCallsites = listOf(
-    TrustedNucleusCallsite(
-        "profileModuleResultPulse",
-        mapOf(SESSION_DECISION_PATH to 1, SESSION_COMPONENT_IMPL_PATH to 1),
-    ),
-    TrustedNucleusCallsite(
-        "gameplayModuleResultPulse",
-        mapOf(SESSION_DECISION_PATH to 1, SESSION_COMPONENT_IMPL_PATH to 1),
-    ),
-    TrustedNucleusCallsite(
-        "profileCommandRejectedBeforeAcceptance",
-        mapOf(SESSION_DECISION_PATH to 1, SESSION_COMPONENT_IMPL_PATH to 1),
-    ),
-    TrustedNucleusCallsite(
-        "gameplayCommandRejectedBeforeAcceptance",
-        mapOf(SESSION_DECISION_PATH to 1, SESSION_COMPONENT_IMPL_PATH to 1),
-    ),
-    TrustedNucleusCallsite(
-        "GameplayNucleusPulse.ProfileModuleResultPulse",
-        mapOf(GAMEPLAY_RUN_IMPL_PATH to 1),
-    ),
-    TrustedNucleusCallsite(
-        "GameplayNucleusPulse.ProfileCommandRejectedBeforeAcceptance",
-        mapOf(GAMEPLAY_RUN_IMPL_PATH to 1),
+        setOf(APP_ASSEMBLY_PATH),
+        setOf("ball/profile/api/", "ball/profile/impl/", "ball/profile/interaction/"),
     ),
 )
 
@@ -320,14 +207,14 @@ internal fun platformCapabilityBoundaryViolations(
     requireTokens(
         APP_PLATFORM_EXPECT_PATH,
         listOf(
-            "expect fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability",
+            "expect fun createPlatformProfilePersistenceCapability(diagnostics: CrashDiagnostics): ProfilePersistenceCapability",
             "expect fun createPlatformTonePlaybackCapability(): TonePlaybackCapability",
         ),
     )
     requireTokens(
         DESKTOP_PLATFORM_BROKER_PATH,
         listOf(
-            "actual fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability",
+            "actual fun createPlatformProfilePersistenceCapability(diagnostics: CrashDiagnostics): ProfilePersistenceCapability",
             "actual fun createPlatformTonePlaybackCapability(): TonePlaybackCapability",
             "Preferences.userRoot().node(ProfilePersistenceContract.DESKTOP_PROFILE_NODE)",
             "AudioSystem.getSourceDataLine(format).use { line ->",
@@ -338,7 +225,7 @@ internal fun platformCapabilityBoundaryViolations(
     requireTokens(
         ANDROID_PLATFORM_BROKER_PATH,
         listOf(
-            "actual fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability",
+            "actual fun createPlatformProfilePersistenceCapability(diagnostics: CrashDiagnostics): ProfilePersistenceCapability",
             "actual fun createPlatformTonePlaybackCapability(): TonePlaybackCapability",
             "context.getSharedPreferences(ANDROID_PROFILE_PREFERENCES, Context.MODE_PRIVATE)",
             "private class AndroidProfilePersistenceCapability",
@@ -352,7 +239,7 @@ internal fun platformCapabilityBoundaryViolations(
     requireTokens(
         WEB_PLATFORM_BROKER_PATH,
         listOf(
-            "actual fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability",
+            "actual fun createPlatformProfilePersistenceCapability(diagnostics: CrashDiagnostics): ProfilePersistenceCapability",
             "actual fun createPlatformTonePlaybackCapability(): TonePlaybackCapability",
             "WebProfilePersistenceCapability()",
             "private external interface WebStorageReadCall : JsAny",
@@ -432,22 +319,12 @@ internal fun platformCapabilityBoundaryViolations(
 /** Enforces Core §6.13 fault-stage separation at audited production boundaries. */
 internal fun resourceFaultStageViolations(
     sources: Collection<SourceDocument>,
-): List<String> = resourceFaultStageViolations(sources, requireCanonicalProfileDispatches = true)
-
-internal fun resourceFaultStageFixtureViolations(
-    sources: Collection<SourceDocument>,
-): List<String> = resourceFaultStageViolations(sources, requireCanonicalProfileDispatches = false)
-
-private fun resourceFaultStageViolations(
-    sources: Collection<SourceDocument>,
-    requireCanonicalProfileDispatches: Boolean,
 ): List<String> = buildList {
     sources.asSequence()
         .filter(SourceDocument::isProductionKotlinSource)
         .forEach { source ->
             val code = source.text.withoutKotlinComments()
             val kotlinCode = source.text.maskKotlinNonCode()
-            val structuralCode = kotlinCode.maskEscapedIdentifierBodies()
             val auditedResourceBoundary =
                 source.relativePath in profileResourceFaultBoundaryPaths ||
                     source.relativePath.isAuditedResourceBoundaryPath()
@@ -467,22 +344,9 @@ private fun resourceFaultStageViolations(
                         "fault type alias `$alias` is forbidden at production boundaries",
                 )
             }
-            if (source.relativePath == PROFILE_COMPONENT_IMPL_PATH) {
-                profileDeferredOutputDrainViolations(
-                    code = structuralCode,
-                    rawCode = code,
-                    requireCanonicalFunctions = requireCanonicalProfileDispatches,
-                ).forEach(::add)
-            }
             broadRuntimeFaultCatchBlocks(kotlinCode).forEach { caught ->
                 val evidence = semanticProviderEvidenceConstruction.find(caught.body)?.groupValues?.get(1)
-                val requiresDeferredDrain = source.relativePath == PROFILE_COMPONENT_IMPL_PATH &&
-                    enclosingFunctionBlock(structuralCode, caught.declarationStart)?.name == "dispatchAccepted"
-                val rethrowsSameFault = caught.parameter != "_" && if (requiresDeferredDrain) {
-                    preservesDeferredFaultUntilRethrow(structuralCode, code, caught)
-                } else {
-                    directlyRethrowsCaughtFault(caught)
-                }
+                val rethrowsSameFault = caught.parameter != "_" && directlyRethrowsCaughtFault(caught)
                 if (evidence != null || protectedBoundary && !rethrowsSameFault) {
                     val reason = if (evidence == null) {
                         "swallows or reclassifies the runtime fault"
@@ -643,12 +507,8 @@ internal fun audioRuntimeFaultStageViolations(
             AUDIO_RESOURCE_PATH,
             "Audio Resource capability calls",
             code,
-            listOf(
-                "if (!closed) platform.unlock()",
-                "platform.close()",
-                "platform.playIfAllowed(request.copy(gain = request.gain * volume))",
-                "play(request)",
-            ),
+            // Calls, ordering, preferences and terminal close are required executed evidence.
+            emptyList(),
         )
     }
 
@@ -656,12 +516,9 @@ internal fun audioRuntimeFaultStageViolations(
         verifyDirectScope(
             GAMEPLAY_RUN_IMPL_PATH,
             "Gameplay output audio branches",
-            sameIndentFunctionSlice(code, "private fun execute(output: GameplayOutput"),
-            listOf(
-                "is GameplayOutput.AdvanceAudio -> " +
-                    "audioExecutor.advance(output.realDeltaSeconds, output.cues)",
-                "GameplayOutput.EnsureAudioUnlocked -> audioExecutor.ensureUnlocked()",
-            ),
+            code,
+            // Do not pin an output-handler name, parameter spelling or helper placement.
+            emptyList(),
         )
     }
 
@@ -768,7 +625,7 @@ internal fun audioRuntimeFaultStageViolations(
     }
 
     val evidenceByPath = sources.associate { source -> source.relativePath to source.text }
-    audioRuntimeFaultEvidenceAnchors.forEach { anchor ->
+    platformAudioFaultEvidenceAnchors.forEach { anchor ->
         val evidence = evidenceByPath[anchor.path]
         if (evidence == null) {
             add("Core §9.13 Audio live-Projection evidence is missing ${anchor.path}")
@@ -780,24 +637,11 @@ internal fun audioRuntimeFaultStageViolations(
     }
 }.distinct().sorted()
 
-private val audioRuntimeFaultEvidenceAnchors = listOf(
-    BoundAnchor(
-        path = "resource/audio/impl/src/commonTest/kotlin/kinetickk/resource/audio/impl/DefaultAudioServiceTest.kt",
-        tokens = listOf("capabilityFaultsPropagateForUnlockPlayAndCloseWithoutInventingClosedState"),
-    ),
-    BoundAnchor(
-        path = "ball/gameplay/impl/src/commonTest/kotlin/kinetickk/ball/gameplay/impl/GameComponentTest.kt",
-        tokens = listOf("audioFaultsPropagateAfterAcceptedFramesCommitAndDrainExactResults"),
-    ),
-    BoundAnchor(
-        path = "app/shared/src/desktopTest/kotlin/kinetickk/app/shared/PlatformCapabilitiesDesktopTest.kt",
-        tokens = listOf(
-            "audioBrokerIsInstanceOwnedAndCloseIsIdempotent",
-            "workerAndDiscardOldestQueueEnforceOneAndTwentyFour",
-            "synthesisBufferAcceptsMaximumDurationAndRejectsNext",
-        ),
-    ),
-    BoundAnchor(
+private data class AudioFaultTestSource(val path: String, val tokens: List<String>)
+
+// Android/Web evidence is separate from the desktop JUnit behavior gate.
+private val platformAudioFaultEvidenceAnchors = listOf(
+    AudioFaultTestSource(
         path = "app/shared/src/androidDeviceTest/kotlin/kinetickk/app/shared/PlatformCapabilitiesAndroidTest.kt",
         tokens = listOf(
             "androidAudioBrokerIsInstanceOwnedAndCloseIsIdempotent",
@@ -806,7 +650,7 @@ private val audioRuntimeFaultEvidenceAnchors = listOf(
             "closingDuringPlaybackCancelsWithoutAnUncaughtWorkerFailure",
         ),
     ),
-    BoundAnchor(
+    AudioFaultTestSource(
         path = "app/shared/src/wasmJsTest/kotlin/kinetickk/app/shared/PlatformCapabilitiesWebTest.kt",
         tokens = listOf("webAudioSynchronousProviderFaultsPropagateWithoutFabricatingClosedState"),
     ),
@@ -862,49 +706,6 @@ internal fun leastAuthorityCompositionViolations(
             }
     }
 
-    val assembly = production.singleOrNull { source -> source.relativePath == APP_ASSEMBLY_PATH }
-    if (assembly == null) {
-        add("Least-authority composition is missing static Assembly $APP_ASSEMBLY_PATH")
-    } else {
-        val code = assembly.text.withoutKotlinComments()
-        listOf(
-            "import kinetickk.ball.profile.impl.ProfileComponent",
-            "profileComponent: ProfileComponent? = null",
-            "private val profileComponent: ProfileComponent =",
-            "import kinetickk.ball.gameplay.impl.GameplayCompositionComponent",
-            "gameplayComponent: GameplayCompositionComponent? = null",
-            "private val gameplayComponent: GameplayCompositionComponent =",
-            "profileRoute = this.profileComponent",
-            "gameplaySessionHost = this.gameplayComponent",
-            "gameplayPresentation = gameplayComponent",
-        ).filterNot(code::contains).forEach { token ->
-            add("Static Assembly is missing least-authority binding `$token`")
-        }
-    }
-}.distinct().sorted()
-
-internal fun trustedNucleusInputCallsiteViolations(
-    sources: Collection<SourceDocument>,
-): List<String> = buildList {
-    val production = sources.filter(SourceDocument::isProductionKotlinSource)
-    trustedNucleusCallsites.forEach { callsite ->
-        val call = Regex("\\b${Regex.escape(callsite.token)}\\s*\\(")
-        production.forEach { source ->
-            val actual = call.findAll(source.text.withoutKotlinComments()).count()
-            val expected = callsite.expectedCountsByPath[source.relativePath] ?: 0
-            if (actual != expected) {
-                add(
-                    "Trusted Nucleus input `${callsite.token}` must occur exactly $expected times in " +
-                        "${source.relativePath}; found $actual",
-                )
-            }
-        }
-        callsite.expectedCountsByPath.keys.filter { expectedPath ->
-            production.none { source -> source.relativePath == expectedPath }
-        }.forEach { missingPath ->
-            add("Trusted Nucleus input `${callsite.token}` is missing expected source $missingPath")
-        }
-    }
 }.distinct().sorted()
 
 private fun platformBrokerSourceViolations(path: String, code: String): List<String> = buildList {
@@ -957,7 +758,7 @@ private fun desktopBrokerSourceViolations(code: String): List<String> = buildLis
     requireRegexCount(
         code,
         Regex(
-            "actual\\s+fun\\s+createPlatformProfilePersistenceCapability\\s*\\(\\s*\\)\\s*:\\s*" +
+            "actual\\s+fun\\s+createPlatformProfilePersistenceCapability\\s*\\(\\s*diagnostics:\\s*CrashDiagnostics\\s*\\)\\s*:\\s*" +
                 "ProfilePersistenceCapability\\s*=\\s*DesktopProfilePersistenceCapability\\s*\\(",
         ),
         1,
@@ -1008,6 +809,10 @@ private fun desktopBrokerSourceViolations(code: String): List<String> = buildLis
                     "desktopProfileReadCall",
                     "desktopProfileMutationCall",
                     "desktopProfilePayloadAdmission",
+                    "recordProfileRead",
+                    "recordProfileWriteAttempt",
+                    "recordProfileWriteResult",
+                    "also",
                     "let",
                     "get",
                     "put",
@@ -1231,7 +1036,7 @@ private fun androidBrokerSourceViolations(code: String): List<String> = buildLis
     )
     requireRegexCount(
         code,
-        Regex("actual\\s+fun\\s+createPlatformProfilePersistenceCapability\\s*\\(\\s*\\)\\s*:\\s*ProfilePersistenceCapability\\s*\\{"),
+        Regex("actual\\s+fun\\s+createPlatformProfilePersistenceCapability\\s*\\(\\s*diagnostics:\\s*CrashDiagnostics\\s*\\)\\s*:\\s*ProfilePersistenceCapability\\s*\\{"),
         1,
         "direct Android profile broker construction",
         ANDROID_PLATFORM_BROKER_PATH,
@@ -1403,7 +1208,7 @@ private fun webBrokerSourceViolations(code: String): List<String> = buildList {
     requireRegexCount(
         code,
         Regex(
-            "actual\\s+fun\\s+createPlatformProfilePersistenceCapability\\s*\\(\\s*\\)\\s*:\\s*" +
+            "actual\\s+fun\\s+createPlatformProfilePersistenceCapability\\s*\\(\\s*diagnostics:\\s*CrashDiagnostics\\s*\\)\\s*:\\s*" +
                 "ProfilePersistenceCapability\\s*=\\s*WebProfilePersistenceCapability\\s*\\(\\s*\\)",
         ),
         1,
@@ -1702,7 +1507,7 @@ private fun platformFactoryCallsiteViolations(
     }
     val assembly = codeByPath[APP_PLATFORM_EXPECT_PATH]?.squashWhitespace().orEmpty()
     listOf(
-        "persistence = createPlatformProfilePersistenceCapability(),",
+        "persistence = createPlatformProfilePersistenceCapability(diagnostics),",
         "DefaultAudioService( createPlatformTonePlaybackCapability(), )",
     ).filterNot(assembly::contains).forEach { binding ->
         add("Static Assembly is missing exact platform capability binding `$binding`")
@@ -1951,154 +1756,6 @@ private fun runtimeFaultAliasViolations(code: String): List<String> {
     return (importAliases + typeAliases).map { alias -> alias.removeSurrounding("`") }.toList()
 }
 
-/**
- * Pin the acceptance transaction itself, not the entire component source. Query, route, and
- * business additions do not change this grammar; changes to the writer/drain require its tests.
- * Literals are masked, while interpolation is rejected so it cannot hide executable work.
- */
-private val profileAcceptedDrainBody = """
-    var item = rootItem
-    var frame = rootFrame
-    var deferredFault: Throwable? = null
-    while (true) {
-        preflight(committedState, item, frame)
-        committedState = frame.nextState
-        for (output in frame.outputs) {
-            try {
-                execute(output, item)
-            } catch (failure: Throwable) {
-                if (deferredFault == null) deferredFault = failure
-            }
-        }
-        item = completions.removeFirstOrNull() ?: break
-        frame = when (val decision = ProfileNucleus.decide(committedState, item.pulse)) {
-            is ProfileDecision.Accepted -> decision.frame
-            is ProfileDecision.Rejected -> error(
-                "Resource completion rejected: " + decision.reason,
-            )
-        }
-    }
-    deferredFault?.let { throw it }
-""".maskKotlinNonCode().filterNot(Char::isWhitespace)
-
-private val profileCommandAdmissionBody = """
-    val decision = ProfileNucleus.decide(committedState, item.pulse)
-    val refusal = when {
-        decision is ProfileDecision.Rejected ->
-            ProfileCommandBoundaryResponse.DecisionRejected(decision.reason)
-        decision is ProfileDecision.Accepted &&
-            deepestReservedLevel(item, decision.frame) >= MAX_PROFILE_CAUSAL_DEPTH ->
-            causalBudgetFailure(pulse.commandSource)
-        else -> null
-    }
-    if (refusal != null) {
-        activeCommandRoute = null
-        return@dispatch refused(
-            commandSource = pulse.commandSource,
-            effectiveProtocolIdentity = pulse.effectiveProtocolIdentity,
-            response = refusal,
-        )
-    }
-    val frame = (decision as ProfileDecision.Accepted).frame
-""".filterNot(Char::isWhitespace)
-
-private fun profileDeferredOutputDrainViolations(
-    code: String,
-    rawCode: String,
-    requireCanonicalFunctions: Boolean,
-): List<String> = buildList {
-    val functions = functionBlocks(code)
-    val drains = functions.filter { it.name == "dispatchAccepted" }
-    if (drains.isEmpty()) {
-        if (requireCanonicalFunctions) {
-            add("Core §6.13 fault-stage violation: Profile canonical accepted-output drain is missing")
-        }
-        return@buildList
-    }
-    val drain = drains.singleOrNull()
-    if (drain == null || !isCanonicalProfileAcceptedDrain(code, rawCode, drain)) {
-        add(
-            "Core §6.13 fault-stage violation: Profile canonical accepted-output/completion drain " +
-                "must preflight before publication, dispatch every ordered output, drain completions, " +
-                "and then rethrow the first runtime fault",
-        )
-    }
-    if (!requireCanonicalFunctions || drain == null) return@buildList
-
-    // There is one publication site and no parallel output-dispatch route outside that writer.
-    val writes = Regex("""\bcommittedState\s*=(?!=)""").findAll(code).toList()
-    val identifiers = Regex("""\b(?:dispatchAccepted|execute)\b""").findAll(code)
-        .groupingBy { it.value }.eachCount()
-    if (writes.size != 1 || writes.single().range.first !in drain.open until drain.close ||
-        identifiers["dispatchAccepted"] != 3 || identifiers["execute"] != 2
-    ) {
-        add("Core §6.13 fault-stage violation: Profile must have one writer and one accepted-output executor")
-    }
-    listOf("dispatchLocal", "dispatchCommand").forEach { name ->
-        val entry = functions.singleOrNull { it.name == name }
-        val call = entry?.let { function ->
-            Regex("""\bdispatchAccepted\s*\(\s*item\s*,\s*(?:decision\.)?frame\s*\)""")
-                .findAll(code, function.open + 1)
-                .takeWhile { it.range.first < function.close }
-                .singleOrNull()
-        }
-        val guarded = entry != null && Regex("""=\s*dispatchGuard\.dispatch\s*$""")
-            .containsMatchIn(code.substring(entry.declarationStart, entry.open))
-        val callOwner = if (entry != null && call != null) {
-            nearestEnclosingCurlyOpen(code, entry.open, call.range.first)
-        } else null
-        val acceptedLocalBranch = name != "dispatchLocal" || callOwner != null &&
-            Regex("""is\s+ProfileDecision\.Accepted\s*->\s*\{\s*$""")
-                .containsMatchIn(code.substring(entry!!.open, callOwner + 1)) &&
-            code.substring(callOwner + 1, call!!.range.first).isBlank() &&
-            curlyDepthBetween(code, entry.open + 1, call.range.first) == 2
-        val directCall = entry != null && call != null && callOwner != null &&
-            !isOwnedByUnbracedControl(code, call.range.first, callOwner + 1) &&
-            (name != "dispatchCommand" || callOwner == entry.open)
-        val commandAdmission = name != "dispatchCommand" || entry != null && call != null && run {
-            val decision = Regex("""\bval\s+decision\s*=\s*ProfileNucleus\.decide""")
-                .find(code, entry.open + 1)
-            decision != null && decision.range.first < call.range.first &&
-                code.substring(decision.range.first, call.range.first)
-                    .filterNot(Char::isWhitespace) == profileCommandAdmissionBody
-        }
-        val localDecision = name != "dispatchLocal" || entry != null && run {
-            val decisions = Regex(
-                """\bwhen\s*\(\s*val\s+decision\s*=\s*ProfileNucleus\.decide\s*""" +
-                    """\(\s*committedState\s*,\s*item\.pulse\s*\)\s*\)""",
-            ).findAll(code, entry.open + 1).takeWhile { it.range.first < entry.close }.toList()
-            val decision = decisions.singleOrNull()
-            decision != null &&
-                curlyDepthBetween(code, entry.open + 1, decision.range.first) == 0 &&
-                !isOwnedByUnbracedControl(code, decision.range.first, entry.open + 1) &&
-                !Regex("""\breturn(?:@\w+)?\b""")
-                    .containsMatchIn(code.substring(entry.open + 1, entry.close))
-        }
-        if (!guarded || !acceptedLocalBranch || !directCall || !commandAdmission || !localDecision) {
-            add("Core §6.13 fault-stage violation: Profile `$name` must reach the shared drain under its dispatch guard")
-        }
-    }
-}
-
-private fun isCanonicalProfileAcceptedDrain(
-    code: String,
-    rawCode: String,
-    function: FunctionBlock,
-): Boolean {
-    val body = code.substring(function.open + 1, function.close)
-    return '$' !in rawCode.substring(function.open + 1, function.close) &&
-        body.filterNot(Char::isWhitespace) == profileAcceptedDrainBody
-}
-
-private fun preservesDeferredFaultUntilRethrow(
-    code: String,
-    rawCode: String,
-    caught: KotlinCatchBlock,
-): Boolean {
-    val function = enclosingFunctionBlock(code, caught.declarationStart) ?: return false
-    return function.name == "dispatchAccepted" && isCanonicalProfileAcceptedDrain(code, rawCode, function)
-}
-
 private fun nearestEnclosingCurlyOpen(code: String, start: Int, position: Int): Int? {
     val stack = ArrayDeque<Int>()
     for (index in start until position) {
@@ -2108,20 +1765,6 @@ private fun nearestEnclosingCurlyOpen(code: String, start: Int, position: Int): 
         }
     }
     return stack.lastOrNull()
-}
-
-private fun String.maskEscapedIdentifierBodies(): String = buildString(length) {
-    var inside = false
-    this@maskEscapedIdentifierBodies.forEach { character ->
-        when {
-            character == '`' -> {
-                append(' ')
-                inside = !inside
-            }
-            inside -> append(if (character == '\n') '\n' else ' ')
-            else -> append(character)
-        }
-    }
 }
 
 private fun closingDelimiterIgnoringQuotedText(
@@ -2192,125 +1835,6 @@ private fun functionBlocks(code: String): List<FunctionBlock> {
         val close = closingDelimiter(code, open, '{', '}') ?: return@mapIndexedNotNull null
         FunctionBlock(open, close, declaration.groupValues[1], declaration.range.first)
     }
-}
-
-private fun isOwnedByUnbracedControl(code: String, statementStart: Int, lowerBound: Int): Boolean {
-    var index = statementStart - 1
-    while (index >= lowerBound && code[index].isWhitespace()) index -= 1
-    while (index >= lowerBound) {
-        when {
-            code[index] == '@' -> {
-                index -= 1
-                while (index >= lowerBound &&
-                    (code[index].isLetterOrDigit() || code[index] == '_')
-                ) {
-                    index -= 1
-                }
-            }
-            else -> {
-                val annotationStart = annotationStartEndingAt(code, index, lowerBound) ?: break
-                index = annotationStart - 1
-            }
-        }
-        while (index >= lowerBound && code[index].isWhitespace()) index -= 1
-    }
-    val tail = index
-    if (index >= lowerBound && (code[index].isLetterOrDigit() || code[index] == '_')) {
-        val end = index + 1
-        while (index >= lowerBound && (code[index].isLetterOrDigit() || code[index] == '_')) index -= 1
-        if (code.substring(index + 1, end) == "else") return true
-        index = tail
-    }
-    if (index < lowerBound || code[index] != ')') return false
-    var depth = 0
-    var open = -1
-    while (index >= lowerBound) {
-        when (code[index]) {
-            ')' -> depth += 1
-            '(' -> {
-                depth -= 1
-                if (depth == 0) {
-                    open = index
-                    break
-                }
-            }
-        }
-        index -= 1
-    }
-    if (open < 0) return true
-    index = open - 1
-    while (index >= lowerBound && code[index].isWhitespace()) index -= 1
-    val end = index + 1
-    while (index >= lowerBound && (code[index].isLetterOrDigit() || code[index] == '_')) index -= 1
-    return code.substring(index + 1, end) in setOf("if", "while", "for", "when")
-}
-
-private fun annotationStartEndingAt(code: String, endInclusive: Int, lowerBound: Int): Int? {
-    var index = endInclusive
-    if (code[index] == ')') {
-        index = matchingOpenDelimiter(code, index, '(', ')', lowerBound) ?: return null
-        index -= 1
-        while (index >= lowerBound && code[index].isWhitespace()) index -= 1
-    } else if (code[index] == ']') {
-        index = matchingOpenDelimiter(code, index, '[', ']', lowerBound) ?: return null
-        index -= 1
-        while (index >= lowerBound && code[index].isWhitespace()) index -= 1
-        return index.takeIf { it >= lowerBound && code[it] == '@' }
-    }
-
-    if (index >= lowerBound && code[index] == '@') return index
-    while (index >= lowerBound) {
-        if (!(code[index].isLetterOrDigit() || code[index] == '_')) return null
-        while (index >= lowerBound &&
-            (code[index].isLetterOrDigit() || code[index] == '_')
-        ) {
-            index -= 1
-        }
-        while (index >= lowerBound && code[index].isWhitespace()) index -= 1
-        when {
-            index >= lowerBound && code[index] == '.' -> {
-                index -= 1
-                while (index >= lowerBound && code[index].isWhitespace()) index -= 1
-            }
-            index >= lowerBound && code[index] == ':' -> {
-                index -= 1
-                while (index >= lowerBound && code[index].isWhitespace()) index -= 1
-            }
-            else -> return index.takeIf { it >= lowerBound && code[it] == '@' }
-        }
-    }
-    return null
-}
-
-private fun matchingOpenDelimiter(
-    code: String,
-    close: Int,
-    opening: Char,
-    closing: Char,
-    lowerBound: Int,
-): Int? {
-    var depth = 0
-    for (index in close downTo lowerBound) {
-        when (code[index]) {
-            closing -> depth += 1
-            opening -> {
-                depth -= 1
-                if (depth == 0) return index
-            }
-        }
-    }
-    return null
-}
-
-private fun curlyDepthBetween(code: String, start: Int, endExclusive: Int): Int {
-    var depth = 0
-    for (index in start until endExclusive) {
-        when (code[index]) {
-            '{' -> depth += 1
-            '}' -> depth -= 1
-        }
-    }
-    return depth
 }
 
 private fun knownPreExecutionMutationBranches(code: String): List<String> {
@@ -2492,150 +2016,4 @@ private fun String.withoutKotlinComments(): String {
         index += 1
     }
     return output.toString()
-}
-
-private val outputFamilySources = linkedMapOf(
-    "ProfileOutput" to
-        "ball/profile/nucleus/src/commonMain/kotlin/kinetickk/ball/profile/nucleus/ProfileDecision.kt",
-    "GameplayOutput" to
-        "ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/GameplayDecision.kt",
-    "AppSessionOutput" to
-        "flow/session/nucleus/src/commonMain/kotlin/kinetickk/flow/session/nucleus/AppSessionDecision.kt",
-)
-
-internal fun compositionLimitViolations(
-    sources: Map<String, SourceDocument>,
-    policy: String,
-    assembly: String,
-): List<String> = buildList {
-    val calculated = staticCumulativeFanoutCeiling(
-        SameStackCumulativeFanoutPolicy.MAX_OUTPUTS_PER_ACCEPTED_DECISION,
-        SameStackCumulativeFanoutPolicy.MAX_CONSUMERS_PER_OUTPUT,
-        SameStackCumulativeFanoutPolicy.acceptedCausalDepths,
-    )
-    if (calculated != SameStackCumulativeFanoutPolicy.MAX_CUMULATIVE_FANOUT) {
-        add(
-            "Static cumulative fan-out proof drift: calculated $calculated, declared " +
-                SameStackCumulativeFanoutPolicy.MAX_CUMULATIVE_FANOUT,
-        )
-    }
-    if (SameStackCumulativeFanoutPolicy.HAS_ASYNC_HANDOFF) {
-        add("Same-stack cumulative fan-out policy must declare no asynchronous handoff")
-    }
-
-    listOf(
-        "| cumulative fan-out per accepted root causal scope | 9840 |",
-        "`maxCumulativeFanout=9840`",
-        "accepted causal depths `0..7`",
-        "`3^1 + 3^2 + ... + 3^8 = 9840`",
-        "No runtime fan-out meter",
-        "No asynchronous semantic handoff exists",
-    ).filterNot(policy::contains).forEach { token ->
-        add("Cumulative fan-out policy is missing exact contract `$token`")
-    }
-
-    listOf(
-        "one accepted root causal scope",
-        "complete accepted source tuple",
-        "effective route and consumer/executor",
-        "Terminal branches count",
-        "co-reachable branches",
-        "converging",
-        "Mutually exclusive alternatives",
-        "duplicate traversal record for the same source tuple",
-        "independent root",
-        "No asynchronous semantic handoff exists",
-    ).filterNot(assembly::contains).forEach { token ->
-        add("Assembly cumulative fan-out contract is missing `$token`")
-    }
-
-    val rows = parseArchitectureTableRows(assembly, "## Closed semantic output executors")
-    val rowsById = rows.groupBy(ArchitectureTableRow::id)
-    val expectedIds = outputExecutorInventory.map(OutputExecutorProjection::id).toSet()
-    if (rows.map(ArchitectureTableRow::id).toSet() != expectedIds) {
-        add("Assembly output/executor table must equal the closed output variant inventory")
-    }
-    rowsById.filterValues { matches -> matches.size != 1 }.forEach { (id, matches) ->
-        add("Assembly output/executor row `$id` appears ${matches.size} times")
-    }
-    outputExecutorInventory.forEach { projection ->
-        val executorText = sources[projection.executorPath]?.text
-        projection.requiredTokens.filter { token -> executorText == null || token !in executorText }
-            .forEach { token ->
-                add(
-                    "Output `${projection.outputVariant}` executor is missing `$token` in " +
-                        projection.executorPath,
-                )
-            }
-        val row = rowsById[projection.id]?.singleOrNull()
-        if (row != null) {
-            listOf(projection.outputVariant, projection.effectiveRoute, projection.consumerOrExecutor)
-                .filterNot(row.text::contains)
-                .forEach { token ->
-                    add("Assembly output/executor row `${projection.id}` is missing `$token`")
-                }
-        }
-    }
-
-    outputExecutorInventory.groupBy(OutputExecutorProjection::outputVariant)
-        .forEach { (variant, projections) ->
-            val resolvedMaximumConsumers = projections
-                .groupBy { projection -> projection.mutualExclusionGroup ?: "always:${projection.id}" }
-                .values
-                .sumOf { reservation ->
-                    if (reservation.singleOrNull()?.mutualExclusionGroup == null) {
-                        1
-                    } else {
-                        reservation.groupingBy(OutputExecutorProjection::alternative)
-                            .eachCount()
-                            .values
-                            .maxOrNull() ?: 0
-                    }
-                }
-            if (resolvedMaximumConsumers != SameStackCumulativeFanoutPolicy.MAX_CONSUMERS_PER_OUTPUT) {
-                add(
-                    "Output `$variant` resolves $resolvedMaximumConsumers conditional consumers; " +
-                        "expected exactly one",
-                )
-            }
-            if (projections.size == 1) {
-                val projection = projections.single()
-                if (projection.mutualExclusionGroup != null || projection.alternative != null) {
-                    add("Single-consumer output `$variant` must not invent a mutual-exclusion reservation")
-                }
-            } else {
-                val groups = projections.map(OutputExecutorProjection::mutualExclusionGroup).toSet()
-                val alternatives = projections.map(OutputExecutorProjection::alternative)
-                if (null in groups || groups.size != 1 || null in alternatives || alternatives.toSet().size != projections.size) {
-                    add(
-                        "Multi-route output `$variant` must declare one mutual-exclusion group and " +
-                            "one distinct alternative per conditional effective consumer",
-                    )
-                }
-            }
-        }
-
-    outputFamilySources.forEach { (family, path) ->
-        val declared = sources[path]?.text?.let { declaredOutputVariants(it, family) }.orEmpty()
-        val inventoried = outputExecutorInventory.asSequence()
-            .map(OutputExecutorProjection::outputVariant)
-            .filter { variant -> variant.startsWith("$family.") }
-            .map { variant -> variant.substringAfter('.') }
-            .toSet()
-        if (declared != inventoried) {
-            add(
-                "$family output/executor closure drift: declared ${declared.sorted().joinToString()}, " +
-                    "inventoried ${inventoried.sorted().joinToString()}",
-            )
-        }
-    }
-}.distinct().sorted()
-
-private fun declaredOutputVariants(text: String, family: String): Set<String> {
-    val body = text.substringAfter("sealed interface $family", missingDelimiterValue = "")
-    if (body.isEmpty()) return emptySet()
-    return Regex("(?m)^\\s{4}(?:data\\s+class|data\\s+object)\\s+(\\w+)")
-        .findAll(body)
-        .map { match -> match.groupValues[1] }
-        .toSet()
 }

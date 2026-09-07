@@ -22,8 +22,8 @@ class GameplayInputMappingTest {
     fun runningHudMapsOnlyToLiveRunActions() {
         val model = hitTestState(GamePhase.RUNNING)
 
-        val dash = assertIs<GameplayInput.Action>(model.resolveGameplayPress(1_198f, 632f))
-        val brake = assertIs<GameplayInput.Action>(model.resolveGameplayPress(1_090f, 653f))
+        val dash = assertIs<GameplayInput.Action>(model.resolveGameplayPress(1_222f, 662f))
+        val brake = assertIs<GameplayInput.Action>(model.resolveGameplayPress(1_146f, 662f))
 
         assertSame(GameplayInteractionPulse.DashRequested, dash.action)
         assertIs<GameplayInteractionPulse.BrakeChanged>(brake.action)
@@ -82,15 +82,15 @@ class GameplayInputMappingTest {
     }
 
     @Test
-    fun terminalButtonsEmitOnlySessionOwnedShellRequests() {
+    fun terminalCanvasCannotActivateHiddenOrDuplicateActions() {
         val gameOver = hitTestState(GamePhase.GAME_OVER)
         val victory = hitTestState(GamePhase.VICTORY)
 
-        assertSame(GameplayInput.RestartRun, gameOver.resolveGameplayPress(640f, 518f))
-        assertSame(GameplayInput.ExitToHome, gameOver.resolveGameplayPress(640f, 600f))
-        assertSame(GameplayInput.RestartRun, victory.resolveGameplayPress(640f, 518f))
-        assertSame(GameplayInput.OpenRebirth, victory.resolveGameplayPress(640f, 580f))
-        assertSame(GameplayInput.ExitToHome, victory.resolveGameplayPress(640f, 650f))
+        assertNull(gameOver.resolveGameplayPress(640f, 518f))
+        assertNull(gameOver.resolveGameplayPress(640f, 600f))
+        assertNull(victory.resolveGameplayPress(640f, 518f))
+        assertNull(victory.resolveGameplayPress(640f, 580f))
+        assertNull(victory.resolveGameplayPress(640f, 650f))
     }
 
     @Test

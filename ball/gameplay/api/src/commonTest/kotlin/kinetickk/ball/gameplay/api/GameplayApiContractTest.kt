@@ -12,61 +12,13 @@ import kotlin.test.assertIs
 
 class GameplayApiContractTest {
     @Test
-    fun runAndProtocolIdentitiesAreStable() {
+    fun runIdentityAndRevisionAreStable() {
         val instance = GameplayInstanceId(RunId(42))
 
         assertEquals("kinetickk.local/GameplayRun/42", instance.canonicalValue)
         assertEquals(GameplayRevision.ZERO, GameplayRevision(0))
-        assertEquals(
-            "kinetickk.local/AppSession/local-session",
-            GameplayCommandSource.LocalSession.canonicalValue,
-        )
         assertFailsWith<IllegalArgumentException> { RunId(-1) }
         assertFailsWith<IllegalArgumentException> { GameplayRevision(-1) }
-    }
-
-    @Test
-    fun canonicalCommandAndResultTokensRejectInvalidScalarMembers() {
-        val instance = GameplayInstanceId(RunId(3))
-        val handle = GameplaySemanticHandle(GameplayCommandSource.LocalSession, 7, 2)
-        val request = GameplayModuleCommandRequest(
-            semanticHandle = handle,
-            sourceOrdinal = 2,
-            targetInstance = instance,
-            command = GameplayModuleCommand.StartRun,
-        )
-        val source = GameplayCommandSourceToken(handle, instance, causalScope = 11, causalDepth = 1)
-        val resultSource = GameplayResultSourceToken(
-            semanticHandle = handle,
-            targetInstance = instance,
-            targetRevision = GameplayRevision(1),
-            sourceOrdinal = 0,
-            causalScope = 11,
-            causalDepth = 2,
-        )
-
-        assertEquals(handle, request.semanticHandle)
-        assertEquals(handle, source.semanticHandle)
-        assertEquals(handle, resultSource.semanticHandle)
-        assertFailsWith<IllegalArgumentException> {
-            GameplaySemanticHandle(GameplayCommandSource.LocalSession, -1, 0)
-        }
-        assertFailsWith<IllegalArgumentException> {
-            GameplayModuleCommandRequest(handle, 3, instance, GameplayModuleCommand.StartRun)
-        }
-        assertFailsWith<IllegalArgumentException> {
-            GameplayCommandSourceToken(handle, instance, -1, 0)
-        }
-        assertFailsWith<IllegalArgumentException> {
-            GameplayResultSourceToken(
-                handle,
-                instance,
-                GameplayRevision.ZERO,
-                0,
-                0,
-                -1,
-            )
-        }
     }
 
     @Test
@@ -115,43 +67,7 @@ class GameplayApiContractTest {
     }
 
     @Test
-    fun commandMappingsAcceptOnlyTheirOwnResultIncludingEveryExitOutcome() {
-        val mappings = listOf(
-            Triple(GameplayModuleCommand.StartRun, GameplayEffectiveProtocolIdentity.SESSION_START,
-                GameplayModuleResult.RunStarted),
-            Triple(GameplayModuleCommand.PauseForOverlay, GameplayEffectiveProtocolIdentity.SESSION_PAUSE,
-                GameplayModuleResult.OverlayPaused),
-            Triple(GameplayModuleCommand.ApplyPreferences, GameplayEffectiveProtocolIdentity.SESSION_PREFERENCES,
-                GameplayModuleResult.PreferencesApplied),
-            Triple(GameplayModuleCommand.ExitRun, GameplayEffectiveProtocolIdentity.SESSION_EXIT,
-                GameplayModuleResult.RunExited(GameplayExitProgressResult.NoProgress)),
-            Triple(GameplayModuleCommand.ExitRun, GameplayEffectiveProtocolIdentity.SESSION_EXIT,
-                GameplayModuleResult.RunExited(GameplayExitProgressResult.Applied)),
-            Triple(GameplayModuleCommand.ExitRun, GameplayEffectiveProtocolIdentity.SESSION_EXIT,
-                GameplayModuleResult.RunExited(GameplayExitProgressResult.NotApplied)),
-        )
-
-        mappings.forEach { (command, identity, result) ->
-            assertEquals(identity, command.effectiveProtocolIdentity())
-            GameplayEffectiveProtocolIdentity.entries.forEach { candidate ->
-                assertEquals(candidate == identity, candidate.acceptsResult(result), "$candidate / $result")
-            }
-        }
-    }
-
-    @Test
-    fun moduleCommandAndIdentityInventoriesRemainExact() {
-        val commands: List<GameplayModuleCommand> = listOf(
-            GameplayModuleCommand.StartRun,
-            GameplayModuleCommand.PauseForOverlay,
-            GameplayModuleCommand.ApplyPreferences,
-            GameplayModuleCommand.ExitRun,
-        )
-
-        assertEquals(4, commands.size)
-        assertEquals(4, GameplayEffectiveProtocolIdentity.entries.size)
-        assertEquals(1, GameplayCommandIssuerProvenance.entries.size)
-        assertEquals(1, GameplayResultIssuerProvenance.entries.size)
+    fun configurationRejectionInventoryRemainsExact() {
         assertEquals(9, GameplayConfigurationRejection.entries.size)
     }
 }

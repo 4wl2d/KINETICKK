@@ -107,20 +107,13 @@ data class PersistenceStatusProjection(
     val persistence: ProfilePersistenceStatus,
 ) : ProfileProjection
 
-/** Query-only Profile surface used by Home and Codex presentation. */
+/** Read capability of the application-lifetime Profile. */
 interface ProfileReadPort {
     val instanceId: ProfileInstanceId
 
     fun query(query: ProfileQuery.GetPreferences): PreferencesProjection
     fun query(query: ProfileQuery.GetHomeProgress): HomeProgressProjection
     fun query(query: ProfileQuery.GetCollection): CollectionProjection
-}
-
-/** Local Profile Interaction authority plus the complete read surface. */
-interface ProfilePort : ProfileReadPort {
-
-    fun accept(pulse: ProfilePulse.Business): ProfileAcceptance
-
     fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection
     fun query(query: ProfileQuery.GetLabProgress): LabProgressProjection
     fun query(query: ProfileQuery.GetLoadout): LoadoutProjection
@@ -128,32 +121,7 @@ interface ProfilePort : ProfileReadPort {
     fun query(query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection
 }
 
-/** Statically bound AppSession command route with only the reads its workflow consumes. */
-interface SessionProfileRoute {
-    val instanceId: ProfileInstanceId
-
-    fun acceptFromSession(
-        request: ProfileModuleCommandRequest,
-        causalScope: Long,
-        causalDepth: Int,
-    ): ProfileCommandIngressResult
-
-    fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection
-    fun query(query: ProfileQuery.GetPreferences): PreferencesProjection
-    fun query(query: ProfileQuery.GetRebirthProgress): RebirthProgressProjection
-    fun query(query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection
-}
-
-/** Statically bound GameplayRun command route and its two admitted Profile reads. */
-interface GameplayProfileRoute {
-    val instanceId: ProfileInstanceId
-
-    fun acceptFromGameplay(
-        request: ProfileModuleCommandRequest,
-        causalScope: Long,
-        causalDepth: Int,
-    ): ProfileCommandIngressResult
-
-    fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection
-    fun query(query: ProfileQuery.GetPreferences): PreferencesProjection
+/** Local Profile interactions with their read capability. */
+interface ProfilePort : ProfileReadPort {
+    fun accept(pulse: ProfilePulse.Business): ProfileAcceptance
 }

@@ -28,29 +28,27 @@ private const val TAU = 6.2831855f
 
 fun DrawScope.drawOverlayFrame(bounds: Rect, accent: Color) {
     drawRect(OverlayPanel, bounds.topLeft, bounds.size)
-    drawRect(accent.copy(alpha = 0.85f), bounds.topLeft, bounds.size, style = Stroke(d(1.5f)))
-    drawRect(accent.copy(alpha = 0.09f), bounds.topLeft, Size(bounds.width, d(61f)))
+    drawLine(DarkLine, Offset(bounds.left, bounds.top + d(61f)), Offset(bounds.right, bounds.top + d(61f)), d(1f))
+    drawRect(accent, Offset(bounds.left, bounds.top + d(22f)), Size(d(2f), d(18f)))
 }
 
 fun DrawScope.drawFooterBack(textMeasurer: TextMeasurer, bounds: Rect, accent: Color) {
     val top = bounds.bottom - d(55f)
-    drawRect(accent.copy(alpha = 0.08f), Offset(bounds.left + d(20f), top), Size(bounds.width - d(40f), d(41f)))
-    drawRect(accent, Offset(bounds.left + d(20f), top), Size(bounds.width - d(40f), d(41f)), style = Stroke(d(1f)))
-    drawLabel(textMeasurer, textMeasurer.language.text(NavigationText.Back), bounds.center.x, top + d(13f), 9f, accent, centered = true, weight = FontWeight.Bold)
+    drawLine(DarkLine, Offset(bounds.left + d(20f), top), Offset(bounds.right - d(20f), top), d(1f))
+    drawLabel(textMeasurer, textMeasurer.language.text(NavigationText.Back), bounds.center.x, top + d(13f), 10f, White, centered = true)
 }
 
 fun DrawScope.drawStripFooter(textMeasurer: TextMeasurer, bounds: Rect, accent: Color) {
     val top = bounds.bottom - d(55f)
-    drawRect(accent.copy(alpha = 0.08f), Offset(bounds.left, top), Size(bounds.width, d(55f)))
-    drawLine(accent.copy(alpha = 0.65f), Offset(bounds.left, top), Offset(bounds.right, top), d(1f))
-    drawLabel(textMeasurer, textMeasurer.language.text(NavigationText.Back), bounds.center.x, top + d(18f), 9f, accent, centered = true, weight = FontWeight.Bold)
+    drawLine(DarkLine, Offset(bounds.left, top), Offset(bounds.right, top), d(1f))
+    drawLabel(textMeasurer, textMeasurer.language.text(NavigationText.Back), bounds.center.x, top + d(18f), 10f, White, centered = true)
 }
 
 fun DrawScope.drawPagedFooter(textMeasurer: TextMeasurer, bounds: Rect, page: Int, maxPage: Int, accent: Color) {
     val top = bounds.bottom - d(55f)
     val closeRight = bounds.left + bounds.width * 0.45f
     val nextLeft = bounds.right - d(85f)
-    drawRect(accent.copy(alpha = 0.07f), Offset(bounds.left, top), Size(bounds.width, d(55f)))
+    drawLine(DarkLine, Offset(bounds.left, top), Offset(bounds.right, top), d(1f))
     drawLine(DarkLine, Offset(closeRight, top), Offset(closeRight, bounds.bottom), d(1f))
     drawLine(DarkLine, Offset(nextLeft, top), Offset(nextLeft, bounds.bottom), d(1f))
     drawLabel(textMeasurer, textMeasurer.language.text(NavigationText.BackEscape), bounds.left + d(25f), top + d(18f), 9f, accent, weight = FontWeight.Bold)

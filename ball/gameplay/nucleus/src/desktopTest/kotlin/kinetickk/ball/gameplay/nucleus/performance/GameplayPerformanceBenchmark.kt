@@ -34,8 +34,6 @@ import kinetickk.ball.gameplay.nucleus.simulation.takeSoundCues
 import kinetickk.ball.gameplay.nucleus.simulation.takeVisualFxCues
 import kinetickk.ball.gameplay.nucleus.simulation.toRenderModel
 import kinetickk.ball.gameplay.nucleus.simulation.togglePause
-import kinetickk.ball.gameplay.nucleus.simulation.update
-import kinetickk.ball.gameplay.nucleus.simulation.updatePointer
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.performance.BenchmarkScenario
 import kinetickk.performance.BenchmarkSuiteIdentity
@@ -604,7 +602,7 @@ private fun authorityState(model: MutableGameState): GameplayState = GameplaySta
     },
     content = canonicalGameplayContent,
     engine = EngineState(model),
-    pendingProfileCommand = null,
+    progressPending = false,
 )
 
 private fun acceptedState(decision: GameplayDecision): GameplayState =
@@ -788,7 +786,9 @@ private fun gameplayOutputFingerprint(outputs: Iterable<GameplayOutput>): Long {
             )
             is GameplayOutput.SendProfileCommand -> mix(signature, SEMANTIC_PROFILE_UPDATE)
             GameplayOutput.EnsureAudioUnlocked -> mix(signature, SEMANTIC_AUDIO_UNLOCK)
-            is GameplayOutput.CompleteCommand -> mix(signature, SEMANTIC_COMMAND_COMPLETION)
+            // This suite submits interaction inputs only; it must not silently add a
+            // command-completion workload when the application's command API changes.
+            else -> error("Unexpected command completion in an interaction benchmark")
         }
     }
     return signature

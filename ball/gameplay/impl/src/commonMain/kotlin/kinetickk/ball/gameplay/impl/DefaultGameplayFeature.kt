@@ -3,59 +3,56 @@
 
 package kinetickk.ball.gameplay.impl
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import kinetickk.ball.content.api.GameplayContentSnapshot
-import kinetickk.ball.gameplay.api.GameplayModuleResultDelivery
 import kinetickk.ball.gameplay.api.GameplayPresentationPort
 import kinetickk.ball.gameplay.api.GameplayQuery
 import kinetickk.ball.gameplay.api.GameplayRunPhase
-import kinetickk.ball.gameplay.api.GameplaySessionRunPort
+import kinetickk.ball.gameplay.api.GameplayRunPort
 import kinetickk.ball.gameplay.api.RunId
 import kinetickk.ball.gameplay.interaction.GameplayContent
 import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
-import kinetickk.ball.profile.api.ProfileModuleResultDelivery
-import kinetickk.ball.profile.api.GameplayProfileRoute
+import kinetickk.ball.profile.api.ProfileReadPort
+import kinetickk.ball.profile.api.ProfileProgress
 import kinetickk.foundation.design.SpaceBlack
+import kinetickk.foundation.diagnostics.CrashDiagnostics
 import kinetickk.resource.audio.api.AudioService
 
 class DefaultGameplayFeature(
     private val gameplayContent: GameplayContentSnapshot,
-    private val profilePort: GameplayProfileRoute,
+    private val profilePort: ProfileReadPort,
+    private val profileProgress: ProfileProgress,
     audioService: AudioService,
+    private val diagnostics: CrashDiagnostics = CrashDiagnostics.None,
 ) : GameplayCompositionComponent {
     private val audioExecutor = ResourceGameplayAudioExecutor(audioService)
     private var componentValue by mutableStateOf<GameComponent?>(null)
 
     override fun createRun(
         runId: RunId,
-        commandResultSink: (GameplayModuleResultDelivery) -> Unit,
-    ): GameplaySessionRunPort {
+    ): GameplayRunPort {
         ensureReplacementAllowed(runId)
+        diagnostics.context("gameplay.start") { "runId=$runId seed=$DEFAULT_GAMEPLAY_SEED" }
+        diagnostics.event("gameplay.start", "runId=$runId seed=$DEFAULT_GAMEPLAY_SEED")
         return GameComponent.create(
             runId = runId,
             content = gameplayContent,
             profilePort = profilePort,
             audioExecutor = audioExecutor,
-            commandResultSink = commandResultSink,
+            profileProgress = profileProgress,
             seed = DEFAULT_GAMEPLAY_SEED,
         ).also { componentValue = it }
     }
 
-    override fun activeRun(): GameplaySessionRunPort? = componentValue
+    override fun activeRun(): GameplayRunPort? = componentValue
 
     override fun activePresentation(): GameplayPresentationPort? = componentValue
-
-    override fun receiveProfileModuleResult(delivery: ProfileModuleResultDelivery) {
-        checkNotNull(componentValue) {
-            "Cannot deliver a Profile command result before creating a GameplayRun"
-        }.receiveProfileModuleResult(delivery)
-    }
 
     @Composable
     override fun Content(
@@ -77,7 +74,7 @@ class DefaultGameplayFeature(
     private fun ensureReplacementAllowed(runId: RunId) {
         val active = componentValue ?: return
         val status = active.query(GameplayQuery.GetRunStatus)
-        check(!status.profileCommandPending) {
+        check(!status.progressPending) {
             "Cannot replace a GameplayRun with a pending Profile command"
         }
         when (status.phase) {

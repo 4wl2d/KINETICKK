@@ -165,6 +165,7 @@ class GameplayRenderModel(
     val nextLevelData: Int,
     val keys: Int,
     val kills: Int,
+    val runStatistics: RunStatistics = RunStatistics(),
     val combo: Int,
     val comboTime: Float,
     val runMatter: Long,
@@ -230,6 +231,7 @@ class GameplayRenderModel(
     val directedChoice: Boolean = false,
     val characterAbility: CharacterAbilityProjection = CharacterAbilityProjection(),
     val effectiveWeaponPower: Float = weaponPower,
+    val rewardPreviews: ImmutableList<RewardPreview> = kinetickk.foundation.collections.immutableListOf(),
 ) {
     val speed: Float get() = vectorLength(velocityX, velocityY)
     val runProgress: Float get() = content.tempo.progress(elapsed)

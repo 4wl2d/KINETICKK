@@ -12,7 +12,6 @@ import kinetickk.ball.gameplay.interaction.layout.containsInclusive
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.interaction.layout.gameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
-import kinetickk.ball.gameplay.interaction.layout.terminalLayoutGeometry
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 
@@ -88,8 +87,7 @@ private fun resolveGameplayPress(
     GamePhase.RUNNING -> resolveHudPress(screenWidth, screenHeight, uiScale, x, y)
     GamePhase.PAUSED -> resolvePausePress(screenWidth, screenHeight, uiScale, x, y)
     GamePhase.CHOICE -> null // Compose activates on click, after scroll gestures resolve.
-    GamePhase.GAME_OVER, GamePhase.VICTORY ->
-        resolveEndPress(phase, screenWidth, screenHeight, uiScale, x, y)
+    GamePhase.GAME_OVER, GamePhase.VICTORY -> null // TerminalContent owns click and scroll handling.
 }
 
 private fun isHudControlPosition(
@@ -119,28 +117,6 @@ private fun resolvePausePress(
         PauseTarget.SETTINGS -> GameplayInput.OpenSettings
         PauseTarget.PERFORMANCE -> GameplayInput.TogglePerformance
         PauseTarget.EXIT -> GameplayInput.ExitToHome
-    }
-}
-
-private fun resolveEndPress(
-    phase: GamePhase,
-    screenWidth: Float,
-    screenHeight: Float,
-    uiScale: Float,
-    x: Float,
-    y: Float,
-): GameplayInput? {
-    val layout = terminalLayoutGeometry(
-        width = screenWidth,
-        height = screenHeight,
-        scale = uiScale,
-        victory = phase == GamePhase.VICTORY,
-    )
-    return when {
-        containsInclusive(layout.restart, x, y) -> GameplayInput.RestartRun
-        layout.rebirth?.let { containsInclusive(it, x, y) } == true -> GameplayInput.OpenRebirth
-        containsInclusive(layout.exit, x, y) -> GameplayInput.ExitToHome
-        else -> null
     }
 }
 

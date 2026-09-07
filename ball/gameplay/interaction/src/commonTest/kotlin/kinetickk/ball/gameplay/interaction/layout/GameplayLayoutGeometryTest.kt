@@ -61,14 +61,18 @@ class GameplayLayoutGeometryTest {
     }
 
     @Test
-    fun regularDesktopGeometryPreservesExistingControlCenters() {
+    fun desktopControlsShareOneBaselineAndKeepComfortableTargets() {
         val controls = runningControlBounds(width = 1_280f, height = 720f, scale = 1f)
             .associateBy { it.target }
 
-        assertEquals(1_198f, controls.getValue(RunningControlTarget.DASH).bounds.center.x)
-        assertEquals(632f, controls.getValue(RunningControlTarget.DASH).bounds.center.y)
-        assertEquals(1_090f, controls.getValue(RunningControlTarget.BRAKE).bounds.center.x)
-        assertEquals(653f, controls.getValue(RunningControlTarget.BRAKE).bounds.center.y)
+        val dash = controls.getValue(RunningControlTarget.DASH).bounds
+        val brake = controls.getValue(RunningControlTarget.BRAKE).bounds
+        assertEquals(1_222f, dash.center.x)
+        assertEquals(1_146f, brake.center.x)
+        assertEquals(662f, dash.center.y)
+        assertEquals(dash.center.y, brake.center.y)
+        assertTrue(brake.width >= 48f && dash.width >= 48f)
+        assertTrue(brake.right < dash.left)
     }
 }
 

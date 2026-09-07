@@ -3,12 +3,12 @@
 
 package kinetickk.flow.session.interaction.codex.impl
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
@@ -111,6 +111,11 @@ class SessionPresentationLocalizationTest {
 
 private class LocalizationProfilePort : ProfileReadPort {
     override val instanceId = LOCAL_PROFILE_INSTANCE_ID
+    override fun query(query: ProfileQuery.GetRunBootstrap): kinetickk.ball.profile.api.RunBootstrapProjection = error("unused")
+    override fun query(query: ProfileQuery.GetLabProgress): kinetickk.ball.profile.api.LabProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetLoadout): kinetickk.ball.profile.api.LoadoutProjection = error("unused")
+    override fun query(query: ProfileQuery.GetRebirthProgress): kinetickk.ball.profile.api.RebirthProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetPersistenceStatus): kinetickk.ball.profile.api.PersistenceStatusProjection = error("unused")
     override fun query(query: ProfileQuery.GetPreferences) = PreferencesProjection(instanceId, ProfileRevision.ZERO, PlayerPreferences())
     override fun query(query: ProfileQuery.GetHomeProgress) = codexTestProgress()
     override fun query(query: ProfileQuery.GetCollection) = CollectionProjection(instanceId, ProfileRevision.ZERO, PlayerCollection())

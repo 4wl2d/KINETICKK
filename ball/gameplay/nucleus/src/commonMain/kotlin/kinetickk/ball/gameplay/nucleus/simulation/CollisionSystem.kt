@@ -356,10 +356,12 @@ internal fun MutableGameState.resolvePickupCollection() {
             )
         ) {
             pickups.removeAt(pickupIndex)
+            pickupsCollected++
             when (pickup.type) {
                 PickupType.DATA -> gainData(dataGain * content.tempo.dataPickupMultiplier)
                 PickupType.KEY -> {
                     keys++
+                    keysCollected++
                     message = "ELITE KEY ACQUIRED"
                     messageTime = 1.4f
                 }
@@ -385,6 +387,7 @@ internal fun MutableGameState.gainData(amount: Float) {
     if (whole <= 0) return
     dataFraction -= whole
     data += whole
+    dataCollected += whole.toLong()
     while (data >= nextLevelData) {
         data -= nextLevelData
         level++

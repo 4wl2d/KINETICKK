@@ -3,6 +3,8 @@
 
 package kinetickk.app.shared
 
+import kinetickk.foundation.diagnostics.CrashDiagnostics
+
 import android.content.Context
 import android.content.SharedPreferences
 import android.media.AudioAttributes
@@ -26,7 +28,7 @@ import kotlin.math.sin
 private const val ANDROID_PROFILE_PREFERENCES = "kinetickk.profile.v2"
 private const val ANDROID_SNAPSHOT = "snapshot"
 
-internal actual fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability {
+internal actual fun createPlatformProfilePersistenceCapability(diagnostics: CrashDiagnostics): ProfilePersistenceCapability {
     val context = AndroidApplicationContext.requireContext()
     return AndroidProfilePersistenceCapability(
         profile = context.getSharedPreferences(ANDROID_PROFILE_PREFERENCES, Context.MODE_PRIVATE),

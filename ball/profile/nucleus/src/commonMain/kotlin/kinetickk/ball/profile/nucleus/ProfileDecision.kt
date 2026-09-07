@@ -4,11 +4,15 @@
 package kinetickk.ball.profile.nucleus
 
 import kinetickk.ball.profile.api.ProfileEffectRef
-import kinetickk.ball.profile.api.ProfileModuleCommandPulse
-import kinetickk.ball.profile.api.ProfileModuleResultOutput
 import kinetickk.ball.profile.api.ProfilePulse
 import kinetickk.ball.profile.api.ProfileRejection
 import kinetickk.ball.profile.api.ProfileSnapshot
+import kinetickk.ball.profile.api.ProfileSettingsChanged
+import kinetickk.ball.profile.api.ProfileCoreShapeSelected
+import kinetickk.ball.profile.api.ProfileRebirthAdvanced
+import kinetickk.ball.profile.api.ProfileProgressApplied
+import kinetickk.ball.profile.api.GameplayProgressUpdate
+import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.profile.api.ProfileWriteResult
 import kinetickk.foundation.collections.ImmutableList
 
@@ -16,7 +20,10 @@ const val MAX_PROFILE_OUTPUTS_PER_DECISION: Int = 2
 
 sealed interface ProfileNucleusPulse {
     data class Intent(val intent: ProfilePulse.Business) : ProfileNucleusPulse
-    data class ModuleCommand(val pulse: ProfileModuleCommandPulse) : ProfileNucleusPulse
+    data object ToggleMute : ProfileNucleusPulse
+    data class SelectCoreShape(val shape: CoreShape) : ProfileNucleusPulse
+    data object AdvanceRebirth : ProfileNucleusPulse
+    data class ApplyGameplayProgress(val update: GameplayProgressUpdate) : ProfileNucleusPulse
 
     sealed interface Fact : ProfileNucleusPulse
 
@@ -54,7 +61,8 @@ sealed interface ProfileOutput {
         val snapshot: ProfileSnapshot,
     ) : ProfileOutput
 
-    data class CompleteCommand(
-        val result: ProfileModuleResultOutput,
-    ) : ProfileOutput
+    data class SettingsChanged(val result: ProfileSettingsChanged) : ProfileOutput
+    data class CoreShapeSelected(val result: ProfileCoreShapeSelected) : ProfileOutput
+    data class RebirthAdvanced(val result: ProfileRebirthAdvanced) : ProfileOutput
+    data class ProgressApplied(val result: ProfileProgressApplied) : ProfileOutput
 }

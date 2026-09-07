@@ -16,6 +16,34 @@ import kotlin.test.assertTrue
 
 class SettingsReducerTest {
     @Test
+    fun exactVolumeValidatesInputAndRequestsOneAcceptedChangeWithoutClickSpam() {
+        val initial = SettingsState(PlayerPreferences().toRenderModel(), 0, SettingsGroup.SOUND)
+        for (percent in listOf(0, 37, 100)) {
+            val action = SettingsAction.SetMasterVolume(percent)
+            val reduction = SettingsReducer.reduce(initial, action)
+            assertEquals(initial, reduction.state)
+            assertEquals(listOf(SettingsEffect.AdjustPreference(ProfilePreferenceAdjustment.SetMasterVolume(percent))), reduction.effects)
+            assertEquals(reduction, SettingsReducer.reduce(initial, action))
+        }
+        for (percent in listOf(-1, 101, 65, Int.MIN_VALUE, Int.MAX_VALUE)) {
+            assertEquals(SettingsReduction(initial), SettingsReducer.reduce(initial, SettingsAction.SetMasterVolume(percent)))
+        }
+    }
+
+    @Test
+    fun switchingGroupsResetsThePageWithoutChangingPreferences() {
+        val initial = SettingsState(PlayerPreferences().toRenderModel(), page = 1, group = SettingsGroup.GRAPHICS)
+        val action = SettingsAction.SelectGroup(SettingsGroup.SOUND)
+        val changed = SettingsReducer.reduce(initial, action)
+        assertEquals(initial.model, changed.state.model)
+        assertEquals(SettingsGroup.SOUND, changed.state.group)
+        assertEquals(0, changed.state.page)
+        assertTrue(changed.effects.none { it is SettingsEffect.AdjustPreference })
+        assertEquals(changed, SettingsReducer.reduce(initial, action))
+        assertEquals(SettingsReduction(initial), SettingsReducer.reduce(initial, SettingsAction.SelectGroup(SettingsGroup.GRAPHICS)))
+    }
+
+    @Test
     fun languageSelectionRequestsAcceptedProfileChangeAndSameLanguageIsInert() {
         val initial = SettingsState(PlayerPreferences(language = AppLanguage.Russian).toRenderModel(), 0)
         val changed = SettingsReducer.reduce(initial, SettingsAction.SelectLanguage(AppLanguage.English))
@@ -31,18 +59,22 @@ class SettingsReducerTest {
     fun textualSettingsUseTheSelectedLanguage() {
         val russian = PlayerPreferences(language = AppLanguage.Russian, soundEnabled = false)
         val english = russian.copy(language = AppLanguage.English)
-        assertEquals("ВЫКЛ", settingValue(russian, SettingsRow.SFX))
-        assertEquals("OFF", settingValue(english, SettingsRow.SFX))
-        assertEquals("НОРМА", settingValue(russian, SettingsRow.PARTICLES))
-        assertEquals("NORMAL", settingValue(english, SettingsRow.PARTICLES))
-        assertEquals("КРАТКО", settingValue(russian, SettingsRow.DAMAGE_NUMBER_FORMAT))
-        assertEquals("COMPACT", settingValue(english, SettingsRow.DAMAGE_NUMBER_FORMAT))
+        assertEquals("Выкл", settingValue(russian, SettingsRow.SFX))
+        assertEquals("Off", settingValue(english, SettingsRow.SFX))
+        assertEquals("Норма", settingValue(russian, SettingsRow.PARTICLES))
+        assertEquals("Normal", settingValue(english, SettingsRow.PARTICLES))
+        assertEquals("Кратко", settingValue(russian, SettingsRow.DAMAGE_NUMBER_FORMAT))
+        assertEquals("Compact", settingValue(english, SettingsRow.DAMAGE_NUMBER_FORMAT))
+        assertEquals("Справа", settingValue(russian, SettingsRow.RUN_STATISTICS_SIDE))
+        assertEquals("Слева", settingValue(russian.copy(runStatisticsOnLeft = true), SettingsRow.RUN_STATISTICS_SIDE))
+        assertEquals("Left", settingValue(english.copy(runStatisticsOnLeft = true), SettingsRow.RUN_STATISTICS_SIDE))
     }
 
     @Test
     fun rowsMapToClosedProfileAdjustmentsWithoutOptimisticStateChanges() {
         val initial = SettingsState(PlayerPreferences().toRenderModel(), page = 0)
         val increasingAdjustments = listOf(
+            SettingsRow.RUN_STATISTICS_SIDE to ProfilePreferenceAdjustment.ToggleRunStatisticsSide,
             SettingsRow.SFX to ProfilePreferenceAdjustment.ToggleSoundEffects,
             SettingsRow.MUSIC to ProfilePreferenceAdjustment.ToggleMusic,
             SettingsRow.MASTER_VOLUME to ProfilePreferenceAdjustment.StepMasterVolume(

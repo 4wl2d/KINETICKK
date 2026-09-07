@@ -23,6 +23,8 @@ internal fun MutableGameState.onEnemyKilled(enemy: Enemy) {
     enemy.dead = true
     kills++
     combo++
+    bestCombo = maxOf(bestCombo, combo)
+    if (enemy.type == EnemyType.ELITE) eliteKills++
     comboTime = comboWindow
     if (enemy.relicKillProcsEligible) {
         onSynergyKill(enemy)

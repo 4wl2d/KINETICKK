@@ -27,6 +27,23 @@ import kotlin.test.assertIs
 
 class ProfileCodecTest {
     @Test
+    fun statisticsSideRoundTripsAndOlderSavesKeepAllProgress() {
+        for (onLeft in listOf(false, true)) {
+            val snapshot = testSnapshot(PlayerProfile(
+                preferences = PlayerPreferences(runStatisticsOnLeft = onLeft),
+                economy = PlayerEconomy(120L, 900L),
+            ), revision = 17L)
+            val encoded = requireEncoded(snapshot)
+            assertEquals(snapshot, assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(encoded)).snapshot)
+            val legacy = encoded.replace(",\"runStatisticsOnLeft\":$onLeft", "")
+            val old = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(legacy)).snapshot
+            assertEquals(snapshot.copy(profile = snapshot.profile.copy(
+                preferences = snapshot.profile.preferences.copy(runStatisticsOnLeft = false),
+            )), old)
+        }
+    }
+
+    @Test
     fun bothLanguageCodesRoundTripAndUnsupportedCodesAreRejected() {
         assertEquals(listOf("ru", "en"), AppLanguage.entries.map { it.code })
         AppLanguage.entries.forEach { language ->
@@ -375,7 +392,7 @@ private const val DEFAULT_GOLDEN: String =
         "\"preferences\":{\"soundEnabled\":true,\"musicEnabled\":true,\"masterVolumePercent\":65," +
         "\"simulationSpeedPercent\":100,\"textScalePercent\":125,\"screenShake\":true," +
         "\"particleDensityId\":\"NORMAL\",\"damageNumbers\":true,\"damageNumberSizeId\":\"NORMAL\"," +
-        "\"damageNumberFormatId\":\"COMPACT\",\"damageNumberTierThreshold\":50,\"languageCode\":\"ru\"}," +
+        "\"damageNumberFormatId\":\"COMPACT\",\"damageNumberTierThreshold\":50,\"languageCode\":\"ru\",\"runStatisticsOnLeft\":false}," +
         "\"economy\":{\"matter\":\"0\",\"lifetimeMatter\":\"0\"}," +
         "\"loadout\":{\"coreShapeId\":\"ORB\",\"selectedWeaponId\":\"FLUX_WAKE\"," +
         "\"unlockedWeaponIds\":[\"FLUX_WAKE\"]},\"labProgress\":{\"ranks\":[" +

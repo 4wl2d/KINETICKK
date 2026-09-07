@@ -5,21 +5,18 @@ package kinetickk.ball.gameplay.nucleus
 
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
-import kinetickk.ball.gameplay.api.GameplayModuleCommandPulse
-import kinetickk.ball.gameplay.api.GameplayModuleResultOutput
 import kinetickk.ball.gameplay.api.GameplayRejection
+import kinetickk.ball.gameplay.api.GameplaySettingsApplied
+import kinetickk.ball.gameplay.api.GameplayRunStarted
+import kinetickk.ball.gameplay.api.GameplayRunExited
+import kinetickk.ball.profile.api.ProfileProgressApplied
+import kinetickk.ball.profile.api.ProfileRefusal
+import kinetickk.ball.profile.api.GameplayProgressUpdate
+import kinetickk.ball.gameplay.api.GameplayOverlayPaused
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.PlayerPreferences
-import kinetickk.ball.profile.api.ProfileCommandBoundaryResponse
-import kinetickk.ball.profile.api.ProfileCommandSourceToken
-import kinetickk.ball.profile.api.ProfileEffectiveProtocolIdentity
-import kinetickk.ball.profile.api.ProfileModuleCommandRequest
-import kinetickk.ball.profile.api.ProfileModuleResult
-import kinetickk.ball.profile.api.ProfileResultIssuerProvenance
-import kinetickk.ball.profile.api.ProfileResultSourceToken
-import kinetickk.ball.profile.api.ProfileTargetBoundaryProvenance
 import kinetickk.foundation.collections.ImmutableList
 
 const val MAX_GAMEPLAY_OUTPUTS_PER_DECISION: Int = 3
@@ -27,7 +24,6 @@ const val MAX_GAMEPLAY_OUTPUTS_PER_DECISION: Int = 3
 /** Sparse trusted read inputs; command, admission, and causal mechanics stay outside Context. */
 data class GameplayContext(
     val start: GameplayStartContext? = null,
-    val preferences: PlayerPreferences? = null,
 ) {
     companion object {
         val Empty: GameplayContext = GameplayContext()
@@ -47,24 +43,14 @@ data class GameplayStartInputs(
 
 sealed interface GameplayNucleusPulse {
     data class Intent(val intent: GameplayInteractionPulse) : GameplayNucleusPulse
-    data class ModuleCommand(val pulse: GameplayModuleCommandPulse) : GameplayNucleusPulse
+    data class ApplyPreferences(val preferences: PlayerPreferences) : GameplayNucleusPulse
+    data object StartRun : GameplayNucleusPulse
+    data object PauseForOverlay : GameplayNucleusPulse
 
-    data class ProfileModuleResultPulse(
-        val commandSource: ProfileCommandSourceToken,
-        val resultSource: ProfileResultSourceToken,
-        val effectiveProtocolIdentity: ProfileEffectiveProtocolIdentity,
-        val result: ProfileModuleResult,
-        val issuerProvenance: ProfileResultIssuerProvenance,
-    ) : GameplayNucleusPulse
+    data object ExitRun : GameplayNucleusPulse
+    data class ProgressApplied(val result: ProfileProgressApplied) : GameplayNucleusPulse
+    data class ProgressRefused(val reason: ProfileRefusal) : GameplayNucleusPulse
 
-    sealed interface ControlPulse : GameplayNucleusPulse
-
-    data class ProfileCommandRejectedBeforeAcceptance(
-        val commandSource: ProfileCommandSourceToken,
-        val effectiveProtocolIdentity: ProfileEffectiveProtocolIdentity,
-        val boundaryResponse: ProfileCommandBoundaryResponse,
-        val targetBoundaryProvenance: ProfileTargetBoundaryProvenance,
-    ) : ControlPulse
 }
 
 sealed interface GameplayDecision {
@@ -81,7 +67,10 @@ public data class GameplayAcceptedFrame(
         var completionIndex = -1
         var index = 0
         while (index < outputs.size && completionIndex < 0) {
-            if (outputs[index] is GameplayOutput.CompleteCommand) completionIndex = index
+            if (outputs[index] is GameplayOutput.RunExited ||
+                outputs[index] is GameplayOutput.SettingsApplied ||
+                outputs[index] is GameplayOutput.RunStarted || outputs[index] is GameplayOutput.OverlayPaused
+            ) completionIndex = index
             index++
         }
         require(completionIndex < 0 || completionIndex == outputs.lastIndex)
@@ -95,13 +84,16 @@ public data class GameplayAcceptedFrame(
 
 sealed interface GameplayOutput {
     data class EmitVisualFx(val cues: ImmutableList<VisualFxCue>) : GameplayOutput
-    data class SendProfileCommand(val request: ProfileModuleCommandRequest) : GameplayOutput
+    data class SendProfileCommand(val update: GameplayProgressUpdate) : GameplayOutput
     data class AdvanceAudio(
         val realDeltaSeconds: Float,
         val cues: ImmutableList<GameplayAudioCue>,
     ) : GameplayOutput
     data object EnsureAudioUnlocked : GameplayOutput
-    data class CompleteCommand(val result: GameplayModuleResultOutput) : GameplayOutput
+    data class RunExited(val result: GameplayRunExited) : GameplayOutput
+    data class SettingsApplied(val result: GameplaySettingsApplied) : GameplayOutput
+    data class RunStarted(val result: GameplayRunStarted) : GameplayOutput
+    data class OverlayPaused(val result: GameplayOverlayPaused) : GameplayOutput
 }
 
 internal fun GameplayOutput.orderRank(): Int = when (this) {
@@ -110,5 +102,7 @@ internal fun GameplayOutput.orderRank(): Int = when (this) {
     is GameplayOutput.AdvanceAudio,
     GameplayOutput.EnsureAudioUnlocked,
     -> 2
-    is GameplayOutput.CompleteCommand -> 3
+    is GameplayOutput.RunExited, is GameplayOutput.SettingsApplied,
+    is GameplayOutput.RunStarted, is GameplayOutput.OverlayPaused,
+    -> 3
 }

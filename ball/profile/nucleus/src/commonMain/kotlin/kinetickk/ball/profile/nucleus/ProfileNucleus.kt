@@ -26,24 +26,24 @@ import kinetickk.ball.profile.api.PreferenceAdjustmentDirection
 import kinetickk.ball.profile.api.PreferencesProjection
 import kinetickk.ball.profile.api.ProfileBootstrapStatus
 import kinetickk.ball.profile.api.ProfileEffectRef
-import kinetickk.ball.profile.api.ProfileCommandSourceToken
 import kinetickk.ball.profile.api.CharacterAchievementProgress
 import kinetickk.ball.profile.api.ProfileGameplayProgressRejection
 import kinetickk.ball.profile.api.ProfilePersistenceStatus
 import kinetickk.ball.profile.api.ProfilePreferenceAdjustment
-import kinetickk.ball.profile.api.ProfileModuleCommand
-import kinetickk.ball.profile.api.ProfileModuleResult
-import kinetickk.ball.profile.api.ProfileModuleResultOutput
 import kinetickk.ball.profile.api.ProfilePulse
 import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.api.ProfileRejection
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileRunBootstrapResult
 import kinetickk.ball.profile.api.ProfileSnapshot
+import kinetickk.ball.profile.api.ProfileSettingsChanged
+import kinetickk.ball.profile.api.ProfileCoreShapeSelected
 import kinetickk.ball.profile.api.ProfileWriteResult
 import kinetickk.ball.profile.api.RebirthProfileSnapshot
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.RebirthProgressProjection
+import kinetickk.ball.profile.api.ProfileRebirthAdvanced
+import kinetickk.ball.profile.api.ProfileProgressApplied
 import kinetickk.ball.profile.api.RunBootstrapProjection
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kinetickk.foundation.collections.toImmutableSet
@@ -64,25 +64,24 @@ object ProfileNucleus {
                 mutationGate(state)?.let { return rejected(it) }
                 decideMutation(state, pulse.intent)
             }
-            is ProfileNucleusPulse.ModuleCommand -> decideModuleCommand(state, pulse.pulse)
+            ProfileNucleusPulse.ToggleMute -> {
+                mutationGate(state)?.let { return rejected(it) }
+                toggleMute(state)
+            }
+            is ProfileNucleusPulse.SelectCoreShape -> {
+                mutationGate(state)?.let { return rejected(it) }
+                selectCoreShape(state, pulse.shape)
+            }
+            ProfileNucleusPulse.AdvanceRebirth -> {
+                mutationGate(state)?.let { return rejected(it) }
+                advanceRebirth(state)
+            }
+            is ProfileNucleusPulse.ApplyGameplayProgress -> {
+                mutationGate(state)?.let { return rejected(it) }
+                applyGameplayProgress(state, pulse.update)
+            }
             is ProfileNucleusPulse.WriteCompleted ->
                 decideWrite(state, pulse.effectRef, pulse.result)
-        }
-    }
-
-    private fun decideModuleCommand(
-        state: ProfileState,
-        pulse: kinetickk.ball.profile.api.ProfileModuleCommandPulse,
-    ): ProfileDecision {
-        val commandSource = pulse.commandSource
-        mutationGate(state)?.let { return rejected(it) }
-        return when (val command = pulse.command) {
-            is ProfileModuleCommand.SelectCoreShape ->
-                selectCoreShape(state, command.shape, commandSource)
-            ProfileModuleCommand.ToggleMute -> toggleMute(state, commandSource)
-            ProfileModuleCommand.AdvanceRebirth -> advanceRebirth(state, commandSource)
-            is ProfileModuleCommand.ApplyGameplayProgress ->
-                applyGameplayProgress(state, command.update, commandSource)
         }
     }
 
@@ -169,6 +168,7 @@ object ProfileNucleus {
             is ProfilePreferenceAdjustment.StepMasterVolume -> current.copy(
                 masterVolume = stepPercentage(current.masterVolume, adjustment.direction, 0f, 1f),
             )
+            is ProfilePreferenceAdjustment.SetMasterVolume -> current.copy(masterVolume = adjustment.percent / 100f)
             is ProfilePreferenceAdjustment.StepSimulationSpeed -> {
                 val currentIndex = SIMULATION_SPEED_OPTIONS.indices.minByOrNull { index ->
                     abs(SIMULATION_SPEED_OPTIONS[index] - current.simulationSpeed)
@@ -184,6 +184,8 @@ object ProfileNucleus {
             )
             ProfilePreferenceAdjustment.ToggleScreenShake ->
                 current.copy(screenShake = !current.screenShake)
+            ProfilePreferenceAdjustment.ToggleRunStatisticsSide ->
+                current.copy(runStatisticsOnLeft = !current.runStatisticsOnLeft)
             is ProfilePreferenceAdjustment.StepParticleDensity -> current.copy(
                 particleDensity = ParticleDensity.entries[
                     (current.particleDensity.ordinal + adjustment.direction.delta)
@@ -225,7 +227,6 @@ object ProfileNucleus {
 
     private fun toggleMute(
         state: ProfileState,
-        commandSource: ProfileCommandSourceToken,
     ): ProfileDecision {
         val current = state.profile.preferences
         val enable = !current.soundEnabled && !current.musicEnabled
@@ -233,7 +234,7 @@ object ProfileNucleus {
         return acceptedMutation(
             state = state,
             nextProfile = state.profile.copy(preferences = next),
-            commandOutput = commandSource.complete(ProfileModuleResult.PreferencesChanged(next)),
+            commandOutput = ProfileOutput.SettingsChanged(ProfileSettingsChanged(state.revision.next(), next)),
         )
     }
 
@@ -261,7 +262,6 @@ object ProfileNucleus {
     private fun selectCoreShape(
         state: ProfileState,
         shape: kinetickk.ball.content.api.CoreShape,
-        commandSource: ProfileCommandSourceToken,
     ): ProfileDecision {
         if (!isCoreShapeUnlocked(state.profile, state.policy.coreShape(shape))) {
             return rejected(ProfileRejection.CoreShapeLocked)
@@ -272,7 +272,7 @@ object ProfileNucleus {
             nextProfile = state.profile.copy(
                 loadout = state.profile.loadout.copy(coreShape = shape),
             ),
-            commandOutput = commandSource.complete(ProfileModuleResult.CoreShapeSelected(shape)),
+            commandOutput = ProfileOutput.CoreShapeSelected(ProfileCoreShapeSelected(state.revision.next(), shape)),
         )
     }
 
@@ -305,7 +305,6 @@ object ProfileNucleus {
 
     private fun advanceRebirth(
         state: ProfileState,
-        commandSource: ProfileCommandSourceToken,
     ): ProfileDecision {
         val progress = state.profile.rebirthProgress
         if (progress.level >= state.policy.rebirth.maximumLevel) {
@@ -318,14 +317,13 @@ object ProfileNucleus {
         return acceptedMutation(
             state = state,
             nextProfile = state.profile.copy(rebirthProgress = next),
-            commandOutput = commandSource.complete(ProfileModuleResult.RebirthAdvanced(next)),
+            commandOutput = ProfileOutput.RebirthAdvanced(ProfileRebirthAdvanced(state.revision.next(), next)),
         )
     }
 
     private fun applyGameplayProgress(
         state: ProfileState,
         update: kinetickk.ball.profile.api.GameplayProgressUpdate,
-        commandSource: ProfileCommandSourceToken,
     ): ProfileDecision {
         validateGameplayProgress(state, update)?.let {
             return rejected(ProfileRejection.InvalidGameplayProgress(it))
@@ -365,14 +363,14 @@ object ProfileNucleus {
         return acceptedMutation(
             state = state,
             nextProfile = next,
-            commandOutput = commandSource.complete(ProfileModuleResult.GameplayProgressApplied),
+            commandOutput = ProfileOutput.ProgressApplied(ProfileProgressApplied(state.revision.next())),
         )
     }
 
     private fun acceptedMutation(
         state: ProfileState,
         nextProfile: PlayerProfile,
-        commandOutput: ProfileOutput.CompleteCommand? = null,
+        commandOutput: ProfileOutput? = null,
     ): ProfileDecision {
         check(state.persistence !is ProfilePersistenceStatus.Pending) {
             "Inline Profile cannot accept another mutation while a Resource effect is pending"
@@ -502,16 +500,6 @@ object ProfileNucleus {
 }
 
 private const val PROFILE_RESOURCE_OUTPUT_ORDINAL: Int = 0
-
-private fun ProfileCommandSourceToken.complete(result: ProfileModuleResult): ProfileOutput.CompleteCommand =
-    ProfileOutput.CompleteCommand(
-        ProfileModuleResultOutput(
-            semanticHandle = semanticHandle,
-            sourceOrdinal = 1,
-            commandSource = this,
-            result = result,
-        ),
-    )
 
 private val PreferenceAdjustmentDirection.delta: Int
     get() = when (this) {

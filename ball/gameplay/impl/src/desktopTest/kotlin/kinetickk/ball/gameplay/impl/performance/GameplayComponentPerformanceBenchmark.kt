@@ -6,16 +6,12 @@ package kinetickk.ball.gameplay.impl.performance
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.gameplay.api.GameplayAcceptance
-import kinetickk.ball.gameplay.api.GameplayCommandIngressResult
-import kinetickk.ball.gameplay.api.GameplayCommandSource
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
-import kinetickk.ball.gameplay.api.GameplayModuleCommand
-import kinetickk.ball.gameplay.api.GameplayModuleCommandRequest
-import kinetickk.ball.gameplay.api.GameplayModuleResultDelivery
 import kinetickk.ball.gameplay.api.GameplayRunPhase
-import kinetickk.ball.gameplay.api.GameplaySemanticHandle
 import kinetickk.ball.gameplay.api.RunId
 import kinetickk.ball.gameplay.impl.GameComponent
+import kinetickk.ball.gameplay.impl.GameplayCommandTestCaller
+import kinetickk.ball.gameplay.api.GameplayRunStarted
 import kinetickk.ball.gameplay.impl.GameplayAudioExecutor
 import kinetickk.ball.gameplay.impl.SyntheticGameplayContent
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
@@ -27,14 +23,17 @@ import kinetickk.ball.gameplay.nucleus.render.CharacterAbilityProjection
 import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot
-import kinetickk.ball.profile.api.GameplayProfileRoute
+import kinetickk.foundation.dispatch.InlineReply
+import kinetickk.ball.profile.api.ProfileReadPort
+import kinetickk.ball.profile.api.ProfileProgress
+import kinetickk.ball.profile.api.ProfileProgressApplied
+import kinetickk.ball.profile.api.ProfileRefusal
+import kinetickk.ball.profile.api.GameplayProgressUpdate
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PreferencesProjection
-import kinetickk.ball.profile.api.ProfileCommandIngressResult
-import kinetickk.ball.profile.api.ProfileModuleCommandRequest
 import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileRunBootstrapResult
@@ -242,26 +241,14 @@ private fun newPreparedPipeline(seed: Int, pauseBeforeProbe: Boolean): PreparedP
         content = SyntheticGameplayContent,
         profilePort = BenchmarkProfilePort,
         audioExecutor = audio,
-        commandResultSink = ::ignoreGameplayCommandResult,
+        profileProgress = BenchmarkProfilePort,
         seed = seed,
     )
-    val startRequest = GameplayModuleCommandRequest(
-        semanticHandle = GameplaySemanticHandle(
-            sourceInstance = GameplayCommandSource.LocalSession,
-            sourceRevision = 0L,
-            sourceOrdinal = 0,
-        ),
-        sourceOrdinal = 0,
-        targetInstance = component.instanceId,
-        command = GameplayModuleCommand.StartRun,
-    )
-    check(
-        component.acceptFromSession(
-            request = startRequest,
-            causalScope = 1L,
-            causalDepth = 0,
-        ) is GameplayCommandIngressResult.Accepted,
-    ) { "Benchmark GameComponent fixture could not start" }
+    val start = GameplayCommandTestCaller<GameplayRunStarted>()
+    start.call(component::startRun)
+    check(start.applied.single().runId == BENCHMARK_RUN_ID && start.refused.isEmpty()) {
+        "Benchmark GameComponent fixture could not start"
+    }
     check(component.stateSnapshot().revision.value == 1L)
     check(component.stateSnapshot().phase == GameplayRunPhase.RUNNING)
     if (pauseBeforeProbe) {
@@ -277,9 +264,7 @@ private fun newPreparedPipeline(seed: Int, pauseBeforeProbe: Boolean): PreparedP
     return PreparedPipeline(component, audio)
 }
 
-private fun ignoreGameplayCommandResult(@Suppress("UNUSED_PARAMETER") delivery: GameplayModuleResultDelivery) = Unit
-
-private object BenchmarkProfilePort : GameplayProfileRoute {
+private object BenchmarkProfilePort : ProfileReadPort, ProfileProgress {
     private val profile = PlayerProfile()
     private val snapshot = GameplayProfileSnapshot(
         preferences = profile.preferences,
@@ -292,14 +277,17 @@ private object BenchmarkProfilePort : GameplayProfileRoute {
 
     override val instanceId = LOCAL_PROFILE_INSTANCE_ID
 
-    override fun acceptFromGameplay(
-        request: ProfileModuleCommandRequest,
-        causalScope: Long,
-        causalDepth: Int,
-    ): ProfileCommandIngressResult = error(
-        "Opening-frame GameComponent benchmark unexpectedly attempted a Profile command: " +
-            "$request scope=$causalScope depth=$causalDepth",
-    )
+    override fun applyGameplayProgress(
+        update: GameplayProgressUpdate,
+        reply: InlineReply<ProfileProgressApplied, ProfileRefusal>,
+    ): Unit = error("Opening-frame GameComponent benchmark unexpectedly attempted Profile progress: $update")
+
+    override fun query(query: ProfileQuery.GetHomeProgress): kinetickk.ball.profile.api.HomeProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetCollection): kinetickk.ball.profile.api.CollectionProjection = error("unused")
+    override fun query(query: ProfileQuery.GetLabProgress): kinetickk.ball.profile.api.LabProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetLoadout): kinetickk.ball.profile.api.LoadoutProjection = error("unused")
+    override fun query(query: ProfileQuery.GetRebirthProgress): kinetickk.ball.profile.api.RebirthProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetPersistenceStatus): kinetickk.ball.profile.api.PersistenceStatusProjection = error("unused")
 
     override fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection =
         RunBootstrapProjection(
@@ -387,7 +375,7 @@ private fun canonicalPipelineFingerprint(
     check(state.revision.value == expectedPriorRevision + 1L)
     check(snapshot.renderModel === render)
     check(state.content === render.content)
-    check(state.pendingProfileCommand == null)
+    check(!state.progressPending)
     check(render.phase == state.phase.toRenderPhase())
 
     var signature = -3_750_763_034_362_895_579L

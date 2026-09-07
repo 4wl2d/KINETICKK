@@ -22,7 +22,6 @@ import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PlayerProfile
-import kinetickk.ball.profile.api.ProfileModuleResultDelivery
 import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileSnapshot
@@ -38,8 +37,7 @@ internal val TestProfilePolicy: ProfilePolicySnapshot by lazy(::profilePolicyFix
 internal fun testProfileComponent(
     resource: ProfileResource = RecordingProfileResource(),
     policy: ProfilePolicySnapshot = TestProfilePolicy,
-    commandResultSink: (ProfileModuleResultDelivery) -> Unit = {},
-): DefaultProfileComponent = DefaultProfileComponent(resource, policy, commandResultSink)
+): DefaultProfileComponent = DefaultProfileComponent(resource, policy)
 
 internal fun testDefaultProfile(policy: ProfilePolicySnapshot = TestProfilePolicy): PlayerProfile {
     val defaultWeapon = policy.weapons.first().id

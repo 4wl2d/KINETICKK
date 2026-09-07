@@ -14,8 +14,8 @@ internal enum class NavigationText(
     override val english: String,
     override val russian: String,
 ) : TextResource {
-    Back("BACK [ESC / ENTER]", "НАЗАД [ESC / ENTER]"),
-    BackEscape("BACK [ESC]", "НАЗАД [ESC]"),
-    Page("‹  PAGE {0}/{1}", "‹  СТР. {0}/{1}"),
-    Next("NEXT ›", "ДАЛЕЕ ›"),
+    Back("Back · Esc", "Назад · Esc"),
+    BackEscape("Back · Esc", "Назад · Esc"),
+    Page("‹  {0}/{1}", "‹  {0}/{1}"),
+    Next("Next ›", "Далее ›"),
 }

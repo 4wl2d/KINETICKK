@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import kinetickk.foundation.design.LocalAppLanguage
+import kinetickk.foundation.design.LocalCrashDiagnostics
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
 import kinetickk.ball.profile.api.ProfileReadPort
@@ -64,6 +65,7 @@ fun AppSessionContent(
     profileReadPort: ProfileReadPort? = null,
     onLanguageChanged: (AppLanguage) -> Unit = {},
 ) {
+    val diagnostics = LocalCrashDiagnostics.current
     var languageValue by remember(sessionPort, profileReadPort) {
         mutableStateOf(profileReadPort?.query(ProfileQuery.GetPreferences)?.preferences?.language ?: initialLanguage)
     }
@@ -71,10 +73,19 @@ fun AppSessionContent(
     var shellValue by remember(sessionPort) {
         mutableStateOf(sessionPort.query(AppSessionQuery.GetShell))
     }
+    val observedShell = shellValue
+    SideEffect(observedShell) {
+        diagnostics.context("session.committed") { observedShell.toString() }
+    }
 
     fun dispatch(pulse: SessionInteractionPulse): Boolean {
+        val before = shellValue
+        diagnostics.context("session.before-input") { before.toString() }
+        diagnostics.event("session.input", pulse.toString())
         val accepted = sessionPort.accept(pulse) is SessionAcceptance.Accepted
         shellValue = sessionPort.query(AppSessionQuery.GetShell)
+        val after = shellValue
+        diagnostics.context("session.committed") { after.toString() }
         return accepted
     }
 
@@ -97,6 +108,8 @@ fun AppSessionContent(
                 .onPreviewKeyEvent { event ->
                     // Codex owns text entry, slot activation and its two-step Escape.
                     if (shellValue.overlay == AppDestination.Codex) return@onPreviewKeyEvent false
+                    // Settings owns slider keys and numeric editing (including Ctrl/Cmd+A).
+                    if (shellValue.overlay == AppDestination.Settings) return@onPreviewKeyEvent false
                     // Let a focused semantic control own Enter. When focus remains on
                     // this root, the bubble handler below preserves the global shortcut.
                     if (event.key == Key.Enter) return@onPreviewKeyEvent false
@@ -108,6 +121,12 @@ fun AppSessionContent(
                 }
                 .onKeyEvent { event ->
                     if (shellValue.overlay == AppDestination.Codex) return@onKeyEvent true
+                    if (shellValue.overlay == AppDestination.Settings) {
+                        if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                        val shortcut = event.key.toSessionShortcut() ?: return@onKeyEvent false
+                        audioExecutor.ensureUnlocked()
+                        return@onKeyEvent dispatch(SessionInteractionPulse.ShortcutObserved(shortcut))
+                    }
                     if (event.key != Key.Enter || event.type != KeyEventType.KeyDown) {
                         return@onKeyEvent false
                     }

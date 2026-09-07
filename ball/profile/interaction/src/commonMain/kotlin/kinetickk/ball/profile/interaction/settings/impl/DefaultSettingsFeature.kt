@@ -9,6 +9,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredSize
@@ -24,6 +25,7 @@ import kotlin.math.roundToInt
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.fillMaxSize
 import kinetickk.foundation.design.LocalAppLanguage
+import kinetickk.foundation.common.localization.text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -63,6 +65,8 @@ class DefaultSettingsFeature(
         val localDensity = LocalDensity.current
         var viewportValue by remember { mutableStateOf(IntSize.Zero) }
         var pageValue by rememberSaveable(routeToken) { mutableIntStateOf(0) }
+        var groupIndexValue by rememberSaveable(routeToken) { mutableIntStateOf(SettingsGroup.GAME.ordinal) }
+        val group = SettingsGroup.entries[groupIndexValue]
         LaunchedEffect(pageValue) { focusRequester.requestFocus() }
         val composeTextMeasurer = rememberTextMeasurer(cacheSize = 64)
         val textMeasurer = CanvasTextMeasurer(
@@ -73,11 +77,12 @@ class DefaultSettingsFeature(
 
         fun dispatch(action: SettingsAction) {
             val reduction = SettingsReducer.reduce(
-                state = SettingsState(renderModelValue, pageValue),
+                state = SettingsState(renderModelValue, pageValue, group),
                 action = action,
             )
             renderModelValue = reduction.state.model
             pageValue = reduction.state.page
+            groupIndexValue = reduction.state.group.ordinal
             reduction.effects.forEach { effect ->
                 when (effect) {
                     is SettingsEffect.AdjustPreference -> {
@@ -99,13 +104,14 @@ class DefaultSettingsFeature(
             Canvas(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(routeToken, renderModelValue, pageValue, onOutput) {
+                    .pointerInput(routeToken, renderModelValue, pageValue, group, onOutput) {
                         detectTapGestures { position ->
                             resolveSettingsPress(
                                 screenWidth = size.width.toFloat(),
                                 screenHeight = size.height.toFloat(),
                                 density = density,
                                 page = pageValue,
+                                group = group,
                                 x = position.x,
                                 y = position.y,
                             )?.let(::dispatch)
@@ -115,12 +121,50 @@ class DefaultSettingsFeature(
                 drawSettings(
                     model = renderModelValue,
                     page = pageValue,
+                    group = group,
                     textMeasurer = textMeasurer,
                 )
             }
+            if (viewportValue.width > 0 && viewportValue.height > 0) {
+                val layout = settingsLayout(
+                    viewportValue.width.toFloat(), viewportValue.height.toFloat(),
+                    localDensity.density, group, pageValue,
+                )
+                layout.volumeBounds(localDensity.density)?.let { bounds ->
+                    SettingsVolumeControl(
+                        percent = (renderModelValue.preferences.masterVolume * 100f).roundToInt(),
+                        routeToken = routeToken,
+                        textScale = renderModelValue.preferences.textScale,
+                        onPercentChange = { dispatch(SettingsAction.SetMasterVolume(it)) },
+                        onEditingFinished = { focusRequester.requestFocus() },
+                        modifier = Modifier
+                            .offset { IntOffset(bounds.left.roundToInt(), bounds.top.roundToInt()) }
+                            .requiredSize(with(localDensity) { bounds.width.toDp() }, with(localDensity) { bounds.height.toDp() }),
+                    )
+                }
+                Box(Modifier.fillMaxSize().selectableGroup()) {
+                    layout.tabs.forEach { tab ->
+                        Box(
+                            Modifier
+                                .offset { IntOffset(tab.bounds.left.roundToInt(), tab.bounds.top.roundToInt()) }
+                                .requiredSize(
+                                    with(localDensity) { tab.bounds.width.toDp() },
+                                    with(localDensity) { tab.bounds.height.toDp() },
+                                )
+                                .testTag("kinetickk.settings.group.${tab.group.name.lowercase()}")
+                                .semantics { contentDescription = textMeasurer.language.text(tab.group.label) }
+                                .selectable(
+                                    selected = group == tab.group,
+                                    role = Role.Tab,
+                                    onClick = { dispatch(SettingsAction.SelectGroup(tab.group)) },
+                                ),
+                        )
+                    }
+                }
+            }
             settingsLanguageOptions(
                 viewportValue.width.toFloat(), viewportValue.height.toFloat(),
-                localDensity.density, pageValue,
+                localDensity.density, pageValue, group,
             ).forEach { option ->
                 Box(
                     Modifier

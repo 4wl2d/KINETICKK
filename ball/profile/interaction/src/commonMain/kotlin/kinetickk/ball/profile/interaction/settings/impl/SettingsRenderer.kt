@@ -6,7 +6,6 @@ package kinetickk.ball.profile.interaction.settings.impl
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.ball.profile.interaction.localization.ProfileText
-import kinetickk.ball.content.api.localizedContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -29,42 +28,39 @@ import kinetickk.foundation.design.drawOverlayFrame
 import kinetickk.foundation.design.drawPagedFooter
 import kinetickk.foundation.design.formatCompact
 import kinetickk.foundation.design.formatMultiplier
-import kinetickk.foundation.design.overlayBounds
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.interaction.settings.api.SettingsRenderModel
-import kotlin.math.floor
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.roundToInt
 
 internal fun DrawScope.drawSettings(
     model: SettingsRenderModel,
     page: Int,
+    group: SettingsGroup,
     textMeasurer: TextMeasurer,
 ) {
     drawRect(Color(0xD9050610))
-    val bounds = overlayBounds(640f, 620f)
+    val layout = settingsLayout(size.width, size.height, density, group, page)
+    val bounds = layout.bounds
     drawOverlayFrame(bounds, Violet)
     drawLabel(textMeasurer, textMeasurer.language.text(ProfileText.SettingsTitle), bounds.left + d(24f), bounds.top + d(12f), 19f, White, weight = FontWeight.Bold)
-    drawLabel(textMeasurer, textMeasurer.language.text(ProfileText.SettingsHint), bounds.right - d(24f), bounds.top + d(43f), 7f, Muted, alignRight = true)
 
-    val startY = bounds.top + d(72f)
-    val settingsBottom = bounds.bottom - d(64f)
-    val availableHeight = settingsBottom - startY
-    val rowsPerPage = settingsRowsPerPage(availableHeight, density)
-    val maxPage = SettingsRow.entries.lastIndex / rowsPerPage
-    val visiblePage = page.coerceIn(0, maxPage)
-    val pageStart = visiblePage * rowsPerPage
-    val visibleRows = SettingsRow.entries.subList(
-        pageStart,
-        min(pageStart + rowsPerPage, SettingsRow.entries.size),
-    )
-    val spacing = min(d(48f), availableHeight / visibleRows.size)
-    visibleRows.forEachIndexed { index, row ->
-        val top = startY + spacing * index
+    layout.tabs.forEach { tab ->
+        val selected = tab.group == group
+        if (selected) drawLine(Cyan, tab.bounds.bottomLeft, tab.bounds.bottomRight, d(2f))
+        drawLabel(
+            textMeasurer, textMeasurer.language.text(tab.group.label), tab.bounds.center.x,
+            tab.bounds.center.y - d(6f * textMeasurer.scale), 10f, if (selected) White else Muted,
+            centered = true, weight = FontWeight.Bold, maxWidth = tab.bounds.width - d(12f),
+        )
+    }
+    val spacing = layout.spacing
+    layout.visibleRows.forEachIndexed { index, row ->
+        if (row == SettingsRow.MASTER_VOLUME) return@forEachIndexed
+        val top = layout.startY + spacing * index
         val rowHeight = spacing - d(4f)
         val controlLeft = bounds.right - d(190f)
         val controlRight = bounds.right - d(20f)
@@ -74,16 +70,15 @@ internal fun DrawScope.drawSettings(
         val valueY = top + max(0f, (rowHeight - d(8f * textMeasurer.scale)) * 0.5f)
         val buttonY = top + max(0f, (rowHeight - d(14f * textMeasurer.scale)) * 0.5f)
         val value = settingValue(model.preferences, row, textMeasurer.language)
-        drawRect(Color(0x66101225), Offset(bounds.left + d(20f), top), Size(bounds.width - d(40f), rowHeight))
-        drawRect(DarkLine, Offset(bounds.left + d(20f), top), Size(bounds.width - d(40f), rowHeight), style = Stroke(d(1f)))
-        drawLabel(textMeasurer, textMeasurer.language.text(SETTINGS_LABELS[row.ordinal]), bounds.left + d(30f), labelY, 9f, White, weight = FontWeight.Bold, maxWidth = controlLeft - bounds.left - d(40f), maxLines = 2)
+        drawLine(DarkLine.copy(alpha = 0.5f), Offset(bounds.left + d(20f), top + rowHeight), Offset(bounds.right - d(20f), top + rowHeight), d(1f))
+        drawLabel(textMeasurer, textMeasurer.language.text(SETTINGS_LABELS[row.ordinal]), bounds.left + d(30f), labelY, 10f, White, maxWidth = controlLeft - bounds.left - d(40f), maxLines = 2)
         if (row == SettingsRow.LANGUAGE) {
             AppLanguage.entries.forEachIndexed { languageIndex, language ->
                 val optionWidth = (controlRight - controlLeft) * 0.5f
                 val optionLeft = controlLeft + optionWidth * languageIndex
                 val selected = model.preferences.language == language
-                drawRect(Violet.copy(alpha = if (selected) 0.24f else 0.05f), Offset(optionLeft, controlTop), Size(optionWidth, controlHeight))
-                drawRect(if (selected) Violet else DarkLine, Offset(optionLeft, controlTop), Size(optionWidth, controlHeight), style = Stroke(d(if (selected) 2f else 1f)))
+                if (selected) drawRect(White.copy(alpha = 0.08f), Offset(optionLeft, controlTop), Size(optionWidth, controlHeight))
+                if (selected) drawLine(Cyan, Offset(optionLeft, controlTop + controlHeight), Offset(optionLeft + optionWidth, controlTop + controlHeight), d(2f))
                 drawLabel(textMeasurer, language.nativeName, optionLeft + optionWidth * 0.5f, valueY, 8f, if (selected) White else Muted, centered = true, maxWidth = optionWidth - d(6f))
             }
             return@forEachIndexed
@@ -97,13 +92,13 @@ internal fun DrawScope.drawSettings(
                 )
             }
         }
-        drawRect(Violet.copy(alpha = 0.08f), Offset(controlLeft, controlTop), Size(controlRight - controlLeft, controlHeight))
+        drawRect(White.copy(alpha = 0.035f), Offset(controlLeft, controlTop), Size(controlRight - controlLeft, controlHeight))
         drawLine(DarkLine, Offset(controlLeft + d(42f), controlTop), Offset(controlLeft + d(42f), controlTop + controlHeight), d(1f))
         drawLine(DarkLine, Offset(controlRight - d(42f), controlTop), Offset(controlRight - d(42f), controlTop + controlHeight), d(1f))
-        drawLabel(textMeasurer, "−", controlLeft + d(21f), buttonY, 14f, Violet, centered = true, weight = FontWeight.Bold)
-        drawLabel(textMeasurer, "+", controlRight - d(21f), buttonY, 14f, Violet, centered = true, weight = FontWeight.Bold)
+        drawLabel(textMeasurer, "−", controlLeft + d(21f), buttonY, 14f, Muted, centered = true)
+        drawLabel(textMeasurer, "+", controlRight - d(21f), buttonY, 14f, Muted, centered = true)
         val valueColor = when {
-            value == textMeasurer.language.text(ProfileText.Off) -> Red
+            value == textMeasurer.language.text(ProfileText.Off) -> Muted
             row == SettingsRow.DAMAGE_COLOR_THRESHOLDS -> Orange
             else -> Cyan
         }
@@ -118,21 +113,14 @@ internal fun DrawScope.drawSettings(
             maxWidth = controlRight - controlLeft - d(86f), maxLines = if (stackedValue) 3 else 1,
         )
     }
-    if (maxPage > 0) {
-        drawPagedFooter(textMeasurer, bounds, visiblePage, maxPage, Violet)
+    if (layout.maxPage > 0) {
+        drawPagedFooter(textMeasurer, bounds, layout.page, layout.maxPage, Violet)
     } else {
         drawFooterBack(textMeasurer, bounds, Violet)
     }
 }
 
 private val SettingsDamageNumberColors = listOf(Color(0xFFFFF2C2), Gold, Orange, Red)
-
-internal fun settingsRowsPerPage(availableHeight: Float, density: Float): Int {
-    val logicalHeight = availableHeight.coerceAtLeast(0f) / density.coerceAtLeast(1f)
-    return floor(logicalHeight / SETTINGS_MIN_ROW_SPACING_DP)
-        .toInt()
-        .coerceIn(1, SettingsRow.entries.size)
-}
 
 internal fun settingValue(
     preferences: PlayerPreferences,
@@ -145,6 +133,9 @@ internal fun settingValue(
     SettingsRow.MASTER_VOLUME -> "${(preferences.masterVolume * 100f).roundToInt()}%"
     SettingsRow.SIMULATION_SPEED -> formatMultiplier(preferences.simulationSpeed, language)
     SettingsRow.TEXT_SIZE -> "${(preferences.textScale * 100f).roundToInt()}%"
+    SettingsRow.RUN_STATISTICS_SIDE -> language.text(
+        if (preferences.runStatisticsOnLeft) ProfileText.LeftSide else ProfileText.RightSide,
+    )
     SettingsRow.SCREEN_SHAKE -> if (preferences.screenShake) language.text(ProfileText.On) else language.text(ProfileText.Off)
     SettingsRow.PARTICLES -> language.text(when (preferences.particleDensity) {
         ParticleDensity.LOW -> ProfileText.Low
@@ -170,7 +161,6 @@ internal fun settingValue(
     }
 }
 
-private const val SETTINGS_MIN_ROW_SPACING_DP = 32f
 private const val DAMAGE_NUMBER_POWERFUL_MULTIPLIER = 4L
 private const val DAMAGE_NUMBER_DEVASTATING_MULTIPLIER = 20L
 
@@ -187,4 +177,5 @@ private val SETTINGS_LABELS = listOf(
     ProfileText.DamageNumberSize,
     ProfileText.DamageNumberFormat,
     ProfileText.DamageColorTiers,
+    ProfileText.RunStatisticsSide,
 )

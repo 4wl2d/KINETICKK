@@ -6,8 +6,21 @@ package kinetickk.ball.profile.interaction.localization
 import kinetickk.foundation.common.localization.TextResource
 
 internal enum class ProfileText : TextResource {
+    Back,
+    PreviousPage,
+    NextPage,
     SettingsTitle,
     SettingsHint,
+    SettingsGame,
+    SettingsSound,
+    SettingsGraphics,
+    SettingsInterface,
+    RunStatisticsSide,
+    LeftSide,
+    RightSide,
+    SettingsDamageHint,
+    SettingsSoundHint,
+    VolumePercent,
     Language,
     Sfx,
     Music,

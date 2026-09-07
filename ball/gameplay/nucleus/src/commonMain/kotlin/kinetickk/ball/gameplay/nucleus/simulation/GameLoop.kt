@@ -10,6 +10,7 @@ import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.exp
 import kotlin.math.max
@@ -331,7 +332,7 @@ internal fun MutableGameState.updateCore(delta: Float) {
         velocityX = 0f
         velocityY = 0f
     }
-    updatePolarityStability(forwardPull, delta)
+    updatePolarityStability(delta)
     val brakeRank = relicRank(RelicId.BRAKEPOINT_MEMORY)
     if (brakeRank > 0 && braking && currentSpeed > 250f && speed < currentSpeed) {
         val cap = 0.18f * brakeRank
@@ -354,10 +355,7 @@ internal fun MutableGameState.updateCore(delta: Float) {
     previousSingularityY = targetY
 }
 
-internal fun MutableGameState.updatePolarityStability(
-    forwardAcceleration: Float,
-    delta: Float,
-) {
+internal fun MutableGameState.updatePolarityStability(delta: Float) {
     val tuning = content.tempo.fatigue
     val stabilityBefore = polarityStability
     val smoothing = 1f - exp(-delta / tuning.velocitySmoothingSeconds)
@@ -365,11 +363,17 @@ internal fun MutableGameState.updatePolarityStability(
     smoothedVelocityY = lerp(smoothedVelocityY, velocityY, smoothing)
     turnRecoveryCooldown = max(0f, turnRecoveryCooldown - delta)
     val smoothedSpeed = length(smoothedVelocityX, smoothedVelocityY)
-    if (braking && speed <= tuning.maximumBrakeRecoverySpeed) {
-        polarityStability = min(1f, polarityStability + tuning.brakeRecoveryPerSecond * delta)
+    // Use screen-relative reach so camera lag, momentum and magnet upgrades cannot
+    // exhaust ordinary steering. Every side and corner shares the same edge band.
+    val cursorReach = max(abs(pointerX / screenWidth * 2f - 1f), abs(pointerY / screenHeight * 2f - 1f))
+    val edgeStrain = ((cursorReach - tuning.edgeStrainStart) / (1f - tuning.edgeStrainStart)).coerceIn(0f, 1f)
+    if (edgeStrain > 0f) {
+        polarityStability = max(0f, polarityStability - tuning.edgeDrainPerSecond * edgeStrain * delta)
     } else {
-        polarityStability = max(0f, polarityStability - tuning.forwardDrainPerSecond *
-            (forwardAcceleration / tuning.fullLoadAcceleration).coerceIn(0f, 1f) * delta)
+        val recovery = if (braking && speed <= tuning.maximumBrakeRecoverySpeed) {
+            max(tuning.normalRecoveryPerSecond, tuning.brakeRecoveryPerSecond)
+        } else tuning.normalRecoveryPerSecond
+        polarityStability = min(1f, polarityStability + recovery * delta)
     }
     if (speed < tuning.minimumTurnSpeed || smoothedSpeed < tuning.minimumTurnSpeed) {
         turnHeadingEstablished = false
@@ -394,7 +398,9 @@ internal fun MutableGameState.updatePolarityStability(
                 turnDirection = direction
                 turnHoldTime += delta
                 if (turnHoldTime >= tuning.turnHoldSeconds) {
-                    polarityStability = min(1f, polarityStability + tuning.turnRecovery)
+                    if (edgeStrain <= 0f) {
+                        polarityStability = min(1f, polarityStability + tuning.turnRecovery)
+                    }
                     onSynergyTurn()
                     turnRecoveryCooldown = tuning.turnCooldownSeconds
                     saturationHeadingX = headingX

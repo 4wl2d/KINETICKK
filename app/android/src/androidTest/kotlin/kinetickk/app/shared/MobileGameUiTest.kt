@@ -109,17 +109,24 @@ class MobileGameUiTest {
             up()
         }
         val brakeControl = composeRule.onNodeWithTag(GAMEPLAY_BRAKE_TAG).requestFocus()
+        composeRule.mainClock.advanceTimeByFrame()
+        val releasedState = brakeControl.fetchSemanticsNode().config[SemanticsProperties.StateDescription]
+        val pressedState = when (releasedState) {
+            "released" -> "pressed"
+            "отпущен" -> "нажат"
+            else -> error("Unexpected released brake state: $releasedState")
+        }
         brakeControl.performKeyInput { pressKey(Key.Spacebar) }
         composeRule.mainClock.advanceTimeByFrame()
         assertEquals(
-            "pressed",
+            pressedState,
             composeRule.onNodeWithTag(GAMEPLAY_BRAKE_TAG)
                 .fetchSemanticsNode().config[SemanticsProperties.StateDescription],
         )
         composeRule.onNodeWithTag(GAMEPLAY_BRAKE_TAG).performKeyInput { pressKey(Key.Spacebar) }
         composeRule.mainClock.advanceTimeByFrame()
         assertEquals(
-            "released",
+            releasedState,
             composeRule.onNodeWithTag(GAMEPLAY_BRAKE_TAG)
                 .fetchSemanticsNode().config[SemanticsProperties.StateDescription],
         )

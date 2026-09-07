@@ -88,6 +88,14 @@ internal fun MutableGameState.startRun() {
     pendingLevelChoices = 0
     keys = 0
     kills = 0
+    damageDealt = 0.0
+    damageTaken = 0.0
+    damageAbsorbed = 0.0
+    dataCollected = 0L
+    pickupsCollected = 0L
+    keysCollected = 0L
+    eliteKills = 0
+    bestCombo = 0
     combo = 0
     comboTime = 0f
     runMatter = 0L

@@ -70,6 +70,7 @@ data class PlayerPreferences(
     val damageNumberFormat: DamageNumberFormat = DamageNumberFormat.COMPACT,
     val damageNumberTierThreshold: Int = DEFAULT_DAMAGE_NUMBER_TIER_THRESHOLD,
     val language: AppLanguage = AppLanguage.Russian,
+    val runStatisticsOnLeft: Boolean = false,
 ) {
     fun normalized(): PlayerPreferences = copy(
         masterVolume = masterVolume.coerceIn(0f, 1f),

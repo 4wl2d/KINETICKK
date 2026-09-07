@@ -58,6 +58,16 @@ internal fun MutableGameState.toRenderModel(
         nextLevelData = nextLevelData,
         keys = keys,
         kills = kills,
+        runStatistics = RunStatistics(
+            damageDealt = damageDealt,
+            damageTaken = damageTaken,
+            damageAbsorbed = damageAbsorbed,
+            dataCollected = dataCollected,
+            pickupsCollected = pickupsCollected,
+            keysCollected = keysCollected,
+            eliteKills = eliteKills,
+            bestCombo = bestCombo,
+        ),
         combo = combo,
         comboTime = comboTime,
         runMatter = runMatter,
@@ -73,6 +83,12 @@ internal fun MutableGameState.toRenderModel(
         damageMultiplier = damageMultiplier,
         weaponPower = weaponPower,
         effectiveWeaponPower = effectiveWeaponPower(),
+        rewardPreviews = if (phase == GamePhase.CHOICE && identitySource?.phase == GamePhase.CHOICE &&
+            choices === identitySource.choices && reusableCollections != null &&
+            buildStats() == identitySource.buildStats() &&
+            equippedRelics === identitySource.equippedRelics && weapon == identitySource.weapon && elapsed == identitySource.elapsed &&
+            itemStacks.sharesStorageWith(identitySource.itemStacks)
+        ) reusableCollections.rewardPreviews else rewardPreviews(),
         coolingRate = coolingRate,
         magnetStrength = magnetStrength,
         dashImpulse = dashImpulse,

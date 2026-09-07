@@ -360,14 +360,14 @@ class PlatformCapabilityBoundaryVerifierTest {
 
                 internal class AppCompositionOwner {
                     private val profile = createProfileComponent(
-                        persistence = createPlatformProfilePersistenceCapability(),
+                        persistence = createPlatformProfilePersistenceCapability(diagnostics),
                     )
                     private val audio = DefaultAudioService(
                         createPlatformTonePlaybackCapability(),
                     )
                 }
 
-                internal expect fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability
+                internal expect fun createPlatformProfilePersistenceCapability(diagnostics: CrashDiagnostics): ProfilePersistenceCapability
                 internal expect fun createPlatformTonePlaybackCapability(): TonePlaybackCapability
             """.trimIndent(),
         ),
@@ -386,7 +386,7 @@ class PlatformCapabilityBoundaryVerifierTest {
             import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
             import kinetickk.resource.audio.impl.TonePlaybackCapability
 
-            internal actual fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability =
+            internal actual fun createPlatformProfilePersistenceCapability(diagnostics: CrashDiagnostics): ProfilePersistenceCapability =
                 DesktopProfilePersistenceCapability(
                     profileNode = {
                         Preferences.userRoot().node(ProfilePersistenceContract.DESKTOP_PROFILE_NODE)
@@ -540,7 +540,7 @@ class PlatformCapabilityBoundaryVerifierTest {
             private const val ANDROID_PROFILE_PREFERENCES = "kinetickk.profile.v2"
             private const val ANDROID_SNAPSHOT = "snapshot"
 
-            internal actual fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability {
+            internal actual fun createPlatformProfilePersistenceCapability(diagnostics: CrashDiagnostics): ProfilePersistenceCapability {
                 val context = AndroidApplicationContext.requireContext()
                 return AndroidProfilePersistenceCapability(
                     profile = context.getSharedPreferences(ANDROID_PROFILE_PREFERENCES, Context.MODE_PRIVATE),
@@ -646,7 +646,7 @@ class PlatformCapabilityBoundaryVerifierTest {
             import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
             import kinetickk.resource.audio.impl.TonePlaybackCapability
 
-            internal actual fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability =
+            internal actual fun createPlatformProfilePersistenceCapability(diagnostics: CrashDiagnostics): ProfilePersistenceCapability =
                 WebProfilePersistenceCapability()
 
             private class WebProfilePersistenceCapability : ProfilePersistenceCapability {

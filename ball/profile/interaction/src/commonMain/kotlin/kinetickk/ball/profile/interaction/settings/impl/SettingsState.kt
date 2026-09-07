@@ -8,6 +8,7 @@ import kinetickk.ball.profile.api.PreferenceAdjustmentDirection
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.ProfilePreferenceAdjustment
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
+import kinetickk.ball.profile.interaction.localization.ProfileText
 import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
 import kinetickk.ball.profile.interaction.settings.api.SettingsRenderModel
 
@@ -24,10 +25,23 @@ internal enum class SettingsRow {
     DAMAGE_NUMBER_SIZE,
     DAMAGE_NUMBER_FORMAT,
     DAMAGE_COLOR_THRESHOLDS,
+    RUN_STATISTICS_SIDE,
+}
+
+internal enum class SettingsGroup(val label: ProfileText, val rows: List<SettingsRow>) {
+    GAME(ProfileText.SettingsGame, listOf(SettingsRow.LANGUAGE, SettingsRow.SIMULATION_SPEED)),
+    SOUND(ProfileText.SettingsSound, listOf(SettingsRow.SFX, SettingsRow.MUSIC, SettingsRow.MASTER_VOLUME)),
+    GRAPHICS(ProfileText.SettingsGraphics, listOf(
+        SettingsRow.SCREEN_SHAKE, SettingsRow.PARTICLES, SettingsRow.DAMAGE_NUMBERS,
+        SettingsRow.DAMAGE_NUMBER_SIZE, SettingsRow.DAMAGE_NUMBER_FORMAT, SettingsRow.DAMAGE_COLOR_THRESHOLDS,
+    )),
+    INTERFACE(ProfileText.SettingsInterface, listOf(SettingsRow.TEXT_SIZE, SettingsRow.RUN_STATISTICS_SIDE)),
 }
 
 internal sealed interface SettingsAction {
+    data class SelectGroup(val group: SettingsGroup) : SettingsAction
     data class SelectLanguage(val language: AppLanguage) : SettingsAction
+    data class SetMasterVolume(val percent: Int) : SettingsAction
     data class Adjust(val row: SettingsRow, val direction: Int) : SettingsAction
     data class PageSelected(val page: Int) : SettingsAction
     data object Back : SettingsAction
@@ -36,6 +50,7 @@ internal sealed interface SettingsAction {
 internal data class SettingsState(
     val model: SettingsRenderModel,
     val page: Int,
+    val group: SettingsGroup = SettingsGroup.GAME,
 )
 
 internal sealed interface SettingsEffect {
@@ -54,12 +69,29 @@ internal data class SettingsReduction(
 
 internal object SettingsReducer {
     fun reduce(state: SettingsState, action: SettingsAction): SettingsReduction = when (action) {
+        is SettingsAction.SelectGroup -> if (state.group == action.group) {
+            SettingsReduction(state)
+        } else {
+            SettingsReduction(
+                state = state.copy(group = action.group, page = 0),
+                effects = listOf(SettingsEffect.PlayAudio(ProfileAudioCue.UI_CLICK)),
+            )
+        }
         is SettingsAction.SelectLanguage -> if (state.model.preferences.language == action.language) {
             SettingsReduction(state)
         } else {
             SettingsReduction(state, listOf(
                 SettingsEffect.AdjustPreference(ProfilePreferenceAdjustment.SetLanguage(action.language)),
                 SettingsEffect.PlayAudio(ProfileAudioCue.UI_CLICK),
+            ))
+        }
+        is SettingsAction.SetMasterVolume -> if (action.percent !in 0..100 ||
+            state.model.preferences.masterVolume == action.percent / 100f
+        ) {
+            SettingsReduction(state)
+        } else {
+            SettingsReduction(state, listOf(
+                SettingsEffect.AdjustPreference(ProfilePreferenceAdjustment.SetMasterVolume(action.percent)),
             ))
         }
         is SettingsAction.Adjust -> {
@@ -109,6 +141,7 @@ private fun SettingsRow.toAdjustment(direction: Int): ProfilePreferenceAdjustmen
         SettingsRow.SIMULATION_SPEED -> ProfilePreferenceAdjustment.StepSimulationSpeed(adjustmentDirection)
         SettingsRow.TEXT_SIZE -> ProfilePreferenceAdjustment.StepTextScale(adjustmentDirection)
         SettingsRow.SCREEN_SHAKE -> ProfilePreferenceAdjustment.ToggleScreenShake
+        SettingsRow.RUN_STATISTICS_SIDE -> ProfilePreferenceAdjustment.ToggleRunStatisticsSide
         SettingsRow.PARTICLES -> ProfilePreferenceAdjustment.StepParticleDensity(adjustmentDirection)
         SettingsRow.DAMAGE_NUMBERS -> ProfilePreferenceAdjustment.ToggleDamageNumbers
         SettingsRow.DAMAGE_NUMBER_SIZE -> ProfilePreferenceAdjustment.StepDamageNumberSize(adjustmentDirection)

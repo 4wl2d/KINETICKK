@@ -19,14 +19,19 @@ internal fun MutableGameState.takeDamage(rawAmount: Float) {
     if (characterRuntime.barrier > 0f) {
         val absorbed = min(characterRuntime.barrier, amount)
         characterRuntime = characterRuntime.copy(barrier = characterRuntime.barrier - absorbed)
+        damageAbsorbed += absorbed.toDouble()
         amount -= absorbed
     }
     if (shield > 0f) {
         val absorbed = min(shield, amount)
         shield -= absorbed
+        damageAbsorbed += absorbed.toDouble()
         amount -= absorbed
     }
-    if (amount > 0f) hp -= amount
+    if (amount > 0f) {
+        damageTaken += min(amount, hp.coerceAtLeast(0f)).toDouble()
+        hp -= amount
+    }
     if (amount > 0f && relicRank(RelicId.BORROWED_MOMENT) > 0) {
         borrowedMomentTime = 2.5f
         relicProcCounts[RelicId.BORROWED_MOMENT.ordinal]++

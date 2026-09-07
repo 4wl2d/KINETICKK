@@ -4,25 +4,106 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.EquippedRelic
+import kinetickk.ball.content.api.PointOfInterestKind
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.gameplay.api.BrakeSource
+import kinetickk.ball.gameplay.api.GameplayInteractionPulse
+import kinetickk.ball.gameplay.nucleus.model.CharacterRuntime
 import kinetickk.ball.gameplay.nucleus.model.Pickup
+import kinetickk.ball.gameplay.nucleus.model.PointOfInterestState
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.Totem
 import kinetickk.ball.gameplay.nucleus.model.TrailPoint
 import kinetickk.ball.gameplay.nucleus.model.WeaponNode
 import kinetickk.ball.gameplay.nucleus.model.WeaponOrbital
+import kinetickk.ball.gameplay.nucleus.model.WorldPoint
+import kinetickk.ball.gameplay.nucleus.reducer.EngineState
+import kinetickk.ball.gameplay.nucleus.reducer.GameReducer
+import kinetickk.ball.gameplay.nucleus.reducer.GameReductionResult
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
+import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNotSame
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class GameplayRenderModelMapperTest {
+    @Test
+    fun reusedProjectionMatchesIndependentFreshMappingAndRetainedSnapshotsSurviveLaterInputs() {
+        val frame = GameplayInteractionPulse.FrameElapsed.fromValidated(1f / 60f)
+        val source = fullyPopulatedState().apply {
+            characterRuntime = CharacterRuntime(
+                charge = 0.4f,
+                barrier = 2f,
+                ringRadius = 61f,
+                parryWindow = 0.2f,
+                lattice = listOf(WorldPoint(-1f, 2f), WorldPoint(3f, -4f)),
+            )
+            pointsOfInterest = listOf(
+                PointOfInterestState(
+                    offerId = 1,
+                    kind = PointOfInterestKind.COLLAPSING_ORBIT,
+                    x = 300f,
+                    y = 400f,
+                    expiresAt = 90f,
+                ),
+            )
+        }
+        val choiceSource = populatedState().apply { openItemChoice() }
+        val cases = listOf(
+            source to listOf(
+                GameplayInteractionPulse.PointerMoved.fromValidated(901f, 361f),
+                GameplayInteractionPulse.ViewportChanged.fromValidated(1_024f, 768f, 2f),
+                GameplayInteractionPulse.BrakeChanged(BrakeSource.KEYBOARD, true),
+                GameplayInteractionPulse.DashRequested,
+                frame,
+                GameplayInteractionPulse.PauseToggled,
+                frame,
+                GameplayInteractionPulse.PauseToggled,
+                GameplayInteractionPulse.BrakeChanged(BrakeSource.KEYBOARD, false),
+                frame,
+            ),
+            choiceSource to listOf(
+                GameplayInteractionPulse.ChoicesRerolled,
+                GameplayInteractionPulse.ChoiceSelected.fromValidated(0),
+                frame,
+            ),
+        )
+
+        cases.forEachIndexed { caseIndex, (initial, inputs) ->
+            var state = EngineState(initial)
+            var projection = initial.toRenderModel()
+            val retained = mutableListOf<Pair<GameplayRenderModel, List<Pair<String, Any?>>>>()
+            val reducer = GameReducer()
+            inputs.forEachIndexed { inputIndex, input ->
+                retained += projection to projection.exactRenderFacts()
+                val accepted = assertIs<GameReductionResult.Accepted>(reducer.reduce(state, input))
+                val optimized = accepted.state.model.toRenderModel(
+                    reusableCollections = projection,
+                    identitySource = state.model,
+                )
+                // No source clone, retained projection, or identity hint participates in this read.
+                val fresh = accepted.state.model.toRenderModel()
+                assertEquals(
+                    fresh.exactRenderFacts(),
+                    optimized.exactRenderFacts(),
+                    "case $caseIndex input $inputIndex: $input",
+                )
+                state = accepted.state
+                projection = optimized
+            }
+            retained.forEachIndexed { index, (snapshot, expected) ->
+                assertEquals(expected, snapshot.exactRenderFacts(), "case $caseIndex retained $index")
+            }
+        }
+    }
+
     @Test
     fun identityMatchedScalarSourceReusesEveryProjectionWithoutReadingStableLists() {
         val source = fullyPopulatedState()
@@ -288,6 +369,92 @@ class GameplayRenderModelMapperTest {
         description = "$title choice",
         tag = "TEST",
         itemId = canonicalGameplayContent.items.first().id,
+    )
+
+    /** Detached observable values; raw Float bits preserve NaN payloads and signed zero. */
+    private fun GameplayRenderModel.exactRenderFacts(): List<Pair<String, Any?>> = listOf(
+        "content" to content,
+        "phase" to phase,
+        "runStatistics" to runStatistics,
+        "settings" to listOf(
+            settings.soundEnabled, settings.musicEnabled, settings.masterVolume.toRawBits(),
+            settings.simulationSpeed.toRawBits(), settings.textScale.toRawBits(), settings.screenShake,
+            settings.particleDensity, settings.damageNumbers, settings.damageNumberSize,
+            settings.damageNumberFormat, settings.damageNumberTierThreshold, settings.language, settings.runStatisticsOnLeft,
+        ),
+        "scalars" to listOf(
+            rebirthLevel, screenWidth.toRawBits(), screenHeight.toRawBits(), uiScale.toRawBits(),
+            coreX.toRawBits(), coreY.toRawBits(), velocityX.toRawBits(), velocityY.toRawBits(),
+            cameraX.toRawBits(), cameraY.toRawBits(), pointerX.toRawBits(), pointerY.toRawBits(),
+            pointerActive, braking, elapsed.toRawBits(), heat.toRawBits(), overheated,
+            dashPhaseTime.toRawBits(), hp.toRawBits(), maxHp.toRawBits(), shield.toRawBits(),
+            maxShield.toRawBits(), level, data, nextLevelData, keys, kills, combo,
+            comboTime.toRawBits(), runMatter, totalMatter, lastImpact.toRawBits(),
+            lastImpactTime.toRawBits(), damageFlash.toRawBits(), runGrace.toRawBits(),
+            screenShake.toRawBits(), message, messageTime.toRawBits(), mass.toRawBits(),
+            damageMultiplier.toRawBits(), weaponPower.toRawBits(), effectiveWeaponPower.toRawBits(),
+            coolingRate.toRawBits(), magnetStrength.toRawBits(), dashImpulse.toRawBits(),
+            dashHeatCost.toRawBits(), regenPerSecond.toRawBits(), critChance.toRawBits(),
+            critMultiplier.toRawBits(), pickupRadius.toRawBits(), luck.toRawBits(),
+            dataGain.toRawBits(), matterGain.toRawBits(), attackSpeed.toRawBits(),
+            damageReduction.toRawBits(), comboWindow.toRawBits(), overdriveGain.toRawBits(),
+            dragCoefficient.toRawBits(), polarityStability.toRawBits(), weapon, weaponLevel,
+            overdriveCharge.toRawBits(), overdriveTime.toRawBits(), rerollsRemaining,
+            acquiredItemCount, recentItem, morningstarAngle.toRawBits(), morningstarX.toRawBits(),
+            morningstarY.toRawBits(), weaponBeamTime.toRawBits(), weaponBeamStartX.toRawBits(),
+            weaponBeamStartY.toRawBits(), weaponBeamEndX.toRawBits(), weaponBeamEndY.toRawBits(),
+            coreShape, choiceType, pendingRelicChoiceCount, directedChoice,
+        ),
+        "equippedRelics" to equippedRelics.toList(),
+        "totem" to totem?.let { listOf(it.x.toRawBits(), it.y.toRawBits(), it.pulse.toRawBits()) },
+        "enemies" to enemies.map {
+            listOf(
+                it.id, it.type, it.x.toRawBits(), it.y.toRawBits(), it.vx.toRawBits(), it.vy.toRawBits(),
+                it.hp.toRawBits(), it.maxHp.toRawBits(), it.radius.toRawBits(), it.actionTimer.toRawBits(),
+                it.flash.toRawBits(), it.contactCooldown.toRawBits(), it.weaponCooldown.toRawBits(),
+                it.previousX.toRawBits(), it.previousY.toRawBits(), it.dead,
+            )
+        },
+        "projectiles" to projectiles.map {
+            listOf(
+                it.x.toRawBits(), it.y.toRawBits(), it.vx.toRawBits(), it.vy.toRawBits(),
+                it.radius.toRawBits(), it.life.toRawBits(), it.hostile, it.damage.toRawBits(),
+                it.pierce, it.colorIndex, it.sourceWeapon, it.previousX.toRawBits(), it.previousY.toRawBits(),
+            )
+        },
+        "pickups" to pickups.map {
+            listOf(
+                it.type, it.x.toRawBits(), it.y.toRawBits(), it.vx.toRawBits(), it.vy.toRawBits(),
+                it.life.toRawBits(), it.previousX.toRawBits(), it.previousY.toRawBits(),
+            )
+        },
+        "trail" to trail.map { listOf(it.x.toRawBits(), it.y.toRawBits(), it.age.toRawBits()) },
+        "weaponNodes" to weaponNodes.map {
+            listOf(
+                it.type, it.x.toRawBits(), it.y.toRawBits(), it.life.toRawBits(),
+                it.maxLife.toRawBits(), it.radius.toRawBits(),
+            )
+        },
+        "weaponOrbitals" to weaponOrbitals.map {
+            listOf(it.index, it.x.toRawBits(), it.y.toRawBits(), it.radius.toRawBits())
+        },
+        "choices" to choices.toList(),
+        "rewardPreviews" to rewardPreviews.toList(),
+        "characterAbility" to listOf(
+            characterAbility.charge.toRawBits(), characterAbility.barrier.toRawBits(),
+            characterAbility.ringRadius.toRawBits(), characterAbility.parryWindow.toRawBits(),
+            characterAbility.lattice.map { listOf(it.x.toRawBits(), it.y.toRawBits()) },
+        ),
+        "pointsOfInterest" to pointsOfInterest.map {
+            listOf(
+                it.kind, it.name, it.x.toRawBits(), it.y.toRawBits(), it.active,
+                it.remaining.toRawBits(), it.nextBeacon, it.progress.toRawBits(), it.defenderIds.toList(),
+                it.warningRemaining.toRawBits(), it.volleyAngle.toRawBits(),
+            )
+        },
+        "itemStacks" to itemStacks.toList(),
+        "discoveredItemIds" to discoveredItemIds.toList(),
+        "relicRanks" to relicRanks.toList(),
     )
 
     private class ReadGuardList<Element>(

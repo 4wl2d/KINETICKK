@@ -35,22 +35,36 @@ import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
+import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RelicAspect
+import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicPolicy
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
-import kinetickk.ball.gameplay.api.GameplayCommandIssuerProvenance
-import kinetickk.ball.gameplay.api.GameplayCommandSource
-import kinetickk.ball.gameplay.api.GameplayCommandSourceToken
-import kinetickk.ball.gameplay.api.GameplayEffectiveProtocolIdentity
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
-import kinetickk.ball.gameplay.api.GameplayModuleCommand
-import kinetickk.ball.gameplay.api.GameplayModuleCommandPulse
-import kinetickk.ball.gameplay.api.GameplaySemanticHandle
 import kinetickk.ball.gameplay.api.RunId
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.layout.choiceLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
+import kinetickk.ball.gameplay.interaction.terminal.TerminalContent
+import kinetickk.ball.gameplay.interaction.terminal.drawCoreDeath
+import kinetickk.ball.gameplay.interaction.GameplayContent
+import kinetickk.ball.gameplay.interaction.GameplayInteractionPort
+import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
+import kinetickk.ball.gameplay.api.GameplayAcceptance
+import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.input.key.Key
+import kotlin.test.assertTrue
+import kotlin.test.assertEquals
+import kinetickk.ball.gameplay.interaction.terminal.terminalPresentation
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.rewards.RewardContent
 import kinetickk.ball.gameplay.interaction.rewards.RewardPresentation
@@ -119,13 +133,19 @@ class GameplayLocalizedRenderingTest {
                             choiceLayoutGeometry(current.width.toFloat(), current.height.toFloat(), 1f, 3, true),
                             current.width.toFloat(), 1f, current.textScale, 0f, true, {}, {},
                         )
+                    } else if (current.scene == Scene.GAME_OVER || current.scene == Scene.VICTORY) {
+                        TerminalContent(model.terminalPresentation(AppLanguage.Russian).copy(
+                            victory = current.scene == Scene.VICTORY,
+                            reason = if (current.scene == Scene.VICTORY) "Архитектор уничтожен" else "Ядро разрушено",
+                        ), current.textScale, false, 3f, true, {})
                     } else {
                         Canvas(Modifier.fillMaxSize()) {
                             if (current.scene == Scene.HUD) {
-                                drawGameplay(model, VisualFxProjection.EMPTY, textMeasurer, 0f, null, null)
-                            } else {
+                                drawGameplay(model, VisualFxProjection.EMPTY, textMeasurer, 0f, null)
+                            } else if (current.scene == Scene.PAUSE) {
                                 drawRect(SpaceBlack)
                                 drawPause(textMeasurer, pauseLayoutGeometry(size.width, size.height, 1f))
+
                             }
                         }
                     }
@@ -135,30 +155,33 @@ class GameplayLocalizedRenderingTest {
 
         val scenarios = listOf(1000 to 720, 390 to 720, 780 to 360).flatMap { (width, height) ->
             Scene.entries.map { scene -> Scenario(width, height, scene) }
-        } + Scenario(390, 720, Scene.REWARDS, 1.75f)
+        } + listOf(
+            Scenario(390, 720, Scene.REWARDS, 1.75f),
+            Scenario(780, 360, Scene.PAUSE, 1.75f),
+            Scenario(780, 360, Scene.GAME_OVER, 1.75f),
+            Scenario(780, 360, Scene.VICTORY, 1.75f),
+        )
         scenarios.forEach { current ->
             compose.runOnIdle { scenario.value = current }
             compose.onNodeWithTag("localized-gameplay").assertIsDisplayed()
             if (current.scene == Scene.REWARDS) {
-                compose.onNodeWithText("ВЫБРАТЬ [1]", useUnmergedTree = true).assertIsDisplayed()
+                compose.onNodeWithText("Взять · 1", useUnmergedTree = true).assertIsDisplayed()
                 compose.onNodeWithTag("kinetickk.gameplay.reroll").assertIsDisplayed()
             }
             capture("gameplay-ru-${current.scene.name.lowercase()}-${current.width}x${current.height}-${current.textScale}")
         }
     }
 
-    private fun model(scenario: Scenario): GameplayRenderModel {
+    private fun model(scenario: Scenario): GameplayRenderModel =
+        requireNotNull(GameplayNucleus.renderSnapshot(startedState(scenario)).renderModel)
+
+    private fun startedState(scenario: Scenario): GameplayState {
         val content = localizationFixtureContent()
         val profile = PlayerProfile(preferences = PlayerPreferences(language = AppLanguage.Russian, textScale = scenario.textScale))
         val initial = GameplayState.initial(RunId(1), content)
         val started = assertIs<GameplayDecision.Accepted>(GameplayNucleus.decide(
             initial,
-            GameplayNucleusPulse.ModuleCommand(GameplayModuleCommandPulse(
-                GameplayCommandSourceToken(GameplaySemanticHandle(GameplayCommandSource.LocalSession, 0, 0), initial.instanceId, 1, 0),
-                GameplayEffectiveProtocolIdentity.SESSION_START,
-                GameplayModuleCommand.StartRun,
-                GameplayCommandIssuerProvenance.LOCAL_SESSION_STATIC_BINDING,
-            )),
+            GameplayNucleusPulse.StartRun,
             GameplayContext(start = GameplayStartContext.Ready(GameplayStartInputs(
                 content,
                 GameplayProfileSnapshot(profile.preferences, profile.economy, profile.loadout, profile.labProgress, profile.collection, profile.rebirthProgress),
@@ -171,7 +194,98 @@ class GameplayLocalizedRenderingTest {
                 scenario.width.toFloat(), scenario.height.toFloat(), 1f,
             )),
         )).frame.nextState
-        return requireNotNull(GameplayNucleus.renderSnapshot(resized).renderModel)
+        return resized
+    }
+
+    @Test
+    fun actualDeathKeepsTheRunFrozenWhilePresentationAdvancesAndRestartClicksOnce() {
+        var state = startedState(Scenario(1000, 720, Scene.GAME_OVER, 1.25f))
+        val port = object : GameplayInteractionPort {
+            override val instanceId get() = state.instanceId
+            override fun renderSnapshot() = GameplayNucleus.renderSnapshot(state)
+            override fun visualFxSnapshot() = VisualFxProjection.EMPTY
+            override fun accept(pulse: GameplayInteractionPulse): GameplayAcceptance =
+                when (val decision = GameplayNucleus.decide(state, GameplayNucleusPulse.Intent(pulse))) {
+                    is GameplayDecision.Accepted -> {
+                        state = decision.frame.nextState
+                        GameplayAcceptance.Accepted(state.instanceId, state.revision)
+                    }
+                    is GameplayDecision.Rejected -> GameplayAcceptance.Rejected(state.instanceId, state.revision, decision.reason)
+                }
+        }
+        repeat(100) {
+            val current = requireNotNull(port.renderSnapshot().renderModel)
+            if (current.phase == GamePhase.RUNNING) {
+                port.accept(GameplayInteractionPulse.PointerMoved.fromValidated(
+                    current.screenWidth * 0.5f + current.coreX - current.cameraX,
+                    current.screenHeight * 0.5f + current.coreY - current.cameraY,
+                ))
+                port.accept(GameplayInteractionPulse.FrameElapsed.fromValidated(0.1f))
+            }
+        }
+        val terminal = requireNotNull(port.renderSnapshot().renderModel)
+        assertEquals(GamePhase.GAME_OVER, terminal.phase)
+        val outputs = mutableListOf<GameplayInteractionOutput>()
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides AppLanguage.Russian) {
+                Box(Modifier.requiredSize(1000.dp, 720.dp).testTag("localized-gameplay")) {
+                    GameplayContent(port, true, outputs::add)
+                }
+            }
+        }
+        compose.onNodeWithTag("kinetickk.gameplay.restart").assertDoesNotExist()
+        compose.onNodeWithTag("kinetickk.gameplay").performKeyInput { pressKey(Key.R) }
+        compose.runOnIdle { assertTrue(outputs.isEmpty()) }
+        capture("core-death-start")
+        compose.mainClock.advanceTimeBy(320)
+        compose.onNodeWithTag("kinetickk.gameplay.restart").assertDoesNotExist()
+        capture("core-death-fragments")
+        compose.mainClock.advanceTimeBy(480)
+        capture("core-death-report-entering")
+        compose.mainClock.advanceTimeBy(1500)
+        compose.onNodeWithTag("kinetickk.gameplay.restart").assertIsEnabled()
+        capture("core-death-report-complete")
+        compose.onNodeWithTag("kinetickk.gameplay.restart").performMouseInput { click() }
+        compose.runOnIdle {
+            assertEquals(listOf<GameplayInteractionOutput>(GameplayInteractionOutput.RestartRun), outputs)
+            val current = requireNotNull(port.renderSnapshot().renderModel)
+            assertEquals(terminal.elapsed, current.elapsed)
+            assertEquals(terminal.runStatistics, current.runStatistics)
+            assertEquals(terminal.kills, current.kills)
+        }
+        compose.onNodeWithTag("kinetickk.gameplay.exit").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        compose.onNodeWithTag("kinetickk.gameplay.exit").performKeyInput { pressKey(Key.Enter) }
+        compose.runOnIdle {
+            assertEquals(listOf<GameplayInteractionOutput>(GameplayInteractionOutput.RestartRun, GameplayInteractionOutput.ExitToHome), outputs)
+        }
+    }
+
+    @Test
+    fun coreFragmentsHaveAFiniteLifetime() {
+        val time = mutableStateOf(0f)
+        compose.setContent {
+            val model = remember { model(Scenario(640, 420, Scene.GAME_OVER)) }
+            Box(Modifier.requiredSize(640.dp, 420.dp).testTag("localized-gameplay")) {
+                Canvas(Modifier.fillMaxSize()) {
+                    drawRect(SpaceBlack)
+                    drawCoreDeath(model, time.value)
+                }
+            }
+        }
+        fun visiblePixels(): Int {
+            val pixels = compose.onNodeWithTag("localized-gameplay").captureToImage().toPixelMap()
+            var count = 0
+            for (y in 0 until pixels.height) for (x in 0 until pixels.width) {
+                if (pixels[x, y].toArgb() != SpaceBlack.toArgb()) count++
+            }
+            return count
+        }
+        assertTrue(visiblePixels() > 0)
+        compose.runOnIdle { time.value = 0.4f }
+        assertTrue(visiblePixels() > 0)
+        compose.runOnIdle { time.value = 1.2f }
+        assertEquals(0, visiblePixels())
     }
 
     private fun capture(name: String) {
@@ -184,7 +298,7 @@ class GameplayLocalizedRenderingTest {
         ImageIO.write(image, "png", File(directory, "$name.png"))
     }
 
-    private enum class Scene { HUD, PAUSE, REWARDS }
+    private enum class Scene { HUD, PAUSE, REWARDS, GAME_OVER, VICTORY }
     private data class Scenario(val width: Int, val height: Int, val scene: Scene, val textScale: Float = 1f)
 }
 
@@ -209,7 +323,9 @@ private fun localizationFixtureContent() = GameplayContentSnapshot(
     metaUpgrades = MetaUpgradeId.entries.map { id ->
         MetaUpgradeDefinition(id, "Fixture", "Fixture", 1, 1, ItemModifier(ItemEffect.MAX_INTEGRITY, 1f))
     }.toImmutableList(),
-    relics = immutableListOf(),
+    relics = RelicId.entries.map { id ->
+        RelicDefinition(id, id.name, RelicAspect.entries.first(), "Fixture", "Fixture")
+    }.toImmutableList(),
     rebirth = RebirthPolicySnapshot(
         minimumLevel = 0, maximumLevel = 0,
         profiles = immutableListOf(RebirthProfile(

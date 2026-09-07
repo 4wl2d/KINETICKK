@@ -3,23 +3,19 @@
 
 package kinetickk.flow.session.nucleus
 
+import kinetickk.ball.gameplay.api.GameplayRunExited
+
 import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.gameplay.api.GameplayCommandBoundaryResponse
-import kinetickk.ball.gameplay.api.GameplayCommandSourceToken
 import kinetickk.ball.gameplay.api.GameplayExitProgressResult
 import kinetickk.ball.gameplay.api.GameplayInstanceId
-import kinetickk.ball.gameplay.api.GameplayModuleCommand
-import kinetickk.ball.gameplay.api.GameplayModuleCommandRequest
-import kinetickk.ball.gameplay.api.GameplayModuleResult
-import kinetickk.ball.gameplay.api.GameplayRejection
-import kinetickk.ball.gameplay.api.GameplayResultIssuerProvenance
-import kinetickk.ball.gameplay.api.GameplayResultSourceToken
 import kinetickk.ball.gameplay.api.GameplayRevision
 import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.GameplayRunStatusProjection
-import kinetickk.ball.gameplay.api.GameplayTargetBoundaryProvenance
 import kinetickk.ball.gameplay.api.RunId
-import kinetickk.ball.gameplay.api.effectiveProtocolIdentity
+import kinetickk.ball.gameplay.api.GameplaySettingsApplied
+import kinetickk.ball.gameplay.api.GameplayRefusal
+import kinetickk.ball.gameplay.api.GameplayRunStarted
+import kinetickk.ball.gameplay.api.GameplayOverlayPaused
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.LabProgress
@@ -31,24 +27,17 @@ import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PreferencesProjection
 import kinetickk.ball.profile.api.ProfileBootstrapBlockReason
 import kinetickk.ball.profile.api.ProfileBootstrapStatus
-import kinetickk.ball.profile.api.ProfileCommandBoundaryResponse
-import kinetickk.ball.profile.api.ProfileCommandSourceToken
-import kinetickk.ball.profile.api.ProfileEffectiveProtocolIdentity
-import kinetickk.ball.profile.api.ProfileModuleCommand
-import kinetickk.ball.profile.api.ProfileModuleCommandRequest
-import kinetickk.ball.profile.api.ProfileModuleResult
 import kinetickk.ball.profile.api.ProfilePersistenceStatus
-import kinetickk.ball.profile.api.ProfileRejection
-import kinetickk.ball.profile.api.ProfileResultIssuerProvenance
-import kinetickk.ball.profile.api.ProfileResultSourceToken
+import kinetickk.ball.profile.api.ProfileRebirthAdvanced
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileRunBootstrapResult
-import kinetickk.ball.profile.api.ProfileTargetBoundaryProvenance
 import kinetickk.ball.profile.api.RebirthProfileSnapshot
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.RebirthProgressProjection
 import kinetickk.ball.profile.api.RunBootstrapProjection
-import kinetickk.ball.profile.api.effectiveProtocolIdentity
+import kinetickk.ball.profile.api.ProfileSettingsChanged
+import kinetickk.ball.profile.api.ProfileRefusal
+import kinetickk.ball.profile.api.ProfileCoreShapeSelected
 import kinetickk.flow.session.api.AppDestination
 import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.flow.session.api.SessionInteractionPulse
@@ -71,23 +60,18 @@ class AppSessionNucleusTest {
     @Test
     fun nucleusPulseInventoryIsExactlyIntentModuleResultOrControlPulse() {
         val start = startFrame()
-        val gameplayRequest = assertIs<AppSessionOutput.SendGameplayCommand>(start.outputs.last()).request
-        val mute = decide(initialState(), SessionInteractionPulse.ToggleMuteRequested).accepted()
-        val profileRequest = assertIs<AppSessionOutput.SendProfileCommand>(mute.outputs.single()).request
+        val startCommand = assertIs<AppSessionOutput.StartRun>(start.outputs.last())
 
         val intents: List<AppSessionNucleusPulse> = listOf(
             AppSessionNucleusPulse.Intent(SessionInteractionPulse.StartRunRequested),
         )
-        val results: List<AppSessionNucleusPulse.ModuleResultPulse> = listOf(
-            gameplayResult(gameplayRequest, GameplayModuleResult.RunStarted),
-            profileResult(
-                profileRequest,
-                ProfileModuleResult.PreferencesChanged(PlayerPreferences()),
-            ),
+        val results: List<AppSessionNucleusPulse.Result> = listOf(
+            gameplayRunStarted(GameplayRunStarted(startCommand.runId, GameplayRevision(5))),
+            profileSettingsChanged(ProfileSettingsChanged(ProfileRevision(5), PlayerPreferences())),
         )
-        val controls: List<AppSessionNucleusPulse.ControlPulse> = listOf(
-            gameplayRefusal(gameplayRequest),
-            profileRefusal(profileRequest),
+        val controls: List<AppSessionNucleusPulse.Refusal> = listOf(
+            gameplayStartRefused(startCommand.runId, GameplayRefusal.Busy),
+            profileSettingsRefused(ProfileRefusal.Busy),
         )
 
         assertEquals(1, intents.size)
@@ -172,15 +156,12 @@ class AppSessionNucleusTest {
         assertEquals(SessionRevision(1L), frame.nextState.revision)
         assertEquals(GameplayRunPhase.CREATED, frame.nextState.gameplayPhase)
         assertEquals(AppSessionOutput.EnsureGameplayRun(RunId(0L)), frame.outputs[0])
-        val send = assertIs<AppSessionOutput.SendGameplayCommand>(frame.outputs[1])
-        assertEquals(GameplayModuleCommand.StartRun, send.request.command)
-        assertEquals(SessionRevision(1L).value, send.request.semanticHandle.sourceRevision)
-        assertEquals(1, send.request.sourceOrdinal)
-        assertEquals(RunId(0L), send.request.targetInstance.runId)
+        val send = assertIs<AppSessionOutput.StartRun>(frame.outputs[1])
+        assertEquals(RunId(0L), send.runId)
 
         val completed = AppSessionNucleus.decide(
             frame.nextState,
-            gameplayResult(send.request, GameplayModuleResult.RunStarted),
+            gameplayRunStarted(GameplayRunStarted(send.runId, GameplayRevision(5))),
         ).accepted()
         assertEquals(AppDestination.Gameplay, completed.nextState.base)
         assertEquals(GameplayRunPhase.RUNNING, completed.nextState.gameplayPhase)
@@ -191,10 +172,10 @@ class AppSessionNucleusTest {
     @Test
     fun rejectedStartRetainsCreatedRunForExactReuseWithoutSecondEnsure() {
         val first = startFrame()
-        val send = assertIs<AppSessionOutput.SendGameplayCommand>(first.outputs.last())
+        val send = assertIs<AppSessionOutput.StartRun>(first.outputs.last())
         val rejected = AppSessionNucleus.decide(
             first.nextState,
-            gameplayRefusal(send.request),
+            gameplayStartRefused(send.runId, GameplayRefusal.Busy),
         ).accepted()
 
         assertEquals(AppDestination.Home, rejected.nextState.base)
@@ -210,10 +191,8 @@ class AppSessionNucleusTest {
                 gameplayStatus = gameplayStatus(rejected.nextState, GameplayRunPhase.CREATED),
             ),
         ).accepted()
-        val retrySend = assertIs<AppSessionOutput.SendGameplayCommand>(retry.outputs.single())
-        assertEquals(RunId(0L), retrySend.request.targetInstance.runId)
-        assertEquals(0, retrySend.request.sourceOrdinal)
-        assertEquals(retry.nextState.revision.value, retrySend.request.semanticHandle.sourceRevision)
+        val retrySend = assertIs<AppSessionOutput.StartRun>(retry.outputs.single())
+        assertEquals(RunId(0L), retrySend.runId)
         assertEquals(RunId(1L), retry.nextState.nextRunId)
     }
 
@@ -266,12 +245,12 @@ class AppSessionNucleusTest {
                 AppSessionContext(gameplayStatus = gameplayStatus(running, GameplayRunPhase.RUNNING)),
             ).accepted()
             assertNull(pause.nextState.overlay)
-            val send = assertIs<AppSessionOutput.SendGameplayCommand>(pause.outputs.single())
-            assertEquals(GameplayModuleCommand.PauseForOverlay, send.request.command)
+            val send = assertIs<AppSessionOutput.PauseForOverlay>(pause.outputs.single())
+            assertEquals(running.activeRunId, send.runId)
 
             val opened = AppSessionNucleus.decide(
                 pause.nextState,
-                gameplayResult(send.request, GameplayModuleResult.OverlayPaused),
+                gameplayOverlayPaused(GameplayOverlayPaused(send.runId, GameplayRevision(5))),
             ).accepted()
             assertEquals(destination, opened.nextState.overlay)
             assertEquals(GameplayRunPhase.PAUSED, opened.nextState.gameplayPhase)
@@ -296,7 +275,7 @@ class AppSessionNucleusTest {
     }
 
     @Test
-    fun settingsCloseReadsPreferencesThenSendsDataFreeGameplayCommand() {
+    fun settingsCloseRetainsReadPreferencesInTypedGameplayCommand() {
         val preferences = PlayerPreferences(masterVolume = 0.31f)
         val state = gameplayState(GameplayRunPhase.PAUSED).copy(overlay = AppDestination.Settings)
         val close = decide(
@@ -308,13 +287,14 @@ class AppSessionNucleusTest {
             ),
         ).accepted()
 
-        val send = assertIs<AppSessionOutput.SendGameplayCommand>(close.outputs.single())
-        assertEquals(GameplayModuleCommand.ApplyPreferences, send.request.command)
+        val send = assertIs<AppSessionOutput.ApplyPreferences>(close.outputs.single())
+        assertEquals(preferences, send.preferences)
+        assertEquals(state.activeRunId, send.runId)
         assertIs<PendingWorkflow.ApplyingSettings>(close.nextState.pendingWorkflow)
 
         val completed = AppSessionNucleus.decide(
             close.nextState,
-            gameplayResult(send.request, GameplayModuleResult.PreferencesApplied),
+            gameplaySettingsApplied(GameplaySettingsApplied(send.runId, GameplayRevision(5))),
         ).accepted()
         assertNull(completed.nextState.overlay)
         assertEquals(
@@ -324,40 +304,37 @@ class AppSessionNucleusTest {
     }
 
     @Test
-    fun muteResultSynchronizesAudioAndOptionallyPropagatesDataFreePreferences() {
+    fun muteResultSynchronizesAudioAndPropagatesAcceptedPreferences() {
         val preferences = PlayerPreferences(soundEnabled = false, musicEnabled = false)
         val running = gameplayState(GameplayRunPhase.RUNNING)
         val requested = decide(running, SessionInteractionPulse.ToggleMuteRequested).accepted()
-        val profileSend = assertIs<AppSessionOutput.SendProfileCommand>(requested.outputs.single())
-        assertEquals(ProfileModuleCommand.ToggleMute, profileSend.request.command)
+        assertEquals(AppSessionOutput.ToggleMute, requested.outputs.single())
+        assertEquals(PendingWorkflow.TogglingMute, requested.nextState.pendingWorkflow)
 
         val propagated = AppSessionNucleus.decide(
             requested.nextState,
-            profileResult(
-                profileSend.request,
-                ProfileModuleResult.PreferencesChanged(preferences),
-            ),
+            profileSettingsChanged(ProfileSettingsChanged(ProfileRevision(5), preferences)),
         ).accepted()
         assertEquals(3, propagated.outputs.size)
-        val gameplaySend = assertIs<AppSessionOutput.SendGameplayCommand>(propagated.outputs[0])
-        assertEquals(GameplayModuleCommand.ApplyPreferences, gameplaySend.request.command)
+        val gameplaySend = assertIs<AppSessionOutput.ApplyPreferences>(propagated.outputs[0])
+        assertEquals(preferences, gameplaySend.preferences)
+        assertEquals(running.activeRunId, gameplaySend.runId)
         assertEquals(AppSessionOutput.SynchronizeAudioPreferences(preferences), propagated.outputs[1])
         assertEquals(AppSessionOutput.PlayMuteFeedback, propagated.outputs[2])
 
         val completed = AppSessionNucleus.decide(
             propagated.nextState,
-            gameplayResult(gameplaySend.request, GameplayModuleResult.PreferencesApplied),
+            gameplaySettingsApplied(GameplaySettingsApplied(gameplaySend.runId, GameplayRevision(5))),
         ).accepted()
         assertNull(completed.nextState.pendingWorkflow)
 
         val homeRequested = decide(initialState(), SessionInteractionPulse.ToggleMuteRequested).accepted()
-        val homeSend = assertIs<AppSessionOutput.SendProfileCommand>(homeRequested.outputs.single())
         val homeCompleted = AppSessionNucleus.decide(
             homeRequested.nextState,
-            profileResult(homeSend.request, ProfileModuleResult.PreferencesChanged(preferences)),
+            profileSettingsChanged(ProfileSettingsChanged(ProfileRevision(5), preferences)),
         ).accepted()
         assertEquals(2, homeCompleted.outputs.size)
-        assertTrue(homeCompleted.outputs.none { it is AppSessionOutput.SendGameplayCommand })
+        assertTrue(homeCompleted.outputs.none { it is AppSessionOutput.ApplyPreferences })
     }
 
     @Test
@@ -366,15 +343,12 @@ class AppSessionNucleusTest {
             initialState(),
             SessionInteractionPulse.SelectCoreShapeRequested(CoreShape.PRISM),
         ).accepted()
-        val send = assertIs<AppSessionOutput.SendProfileCommand>(requested.outputs.single())
-        assertEquals(ProfileModuleCommand.SelectCoreShape(CoreShape.PRISM), send.request.command)
+        val send = assertIs<AppSessionOutput.SelectCoreShape>(requested.outputs.single())
+        assertEquals(CoreShape.PRISM, send.shape)
 
         val completed = AppSessionNucleus.decide(
             requested.nextState,
-            profileResult(
-                send.request,
-                ProfileModuleResult.CoreShapeSelected(CoreShape.PRISM),
-            ),
+            profileCoreShapeSelected(ProfileCoreShapeSelected(ProfileRevision(5), CoreShape.PRISM)),
         ).accepted()
         assertNull(completed.nextState.pendingWorkflow)
         assertNull(completed.nextState.lastFailure)
@@ -396,24 +370,22 @@ class AppSessionNucleusTest {
             SessionInteractionPulse.RebirthRequested,
             context,
         ).accepted()
-        val profileSend = assertIs<AppSessionOutput.SendProfileCommand>(requested.outputs.single())
-        assertEquals(ProfileModuleCommand.AdvanceRebirth, profileSend.request.command)
+        assertEquals(AppSessionOutput.AdvanceRebirth, requested.outputs.single())
 
         val starting = AppSessionNucleus.decide(
             requested.nextState,
-            profileResult(profileSend.request, ProfileModuleResult.RebirthAdvanced(advanced)),
+            profileRebirthAdvanced(ProfileRebirthAdvanced(ProfileRevision(1), advanced)),
             AppSessionContext(runBootstrap = runBootstrap(rebirthProgress = advanced)),
         ).accepted()
         assertEquals(3, starting.outputs.size)
         assertEquals(AppSessionOutput.EnsureGameplayRun(RunId(0L)), starting.outputs[0])
-        val gameplaySend = assertIs<AppSessionOutput.SendGameplayCommand>(starting.outputs[1])
-        assertEquals(1, gameplaySend.request.sourceOrdinal)
-        assertEquals(GameplayModuleCommand.StartRun, gameplaySend.request.command)
+        val gameplaySend = assertIs<AppSessionOutput.StartRun>(starting.outputs[1])
+        assertEquals(RunId(0L), gameplaySend.runId)
         assertEquals(AppSessionOutput.PlayRebirthAcceptedFeedback, starting.outputs[2])
 
         val completed = AppSessionNucleus.decide(
             starting.nextState,
-            gameplayResult(gameplaySend.request, GameplayModuleResult.RunStarted),
+            gameplayRunStarted(GameplayRunStarted(gameplaySend.runId, GameplayRevision(5))),
         ).accepted()
         assertEquals(AppDestination.Gameplay, completed.nextState.base)
     }
@@ -425,23 +397,20 @@ class AppSessionNucleusTest {
             GameplayExitProgressResult.Applied,
         ).forEach { progress ->
             val exit = exitFrame()
-            val send = assertIs<AppSessionOutput.SendGameplayCommand>(exit.outputs.single())
+            val send = assertIs<AppSessionOutput.ExitRun>(exit.outputs.single())
             val completed = AppSessionNucleus.decide(
                 exit.nextState,
-                gameplayResult(send.request, GameplayModuleResult.RunExited(progress)),
+                gameplayRunExited(GameplayRunExited(send.runId, GameplayRevision(5), progress)),
             ).accepted()
             assertEquals(AppDestination.Home, completed.nextState.base)
             assertNull(completed.nextState.lastFailure)
         }
 
         val exit = exitFrame()
-        val send = assertIs<AppSessionOutput.SendGameplayCommand>(exit.outputs.single())
+        val send = assertIs<AppSessionOutput.ExitRun>(exit.outputs.single())
         val notApplied = AppSessionNucleus.decide(
             exit.nextState,
-            gameplayResult(
-                send.request,
-                GameplayModuleResult.RunExited(GameplayExitProgressResult.NotApplied),
-            ),
+            gameplayRunExited(GameplayRunExited(send.runId, GameplayRevision(5), GameplayExitProgressResult.NotApplied)),
         ).accepted()
         assertEquals(AppDestination.Gameplay, notApplied.nextState.base)
         assertEquals(GameplayRunPhase.EXITED, notApplied.nextState.gameplayPhase)
@@ -479,19 +448,19 @@ class AppSessionNucleusTest {
             initialState(),
             SessionInteractionPulse.ToggleMuteRequested,
         ).accepted()
-        val profileSend = assertIs<AppSessionOutput.SendProfileCommand>(profileRequested.outputs.single())
+        assertEquals(AppSessionOutput.ToggleMute, profileRequested.outputs.single())
         val profileRecovered = AppSessionNucleus.decide(
             profileRequested.nextState,
-            profileRefusal(profileSend.request),
+            profileSettingsRefused(ProfileRefusal.Busy),
         ).accepted()
         assertEquals(SessionWorkflowFailureCode.PROFILE_COMMAND_REFUSED, profileRecovered.nextState.lastFailure)
         assertEquals(AppSessionOutput.PlayMuteFeedback, profileRecovered.outputs.single())
 
         val gameplayRequested = startFrame()
-        val gameplaySend = assertIs<AppSessionOutput.SendGameplayCommand>(gameplayRequested.outputs.last())
+        val gameplaySend = assertIs<AppSessionOutput.StartRun>(gameplayRequested.outputs.last())
         val gameplayRecovered = AppSessionNucleus.decide(
             gameplayRequested.nextState,
-            gameplayRefusal(gameplaySend.request),
+            gameplayStartRefused(gameplaySend.runId, GameplayRefusal.Busy),
         ).accepted()
         assertEquals(SessionWorkflowFailureCode.GAMEPLAY_COMMAND_REFUSED, gameplayRecovered.nextState.lastFailure)
         assertEquals(GameplayRunPhase.CREATED, gameplayRecovered.nextState.gameplayPhase)
@@ -524,15 +493,9 @@ class AppSessionNucleusTest {
             gameplayState(GameplayRunPhase.RUNNING),
             SessionInteractionPulse.ToggleMuteRequested,
         ).accepted()
-        val toggleRequest = assertIs<AppSessionOutput.SendProfileCommand>(
-            toggling.outputs.single(),
-        ).request
         val propagating = AppSessionNucleus.decide(
             toggling.nextState,
-            profileResult(
-                toggleRequest,
-                ProfileModuleResult.PreferencesChanged(PlayerPreferences()),
-            ),
+            profileSettingsChanged(ProfileSettingsChanged(ProfileRevision(5), PlayerPreferences())),
         ).accepted()
         val rebirthState = initialState().copy(overlay = AppDestination.Rebirth)
         val rebirthContext = AppSessionContext(
@@ -548,13 +511,11 @@ class AppSessionNucleusTest {
             SessionInteractionPulse.RebirthRequested,
             rebirthContext,
         ).accepted()
-        val advanceRequest = assertIs<AppSessionOutput.SendProfileCommand>(
-            advancing.outputs.single(),
-        ).request
+        assertEquals(AppSessionOutput.AdvanceRebirth, advancing.outputs.single())
         val advanced = RebirthProgress(level = 1, highestCleared = 0)
         val startingRebirth = AppSessionNucleus.decide(
             advancing.nextState,
-            profileResult(advanceRequest, ProfileModuleResult.RebirthAdvanced(advanced)),
+            profileRebirthAdvanced(ProfileRebirthAdvanced(ProfileRevision(1), advanced)),
             AppSessionContext(runBootstrap = runBootstrap(rebirthProgress = advanced)),
         ).accepted()
         val frames = listOf(
@@ -572,20 +533,24 @@ class AppSessionNucleusTest {
         assertEquals(9, frames.map { it.nextState.pendingWorkflow!!::class }.toSet().size)
 
         frames.forEach { frame ->
-            val participant = checkNotNull(frame.nextState.pendingWorkflow).participant
-            val recovered = when (participant) {
-                is PendingParticipantCommand.Profile -> AppSessionNucleus.decide(
-                    frame.nextState,
-                    profileRefusal(participant.request),
-                )
-                is PendingParticipantCommand.Gameplay -> AppSessionNucleus.decide(
-                    frame.nextState,
-                    gameplayRefusal(participant.request),
-                )
-            }.accepted()
+            val pending = checkNotNull(frame.nextState.pendingWorkflow)
+            val refusal = when (pending) {
+                is PendingWorkflow.ExitingRun -> gameplayExitRefused(pending.runId, GameplayRefusal.Busy)
+                PendingWorkflow.AdvancingRebirth -> profileRebirthRefused(ProfileRefusal.Busy)
+                PendingWorkflow.TogglingMute -> profileSettingsRefused(ProfileRefusal.Busy)
+                is PendingWorkflow.SelectingCoreShape -> profileCoreShapeRefused(ProfileRefusal.Busy)
+                is PendingWorkflow.StartingRun -> gameplayStartRefused(pending.runId, GameplayRefusal.Busy)
+                is PendingWorkflow.StartingRebirthRun -> gameplayStartRefused(pending.runId, GameplayRefusal.Busy)
+                is PendingWorkflow.PausingForOverlay -> gameplayPauseRefused(pending.runId, GameplayRefusal.Busy)
+                is PendingWorkflow.ApplyingSettings -> gameplaySettingsRefused(pending.runId, GameplayRefusal.Busy)
+                is PendingWorkflow.PropagatingMute -> gameplaySettingsRefused(pending.runId, GameplayRefusal.Busy)
+            }
+            val recovered = AppSessionNucleus.decide(frame.nextState, refusal).accepted()
             assertNull(recovered.nextState.pendingWorkflow)
             assertEquals(
-                if (participant is PendingParticipantCommand.Profile) {
+                if (pending === PendingWorkflow.TogglingMute || pending is PendingWorkflow.SelectingCoreShape ||
+                    pending === PendingWorkflow.AdvancingRebirth
+                ) {
                     SessionWorkflowFailureCode.PROFILE_COMMAND_REFUSED
                 } else {
                     SessionWorkflowFailureCode.GAMEPLAY_COMMAND_REFUSED
@@ -601,44 +566,30 @@ class AppSessionNucleusTest {
             initialState(),
             SessionInteractionPulse.SelectCoreShapeRequested(CoreShape.PRISM),
         ).accepted()
-        val send = assertIs<AppSessionOutput.SendProfileCommand>(requested.outputs.single())
+        assertIs<AppSessionOutput.SelectCoreShape>(requested.outputs.single())
 
         assertFailsWith<IllegalStateException> {
             AppSessionNucleus.decide(
                 requested.nextState,
-                profileResult(
-                    send.request.copy(
-                        semanticHandle = send.request.semanticHandle.copy(sourceRevision = 999L),
-                    ),
-                    ProfileModuleResult.CoreShapeSelected(CoreShape.PRISM),
-                ),
+                profileCoreShapeSelected(ProfileCoreShapeSelected(ProfileRevision(5), CoreShape.SHARD)),
             )
         }
         assertFailsWith<IllegalStateException> {
             AppSessionNucleus.decide(
                 requested.nextState,
-                profileResult(
-                    send.request,
-                    ProfileModuleResult.PreferencesChanged(PlayerPreferences()),
-                    issuer = ProfileResultIssuerProvenance.LOCAL_PROFILE_STATIC_BINDING,
-                ).copy(
-                    effectiveProtocolIdentity = ProfileEffectiveProtocolIdentity.SESSION_MUTE,
-                ),
+                profileSettingsChanged(ProfileSettingsChanged(ProfileRevision(5), PlayerPreferences())),
             )
         }
         assertFailsWith<IllegalStateException> {
             AppSessionNucleus.decide(
                 requested.nextState,
-                profileResult(
-                    send.request,
-                    ProfileModuleResult.PreferencesChanged(PlayerPreferences()),
-                ),
+                profileSettingsRefused(ProfileRefusal.Busy),
             )
         }
         assertFailsWith<IllegalStateException> {
             AppSessionNucleus.decide(
                 initialState(),
-                profileResult(send.request, ProfileModuleResult.CoreShapeSelected(CoreShape.PRISM)),
+                profileCoreShapeSelected(ProfileCoreShapeSelected(ProfileRevision(5), CoreShape.PRISM)),
             )
         }
     }
@@ -691,10 +642,10 @@ class AppSessionNucleusTest {
             SessionInteractionPulse.RebirthRequested,
             AppSessionContext(rebirthProgress = rebirthProjection(progress)),
         ).accepted()
-        val profileSend = assertIs<AppSessionOutput.SendProfileCommand>(requested.outputs.single())
+        assertEquals(AppSessionOutput.AdvanceRebirth, requested.outputs.single())
         val exact = AppSessionNucleus.decide(
             requested.nextState,
-            profileResult(profileSend.request, ProfileModuleResult.RebirthAdvanced(advanced)),
+            profileRebirthAdvanced(ProfileRebirthAdvanced(ProfileRevision(1), advanced)),
             AppSessionContext(runBootstrap = runBootstrap(rebirthProgress = advanced)),
         ).accepted()
         assertEquals(3, exact.outputs.size)
@@ -773,109 +724,8 @@ private fun gameplayStatus(
     instanceId = GameplayInstanceId(requireNotNull(state.activeRunId)),
     revision = GameplayRevision(4L),
     phase = phase,
-    profileCommandPending = false,
+    progressPending = false,
 )
-
-private fun gameplayResult(
-    request: GameplayModuleCommandRequest,
-    result: GameplayModuleResult,
-    causalScope: Long = 71L,
-    commandDepth: Int = 2,
-    resultDepth: Int = 3,
-): GameplayModuleResultPulse {
-    val commandSource = GameplayCommandSourceToken(
-        semanticHandle = request.semanticHandle,
-        targetInstance = request.targetInstance,
-        causalScope = causalScope,
-        causalDepth = commandDepth,
-    )
-    return GameplayModuleResultPulse(
-        commandSource = commandSource,
-        resultSource = GameplayResultSourceToken(
-            semanticHandle = request.semanticHandle,
-            targetInstance = request.targetInstance,
-            targetRevision = GameplayRevision(5L),
-            sourceOrdinal = 0,
-            causalScope = causalScope,
-            causalDepth = resultDepth,
-        ),
-        effectiveProtocolIdentity = request.command.effectiveProtocolIdentity(),
-        result = result,
-        issuerProvenance = GameplayResultIssuerProvenance.GAMEPLAY_RUN_STATIC_BINDING,
-    )
-}
-
-private fun profileResult(
-    request: ProfileModuleCommandRequest,
-    result: ProfileModuleResult,
-    causalScope: Long = 81L,
-    commandDepth: Int = 2,
-    resultDepth: Int = 3,
-    issuer: ProfileResultIssuerProvenance = ProfileResultIssuerProvenance.LOCAL_PROFILE_STATIC_BINDING,
-): ProfileModuleResultPulse {
-    val commandSource = ProfileCommandSourceToken(
-        semanticHandle = request.semanticHandle,
-        targetInstance = request.targetInstance,
-        causalScope = causalScope,
-        causalDepth = commandDepth,
-    )
-    return ProfileModuleResultPulse(
-        commandSource = commandSource,
-        resultSource = ProfileResultSourceToken(
-            semanticHandle = request.semanticHandle,
-            targetInstance = request.targetInstance,
-            targetRevision = ProfileRevision(5L),
-            sourceOrdinal = 0,
-            causalScope = causalScope,
-            causalDepth = resultDepth,
-        ),
-        effectiveProtocolIdentity = request.command.effectiveProtocolIdentity(),
-        result = result,
-        issuerProvenance = issuer,
-    )
-}
-
-private fun gameplayRefusal(
-    request: GameplayModuleCommandRequest,
-): GameplayCommandRejectedBeforeAcceptance {
-    val identity = request.command.effectiveProtocolIdentity()
-    return GameplayCommandRejectedBeforeAcceptance(
-        commandSource = GameplayCommandSourceToken(
-            request.semanticHandle,
-            request.targetInstance,
-            causalScope = 91L,
-            causalDepth = 1,
-        ),
-        effectiveProtocolIdentity = identity,
-        boundaryResponse = GameplayCommandBoundaryResponse.DecisionRejected(
-            GameplayRejection.AlreadyStarted,
-        ),
-        targetBoundaryProvenance = GameplayTargetBoundaryProvenance(
-            request.targetInstance,
-            identity,
-        ),
-    )
-}
-
-private fun profileRefusal(
-    request: ProfileModuleCommandRequest,
-): ProfileCommandRejectedBeforeAcceptance {
-    val identity = request.command.effectiveProtocolIdentity()
-    return ProfileCommandRejectedBeforeAcceptance(
-        commandSource = ProfileCommandSourceToken(
-            request.semanticHandle,
-            request.targetInstance,
-            causalScope = 92L,
-            causalDepth = 1,
-        ),
-        effectiveProtocolIdentity = identity,
-        boundaryResponse = ProfileCommandBoundaryResponse.DecisionRejected(ProfileRejection.NoChange),
-        targetBoundaryProvenance = ProfileTargetBoundaryProvenance(
-            request.targetInstance,
-            identity,
-        ),
-    )
-}
 
 private fun runBootstrap(
     rebirthProgress: RebirthProgress = RebirthProgress(),

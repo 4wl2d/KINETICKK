@@ -7,6 +7,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
 import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
+import kinetickk.foundation.diagnostics.CrashDiagnostics
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertTrue
@@ -30,7 +31,7 @@ class PlatformCapabilitiesAndroidTest {
             .putString("progress_v2", "historical-progress")
             .commit()
         try {
-            val capability = createPlatformProfilePersistenceCapability()
+            val capability = createPlatformProfilePersistenceCapability(CrashDiagnostics.None)
             assertEquals(ProfilePersistenceReadResult.Observed(null), capability.readSnapshot())
             assertEquals(
                 ProfilePersistenceMutationResult.COMPLETED,

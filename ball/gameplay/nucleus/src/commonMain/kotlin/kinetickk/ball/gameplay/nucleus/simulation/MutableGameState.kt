@@ -271,6 +271,15 @@ internal class MutableGameState(
     var keys: Int = reductionSource?.keys ?: 0
         internal set
     var kills: Int = reductionSource?.kills ?: 0
+
+    var damageDealt: Double = reductionSource?.damageDealt ?: 0.0
+    var damageTaken: Double = reductionSource?.damageTaken ?: 0.0
+    var damageAbsorbed: Double = reductionSource?.damageAbsorbed ?: 0.0
+    var dataCollected: Long = reductionSource?.dataCollected ?: 0L
+    var pickupsCollected: Long = reductionSource?.pickupsCollected ?: 0L
+    var keysCollected: Long = reductionSource?.keysCollected ?: 0L
+    var eliteKills: Int = reductionSource?.eliteKills ?: 0
+    var bestCombo: Int = reductionSource?.bestCombo ?: 0
         internal set
     var combo: Int = reductionSource?.combo ?: 0
         internal set

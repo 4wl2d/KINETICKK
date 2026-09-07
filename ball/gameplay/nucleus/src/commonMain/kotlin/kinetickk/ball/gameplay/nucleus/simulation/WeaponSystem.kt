@@ -68,7 +68,7 @@ internal fun MutableGameState.updateWeapons(delta: Float) {
             }
         }
         WeaponId.ION_SWARM -> {
-            val orbitalCount = min(8, 2 + (weaponLevel - 1) / 3 + if (agonyRank > 0) 1 + agonyRank / 2 else 0)
+            val orbitalCount = weaponOrbitalCount()
             ensureOrbitals(orbitalCount, 145f + agonyRank * 3f, 8f, delta, 1.8f + agonyRank * 0.05f)
             if (agonyRank > 0) agonyMutationCounts[WeaponId.ION_SWARM.ordinal]++
             if (weaponClock <= 0f && enemies.isNotEmpty()) {
@@ -84,7 +84,7 @@ internal fun MutableGameState.updateWeapons(delta: Float) {
             }
         }
         WeaponId.RIFT_BLADES -> {
-            val bladeCount = min(8, 2 + (weaponLevel - 1) / 3 + if (agonyRank > 0) 1 + agonyRank / 2 else 0)
+            val bladeCount = weaponOrbitalCount()
             ensureOrbitals(bladeCount, 82f + min(75f, softVelocity(speed) * 0.025f) + agonyRank * 5f, 17f, delta, 4.2f + agonyRank * 0.08f)
             if (agonyRank > 0) agonyMutationCounts[WeaponId.RIFT_BLADES.ordinal]++
         }
@@ -237,7 +237,7 @@ internal fun MutableGameState.explodeMine(node: WeaponNode) {
 }
 
 internal fun MutableGameState.fireArcCoil(baseDamage: Float) {
-    val maximumTargets = min(MAX_ARC_COIL_TARGETS, 3 + weaponLevel / 3)
+    val maximumTargets = arcCoilTargetCount()
     val targets = arrayOfNulls<Enemy>(maximumTargets)
     var targetCount = 0
     while (targetCount < maximumTargets) {
@@ -337,13 +337,8 @@ internal fun MutableGameState.firePrismRelay(power: Float) {
     val target = nearestEnemy(coreX, coreY, 820f) ?: return
     val baseAngle = atan2(target.y - coreY, target.x - coreX)
     val agonyRank = relicRank(RelicId.AGONY_SCEPTER)
-    val relayCount = (if (currentWeaponMastery >= WeaponMastery.RESONANT) 2 else 1) + if (agonyRank > 0) 1 else 0
-    val bounces = when (currentWeaponMastery) {
-        WeaponMastery.CALIBRATED -> 2
-        WeaponMastery.AMPLIFIED -> 3
-        WeaponMastery.RESONANT -> 4
-        WeaponMastery.ASCENDED -> 6
-    } + agonyRank
+    val relayCount = prismRelayCount()
+    val bounces = prismRelayBounces()
     repeat(relayCount) { index ->
         val offset = (index - (relayCount - 1) * 0.5f) * 0.075f
         firePlayerProjectile(coreX, coreY, baseAngle + offset, 760f, 27f * power, bounces, 6f, 3)

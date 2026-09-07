@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.RunTempoProfile
+import kinetickk.ball.content.api.FatigueTuning
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.enemyTypeForElapsed
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
@@ -13,9 +14,23 @@ import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class RunTempoTest {
+    @Test
+    fun edgeFatigueTuningRejectsMissingRecoveryAndDegenerateEdgeBands() {
+        for (invalid in listOf(0f, -1f, Float.NaN, Float.POSITIVE_INFINITY)) {
+            assertFailsWith<IllegalArgumentException> { FatigueTuning(normalRecoveryPerSecond = invalid) }
+            assertFailsWith<IllegalArgumentException> { FatigueTuning(edgeDrainPerSecond = invalid) }
+            assertFailsWith<IllegalArgumentException> { FatigueTuning(edgeStrainStart = invalid) }
+        }
+        assertFailsWith<IllegalArgumentException> { FatigueTuning(edgeStrainStart = 1f) }
+        assertFailsWith<IllegalArgumentException> { FatigueTuning(edgeStrainStart = 1.01f) }
+        assertEquals(0.01f, FatigueTuning(edgeStrainStart = 0.01f).edgeStrainStart)
+        assertEquals(0.99f, FatigueTuning(edgeStrainStart = 0.99f).edgeStrainStart)
+    }
+
     @Test
     fun customTempoDrivesBossAndRenderThroughSameSnapshot() {
         val engine = MutableGameState(canonicalGameplayContent.copy(tempo = RunTempoProfile(bossAtSeconds = 400f)))

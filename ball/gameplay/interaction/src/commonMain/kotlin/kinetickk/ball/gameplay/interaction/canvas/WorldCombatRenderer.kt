@@ -68,9 +68,11 @@ internal fun DrawScope.drawWorld(
     }
     val tetherPulse = (sin(engine.elapsed * 10f) + 1f) * 0.5f
     val strained = engine.polarityStability < 0.58f
-    drawLine(tetherColor.copy(alpha = 0.08f + if (danger || strained) tetherPulse * 0.08f else 0f), core, pointer, if (danger || strained) 13f else 9f, StrokeCap.Round)
-    drawLine(tetherColor.copy(alpha = if (danger || strained) 0.78f else 0.55f), core, pointer, if (danger || strained) 2f else 1.4f, StrokeCap.Round, dashEffect)
-    drawCore(engine, core)
+    if (engine.phase != kinetickk.ball.gameplay.nucleus.render.GamePhase.GAME_OVER) {
+        drawLine(tetherColor.copy(alpha = 0.08f + if (danger || strained) tetherPulse * 0.08f else 0f), core, pointer, if (danger || strained) 13f else 9f, StrokeCap.Round)
+        drawLine(tetherColor.copy(alpha = if (danger || strained) 0.78f else 0.55f), core, pointer, if (danger || strained) 2f else 1.4f, StrokeCap.Round, dashEffect)
+        drawCore(engine, core)
+    }
     drawSingularity(pointer, engine.elapsed, danger)
 
     val settings = engine.settings

@@ -70,8 +70,8 @@ class DefaultCodexFeature(
 private enum class CodexGridContentType { NOTICE, HEADING, SLOT, STAT, SYNERGY }
 
 private val LocalCodexInputEnabled = staticCompositionLocalOf { true }
-private val CodexBackground = Color(0xFF080A17)
-private val CodexPanel = Color(0xFF111A2B)
+private val CodexBackground = Color(0xFF0B0D11)
+private val CodexPanel = Color(0xFF15181D)
 private val SelectionSaver = listSaver<CodexSelection, Any>(
     save = { listOf(it.pinnedKey.orEmpty(), it.sheetOpen) },
     restore = { CodexSelection(pinnedKey = (it[0] as String).ifEmpty { null }, sheetOpen = it[1] as Boolean) },
@@ -168,7 +168,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
         }) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 if (compactHeader) CodexNavigationTabs(tab, scale, Modifier.weight(1f)) { tabValue = it }
-                else CodexLabel(language.text(SessionText.CODEX), scale, Cyan, bold = true)
+                else CodexLabel(language.text(SessionText.CODEX), scale, White, bold = true)
                 CodexButton(language.text(SessionText.CLOSE), scale, "codex-close", onClick = onClose)
             }
             if (!compactHeader) CodexNavigationTabs(tab, scale, Modifier.fillMaxWidth()) { tabValue = it }
@@ -318,8 +318,8 @@ private fun slotModifier(entry: CodexEntry, selection: CodexSelection, focus: Mu
         }
     }
     val highlighted = selection.previewKey == entry.key || selection.pinnedKey == entry.key
-    return Modifier.background(if (highlighted) Color(0xFF25344B) else CodexPanel)
-        .border(if (highlighted) 2.dp else 1.dp, if (highlighted) entry.color else entry.color.copy(alpha = 0.5f))
+    return Modifier.background(if (highlighted) Color(0xFF252A31) else CodexPanel)
+        .border(if (highlighted) 2.dp else 1.dp, if (highlighted) entry.color else DarkLine)
         .testTag("codex-slot-${entry.key}").semantics { contentDescription = "${entry.title} · ${entry.kind} · ${entry.quantity} · ${entry.availability}"; selected = selection.pinnedKey == entry.key }
         .focusRequester(requester).focusProperties { canFocus = inputEnabled }.onFocusChanged { state ->
             onSelection { current ->
@@ -425,8 +425,8 @@ private fun CodexNavigationTabs(tab: Int, scale: Float, modifier: Modifier, onSe
 @Composable
 private fun CodexButton(text: String, scale: Float, tag: String, selected: Boolean = false, enabled: Boolean = true, role: Role = Role.Button, onClick: () -> Unit) {
     val inputEnabled = enabled && LocalCodexInputEnabled.current
-    BasicText(text, Modifier.testTag(tag).semantics { this.selected = selected }.background(if (selected) Color(0xFF263A51) else CodexPanel)
-        .border(1.dp, if (selected) Cyan else DarkLine).clickable(enabled = inputEnabled, role = role, onClick = onClick)
+    BasicText(text, Modifier.testTag(tag).semantics { this.selected = selected }.background(if (selected) Color(0xFF252A31) else CodexPanel)
+        .border(1.dp, if (selected) Cyan.copy(alpha = 0.7f) else Color.Transparent).clickable(enabled = inputEnabled, role = role, onClick = onClick)
         .padding(horizontal = 10.dp, vertical = 10.dp), style = TextStyle(color = if (!inputEnabled) Muted.copy(alpha = 0.5f) else if (selected) Cyan else White, fontSize = (12f * scale).sp, fontWeight = FontWeight.Bold))
 }
 

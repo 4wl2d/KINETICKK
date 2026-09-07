@@ -35,8 +35,8 @@ class GameplayLocalizationTest {
 
     @Test
     fun changingLanguageChangesRewardsAndAccessibilityWithoutChangingTheirValues() {
-        assertEquals("RELIC MELD", rewardHeading(ChoiceType.RELIC_BIND, RelicChoiceAction.MELD_TARGET, AppLanguage.English))
-        assertEquals("СЛИЯНИЕ РЕЛИКВИЙ", rewardHeading(ChoiceType.RELIC_BIND, RelicChoiceAction.MELD_TARGET, AppLanguage.Russian))
+        assertEquals("Merge", rewardHeading(ChoiceType.RELIC_BIND, RelicChoiceAction.MELD_TARGET, AppLanguage.English))
+        assertEquals("Слияние", rewardHeading(ChoiceType.RELIC_BIND, RelicChoiceAction.MELD_TARGET, AppLanguage.Russian))
         assertEquals("СЛИЯНИЕ // Р2 → Р3", relicRewardOperation(RelicChoiceAction.MELD_TARGET, 0, 2, 0, 5, AppLanguage.Russian))
         assertEquals("REPLACE SLOT 4", relicRewardOperation(RelicChoiceAction.REPLACE, 0, 2, 3, 5, AppLanguage.English))
         assertEquals("ЗАМЕНИТЬ ЯЧЕЙКУ 4", relicRewardOperation(RelicChoiceAction.REPLACE, 0, 2, 3, 5, AppLanguage.Russian))

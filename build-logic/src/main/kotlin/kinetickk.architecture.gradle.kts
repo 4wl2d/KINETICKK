@@ -9,6 +9,7 @@ import kinetickk.gradle.pokeball.VerifyPokeballArchitectureTask
 import kinetickk.gradle.pokeball.VerifyPokeballConformanceTask
 import kinetickk.gradle.pokeball.VerifyPokeballManifestDriftTask
 import kinetickk.gradle.pokeball.VerifyPokeballSnapshotTask
+import kinetickk.gradle.pokeball.runtimeBehaviorEvidence
 import org.gradle.api.tasks.Copy
 
 val leafProjects = rootProject.subprojects.filter { it.childProjects.isEmpty() }
@@ -71,8 +72,6 @@ val architectureSources = rootProject.fileTree(rootProject.projectDir) {
     include("resource/**/src/*Test/**/*.kt")
     include("resource/**/src/main/**/*.kt")
     include("resource/**/src/test/**/*.kt")
-    include("build-logic/src/main/kotlin/kinetickk/gradle/pokeball/CumulativeFanoutPolicy.kt")
-    include("build-logic/src/test/kotlin/kinetickk/gradle/pokeball/PokeballArchitectureVerifierTest.kt")
     exclude("**/build/**", "**/.gradle/**")
 }
 
@@ -83,7 +82,8 @@ val generatePokeballManifestTask = tasks.register<GeneratePokeballResolvedManife
     description = "Generates the non-authoritative Pokeball architecture projection."
     leafProjectPaths.set(leafProjectPathValues)
     architectureEdgeReportFiles.from(architectureEdgeReports)
-    assemblyRecord.set(rootProject.layout.projectDirectory.file("docs/architecture/pokeball/assembly.md"))
+    productionSourceFiles.from(architectureSources)
+    repositoryRoot.set(rootProject.layout.projectDirectory)
     outputFile.set(generatedManifestFile)
 }
 
@@ -140,6 +140,8 @@ val verifyPokeballArchitectureTask = tasks.register<VerifyPokeballArchitectureTa
     architectureEdgeReportFiles.from(architectureEdgeReports)
     productionSourceFiles.from(architectureSources)
     architectureRecordFiles.from(architectureRecords)
+    dependsOn(runtimeBehaviorEvidence.map { it.taskPath }.distinct())
+    behaviorTestReports.from(runtimeBehaviorEvidence.map { rootProject.file(it.reportPath) })
     repositoryRoot.set(rootProject.layout.projectDirectory)
     reportFile.set(rootProject.layout.buildDirectory.file("reports/pokeball/architecture.json"))
     mustRunAfter(updatePokeballManifestTask)

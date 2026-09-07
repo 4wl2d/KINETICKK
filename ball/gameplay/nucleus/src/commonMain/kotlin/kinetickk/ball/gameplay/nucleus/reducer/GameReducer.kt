@@ -224,7 +224,11 @@ internal class GameReducer {
             !visualFxCues.isEmpty() ||
             pendingBankedMatter != 0L ||
             pendingDiscoveredItemIds.isNotEmpty() ||
-            pendingClearedRebirthLevel != null
+            pendingClearedRebirthLevel != null ||
+            pendingEliteKills != 0 ||
+            pendingDashHits != 0 ||
+            pendingCompletedOrbits != 0 ||
+            pendingArchitectDefeatedWith != null
 
     private fun Float.sameBitsAs(other: Float): Boolean = toBits() == other.toBits()
 }

@@ -7,34 +7,18 @@ import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.gameplay.api.GameplayAcceptance
 import kinetickk.ball.gameplay.api.GameplayActiveWeaponProjection
 import kinetickk.ball.gameplay.api.GameplayBuildSummaryProjection
-import kinetickk.ball.gameplay.api.GameplayCommandAdmissionFailureReason
-import kinetickk.ball.gameplay.api.GameplayCommandBoundaryResponse
-import kinetickk.ball.gameplay.api.GameplayCommandIngressResult
-import kinetickk.ball.gameplay.api.GameplayCommandIssuerProvenance
-import kinetickk.ball.gameplay.api.GameplayCommandRefusalEvidence
-import kinetickk.ball.gameplay.api.GameplayCommandSource
-import kinetickk.ball.gameplay.api.GameplayCommandSourceToken
-import kinetickk.ball.gameplay.api.GameplayCommandValidationFailureReason
-import kinetickk.ball.gameplay.api.GameplayEffectiveProtocolIdentity
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
-import kinetickk.ball.gameplay.api.GameplayModuleCommand
-import kinetickk.ball.gameplay.api.GameplayModuleCommandPulse
-import kinetickk.ball.gameplay.api.GameplayModuleCommandRequest
-import kinetickk.ball.gameplay.api.GameplayModuleResult
-import kinetickk.ball.gameplay.api.GameplayModuleResultDelivery
-import kinetickk.ball.gameplay.api.GameplayModuleResultOutput
 import kinetickk.ball.gameplay.api.GameplayPresentationPort
 import kinetickk.ball.gameplay.api.GameplayQuery
-import kinetickk.ball.gameplay.api.GameplayResultIssuerProvenance
-import kinetickk.ball.gameplay.api.GameplayResultSourceToken
 import kinetickk.ball.gameplay.api.GameplayRevision
 import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.GameplayRunStatusProjection
-import kinetickk.ball.gameplay.api.GameplaySessionRunPort
-import kinetickk.ball.gameplay.api.GameplayTargetBoundaryProvenance
+import kinetickk.ball.gameplay.api.GameplayRunPort
 import kinetickk.ball.gameplay.api.RunId
-import kinetickk.ball.gameplay.api.acceptsResult
-import kinetickk.ball.gameplay.api.effectiveProtocolIdentity
+import kinetickk.ball.gameplay.api.GameplaySettingsApplied
+import kinetickk.ball.gameplay.api.GameplayRefusal
+import kinetickk.ball.gameplay.api.GameplayRunStarted
+import kinetickk.ball.gameplay.api.GameplayOverlayPaused
 import kinetickk.ball.gameplay.interaction.GameplayInteractionPort
 import kinetickk.ball.gameplay.interaction.fx.InteractionFxReducer
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
@@ -50,41 +34,28 @@ import kinetickk.ball.gameplay.nucleus.GameplayStartInputs
 import kinetickk.ball.gameplay.nucleus.GameplayState
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot
-import kinetickk.ball.profile.api.GameplayProfileRoute
-import kinetickk.ball.profile.api.ProfileCommandAdmissionFailureReason
-import kinetickk.ball.profile.api.ProfileCommandBoundaryResponse
-import kinetickk.ball.profile.api.ProfileCommandIngressResult
-import kinetickk.ball.profile.api.ProfileCommandSource
-import kinetickk.ball.profile.api.ProfileCommandSourceToken
-import kinetickk.ball.profile.api.ProfileEffectiveProtocolIdentity
-import kinetickk.ball.profile.api.ProfileModuleCommand
-import kinetickk.ball.profile.api.ProfileModuleCommandRequest
-import kinetickk.ball.profile.api.ProfileModuleResult
-import kinetickk.ball.profile.api.ProfileModuleResultDelivery
+import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.ProfileQuery
-import kinetickk.ball.profile.api.ProfileResultIssuerProvenance
-import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileRunBootstrapResult
 import kinetickk.foundation.dispatch.BoundedCompletionDeque
-import kinetickk.foundation.dispatch.InlineDispatchGuard
+import kinetickk.foundation.dispatch.InlineAcceptance
+import kinetickk.foundation.dispatch.InlineReply
+import kinetickk.foundation.dispatch.call
+import kinetickk.ball.profile.api.ProfileReadPort
+import kinetickk.ball.profile.api.ProfileProgress
+import kinetickk.ball.gameplay.api.GameplayRunExited
 
 /** Sole owner, acceptor, atomic publisher, and ordered-output dispatcher for one GameplayRun. */
 internal class GameComponent private constructor(
     initialState: GameplayState,
-    private val profilePort: GameplayProfileRoute,
+    private val profilePort: ProfileReadPort,
+    private val profileProgress: ProfileProgress,
     private val audioExecutor: GameplayAudioExecutor,
-    private val commandResultSink: (GameplayModuleResultDelivery) -> Unit,
     private val seed: Int,
-) : GameplaySessionRunPort, GameplayPresentationPort, GameplayInteractionPort {
-    private val dispatchGuard = InlineDispatchGuard()
-    private val completions = gameplayCompletionDeque<GameplayWorkItem>()
+) : GameplayRunPort, GameplayPresentationPort, GameplayInteractionPort {
+    private val acceptance = InlineAcceptance(gameplayCompletionDeque<GameplayWorkItem>())
 
-    /**
-     * Root Interaction outputs consume only causal metadata. Reusing that metadata under the
-     * non-reentrant dispatch guard keeps the root Intent out of the completion deque without
-     * introducing a second output dispatcher or a per-Interaction work-item allocation.
-     */
-    private val localOutputItem = GameplayWorkItem.reusableLocalOutputItem()
+    private val localOutputItem = GameplayWorkItem.Local
     private var committedFrame: CommittedGameplayFrame = CommittedGameplayFrame(
         state = initialState,
         renderSnapshot = GameplayNucleus.renderSnapshot(initialState),
@@ -94,9 +65,6 @@ internal class GameComponent private constructor(
     private val committedRenderSnapshot: GameplayRenderSnapshot
         get() = committedFrame.renderSnapshot
     private var interactionFxReducer: InteractionFxReducer? = null
-    private var activeGameplayCommandRoute: GameplayCommandRouteReservation? = null
-    private var activeProfileCommandRoute: GameplayProfileRouteReservation? = null
-    private var nextLocalCausalScope: Long = 1L
 
     override val instanceId
         get() = committedState.instanceId
@@ -104,75 +72,41 @@ internal class GameComponent private constructor(
     override fun accept(pulse: GameplayInteractionPulse): GameplayAcceptance =
         dispatchLocal(pulse)
 
-    override fun acceptFromSession(
-        request: GameplayModuleCommandRequest,
-        causalScope: Long,
-        causalDepth: Int,
-    ): GameplayCommandIngressResult {
-        require(causalScope >= 0L) { "Trusted Gameplay route supplied a negative causal scope" }
-        require(causalDepth >= 0) { "Trusted Gameplay route supplied a negative causal depth" }
+    override fun applyPreferences(
+        preferences: PlayerPreferences,
+        reply: InlineReply<GameplaySettingsApplied, GameplayRefusal>,
+    ) = dispatchDirect(reply) { GameplayWorkItem.Settings(GameplayNucleusPulse.ApplyPreferences(preferences), reply) }
 
-        val commandSource = GameplayCommandSourceToken(
-            semanticHandle = request.semanticHandle,
-            targetInstance = request.targetInstance,
-            causalScope = causalScope,
-            causalDepth = causalDepth,
-        )
-        val identity = request.command.effectiveProtocolIdentity()
-        if (request.semanticHandle.sourceInstance != GameplayCommandSource.LocalSession) {
-            return refused(
-                commandSource,
-                identity,
-                GameplayCommandBoundaryResponse.ValidationFailure(
-                    GameplayCommandValidationFailureReason.WrongSourceKind,
-                ),
-            )
-        }
-        if (request.targetInstance != committedState.instanceId) {
-            return refused(
-                commandSource,
-                identity,
-                GameplayCommandBoundaryResponse.ValidationFailure(
-                    GameplayCommandValidationFailureReason.WrongTarget,
-                ),
-            )
-        }
-        if (
-            dispatchGuard.isDispatching ||
-            activeGameplayCommandRoute != null ||
-            activeProfileCommandRoute != null ||
-            !completions.isEmpty
-        ) {
-            return refused(
-                commandSource,
-                identity,
-                GameplayCommandBoundaryResponse.AdmissionFailure(
-                    GameplayCommandAdmissionFailureReason.CompletionCapacityExhausted,
-                ),
-            )
-        }
-        if (causalDepth >= MAX_GAMEPLAY_CAUSAL_DEPTH - 1) {
-            return refused(commandSource, identity, causalBudgetFailure(commandSource))
-        }
-        if (!hasGameplayCommandRevisionCapacity(committedState.revision, request.command)) {
-            return refused(
-                commandSource,
-                identity,
-                GameplayCommandBoundaryResponse.AdmissionFailure(
-                    GameplayCommandAdmissionFailureReason.RevisionCapacityExhausted,
-                ),
-            )
-        }
+    override fun startRun(reply: InlineReply<GameplayRunStarted, GameplayRefusal>) =
+        dispatchDirect(reply) { GameplayWorkItem.Starting(trustedStartContext(), reply) }
 
-        val context = trustedContextFor(request.command)
-        val pulse = GameplayModuleCommandPulse(
-            commandSource = commandSource,
-            effectiveProtocolIdentity = identity,
-            command = request.command,
-            issuerProvenance = GameplayCommandIssuerProvenance.LOCAL_SESSION_STATIC_BINDING,
-        )
-        activeGameplayCommandRoute = GameplayCommandRouteReservation(commandSource, identity)
-        return dispatchCommand(pulse, context)
+    override fun pauseForOverlay(reply: InlineReply<GameplayOverlayPaused, GameplayRefusal>) =
+        dispatchDirect(reply) { GameplayWorkItem.Pausing(reply) }
+
+    override fun exitRun(reply: InlineReply<GameplayRunExited, GameplayRefusal>) =
+        dispatchDirect(reply, MAX_EXIT_REVISIONS_PER_DISPATCH) { GameplayWorkItem.Exiting(reply) }
+
+    private fun <Result : Any> dispatchDirect(
+        reply: InlineReply<Result, GameplayRefusal>,
+        requiredRevisions: Long = 1L,
+        itemForAcceptedCall: () -> GameplayWorkItem.Direct<Result>,
+    ) {
+        reply.checkAvailable()
+        if (acceptance.isDispatching || !acceptance.isEmpty) {
+            reply.refused(GameplayRefusal.Busy)
+            return
+        }
+        if (!hasGameplayRevisionCapacity(committedState.revision, requiredRevisions)) {
+            reply.refused(GameplayRefusal.RevisionCapacityExhausted)
+            return
+        }
+        acceptance.dispatch {
+            val item = itemForAcceptedCall()
+            when (val decision = GameplayNucleus.decide(committedState, item.pulse, item.context)) {
+                is GameplayDecision.Rejected -> reply.refused(GameplayRefusal.DecisionRejected(decision.reason))
+                is GameplayDecision.Accepted -> dispatchAccepted(decision.frame, item)
+            }
+        }
     }
 
     override fun query(query: GameplayQuery.GetRunStatus): GameplayRunStatusProjection =
@@ -189,80 +123,34 @@ internal class GameComponent private constructor(
     override fun visualFxSnapshot(): VisualFxProjection =
         interactionFxReducer?.snapshot() ?: VisualFxProjection.EMPTY
 
-    /** Trusted binding validation precedes caller-owned ModuleResultPulse construction. */
-    internal fun receiveProfileModuleResult(delivery: ProfileModuleResultDelivery) {
-        check(dispatchGuard.isDispatching) {
-            "Inline Profile completion arrived outside its Gameplay causal scope"
-        }
-        val route = checkNotNull(activeProfileCommandRoute) {
-            "Profile result arrived without a reserved Gameplay route"
-        }
-        val pending = checkNotNull(committedState.pendingProfileCommand) {
-            "Profile result arrived without a pending Gameplay command"
-        }
-        check(pending.request == route.request)
-
-        val expectedCommandSource = route.commandSource(profilePort)
-        check(delivery.commandSource == expectedCommandSource) {
-            "Profile result command-source correlation mismatch"
-        }
-        check(delivery.effectiveProtocolIdentity == ProfileEffectiveProtocolIdentity.GAMEPLAY_PROGRESS)
-        check(delivery.issuerProvenance == ProfileResultIssuerProvenance.LOCAL_PROFILE_STATIC_BINDING)
-        check(delivery.result == ProfileModuleResult.GameplayProgressApplied)
-        check(delivery.resultSource.semanticHandle == route.request.semanticHandle)
-        check(delivery.resultSource.targetInstance == profilePort.instanceId)
-        check(delivery.resultSource.sourceOrdinal == PROFILE_GAMEPLAY_RESULT_ORDINAL)
-        check(delivery.resultSource.causalScope == route.causalScope)
-        check(delivery.resultSource.causalDepth == route.sourceDepth + 1)
-
-        check(route.delivery == null) { "Profile result route received more than one delivery" }
-        route.delivery = delivery
-    }
-
     internal fun stateSnapshot(): GameplayState = committedState
 
-    private fun trustedContextFor(command: GameplayModuleCommand): GameplayContext = when (command) {
-        GameplayModuleCommand.StartRun -> {
-            val projection = profilePort.query(ProfileQuery.GetRunBootstrap)
-            check(projection.instanceId == profilePort.instanceId) {
-                "Profile bootstrap projection came from the wrong instance"
-            }
-            when (val result = projection.result) {
-                is ProfileRunBootstrapResult.Ready -> GameplayContext(
-                    start = GameplayStartContext.Ready(
-                        GameplayStartInputs(
-                            content = committedState.content,
-                            profile = result.snapshot,
-                            seed = seed,
-                        ),
+    private fun trustedStartContext(): GameplayContext {
+        val projection = profilePort.query(ProfileQuery.GetRunBootstrap)
+        check(projection.instanceId == profilePort.instanceId) {
+            "Profile bootstrap projection came from the wrong instance"
+        }
+        return when (val result = projection.result) {
+            is ProfileRunBootstrapResult.Ready -> GameplayContext(
+                start = GameplayStartContext.Ready(
+                    GameplayStartInputs(
+                        content = committedState.content,
+                        profile = result.snapshot,
+                        seed = seed,
                     ),
-                )
-                is ProfileRunBootstrapResult.Unavailable -> GameplayContext(
-                    start = GameplayStartContext.ProfileUnavailable,
-                )
-            }
+                ),
+            )
+            is ProfileRunBootstrapResult.Unavailable -> GameplayContext(
+                start = GameplayStartContext.ProfileUnavailable,
+            )
         }
-        GameplayModuleCommand.ApplyPreferences -> {
-            val projection = profilePort.query(ProfileQuery.GetPreferences)
-            check(projection.instanceId == profilePort.instanceId) {
-                "Profile preferences projection came from the wrong instance"
-            }
-            GameplayContext(preferences = projection.preferences)
-        }
-        GameplayModuleCommand.PauseForOverlay,
-        GameplayModuleCommand.ExitRun,
-        -> GameplayContext.Empty
     }
 
     private fun dispatchLocal(pulse: GameplayInteractionPulse): GameplayAcceptance =
-        dispatchGuard.dispatch {
-            check(activeGameplayCommandRoute == null)
-            check(activeProfileCommandRoute == null)
-            check(completions.isEmpty) { "Gameplay completion deque leaked across dispatches" }
+        acceptance.dispatch {
             check(committedState.revision.value <= Long.MAX_VALUE - MAX_LOCAL_REVISIONS_PER_DISPATCH) {
                 "Gameplay local revision capacity exhausted before Intent construction"
             }
-            localOutputItem.bindLocalCausalScope(allocateLocalCausalScope())
             val before = committedState
             when (val decision = GameplayNucleus.decide(
                 before,
@@ -275,69 +163,18 @@ internal class GameComponent private constructor(
                     reason = decision.reason,
                 )
                 is GameplayDecision.Accepted -> {
-                    acceptFrame(
-                        before,
-                        localOutputItem,
-                        decision.frame,
+                    dispatchAccepted(
+                        rootFrame = decision.frame,
+                        rootItem = localOutputItem,
                         renderModelNeutralTransition = pulse === GameplayInteractionPulse.DashRequested,
                     )
-                    val acceptance = GameplayAcceptance.Accepted(
-                        instanceId = committedState.instanceId,
-                        revision = committedState.revision,
+                    GameplayAcceptance.Accepted(
+                        instanceId = decision.frame.nextState.instanceId,
+                        revision = decision.frame.nextState.revision,
                     )
-                    drainAcceptedFrame(decision.frame, localOutputItem)
-                    check(activeProfileCommandRoute == null)
-                    acceptance
                 }
             }
         }
-
-    private fun dispatchCommand(
-        pulse: GameplayModuleCommandPulse,
-        context: GameplayContext,
-    ): GameplayCommandIngressResult = dispatchGuard.dispatch {
-        check(completions.isEmpty) { "Gameplay completion deque leaked across dispatches" }
-        val item = GameplayWorkItem(
-            pulse = GameplayNucleusPulse.ModuleCommand(pulse),
-            context = context,
-            causalScope = pulse.commandSource.causalScope,
-            causalDepth = pulse.commandSource.causalDepth + 1,
-        )
-        val before = committedState
-        when (val decision = GameplayNucleus.decide(before, item.pulse, item.context)) {
-            is GameplayDecision.Rejected -> {
-                activeGameplayCommandRoute = null
-                refused(
-                    pulse.commandSource,
-                    pulse.effectiveProtocolIdentity,
-                    GameplayCommandBoundaryResponse.DecisionRejected(decision.reason),
-                )
-            }
-            is GameplayDecision.Accepted -> {
-                if (deepestReservedLevel(item, decision.frame) >= MAX_GAMEPLAY_CAUSAL_DEPTH) {
-                    activeGameplayCommandRoute = null
-                    return@dispatch refused(
-                        pulse.commandSource,
-                        pulse.effectiveProtocolIdentity,
-                        causalBudgetFailure(pulse.commandSource),
-                    )
-                }
-                acceptFrame(before, item, decision.frame)
-                val acceptance = GameplayCommandIngressResult.Accepted(
-                    targetInstance = committedState.instanceId,
-                    targetRevision = committedState.revision,
-                )
-                drainAcceptedFrame(decision.frame, item)
-                check(activeProfileCommandRoute == null) {
-                    "Accepted Gameplay frame left an unresolved Profile route"
-                }
-                check(activeGameplayCommandRoute == null) {
-                    "Accepted inline Gameplay command completed without its one-shot result"
-                }
-                acceptance
-            }
-        }
-    }
 
     /** Shared source, expanded at ingress to keep the input path free of extra call boundaries. */
     @Suppress("NOTHING_TO_INLINE")
@@ -350,55 +187,51 @@ internal class GameComponent private constructor(
         val renderSnapshot = preflight(
             before = before,
             renderModelNeutralTransition = renderModelNeutralTransition,
-            causalScope = item.causalScope,
+            item = item,
             frame = frame,
         )
         publish(frame.nextState, renderSnapshot)
         initializeInteractionFxIfStarted(before, item)
     }
 
-    /** Dispatch every accepted output and completion before surfacing the first execution fault. */
+    /** Inline the shared loop to retain the allocation-free local dispatch path. */
     @Suppress("NOTHING_TO_INLINE")
-    private inline fun drainAcceptedFrame(frame: GameplayAcceptedFrame, item: GameplayWorkItem) {
-        var deferredFault = executeOutputs(frame, item, previousFault = null)
-        while (!completions.isEmpty) {
-            val completion = checkNotNull(completions.removeFirstOrNull())
-            val before = committedState
-            when (val decision = GameplayNucleus.decide(before, completion.pulse, completion.context)) {
-                is GameplayDecision.Rejected ->
-                    error("A trusted Gameplay completion was rejected: ${decision.reason}")
-                is GameplayDecision.Accepted -> {
-                    acceptFrame(before, completion, decision.frame)
-                    deferredFault = executeOutputs(decision.frame, completion, deferredFault)
+    private inline fun dispatchAccepted(
+        rootFrame: GameplayAcceptedFrame,
+        rootItem: GameplayWorkItem,
+        renderModelNeutralTransition: Boolean = false,
+    ) {
+        acceptance.acceptAndDrain(
+            rootItem = rootItem,
+            rootFrame = rootFrame,
+            outputs = { it.outputs },
+            acceptFrame = { item, frame ->
+                acceptFrame(
+                    before = committedState,
+                    item = item,
+                    frame = frame,
+                    renderModelNeutralTransition = renderModelNeutralTransition && item === rootItem,
+                )
+            },
+            decideCompletion = { completion ->
+                when (val decision = GameplayNucleus.decide(
+                    committedState,
+                    completion.pulse,
+                    completion.context,
+                )) {
+                    is GameplayDecision.Accepted -> decision.frame
+                    is GameplayDecision.Rejected ->
+                        error("A trusted Gameplay completion was rejected: ${decision.reason}")
                 }
-            }
-        }
-        deferredFault?.let { throw it }
-    }
-
-    @Suppress("NOTHING_TO_INLINE")
-    private inline fun executeOutputs(
-        frame: GameplayAcceptedFrame,
-        item: GameplayWorkItem,
-        previousFault: Throwable?,
-    ): Throwable? {
-        var deferredFault = previousFault
-        var outputIndex = 0
-        while (outputIndex < frame.outputs.size) {
-            try {
-                execute(frame.outputs[outputIndex], item)
-            } catch (failure: Throwable) {
-                if (deferredFault == null) deferredFault = failure
-            }
-            outputIndex++
-        }
-        return deferredFault
+            },
+            execute = { output, item -> execute(output, item) },
+        )
     }
 
     private fun preflight(
         before: GameplayState,
         renderModelNeutralTransition: Boolean,
-        causalScope: Long,
+        item: GameplayWorkItem,
         frame: GameplayAcceptedFrame,
     ): GameplayRenderSnapshot {
         val next = frame.nextState
@@ -408,6 +241,7 @@ internal class GameComponent private constructor(
         check(next.revision.value == before.revision.value + 1L) {
             "Gameplay revision must advance exactly once"
         }
+        if (item is GameplayWorkItem.Direct<*>) item.reply.checkAvailable()
         val renderSnapshot = if (
             next.engine === before.engine ||
             renderModelNeutralTransition
@@ -444,8 +278,8 @@ internal class GameComponent private constructor(
         }
         check(frame.outputs.size <= MAX_GAMEPLAY_OUTPUTS_PER_DECISION)
         var profileOutput: GameplayOutput.SendProfileCommand? = null
-        var profileOutputIndex = -1
         var profileOutputCount = 0
+        var directResultCount = 0
         var outputIndex = 0
         var previousDispatchOrder = 0
         while (outputIndex < frame.outputs.size) {
@@ -461,43 +295,59 @@ internal class GameComponent private constructor(
                 profileOutputCount++
                 if (profileOutput == null) {
                     profileOutput = output
-                    profileOutputIndex = outputIndex
                 }
             }
+            if (output is GameplayOutput.SettingsApplied || output is GameplayOutput.RunStarted ||
+                output is GameplayOutput.OverlayPaused || output is GameplayOutput.RunExited
+            ) directResultCount++
             outputIndex++
+        }
+
+        val expectsExitResult = item.exitReplyOrNull() != null && !next.progressPending
+        val expectsImmediateResult = item is GameplayWorkItem.Direct<*> && item !is GameplayWorkItem.Exiting
+        check(directResultCount == if (expectsImmediateResult || expectsExitResult) 1 else 0) {
+            "Gameplay command must accept its one typed result"
         }
 
         requireGameplayProfileOutputFanoutBound(profileOutputCount)
         if (profileOutput != null) {
-            check(before.pendingProfileCommand == null)
-            requireGameplayCompletionCapacity(completions.remainingCapacity, requiredCompletions = 1)
-            val pending = checkNotNull(next.pendingProfileCommand)
-            check(pending.request == profileOutput.request)
-            check(profileOutput.request.targetInstance == profilePort.instanceId)
-            check(profileOutput.request.command is ProfileModuleCommand.ApplyGameplayProgress)
-            check(profileOutput.request.sourceOrdinal == profileOutputIndex)
-            check(profileOutput.request.semanticHandle.sourceOrdinal == profileOutputIndex)
-            check(profileOutput.request.semanticHandle.sourceRevision == next.revision.value)
-            check(
-                profileOutput.request.semanticHandle.sourceInstance ==
-                    ProfileCommandSource.GameplayRun(next.instanceId.runId.value),
-            )
-        } else if (before.pendingProfileCommand == null) {
-            check(next.pendingProfileCommand == null)
+            check(!before.progressPending && next.progressPending)
+            requireGameplayCompletionCapacity(acceptance.remainingCapacity, requiredCompletions = 1)
+        } else if (!before.progressPending) {
+            check(!next.progressPending)
+        } else if (item is GameplayWorkItem.ProgressCompletion) {
+            check(!next.progressPending)
+        } else {
+            check(next.progressPending)
         }
 
         outputIndex = 0
         while (outputIndex < frame.outputs.size) {
             val output = frame.outputs[outputIndex]
             when (output) {
-                is GameplayOutput.CompleteCommand -> {
-                    val route = checkNotNull(activeGameplayCommandRoute)
-                    check(output.result.commandSource == route.commandSource)
-                    check(output.result.semanticHandle == route.commandSource.semanticHandle)
-                    check(output.result.sourceOrdinal == outputIndex)
-                    check(route.effectiveProtocolIdentity.acceptsResult(output.result.result))
+                is GameplayOutput.RunExited -> {
+                    checkNotNull(item.exitReplyOrNull()).checkAvailable()
+                    check(output.result.runId == next.instanceId.runId && output.result.revision == next.revision)
+                    check(next.phase == GameplayRunPhase.EXITED && !next.progressPending)
                     check(outputIndex == frame.outputs.lastIndex)
-                    check(causalScope == route.commandSource.causalScope)
+                }
+                is GameplayOutput.SettingsApplied -> {
+                    check(item is GameplayWorkItem.Settings)
+                    check(output.result.runId == next.instanceId.runId)
+                    check(output.result.revision == next.revision)
+                    check(outputIndex == frame.outputs.lastIndex)
+                }
+                is GameplayOutput.RunStarted -> {
+                    check(item is GameplayWorkItem.Starting)
+                    check(output.result.runId == next.instanceId.runId && output.result.revision == next.revision)
+                    check(next.phase == GameplayRunPhase.RUNNING)
+                    check(outputIndex == frame.outputs.lastIndex)
+                }
+                is GameplayOutput.OverlayPaused -> {
+                    check(item is GameplayWorkItem.Pausing)
+                    check(output.result.runId == next.instanceId.runId && output.result.revision == next.revision)
+                    check(next.phase == GameplayRunPhase.PAUSED)
+                    check(outputIndex == frame.outputs.lastIndex)
                 }
                 is GameplayOutput.SendProfileCommand -> Unit
                 is GameplayOutput.AdvanceAudio,
@@ -519,8 +369,7 @@ internal class GameComponent private constructor(
         item: GameplayWorkItem,
     ) {
         if (before.phase != GameplayRunPhase.CREATED) return
-        val command = (item.pulse as? GameplayNucleusPulse.ModuleCommand)?.pulse?.command
-        if (command != GameplayModuleCommand.StartRun) return
+        if (item.pulse !== GameplayNucleusPulse.StartRun) return
         check(interactionFxReducer == null)
         interactionFxReducer = InteractionFxReducer(
             (checkNotNull(item.context.start) as GameplayStartContext.Ready).inputs.seed,
@@ -536,225 +385,44 @@ internal class GameComponent private constructor(
                 audioExecutor.advance(output.realDeltaSeconds, output.cues)
             GameplayOutput.EnsureAudioUnlocked ->
                 audioExecutor.ensureUnlocked()
-            is GameplayOutput.CompleteCommand -> dispatchCommandResult(output.result, item)
-        }
-    }
-
-    private fun executeProfileCommand(
-        output: GameplayOutput.SendProfileCommand,
-        item: GameplayWorkItem,
-    ) {
-        check(activeProfileCommandRoute == null)
-        val route = GameplayProfileRouteReservation(
-            request = output.request,
-            causalScope = item.causalScope,
-            sourceDepth = item.causalDepth,
-        )
-        activeProfileCommandRoute = route
-        var invocationFailure: Throwable? = null
-        val ingress = try {
-            profilePort.acceptFromGameplay(
-                request = output.request,
-                causalScope = item.causalScope,
-                causalDepth = item.causalDepth,
-            )
-        } catch (failure: Throwable) {
-            invocationFailure = failure
-            null
-        }
-        when (ingress) {
-            is ProfileCommandIngressResult.Accepted -> {
-                check(ingress.targetInstance == profilePort.instanceId)
-                val delivery = checkNotNull(route.delivery) {
-                    "Accepted inline Profile command returned without its reserved result"
-                }
-                enqueueProfileResult(route, delivery, ingress.targetRevision)
-                check(!completions.isEmpty) {
-                    "Accepted inline Profile result was not retained by Gameplay"
-                }
+            is GameplayOutput.RunExited -> checkNotNull(item.exitReplyOrNull()).accepted(output.result)
+            is GameplayOutput.SettingsApplied -> when (item) {
+                is GameplayWorkItem.Settings -> item.reply.accepted(output.result)
+                else -> error("Gameplay settings result has no current typed call")
             }
-            is ProfileCommandIngressResult.RejectedBeforeAcceptance -> {
-                check(activeProfileCommandRoute === route)
-                check(route.delivery == null) {
-                    "Profile route returned a pre-acceptance refusal after delivering a result"
-                }
-                validateProfileRefusal(route, ingress)
-                activeProfileCommandRoute = null
-                val refusal = ingress.refusal
-                enqueueCompletion(
-                    pulse = GameplayNucleusPulse.ProfileCommandRejectedBeforeAcceptance(
-                        commandSource = refusal.commandSource,
-                        effectiveProtocolIdentity = refusal.effectiveProtocolIdentity,
-                        boundaryResponse = refusal.boundaryResponse,
-                        targetBoundaryProvenance = refusal.targetBoundaryProvenance,
-                    ),
-                    causalScope = item.causalScope,
-                    causalDepth = item.causalDepth + 1,
-                )
+            is GameplayOutput.RunStarted -> when (item) {
+                is GameplayWorkItem.Starting -> item.reply.accepted(output.result)
+                else -> error("Gameplay start result has no current typed call")
             }
-            null -> {
-                route.delivery?.let { delivery ->
-                    // A verified target-owned result frame is authoritative even when the
-                    // same-stack invocation faults after delivering it.
-                    enqueueProfileResult(route, delivery, acceptedTargetRevision = null)
-                }
-                throw checkNotNull(invocationFailure)
+            is GameplayOutput.OverlayPaused -> when (item) {
+                is GameplayWorkItem.Pausing -> item.reply.accepted(output.result)
+                else -> error("Gameplay pause result has no current typed call")
             }
         }
     }
 
-    private fun enqueueProfileResult(
-        route: GameplayProfileRouteReservation,
-        delivery: ProfileModuleResultDelivery,
-        acceptedTargetRevision: ProfileRevision?,
-    ) {
-        check(activeProfileCommandRoute === route)
-        if (acceptedTargetRevision != null) {
-            check(delivery.resultSource.targetRevision == acceptedTargetRevision) {
-                "Profile result did not name the accepted target frame"
-            }
-        }
-        activeProfileCommandRoute = null
-        enqueueCompletion(
-            pulse = GameplayNucleusPulse.ProfileModuleResultPulse(
-                commandSource = delivery.commandSource,
-                resultSource = delivery.resultSource,
-                effectiveProtocolIdentity = delivery.effectiveProtocolIdentity,
-                result = delivery.result,
-                issuerProvenance = delivery.issuerProvenance,
-            ),
-            causalScope = delivery.resultSource.causalScope,
-            causalDepth = delivery.resultSource.causalDepth + 1,
+    private fun executeProfileCommand(output: GameplayOutput.SendProfileCommand, item: GameplayWorkItem) {
+        val exitReply = item.exitReplyOrNull()
+        acceptance.call(
+            invoke = { reply -> profileProgress.applyGameplayProgress(output.update, reply) },
+            acceptedInput = { GameplayWorkItem.ProgressCompletion(GameplayNucleusPulse.ProgressApplied(it), exitReply) },
+            refusedInput = { GameplayWorkItem.ProgressCompletion(GameplayNucleusPulse.ProgressRefused(it), exitReply) },
         )
-    }
-
-    private fun validateProfileRefusal(
-        route: GameplayProfileRouteReservation,
-        ingress: ProfileCommandIngressResult.RejectedBeforeAcceptance,
-    ) {
-        val refusal = ingress.refusal
-        check(refusal.commandSource == route.commandSource(profilePort))
-        check(refusal.effectiveProtocolIdentity == ProfileEffectiveProtocolIdentity.GAMEPLAY_PROGRESS)
-        check(refusal.targetBoundaryProvenance.targetInstance == profilePort.instanceId)
-        check(
-            refusal.targetBoundaryProvenance.effectiveProtocolIdentity ==
-                ProfileEffectiveProtocolIdentity.GAMEPLAY_PROGRESS,
-        )
-        val admission = refusal.boundaryResponse as? ProfileCommandBoundaryResponse.AdmissionFailure
-        val budget = admission?.reason as? ProfileCommandAdmissionFailureReason.CausalBudgetExceeded
-        if (budget != null) check(budget.causalScope == route.causalScope)
-    }
-
-    private fun dispatchCommandResult(
-        output: GameplayModuleResultOutput,
-        item: GameplayWorkItem,
-    ) {
-        val route = checkNotNull(activeGameplayCommandRoute) {
-            "Gameplay result has no reserved command route"
-        }
-        check(route.commandSource == output.commandSource)
-        check(route.commandSource.causalScope == item.causalScope)
-        check(route.effectiveProtocolIdentity.acceptsResult(output.result))
-        activeGameplayCommandRoute = null
-        commandResultSink(
-            GameplayModuleResultDelivery(
-                commandSource = output.commandSource,
-                resultSource = GameplayResultSourceToken(
-                    semanticHandle = output.semanticHandle,
-                    targetInstance = committedState.instanceId,
-                    targetRevision = committedState.revision,
-                    sourceOrdinal = output.sourceOrdinal,
-                    causalScope = item.causalScope,
-                    causalDepth = item.causalDepth,
-                ),
-                effectiveProtocolIdentity = route.effectiveProtocolIdentity,
-                result = output.result,
-                issuerProvenance = GameplayResultIssuerProvenance.GAMEPLAY_RUN_STATIC_BINDING,
-            ),
-        )
-    }
-
-    private fun enqueueCompletion(
-        pulse: GameplayNucleusPulse,
-        causalScope: Long,
-        causalDepth: Int,
-    ) {
-        requireGameplayCausalDepth(causalDepth)
-        check(
-            completions.tryAddLast(
-                GameplayWorkItem(
-                    pulse = pulse,
-                    context = GameplayContext.Empty,
-                    causalScope = causalScope,
-                    causalDepth = causalDepth,
-                ),
-            ),
-        ) { "Pre-reserved Gameplay completion could not be retained" }
-    }
-
-    private fun deepestReservedLevel(
-        item: GameplayWorkItem,
-        frame: GameplayAcceptedFrame,
-    ): Int {
-        var deepest = item.causalDepth
-        if (frame.outputs.any { it is GameplayOutput.CompleteCommand }) {
-            deepest = maxOf(deepest, item.causalDepth + 1)
-        }
-        if (frame.outputs.any { it is GameplayOutput.SendProfileCommand }) {
-            val returnsCommandResult = frame.nextState.pendingProfileCommand?.exitCompletion != null
-            deepest = maxOf(
-                deepest,
-                item.causalDepth + if (returnsCommandResult) 3 else 2,
-            )
-        }
-        return deepest
-    }
-
-    private fun refused(
-        commandSource: GameplayCommandSourceToken,
-        effectiveProtocolIdentity: GameplayEffectiveProtocolIdentity,
-        response: GameplayCommandBoundaryResponse,
-    ): GameplayCommandIngressResult.RejectedBeforeAcceptance =
-        GameplayCommandIngressResult.RejectedBeforeAcceptance(
-            GameplayCommandRefusalEvidence(
-                commandSource = commandSource,
-                effectiveProtocolIdentity = effectiveProtocolIdentity,
-                boundaryResponse = response,
-                targetBoundaryProvenance = GameplayTargetBoundaryProvenance(
-                    targetInstance = committedState.instanceId,
-                    effectiveProtocolIdentity = effectiveProtocolIdentity,
-                ),
-            ),
-        )
-
-    private fun causalBudgetFailure(
-        commandSource: GameplayCommandSourceToken,
-    ): GameplayCommandBoundaryResponse.AdmissionFailure =
-        GameplayCommandBoundaryResponse.AdmissionFailure(
-            GameplayCommandAdmissionFailureReason.CausalBudgetExceeded(
-                causalScope = commandSource.causalScope,
-                limit = MAX_GAMEPLAY_CAUSAL_DEPTH,
-            ),
-        )
-
-    private fun allocateLocalCausalScope(): Long {
-        check(nextLocalCausalScope < Long.MAX_VALUE) { "Gameplay local causal scope exhausted" }
-        return nextLocalCausalScope++
     }
 
     companion object {
         fun create(
             runId: RunId,
             content: GameplayContentSnapshot,
-            profilePort: GameplayProfileRoute,
+            profilePort: ProfileReadPort,
+            profileProgress: ProfileProgress,
             audioExecutor: GameplayAudioExecutor,
-            commandResultSink: (GameplayModuleResultDelivery) -> Unit,
             seed: Int,
         ): GameComponent = GameComponent(
             initialState = GameplayState.initial(runId, content),
             profilePort = profilePort,
             audioExecutor = audioExecutor,
-            commandResultSink = commandResultSink,
+            profileProgress = profileProgress,
             seed = seed,
         )
     }
@@ -768,12 +436,6 @@ private data class CommittedGameplayFrame(
 internal fun <T> gameplayCompletionDeque(): BoundedCompletionDeque<T> =
     BoundedCompletionDeque(GAMEPLAY_COMPLETION_CAPACITY)
 
-internal fun requireGameplayCausalDepth(causalDepth: Int) {
-    check(causalDepth >= 0 && causalDepth < MAX_GAMEPLAY_CAUSAL_DEPTH) {
-        "Gameplay causal depth exhausted before acceptance"
-    }
-}
-
 internal fun requireGameplayProfileOutputFanoutBound(profileCommandCount: Int) {
     check(profileCommandCount in 0..1) {
         "A Gameplay decision may issue at most one Profile command"
@@ -786,64 +448,68 @@ internal fun requireGameplayCompletionCapacity(remainingCapacity: Int, requiredC
     }
 }
 
-internal fun hasGameplayCommandRevisionCapacity(
+internal fun hasGameplayRevisionCapacity(
     revision: GameplayRevision,
-    command: GameplayModuleCommand,
+    requiredRevisions: Long,
 ): Boolean {
-    val required = if (command == GameplayModuleCommand.ExitRun) {
-        MAX_EXIT_REVISIONS_PER_DISPATCH
-    } else {
-        1L
-    }
-    return revision.value <= Long.MAX_VALUE - required
+    require(requiredRevisions > 0L)
+    return revision.value <= Long.MAX_VALUE - requiredRevisions
 }
 
-private class GameplayWorkItem(
-    val pulse: GameplayNucleusPulse,
-    val context: GameplayContext,
-    causalScope: Long,
-    val causalDepth: Int,
-    private val reusableLocalOutputItem: Boolean = false,
-) {
-    var causalScope: Long = causalScope
-        private set
+private sealed interface GameplayWorkItem {
+    val pulse: GameplayNucleusPulse
+    val context: GameplayContext
 
-    fun bindLocalCausalScope(causalScope: Long) {
-        check(reusableLocalOutputItem && causalDepth == 0)
-        check(causalScope >= 0L)
-        this.causalScope = causalScope
+    sealed interface Direct<Result : Any> : GameplayWorkItem {
+        val reply: InlineReply<Result, GameplayRefusal>
     }
 
-    companion object {
-        fun reusableLocalOutputItem(): GameplayWorkItem = GameplayWorkItem(
-            pulse = LOCAL_OUTPUT_METADATA_PULSE,
-            context = GameplayContext.Empty,
-            causalScope = 0L,
-            causalDepth = 0,
-            reusableLocalOutputItem = true,
-        )
+    data object Local : GameplayWorkItem {
+        override val pulse: GameplayNucleusPulse = GameplayNucleusPulse.Intent(GameplayInteractionPulse.UserGestureObserved)
+        override val context: GameplayContext = GameplayContext.Empty
     }
+
+    data class ProgressCompletion(
+        override val pulse: GameplayNucleusPulse,
+        val exitReply: InlineReply<GameplayRunExited, GameplayRefusal>?,
+    ) : GameplayWorkItem {
+        override val context: GameplayContext = GameplayContext.Empty
+    }
+
+    data class Exiting(
+        override val reply: InlineReply<GameplayRunExited, GameplayRefusal>,
+    ) : Direct<GameplayRunExited> {
+        override val pulse: GameplayNucleusPulse = GameplayNucleusPulse.ExitRun
+        override val context: GameplayContext = GameplayContext.Empty
+    }
+
+    data class Settings(
+        override val pulse: GameplayNucleusPulse.ApplyPreferences,
+        override val reply: InlineReply<GameplaySettingsApplied, GameplayRefusal>,
+    ) : Direct<GameplaySettingsApplied> {
+        override val context: GameplayContext = GameplayContext.Empty
+    }
+
+    data class Starting(
+        override val context: GameplayContext,
+        override val reply: InlineReply<GameplayRunStarted, GameplayRefusal>,
+    ) : Direct<GameplayRunStarted> {
+        override val pulse: GameplayNucleusPulse = GameplayNucleusPulse.StartRun
+    }
+
+    data class Pausing(
+        override val reply: InlineReply<GameplayOverlayPaused, GameplayRefusal>,
+    ) : Direct<GameplayOverlayPaused> {
+        override val pulse: GameplayNucleusPulse = GameplayNucleusPulse.PauseForOverlay
+        override val context: GameplayContext = GameplayContext.Empty
+    }
+
 }
 
-private data class GameplayCommandRouteReservation(
-    val commandSource: GameplayCommandSourceToken,
-    val effectiveProtocolIdentity: GameplayEffectiveProtocolIdentity,
-)
-
-private class GameplayProfileRouteReservation(
-    val request: ProfileModuleCommandRequest,
-    val causalScope: Long,
-    val sourceDepth: Int,
-) {
-    var delivery: ProfileModuleResultDelivery? = null
-
-    fun commandSource(profilePort: GameplayProfileRoute): ProfileCommandSourceToken =
-        ProfileCommandSourceToken(
-            semanticHandle = request.semanticHandle,
-            targetInstance = profilePort.instanceId,
-            causalScope = causalScope,
-            causalDepth = sourceDepth,
-        )
+private fun GameplayWorkItem.exitReplyOrNull(): InlineReply<GameplayRunExited, GameplayRefusal>? = when (this) {
+    is GameplayWorkItem.Exiting -> reply
+    is GameplayWorkItem.ProgressCompletion -> exitReply
+    else -> null
 }
 
 private val GameplayOutput.dispatchOrder: Int
@@ -853,13 +519,11 @@ private val GameplayOutput.dispatchOrder: Int
         is GameplayOutput.AdvanceAudio,
         GameplayOutput.EnsureAudioUnlocked,
         -> 2
-        is GameplayOutput.CompleteCommand -> 3
+        is GameplayOutput.RunExited, is GameplayOutput.SettingsApplied,
+        is GameplayOutput.RunStarted, is GameplayOutput.OverlayPaused,
+        -> 3
     }
 
 private const val GAMEPLAY_COMPLETION_CAPACITY: Int = 8
-private const val MAX_GAMEPLAY_CAUSAL_DEPTH: Int = 8
-private const val PROFILE_GAMEPLAY_RESULT_ORDINAL: Int = 1
 private const val MAX_LOCAL_REVISIONS_PER_DISPATCH: Long = 2L
 private const val MAX_EXIT_REVISIONS_PER_DISPATCH: Long = 2L
-private val LOCAL_OUTPUT_METADATA_PULSE: GameplayNucleusPulse =
-    GameplayNucleusPulse.Intent(GameplayInteractionPulse.UserGestureObserved)

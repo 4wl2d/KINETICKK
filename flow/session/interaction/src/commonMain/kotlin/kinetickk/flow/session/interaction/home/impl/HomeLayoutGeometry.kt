@@ -70,21 +70,21 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
     val actions = when (mode) {
         HomeLayoutMode.REGULAR -> {
             val center = width * 0.5f
-            val cardY = height * 0.62f
+            val cardY = height * 0.49f
             val cardWidth = minOf(d(108f), (width - d(48f)) / 6f)
             val centers = List(6) { center + (it - 2.5f) * cardWidth }
-            val startY = height * 0.78f
-            val navY = height * 0.9f
+            val startY = height * 0.70f
+            val navY = height * 0.84f
             val spacing = minOf(d(132f), width * 0.19f)
             val navStart = center - spacing * 2f
             buildList {
                 coreTargets.forEachIndexed { index, target ->
-                    add(HomeActionBounds(target, Rect(centers[index] - cardWidth * 0.46f, cardY - d(55f), centers[index] + cardWidth * 0.46f, cardY + d(55f))))
+                    add(HomeActionBounds(target, Rect(centers[index] - cardWidth * 0.46f, cardY - d(40f), centers[index] + cardWidth * 0.46f, cardY + d(40f))))
                 }
-                add(HomeActionBounds(HomeLayoutTarget.START, Rect(center - d(150f), startY - d(31f), center + d(150f), startY + d(31f))))
+                add(HomeActionBounds(HomeLayoutTarget.START, Rect(center - d(120f), startY - d(25f), center + d(120f), startY + d(25f))))
                 navigationTargets.forEachIndexed { index, target ->
                     val itemCenter = navStart + spacing * index
-                    add(HomeActionBounds(target, Rect(itemCenter - spacing * 0.44f, navY - d(20f), itemCenter + spacing * 0.44f, navY + d(20f))))
+                    add(HomeActionBounds(target, Rect(itemCenter - spacing * 0.44f, navY - d(28f), itemCenter + spacing * 0.44f, navY + d(28f))))
                 }
             }
         }

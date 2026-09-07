@@ -7,21 +7,19 @@ import kinetickk.ball.gameplay.nucleus.simulation.buildSummary
 
 import kinetickk.ball.gameplay.api.GameplayActiveWeaponProjection
 import kinetickk.ball.gameplay.api.GameplayBuildSummaryProjection
-import kinetickk.ball.gameplay.api.GameplayCommandSourceToken
 import kinetickk.ball.gameplay.api.GameplayConfigurationRejection
 import kinetickk.ball.gameplay.api.GameplayExitProgressResult
 import kinetickk.ball.gameplay.api.GameplayInstanceId
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
-import kinetickk.ball.gameplay.api.GameplayModuleCommand
-import kinetickk.ball.gameplay.api.GameplayModuleCommandPulse
-import kinetickk.ball.gameplay.api.GameplayModuleResult
-import kinetickk.ball.gameplay.api.GameplayModuleResultOutput
-import kinetickk.ball.gameplay.api.GameplayPointerAxis
 import kinetickk.ball.gameplay.api.GameplayQuery
 import kinetickk.ball.gameplay.api.GameplayRejection
 import kinetickk.ball.gameplay.api.GameplayRevision
 import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.GameplayRunStatusProjection
+import kinetickk.ball.gameplay.api.GameplaySettingsApplied
+import kinetickk.ball.gameplay.api.GameplayRunStarted
+import kinetickk.ball.gameplay.api.GameplayRunExited
+import kinetickk.ball.gameplay.api.GameplayOverlayPaused
 import kinetickk.ball.gameplay.nucleus.protocol.SimulationOutputs
 import kinetickk.ball.gameplay.nucleus.reducer.EngineState
 import kinetickk.ball.gameplay.nucleus.reducer.GameReducer
@@ -40,19 +38,11 @@ import kinetickk.ball.gameplay.nucleus.simulation.takeSoundCues
 import kinetickk.ball.gameplay.nucleus.simulation.takeVisualFxCues
 import kinetickk.ball.gameplay.nucleus.simulation.toRenderModel
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
-import kinetickk.ball.profile.api.GameplayProgressUpdate
-import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.PlayerPreferences
-import kinetickk.ball.profile.api.ProfileCommandSource
-import kinetickk.ball.profile.api.ProfileModuleCommand
-import kinetickk.ball.profile.api.ProfileModuleCommandRequest
-import kinetickk.ball.profile.api.ProfileModuleResult
-import kinetickk.ball.profile.api.ProfileSemanticHandle
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.immutableListOfSize
-import kinetickk.foundation.collections.toImmutableList
 
 /** Pure, deterministic authority for GameplayRun decisions and projections. */
 object GameplayNucleus {
@@ -65,10 +55,14 @@ object GameplayNucleus {
     ): GameplayDecision {
         return when (pulse) {
             is GameplayNucleusPulse.Intent -> decideInteraction(state, pulse.intent)
-            is GameplayNucleusPulse.ModuleCommand -> decideModuleCommand(state, pulse.pulse, context)
-            is GameplayNucleusPulse.ProfileModuleResultPulse -> decideProfileResult(state, pulse)
-            is GameplayNucleusPulse.ProfileCommandRejectedBeforeAcceptance ->
-                decideProfileRefusal(state, pulse)
+            is GameplayNucleusPulse.ApplyPreferences -> applyPreferences(state, pulse.preferences)
+            GameplayNucleusPulse.StartRun -> startRun(
+                state, checkNotNull(context.start) { "Trusted Gameplay start Context was not supplied" },
+            )
+            GameplayNucleusPulse.PauseForOverlay -> pauseForOverlay(state)
+            GameplayNucleusPulse.ExitRun -> exitRun(state)
+            is GameplayNucleusPulse.ProgressApplied -> completeProfileProgress(state, GameplayExitProgressResult.Applied)
+            is GameplayNucleusPulse.ProgressRefused -> completeProfileProgress(state, GameplayExitProgressResult.NotApplied)
         }
     }
 
@@ -180,7 +174,7 @@ object GameplayNucleus {
             instanceId = state.instanceId,
             revision = state.revision,
             phase = state.phase,
-            profileCommandPending = state.pendingProfileCommand != null,
+            progressPending = state.progressPending,
         )
 
     fun query(state: GameplayState, query: GameplayQuery.GetActiveWeapon): GameplayActiveWeaponProjection =
@@ -194,28 +188,8 @@ object GameplayNucleus {
         state.engine?.model?.buildSummary(state.instanceId, state.revision)
             ?: GameplayBuildSummaryProjection(state.instanceId, state.revision, immutableListOf())
 
-    private fun decideModuleCommand(
-        state: GameplayState,
-        pulse: GameplayModuleCommandPulse,
-        context: GameplayContext,
-    ): GameplayDecision = when (val command = pulse.command) {
-        GameplayModuleCommand.StartRun -> startRun(
-            state = state,
-            commandSource = pulse.commandSource,
-            start = checkNotNull(context.start) { "Trusted Gameplay start Context was not supplied" },
-        )
-        GameplayModuleCommand.PauseForOverlay -> pauseForOverlay(state, pulse.commandSource)
-        GameplayModuleCommand.ApplyPreferences -> applyPreferences(
-            state,
-            pulse.commandSource,
-            checkNotNull(context.preferences) { "Trusted preferences read was not supplied" },
-        )
-        GameplayModuleCommand.ExitRun -> exitRun(state, pulse.commandSource)
-    }
-
     private fun startRun(
         state: GameplayState,
-        commandSource: GameplayCommandSourceToken,
         start: GameplayStartContext,
     ): GameplayDecision {
         when (state.phase) {
@@ -250,14 +224,13 @@ object GameplayNucleus {
         return accepted(
             nextState,
             immutableListOf(
-                completion(commandSource, sourceOrdinal = 0, GameplayModuleResult.RunStarted),
+                GameplayOutput.RunStarted(GameplayRunStarted(state.instanceId.runId, revision)),
             ),
         )
     }
 
     private fun pauseForOverlay(
         state: GameplayState,
-        commandSource: GameplayCommandSourceToken,
     ): GameplayDecision {
         lifecycleGate(state)?.let { return rejected(it) }
         if (state.phase != GameplayRunPhase.RUNNING) {
@@ -271,13 +244,7 @@ object GameplayNucleus {
             engine = reduction.state,
         )
         val outputs = reduction.outputs.toGameplayOutputs(
-            instanceId = prepared.instanceId,
-            revision = prepared.revision,
-            trailingOutput = completion(
-                commandSource,
-                sourceOrdinal = reduction.outputs.size,
-                result = GameplayModuleResult.OverlayPaused,
-            ),
+            trailingOutput = GameplayOutput.OverlayPaused(GameplayOverlayPaused(state.instanceId.runId, revision)),
         )
         check(reduction.outputs.progressUpdate == null) {
             "Pause unexpectedly emitted Profile progress"
@@ -287,7 +254,6 @@ object GameplayNucleus {
 
     private fun applyPreferences(
         state: GameplayState,
-        commandSource: GameplayCommandSourceToken,
         preferences: PlayerPreferences,
     ): GameplayDecision {
         lifecycleGate(state)?.let { return rejected(it) }
@@ -298,13 +264,7 @@ object GameplayNucleus {
         val revision = state.revision.next()
         val prepared = state.copy(revision = revision, engine = reduction.state)
         val outputs = reduction.outputs.toGameplayOutputs(
-            instanceId = prepared.instanceId,
-            revision = prepared.revision,
-            trailingOutput = completion(
-                commandSource,
-                sourceOrdinal = reduction.outputs.size,
-                result = GameplayModuleResult.PreferencesApplied,
-            ),
+            trailingOutput = GameplayOutput.SettingsApplied(GameplaySettingsApplied(state.instanceId.runId, revision)),
         )
         check(reduction.outputs.progressUpdate == null) {
             "Preferences unexpectedly emitted Profile progress"
@@ -314,34 +274,28 @@ object GameplayNucleus {
 
     private fun exitRun(
         state: GameplayState,
-        commandSource: GameplayCommandSourceToken,
     ): GameplayDecision {
         lifecycleGate(state)?.let { return rejected(it) }
-        if (state.pendingProfileCommand != null) {
-            return rejected(GameplayRejection.ProfileCommandPending)
+        if (state.progressPending) {
+            return rejected(GameplayRejection.ProgressPending)
         }
         val reduction = reduceTrusted(state.engine!!) { it.exitRun() }
         val revision = state.revision.next()
         val profileProgressPending = reduction.outputs.progressUpdate != null
         val outputs = reduction.outputs.toGameplayOutputs(
-            instanceId = state.instanceId,
-            revision = revision,
             trailingOutput = if (profileProgressPending) {
                 null
             } else {
-                completion(
-                    commandSource,
-                    sourceOrdinal = reduction.outputs.size,
-                    result = GameplayModuleResult.RunExited(GameplayExitProgressResult.NoProgress),
-                )
+                GameplayOutput.RunExited(GameplayRunExited(
+                    state.instanceId.runId, revision, GameplayExitProgressResult.NoProgress,
+                ))
             },
         )
-        val pending = reduction.outputs.toPendingProfileCommand(outputs, commandSource)
         val nextState = state.copy(
             revision = revision,
             phase = GameplayRunPhase.EXITED,
             engine = reduction.state,
-            pendingProfileCommand = pending,
+            progressPending = profileProgressPending,
         )
         return accepted(nextState, outputs)
     }
@@ -356,21 +310,16 @@ object GameplayNucleus {
             is GameReductionResult.Accepted -> {
                 val revision = state.revision.next()
                 val outputs = result.outputs.toGameplayOutputs(
-                    instanceId = state.instanceId,
-                    revision = revision,
                 )
-                val pending = result.outputs.toPendingProfileCommand(
-                    mappedOutputs = outputs,
-                    exitCompletion = null,
-                )
-                if (pending != null && state.pendingProfileCommand != null) {
-                    return rejected(GameplayRejection.ProfileCommandPending)
+                val progressPending = result.outputs.progressUpdate != null
+                if (progressPending && state.progressPending) {
+                    return rejected(GameplayRejection.ProgressPending)
                 }
                 val nextState = state.copy(
                     revision = revision,
                     phase = result.state.model.phase.toRunPhase(),
                     engine = result.state,
-                    pendingProfileCommand = pending ?: state.pendingProfileCommand,
+                    progressPending = progressPending || state.progressPending,
                 )
                 accepted(
                     nextState,
@@ -380,41 +329,20 @@ object GameplayNucleus {
         }
     }
 
-    private fun decideProfileResult(
-        state: GameplayState,
-        pulse: GameplayNucleusPulse.ProfileModuleResultPulse,
-    ): GameplayDecision {
-        val pending = checkNotNull(state.pendingProfileCommand)
-        check(pulse.commandSource.semanticHandle == pending.request.semanticHandle)
-        check(pulse.result == ProfileModuleResult.GameplayProgressApplied)
-        return completeProfileProgress(state, pending, GameplayExitProgressResult.Applied)
-    }
-
-    private fun decideProfileRefusal(
-        state: GameplayState,
-        pulse: GameplayNucleusPulse.ProfileCommandRejectedBeforeAcceptance,
-    ): GameplayDecision {
-        val pending = checkNotNull(state.pendingProfileCommand)
-        check(pulse.commandSource.semanticHandle == pending.request.semanticHandle)
-        return completeProfileProgress(state, pending, GameplayExitProgressResult.NotApplied)
-    }
-
     private fun completeProfileProgress(
         state: GameplayState,
-        pending: PendingProfileCommand,
         progressResult: GameplayExitProgressResult,
     ): GameplayDecision {
+        check(state.progressPending) { "Profile progress result has no pending progress" }
         val revision = state.revision.next()
-        val nextState = state.copy(revision = revision, pendingProfileCommand = null)
-        val outputs = pending.exitCompletion?.let { commandSource ->
-            immutableListOf(
-                completion(
-                    commandSource,
-                    sourceOrdinal = 0,
-                    result = GameplayModuleResult.RunExited(progressResult),
-                ),
-            )
-        } ?: immutableListOf()
+        val nextState = state.copy(revision = revision, progressPending = false)
+        val outputs = if (state.phase == GameplayRunPhase.EXITED) {
+            immutableListOf(GameplayOutput.RunExited(GameplayRunExited(
+                state.instanceId.runId, revision, progressResult,
+            )))
+        } else {
+            immutableListOf()
+        }
         return accepted(nextState, outputs)
     }
 
@@ -489,8 +417,6 @@ object GameplayNucleus {
     }
 
     private fun SimulationOutputs.toGameplayOutputs(
-        instanceId: GameplayInstanceId,
-        revision: GameplayRevision,
         trailingOutput: GameplayOutput? = null,
     ): ImmutableList<GameplayOutput> {
         val sourceOutputCount = size
@@ -499,14 +425,12 @@ object GameplayNucleus {
             if (sourceOrdinal == sourceOutputCount) {
                 checkNotNull(trailingOutput)
             } else {
-                toGameplayOutputAt(instanceId, revision, sourceOrdinal)
+                toGameplayOutputAt(sourceOrdinal)
             }
         }
     }
 
     private fun SimulationOutputs.toGameplayOutputAt(
-        instanceId: GameplayInstanceId,
-        revision: GameplayRevision,
         sourceOrdinal: Int,
     ): GameplayOutput {
         var remainingIndex = sourceOrdinal
@@ -516,7 +440,7 @@ object GameplayNucleus {
         }
         progressUpdate?.let { update ->
             if (remainingIndex == 0) {
-                return profileOutput(instanceId, revision, sourceOrdinal, update)
+                return GameplayOutput.SendProfileCommand(update)
             }
             remainingIndex--
         }
@@ -531,49 +455,6 @@ object GameplayNucleus {
         }
         error("Canonical Simulation output index was not resolved")
     }
-
-    private fun profileOutput(
-        instanceId: GameplayInstanceId,
-        revision: GameplayRevision,
-        sourceOrdinal: Int,
-        update: GameplayProgressUpdate,
-    ): GameplayOutput.SendProfileCommand {
-        val handle = ProfileSemanticHandle(
-            sourceInstance = ProfileCommandSource.GameplayRun(instanceId.runId.value),
-            sourceRevision = revision.value,
-            sourceOrdinal = sourceOrdinal,
-        )
-        val request = ProfileModuleCommandRequest(
-            semanticHandle = handle,
-            sourceOrdinal = sourceOrdinal,
-            targetInstance = LOCAL_PROFILE_INSTANCE_ID,
-            command = ProfileModuleCommand.ApplyGameplayProgress(update),
-        )
-        return GameplayOutput.SendProfileCommand(request)
-    }
-
-    private fun SimulationOutputs.toPendingProfileCommand(
-        mappedOutputs: ImmutableList<GameplayOutput>,
-        exitCompletion: GameplayCommandSourceToken?,
-    ): PendingProfileCommand? {
-        if (progressUpdate == null) return null
-        val profileOutputIndex = if (visualFxCuesOrNull == null) 0 else 1
-        val profileOutput = mappedOutputs[profileOutputIndex] as GameplayOutput.SendProfileCommand
-        return PendingProfileCommand(profileOutput.request, exitCompletion)
-    }
-
-    private fun completion(
-        commandSource: GameplayCommandSourceToken,
-        sourceOrdinal: Int,
-        result: GameplayModuleResult,
-    ): GameplayOutput.CompleteCommand = GameplayOutput.CompleteCommand(
-        GameplayModuleResultOutput(
-            semanticHandle = commandSource.semanticHandle,
-            sourceOrdinal = sourceOrdinal,
-            commandSource = commandSource,
-            result = result,
-        ),
-    )
 
     private fun accepted(
         nextState: GameplayState,

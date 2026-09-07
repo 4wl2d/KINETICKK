@@ -3,6 +3,8 @@
 
 package kinetickk.app.shared
 
+import kinetickk.foundation.diagnostics.CrashDiagnostics
+
 import kinetickk.ball.profile.impl.ProfilePersistenceCapability
 import kinetickk.ball.profile.impl.ProfilePersistenceContract
 import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
@@ -13,7 +15,7 @@ import kinetickk.resource.audio.impl.TonePlaybackCapability
 import kotlin.js.ExperimentalWasmJsInterop
 import kotlin.js.JsAny
 
-internal actual fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability =
+internal actual fun createPlatformProfilePersistenceCapability(diagnostics: CrashDiagnostics): ProfilePersistenceCapability =
     WebProfilePersistenceCapability()
 
 private class WebProfilePersistenceCapability : ProfilePersistenceCapability {

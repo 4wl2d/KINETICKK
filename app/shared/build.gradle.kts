@@ -21,6 +21,7 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            implementation(projects.foundation.design)
             implementation(libs.compose.runtime)
             implementation(projects.resource.audio.api)
             implementation(projects.resource.audio.impl)
@@ -37,6 +38,7 @@ kotlin {
             implementation(projects.foundation.common)
             implementation(projects.ball.gameplay.api)
             implementation(projects.ball.gameplay.interaction)
+            implementation(projects.ball.gameplay.nucleus)
             implementation(projects.flow.session.api)
         }
         desktopTest.dependencies {

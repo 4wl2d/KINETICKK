@@ -9,31 +9,27 @@ import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.ProfileAcceptance
 import kinetickk.ball.profile.api.ProfileBootstrapBlockReason
 import kinetickk.ball.profile.api.ProfileBootstrapStatus
-import kinetickk.ball.profile.api.ProfileCommandAdmissionFailureReason
-import kinetickk.ball.profile.api.ProfileCommandBoundaryResponse
-import kinetickk.ball.profile.api.ProfileCommandIngressResult
-import kinetickk.ball.profile.api.ProfileCommandSource
-import kinetickk.ball.profile.api.ProfileCommandValidationFailureReason
-import kinetickk.ball.profile.api.ProfileEffectiveProtocolIdentity
 import kinetickk.ball.profile.api.ProfileEffectRef
-import kinetickk.ball.profile.api.ProfileModuleCommand
-import kinetickk.ball.profile.api.ProfileModuleCommandRequest
-import kinetickk.ball.profile.api.ProfileModuleResult
-import kinetickk.ball.profile.api.ProfileModuleResultDelivery
 import kinetickk.ball.profile.api.ProfilePersistenceStatus
 import kinetickk.ball.profile.api.ProfilePreferenceAdjustment
 import kinetickk.ball.profile.api.ProfilePulse
 import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.api.ProfileReadFailure
 import kinetickk.ball.profile.api.ProfileRejection
-import kinetickk.ball.profile.api.ProfileResultIssuerProvenance
 import kinetickk.ball.profile.api.ProfileRevision
-import kinetickk.ball.profile.api.ProfileSemanticHandle
 import kinetickk.ball.profile.api.ProfileSnapshotReadResult
 import kinetickk.ball.profile.api.ProfileSnapshotRejection
 import kinetickk.ball.profile.api.ProfileWriteFailure
 import kinetickk.ball.profile.api.ProfileWriteOutcomeUnknownReason
 import kinetickk.ball.profile.api.ProfileWriteResult
+import kinetickk.ball.profile.api.ProfileSettings
+import kinetickk.ball.profile.api.ProfileSettingsChanged
+import kinetickk.ball.profile.api.ProfileRefusal
+import kinetickk.ball.profile.api.ProfileRebirthAdvanced
+import kinetickk.ball.profile.api.ProfileProgressApplied
+import kinetickk.ball.profile.api.GameplayProgressUpdate
+import kinetickk.ball.profile.api.RebirthProgress
+import kinetickk.foundation.dispatch.InlineReply
 import kinetickk.foundation.common.localization.AppLanguage
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -44,6 +40,293 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class DefaultProfileComponentTest {
+    @Test
+    fun gameplayProgressCapabilityPublishesEveryCapturedFieldBeforeSaveAndReply() {
+        val initial = representativeProfile().copy(rebirthProgress = RebirthProgress(2, 1))
+        val resource = RecordingProfileResource(ProfileSnapshotReadResult.Observed(profileSnapshot(initial)))
+        val component = testProfileComponent(resource)
+        val caller = ProfileCommandTestCaller<ProfileProgressApplied>()
+        val update = GameplayProgressUpdate(
+            bankedMatter = 7L,
+            discoveredItemIds = setOf(1, 3),
+            clearedRebirthLevel = 2,
+            eliteKills = 5,
+            dashHits = 8,
+            completedOrbits = 13,
+            architectDefeatedWith = CoreShape.ORB,
+        )
+
+        caller.call { reply ->
+            resource.beforeWrite = { snapshot ->
+                reply.checkAvailable()
+                assertEquals(snapshot.profile, component.stateSnapshot().profile)
+                assertEquals(snapshot.revision, component.stateSnapshot().revision)
+                assertIs<ProfilePersistenceStatus.Pending>(component.stateSnapshot().persistence)
+            }
+            component.applyGameplayProgress(update, reply)
+        }
+
+        val result = caller.changed.single()
+        val next = queriedProfile(component)
+        assertEquals(initial.economy.matter + 7L, next.economy.matter)
+        assertEquals(initial.economy.lifetimeMatter + 7L, next.economy.lifetimeMatter)
+        assertEquals(initial.collection.discoveredItemIds + setOf(1, 3), next.collection.discoveredItemIds)
+        assertEquals(RebirthProgress(2, 2), next.rebirthProgress)
+        assertEquals(initial.characterAchievements.eliteKills + 5L, next.characterAchievements.eliteKills)
+        assertEquals(initial.characterAchievements.dashHits + 8L, next.characterAchievements.dashHits)
+        assertEquals(initial.characterAchievements.completedOrbits + 13L, next.characterAchievements.completedOrbits)
+        assertEquals(initial.characterAchievements.architectVictories + 1L, next.characterAchievements.architectVictories)
+        assertEquals(initial.characterAchievements.victoriousCharacters + CoreShape.ORB, next.characterAchievements.victoriousCharacters)
+        assertEquals(initial.copy(
+            economy = next.economy,
+            collection = next.collection,
+            rebirthProgress = next.rebirthProgress,
+            characterAchievements = next.characterAchievements,
+        ), next)
+        assertEquals(result.revision, resource.writes.single().revision)
+        assertEquals(ProfilePersistenceStatus.Persisted(result.revision), component.stateSnapshot().persistence)
+        assertTrue(caller.refused.isEmpty())
+    }
+
+    @Test
+    fun gameplayProgressAcceptedResultSurvivesSaveFaultWithoutRollback() {
+        val fault = IllegalStateException("save failed after gameplay progress acceptance")
+        val initial = representativeProfile()
+        val resource = RecordingProfileResource(ProfileSnapshotReadResult.Observed(profileSnapshot(initial)))
+            .apply { writeBehavior = { throw fault } }
+        val component = testProfileComponent(resource)
+        val caller = ProfileCommandTestCaller<ProfileProgressApplied>()
+
+        assertEquals(fault, assertFailsWith<IllegalStateException> {
+            caller.call { reply -> component.applyGameplayProgress(GameplayProgressUpdate(bankedMatter = 7L), reply) }
+        })
+
+        assertEquals(component.stateSnapshot().revision, caller.changed.single().revision)
+        assertEquals(initial.economy.matter + 7L, component.stateSnapshot().profile.economy.matter)
+        assertEquals(initial.economy.lifetimeMatter + 7L, component.stateSnapshot().profile.economy.lifetimeMatter)
+        assertIs<ProfilePersistenceStatus.Pending>(component.stateSnapshot().persistence)
+        assertTrue(caller.refused.isEmpty())
+        assertEquals(1, resource.writes.size)
+    }
+
+    @Test
+    fun gameplayProgressSaveFailureAndUnknownOutcomeRetainTheAcceptedMutation() {
+        listOf(
+            ProfileWriteResult.ResourceFailure(ProfileWriteFailure.PROVIDER_WRITE_FAILED_BEFORE_EXECUTION),
+            ProfileWriteResult.OutcomeUnknown(ProfileWriteOutcomeUnknownReason.PROVIDER_WRITE_MAY_HAVE_EXECUTED),
+        ).forEach { writeResult ->
+            val resource = RecordingProfileResource().apply { writeBehavior = { writeResult } }
+            val component = testProfileComponent(resource)
+            val caller = ProfileCommandTestCaller<ProfileProgressApplied>()
+
+            caller.call { reply -> component.applyGameplayProgress(GameplayProgressUpdate(bankedMatter = 7L), reply) }
+
+            val result = caller.changed.single()
+            assertEquals(7L, component.stateSnapshot().profile.economy.matter)
+            assertEquals(7L, component.stateSnapshot().profile.economy.lifetimeMatter)
+            assertTrue(caller.refused.isEmpty())
+            assertEquals(1, resource.writes.size)
+            when (writeResult) {
+                is ProfileWriteResult.ResourceFailure -> assertEquals(
+                    ProfilePersistenceStatus.ResourceFailure(result.revision, writeResult.reason),
+                    component.stateSnapshot().persistence,
+                )
+                is ProfileWriteResult.OutcomeUnknown -> assertEquals(
+                    ProfilePersistenceStatus.OutcomeUnknown(result.revision, writeResult.reason),
+                    component.stateSnapshot().persistence,
+                )
+                else -> error("Not a failure case")
+            }
+        }
+    }
+
+    @Test
+    fun rebirthCapabilityPublishesAndSavesBeforeCompletingItsOwnedResult() {
+        val initial = representativeProfile()
+        val resource = RecordingProfileResource(ProfileSnapshotReadResult.Observed(profileSnapshot(initial)))
+        val component = testProfileComponent(resource)
+        val before = component.stateSnapshot()
+        val caller = ProfileCommandTestCaller<ProfileRebirthAdvanced>()
+
+        caller.call { reply ->
+            resource.beforeWrite = { snapshot ->
+                reply.checkAvailable()
+                assertEquals(snapshot.profile, component.stateSnapshot().profile)
+                assertEquals(snapshot.revision, component.stateSnapshot().revision)
+                assertIs<ProfilePersistenceStatus.Pending>(component.stateSnapshot().persistence)
+            }
+            component.advanceRebirth(reply)
+        }
+
+        val result = caller.changed.single()
+        assertEquals(ProfileRevision(before.revision.value + 1L), result.revision)
+        assertEquals(RebirthProgress(3, 2), result.progress)
+        assertEquals(initial.copy(rebirthProgress = result.progress), queriedProfile(component))
+        assertEquals(result.revision, resource.writes.single().revision)
+        assertEquals(ProfilePersistenceStatus.Persisted(result.revision), component.stateSnapshot().persistence)
+        assertEquals(ProfileRevision(before.revision.value + 2L), component.stateSnapshot().revision)
+        assertTrue(caller.refused.isEmpty())
+    }
+
+    @Test
+    fun rebirthAcceptedResultSurvivesSaveFaultWithoutRollback() {
+        val fault = IllegalStateException("save failed after rebirth acceptance")
+        val initial = representativeProfile()
+        val resource = RecordingProfileResource(ProfileSnapshotReadResult.Observed(profileSnapshot(initial)))
+            .apply { writeBehavior = { throw fault } }
+        val component = testProfileComponent(resource)
+        val caller = ProfileCommandTestCaller<ProfileRebirthAdvanced>()
+
+        assertEquals(fault, assertFailsWith<IllegalStateException> { caller.call(component::advanceRebirth) })
+
+        val result = caller.changed.single()
+        assertEquals(initial.copy(rebirthProgress = RebirthProgress(3, 2)), component.stateSnapshot().profile)
+        assertEquals(component.stateSnapshot().revision, result.revision)
+        assertEquals(component.stateSnapshot().profile.rebirthProgress, result.progress)
+        assertIs<ProfilePersistenceStatus.Pending>(component.stateSnapshot().persistence)
+        assertTrue(caller.refused.isEmpty())
+        assertEquals(1, resource.writes.size)
+    }
+
+    @Test
+    fun rebirthSaveFailureAndUnknownOutcomeRetainTheAcceptedProgress() {
+        listOf(
+            ProfileWriteResult.ResourceFailure(ProfileWriteFailure.PROVIDER_WRITE_FAILED_BEFORE_EXECUTION),
+            ProfileWriteResult.OutcomeUnknown(ProfileWriteOutcomeUnknownReason.PROVIDER_WRITE_MAY_HAVE_EXECUTED),
+        ).forEach { writeResult ->
+            val initial = representativeProfile()
+            val resource = RecordingProfileResource(ProfileSnapshotReadResult.Observed(profileSnapshot(initial)))
+                .apply { writeBehavior = { writeResult } }
+            val component = testProfileComponent(resource)
+            val caller = ProfileCommandTestCaller<ProfileRebirthAdvanced>()
+
+            caller.call(component::advanceRebirth)
+
+            val result = caller.changed.single()
+            assertEquals(initial.copy(rebirthProgress = RebirthProgress(3, 2)), queriedProfile(component))
+            assertEquals(RebirthProgress(3, 2), result.progress)
+            assertTrue(caller.refused.isEmpty())
+            assertEquals(1, resource.writes.size)
+            when (writeResult) {
+                is ProfileWriteResult.ResourceFailure -> assertEquals(
+                    ProfilePersistenceStatus.ResourceFailure(result.revision, writeResult.reason),
+                    component.stateSnapshot().persistence,
+                )
+                is ProfileWriteResult.OutcomeUnknown -> assertEquals(
+                    ProfilePersistenceStatus.OutcomeUnknown(result.revision, writeResult.reason),
+                    component.stateSnapshot().persistence,
+                )
+                else -> error("Not a failure case")
+            }
+        }
+    }
+
+    @Test
+    fun muteCapabilityPublishesBeforeSaveAndCompletesThroughTheSharedBinding() {
+        val resource = RecordingProfileResource()
+        val caller = ProfileCommandTestCaller<ProfileSettingsChanged>()
+        lateinit var component: DefaultProfileComponent
+        resource.beforeWrite = { snapshot ->
+            assertEquals(snapshot.profile.preferences, component.query(ProfileQuery.GetPreferences).preferences)
+            assertTrue(caller.changed.isEmpty())
+            assertIs<ProfilePersistenceStatus.Pending>(component.stateSnapshot().persistence)
+        }
+        component = testProfileComponent(resource)
+
+        caller.call(component::toggleMute)
+
+        val result = caller.changed.single()
+        assertEquals(ProfileRevision(2), result.revision)
+        assertFalse(result.preferences.soundEnabled)
+        assertFalse(result.preferences.musicEnabled)
+        assertEquals(result.preferences, component.query(ProfileQuery.GetPreferences).preferences)
+        assertEquals(ProfileRevision(3), component.stateSnapshot().revision)
+        assertEquals(1, resource.writes.size)
+        assertTrue(caller.refused.isEmpty())
+
+        resource.beforeWrite = null
+        val additionalConsumer = ProfileCommandTestCaller<ProfileSettingsChanged>()
+        additionalConsumer.call(component::toggleMute)
+        assertTrue(additionalConsumer.changed.single().preferences.soundEnabled)
+        assertEquals(2, resource.writes.size)
+    }
+
+    @Test
+    fun muteAcceptedResultSurvivesSaveFaultWithoutRollback() {
+        val fault = IllegalStateException("save failed after Profile acceptance")
+        val resource = RecordingProfileResource().apply { writeBehavior = { throw fault } }
+        val component = testProfileComponent(resource)
+        val caller = ProfileCommandTestCaller<ProfileSettingsChanged>()
+
+        assertEquals(fault, assertFailsWith<IllegalStateException> { caller.call(component::toggleMute) })
+
+        assertEquals(ProfileRevision(2), caller.changed.single().revision)
+        assertFalse(caller.changed.single().preferences.soundEnabled)
+        assertTrue(caller.refused.isEmpty())
+        assertEquals(caller.changed.single().preferences, component.stateSnapshot().profile.preferences)
+        assertIs<ProfilePersistenceStatus.Pending>(component.stateSnapshot().persistence)
+        assertEquals(1, resource.writes.size)
+    }
+
+    @Test
+    fun muteScopeRejectsLateOrRepeatedUseBeforeAnotherProfileAcceptance() {
+        val resource = RecordingProfileResource()
+        val component = testProfileComponent(resource)
+        lateinit var retained: InlineReply<ProfileSettingsChanged, ProfileRefusal>
+        val capture = object : ProfileSettings {
+            override fun toggleMute(reply: InlineReply<ProfileSettingsChanged, ProfileRefusal>) {
+                retained = reply
+                component.toggleMute(reply)
+                assertFailsWith<IllegalStateException> { component.toggleMute(reply) }
+            }
+        }
+        val caller = ProfileCommandTestCaller<ProfileSettingsChanged>()
+        caller.call(capture::toggleMute)
+        val before = component.stateSnapshot()
+
+        assertFailsWith<IllegalStateException> { component.toggleMute(retained) }
+        assertFailsWith<IllegalStateException> { retained.accepted(caller.changed.single()) }
+        assertEquals(before, component.stateSnapshot())
+        assertEquals(1, resource.writes.size)
+    }
+
+    @Test
+    fun muteTypedRefusalPreservesStateAndDoesNotRunPersistence() {
+        val resource = RecordingProfileResource(
+            ProfileSnapshotReadResult.ResourceFailure(ProfileReadFailure.PROVIDER_READ_FAILED),
+        )
+        val component = testProfileComponent(resource)
+        val before = component.stateSnapshot()
+        val caller = ProfileCommandTestCaller<ProfileSettingsChanged>()
+
+        caller.call(component::toggleMute)
+
+        assertEquals(
+            ProfileRefusal.DecisionRejected(ProfileRejection.BootstrapNotReady),
+            caller.refused.single(),
+        )
+        assertTrue(caller.changed.isEmpty())
+        assertEquals(before, component.stateSnapshot())
+        assertTrue(resource.writes.isEmpty())
+    }
+
+    @Test
+    fun muteReentrantInvocationReturnsBusyAndCannotAcceptAnotherMutation() {
+        val resource = RecordingProfileResource()
+        val nested = ProfileCommandTestCaller<ProfileSettingsChanged>()
+        lateinit var component: DefaultProfileComponent
+        resource.beforeWrite = { nested.call(component::toggleMute) }
+        component = testProfileComponent(resource)
+        val root = ProfileCommandTestCaller<ProfileSettingsChanged>()
+
+        root.call(component::toggleMute)
+
+        assertEquals(ProfileRefusal.Busy, nested.refused.single())
+        assertTrue(nested.changed.isEmpty())
+        assertEquals(1, root.changed.size)
+        assertEquals(1, resource.writes.size)
+    }
+
     @Test
     fun selectedLanguageIsPersistedRestoredAndPublishedThroughPreferenceQuery() {
         val resource = RecordingProfileResource()
@@ -240,134 +523,32 @@ class DefaultProfileComponentTest {
     }
 
     @Test
-    fun acceptedCommandDeliversExactSourceTargetProtocolAndCausalEvidence() {
-        val events = mutableListOf<String>()
-        val deliveries = mutableListOf<ProfileModuleResultDelivery>()
-        val resource = RecordingProfileResource().apply {
-            beforeWrite = { events += "write" }
-        }
-        val component = testProfileComponent(resource) { delivery ->
-            events += "delivery"
-            deliveries += delivery
-        }
-        val request = request(
-            component = component,
-            command = ProfileModuleCommand.ToggleMute,
-            sourceRevision = 7L,
-            sourceOrdinal = 3,
-        )
-
-        val acceptance = assertIs<ProfileCommandIngressResult.Accepted>(
-            component.acceptTestCommand(request, causalScope = 91L, causalDepth = 2),
-        )
-
-        assertEquals(ProfileRevision(2L), acceptance.targetRevision)
-        assertEquals(LOCAL_PROFILE_INSTANCE_ID, acceptance.targetInstance)
-        assertEquals(listOf("write", "delivery"), events)
-        val delivery = deliveries.single()
-        assertEquals(request.semanticHandle, delivery.commandSource.semanticHandle)
-        assertEquals(91L, delivery.commandSource.causalScope)
-        assertEquals(2, delivery.commandSource.causalDepth)
-        assertEquals(request.semanticHandle, delivery.resultSource.semanticHandle)
-        assertEquals(acceptance.targetRevision, delivery.resultSource.targetRevision)
-        assertEquals(1, delivery.resultSource.sourceOrdinal)
-        assertEquals(91L, delivery.resultSource.causalScope)
-        assertEquals(3, delivery.resultSource.causalDepth)
-        assertEquals(ProfileEffectiveProtocolIdentity.SESSION_MUTE, delivery.effectiveProtocolIdentity)
-        assertIs<ProfileModuleResult.PreferencesChanged>(delivery.result)
-        assertEquals(
-            ProfileResultIssuerProvenance.LOCAL_PROFILE_STATIC_BINDING,
-            delivery.issuerProvenance,
-        )
-        assertEquals(ProfileRevision(3L), component.query(ProfileQuery.GetPreferences).revision)
-    }
-
-    @Test
-    fun resultSinkFaultDrainsAcceptedWriteCompletionBeforeEscapingAndReleasesTheRoute() {
+    fun callerWrapperFaultPreservesAcceptedWriteAndAllowsTheNextCommand() {
         val resource = RecordingProfileResource()
-        var deliveries = 0
         val fault = IllegalStateException("result observer failed")
-        val component = testProfileComponent(resource) {
-            deliveries++
-            if (deliveries == 1) throw fault
-        }
+        val component = testProfileComponent(resource)
+        val caller = ProfileCommandTestCaller<ProfileProgressApplied>()
 
         val thrown = assertFailsWith<IllegalStateException> {
-            component.acceptTestCommand(
-                request(component, ProfileModuleCommand.ToggleMute),
-                causalScope = 20L,
-                causalDepth = 0,
-            )
+            caller.call { reply ->
+                component.applyGameplayProgress(GameplayProgressUpdate(bankedMatter = 1L), reply)
+                throw fault
+            }
         }
 
         assertEquals(fault, thrown)
-        assertEquals(1, deliveries)
+        assertEquals(ProfileRevision(2L), caller.changed.single().revision)
+        assertTrue(caller.refused.isEmpty())
         assertEquals(ProfileRevision(3L), component.stateSnapshot().revision)
         assertEquals(
             ProfilePersistenceStatus.Persisted(ProfileRevision(2L)),
             component.query(ProfileQuery.GetPersistenceStatus).persistence,
         )
-        val next = assertIs<ProfileCommandIngressResult.Accepted>(
-            component.acceptTestCommand(
-                request(component, ProfileModuleCommand.ToggleMute, sourceRevision = 8L),
-                causalScope = 21L,
-                causalDepth = 0,
-            ),
-        )
-        assertEquals(ProfileRevision(4L), next.targetRevision)
-        assertEquals(2, deliveries)
+        val nextCaller = ProfileCommandTestCaller<ProfileProgressApplied>()
+        nextCaller.call { reply -> component.applyGameplayProgress(GameplayProgressUpdate(bankedMatter = 1L), reply) }
+        assertEquals(ProfileRevision(4L), nextCaller.changed.single().revision)
+        assertTrue(nextCaller.refused.isEmpty())
         assertEquals(2, resource.writes.size)
-    }
-
-    @Test
-    fun resourceProgrammingFaultStillDispatchesAcceptedResultAndPreservesPendingState() {
-        val fault = IllegalStateException("provider violated its result contract")
-        val resource = RecordingProfileResource().apply { writeBehavior = { throw fault } }
-        val deliveries = mutableListOf<ProfileModuleResultDelivery>()
-        val component = testProfileComponent(resource) { deliveries += it }
-
-        val thrown = assertFailsWith<IllegalStateException> {
-            component.acceptTestCommand(
-                request(component, ProfileModuleCommand.ToggleMute),
-                causalScope = 30L,
-                causalDepth = 0,
-            )
-        }
-
-        assertEquals(fault, thrown)
-        assertEquals(ProfileRevision(2L), component.stateSnapshot().revision)
-        assertEquals(ProfileRevision(2L), deliveries.single().resultSource.targetRevision)
-        assertIs<ProfileModuleResult.PreferencesChanged>(deliveries.single().result)
-        assertIs<ProfilePersistenceStatus.Pending>(
-            component.query(ProfileQuery.GetPersistenceStatus).persistence,
-        )
-        assertEquals(1, resource.writes.size)
-    }
-
-    @Test
-    fun wrongSourceKindReturnsTypedValidationCarrierWithoutAcceptanceOrEffect() {
-        val resource = RecordingProfileResource()
-        val component = testProfileComponent(resource)
-        val request = request(
-            component = component,
-            command = ProfileModuleCommand.SelectCoreShape(CoreShape.SHARD),
-            source = ProfileCommandSource.GameplayRun(4L),
-        )
-        val before = component.stateSnapshot()
-
-        val rejection = assertIs<ProfileCommandIngressResult.RejectedBeforeAcceptance>(
-            component.acceptTestCommand(request, causalScope = 44L, causalDepth = 1),
-        ).refusal
-
-        assertEquals(
-            ProfileCommandBoundaryResponse.ValidationFailure(
-                ProfileCommandValidationFailureReason.WRONG_SOURCE_KIND,
-            ),
-            rejection.boundaryResponse,
-        )
-        assertEquals(ProfileEffectiveProtocolIdentity.SESSION_CORE_SHAPE, rejection.effectiveProtocolIdentity)
-        assertEquals(before, component.stateSnapshot())
-        assertTrue(resource.writes.isEmpty())
     }
 
     @Test
@@ -376,33 +557,26 @@ class DefaultProfileComponentTest {
             ProfileSnapshotReadResult.ResourceFailure(ProfileReadFailure.PROVIDER_READ_FAILED),
         )
         val component = testProfileComponent(resource)
-
-        val refusal = assertIs<ProfileCommandIngressResult.RejectedBeforeAcceptance>(
-            component.acceptTestCommand(
-                request(component, ProfileModuleCommand.ToggleMute),
-                causalScope = 10L,
-                causalDepth = 0,
-            ),
-        ).refusal
+        val before = component.stateSnapshot()
+        val caller = ProfileCommandTestCaller<ProfileProgressApplied>()
+        caller.call { reply -> component.applyGameplayProgress(GameplayProgressUpdate(bankedMatter = 1L), reply) }
 
         assertEquals(
-            ProfileCommandBoundaryResponse.DecisionRejected(ProfileRejection.BootstrapNotReady),
-            refusal.boundaryResponse,
+            ProfileRefusal.DecisionRejected(ProfileRejection.BootstrapNotReady),
+            caller.refused.single(),
         )
+        assertTrue(caller.changed.isEmpty())
+        assertEquals(before, component.stateSnapshot())
         assertTrue(resource.writes.isEmpty())
     }
 
     @Test
-    fun activeDispatchReturnsCompletionCapacityCarrierForReentrantCommand() {
+    fun activeLocalDispatchRefusesReentrantProgressWithoutAnotherMutation() {
         val resource = RecordingProfileResource()
         lateinit var component: DefaultProfileComponent
-        lateinit var reentrant: ProfileCommandIngressResult
+        val reentrant = ProfileCommandTestCaller<ProfileProgressApplied>()
         resource.beforeWrite = {
-            reentrant = component.acceptTestCommand(
-                request(component, ProfileModuleCommand.ToggleMute, sourceRevision = 99L),
-                causalScope = 52L,
-                causalDepth = 0,
-            )
+            reentrant.call { reply -> component.applyGameplayProgress(GameplayProgressUpdate(bankedMatter = 1L), reply) }
         }
         component = testProfileComponent(resource)
 
@@ -411,44 +585,10 @@ class DefaultProfileComponentTest {
                 ProfilePulse.AdjustPreference(ProfilePreferenceAdjustment.ToggleSoundEffects),
             ),
         )
-        val refusal = assertIs<ProfileCommandIngressResult.RejectedBeforeAcceptance>(reentrant).refusal
-        assertEquals(
-            ProfileCommandBoundaryResponse.AdmissionFailure(
-                ProfileCommandAdmissionFailureReason.CompletionCapacityExhausted,
-            ),
-            refusal.boundaryResponse,
-        )
+        assertEquals(ProfileRefusal.Busy, reentrant.refused.single())
+        assertTrue(reentrant.changed.isEmpty())
+        assertEquals(0L, component.stateSnapshot().profile.economy.matter)
         assertEquals(1, resource.writes.size)
-    }
-
-    @Test
-    fun causalDepthAcceptsExactBoundAndRejectsFirstOverflow() {
-        val acceptedResource = RecordingProfileResource()
-        val accepted = testProfileComponent(acceptedResource)
-        assertIs<ProfileCommandIngressResult.Accepted>(
-            accepted.acceptTestCommand(
-                request(accepted, ProfileModuleCommand.ToggleMute),
-                causalScope = 61L,
-                causalDepth = 5,
-            ),
-        )
-
-        val overflowResource = RecordingProfileResource()
-        val overflow = testProfileComponent(overflowResource)
-        val refusal = assertIs<ProfileCommandIngressResult.RejectedBeforeAcceptance>(
-            overflow.acceptTestCommand(
-                request(overflow, ProfileModuleCommand.ToggleMute),
-                causalScope = 62L,
-                causalDepth = 6,
-            ),
-        ).refusal
-        assertEquals(
-            ProfileCommandBoundaryResponse.AdmissionFailure(
-                ProfileCommandAdmissionFailureReason.CausalBudgetExceeded(62L, limit = 8),
-            ),
-            refusal.boundaryResponse,
-        )
-        assertTrue(overflowResource.writes.isEmpty())
     }
 
     @Test
@@ -483,8 +623,6 @@ class DefaultProfileComponentTest {
         assertFalse(completions.tryAddLast(8))
         assertEquals((0 until 8).toList(), List(8) { completions.removeFirstOrNull() })
 
-        repeat(8, ::requireProfileCausalDepth)
-        assertFailsWith<IllegalStateException> { requireProfileCausalDepth(8) }
         requireProfileSynchronousResourceEffectBound(1)
         assertFailsWith<IllegalStateException> { requireProfileSynchronousResourceEffectBound(2) }
         requireProfileCompletionCapacity(remainingCapacity = 1, requiredCompletions = 1)
@@ -500,34 +638,3 @@ private data class BootstrapCase(
     val expectedRevision: ProfileRevision,
     val expectedBootstrap: ProfileBootstrapStatus,
 )
-
-private fun request(
-    component: DefaultProfileComponent,
-    command: ProfileModuleCommand,
-    source: ProfileCommandSource = if (command is ProfileModuleCommand.ApplyGameplayProgress) {
-        ProfileCommandSource.GameplayRun(8L)
-    } else {
-        ProfileCommandSource.LocalSession
-    },
-    sourceRevision: Long = 7L,
-    sourceOrdinal: Int = 0,
-): ProfileModuleCommandRequest {
-    val handle = ProfileSemanticHandle(source, sourceRevision, sourceOrdinal)
-    return ProfileModuleCommandRequest(
-        semanticHandle = handle,
-        sourceOrdinal = sourceOrdinal,
-        targetInstance = component.instanceId,
-        command = command,
-    )
-}
-
-private fun DefaultProfileComponent.acceptTestCommand(
-    request: ProfileModuleCommandRequest,
-    causalScope: Long,
-    causalDepth: Int,
-): ProfileCommandIngressResult =
-    if (request.command is ProfileModuleCommand.ApplyGameplayProgress) {
-        acceptFromGameplay(request, causalScope, causalDepth)
-    } else {
-        acceptFromSession(request, causalScope, causalDepth)
-    }

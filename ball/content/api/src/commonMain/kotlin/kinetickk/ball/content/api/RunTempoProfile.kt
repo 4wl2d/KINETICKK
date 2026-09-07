@@ -13,8 +13,10 @@ data class FatigueTuning(
     val turnCooldownSeconds: Float = 0.75f,
     val maximumBrakeRecoverySpeed: Float = 250f,
     val brakeRecoveryPerSecond: Float = 0.80f,
-    val forwardDrainPerSecond: Float = 0.40f,
-    val fullLoadAcceleration: Float = 2_000f,
+    val normalRecoveryPerSecond: Float = 0.30f,
+    /** Normalized center-to-edge reach; 0.8 leaves the outer 10% of each screen axis strained. */
+    val edgeStrainStart: Float = 0.80f,
+    val edgeDrainPerSecond: Float = 0.40f,
 ) {
     init {
         require(velocitySmoothingSeconds.isFinite() && velocitySmoothingSeconds > 0f)
@@ -25,8 +27,9 @@ data class FatigueTuning(
         require(turnCooldownSeconds.isFinite() && turnCooldownSeconds >= turnHoldSeconds)
         require(maximumBrakeRecoverySpeed.isFinite() && maximumBrakeRecoverySpeed > 0f)
         require(brakeRecoveryPerSecond.isFinite() && brakeRecoveryPerSecond > 0f)
-        require(forwardDrainPerSecond.isFinite() && forwardDrainPerSecond > 0f)
-        require(fullLoadAcceleration.isFinite() && fullLoadAcceleration > 0f)
+        require(normalRecoveryPerSecond.isFinite() && normalRecoveryPerSecond > 0f)
+        require(edgeStrainStart.isFinite() && edgeStrainStart > 0f && edgeStrainStart < 1f)
+        require(edgeDrainPerSecond.isFinite() && edgeDrainPerSecond > 0f)
     }
 }
 

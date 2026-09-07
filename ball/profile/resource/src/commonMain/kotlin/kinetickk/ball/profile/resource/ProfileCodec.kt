@@ -151,6 +151,8 @@ private data class PlayerPreferencesDto(
     // Omitting this sentinel during canonical re-encoding preserves validation of those saves.
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val languageCode: String? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val runStatisticsOnLeft: Boolean? = null,
 )
 
 @Serializable
@@ -227,6 +229,7 @@ private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
                 damageNumberFormatId = preferences.damageNumberFormat.wireId(),
                 damageNumberTierThreshold = preferences.damageNumberTierThreshold,
                 languageCode = preferences.language.code,
+                runStatisticsOnLeft = preferences.runStatisticsOnLeft,
             ),
             economy = PlayerEconomyDto(
                 matter = profile.economy.matter.toString(),
@@ -303,6 +306,7 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
             damageNumberFormat = profile.preferences.damageNumberFormatId.damageNumberFormat(),
             damageNumberTierThreshold = profile.preferences.damageNumberTierThreshold,
             language = profile.preferences.languageCode?.appLanguage() ?: AppLanguage.Russian,
+            runStatisticsOnLeft = profile.preferences.runStatisticsOnLeft ?: false,
         ),
         economy = PlayerEconomy(
             matter = profile.economy.matter.parseCanonicalNonNegativeLong(),
