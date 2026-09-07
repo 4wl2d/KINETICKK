@@ -5,15 +5,6 @@ package kinetickk.ball.content.api
 
 import kinetickk.foundation.collections.ImmutableList
 
-data class CoreShapeDefinition(
-    val id: CoreShape,
-    val unlockLifetimeMatter: Long,
-) {
-    init {
-        require(unlockLifetimeMatter >= 0L) { "Core shape unlock cost must be non-negative" }
-    }
-}
-
 data class RebirthPolicySnapshot(
     val minimumLevel: Int,
     val maximumLevel: Int,
@@ -74,7 +65,16 @@ data class GameplayContentSnapshot(
     val relics: ImmutableList<RelicDefinition>,
     val rebirth: RebirthPolicySnapshot,
     val relicPolicy: RelicPolicy,
+    val pointsOfInterest: PointOfInterestPolicy = PointOfInterestPolicy(),
+    val tempo: RunTempoProfile = RunTempoProfile(),
+    val synergies: ImmutableList<SynergyDefinition> = defaultSynergyDefinitions(),
+    val coreShapes: ImmutableList<CoreShapeDefinition> = defaultCoreShapeDefinitions(),
 ) {
+    /** Derived once per immutable catalog snapshot, rather than once per gameplay state. */
+    val itemFamilyCount: Int = items.maxOfOrNull { it.id / 20 + 1 } ?: 0
+
+    fun coreShape(id: CoreShape): CoreShapeDefinition = coreShapes.first { it.id == id }
+
     fun item(id: Int): ItemDefinition? = items.getOrNull(id)?.takeIf { item -> item.id == id }
 
     fun weapon(id: WeaponId): WeaponDefinition =
@@ -103,6 +103,9 @@ data class UiCatalogSnapshot(
     val coreShapes: ImmutableList<CoreShapeDefinition>,
     val rebirth: RebirthPolicySnapshot,
     val relicPolicy: RelicPolicy,
+    val pointsOfInterest: PointOfInterestPolicy = PointOfInterestPolicy(),
+    val tempo: RunTempoProfile = RunTempoProfile(),
+    val synergies: ImmutableList<SynergyDefinition> = defaultSynergyDefinitions(),
 ) {
     fun item(id: Int): ItemDefinition? = items.getOrNull(id)?.takeIf { item -> item.id == id }
 

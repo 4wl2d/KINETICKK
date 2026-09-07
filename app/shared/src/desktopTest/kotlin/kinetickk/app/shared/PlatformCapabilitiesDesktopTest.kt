@@ -234,12 +234,6 @@ class PlatformCapabilitiesDesktopTest {
     }
 
     @Test
-    fun workerQueueAndBestEffortLossPolicyAreFiniteAndExplicit() {
-        assertEquals(1, DesktopAudioExecutionPolicy.WORKER_COUNT)
-        assertEquals(24, DesktopAudioExecutionPolicy.QUEUE_CAPACITY)
-    }
-
-    @Test
     fun workerAndDiscardOldestQueueEnforceOneAndTwentyFour() {
         val executor = createTestDesktopAudioExecutor()
         val blockerStarted = CountDownLatch(1)

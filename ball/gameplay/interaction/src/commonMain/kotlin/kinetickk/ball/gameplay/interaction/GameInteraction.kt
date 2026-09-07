@@ -3,6 +3,26 @@
 
 package kinetickk.ball.gameplay.interaction
 
+import kinetickk.ball.gameplay.interaction.localization.GameplayText
+import kinetickk.foundation.common.localization.text
+import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.design.LocalAppLanguage
+import kinetickk.foundation.design.InterfaceGlyph
+import kinetickk.foundation.design.drawInterfaceGlyph
+import kinetickk.foundation.design.White
+import kinetickk.foundation.design.Muted
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -10,6 +30,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.NonRestartableComposable
@@ -50,6 +71,8 @@ import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayAcceptance
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.foundation.design.CanvasTextMeasurer
+import kinetickk.foundation.design.LocalCrashDiagnostics
+import kinetickk.foundation.diagnostics.CrashDiagnostics
 import kinetickk.ball.gameplay.interaction.canvas.drawGameplay
 import kinetickk.ball.gameplay.interaction.canvas.drawPerformanceHud
 import kinetickk.ball.gameplay.interaction.canvas.shouldDrawRunningPresentation
@@ -63,12 +86,12 @@ import kinetickk.ball.gameplay.interaction.input.resolveGameplayPress
 import kinetickk.ball.gameplay.interaction.layout.PauseTarget
 import kinetickk.ball.gameplay.interaction.layout.PauseLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
-import kinetickk.ball.gameplay.interaction.layout.ChoiceLayoutGeometry
-import kinetickk.ball.gameplay.interaction.layout.TerminalLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.choiceLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
-import kinetickk.ball.gameplay.interaction.layout.terminalLayoutGeometry
+import kinetickk.ball.gameplay.interaction.rewards.RewardContent
+import kinetickk.ball.gameplay.interaction.terminal.TerminalContent
+import kinetickk.ball.gameplay.interaction.terminal.terminalActionsReady
 import kinetickk.ball.gameplay.interaction.performance.GameplayPerformanceSnapshot
 import kinetickk.ball.gameplay.interaction.performance.GameplayPerformanceTelemetry
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
@@ -88,6 +111,8 @@ fun GameplayContent(
     inputEnabled: Boolean,
     onOutput: (GameplayInteractionOutput) -> Unit,
 ) {
+    val language = LocalAppLanguage.current
+    val diagnostics = LocalCrashDiagnostics.current
     val focusRequester = remember(component) { FocusRequester() }
     val composeTextMeasurer = rememberTextMeasurer(cacheSize = 64)
     val localDensity = LocalDensity.current
@@ -112,15 +137,29 @@ fun GameplayContent(
         collectPerformance: Boolean = performanceEnabledValue,
     ) {
         val dispatchStartedAt = if (collectPerformance) TimeSource.Monotonic.markNow() else null
+        if (diagnostics !== CrashDiagnostics.None) {
+            val before = component.renderSnapshot()
+            diagnostics.context("gameplay.before-input") { before.crashContext() }
+            diagnostics.context("gameplay.input") { pulse.crashDescription() }
+            diagnostics.event("gameplay.input", pulse.crashDescription(),
+                highFrequency = pulse is GameplayInteractionPulse.FrameElapsed ||
+                    pulse is GameplayInteractionPulse.PointerMoved)
+        }
         val acceptance = try {
             component.accept(pulse)
         } catch (failure: Throwable) {
-            val committed = component.renderSnapshot()
             // A target can publish atomically and then surface a deferred side-effect fault.
             // Republishing the immutable values is also harmless for a pre-commit fault because
             // Compose suppresses equal assignments, so the hot success path needs no pre-query.
-            renderModelValue = requireNotNull(committed.renderModel)
-            visualFxProjectionValue = component.visualFxSnapshot()
+            try {
+                val committed = component.renderSnapshot()
+                renderModelValue = requireNotNull(committed.renderModel)
+                visualFxProjectionValue = component.visualFxSnapshot()
+                diagnostics.context("gameplay.committed") { committed.crashContext() }
+            } catch (snapshotFailure: Throwable) {
+                if (snapshotFailure !== failure) failure.addSuppressed(snapshotFailure)
+            }
+            diagnostics.event("gameplay.failure", failure.toString())
             throw failure
         }
         when (acceptance) {
@@ -129,6 +168,10 @@ fun GameplayContent(
                 visualFxProjectionValue = component.visualFxSnapshot()
             }
             is GameplayAcceptance.Rejected -> Unit
+        }
+        if (diagnostics !== CrashDiagnostics.None) {
+            val committed = component.renderSnapshot()
+            diagnostics.context("gameplay.committed") { committed.crashContext() }
         }
         if (dispatchStartedAt != null) {
             performanceTelemetry.recordDispatchPipelineMillis(
@@ -181,7 +224,7 @@ fun GameplayContent(
         }
     }
 
-    SideEffect(component, inputEnabled) {
+    SideEffect(component, inputEnabled, renderModelValue.phase) {
         if (inputEnabled) focusRequester.requestFocus()
     }
 
@@ -217,10 +260,11 @@ fun GameplayContent(
     }
 
     val textScale = renderModelValue.settings.textScale
-    val textMeasurer = remember(composeTextMeasurer, textScale) {
+    val textMeasurer = remember(composeTextMeasurer, textScale, language) {
         CanvasTextMeasurer(
             delegate = composeTextMeasurer,
             scale = textScale,
+            language = language,
         )
     }
     val layoutDimensions = remember(
@@ -262,24 +306,13 @@ fun GameplayContent(
     } else {
         null
     }
-    val terminalLayout = if (
-        renderModelValue.phase == GamePhase.GAME_OVER ||
-        renderModelValue.phase == GamePhase.VICTORY
-    ) {
-        remember(layoutDimensions, renderModelValue.phase) {
-            terminalLayoutGeometry(
-                layoutDimensions.width,
-                layoutDimensions.height,
-                layoutDimensions.scale,
-                victory = renderModelValue.phase == GamePhase.VICTORY,
-            )
-        }
-    } else {
-        null
-    }
+    val terminal = renderModelValue.phase == GamePhase.GAME_OVER || renderModelValue.phase == GamePhase.VICTORY
+    val terminalStartedAt = remember(component, renderModelValue.phase) { renderTimeSecondsValue }
+    val terminalElapsed = if (terminal) (renderTimeSecondsValue - terminalStartedAt).coerceAtLeast(0f) else 0f
+    val terminalReady = terminalActionsReady(terminalElapsed, renderModelValue.phase == GamePhase.VICTORY)
     val performanceHudProjection = if (performanceEnabledValue) {
-        remember(performanceSnapshotValue) {
-            performanceSnapshotValue.toPerformanceHudProjection()
+        remember(performanceSnapshotValue, language) {
+            performanceSnapshotValue.toPerformanceHudProjection(language)
         }
     } else {
         null
@@ -291,7 +324,7 @@ fun GameplayContent(
             .background(Color(0xFF050610))
             .testTag(GAMEPLAY_ROOT_TAG)
             .semantics {
-                contentDescription = "KINETICKK gameplay"
+                contentDescription = language.text(GameplayText.Gameplay)
             }
             .focusRequester(focusRequester)
             .focusable()
@@ -309,6 +342,7 @@ fun GameplayContent(
                     return@onKeyEvent keyDown(event.type, ::togglePerformanceTelemetry)
                 }
                 if (!inputEnabled) return@onKeyEvent false
+                if (terminal && !terminalReady) return@onKeyEvent true
                 if (event.type == KeyEventType.KeyDown) {
                     dispatch(GameplayInteractionPulse.UserGestureObserved)
                 }
@@ -417,6 +451,14 @@ fun GameplayContent(
                             val position = event.changes.firstOrNull()?.position
                             val pressed = event.changes.any { it.pressed }
                             val currentRenderModel = renderModelValue
+                            if (currentRenderModel.phase == GamePhase.CHOICE ||
+                                currentRenderModel.phase == GamePhase.GAME_OVER ||
+                                currentRenderModel.phase == GamePhase.VICTORY
+                            ) {
+                                wasPressedValue = false
+                                hudGestureActiveValue = false
+                                continue
+                            }
                             val validatedMove = position?.let { pointerPosition ->
                                 when (
                                     val result = interactionValidator.pointerMoved(
@@ -478,8 +520,7 @@ fun GameplayContent(
                 textMeasurer = textMeasurer,
                 renderTime = renderTimeSecondsValue,
                 pauseLayout = pauseLayout,
-                choiceLayout = choiceLayout,
-                terminalLayout = terminalLayout,
+                terminalElapsed = terminalElapsed,
             )
             if (drawStartedAt != null) {
                 // State writes can invalidate the draw scope before recomposition publishes the
@@ -497,14 +538,45 @@ fun GameplayContent(
                 )
             }
         }
+        if (terminal) {
+            TerminalContent(renderModelValue, terminalElapsed, inputEnabled) { input ->
+                dispatch(GameplayInteractionPulse.UserGestureObserved)
+                dispatchInput(input)
+            }
+        }
+        if (renderModelValue.phase == GamePhase.CHOICE) {
+            RewardContent(
+                engine = renderModelValue,
+                layout = requireNotNull(choiceLayout),
+                renderTime = renderTimeSecondsValue,
+                enabled = inputEnabled,
+                onSelect = { index ->
+                    dispatch(GameplayInteractionPulse.UserGestureObserved)
+                    dispatchValidated(interactionValidator.choiceSelected(index))
+                },
+                onReroll = {
+                    dispatch(GameplayInteractionPulse.UserGestureObserved)
+                    dispatch(GameplayInteractionPulse.ChoicesRerolled)
+                },
+            )
+        }
+        if (inputEnabled && (renderModelValue.phase == GamePhase.RUNNING || renderModelValue.phase == GamePhase.PAUSED || renderModelValue.phase == GamePhase.CHOICE)) {
+            BuildButton(
+                modifier = Modifier.align(when {
+                    renderModelValue.phase != GamePhase.RUNNING -> Alignment.TopStart
+                    kinetickk.ball.gameplay.interaction.layout.gameplayLayoutMode(renderModelValue.screenWidth, renderModelValue.screenHeight, density) == kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode.REGULAR -> Alignment.BottomStart
+                    else -> Alignment.BottomCenter
+                }).padding(12.dp),
+                textScale = renderModelValue.settings.textScale,
+                onClick = { onOutput(GameplayInteractionOutput.OpenCodex) },
+            )
+        }
         if (inputEnabled) {
             GameplaySemanticControls(
                 engine = renderModelValue,
                 density = localDensity,
                 performanceEnabled = performanceEnabledValue,
                 pauseLayout = pauseLayout,
-                choiceLayout = choiceLayout,
-                terminalLayout = terminalLayout,
                 onInput = { input ->
                     dispatch(GameplayInteractionPulse.UserGestureObserved)
                     dispatchInput(input)
@@ -529,11 +601,10 @@ private fun GameplaySemanticControls(
     density: Density,
     performanceEnabled: Boolean,
     pauseLayout: PauseLayoutGeometry?,
-    choiceLayout: ChoiceLayoutGeometry?,
-    terminalLayout: TerminalLayoutGeometry?,
     onInput: (GameplayInput) -> Unit,
     onBrakeChanged: (Boolean) -> Unit,
 ) {
+    val language = LocalAppLanguage.current
     when (engine.phase) {
         GamePhase.RUNNING -> forEachRunningControlBounds(
             width = engine.screenWidth,
@@ -552,11 +623,11 @@ private fun GameplaySemanticControls(
                     bounds = bounds,
                     density = density,
                     tag = "kinetickk.gameplay.dash",
-                    description = "Dash",
+                    description = language.text(GameplayText.DashDescription),
                     state = when {
-                        engine.overheated -> "offline"
-                        engine.dashReady -> "ready"
-                        else -> "cooling"
+                        engine.overheated -> language.text(GameplayText.OfflineState)
+                        engine.dashReady -> language.text(GameplayText.ReadyState)
+                        else -> language.text(GameplayText.CoolingState)
                     },
                     onClick = {
                         onInput(GameplayInput.Action(GameplayInteractionPulse.DashRequested))
@@ -572,7 +643,7 @@ private fun GameplaySemanticControls(
                     bounds = bounds,
                     density = density,
                     tag = "kinetickk.gameplay.pause",
-                    description = "Pause game",
+                    description = language.text(GameplayText.PauseDescription),
                     onClick = {
                         onInput(GameplayInput.Action(GameplayInteractionPulse.PauseToggled))
                     },
@@ -585,7 +656,7 @@ private fun GameplaySemanticControls(
                     bounds = action.bounds,
                     density = density,
                     tag = "kinetickk.gameplay.resume",
-                    description = "Resume game",
+                    description = language.text(GameplayText.ResumeDescription),
                     onClick = {
                         onInput(GameplayInput.Action(GameplayInteractionPulse.PauseToggled))
                     },
@@ -594,7 +665,7 @@ private fun GameplaySemanticControls(
                     bounds = action.bounds,
                     density = density,
                     tag = "kinetickk.gameplay.settings",
-                    description = "Open gameplay settings",
+                    description = language.text(GameplayText.SettingsDescription),
                     onClick = { onInput(GameplayInput.OpenSettings) },
                 )
                 PauseTarget.PERFORMANCE -> PerformanceSemanticAction(
@@ -607,66 +678,14 @@ private fun GameplaySemanticControls(
                     bounds = action.bounds,
                     density = density,
                     tag = "kinetickk.gameplay.exit",
-                    description = "Exit to home",
+                    description = language.text(GameplayText.ExitDescription),
                     onClick = { onInput(GameplayInput.ExitToHome) },
                 )
             }
         }
-        GamePhase.CHOICE -> {
-            val layout = requireNotNull(choiceLayout)
-            engine.choices.forEachIndexed { index, choice ->
-                GameplaySemanticAction(
-                    bounds = layout.cards[index],
-                    density = density,
-                    tag = "kinetickk.gameplay.choice.${index + 1}",
-                    description = "Select choice ${index + 1}: ${choice.title}",
-                    onClick = {
-                        onInput(
-                            GameplayInput.Action(
-                                GameplayInteractionPulse.ChoiceSelected.fromValidated(index),
-                            ),
-                        )
-                    },
-                )
-            }
-            layout.reroll?.let { bounds ->
-                GameplaySemanticAction(
-                    bounds = bounds,
-                    density = density,
-                    tag = "kinetickk.gameplay.reroll",
-                    description = "Reroll choices. ${engine.rerollsRemaining} remaining",
-                    onClick = {
-                        onInput(GameplayInput.Action(GameplayInteractionPulse.ChoicesRerolled))
-                    },
-                )
-            }
-        }
-        GamePhase.GAME_OVER, GamePhase.VICTORY -> {
-            val layout = requireNotNull(terminalLayout)
-            GameplaySemanticAction(
-                bounds = layout.restart,
-                density = density,
-                tag = "kinetickk.gameplay.restart",
-                description = "Restart run",
-                onClick = { onInput(GameplayInput.RestartRun) },
-            )
-            layout.rebirth?.let { bounds ->
-                GameplaySemanticAction(
-                    bounds = bounds,
-                    density = density,
-                    tag = "kinetickk.gameplay.rebirth",
-                    description = "Start next rebirth cycle",
-                    onClick = { onInput(GameplayInput.OpenRebirth) },
-                )
-            }
-            GameplaySemanticAction(
-                bounds = layout.exit,
-                density = density,
-                tag = "kinetickk.gameplay.exit",
-                description = "Exit to home",
-                onClick = { onInput(GameplayInput.ExitToHome) },
-            )
-        }
+        GamePhase.CHOICE -> Unit // RewardContent owns the visible Compose actions.
+        GamePhase.GAME_OVER, GamePhase.VICTORY -> Unit // TerminalContent owns native buttons.
+
     }
 }
 
@@ -678,12 +697,13 @@ private fun PerformanceSemanticAction(
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
+    val language = LocalAppLanguage.current
     GameplaySemanticAction(
         bounds = bounds,
         density = density,
         tag = "kinetickk.gameplay.performance",
-        description = "Performance metrics",
-        state = if (enabled) "on" else "off",
+        description = language.text(GameplayText.PerformanceDescription),
+        state = if (enabled) language.text(GameplayText.OnState) else language.text(GameplayText.OffState),
         onClick = onClick,
     )
 }
@@ -724,6 +744,7 @@ private fun BrakeSemanticControl(
     active: Boolean,
     onPressedChange: (Boolean) -> Unit,
 ) {
+    val language = LocalAppLanguage.current
     Box(
         Modifier
             .placeInGameplayBounds(bounds, density)
@@ -735,9 +756,9 @@ private fun BrakeSemanticControl(
             }
             .semantics(mergeDescendants = true) {
                 role = Role.Button
-                contentDescription = GAMEPLAY_BRAKE_DESCRIPTION
-                stateDescription = gameplayBrakeStateDescription(active)
-                onClick(label = GAMEPLAY_BRAKE_SEMANTIC_ACTION_LABEL) {
+                contentDescription = language.text(GameplayText.BrakeDescription)
+                stateDescription = gameplayBrakeStateDescription(active, language)
+                onClick(label = language.text(GameplayText.BrakeAction)) {
                     onPressedChange(gameplayBrakeSemanticToggleState(active))
                     true
                 }
@@ -757,11 +778,11 @@ private fun Modifier.placeInGameplayBounds(bounds: Rect, density: Density): Modi
         )
 
 private const val GAMEPLAY_ROOT_TAG = "kinetickk.gameplay"
-internal const val GAMEPLAY_BRAKE_DESCRIPTION = "Brake"
-internal const val GAMEPLAY_BRAKE_SEMANTIC_ACTION_LABEL = "Toggle brake"
+internal val GAMEPLAY_BRAKE_DESCRIPTION = GameplayText.BrakeDescription.english
+internal val GAMEPLAY_BRAKE_SEMANTIC_ACTION_LABEL = GameplayText.BrakeAction.english
 
-internal fun gameplayBrakeStateDescription(active: Boolean): String =
-    if (active) "pressed" else "released"
+internal fun gameplayBrakeStateDescription(active: Boolean, language: AppLanguage = AppLanguage.English): String =
+    if (active) language.text(GameplayText.PressedState) else language.text(GameplayText.ReleasedState)
 
 /** Accessibility activation is a latch: only another explicit action releases it. */
 internal fun gameplayBrakeSemanticToggleState(active: Boolean): Boolean = !active
@@ -795,4 +816,28 @@ private inline fun keyDown(type: KeyEventType, action: () -> Unit): Boolean {
 
 private fun reportInvalidInteractionInput(failure: ValidationFailure) {
     println("KINETICKK interaction input dropped: ${failure.code}")
+}
+
+@Composable
+private fun BuildButton(modifier: Modifier, textScale: Float, onClick: () -> Unit) {
+    val label = LocalAppLanguage.current.text(GameplayText.Build)
+    val interactions = remember { MutableInteractionSource() }
+    val focused by interactions.collectIsFocusedAsState()
+    val hovered by interactions.collectIsHoveredAsState()
+    Box(modifier) {
+        Box(Modifier.size(48.dp).background(if (focused || hovered) Color(0xFF292D34) else Color(0xE6101216))
+            .testTag("kinetickk.gameplay.build")
+            .semantics { contentDescription = label }
+            .hoverable(interactions)
+            .clickable(interactionSource = interactions, indication = null, role = Role.Button, onClick = onClick)) {
+            Canvas(Modifier.fillMaxSize().padding(13.dp)) {
+                drawInterfaceGlyph(InterfaceGlyph.LAYERS, center.copy(y = center.y - 3.dp.toPx()), 9.dp.toPx(), White)
+            }
+            BasicText("I", Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp), TextStyle(color = Muted, fontSize = 8.sp))
+        }
+        if (focused || hovered) {
+            BasicText(label, Modifier.offset(x = 54.dp).background(Color(0xFF191C22)).padding(10.dp),
+                TextStyle(color = White, fontSize = (11f * textScale).sp))
+        }
+    }
 }

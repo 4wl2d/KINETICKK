@@ -12,6 +12,7 @@ import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.foundation.common.localization.AppLanguage
 
 /** Persistent ordinal order; append-only changes require an explicit save-format decision. */
 enum class ParticleDensity { LOW, NORMAL, HIGH }
@@ -60,7 +61,7 @@ data class PlayerPreferences(
     val soundEnabled: Boolean = true,
     val musicEnabled: Boolean = true,
     val masterVolume: Float = 0.65f,
-    val simulationSpeed: Float = 1.15f,
+    val simulationSpeed: Float = 1f,
     val textScale: Float = 1.25f,
     val screenShake: Boolean = true,
     val particleDensity: ParticleDensity = ParticleDensity.NORMAL,
@@ -68,6 +69,8 @@ data class PlayerPreferences(
     val damageNumberSize: DamageNumberSize = DamageNumberSize.NORMAL,
     val damageNumberFormat: DamageNumberFormat = DamageNumberFormat.COMPACT,
     val damageNumberTierThreshold: Int = DEFAULT_DAMAGE_NUMBER_TIER_THRESHOLD,
+    val language: AppLanguage = AppLanguage.Russian,
+    val runStatisticsOnLeft: Boolean = false,
 ) {
     fun normalized(): PlayerPreferences = copy(
         masterVolume = masterVolume.coerceIn(0f, 1f),
@@ -116,6 +119,15 @@ data class RebirthProgress(
     val highestCleared: Int = -1,
 )
 
+/** Cumulative Profile-owned achievements shared by every run and Lab loadout. */
+data class CharacterAchievementProgress(
+    val eliteKills: Long = 0L,
+    val dashHits: Long = 0L,
+    val completedOrbits: Long = 0L,
+    val architectVictories: Long = 0L,
+    val victoriousCharacters: ImmutableSet<CoreShape> = immutableSetOf(),
+)
+
 data class PlayerProfile(
     val preferences: PlayerPreferences = PlayerPreferences(),
     val economy: PlayerEconomy = PlayerEconomy(),
@@ -123,4 +135,5 @@ data class PlayerProfile(
     val labProgress: LabProgress = LabProgress(),
     val collection: PlayerCollection = PlayerCollection(),
     val rebirthProgress: RebirthProgress = RebirthProgress(),
+    val characterAchievements: CharacterAchievementProgress = CharacterAchievementProgress(),
 )

@@ -10,6 +10,7 @@ import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.exp
 import kotlin.math.max
@@ -90,7 +91,10 @@ internal fun MutableGameState.simulateStep(delta: Float) {
             dashPhaseTime = dashPhaseTime,
         ),
     )
+    updateCharacterRuntime(delta)
     updateCamera(delta)
+    updateSynergyRuntime(delta)
+    updatePointsOfInterest(delta)
     updateWeapons(delta)
     updateEnemies(delta)
     updateRelicRuntime(delta)
@@ -105,7 +109,7 @@ internal fun MutableGameState.simulateStep(delta: Float) {
 
     openNextPendingChoice()
 
-    if (!bossSpawned && phase == GamePhase.RUNNING && elapsed >= MutableGameState.RUN_DURATION_SECONDS) {
+    if (!bossSpawned && phase == GamePhase.RUNNING && elapsed >= content.tempo.bossAtSeconds) {
         bossSpawned = true
         message = "THE ARCHITECT"
         messageTime = 3f
@@ -137,11 +141,6 @@ internal fun MutableGameState.updateRelicRuntime(delta: Float) {
     }
     if (borrowedMomentTime.toRawBits() != 0) {
         borrowedMomentTime = max(0f, borrowedMomentTime - delta)
-    }
-    val brakeRank = relicRank(RelicId.BRAKEPOINT_MEMORY)
-    if (brakeRank > 0 && braking) {
-        val cap = 0.18f * brakeRank
-        brakepointCharge = min(cap, brakepointCharge + cap * delta)
     }
 
     val glassIndex = RelicId.GLASS_WITNESS.ordinal
@@ -186,6 +185,12 @@ internal fun MutableGameState.updateRelicRuntime(delta: Float) {
             damageEnemy(target, delayed.damage)
             relicProcCounts[delayed.relicId.ordinal]++
             burst(target.x, target.y, 4, 2)
+        }
+        if (delayed.linkedEnemyId >= 0 && hasSynergy(kinetickk.ball.content.api.SynergyId.LINKED_ECHO)) {
+            enemies.firstOrNull { it.id == delayed.linkedEnemyId && !it.dead && it.hp > 0f }?.let { linked ->
+                damageEnemy(linked, delayed.damage * 0.75f)
+                if (target != null) addRelicArc(target.x, target.y, linked.x, linked.y)
+            }
         }
     }
     var delayedHitIndex = delayedRelicHits.lastIndex
@@ -236,6 +241,8 @@ internal fun MutableGameState.updateHeat(delta: Float) {
 }
 
 internal fun MutableGameState.performDash() {
+    onSynergyDash()
+    beginCharacterDash()
     val departureX = coreX
     val departureY = coreY
     val targetX = cameraX + pointerX - screenWidth * 0.5f
@@ -296,12 +303,18 @@ internal fun MutableGameState.updateCore(delta: Float) {
     }
     val directionX = dx / distance
     val directionY = dy / distance
-    updatePolarityStability(directionX, directionY, delta)
     val overdriveMultiplier = if (overdriveTime > 0f) 1.3f else 1f
-    val pull = (92f + distance * magnetStrength) * overdriveMultiplier * tetherAuthority
+    val pull = (92f + distance * magnetStrength) * overdriveMultiplier
     val brakeFactor = if (braking) 1.12f else 1f
-    velocityX += directionX * pull * brakeFactor * delta
-    velocityY += directionY * pull * brakeFactor * delta
+    val currentSpeed = speed
+    val forwardX = if (currentSpeed > 1f) velocityX / currentSpeed else directionX
+    val forwardY = if (currentSpeed > 1f) velocityY / currentSpeed else directionY
+    val forwardPull = max(0f, (directionX * forwardX + directionY * forwardY) * pull)
+    // Exhaustion only weakens acceleration along existing momentum. Lateral steering,
+    // counter-thrust and the Brake damping remain available even at zero stability.
+    val suppressedPull = if (currentSpeed > 1f) forwardPull * (1f - tetherAuthority) else 0f
+    velocityX += (directionX * pull - forwardX * suppressedPull) * brakeFactor * delta
+    velocityY += (directionY * pull - forwardY * suppressedPull) * brakeFactor * delta
     val damping = exp((if (braking) -5.2f else -dragCoefficient) * delta)
     velocityX *= damping
     velocityY *= damping
@@ -318,6 +331,12 @@ internal fun MutableGameState.updateCore(delta: Float) {
         coreY = previousCoreY
         velocityX = 0f
         velocityY = 0f
+    }
+    updatePolarityStability(delta)
+    val brakeRank = relicRank(RelicId.BRAKEPOINT_MEMORY)
+    if (brakeRank > 0 && braking && currentSpeed > 250f && speed < currentSpeed) {
+        val cap = 0.18f * brakeRank
+        brakepointCharge = min(cap, brakepointCharge + cap * (currentSpeed - speed) / 500f)
     }
 
     if (runGrace <= 0f && segmentCircleIntersects(
@@ -336,39 +355,63 @@ internal fun MutableGameState.updateCore(delta: Float) {
     previousSingularityY = targetY
 }
 
-internal fun MutableGameState.updatePolarityStability(
-    directionX: Float,
-    directionY: Float,
-    delta: Float,
-) {
-    val halfWidth = max(1f, screenWidth * 0.5f)
-    val halfHeight = max(1f, screenHeight * 0.5f)
-    val normalizedX = (pointerX - halfWidth) / halfWidth
-    val normalizedY = (pointerY - halfHeight) / halfHeight
-    val reach = clamp(length(normalizedX, normalizedY), 0f, 1f)
-    val load = reach * reach
-    val headingDot = clamp(
-        saturationHeadingX * directionX + saturationHeadingY * directionY,
-        -1f,
-        1f,
-    )
-    val headingCross = saturationHeadingX * directionY - saturationHeadingY * directionX
-    val turnAngle = kotlin.math.abs(atan2(headingCross, headingDot))
-    val meaningfulTurn = max(0f, turnAngle - 0.15f)
-    val nearRecovery = clamp((0.35f - reach) / (0.35f - 0.18f), 0f, 1f)
+internal fun MutableGameState.updatePolarityStability(delta: Float) {
+    val tuning = content.tempo.fatigue
     val stabilityBefore = polarityStability
-    val saturation = clamp(
-        (1f - polarityStability) +
-            0.40f * load * delta -
-            0.85f * nearRecovery * delta -
-            0.58f * meaningfulTurn,
-        0f,
-        1f,
-    )
-    polarityStability = 1f - saturation
-    if (turnAngle > 0.15f) {
-        saturationHeadingX = directionX
-        saturationHeadingY = directionY
+    val smoothing = 1f - exp(-delta / tuning.velocitySmoothingSeconds)
+    smoothedVelocityX = lerp(smoothedVelocityX, velocityX, smoothing)
+    smoothedVelocityY = lerp(smoothedVelocityY, velocityY, smoothing)
+    turnRecoveryCooldown = max(0f, turnRecoveryCooldown - delta)
+    val smoothedSpeed = length(smoothedVelocityX, smoothedVelocityY)
+    // Use screen-relative reach so camera lag, momentum and magnet upgrades cannot
+    // exhaust ordinary steering. Every side and corner shares the same edge band.
+    val cursorReach = max(abs(pointerX / screenWidth * 2f - 1f), abs(pointerY / screenHeight * 2f - 1f))
+    val edgeStrain = ((cursorReach - tuning.edgeStrainStart) / (1f - tuning.edgeStrainStart)).coerceIn(0f, 1f)
+    if (edgeStrain > 0f) {
+        polarityStability = max(0f, polarityStability - tuning.edgeDrainPerSecond * edgeStrain * delta)
+    } else {
+        val recovery = if (braking && speed <= tuning.maximumBrakeRecoverySpeed) {
+            max(tuning.normalRecoveryPerSecond, tuning.brakeRecoveryPerSecond)
+        } else tuning.normalRecoveryPerSecond
+        polarityStability = min(1f, polarityStability + recovery * delta)
+    }
+    if (speed < tuning.minimumTurnSpeed || smoothedSpeed < tuning.minimumTurnSpeed) {
+        turnHeadingEstablished = false
+        turnHoldTime = 0f
+        turnDirection = 0
+    } else {
+        val headingX = smoothedVelocityX / smoothedSpeed
+        val headingY = smoothedVelocityY / smoothedSpeed
+        if (!turnHeadingEstablished || turnRecoveryCooldown > 0f) {
+            saturationHeadingX = headingX
+            saturationHeadingY = headingY
+            turnHeadingEstablished = true
+            turnHoldTime = 0f
+            turnDirection = 0
+        } else {
+            val headingDot = (saturationHeadingX * headingX + saturationHeadingY * headingY).coerceIn(-1f, 1f)
+            val headingCross = saturationHeadingX * headingY - saturationHeadingY * headingX
+            val angle = atan2(headingCross, headingDot)
+            val direction = if (angle >= 0f) 1 else -1
+            if (kotlin.math.abs(angle) >= tuning.turnDegrees * TAU / 360f) {
+                if (turnDirection != direction) turnHoldTime = 0f
+                turnDirection = direction
+                turnHoldTime += delta
+                if (turnHoldTime >= tuning.turnHoldSeconds) {
+                    if (edgeStrain <= 0f) {
+                        polarityStability = min(1f, polarityStability + tuning.turnRecovery)
+                    }
+                    onSynergyTurn()
+                    turnRecoveryCooldown = tuning.turnCooldownSeconds
+                    saturationHeadingX = headingX
+                    saturationHeadingY = headingY
+                    turnHoldTime = 0f
+                }
+            } else {
+                turnHoldTime = 0f
+                turnDirection = 0
+            }
+        }
     }
     if (stabilityBefore >= 0.35f && polarityStability < 0.35f) {
         message = "POLARITY FIELD STRAIN"

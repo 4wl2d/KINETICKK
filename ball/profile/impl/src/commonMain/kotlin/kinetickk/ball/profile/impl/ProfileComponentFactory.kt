@@ -4,10 +4,11 @@
 package kinetickk.ball.profile.impl
 
 import kinetickk.ball.content.api.ProfilePolicySnapshot
-import kinetickk.ball.profile.api.GameplayProfileRoute
-import kinetickk.ball.profile.api.ProfileModuleResultDelivery
 import kinetickk.ball.profile.api.ProfilePort
-import kinetickk.ball.profile.api.SessionProfileRoute
+import kinetickk.ball.profile.api.ProfileSettings
+import kinetickk.ball.profile.api.ProfileLoadout
+import kinetickk.ball.profile.api.ProfileRebirth
+import kinetickk.ball.profile.api.ProfileProgress
 import kinetickk.ball.profile.resource.ExactProfilePersistence
 import kinetickk.ball.profile.resource.ProfileProviderMutationResult
 import kinetickk.ball.profile.resource.ProfileProviderReadResult
@@ -35,25 +36,23 @@ enum class ProfilePersistenceMutationResult {
 }
 
 /** Assembly-only composite implemented by the one application-lifetime Profile component. */
-interface ProfileComponent : ProfilePort, SessionProfileRoute, GameplayProfileRoute
+interface ProfileComponent : ProfilePort, ProfileSettings, ProfileLoadout, ProfileRebirth, ProfileProgress
 
 /** Closed physical key contract implemented only by platform composition. */
 object ProfilePersistenceContract {
-    const val DESKTOP_PROFILE_NODE: String = "kinetickk/profile"
+    const val DESKTOP_PROFILE_NODE: String = "kinetickk/profile-v2"
     const val DESKTOP_SNAPSHOT: String = "snapshot"
 
-    const val WEB_SNAPSHOT: String = "kinetickk_profile"
+    const val WEB_SNAPSHOT: String = "kinetickk_profile_v2"
 }
 
 fun createProfileComponent(
     persistence: ProfilePersistenceCapability,
     policy: ProfilePolicySnapshot,
-    commandResultSink: (ProfileModuleResultDelivery) -> Unit = {},
 ): ProfileComponent =
     DefaultProfileComponent(
         resource = createProfileResource(ProfilePersistenceAdapter(persistence)),
         policy = policy,
-        commandResultSink = commandResultSink,
     )
 
 private class ProfilePersistenceAdapter(

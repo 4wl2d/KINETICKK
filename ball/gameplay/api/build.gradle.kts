@@ -10,6 +10,7 @@ kotlin {
         commonMain.dependencies {
             api(projects.foundation.common)
             api(projects.ball.content.api)
+            api(projects.ball.profile.api)
         }
     }
 }

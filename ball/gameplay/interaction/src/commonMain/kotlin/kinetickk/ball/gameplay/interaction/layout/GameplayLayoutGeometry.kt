@@ -51,9 +51,9 @@ internal inline fun forEachRunningControlBounds(
 ) {
     val safeScale = scale.coerceAtLeast(1f)
     if (gameplayLayoutMode(width, height, safeScale) == GameplayLayoutMode.REGULAR) {
-        val dashCenterX = width - 82f * safeScale
-        val dashCenterY = height - 88f * safeScale
-        val dashRadius = 48f * safeScale
+        val dashCenterX = width - 58f * safeScale
+        val dashCenterY = height - 58f * safeScale
+        val dashRadius = 32f * safeScale
         action(
             RunningControlTarget.DASH,
             dashCenterX - dashRadius,
@@ -61,9 +61,9 @@ internal inline fun forEachRunningControlBounds(
             dashCenterX + dashRadius,
             dashCenterY + dashRadius,
         )
-        val brakeCenterX = width - 190f * safeScale
-        val brakeCenterY = height - 67f * safeScale
-        val brakeRadius = 38f * safeScale
+        val brakeCenterX = width - 134f * safeScale
+        val brakeCenterY = height - 58f * safeScale
+        val brakeRadius = 26f * safeScale
         action(
             RunningControlTarget.BRAKE,
             brakeCenterX - brakeRadius,
@@ -209,7 +209,7 @@ internal fun choiceLayoutGeometry(
         val startX = (width - total) * 0.5f
         val top = height * if (count >= 4) 0.29f else 0.31f
         val bottomReserve = d(if (canReroll) 105f else 35f)
-        val cardHeight = min(d(270f), height - bottomReserve - top).coerceAtLeast(d(170f))
+        val cardHeight = min(d(405f), height - bottomReserve - top).coerceAtLeast(d(170f))
         val rerollY = height - d(72f)
         return ChoiceLayoutGeometry(
             mode,
@@ -226,15 +226,15 @@ internal fun choiceLayoutGeometry(
     if (mode == GameplayLayoutMode.COMPACT_LANDSCAPE) {
         val margin = d(12f)
         val gap = d(10f)
-        val top = d(128f)
+        val top = d(152f)
         val rerollHeight = d(48f)
         val bottom = if (canReroll) height - d(68f) else height - d(12f)
         val cardWidth = (width - margin * 2f - gap * (count - 1)) / count
         val cardHeight = (bottom - top).coerceAtLeast(d(136f))
         return ChoiceLayoutGeometry(
             mode,
-            titleY = d(14f),
-            subtitleY = d(45f),
+            titleY = d(58f),
+            subtitleY = d(94f),
             cards = List(count) { index ->
                 val left = margin + index * (cardWidth + gap)
                 Rect(left, top, left + cardWidth, top + cardHeight)
@@ -247,14 +247,14 @@ internal fun choiceLayoutGeometry(
     val gap = d(10f)
     val columns = min(2, count)
     val rows = ceil(count / columns.toDouble()).toInt()
-    val top = maxOf(d(118f), height * 0.16f)
+    val top = maxOf(d(154f), height * 0.19f)
     val bottom = if (canReroll) height - d(76f) else height - d(12f)
     val cardWidth = (width - margin * 2f - gap * (columns - 1)) / columns
-    val cardHeight = min(d(260f), (bottom - top - gap * (rows - 1)) / rows)
+    val cardHeight = min(d(390f), (bottom - top - gap * (rows - 1)) / rows)
     return ChoiceLayoutGeometry(
         mode,
-        titleY = d(38f),
-        subtitleY = d(76f),
+        titleY = d(62f),
+        subtitleY = d(108f),
         cards = List(count) { index ->
             val row = index / columns
             val column = index % columns
@@ -295,7 +295,7 @@ internal fun terminalLayoutGeometry(width: Float, height: Float, scale: Float, v
             statsY = height * 0.47f,
             restart = Rect(center - d(155f), buttonY - d(38f), center + d(155f), buttonY + d(38f)),
             rebirth = rebirth,
-            exit = Rect(0f, exitTop, width, height),
+            exit = Rect(center - d(120f), exitTop, center + d(120f), min(height - d(12f), exitTop + d(40f))),
         )
     }
     val margin = d(12f)

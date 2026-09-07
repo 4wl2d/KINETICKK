@@ -4,15 +4,7 @@
 package kinetickk.ball.gameplay.nucleus.characterization
 
 import kinetickk.ball.gameplay.api.BrakeSource
-import kinetickk.ball.gameplay.api.GameplayCommandIssuerProvenance
-import kinetickk.ball.gameplay.api.GameplayCommandSource
-import kinetickk.ball.gameplay.api.GameplayCommandSourceToken
-import kinetickk.ball.gameplay.api.GameplayEffectiveProtocolIdentity
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
-import kinetickk.ball.gameplay.api.GameplayModuleCommand
-import kinetickk.ball.gameplay.api.GameplayModuleCommandPulse
-import kinetickk.ball.gameplay.api.GameplayRevision
-import kinetickk.ball.gameplay.api.GameplaySemanticHandle
 import kinetickk.ball.gameplay.api.RunId
 import kinetickk.ball.gameplay.nucleus.GameplayAcceptedFrame
 import kinetickk.ball.gameplay.nucleus.GameplayContext
@@ -57,6 +49,7 @@ import kotlin.test.assertTrue
 class GameplayBaselineCharacterizationTest {
     @Test
     fun seededIntentTraceHasStableCheckpoints() {
+        // Edge-based polarity golden; ordinary thrust keeps full authority throughout this trace.
         var state = startCharacterizedRun(seed = 0x4B1D, initialMatter = 17)
         val actions = listOf(
             GameplayInteractionPulse.ViewportChanged.fromValidated(960f, 540f, 1.25f),
@@ -90,10 +83,10 @@ class GameplayBaselineCharacterizationTest {
                     elapsedSteps = 2,
                     coreXCentipixels = 35,
                     coreYCentipixels = -14,
-                    velocityXCentipixelsPerSecond = 2_760,
-                    velocityYCentipixelsPerSecond = -1_096,
+                    velocityXCentipixelsPerSecond = 2767,
+                    velocityYCentipixelsPerSecond = -1099,
                     heatCentipercent = 0,
-                    hpCentipercent = 10_000,
+                    hpCentipercent = 10000,
                     enemyCount = 5,
                     firstEnemy = "1:DRIFTER:69088:48002:-220:-153:3000",
                     lastEnemy = "5:DRIFTER:-21851:-48606:110:245:3000",
@@ -107,12 +100,12 @@ class GameplayBaselineCharacterizationTest {
                 TraceCheckpoint(
                     revision = 6,
                     elapsedSteps = 6,
-                    coreXCentipixels = 2_055,
-                    coreYCentipixels = -816,
-                    velocityXCentipixelsPerSecond = 62_361,
-                    velocityYCentipixelsPerSecond = -24_761,
-                    heatCentipercent = 3_553,
-                    hpCentipercent = 10_000,
+                    coreXCentipixels = 2057,
+                    coreYCentipixels = -817,
+                    velocityXCentipixelsPerSecond = 62462,
+                    velocityYCentipixelsPerSecond = -24801,
+                    heatCentipercent = 3553,
+                    hpCentipercent = 10000,
                     enemyCount = 5,
                     firstEnemy = "1:DRIFTER:69072:47991:-634:-450:3000",
                     lastEnemy = "5:DRIFTER:-21843:-48589:331:703:3000",
@@ -126,12 +119,12 @@ class GameplayBaselineCharacterizationTest {
                 TraceCheckpoint(
                     revision = 8,
                     elapsedSteps = 13,
-                    coreXCentipixels = 5_411,
-                    coreYCentipixels = -2_148,
-                    velocityXCentipixelsPerSecond = 54_139,
-                    velocityYCentipixelsPerSecond = -21_496,
-                    heatCentipercent = 3_375,
-                    hpCentipercent = 10_000,
+                    coreXCentipixels = 5430,
+                    coreYCentipixels = -2156,
+                    velocityXCentipixelsPerSecond = 54595,
+                    velocityYCentipixelsPerSecond = -21677,
+                    heatCentipercent = 3375,
+                    hpCentipercent = 10000,
                     enemyCount = 5,
                     firstEnemy = "1:DRIFTER:69013:47948:-1276:-943:3000",
                     lastEnemy = "5:DRIFTER:-21810:-48524:727:1410:3000",
@@ -145,15 +138,15 @@ class GameplayBaselineCharacterizationTest {
                 TraceCheckpoint(
                     revision = 11,
                     elapsedSteps = 27,
-                    coreXCentipixels = 10_433,
-                    coreYCentipixels = -4_002,
-                    velocityXCentipixelsPerSecond = 33_664,
-                    velocityYCentipixelsPerSecond = -11_169,
-                    heatCentipercent = 3_154,
-                    hpCentipercent = 10_000,
+                    coreXCentipixels = 10477,
+                    coreYCentipixels = -4017,
+                    velocityXCentipixelsPerSecond = 33472,
+                    velocityYCentipixelsPerSecond = -11021,
+                    heatCentipercent = 3154,
+                    hpCentipercent = 10000,
                     enemyCount = 6,
-                    firstEnemy = "1:DRIFTER:68797:47781:-2293:-1832:3000",
-                    lastEnemy = "6:DRIFTER:1700:45077:68:-393:3001",
+                    firstEnemy = "1:DRIFTER:68797:47781:-2292:-1833:3000",
+                    lastEnemy = "6:DRIFTER:1747:45060:68:-393:3002",
                     projectileCount = 0,
                     pickupCount = 0,
                     trailCount = 5,
@@ -164,15 +157,15 @@ class GameplayBaselineCharacterizationTest {
                 TraceCheckpoint(
                     revision = 12,
                     elapsedSteps = 37,
-                    coreXCentipixels = 12_615,
-                    coreYCentipixels = -4_621,
-                    velocityXCentipixelsPerSecond = 20_247,
-                    velocityYCentipixelsPerSecond = -4_457,
-                    heatCentipercent = 2_995,
-                    hpCentipercent = 10_000,
+                    coreXCentipixels = 12591,
+                    coreYCentipixels = -4597,
+                    velocityXCentipixelsPerSecond = 18824,
+                    velocityYCentipixelsPerSecond = -3683,
+                    heatCentipercent = 2995,
+                    hpCentipercent = 10000,
                     enemyCount = 6,
-                    firstEnemy = "1:DRIFTER:68580:47603:-2849:-2384:3000",
-                    lastEnemy = "6:DRIFTER:1717:44990:306:-1557:3001",
+                    firstEnemy = "1:DRIFTER:68580:47603:-2848:-2384:3000",
+                    lastEnemy = "6:DRIFTER:1764:44972:306:-1557:3002",
                     projectileCount = 0,
                     pickupCount = 0,
                     trailCount = 6,
@@ -183,15 +176,15 @@ class GameplayBaselineCharacterizationTest {
                 TraceCheckpoint(
                     revision = 13,
                     elapsedSteps = 51,
-                    coreXCentipixels = 13_912,
-                    coreYCentipixels = -4_610,
-                    velocityXCentipixelsPerSecond = 3_587,
-                    velocityYCentipixelsPerSecond = 3_839,
-                    heatCentipercent = 2_774,
-                    hpCentipercent = 10_000,
+                    coreXCentipixels = 13568,
+                    coreYCentipixels = -4417,
+                    velocityXCentipixelsPerSecond = -434,
+                    velocityYCentipixelsPerSecond = 5932,
+                    heatCentipercent = 2774,
+                    hpCentipercent = 10000,
                     enemyCount = 6,
-                    firstEnemy = "1:DRIFTER:68208:47283:-3459:-3033:3000",
-                    lastEnemy = "6:DRIFTER:1773:44723:631:-2868:3001",
+                    firstEnemy = "1:DRIFTER:68208:47283:-3461:-3030:3000",
+                    lastEnemy = "6:DRIFTER:1820:44706:624:-2869:3002",
                     projectileCount = 0,
                     pickupCount = 0,
                     trailCount = 6,
@@ -202,15 +195,15 @@ class GameplayBaselineCharacterizationTest {
                 TraceCheckpoint(
                     revision = 14,
                     elapsedSteps = 65,
-                    coreXCentipixels = 13_420,
-                    coreYCentipixels = -3_710,
-                    velocityXCentipixelsPerSecond = -10_610,
-                    velocityYCentipixelsPerSecond = 10_881,
-                    heatCentipercent = 2_552,
-                    hpCentipercent = 10_000,
+                    coreXCentipixels = 12403,
+                    coreYCentipixels = -3170,
+                    velocityXCentipixelsPerSecond = -17988,
+                    velocityYCentipixelsPerSecond = 14679,
+                    heatCentipercent = 2552,
+                    hpCentipercent = 10000,
                     enemyCount = 6,
-                    firstEnemy = "1:DRIFTER:67773:46896:-3939:-3538:3000",
-                    lastEnemy = "6:DRIFTER:1864:44322:898:-3891:3001",
+                    firstEnemy = "1:DRIFTER:67772:46897:-3952:-3524:3000",
+                    lastEnemy = "6:DRIFTER:1909:44304:872:-3897:3002",
                     projectileCount = 0,
                     pickupCount = 0,
                     trailCount = 7,
@@ -221,18 +214,18 @@ class GameplayBaselineCharacterizationTest {
                 TraceCheckpoint(
                     revision = 15,
                     elapsedSteps = 79,
-                    coreXCentipixels = 11_414,
-                    coreYCentipixels = -2_061,
-                    velocityXCentipixelsPerSecond = -22_565,
-                    velocityYCentipixelsPerSecond = 16_791,
-                    heatCentipercent = 2_330,
-                    hpCentipercent = 10_000,
+                    coreXCentipixels = 9299,
+                    coreYCentipixels = -957,
+                    velocityXCentipixelsPerSecond = -33815,
+                    velocityYCentipixelsPerSecond = 22558,
+                    heatCentipercent = 2330,
+                    hpCentipercent = 10000,
                     enemyCount = 6,
-                    firstEnemy = "1:DRIFTER:67288:46459:-4343:-3902:3000",
-                    lastEnemy = "6:DRIFTER:1981:43816:1072:-4699:3001",
+                    firstEnemy = "1:DRIFTER:67284:46463:-4379:-3862:3000",
+                    lastEnemy = "6:DRIFTER:2020:43797:1002:-4714:3002",
                     projectileCount = 0,
                     pickupCount = 0,
-                    trailCount = 8,
+                    trailCount = 9,
                     effectOrder = "FX>AUDIO",
                     visualCueCount = 42,
                     audioCues = "",
@@ -365,7 +358,9 @@ private fun GameplayAcceptedFrame.toTraceCheckpoint(): TraceCheckpoint {
                 is GameplayOutput.SendProfileCommand -> "PROGRESS"
                 is GameplayOutput.AdvanceAudio -> "AUDIO"
                 GameplayOutput.EnsureAudioUnlocked -> "UNLOCK_AUDIO"
-                is GameplayOutput.CompleteCommand -> "COMPLETE"
+                is GameplayOutput.RunExited, is GameplayOutput.SettingsApplied,
+                is GameplayOutput.RunStarted, is GameplayOutput.OverlayPaused,
+                -> "COMPLETE"
             }
         },
         visualCueCount = outputs.filterIsInstance<GameplayOutput.EmitVisualFx>().sumOf { it.cues.size },
@@ -380,24 +375,14 @@ private fun EnemyProjection.traceToken(): String =
 
 private fun startCharacterizedRun(seed: Int, initialMatter: Long): GameplayState {
     val profile = PlayerProfile(
+        preferences = PlayerPreferences(simulationSpeed = 1.15f), // Fixed trace input, independent of the fresh-profile default.
         economy = PlayerEconomy(initialMatter, initialMatter),
     ).toGameplaySnapshot()
     val initial = GameplayState.initial(RunId(0), canonicalGameplayContent)
-    val handle = GameplaySemanticHandle(
-        sourceInstance = GameplayCommandSource.LocalSession,
-        sourceRevision = 0,
-        sourceOrdinal = 0,
-    )
-    val pulse = GameplayModuleCommandPulse(
-        commandSource = GameplayCommandSourceToken(handle, initial.instanceId, 1, 0),
-        effectiveProtocolIdentity = GameplayEffectiveProtocolIdentity.SESSION_START,
-        command = GameplayModuleCommand.StartRun,
-        issuerProvenance = GameplayCommandIssuerProvenance.LOCAL_SESSION_STATIC_BINDING,
-    )
     return assertIs<GameplayDecision.Accepted>(
         GameplayNucleus.decide(
             initial,
-            GameplayNucleusPulse.ModuleCommand(pulse),
+            GameplayNucleusPulse.StartRun,
             GameplayContext(
                 start = GameplayStartContext.Ready(
                     GameplayStartInputs(canonicalGameplayContent, profile, seed),
@@ -419,6 +404,7 @@ private fun PlayerProfile.toGameplaySnapshot(): GameplayProfileSnapshot = Gamepl
 private fun Float.centi(): Int = (this * 100f).roundToInt()
 
 private fun cueToken(cue: VisualFxCue): String = when (cue) {
+    is VisualFxCue.BuildChanged -> "U"
     VisualFxCue.ClearAll -> "Q"
     VisualFxCue.ClearWeaponArcs -> "C"
     is VisualFxCue.MotionSample -> "M"

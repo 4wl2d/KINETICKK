@@ -19,18 +19,16 @@ import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.PreferenceAdjustmentDirection
 import kinetickk.ball.profile.api.ProfileAcceptance
-import kinetickk.ball.profile.api.ProfileCommandBoundaryResponse
-import kinetickk.ball.profile.api.ProfileCommandIngressResult
-import kinetickk.ball.profile.api.ProfileCommandSource
 import kinetickk.ball.profile.api.ProfileGameplayProgressRejection
-import kinetickk.ball.profile.api.ProfileModuleCommand
-import kinetickk.ball.profile.api.ProfileModuleCommandRequest
 import kinetickk.ball.profile.api.ProfilePreferenceAdjustment
 import kinetickk.ball.profile.api.ProfilePulse
 import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.api.ProfileRejection
 import kinetickk.ball.profile.api.ProfileRevision
-import kinetickk.ball.profile.api.ProfileSemanticHandle
+import kinetickk.ball.profile.api.ProfileSettingsChanged
+import kinetickk.ball.profile.api.ProfileCoreShapeSelected
+import kinetickk.ball.profile.api.ProfileRebirthAdvanced
+import kinetickk.ball.profile.api.ProfileProgressApplied
 import kinetickk.ball.profile.api.ProfileSnapshotReadResult
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.foundation.collections.toImmutableList
@@ -40,7 +38,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-/** Freezes Profile behavior through its one canonical local/ModuleCommand acceptor surface. */
+/** Freezes Profile behavior through its local and typed command capabilities. */
 class ProfileComponentCharacterizationTest {
     @Test
     fun everyPreferenceAdjustmentAndMutePublishesThroughQueriesAndWritesOnce() {
@@ -74,14 +72,14 @@ class ProfileComponentCharacterizationTest {
         assertAcceptedAndWritten(
             component,
             resource,
-            ProfileTestOperation.Command(ProfileModuleCommand.ToggleMute),
+            ProfileTestOperation.ToggleMute,
         )
 
         val preferences = component.query(ProfileQuery.GetPreferences).preferences
         assertTrue(preferences.soundEnabled)
         assertTrue(preferences.musicEnabled)
         assertEquals(0.66f, preferences.masterVolume)
-        assertEquals(1.35f, preferences.simulationSpeed)
+        assertEquals(1.15f, preferences.simulationSpeed)
         assertEquals(1.26f, preferences.textScale)
         assertFalse(preferences.screenShake)
         assertEquals(ParticleDensity.HIGH, preferences.particleDensity)
@@ -119,9 +117,10 @@ class ProfileComponentCharacterizationTest {
     }
 
     @Test
-    fun coreShapeSelectionUsesLifetimeUnlocksWithoutSpendingMatter() {
+    fun coreShapeSelectionUsesAchievementsWithoutSpendingMatter() {
         val initial = testDefaultProfile().copy(
             economy = PlayerEconomy(matter = 70L, lifetimeMatter = 90L),
+            characterAchievements = kinetickk.ball.profile.api.CharacterAchievementProgress(eliteKills = 3, dashHits = 20),
         )
         val resource = loadedResource(initial)
         val component = testProfileComponent(resource)
@@ -129,12 +128,12 @@ class ProfileComponentCharacterizationTest {
         assertAcceptedAndWritten(
             component,
             resource,
-            ProfileTestOperation.Command(ProfileModuleCommand.SelectCoreShape(CoreShape.PRISM)),
+            ProfileTestOperation.SelectCoreShape(CoreShape.PRISM),
         )
         assertAcceptedAndWritten(
             component,
             resource,
-            ProfileTestOperation.Command(ProfileModuleCommand.SelectCoreShape(CoreShape.SHARD)),
+            ProfileTestOperation.SelectCoreShape(CoreShape.SHARD),
         )
 
         val loadout = component.query(ProfileQuery.GetLoadout).snapshot
@@ -183,13 +182,11 @@ class ProfileComponentCharacterizationTest {
         assertAcceptedAndWritten(
             component,
             resource,
-            ProfileTestOperation.Command(
-                ProfileModuleCommand.ApplyGameplayProgress(
-                    GameplayProgressUpdate(
-                        bankedMatter = 7L,
-                        discoveredItemIds = setOf(1, 399),
-                        clearedRebirthLevel = 2,
-                    ),
+            ProfileTestOperation.ApplyGameplayProgress(
+                GameplayProgressUpdate(
+                    bankedMatter = 7L,
+                    discoveredItemIds = setOf(1, 399),
+                    clearedRebirthLevel = 2,
                 ),
             ),
         )
@@ -201,7 +198,7 @@ class ProfileComponentCharacterizationTest {
         assertAcceptedAndWritten(
             component,
             resource,
-            ProfileTestOperation.Command(ProfileModuleCommand.AdvanceRebirth),
+            ProfileTestOperation.AdvanceRebirth,
         )
         val advanced = queriedProfile(component)
         assertEquals(afterRun.preferences, advanced.preferences)
@@ -225,9 +222,7 @@ class ProfileComponentCharacterizationTest {
         val cases = listOf(
             RejectionCase(
                 profile = testDefaultProfile(),
-                operation = ProfileTestOperation.Command(
-                    ProfileModuleCommand.SelectCoreShape(CoreShape.ORB),
-                ),
+                operation = ProfileTestOperation.SelectCoreShape(CoreShape.ORB),
                 reason = ProfileRejection.NoChange,
             ),
             RejectionCase(
@@ -249,9 +244,7 @@ class ProfileComponentCharacterizationTest {
             ),
             RejectionCase(
                 profile = testDefaultProfile().copy(economy = PlayerEconomy(0L, 24L)),
-                operation = ProfileTestOperation.Command(
-                    ProfileModuleCommand.SelectCoreShape(CoreShape.PRISM),
-                ),
+                operation = ProfileTestOperation.SelectCoreShape(CoreShape.PRISM),
                 reason = ProfileRejection.CoreShapeLocked,
             ),
             RejectionCase(
@@ -265,24 +258,27 @@ class ProfileComponentCharacterizationTest {
                 profile = testDefaultProfile().copy(
                     rebirthProgress = RebirthProgress(level = 10, highestCleared = 10),
                 ),
-                operation = ProfileTestOperation.Command(ProfileModuleCommand.AdvanceRebirth),
+                operation = ProfileTestOperation.AdvanceRebirth,
                 reason = ProfileRejection.RebirthMaximumReached,
             ),
             RejectionCase(
                 profile = testDefaultProfile(),
-                operation = ProfileTestOperation.Command(ProfileModuleCommand.AdvanceRebirth),
+                operation = ProfileTestOperation.AdvanceRebirth,
                 reason = ProfileRejection.RebirthLevelNotCleared,
             ),
             RejectionCase(
                 profile = testDefaultProfile(),
-                operation = ProfileTestOperation.Command(
-                    ProfileModuleCommand.ApplyGameplayProgress(
-                        GameplayProgressUpdate(bankedMatter = -1L),
-                    ),
+                operation = ProfileTestOperation.ApplyGameplayProgress(
+                    GameplayProgressUpdate(bankedMatter = -1L),
                 ),
                 reason = ProfileRejection.InvalidGameplayProgress(
                     ProfileGameplayProgressRejection.NegativeBankedMatter,
                 ),
+            ),
+            RejectionCase(
+                profile = testDefaultProfile(),
+                operation = ProfileTestOperation.ApplyGameplayProgress(GameplayProgressUpdate()),
+                reason = ProfileRejection.NoChange,
             ),
         )
 
@@ -305,14 +301,7 @@ class ProfileComponentCharacterizationTest {
             version = ContentVersion("custom-policy"),
             itemCount = 2,
             coreShapes = TestProfilePolicy.coreShapes.map { definition ->
-                CoreShapeDefinition(
-                    definition.id,
-                    when (definition.id) {
-                        CoreShape.ORB -> 0L
-                        CoreShape.PRISM -> 500L
-                        CoreShape.SHARD -> 900L
-                    },
-                )
+                definition.copy(unlockTarget = if (definition.id == CoreShape.ORB) 0 else 500)
             }.toImmutableList(),
             weapons = TestProfilePolicy.weapons.map { definition ->
                 if (definition.id == WeaponId.MORNINGSTAR) {
@@ -337,10 +326,8 @@ class ProfileComponentCharacterizationTest {
         assertAcceptedAndWritten(
             component,
             resource,
-            ProfileTestOperation.Command(
-                ProfileModuleCommand.ApplyGameplayProgress(
-                    GameplayProgressUpdate(bankedMatter = 7L, discoveredItemIds = setOf(0, 1)),
-                ),
+            ProfileTestOperation.ApplyGameplayProgress(
+                GameplayProgressUpdate(bankedMatter = 7L, discoveredItemIds = setOf(0, 1)),
             ),
         )
         assertAcceptedAndWritten(
@@ -355,38 +342,34 @@ class ProfileComponentCharacterizationTest {
         assertRejectedAtomically(
             component,
             resource,
-            ProfileTestOperation.Command(ProfileModuleCommand.SelectCoreShape(CoreShape.PRISM)),
+            ProfileTestOperation.SelectCoreShape(CoreShape.PRISM),
             ProfileRejection.CoreShapeLocked,
         )
         assertRejectedAtomically(
             component,
             resource,
-            ProfileTestOperation.Command(
-                ProfileModuleCommand.ApplyGameplayProgress(
-                    GameplayProgressUpdate(discoveredItemIds = setOf(2)),
-                ),
+            ProfileTestOperation.ApplyGameplayProgress(
+                GameplayProgressUpdate(discoveredItemIds = setOf(2)),
             ),
             ProfileRejection.InvalidGameplayProgress(ProfileGameplayProgressRejection.UnknownItem(2)),
         )
         assertAcceptedAndWritten(
             component,
             resource,
-            ProfileTestOperation.Command(
-                ProfileModuleCommand.ApplyGameplayProgress(
-                    GameplayProgressUpdate(clearedRebirthLevel = 2),
-                ),
+            ProfileTestOperation.ApplyGameplayProgress(
+                GameplayProgressUpdate(clearedRebirthLevel = 2),
             ),
         )
         assertAcceptedAndWritten(
             component,
             resource,
-            ProfileTestOperation.Command(ProfileModuleCommand.AdvanceRebirth),
+            ProfileTestOperation.AdvanceRebirth,
         )
         assertEquals(3, component.query(ProfileQuery.GetRebirthProgress).snapshot.progress.level)
         assertRejectedAtomically(
             component,
             resource,
-            ProfileTestOperation.Command(ProfileModuleCommand.AdvanceRebirth),
+            ProfileTestOperation.AdvanceRebirth,
             ProfileRejection.RebirthMaximumReached,
         )
         assertEquals(4, resource.writes.size)
@@ -394,8 +377,11 @@ class ProfileComponentCharacterizationTest {
 }
 
 private sealed interface ProfileTestOperation {
+    data object ToggleMute : ProfileTestOperation
+    data object AdvanceRebirth : ProfileTestOperation
+    data class SelectCoreShape(val shape: CoreShape) : ProfileTestOperation
     data class Local(val pulse: ProfilePulse.Business) : ProfileTestOperation
-    data class Command(val command: ProfileModuleCommand) : ProfileTestOperation
+    data class ApplyGameplayProgress(val update: GameplayProgressUpdate) : ProfileTestOperation
 }
 
 private data class RejectionCase(
@@ -421,12 +407,16 @@ private fun assertAcceptedAndWritten(
     val beforeRevision = component.query(ProfileQuery.GetPreferences).revision
     val beforeWrites = resource.writes.size
     val acceptedRevision = when (operation) {
+        ProfileTestOperation.ToggleMute -> ProfileCommandTestCaller<ProfileSettingsChanged>()
+            .also { it.call(component::toggleMute) }.changed.single().revision
+        ProfileTestOperation.AdvanceRebirth -> ProfileCommandTestCaller<ProfileRebirthAdvanced>()
+            .also { it.call(component::advanceRebirth) }.changed.single().revision
+        is ProfileTestOperation.SelectCoreShape -> ProfileCommandTestCaller<ProfileCoreShapeSelected>()
+            .also { it.call { reply -> component.selectCoreShape(operation.shape, reply) } }.changed.single().revision
         is ProfileTestOperation.Local ->
             assertIs<ProfileAcceptance.Accepted>(component.accept(operation.pulse)).revision
-        is ProfileTestOperation.Command ->
-            assertIs<ProfileCommandIngressResult.Accepted>(
-                component.acceptTestCommand(operation.command),
-            ).targetRevision
+        is ProfileTestOperation.ApplyGameplayProgress -> ProfileCommandTestCaller<ProfileProgressApplied>()
+            .also { it.call { reply -> component.applyGameplayProgress(operation.update, reply) } }.changed.single().revision
     }
 
     assertEquals(ProfileRevision(beforeRevision.value + 1L), acceptedRevision)
@@ -454,37 +444,20 @@ private fun assertRejectedAtomically(
 
 private fun DefaultProfileComponent.reject(operation: ProfileTestOperation): ProfileRejection =
     when (operation) {
+        ProfileTestOperation.ToggleMute -> assertIs<kinetickk.ball.profile.api.ProfileRefusal.DecisionRejected>(
+            ProfileCommandTestCaller<ProfileSettingsChanged>().also { it.call(this::toggleMute) }.refused.single(),
+        ).reason
+        ProfileTestOperation.AdvanceRebirth -> assertIs<kinetickk.ball.profile.api.ProfileRefusal.DecisionRejected>(
+            ProfileCommandTestCaller<ProfileRebirthAdvanced>().also { it.call(this::advanceRebirth) }.refused.single(),
+        ).reason
+        is ProfileTestOperation.SelectCoreShape -> assertIs<kinetickk.ball.profile.api.ProfileRefusal.DecisionRejected>(
+            ProfileCommandTestCaller<ProfileCoreShapeSelected>()
+                .also { it.call { reply -> selectCoreShape(operation.shape, reply) } }.refused.single(),
+        ).reason
         is ProfileTestOperation.Local ->
             assertIs<ProfileAcceptance.Rejected>(accept(operation.pulse)).reason
-        is ProfileTestOperation.Command -> {
-            val refused = assertIs<ProfileCommandIngressResult.RejectedBeforeAcceptance>(
-                acceptTestCommand(operation.command),
-            )
-            assertIs<ProfileCommandBoundaryResponse.DecisionRejected>(
-                refused.refusal.boundaryResponse,
-            ).reason
-        }
+        is ProfileTestOperation.ApplyGameplayProgress -> assertIs<kinetickk.ball.profile.api.ProfileRefusal.DecisionRejected>(
+            ProfileCommandTestCaller<ProfileProgressApplied>()
+                .also { it.call { reply -> applyGameplayProgress(operation.update, reply) } }.refused.single(),
+        ).reason
     }
-
-private fun DefaultProfileComponent.acceptTestCommand(
-    command: ProfileModuleCommand,
-): ProfileCommandIngressResult {
-    val source = if (command is ProfileModuleCommand.ApplyGameplayProgress) {
-        ProfileCommandSource.GameplayRun(42L)
-    } else {
-        ProfileCommandSource.LocalSession
-    }
-    val sourceRevision = query(ProfileQuery.GetPreferences).revision.value
-    val handle = ProfileSemanticHandle(source, sourceRevision, sourceOrdinal = 0)
-    val request = ProfileModuleCommandRequest(
-        semanticHandle = handle,
-        sourceOrdinal = handle.sourceOrdinal,
-        targetInstance = instanceId,
-        command = command,
-    )
-    return if (command is ProfileModuleCommand.ApplyGameplayProgress) {
-        acceptFromGameplay(request, causalScope = sourceRevision + 100L, causalDepth = 0)
-    } else {
-        acceptFromSession(request, causalScope = sourceRevision + 100L, causalDepth = 0)
-    }
-}

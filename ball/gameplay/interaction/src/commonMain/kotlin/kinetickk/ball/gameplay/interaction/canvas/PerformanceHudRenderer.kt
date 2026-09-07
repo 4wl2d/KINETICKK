@@ -3,6 +3,10 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
+import kinetickk.ball.gameplay.interaction.localization.GameplayText
+import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.text
+
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -35,31 +39,32 @@ internal class PerformanceHudProjection(
     val hasSlowFrames: Boolean,
 )
 
-internal fun GameplayPerformanceSnapshot.toPerformanceHudProjection() = PerformanceHudProjection(
-    frameLine = frameInterval.hudLine("FRAME"),
-    dispatchLine = dispatchPipeline.hudLine("DISPATCH"),
-    canvasLine = canvasDraw.hudLine("CANVAS"),
-    rateLine = "FPS ${framesPerSecond.tenths()}  1% LOW ${onePercentLowFramesPerSecond.tenths()}" +
-        "  >16.67 ${framesOver16MillisFraction.percent()}  >33.33 ${framesOver33MillisFraction.percent()}",
-    entitiesLine = "ENTITY CUR/PEAK" +
-        "  E $currentEnemies/$peakEnemies" +
-        "  P $currentProjectiles/$peakProjectiles" +
-        "  PICK $currentPickups/$peakPickups" +
-        "  TRAIL $currentTrailPoints/$peakTrailPoints",
+internal fun GameplayPerformanceSnapshot.toPerformanceHudProjection(language: AppLanguage = AppLanguage.English) = PerformanceHudProjection(
+    frameLine = frameInterval.hudLine(language.text(GameplayText.Frame), language),
+    dispatchLine = dispatchPipeline.hudLine(language.text(GameplayText.Dispatch), language),
+    canvasLine = canvasDraw.hudLine(language.text(GameplayText.Canvas), language),
+    rateLine = language.text(GameplayText.Rate, framesPerSecond.tenths(language), onePercentLowFramesPerSecond.tenths(language)) +
+        (if (language == AppLanguage.Russian) "  >16,67 " else "  >16.67 ") + framesOver16MillisFraction.percent(language) +
+        (if (language == AppLanguage.Russian) "  >33,33 " else "  >33.33 ") + framesOver33MillisFraction.percent(language),
+    entitiesLine = language.text(GameplayText.Entities) +
+        language.text(GameplayText.EnemyCounts, currentEnemies, peakEnemies) +
+        language.text(GameplayText.ProjectileCounts, currentProjectiles, peakProjectiles) +
+        language.text(GameplayText.PickupCounts, currentPickups, peakPickups) +
+        language.text(GameplayText.TrailCounts, currentTrailPoints, peakTrailPoints),
     compactLines = listOf(
-        "FRM P50 ${frameInterval.p50Millis.tenths()}" +
-            " P95 ${frameInterval.p95Millis.tenths()}" +
-            " P99 ${frameInterval.p99Millis.tenths()}" +
-            " MAX ${frameInterval.maxMillis.tenths()}",
-        "N ${frameInterval.totalSampleCount.compact()} W ${frameInterval.sampleCount.compact()}" +
-            " | PIPE P50 ${dispatchPipeline.p50Millis.tenths()} P95 ${dispatchPipeline.p95Millis.tenths()}",
-        "DRAW P50 ${canvasDraw.p50Millis.tenths()} P95 ${canvasDraw.p95Millis.tenths()}" +
-            " | FPS ${framesPerSecond.tenths()} LOW ${onePercentLowFramesPerSecond.tenths()}",
-        ">16 ${framesOver16MillisFraction.percent()} >33 ${framesOver33MillisFraction.percent()}" +
-            " | E ${currentEnemies.compact()}/${peakEnemies.compact()}" +
-            " PRJ ${currentProjectiles.compact()}/${peakProjectiles.compact()}",
-        "PICK ${currentPickups.compact()}/${peakPickups.compact()}" +
-            " TRAIL ${currentTrailPoints.compact()}/${peakTrailPoints.compact()}",
+        language.text(GameplayText.CompactFrame, frameInterval.p50Millis.tenths(language)) +
+            " P95 ${frameInterval.p95Millis.tenths(language)}" +
+            " P99 ${frameInterval.p99Millis.tenths(language)}" +
+            language.text(GameplayText.Max, frameInterval.maxMillis.tenths(language)),
+        language.text(GameplayText.CompactSamples, frameInterval.totalSampleCount.compact(language), frameInterval.sampleCount.compact(language)) +
+            language.text(GameplayText.CompactPipeline, dispatchPipeline.p50Millis.tenths(language), dispatchPipeline.p95Millis.tenths(language)),
+        language.text(GameplayText.CompactDraw, canvasDraw.p50Millis.tenths(language), canvasDraw.p95Millis.tenths(language)) +
+            language.text(GameplayText.CompactRate, framesPerSecond.tenths(language), onePercentLowFramesPerSecond.tenths(language)),
+        ">16 ${framesOver16MillisFraction.percent(language)} >33 ${framesOver33MillisFraction.percent(language)}" +
+            language.text(GameplayText.CompactEnemies, currentEnemies.compact(language), peakEnemies.compact(language)) +
+            language.text(GameplayText.CompactProjectiles, currentProjectiles.compact(language), peakProjectiles.compact(language)),
+        language.text(GameplayText.CompactPickups, currentPickups.compact(language), peakPickups.compact(language)) +
+            language.text(GameplayText.CompactTrail, currentTrailPoints.compact(language), peakTrailPoints.compact(language)),
     ),
     hasSlowFrames = framesOver16MillisFraction > 0.05,
 )
@@ -96,7 +101,7 @@ private fun DrawScope.drawCompactPerformanceHud(
     drawRect(Cyan.copy(alpha = 0.82f), Offset(left, top), Size(width, height), style = Stroke(d(1f)))
     drawLabel(
         textMeasurer = textMeasurer,
-        text = COMPACT_PERFORMANCE_TITLE,
+        text = textMeasurer.language.text(GameplayText.PerformanceCompactTitle),
         x = textLeft,
         y = top + d(7f),
         fontSize = fontSize + 0.5f,
@@ -132,7 +137,7 @@ private fun DrawScope.drawRegularPerformanceHud(
     drawRect(Cyan.copy(alpha = 0.82f), Offset(left, top), Size(width, height), style = Stroke(d(1f)))
     drawLabel(
         textMeasurer = textMeasurer,
-        text = "PERFORMANCE // F3 TOGGLE + RESET // ROLLING WINDOW",
+        text = textMeasurer.language.text(GameplayText.PerformanceTitle),
         x = textLeft,
         y = top + d(7f),
         fontSize = fontSize + 0.5f,
@@ -181,22 +186,23 @@ private fun DrawScope.drawPerformanceLine(
     )
 }
 
-private fun PerformanceDurationStats.hudLine(label: String): String =
-    "$label ms" +
-        "  P50 ${p50Millis.tenths()}" +
-        "  P95 ${p95Millis.tenths()}" +
-        "  P99 ${p99Millis.tenths()}" +
-        "  MAX ${maxMillis.tenths()}" +
-        "  N $totalSampleCount  WIN $sampleCount"
+private fun PerformanceDurationStats.hudLine(label: String, language: AppLanguage): String =
+    language.text(GameplayText.Milliseconds, label) +
+        "  P50 ${p50Millis.tenths(language)}" +
+        "  P95 ${p95Millis.tenths(language)}" +
+        "  P99 ${p99Millis.tenths(language)}" +
+        language.text(GameplayText.MaxRegular, maxMillis.tenths(language)) +
+        language.text(GameplayText.Samples, totalSampleCount, sampleCount)
 
-private fun Number.compact(): String = formatCompact(toLong())
+private fun Number.compact(language: AppLanguage): String = formatCompact(toLong(), language)
 
-private fun Double.percent(): String = "${(this * 100.0).tenths()}%"
+private fun Double.percent(language: AppLanguage): String = "${(this * 100.0).tenths(language)}%"
 
-private fun Double.tenths(): String {
+private fun Double.tenths(language: AppLanguage): String {
     if (!isFinite()) return "--"
     val scaled = (this * 10.0).roundToInt()
-    return "${scaled / 10}.${abs(scaled % 10)}"
+    val separator = if (language == AppLanguage.Russian) ',' else '.'
+    return "${scaled / 10}$separator${abs(scaled % 10)}"
 }
 
-internal const val COMPACT_PERFORMANCE_TITLE = "PERFORMANCE // TAP PERF // ROLLING"
+internal val COMPACT_PERFORMANCE_TITLE = GameplayText.PerformanceCompactTitle.english

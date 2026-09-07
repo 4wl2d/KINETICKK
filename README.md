@@ -1,62 +1,24 @@
 <!-- SPDX-FileCopyrightText: 2026 Vladislav Tomilov -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-<h1 align="center">KINETICKK</h1>
+# KINETICKK
 
-<p align="center">
-  <strong>Your movement is the weapon. Your cursor is the threat.</strong>
-</p>
+**Your movement is the weapon. Your cursor is the threat.**
 
-<p align="center">
-  A cross-platform physics-action roguelite powered by one Kotlin Multiplatform simulation.
-</p>
-
-<p align="center">
-  <img alt="Kotlin 2.4.20 RC" src="https://img.shields.io/badge/Kotlin-2.4.20--RC-7F52FF?logo=kotlin&logoColor=white">
-  <img alt="Compose Multiplatform 1.12.0 RC1" src="https://img.shields.io/badge/Compose_Multiplatform-1.12.0--rc01-4285F4?logo=jetpackcompose&logoColor=white">
-  <img alt="Desktop and WebAssembly" src="https://img.shields.io/badge/targets-Desktop_%2B_WebAssembly-42F5E9">
-  <a href="LICENSE"><img alt="GNU GPL version 3 or later" src="https://img.shields.io/badge/license-GPLv3%2B-FF426D"></a>
-</p>
-
-<p align="center">
-  <a href="#development">Development</a> ·
-  <a href="#how-to-play">How to play</a> ·
-  <a href="#systems">Systems</a> ·
-  <a href="#contributing">Contributing</a> ·
-  <a href="docs/project/LEGAL.md">Legal</a>
-</p>
+A physics-action roguelite for Android, desktop (macOS, Windows, Linux), and
+WebAssembly, built with Kotlin Multiplatform and Compose.
 
 ![KINETICKK start screen](docs/assets/kinetickk.png)
 
-> [!IMPORTANT]
-> KINETICKK is open-source software under the
-> [GNU GPL version 3 or later](LICENSE). You may study, build, run, modify, and
-> redistribute it. A distributed fork must keep the copyright and license
-> notices, identify its changes, provide the complete corresponding source, and
-> remain under the GPL. The KINETICKK name and branding are separate; see the
-> [trademark policy](docs/project/TRADEMARKS.md).
-
-The cursor or touch point is both a magnetic target and a lethal singularity. Pull it away from the Core to build speed, turn that momentum into impact damage, and never let the Core touch the singularity.
-
-The same shared application composition, Pokeball authorities, deterministic
-gameplay simulation, content catalog, strict profile resource, and tests run
-across Android phones, desktop (macOS, Windows, and Linux), and modern browsers
-through WebAssembly.
-
-The repository is published as a working learning example for Kotlin
-Multiplatform, Compose Canvas rendering, deterministic simulation, progression
-systems, and cross-platform persistence. You can inspect the design, build the
-whole game locally, experiment with it, and contribute changes under the GPL.
-
-## At a glance
-
-| 400 items | 12 weapons | 40 Relics | 9 enemy archetypes | 7 application routes |
-|:---:|:---:|:---:|:---:|:---:|
-| Deterministic catalog | Movement-reactive | Six aspects | Architect included | 23 leaf modules |
+Steer a magnetic singularity to accelerate your Core and turn momentum into
+impact damage. Keep the Core away from the singularity, build a loadout, and
+survive twelve minutes to face **The Architect**.
 
 ## How to play
 
-Magnetic Polarity saturates when the target stays far away in one direction. A saturated tether stops adding thrust: turn decisively or bring the target inward to recover before enemies intercept your line.
+Pull the cursor away from the Core to gain speed. Staying at the screen edges
+drains Magnetic Polarity; return inward, turn, or brake to recover. Fresh
+profiles start at 1× speed. Pauses and reward choices stop the run clock.
 
 | Input | Action |
 |---|---|
@@ -64,168 +26,89 @@ Magnetic Polarity saturates when the target stays far away in one direction. A s
 | `Space` / **Dash** | Kinetic Dash and phase through bullets |
 | `Shift` / right mouse / **Brake** | Gravity Brake |
 | `P` / `Esc` | Pause or return |
-| `1`–`4` | Select an item, weapon, or Relic option |
+| `1`–`4` | Select a reward |
 | `Q` | Reroll an item or weapon choice |
-| `L` / `A` / `B` / `C` / `S` | Lab, Armory, Rebirth, Codex, Settings |
+| `L` / `A` / `B` / `C` or `I` / `S` | Lab, Armory, Rebirth, Codex, Settings |
 | `M` | Toggle sound and music |
-| `F3` | Toggle and reset the rolling performance HUD |
+| `F3` | Toggle and reset the performance HUD |
 | `R` | Restart after a completed run |
 
-Defeat **The Architect** on the current Rebirth tier to unlock the next one. Rebirth starts a fresh run build with a stronger threat profile while preserving permanent progression, unlocks, Codex discovery, and settings.
+Six characters share permanent upgrades and can use all twelve weapons.
+Builds combine 400 items, forty Relics, synergies, and optional anomaly trials.
+Spend Kinetic Matter in the Lab and Armory between runs. Defeat The Architect
+to unlock the next Rebirth tier while keeping permanent progression.
 
-## Development
+## Build and run
 
-Requirements: JDK 17 or newer. The Gradle wrapper downloads the matching Gradle distribution automatically.
-
-```bash
-git clone https://github.com/4wl2d/KINETICKK.git
-cd KINETICKK
-./gradlew run
-```
-
-On Windows, use `gradlew.bat run`.
-
-### Browser development
+Requires JDK 17 or newer; Android builds also need the Android SDK.
+The Gradle wrapper downloads Gradle and the project dependencies.
+On Windows, replace `./gradlew` with `gradlew.bat`.
 
 ```bash
-./gradlew wasmJsBrowserDevelopmentRun
+./gradlew :app:desktop:run
+./gradlew :app:web:wasmJsBrowserDevelopmentRun
+./gradlew :app:android:assembleDebug
 ```
 
-Open the local URL printed by Gradle. A production WebAssembly bundle can be built with:
+The Android debug APK is in `app/android/build/outputs/apk/debug/` and uses a
+separate package from the release. Build the production web bundle with
+`./gradlew :app:web:wasmJsBrowserDistribution`; its output is
+`app/web/build/dist/wasmJs/productionExecutable/`.
+
+### Verification
 
 ```bash
-./gradlew wasmJsBrowserDistribution
+./gradlew desktopTest
+./gradlew :app:android:assembleDebug :app:android:assembleDebugAndroidTest :app:shared:assembleAndroidDeviceTest
+CHROME_BIN=/path/to/chrome ./gradlew wasmJsBrowserTest wasmJsBrowserDistribution --max-workers=1
 ```
 
-The optimized bundle is written to `app/web/build/dist/wasmJs/productionExecutable`.
-
-### Android development
-
-Build the Android app and its Compose instrumentation tests with:
+Architecture checks require a clean Pokeball checkout at
+`b4a8219ecb70ae5e81214edd6b509b61d9db0637`:
 
 ```bash
-./gradlew :app:android:assembleDebug :app:android:assembleDebugAndroidTest \
-  :app:shared:assembleAndroidDeviceTest
+./gradlew verifyArchitecture verifyPokeballArchitecture verifyPokeballConformance -PpokeballSnapshotDir=/path/to/pinned/Pokeball
 ```
 
-The debug package is `com.vladislavtomilov.kinetickk.debug`, isolated from the
-stable benchmark/release package so device tests cannot remove or overwrite
-gameplay data. The APK is written to
-`app/android/build/outputs/apk/debug/app-android-debug.apk`.
+[CI](.github/workflows/ci.yml) defines the complete platform checks.
+[Performance tools](tools/performance/README.md) cover benchmark comparisons.
+Project-specific architecture inputs live in
+[docs/architecture/pokeball](docs/architecture/pokeball/README.md);
+agent instructions are in [AGENTS.md](AGENTS.md).
 
-### Verification and packaging
+### Crash reports
 
-Pokeball architecture verification requires an immutable checkout of
-`4wl2d/Pokeball` at commit
-`de9ef7384795680c836d5e6c2c9b394286058670`. Supply it with
-`-PpokeballSnapshotDir=/absolute/path` or `POKEBALL_SNAPSHOT_DIR`; a sibling
-`../Pokeball` checkout is the local default.
-
-| Goal | Command |
-|---|---|
-| Run desktop tests | `./gradlew desktopTest` |
-| Compile the Android app and both device-test APKs | `./gradlew :app:android:assembleDebug :app:android:assembleBenchmark :app:android:assembleDebugAndroidTest :app:shared:assembleAndroidDeviceTest` |
-| Verify the module graph and Pokeball architecture/claim prerequisites | `./gradlew verifyArchitecture verifyPokeballArchitecture verifyPokeballConformance` |
-| Compile and run isolated Wasm browser tests | `CHROME_BIN=/path/to/chrome ./gradlew compileTestKotlinWasmJs wasmJsBrowserTest` |
-| Build the production web bundle | `./gradlew wasmJsBrowserDistribution` |
-| Run reproducible performance comparisons | See [`tools/performance`](tools/performance/README.md) |
-| Run the complete local gate | Run both commands below: the strict Android/Desktop/architecture graph, then the normal Web graph |
-| List every available task | `./gradlew tasks` |
-
-Gradle 9.7 Isolated Projects is enabled for the Android, Desktop, and architecture CI graphs:
-
-```bash
-./gradlew \
-  verifyArchitecture verifyPokeballArchitecture verifyPokeballConformance desktopTest \
-  :app:android:assembleDebug :app:android:assembleBenchmark \
-  :app:android:assembleDebugAndroidTest :app:shared:assembleAndroidDeviceTest \
-  -Pkinetickk.gradle.isolatedProfile=true \
-  --isolated-projects \
-  --configuration-cache-problems=fail
-
-CHROME_BIN=/path/to/chrome ./gradlew \
-  compileTestKotlinWasmJs wasmJsBrowserTest wasmJsBrowserDistribution \
-  --configuration-cache-problems=fail
-```
-
-The strict profile omits Kotlin/Wasm targets because Kotlin's JS/Wasm Gradle plugins still access
-the root task graph under Isolated Projects
-([KT-80311](https://youtrack.jetbrains.com/issue/KT-80311)). Wasm tests and distributions use the
-normal profile without `--isolated-projects`; no Gradle problem is ignored or suppressed.
-
-## Systems
-
-- **Kinetic combat:** fixed-step simulation at 120 Hz, uncapped magnetic acceleration, swept high-speed collisions, mass-based impact damage, recoil, Gravity Brake, and Polarity saturation.
-- **Buildcraft:** twelve movement-reactive weapons, forty rankable Relics, four Sovereign Relics, four bound Relic slots, and 400 deterministic items across twenty modifier families.
-- **Run progression:** Data leveling, stat evolutions, Elite Keys, two-stage Totems, weapon mastery, combo rewards, velocity tiers, Kinetic Overdrive, and a twenty-minute Architect finale.
-- **Persistent progression:** spendable Kinetic Matter, eight Lab upgrades, twelve Armory unlocks, three Core shapes, Codex discovery, and replayable Rebirth threat tiers.
-- **Presentation:** infinite procedural grid, camera tracking, trails, particles, screen shake, configurable damage numbers, and procedural synth audio on Android, desktop, and web.
-- **Opposition:** Drifter, Shooter, Charger, Interceptor, Weaver, Warden, Splitter, Elite, and Architect behaviors with projectiles and escalating wave mixes.
-
-## Project layout
-
-| Path | Responsibility |
-|---|---|
-| `app/android` | Thin Android application host: manifest, activity, resources, build types, R8, and UI device tests; depends only on `app/shared` |
-| `app/shared` | Multiplatform Application Assembly and platform brokers; constructs fixed bindings, owns provider lifecycle, and delegates the shell to AppSession |
-| `app/desktop` | Thin JVM/desktop host and native packaging; depends only on `app/shared` |
-| `app/web` | Thin Wasm browser host and production web bundle; depends only on `app/shared` |
-| `foundation/common`, `foundation/design` | Shared mechanical collections, random utilities, Canvas tokens, text, geometry, and UI primitives |
-| `resource/audio/api`, `resource/audio/impl` | Bounded audio Resource contract and capability-driven mechanical service; platform authority stays in private `app/shared` brokers |
-| `ball/content/api`, `ball/content/impl` | Stable content types and the immutable Content authority role |
-| `ball/profile/api`, `ball/profile/nucleus`, `ball/profile/resource`, `ball/profile/interaction`, `ball/profile/impl` | Profile protocols, pure decisions, persistence edge, Settings/Lab/Armory/Rebirth UI, and the accepting component |
-| `ball/gameplay/api`, `ball/gameplay/nucleus`, `ball/gameplay/interaction`, `ball/gameplay/impl` | Run protocols, deterministic simulation, Canvas/input interaction, and accepted-effect execution |
-| `flow/session/api`, `flow/session/nucleus`, `flow/session/interaction`, `flow/session/impl` | Session protocols, navigation/workflow decisions, Home/Codex interaction, and orchestration role |
-| `build-logic` | Gradle conventions plus deterministic module, ownership, route, bound, snapshot, manifest-drift, and conformance verification |
-
-The graph has exactly 23 leaf modules. Ball APIs and Nuclei are separate from
-Compose Interaction and provider-facing Resource roles; the Android host lives
-in `app/android`, while Android, Desktop, and Web depend only on `app/shared`. AppSession owns navigation and cross-authority workflow;
-`app/shared` is static construction and transport only. The build rejects
-legacy `core:*` and `feature:*` modules and dependencies, invalid role imports,
-unexpected graph endpoints, manifest drift, and any mismatch in the pinned
-external Pokeball snapshot.
-
-## Contributing
-
-Bug reports, ideas, tests, documentation, and pull requests are welcome. Read
-[the contribution guide](docs/project/CONTRIBUTING.md) before submitting code.
-
-Contributions use the same **GPL-3.0-or-later** terms as the project. Contributors
-keep their copyright; no Developer Certificate of Origin sign-off or separate
-Contributor License Agreement is required. By submitting material for inclusion,
-you confirm that you have the right to license it on those terms.
+Desktop reports stay in `~/.kinetickk/crashes/`
+(`%USERPROFILE%\.kinetickk\crashes` on Windows). The crash dialog can open
+that folder; `bash tools/crashes/latest.sh --path` prints the latest report path.
+Reports include logs, runtime details, and diagnostic copies of saves. Nothing
+is uploaded. See the [privacy note](docs/project/PRIVACY.md).
 
 ## Status
 
-KINETICKK is a playable `0.1.0` prototype. Until the `1.0.0` release, the
-current local profile schema is the only supported schema: development builds
-do not migrate, import, or clean up saves written by earlier builds. An absent
-or incompatible current profile starts from the current defaults. APIs,
-balance, content, and saved-progress formats may change while the game is in
-active development.
+Version **0.2.0** is a playable prototype. Before 1.0.0, only the current
+profile schema is supported: incompatible profiles start from defaults, and
+older save locations remain untouched. Balance, content, and save formats may
+change during development.
+
+## Contributing
+
+Bug reports and focused pull requests are welcome. Describe the change and the
+checks you ran; include comparable performance results for hot-path changes.
+Follow the existing code and retain regression tests. Identify the source and
+license of copied, generated, or adapted material. New project-authored files
+use an accurate SPDX copyright line and `GPL-3.0-or-later` license identifier.
+
+Contributions use GPL-3.0-or-later. Contributors keep their copyright and must
+have the right to submit the material. No separate CLA or DCO sign-off is required.
 
 ## License
 
-Copyright © 2026 Vladislav Tomilov.
-
-KINETICKK's original code, tests, docs, game content, and project-made assets are
-free and open-source under the **GNU General Public License version 3 or later**.
-The GPL permits use, modification, redistribution, and commercial distribution.
-When you distribute the game or a fork, you must follow the GPL's notice,
-source-code, and copyleft terms.
-
-The GPL does not grant rights to present a fork as the official KINETICKK game
-or to imply endorsement by Vladislav Tomilov.
-
-- [GNU GPL version 3 or later](LICENSE)
-- [Legal overview](docs/project/LEGAL.md)
-- [Copyright and open-source notice](NOTICE)
-- [Authorship record](docs/project/AUTHORS.md)
-- [Trademark and brand policy](docs/project/TRADEMARKS.md)
-- [Third-party notices](docs/project/THIRD_PARTY_NOTICES.md)
-- [Contribution policy](docs/project/CONTRIBUTING.md)
-- [Project governance](docs/project/GOVERNANCE.md)
-- [Corresponding source plan](docs/project/SOURCE.md)
-- [Asset provenance](docs/project/ASSET_PROVENANCE.md)
-- [Privacy note for prototype 0.1.0](docs/project/PRIVACY.md)
+Copyright © 2026 Vladislav Tomilov. Licensed under
+[GNU GPL version 3 or later](LICENSE). See [NOTICE](NOTICE),
+[authors](docs/project/AUTHORS.md),
+[third-party notices](docs/project/THIRD_PARTY_NOTICES.md),
+[asset provenance](docs/project/ASSET_PROVENANCE.md), and
+[corresponding source](docs/project/SOURCE.md).
+The KINETICKK name and branding have a separate
+[trademark policy](docs/project/TRADEMARKS.md).

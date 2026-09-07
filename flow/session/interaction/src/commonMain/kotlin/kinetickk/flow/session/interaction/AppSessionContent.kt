@@ -7,6 +7,13 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import kinetickk.foundation.design.LocalAppLanguage
+import kinetickk.foundation.design.LocalCrashDiagnostics
+import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
+import kinetickk.ball.profile.api.ProfileReadPort
+import kinetickk.ball.profile.api.ProfileQuery
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -54,94 +61,134 @@ fun AppSessionContent(
     rebirthFeature: RebirthFeature,
     codexFeature: CodexFeature,
     profileUnavailableFeature: ProfileUnavailableFeature,
+    initialLanguage: AppLanguage = AppLanguage.English,
+    profileReadPort: ProfileReadPort? = null,
+    onLanguageChanged: (AppLanguage) -> Unit = {},
 ) {
+    val diagnostics = LocalCrashDiagnostics.current
+    var languageValue by remember(sessionPort, profileReadPort) {
+        mutableStateOf(profileReadPort?.query(ProfileQuery.GetPreferences)?.preferences?.language ?: initialLanguage)
+    }
     val focusRequester = remember(sessionPort) { FocusRequester() }
     var shellValue by remember(sessionPort) {
         mutableStateOf(sessionPort.query(AppSessionQuery.GetShell))
     }
+    val observedShell = shellValue
+    SideEffect(observedShell) {
+        diagnostics.context("session.committed") { observedShell.toString() }
+    }
 
     fun dispatch(pulse: SessionInteractionPulse): Boolean {
+        val before = shellValue
+        diagnostics.context("session.before-input") { before.toString() }
+        diagnostics.event("session.input", pulse.toString())
         val accepted = sessionPort.accept(pulse) is SessionAcceptance.Accepted
         shellValue = sessionPort.query(AppSessionQuery.GetShell)
+        val after = shellValue
+        diagnostics.context("session.committed") { after.toString() }
         return accepted
     }
 
-    SideEffect(sessionPort) {
-        focusRequester.requestFocus()
+    SideEffect(sessionPort, shellValue.base, shellValue.overlay) {
+        // Home has no focus owner of its own. Reclaim keyboard input after an
+        // overlay disposes its focused control; Gameplay restores its own focus.
+        if (shellValue.base == AppDestination.Home && shellValue.overlay == null) {
+            focusRequester.requestFocus()
+        }
     }
 
+    SideEffect(languageValue, onLanguageChanged) { onLanguageChanged(languageValue) }
+
     val normalInputEnabled = shellValue.normalInputEnabled
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .focusRequester(focusRequester)
-            .onPreviewKeyEvent { event ->
-                // Let a focused semantic control own Enter. When focus remains on
-                // this root, the bubble handler below preserves the global shortcut.
-                if (event.key == Key.Enter) return@onPreviewKeyEvent false
-                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                audioExecutor.ensureUnlocked()
-                val shortcut = event.key.toSessionShortcut()
-                    ?: return@onPreviewKeyEvent false
-                dispatch(SessionInteractionPulse.ShortcutObserved(shortcut))
-            }
-            .onKeyEvent { event ->
-                if (event.key != Key.Enter || event.type != KeyEventType.KeyDown) {
-                    return@onKeyEvent false
+    CompositionLocalProvider(LocalAppLanguage provides languageValue) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .focusRequester(focusRequester)
+                .onPreviewKeyEvent { event ->
+                    // Codex owns text entry, slot activation and its two-step Escape.
+                    if (shellValue.overlay == AppDestination.Codex) return@onPreviewKeyEvent false
+                    // Settings owns slider keys and numeric editing (including Ctrl/Cmd+A).
+                    if (shellValue.overlay == AppDestination.Settings) return@onPreviewKeyEvent false
+                    // Let a focused semantic control own Enter. When focus remains on
+                    // this root, the bubble handler below preserves the global shortcut.
+                    if (event.key == Key.Enter) return@onPreviewKeyEvent false
+                    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    audioExecutor.ensureUnlocked()
+                    val shortcut = event.key.toSessionShortcut()
+                        ?: return@onPreviewKeyEvent false
+                    dispatch(SessionInteractionPulse.ShortcutObserved(shortcut))
                 }
-                audioExecutor.ensureUnlocked()
-                dispatch(SessionInteractionPulse.ShortcutObserved(SessionShortcut.ENTER))
+                .onKeyEvent { event ->
+                    if (shellValue.overlay == AppDestination.Codex) return@onKeyEvent true
+                    if (shellValue.overlay == AppDestination.Settings) {
+                        if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                        val shortcut = event.key.toSessionShortcut() ?: return@onKeyEvent false
+                        audioExecutor.ensureUnlocked()
+                        return@onKeyEvent dispatch(SessionInteractionPulse.ShortcutObserved(shortcut))
+                    }
+                    if (event.key != Key.Enter || event.type != KeyEventType.KeyDown) {
+                        return@onKeyEvent false
+                    }
+                    audioExecutor.ensureUnlocked()
+                    dispatch(SessionInteractionPulse.ShortcutObserved(SessionShortcut.ENTER))
+                }
+                .focusable(),
+        ) {
+            when (shellValue.base) {
+                AppDestination.Home -> homeFeature.Content(
+                    inputEnabled = normalInputEnabled && shellValue.overlay == null,
+                    onOutput = { output -> dispatch(output.toSessionPulse()) },
+                )
+                AppDestination.Gameplay -> gameplayPresentation.Content(
+                    inputEnabled = normalInputEnabled && shellValue.overlay == null,
+                    onOutput = { output -> dispatch(output.toSessionPulse()) },
+                )
+                AppDestination.Settings,
+                AppDestination.Lab,
+                AppDestination.Armory,
+                AppDestination.Rebirth,
+                AppDestination.Codex,
+                -> error("Only Home and Gameplay may be base destinations")
             }
-            .focusable(),
-    ) {
-        when (shellValue.base) {
-            AppDestination.Home -> homeFeature.Content(
-                inputEnabled = normalInputEnabled && shellValue.overlay == null,
-                onOutput = { output -> dispatch(output.toSessionPulse()) },
-            )
-            AppDestination.Gameplay -> gameplayPresentation.Content(
-                inputEnabled = normalInputEnabled && shellValue.overlay == null,
-                onOutput = { output -> dispatch(output.toSessionPulse()) },
-            )
-            AppDestination.Settings,
-            AppDestination.Lab,
-            AppDestination.Armory,
-            AppDestination.Rebirth,
-            AppDestination.Codex,
-            -> error("Only Home and Gameplay may be base destinations")
-        }
 
-        when (shellValue.overlay.takeIf { normalInputEnabled }) {
-            null -> Unit
-            AppDestination.Settings -> settingsFeature.Content(
-                routeToken = shellValue.routeToken.value,
-                onOutput = { output -> dispatch(output.toSessionPulse()) },
-            )
-            AppDestination.Lab -> labFeature.Content(
-                routeToken = shellValue.routeToken.value,
-                onOutput = { output -> dispatch(output.toSessionPulse()) },
-            )
-            AppDestination.Armory -> armoryFeature.Content(
-                activeRunWeapon = activeGameplayWeapon(shellValue, gameplayPresentation),
-                onOutput = { output -> dispatch(output.toSessionPulse()) },
-            )
-            AppDestination.Rebirth -> rebirthFeature.Content(
-                routeToken = shellValue.routeToken.value,
-                eligible = shellValue.rebirthEligible,
-                confirmationArmed = shellValue.rebirthConfirmationArmed,
-                onOutput = { output -> dispatch(output.toSessionPulse()) },
-            )
-            AppDestination.Codex -> codexFeature.Content(
-                runStacks = currentRunStacks(shellValue, gameplayPresentation),
-                onOutput = { output -> dispatch(output.toSessionPulse()) },
-            )
-            AppDestination.Home,
-            AppDestination.Gameplay,
-            -> error("Base destinations cannot be overlays")
-        }
+            when (shellValue.overlay.takeIf { normalInputEnabled }) {
+                null -> Unit
+                AppDestination.Settings -> settingsFeature.Content(
+                    routeToken = shellValue.routeToken.value,
+                    onOutput = { output ->
+                        when (output) {
+                            is SettingsOutput.LanguageChanged -> languageValue = output.language
+                            SettingsOutput.Back -> output.toSessionPulse()?.let { dispatch(it) }
+                        }
+                    },
+                )
+                AppDestination.Lab -> labFeature.Content(
+                    routeToken = shellValue.routeToken.value,
+                    onOutput = { output -> dispatch(output.toSessionPulse()) },
+                )
+                AppDestination.Armory -> armoryFeature.Content(
+                    activeRunWeapon = activeGameplayWeapon(shellValue, gameplayPresentation),
+                    onOutput = { output -> dispatch(output.toSessionPulse()) },
+                )
+                AppDestination.Rebirth -> rebirthFeature.Content(
+                    routeToken = shellValue.routeToken.value,
+                    eligible = shellValue.rebirthEligible,
+                    confirmationArmed = shellValue.rebirthConfirmationArmed,
+                    onOutput = { output -> dispatch(output.toSessionPulse()) },
+                )
+                AppDestination.Codex -> codexFeature.Content(
+                    runStacks = currentRunStacks(shellValue, gameplayPresentation),
+                    onOutput = { output -> dispatch(output.toSessionPulse()) },
+                )
+                AppDestination.Home,
+                AppDestination.Gameplay,
+                -> error("Base destinations cannot be overlays")
+            }
 
-        if (shellValue.lifecycle.showsProfileUnavailable()) {
-            profileUnavailableFeature.Content()
+            if (shellValue.lifecycle.showsProfileUnavailable()) {
+                profileUnavailableFeature.Content()
+            }
         }
     }
 }
@@ -162,11 +209,10 @@ internal fun currentRunStacks(
     shell: AppShellProjection,
     gameplayPresentation: GameplayPresentation,
 ): CodexRunStacks = if (shell.base == AppDestination.Gameplay) {
+    val build = gameplayPresentation.activePresentation()?.query(GameplayQuery.GetBuildSummary)
     CodexRunStacks(
-        gameplayPresentation.activePresentation()
-            ?.query(GameplayQuery.GetCodexStacks)
-            ?.itemStacks
-            ?: kinetickk.foundation.collections.immutableListOf(),
+        itemStacks = build?.itemStacks ?: kinetickk.foundation.collections.immutableListOf(),
+        build = build,
     )
 } else {
     CodexRunStacks()

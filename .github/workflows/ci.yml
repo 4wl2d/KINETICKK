@@ -41,7 +41,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: 4wl2d/Pokeball
-          ref: de9ef7384795680c836d5e6c2c9b394286058670
+          ref: b4a8219ecb70ae5e81214edd6b509b61d9db0637
           path: pokeball
           persist-credentials: false
 

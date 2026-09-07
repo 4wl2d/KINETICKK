@@ -3,59 +3,45 @@
 
 package kinetickk.ball.profile.interaction.lab.impl
 
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.text.font.FontWeight
-import kinetickk.foundation.design.Acid
-import kinetickk.foundation.design.Cyan
-import kinetickk.foundation.design.Muted
-import kinetickk.foundation.design.TextMeasurer
-import kinetickk.foundation.design.White
-import kinetickk.foundation.design.d
-import kinetickk.foundation.design.drawLabel
-import kinetickk.foundation.design.drawStripFooter
-import kinetickk.foundation.design.drawOverlayFrame
-import kinetickk.foundation.design.formatCompact
-import kinetickk.foundation.design.overlayBounds
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import kinetickk.ball.content.api.localizedContent
+import kinetickk.ball.profile.interaction.*
 import kinetickk.ball.profile.interaction.lab.api.LabRenderModel
-import kinetickk.ball.profile.interaction.lab.api.LabUpgradeRenderModel
+import kinetickk.ball.profile.interaction.localization.ProfileText
+import kinetickk.foundation.common.localization.text
+import kinetickk.foundation.design.*
 
-internal fun DrawScope.drawLab(model: LabRenderModel, textMeasurer: TextMeasurer) {
-    drawRect(Color(0xD9050610))
-    val bounds = overlayBounds()
-    drawOverlayFrame(bounds, Acid)
-    drawLabel(textMeasurer, "KINETIC LAB", bounds.left + d(25f), bounds.top + d(24f), 20f, Acid, weight = FontWeight.Bold)
-    drawLabel(textMeasurer, "PERMANENT RESEARCH // MATTER ${formatCompact(model.matter)}", bounds.right - d(25f), bounds.top + d(30f), 8f, White, alignRight = true)
-    val contentTop = bounds.top + d(88f)
-    val contentWidth = bounds.width - d(50f)
-    val columnWidth = contentWidth * 0.5f
-    val rowHeight = d(105f)
-    model.upgrades.forEachIndexed { index, upgrade ->
-        val column = index % 2
-        val row = index / 2
-        val left = bounds.left + d(25f) + columnWidth * column
-        val top = contentTop + rowHeight * row
-        drawMetaCard(textMeasurer, upgrade, left, top, columnWidth, rowHeight)
+@Composable
+internal fun LabContent(model: LabRenderModel, scale: Float, onAction: (LabAction) -> Unit) {
+    val language = LocalAppLanguage.current
+    ProfilePanel(language.text(ProfileText.LabTitle), language.text(ProfileText.LabSummary, formatCompact(model.matter, language)),
+        scale, "profile-lab", onBack = { onAction(LabAction.Back) }) { wide ->
+        model.upgrades.chunked(if (wide) 2 else 1).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+                row.forEach { upgrade ->
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            ProfileLabel(upgrade.name.localizedContent(language), scale, bold = true, modifier = Modifier.weight(1f))
+                            ProfileLabel("${upgrade.rank}/${upgrade.maxRanks}", scale, Muted, size = 10f)
+                        }
+                        ProfileLabel(upgrade.description.localizedContent(language), scale, Muted, size = 11f)
+                        Canvas(Modifier.fillMaxWidth().height(3.dp)) {
+                            drawBar(0f, 0f, size.width, size.height, upgrade.rank.toFloat() / upgrade.maxRanks.coerceAtLeast(1), Cyan, DarkLine)
+                        }
+                        ProfileButton(if (upgrade.isMaxed) language.text(ProfileText.MaximumSynchrony)
+                            else language.text(ProfileText.BuyMatter, formatCompact(upgrade.nextCost, language)), scale,
+                            "profile-lab-buy-${upgrade.id}", Modifier.fillMaxWidth(), enabled = upgrade.isAffordable, accent = Cyan) {
+                            onAction(LabAction.PurchaseRequested(upgrade.id))
+                        }
+                        ProfileDivider()
+                    }
+                }
+                if (wide && row.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
     }
-    drawStripFooter(textMeasurer, bounds, Acid)
-}
-
-private fun DrawScope.drawMetaCard(
-    textMeasurer: TextMeasurer,
-    upgrade: LabUpgradeRenderModel,
-    x: Float,
-    y: Float,
-    width: Float,
-    height: Float,
-) {
-    val accent = if (upgrade.isMaxed) Acid else if (upgrade.isAffordable) Cyan else Muted
-    drawRect(Color(0x99101225), Offset(x, y), Size(width, height))
-    drawRect(accent.copy(alpha = 0.7f), Offset(x, y), Size(width, height), style = Stroke(d(1f)))
-    drawLabel(textMeasurer, upgrade.name.uppercase(), x + d(14f), y + d(12f), 9f, accent, weight = FontWeight.Bold)
-    drawLabel(textMeasurer, "RANK ${upgrade.rank}/${upgrade.maxRanks}", x + width - d(14f), y + d(12f), 8f, White, alignRight = true)
-    drawLabel(textMeasurer, upgrade.description, x + d(14f), y + d(36f), 7f, Muted, maxWidth = width - d(28f), maxLines = 2)
-    drawLabel(textMeasurer, if (upgrade.isMaxed) "MAXIMUM SYNCHRONY" else "BUY ${formatCompact(upgrade.nextCost)} MATTER", x + width - d(14f), y + height - d(24f), 8f, accent, alignRight = true, weight = FontWeight.Bold)
 }

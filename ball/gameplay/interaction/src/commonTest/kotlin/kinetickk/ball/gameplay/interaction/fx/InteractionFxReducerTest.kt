@@ -13,6 +13,24 @@ import kotlin.test.Test
 
 class InteractionFxReducerTest {
     @Test
+    fun buildNotificationsAreGroupedBoundedDetachedAndExpireOnlyWhenEffectsAdvance() {
+        val reducer = InteractionFxReducer(seed = 7)
+        repeat(4) { index -> reducer.apply(listOf(VisualFxCue.BuildChanged("Item $index",
+            kinetickk.foundation.collections.immutableListOf("Weapon power +0.1×", "New resonance")))) }
+        val retained = reducer.snapshot()
+        assertEquals(listOf("Item 1", "Item 2", "Item 3"), retained.buildNotifications.map { it.title })
+        assertSame(retained, reducer.snapshot())
+        reducer.apply(listOf(VisualFxCue.EffectsAdvanced(3f)))
+        assertEquals(6f, retained.buildNotifications.first().life)
+        assertEquals(3f, reducer.snapshot().buildNotifications.first().life)
+        reducer.apply(listOf(VisualFxCue.ClearAll))
+        assertTrue(reducer.snapshot().buildNotifications.isEmpty())
+        reducer.apply(listOf(VisualFxCue.BuildChanged("Relic", kinetickk.foundation.collections.immutableListOf())))
+        reducer.apply(listOf(VisualFxCue.EffectsAdvanced(6.1f)))
+        assertTrue(reducer.snapshot().buildNotifications.isEmpty())
+    }
+
+    @Test
     fun snapshotIsReusedUntilTheVisibleProjectionChanges() {
         val reducer = InteractionFxReducer(seed = 46)
         val empty = reducer.snapshot()

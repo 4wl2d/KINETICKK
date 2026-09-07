@@ -37,6 +37,7 @@ class InteractionFxReducer(seed: Int) {
     private val shockwaves = mutableListOf<Shockwave>()
     private val damageNumbers = mutableListOf<DamageNumber>()
     private val weaponArcs = mutableListOf<WeaponArc>()
+    private val buildNotifications = mutableListOf<BuildNotificationProjection>()
     private var projectionDirty = false
     private var cachedProjection = VisualFxProjection.EMPTY
     private var particlesDirty = false
@@ -62,6 +63,7 @@ class InteractionFxReducer(seed: Int) {
     fun snapshot(): VisualFxProjection {
         if (!projectionDirty) return cachedProjection
         cachedProjection = VisualFxProjection(
+            buildNotifications = buildNotifications.mapToImmutableList { it },
             particles = if (particlesDirty) particles.mapToImmutableList { value ->
                 ParticleProjection(
                     value.x,
@@ -96,6 +98,7 @@ class InteractionFxReducer(seed: Int) {
                     life = value.life,
                     compactAmount = value.compactAmount,
                     fullAmount = value.fullAmount,
+                    russianCompactAmount = value.russianCompactAmount,
                 )
             } else cachedProjection.damageNumbers,
             weaponArcs = if (weaponArcsDirty) weaponArcs.mapToImmutableList { value ->
@@ -114,6 +117,11 @@ class InteractionFxReducer(seed: Int) {
     /** Returns whether the externally visible projection changed. */
     private fun applyCue(cue: VisualFxCue): Boolean =
         when (cue) {
+            is VisualFxCue.BuildChanged -> {
+                buildNotifications += BuildNotificationProjection(cue.title, cue.details, 6f)
+                trimFront(buildNotifications, 3)
+                true
+            }
             VisualFxCue.ClearAll -> clearAll()
             VisualFxCue.ClearWeaponArcs -> if (weaponArcs.isEmpty()) {
                 false
@@ -168,11 +176,12 @@ class InteractionFxReducer(seed: Int) {
         }
 
     private fun clearAll(): Boolean {
-        val changed = particles.isNotEmpty() ||
+        val changed = buildNotifications.isNotEmpty() || particles.isNotEmpty() ||
             motionEchoes.isNotEmpty() ||
             shockwaves.isNotEmpty() ||
             damageNumbers.isNotEmpty() ||
             weaponArcs.isNotEmpty()
+        buildNotifications.clear()
         particles.clear()
         motionEchoes.clear()
         shockwaves.clear()
@@ -214,11 +223,17 @@ class InteractionFxReducer(seed: Int) {
 
     private fun advanceEffects(delta: Float): Boolean {
         if (
+            buildNotifications.isEmpty() &&
             particles.isEmpty() &&
             motionEchoes.isEmpty() &&
             shockwaves.isEmpty() &&
             damageNumbers.isEmpty()
         ) return false
+        for (index in buildNotifications.indices) {
+            val value = buildNotifications[index]
+            buildNotifications[index] = value.copy(life = value.life - delta)
+        }
+        removeExpired(buildNotifications) { it.life > 0f }
         for (index in particles.indices) {
             val value = particles[index]
             value.x += value.vx * delta
@@ -369,6 +384,7 @@ class InteractionFxReducer(seed: Int) {
         var life: Float = 0.65f,
         val compactAmount: String = formatDamageNumber(amount, DamageNumberFormat.COMPACT),
         val fullAmount: String = formatDamageNumber(amount, DamageNumberFormat.FULL),
+        val russianCompactAmount: String = compactAmount.russianDamageNumber(),
     )
 
     private data class WeaponArc(

@@ -49,6 +49,7 @@ internal class HomeReducer(
         coreShapes = coreShapes,
         itemCount = itemCount,
         weaponCount = weaponCount,
+        unlockedCoreShapes = projection.unlockedCoreShapes,
     )
 
     fun reduce(action: HomeAction): HomeReduction = when (action) {

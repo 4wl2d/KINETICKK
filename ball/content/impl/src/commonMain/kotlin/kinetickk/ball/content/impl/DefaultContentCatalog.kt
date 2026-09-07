@@ -7,6 +7,7 @@ import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.ContentCatalog
 import kinetickk.ball.content.api.ContentVersion
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.defaultCoreShapeDefinitions
 import kinetickk.ball.content.api.CoreShapeDefinition
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
@@ -42,6 +43,8 @@ internal data class ContentBootstrapData(
     val maxActiveEnemies: Int,
     val minSpawnIntervalSeconds: Float,
     val minEliteIntervalSeconds: Float,
+    val tempo: kinetickk.ball.content.api.RunTempoProfile = kinetickk.ball.content.api.RunTempoProfile(),
+    val synergies: List<kinetickk.ball.content.api.SynergyDefinition> = kinetickk.ball.content.api.defaultSynergyDefinitions(),
 )
 
 internal fun defaultContentBootstrapData(): ContentBootstrapData = ContentBootstrapData(
@@ -51,11 +54,7 @@ internal fun defaultContentBootstrapData(): ContentBootstrapData = ContentBootst
     weaponMasteries = WeaponMastery.entries,
     metaUpgrades = defaultMetaUpgrades(),
     relics = defaultRelics(),
-    coreShapes = listOf(
-        CoreShapeDefinition(CoreShape.ORB, unlockLifetimeMatter = 0L),
-        CoreShapeDefinition(CoreShape.PRISM, unlockLifetimeMatter = 25L),
-        CoreShapeDefinition(CoreShape.SHARD, unlockLifetimeMatter = 90L),
-    ),
+    coreShapes = defaultCoreShapeDefinitions(),
     rebirthProfiles = defaultRebirthProfiles(),
     relicPolicy = RelicPolicy(maxSlots = 4, maxRank = 5),
     maxActiveEnemies = DEFAULT_MAX_ACTIVE_ENEMIES,
@@ -79,6 +78,7 @@ private class DefaultContentCatalog(data: ContentBootstrapData) : ContentCatalog
     private val metaUpgrades = data.metaUpgrades.toImmutableList()
     private val relics = data.relics.toImmutableList()
     private val coreShapes = data.coreShapes.toImmutableList()
+    private val synergies = data.synergies.toImmutableList()
     private val rebirthProfiles = data.rebirthProfiles.toImmutableList()
 
     private val rebirth = RebirthPolicySnapshot(
@@ -108,6 +108,9 @@ private class DefaultContentCatalog(data: ContentBootstrapData) : ContentCatalog
         relics = relics,
         rebirth = rebirth,
         relicPolicy = data.relicPolicy,
+        tempo = data.tempo,
+        synergies = synergies,
+        coreShapes = coreShapes,
     )
 
     private val uiCatalog = UiCatalogSnapshot(
@@ -120,6 +123,8 @@ private class DefaultContentCatalog(data: ContentBootstrapData) : ContentCatalog
         coreShapes = coreShapes,
         rebirth = rebirth,
         relicPolicy = data.relicPolicy,
+        tempo = data.tempo,
+        synergies = synergies,
     )
 
     override fun profilePolicy(): ProfilePolicySnapshot = profilePolicy
@@ -156,6 +161,12 @@ private fun validateBootstrap(data: ContentBootstrapData) {
     requireUniqueIds("relic", data.relics.map(RelicDefinition::id))
     require(data.relics.map(RelicDefinition::id) == RelicId.entries.toList()) {
         "Relic ids must match the stable RelicId order"
+    }
+
+    requireBound("synergies", data.synergies.size, 12)
+    requireUniqueIds("synergy", data.synergies.map { it.id })
+    require(data.synergies.map { it.id } == kinetickk.ball.content.api.SynergyId.entries.toList()) {
+        "Synergy ids must match the stable SynergyId order"
     }
 
     requireUniqueIds("core-shape", data.coreShapes.map(CoreShapeDefinition::id))

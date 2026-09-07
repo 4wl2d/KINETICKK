@@ -9,6 +9,7 @@ import kinetickk.ball.content.api.WeaponId
 import kinetickk.foundation.collections.ImmutableSet
 import kinetickk.foundation.collections.immutableSetOf
 import kinetickk.foundation.collections.toImmutableSet
+import kinetickk.foundation.common.localization.AppLanguage
 
 enum class PreferenceAdjustmentDirection {
     DECREASE,
@@ -17,12 +18,19 @@ enum class PreferenceAdjustmentDirection {
 
 /** Closed settings operation interpreted only by Profile Nucleus. */
 sealed interface ProfilePreferenceAdjustment {
+    data class SetLanguage(val language: AppLanguage) : ProfilePreferenceAdjustment
     data object ToggleSoundEffects : ProfilePreferenceAdjustment
     data object ToggleMusic : ProfilePreferenceAdjustment
     data class StepMasterVolume(val direction: PreferenceAdjustmentDirection) : ProfilePreferenceAdjustment
+    data class SetMasterVolume(val percent: Int) : ProfilePreferenceAdjustment {
+        init {
+            require(percent in 0..100) { "Master volume must be between 0 and 100 percent" }
+        }
+    }
     data class StepSimulationSpeed(val direction: PreferenceAdjustmentDirection) : ProfilePreferenceAdjustment
     data class StepTextScale(val direction: PreferenceAdjustmentDirection) : ProfilePreferenceAdjustment
     data object ToggleScreenShake : ProfilePreferenceAdjustment
+    data object ToggleRunStatisticsSide : ProfilePreferenceAdjustment
     data class StepParticleDensity(val direction: PreferenceAdjustmentDirection) : ProfilePreferenceAdjustment
     data object ToggleDamageNumbers : ProfilePreferenceAdjustment
     data class StepDamageNumberSize(val direction: PreferenceAdjustmentDirection) : ProfilePreferenceAdjustment
@@ -34,12 +42,23 @@ data class GameplayProgressUpdate(
     val bankedMatter: Long = 0L,
     val discoveredItemIds: ImmutableSet<Int> = immutableSetOf(),
     val clearedRebirthLevel: Int? = null,
+    val eliteKills: Int = 0,
+    val dashHits: Int = 0,
+    val completedOrbits: Int = 0,
+    val architectDefeatedWith: CoreShape? = null,
 ) {
     constructor(
         bankedMatter: Long = 0L,
         discoveredItemIds: Set<Int>,
         clearedRebirthLevel: Int? = null,
-    ) : this(bankedMatter, discoveredItemIds.toImmutableSet(), clearedRebirthLevel)
+        eliteKills: Int = 0,
+        dashHits: Int = 0,
+        completedOrbits: Int = 0,
+        architectDefeatedWith: CoreShape? = null,
+    ) : this(
+        bankedMatter, discoveredItemIds.toImmutableSet(), clearedRebirthLevel,
+        eliteKills, dashHits, completedOrbits, architectDefeatedWith,
+    )
 }
 
 /** Closed local Interaction intent inventory. */
@@ -59,47 +78,14 @@ sealed interface ProfilePulse {
     ) : Business
 }
 
-/** Target-owned Profile ModuleCommand payloads. They are not aliases of local Interaction intents. */
-sealed interface ProfileModuleCommand {
-    data class SelectCoreShape(val shape: CoreShape) : ProfileModuleCommand
-    data object ToggleMute : ProfileModuleCommand
-    data object AdvanceRebirth : ProfileModuleCommand
-    data class ApplyGameplayProgress(val update: GameplayProgressUpdate) : ProfileModuleCommand
-}
-
-/** Canonical accepted-source ModuleCommandRequest retained in a caller frame. */
-data class ProfileModuleCommandRequest(
-    val semanticHandle: ProfileSemanticHandle,
-    val sourceOrdinal: Int,
-    val targetInstance: ProfileInstanceId,
-    val command: ProfileModuleCommand,
-) {
-    init {
-        require(sourceOrdinal == semanticHandle.sourceOrdinal) {
-            "Profile command request ordinal must match its semantic handle"
-        }
-    }
-}
-
-/** Canonical target Nucleus command input, constructed only by the trusted binding boundary. */
-data class ProfileModuleCommandPulse(
-    val commandSource: ProfileCommandSourceToken,
-    val effectiveProtocolIdentity: ProfileEffectiveProtocolIdentity,
-    val command: ProfileModuleCommand,
-    val issuerProvenance: ProfileCommandIssuerProvenance,
-)
-
 sealed interface ProfileGameplayProgressRejection {
+    data object NegativeAchievementProgress : ProfileGameplayProgressRejection
+    data object VictoryCharacterLocked : ProfileGameplayProgressRejection
     data object NegativeBankedMatter : ProfileGameplayProgressRejection
     data class UnknownItem(val itemId: Int) : ProfileGameplayProgressRejection
     data object TooManyDiscoveries : ProfileGameplayProgressRejection
     data class ClearedLevelBelowMinimum(val level: Int) : ProfileGameplayProgressRejection
     data class ClearedLevelAboveCurrent(val level: Int) : ProfileGameplayProgressRejection
-}
-
-enum class ProfileCommandValidationFailureReason {
-    WRONG_TARGET,
-    WRONG_SOURCE_KIND,
 }
 
 sealed interface ProfileRejection {
@@ -130,80 +116,6 @@ sealed interface ProfileAcceptance {
         val observedRevision: ProfileRevision,
         val reason: ProfileRejection,
     ) : ProfileAcceptance
-}
-
-/** Target-owned ModuleResult payload family for the four Profile mappings. */
-sealed interface ProfileModuleResult {
-    data class PreferencesChanged(val preferences: PlayerPreferences) : ProfileModuleResult
-    data class CoreShapeSelected(val shape: CoreShape) : ProfileModuleResult
-    data class RebirthAdvanced(val progress: RebirthProgress) : ProfileModuleResult
-    data object GameplayProgressApplied : ProfileModuleResult
-}
-
-/** Canonical target output, created only inside an accepted Profile Decision. */
-data class ProfileModuleResultOutput(
-    val semanticHandle: ProfileSemanticHandle,
-    val sourceOrdinal: Int,
-    val commandSource: ProfileCommandSourceToken,
-    val result: ProfileModuleResult,
-) {
-    init {
-        require(semanticHandle == commandSource.semanticHandle) {
-            "Profile result output must preserve the command semantic handle"
-        }
-    }
-}
-
-/** Full accepted-frame evidence transported by the statically bound Profile result route. */
-data class ProfileModuleResultDelivery(
-    val commandSource: ProfileCommandSourceToken,
-    val resultSource: ProfileResultSourceToken,
-    val effectiveProtocolIdentity: ProfileEffectiveProtocolIdentity,
-    val result: ProfileModuleResult,
-    val issuerProvenance: ProfileResultIssuerProvenance,
-)
-
-sealed interface ProfileCommandAdmissionFailureReason {
-    data class CausalBudgetExceeded(
-        val causalScope: Long,
-        val limit: Int,
-    ) : ProfileCommandAdmissionFailureReason
-
-    data object CompletionCapacityExhausted : ProfileCommandAdmissionFailureReason
-    data object RevisionCapacityExhausted : ProfileCommandAdmissionFailureReason
-}
-
-sealed interface ProfileCommandBoundaryResponse {
-    data class ValidationFailure(
-        val reason: ProfileCommandValidationFailureReason,
-    ) : ProfileCommandBoundaryResponse
-
-    data class AdmissionFailure(
-        val reason: ProfileCommandAdmissionFailureReason,
-    ) : ProfileCommandBoundaryResponse
-
-    data class DecisionRejected(
-        val reason: ProfileRejection,
-    ) : ProfileCommandBoundaryResponse
-}
-
-/** Verified target-ingress refusal evidence; the caller owns its ControlPulse carrier wrapper. */
-data class ProfileCommandRefusalEvidence(
-    val commandSource: ProfileCommandSourceToken,
-    val effectiveProtocolIdentity: ProfileEffectiveProtocolIdentity,
-    val boundaryResponse: ProfileCommandBoundaryResponse,
-    val targetBoundaryProvenance: ProfileTargetBoundaryProvenance,
-)
-
-sealed interface ProfileCommandIngressResult {
-    data class Accepted(
-        val targetInstance: ProfileInstanceId,
-        val targetRevision: ProfileRevision,
-    ) : ProfileCommandIngressResult
-
-    data class RejectedBeforeAcceptance(
-        val refusal: ProfileCommandRefusalEvidence,
-    ) : ProfileCommandIngressResult
 }
 
 sealed interface ProfileBootstrapBlockReason {

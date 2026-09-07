@@ -4,10 +4,14 @@
 # KINETICKK Pokeball architecture record
 
 This directory records the project-owned decisions and evidence for the full
-KINETICKK migration to Pokeball Core `1.4.0-draft`. Typed Kotlin source remains
+KINETICKK migration to Pokeball Core `1.5.0-draft`. Typed Kotlin source remains
 the authority for protocols and behavior. The generated
 [`resolved-manifest.json`](resolved-manifest.json) is a checked projection, not
 a second source of truth.
+
+Development guidance lives in the current Pokeball skills, required by
+[AGENTS.md](../../../AGENTS.md). This directory retains project-specific
+decisions and verification inputs.
 
 Before KINETICKK `1.0.0`, persisted Profile data has one current schema, not a
 version family. The authoritative value is `ProfileSnapshot`; its Profile data
@@ -22,15 +26,15 @@ The record is split by ownership:
   product delta.
 - `authority-map.md` assigns every business fact and writer to one authority.
 - `policy.md` selects execution profiles, bounds, and project-local mechanisms.
-- `assembly.md` owns the finite cross-authority graph and route bindings.
+- `assembly.md` records composition decisions and workflow order; actual Kotlin
+  interfaces and runtime wiring own the bindings.
 - `applicability.md` records triggered Core concerns, exclusions, and the
   absence-proof scopes that may be used only by the final conformance claim.
-- `browser-qa.md` defines the isolated production-Wasm rendered smoke and its
-  relationship to the automated Chromium suite.
 - `resolved-manifest.json` deterministically projects modules, compile and
-  direct-control edges, Application Surfaces, routes, and selected bounds.
+  direct-control edges, Application Surfaces, inspectable source evidence, and
+  the executed behavior suites. It contains no handwritten operation registry.
 
-The verified physical graph contains exactly 23 leaf modules. `app:android` is
+The generated manifest records the physical module graph. `app:android` is
 the mechanical Android application host and has exactly one production project
 edge, `implementation -> :app:shared`. The shared KMP leaf retains Compose
 Assembly and Android/Desktop/Web capability bindings, so the host split adds no

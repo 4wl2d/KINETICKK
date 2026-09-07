@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-FileCopyrightText: 2026 Vladislav Tomilov -->
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#42F5E9"
+        android:fillType="evenOdd"
+        android:pathData="M46,34 L70,58 L46,82 L22,58 Z M46,41 L29,58 L46,75 L63,58 Z" />
+    <path
+        android:fillColor="#F4F6FF"
+        android:pathData="M46,49 L55,58 L46,67 L37,58 Z M57,44 L64,37 L67,40 L60,47 Z" />
+    <path
+        android:fillColor="#FF4DC4"
+        android:fillType="evenOdd"
+        android:pathData="M76,34 A6,6 0,1 1,64 34 A6,6 0,1 1,76 34 Z M73.5,34 A3.5,3.5 0,1 0,66.5 34 A3.5,3.5 0,1 0,73.5 34 Z M71.5,34 A1.5,1.5 0,1 1,68.5 34 A1.5,1.5 0,1 1,71.5 34 Z" />
+</vector>

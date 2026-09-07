@@ -26,6 +26,7 @@ class AppSessionInputMappingTest {
             Key.A to SessionShortcut.ARMORY,
             Key.B to SessionShortcut.REBIRTH,
             Key.C to SessionShortcut.CODEX,
+            Key.I to SessionShortcut.CODEX,
             Key.M to SessionShortcut.MUTE,
             Key.Escape to SessionShortcut.BACK,
             Key.Enter to SessionShortcut.ENTER,

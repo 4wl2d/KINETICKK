@@ -28,7 +28,7 @@ Release notes must record:
 Prototype artifacts built from an uncommitted working tree are development
 builds, not official releases.
 
-The current project version is `0.1.0`. The macOS `jpackage` tool rejects an
+The current project version is `0.2.0`. The macOS `jpackage` tool rejects an
 application version whose first number is zero, so `createDistributable` cannot
 produce the native app until the release owner chooses a positive-major macOS
 package version. Record that mapping in the release notes; do not silently

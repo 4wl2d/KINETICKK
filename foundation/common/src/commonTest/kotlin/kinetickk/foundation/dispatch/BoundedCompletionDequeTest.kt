@@ -6,6 +6,7 @@ package kinetickk.foundation.dispatch
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -48,6 +49,28 @@ class BoundedCompletionDequeTest {
         assertTrue(deque.tryAddLast("third"))
         assertEquals("second", deque.removeFirstOrNull())
         assertEquals("third", deque.removeFirstOrNull())
+        assertTrue(deque.isEmpty)
+    }
+
+    @Test
+    fun preparationFailureRetainsTheHeadAndDoesNotReorderReadyItems() {
+        val deque = BoundedCompletionDeque<String>(capacity = 2)
+        var ready = false
+        assertTrue(deque.tryAddLastPreparation {
+            check(ready) { "input preparation failed" }
+            "first"
+        })
+        assertTrue(deque.tryAddLast("second"))
+
+        assertFailsWith<IllegalStateException> { deque.peekFirstOrNull() }
+        assertFailsWith<IllegalStateException> { deque.removeFirstOrNull() }
+        assertEquals(2, deque.size)
+        assertEquals(0, deque.remainingCapacity)
+        ready = true
+        assertEquals("first", deque.peekFirstOrNull())
+        assertEquals(2, deque.size)
+        assertEquals("first", deque.removeFirstOrNull())
+        assertEquals("second", deque.removeFirstOrNull())
         assertTrue(deque.isEmpty)
     }
 }

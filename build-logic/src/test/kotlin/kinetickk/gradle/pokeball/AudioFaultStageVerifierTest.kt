@@ -15,6 +15,26 @@ class AudioFaultStageVerifierTest {
     }
 
     @Test
+    fun localAudioDispatchAllowsRenamedVariablesAndExtractedHelpers() {
+        val sources = validAudioSources().map { source ->
+            when (source.relativePath) {
+                GAMEPLAY_PATH -> source.copy(text = source.text
+                    .replace("fun execute", "fun dispatchAcceptedEffect")
+                    .replace("output", "effect")
+                    .replace("audioExecutor.ensureUnlocked()", "unlockAudio()") +
+                    "\nprivate fun unlockAudio() = audioExecutor.ensureUnlocked()")
+                AUDIO_RESOURCE_PATH -> source.copy(text = source.text
+                    .replace("platform", "sink")
+                    .replace("request.copy(gain = request.gain * volume)", "scaled(request)") +
+                    "\nprivate fun scaled(request: ToneRequest) = request.copy(gain = request.gain * volume)")
+                else -> source
+            }
+        }
+        val violations = audioRuntimeFaultStageViolations(sources)
+        assertTrue(violations.isEmpty(), violations.joinToString("\n"))
+    }
+
+    @Test
     fun conventionalMainCannotDeclareSemanticAudioStatus() {
         val path = "app/desktop/src/main/kotlin/kinetickk/app/desktop/AudioPlaybackStatus.kt"
         val semanticStatus = SourceDocument(
@@ -60,6 +80,62 @@ class AudioFaultStageVerifierTest {
 
         assertViolation(audioRuntimeFaultStageViolations(sources), "`runCatching`")
         assertViolation(audioRuntimeFaultStageViolations(sources), "Desktop Tone submission/synthesis/close")
+    }
+
+    @Test
+    fun androidWorkerCancellationRequiresExactShutdownGuardAndInterruptRestoration() {
+        listOf<(String) -> String>(
+            { it.replace("if (!executor.isShutdown) throw failure", "") },
+            { it.replace("if (!executor.isShutdown) throw failure", "if (executor.isShutdown) throw failure") },
+            { it.replace("Thread.currentThread().interrupt()", "") },
+            { it.replace("if (!executor.isShutdown) throw failure", "if (!executor.isShutdown) return") },
+        ).forEach { transform ->
+            assertViolation(audioRuntimeFaultStageViolations(mutate(ANDROID_PATH, transform)),
+                "synchronous `InterruptedException` catch")
+        }
+    }
+
+    @Test
+    fun androidWorkerCancellationCannotBroadenToProviderFaultsOrSuppressCleanup() {
+        listOf("Throwable", "Exception", "IllegalStateException", "RuntimeException").forEach { type ->
+            val sources = mutate(ANDROID_PATH) { it.replace("failure: InterruptedException", "failure: $type") }
+            assertViolation(audioRuntimeFaultStageViolations(sources), "synchronous `$type` catch")
+        }
+        val providerCatch = mutate(ANDROID_PATH) { code ->
+            code.replace("track.play()", "try { track.play() } catch (_: IllegalStateException) { Unit }")
+        }
+        assertViolation(audioRuntimeFaultStageViolations(providerCatch), "synchronous `IllegalStateException` catch")
+        val conditionalCleanup = mutate(ANDROID_PATH) { code ->
+            code.replace("track.release()", "if (!executor.isShutdown) track.release()")
+        }
+        assertViolation(audioRuntimeFaultStageViolations(conditionalCleanup), "synchronous `InterruptedException` catch")
+    }
+
+    @Test
+    fun shutdownCancellationCatchCannotMoveToSynchronousPlayCloseOrResource() {
+        listOf(
+            ANDROID_PATH to "executor.execute { synthesize(request) }",
+            ANDROID_PATH to "executor.shutdownNow()",
+            AUDIO_RESOURCE_PATH to "platform.close()",
+            AUDIO_RESOURCE_PATH to "play(request)",
+        ).forEach { (path, call) ->
+            val sources = mutate(path) { code ->
+                code.replace(call, "try { $call } catch (failure: InterruptedException) { " +
+                    "Thread.currentThread().interrupt(); if (!executor.isShutdown) throw failure }")
+            }
+            assertViolation(audioRuntimeFaultStageViolations(sources), "synchronous `InterruptedException` catch")
+        }
+    }
+
+    @Test
+    fun androidCancellationWorkerMustRemainPrivateAndOnlyExecutorInvoked() {
+        val publicWorker = mutate(ANDROID_PATH) { it.replace("private fun synthesize", "fun synthesize") }
+        val synchronousCall = mutate(ANDROID_PATH) {
+            it.replace("executor.shutdownNow()", "executor.shutdownNow(); synthesize(request)")
+        }
+        listOf(publicWorker, synchronousCall).forEach { sources ->
+            assertViolation(audioRuntimeFaultStageViolations(sources), "synchronous `InterruptedException` catch")
+        }
     }
 
     @Test
@@ -200,8 +276,17 @@ class AudioFaultStageVerifierTest {
                     private fun synthesize(request: ToneRequest) {
                         val track = AudioTrack.Builder()
                         val samples = ShortArray(1)
-                        val written = track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
-                        track.release()
+                        try {
+                            val written = track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
+                            check(written == samples.size)
+                            track.play()
+                            Thread.sleep((request.durationSeconds * 1_000f).toLong().coerceAtLeast(1L))
+                        } catch (failure: InterruptedException) {
+                            Thread.currentThread().interrupt()
+                            if (!executor.isShutdown) throw failure
+                        } finally {
+                            track.release()
+                        }
                     }
                 }
             """.trimIndent(),
@@ -248,15 +333,9 @@ class AudioFaultStageVerifierTest {
                 }
             """.trimIndent(),
         ),
-        SourceDocument(RESOURCE_TEST_PATH, RESOURCE_TEST_TOKEN),
-        SourceDocument(GAMEPLAY_TEST_PATH, GAMEPLAY_TEST_TOKEN),
-        SourceDocument(
-            DESKTOP_TEST_PATH,
-            listOf(DESKTOP_TEST_TOKEN, DESKTOP_QUEUE_TEST_TOKEN, DESKTOP_BUFFER_TEST_TOKEN).joinToString("\n"),
-        ),
         SourceDocument(
             ANDROID_TEST_PATH,
-            listOf(ANDROID_TEST_TOKEN, ANDROID_QUEUE_TEST_TOKEN, ANDROID_BUFFER_TEST_TOKEN).joinToString("\n"),
+            listOf(ANDROID_TEST_TOKEN, ANDROID_QUEUE_TEST_TOKEN, ANDROID_BUFFER_TEST_TOKEN, ANDROID_CANCEL_TEST_TOKEN).joinToString("\n"),
         ),
         SourceDocument(WEB_TEST_PATH, WEB_TEST_TOKEN),
     )
@@ -273,6 +352,9 @@ class AudioFaultStageVerifierTest {
             Synchronous Audio Resource and platform calls propagate under runtime-fault policy
             Android and Desktop synthesis faults escape their detached executor `Runnable` to the runtime
             no caller-propagation claim
+            Only Android worker InterruptedException during executor shutdown is expected cancellation
+            restore the interrupt flag and rethrow unless executor.isShutdown
+            AudioTrack.release remains in finally
             `.catch(() => undefined)`
             post-acceptance mechanical projection loss
             synchronous JavaScript invocation and graph faults still propagate
@@ -303,26 +385,14 @@ class AudioFaultStageVerifierTest {
             "app/shared/src/androidMain/kotlin/kinetickk/app/shared/PlatformCapabilities.android.kt"
         const val WEB_PATH =
             "app/shared/src/wasmJsMain/kotlin/kinetickk/app/shared/PlatformCapabilities.wasm.kt"
-        const val RESOURCE_TEST_PATH =
-            "resource/audio/impl/src/commonTest/kotlin/kinetickk/resource/audio/impl/DefaultAudioServiceTest.kt"
-        const val GAMEPLAY_TEST_PATH =
-            "ball/gameplay/impl/src/commonTest/kotlin/kinetickk/ball/gameplay/impl/GameComponentTest.kt"
-        const val DESKTOP_TEST_PATH =
-            "app/shared/src/desktopTest/kotlin/kinetickk/app/shared/PlatformCapabilitiesDesktopTest.kt"
         const val ANDROID_TEST_PATH =
             "app/shared/src/androidDeviceTest/kotlin/kinetickk/app/shared/PlatformCapabilitiesAndroidTest.kt"
         const val WEB_TEST_PATH =
             "app/shared/src/wasmJsTest/kotlin/kinetickk/app/shared/PlatformCapabilitiesWebTest.kt"
-        const val RESOURCE_TEST_TOKEN =
-            "capabilityFaultsPropagateForUnlockPlayAndCloseWithoutInventingClosedState"
-        const val GAMEPLAY_TEST_TOKEN =
-            "audioFaultsPropagateAfterAcceptedFramesCommitAndDrainExactResults"
-        const val DESKTOP_TEST_TOKEN = "audioBrokerIsInstanceOwnedAndCloseIsIdempotent"
-        const val DESKTOP_QUEUE_TEST_TOKEN = "workerAndDiscardOldestQueueEnforceOneAndTwentyFour"
-        const val DESKTOP_BUFFER_TEST_TOKEN = "synthesisBufferAcceptsMaximumDurationAndRejectsNext"
         const val ANDROID_TEST_TOKEN = "androidAudioBrokerIsInstanceOwnedAndCloseIsIdempotent"
         const val ANDROID_QUEUE_TEST_TOKEN = "androidWorkerAndDiscardOldestQueueEnforceOneAndTwentyFour"
         const val ANDROID_BUFFER_TEST_TOKEN = "androidSynthesisBufferAcceptsMaximumDurationAndRejectsNext"
+        const val ANDROID_CANCEL_TEST_TOKEN = "closingDuringPlaybackCancelsWithoutAnUncaughtWorkerFailure"
         const val WEB_TEST_TOKEN =
             "webAudioSynchronousProviderFaultsPropagateWithoutFabricatingClosedState"
     }

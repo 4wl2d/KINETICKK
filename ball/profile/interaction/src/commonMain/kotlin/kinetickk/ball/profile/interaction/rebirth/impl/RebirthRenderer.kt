@@ -3,166 +3,89 @@
 
 package kinetickk.ball.profile.interaction.rebirth.impl
 
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.RebirthProfile
-import kinetickk.foundation.design.Acid
-import kinetickk.foundation.design.Cyan
-import kinetickk.foundation.design.Muted
-import kinetickk.foundation.design.Orange
-import kinetickk.foundation.design.Red
-import kinetickk.foundation.design.TextMeasurer
-import kinetickk.foundation.design.White
-import kinetickk.foundation.design.d
-import kinetickk.foundation.design.drawFooterBack
-import kinetickk.foundation.design.drawLabel
-import kinetickk.foundation.design.drawOverlayFrame
-import kinetickk.foundation.design.formatMultiplier
-import kinetickk.foundation.design.overlayBounds
+import kinetickk.ball.content.api.localizedContent
+import kinetickk.ball.profile.interaction.*
+import kinetickk.ball.profile.interaction.localization.ProfileText
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthRenderModel
-import kotlin.math.max
-import kotlin.math.min
+import kinetickk.foundation.common.localization.text
+import kinetickk.foundation.design.*
 
-internal fun DrawScope.drawRebirth(
-    model: RebirthRenderModel,
-    confirmationArmed: Boolean,
-    textMeasurer: TextMeasurer,
-) {
-    drawRect(Color(0xD9050610))
-    val bounds = overlayBounds()
+@Composable
+internal fun RebirthContent(model: RebirthRenderModel, confirmationArmed: Boolean, scale: Float, onAction: (RebirthAction) -> Unit) {
+    val language = LocalAppLanguage.current
     val current = model.current
     val next = model.next
-    val maximumTier = model.isMaximumTier
-    drawOverlayFrame(bounds, Orange)
-    drawLabel(textMeasurer, "REBIRTH PROTOCOL", bounds.left + d(24f), bounds.top + d(24f), 20f, Orange, weight = FontWeight.Bold)
-    drawLabel(
-        textMeasurer,
-        "PERMANENT THREAT // TIER ${current.tier} > ${next.tier}",
-        bounds.right - d(24f),
-        bounds.top + d(30f),
-        8f,
-        White,
-        alignRight = true,
-    )
-
-    val contentLeft = bounds.left + d(24f)
-    val cardTop = bounds.top + d(78f)
-    val cardGap = d(14f)
-    val cardWidth = (bounds.width - d(62f)) * 0.5f
-    val cardHeight = d(92f)
-    drawRebirthTierCard(textMeasurer, current, "CURRENT CYCLE", contentLeft, cardTop, cardWidth, cardHeight, Cyan)
-    drawRebirthTierCard(textMeasurer, next, "NEXT CYCLE", contentLeft + cardWidth + cardGap, cardTop, cardWidth, cardHeight, Orange)
-
-    val statsTop = cardTop + cardHeight + d(14f)
-    val statsHeight = min(d(220f), max(d(176f), bounds.bottom - d(210f) - statsTop))
-    drawRebirthHostileStats(textMeasurer, current, next, contentLeft, statsTop, cardWidth, statsHeight)
-    drawRebirthRewardStats(textMeasurer, current, next, contentLeft + cardWidth + cardGap, statsTop, cardWidth, statsHeight)
-
-    drawLabel(textMeasurer, "RESET: RUN BUILD", bounds.center.x, bounds.bottom - d(194f), 9f, Orange, centered = true, weight = FontWeight.Bold)
-    drawLabel(textMeasurer, "KEPT: MATTER // LAB // ARMORY // CODEX", bounds.center.x, bounds.bottom - d(172f), 9f, Acid, centered = true, weight = FontWeight.Bold)
-    drawLabel(textMeasurer, "LIFETIME UNLOCKS + SETTINGS ALSO REMAIN", bounds.center.x, bounds.bottom - d(151f), 7f, Muted, centered = true)
-
-    val actionLeft = bounds.left + d(24f)
-    val actionTop = bounds.bottom - d(118f)
-    val actionWidth = bounds.width - d(48f)
-    val actionAccent = when {
-        confirmationArmed -> Red
-        model.canAdvance && !maximumTier -> Acid
-        else -> Muted
+    ProfilePanel(language.text(ProfileText.RebirthTitle), language.text(ProfileText.ThreatTier, current.tier, next.tier),
+        scale, "profile-rebirth", onBack = { onAction(RebirthAction.Back) }) { wide ->
+        if (wide) Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+            TierSummary(current, language.text(ProfileText.CurrentCycle), scale, Modifier.weight(1f))
+            TierSummary(next, language.text(ProfileText.NextCycle), scale, Modifier.weight(1f))
+        } else {
+            TierSummary(current, language.text(ProfileText.CurrentCycle), scale)
+            TierSummary(next, language.text(ProfileText.NextCycle), scale)
+        }
+        ProfileDivider()
+        ProfileLabel(language.text(ProfileText.HostileEscalation), scale, bold = true)
+        RebirthStat(ProfileText.OpeningHostiles, current.openingEnemyCount.toString(), next.openingEnemyCount.toString(), scale, Orange)
+        RebirthStat(ProfileText.EnemyCap, formatMultiplier(current.enemyCapMultiplier, language), formatMultiplier(next.enemyCapMultiplier, language), scale, Orange)
+        RebirthStat(ProfileText.SpawnRate, formatMultiplier(current.spawnRateMultiplier, language), formatMultiplier(next.spawnRateMultiplier, language), scale, Orange)
+        RebirthStat(ProfileText.EnemyIntegrity, formatMultiplier(current.enemyHealthMultiplier, language), formatMultiplier(next.enemyHealthMultiplier, language), scale, Orange)
+        RebirthStat(ProfileText.EnemySpeed, formatMultiplier(current.enemySpeedMultiplier, language), formatMultiplier(next.enemySpeedMultiplier, language), scale, Orange)
+        RebirthStat(ProfileText.IncomingDamage, formatMultiplier(current.incomingDamageMultiplier, language), formatMultiplier(next.incomingDamageMultiplier, language), scale, Orange)
+        ProfileDivider()
+        ProfileLabel(language.text(ProfileText.CycleCompensation), scale, bold = true)
+        RebirthStat(ProfileText.ThreatAdvance, language.text(ProfileText.Seconds, current.threatTimeOffsetSeconds.toInt()), language.text(ProfileText.Seconds, next.threatTimeOffsetSeconds.toInt()), scale, Orange)
+        RebirthStat(ProfileText.PlayerPower, formatMultiplier(current.playerPowerMultiplier, language), formatMultiplier(next.playerPowerMultiplier, language), scale, Cyan)
+        RebirthStat(ProfileText.CoreIntegrity, "+${current.playerIntegrityBonus.toInt()}", "+${next.playerIntegrityBonus.toInt()}", scale, Cyan)
+        RebirthStat(ProfileText.KineticMatter, formatMultiplier(current.matterGainMultiplier, language), formatMultiplier(next.matterGainMultiplier, language), scale, Cyan)
+        RebirthStat(ProfileText.BonusRerolls, "+${current.bonusRerolls}", "+${next.bonusRerolls}", scale, Cyan)
+        ProfileDivider()
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            ProfileLabel(language.text(ProfileText.ResetBuild), scale, Orange)
+            ProfileLabel(language.text(ProfileText.Kept), scale, Muted, size = 11f)
+            ProfileLabel(language.text(ProfileText.LifetimeKept), scale, Muted, size = 11f)
+        }
+        val action = when {
+            model.isMaximumTier -> language.text(ProfileText.MaxRebirth)
+            !model.canAdvance -> language.text(ProfileText.LockedRebirth)
+            confirmationArmed -> language.text(ProfileText.ConfirmRebirth, next.tier)
+            else -> language.text(ProfileText.ArmRebirth, current.tier, next.tier)
+        }
+        ProfileLabel(language.text(when {
+            model.isMaximumTier -> ProfileText.AllDirectives
+            !model.canAdvance -> ProfileText.DefeatArchitect
+            confirmationArmed -> ProfileText.SecondPress
+            else -> ProfileText.FirstPress
+        }, current.tier), scale, Muted, size = 11f)
+        ProfileButton(action, scale, "profile-rebirth-advance", Modifier.fillMaxWidth(),
+            enabled = model.canAdvance && !model.isMaximumTier, accent = if (confirmationArmed) Red else Cyan) {
+            onAction(RebirthAction.AdvanceRequested)
+        }
     }
-    val actionLabel = when {
-        maximumTier -> "MAXIMUM REBIRTH TIER"
-        !model.canAdvance -> "REBIRTH LOCKED"
-        confirmationArmed -> "CONFIRM REBIRTH // ENTER TIER ${next.tier}"
-        else -> "ARM REBIRTH // TIER ${current.tier} > ${next.tier}"
+}
+
+@Composable
+private fun TierSummary(profile: RebirthProfile, label: String, scale: Float, modifier: Modifier = Modifier) {
+    val language = LocalAppLanguage.current
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ProfileLabel(label, scale, Muted, size = 10f)
+        ProfileLabel(language.text(ProfileText.TierDirective, profile.tier, profile.directive.displayName.localizedContent(language)), scale, bold = true)
+        ProfileLabel(profile.directive.description.localizedContent(language), scale, Muted, size = 11f)
     }
-    val actionDetail = when {
-        maximumTier -> "ALL THREAT DIRECTIVES CLEARED"
-        !model.canAdvance -> "DEFEAT THE ARCHITECT ON TIER ${current.tier}"
-        confirmationArmed -> "SECOND PRESS RESETS THE RUN BUILD"
-        else -> "FIRST PRESS ARMS THIS TRANSITION"
+}
+
+@Composable
+private fun RebirthStat(label: ProfileText, current: String, next: String, scale: Float, accent: Color) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        ProfileLabel(LocalAppLanguage.current.text(label), scale, Muted, size = 11f, modifier = Modifier.weight(1f))
+        ProfileLabel(current, scale, Muted, size = 11f)
+        ProfileLabel("→", scale, Muted, size = 11f)
+        ProfileLabel(next, scale, if (current == next) White else accent, size = 11f, bold = true)
     }
-    drawRect(actionAccent.copy(alpha = 0.11f), Offset(actionLeft, actionTop), Size(actionWidth, d(50f)))
-    drawRect(actionAccent, Offset(actionLeft, actionTop), Size(actionWidth, d(50f)), style = Stroke(d(if (confirmationArmed) 2f else 1.4f)))
-    drawLabel(textMeasurer, actionLabel, bounds.center.x, actionTop + d(7f), 11f, actionAccent, centered = true, weight = FontWeight.Bold)
-    drawLabel(textMeasurer, actionDetail, bounds.center.x, actionTop + d(28f), 7f, if (model.canAdvance) White else Muted, centered = true)
-    drawFooterBack(textMeasurer, bounds, Orange)
-}
-
-private fun DrawScope.drawRebirthTierCard(
-    textMeasurer: TextMeasurer,
-    profile: RebirthProfile,
-    eyebrow: String,
-    x: Float,
-    y: Float,
-    width: Float,
-    height: Float,
-    accent: Color,
-) {
-    drawRect(Color(0x99101225), Offset(x, y), Size(width, height))
-    drawRect(accent.copy(alpha = 0.75f), Offset(x, y), Size(width, height), style = Stroke(d(1f)))
-    drawLabel(textMeasurer, eyebrow, x + d(13f), y + d(10f), 7f, Muted, weight = FontWeight.Bold)
-    drawLabel(textMeasurer, "TIER ${profile.tier} // ${profile.directive.displayName.uppercase()}", x + d(13f), y + d(30f), 11f, accent, weight = FontWeight.Bold)
-    drawLabel(textMeasurer, profile.directive.description, x + d(13f), y + d(55f), 7f, White, maxWidth = width - d(26f), maxLines = 2)
-}
-
-private fun DrawScope.drawRebirthHostileStats(
-    textMeasurer: TextMeasurer,
-    current: RebirthProfile,
-    next: RebirthProfile,
-    x: Float,
-    y: Float,
-    width: Float,
-    height: Float,
-) {
-    drawRect(Color(0x80101225), Offset(x, y), Size(width, height))
-    drawRect(Red.copy(alpha = 0.45f), Offset(x, y), Size(width, height), style = Stroke(d(1f)))
-    drawLabel(textMeasurer, "HOSTILE ESCALATION", x + d(13f), y + d(11f), 8f, Red, weight = FontWeight.Bold)
-    val rowY = y + d(38f)
-    val rowStep = (height - d(62f)) / 5f
-    drawRebirthStatRow(textMeasurer, "OPENING HOSTILES", current.openingEnemyCount.toString(), next.openingEnemyCount.toString(), x, rowY, width, Red)
-    drawRebirthStatRow(textMeasurer, "ACTIVE ENEMY CAP", formatMultiplier(current.enemyCapMultiplier), formatMultiplier(next.enemyCapMultiplier), x, rowY + rowStep, width, Red)
-    drawRebirthStatRow(textMeasurer, "SPAWN RATE", formatMultiplier(current.spawnRateMultiplier), formatMultiplier(next.spawnRateMultiplier), x, rowY + rowStep * 2f, width, Red)
-    drawRebirthStatRow(textMeasurer, "ENEMY INTEGRITY", formatMultiplier(current.enemyHealthMultiplier), formatMultiplier(next.enemyHealthMultiplier), x, rowY + rowStep * 3f, width, Red)
-    drawRebirthStatRow(textMeasurer, "ENEMY SPEED", formatMultiplier(current.enemySpeedMultiplier), formatMultiplier(next.enemySpeedMultiplier), x, rowY + rowStep * 4f, width, Red)
-    drawRebirthStatRow(textMeasurer, "INCOMING DAMAGE", formatMultiplier(current.incomingDamageMultiplier), formatMultiplier(next.incomingDamageMultiplier), x, rowY + rowStep * 5f, width, Red)
-}
-
-private fun DrawScope.drawRebirthRewardStats(
-    textMeasurer: TextMeasurer,
-    current: RebirthProfile,
-    next: RebirthProfile,
-    x: Float,
-    y: Float,
-    width: Float,
-    height: Float,
-) {
-    drawRect(Color(0x80101225), Offset(x, y), Size(width, height))
-    drawRect(Acid.copy(alpha = 0.45f), Offset(x, y), Size(width, height), style = Stroke(d(1f)))
-    drawLabel(textMeasurer, "CYCLE COMPENSATION", x + d(13f), y + d(11f), 8f, Acid, weight = FontWeight.Bold)
-    val rowY = y + d(38f)
-    val rowStep = (height - d(67f)) / 4f
-    drawRebirthStatRow(textMeasurer, "THREAT ADVANCE", "+${current.threatTimeOffsetSeconds.toInt()}s", "+${next.threatTimeOffsetSeconds.toInt()}s", x, rowY, width, Orange)
-    drawRebirthStatRow(textMeasurer, "PLAYER POWER", formatMultiplier(current.playerPowerMultiplier), formatMultiplier(next.playerPowerMultiplier), x, rowY + rowStep, width, Acid)
-    drawRebirthStatRow(textMeasurer, "CORE INTEGRITY", "+${current.playerIntegrityBonus.toInt()}", "+${next.playerIntegrityBonus.toInt()}", x, rowY + rowStep * 2f, width, Acid)
-    drawRebirthStatRow(textMeasurer, "KINETIC MATTER", formatMultiplier(current.matterGainMultiplier), formatMultiplier(next.matterGainMultiplier), x, rowY + rowStep * 3f, width, Acid)
-    drawRebirthStatRow(textMeasurer, "BONUS REROLLS", "+${current.bonusRerolls}", "+${next.bonusRerolls}", x, rowY + rowStep * 4f, width, Acid)
-}
-
-private fun DrawScope.drawRebirthStatRow(
-    textMeasurer: TextMeasurer,
-    label: String,
-    current: String,
-    next: String,
-    x: Float,
-    y: Float,
-    width: Float,
-    accent: Color,
-) {
-    drawLabel(textMeasurer, label, x + d(13f), y, 7f, Muted, weight = FontWeight.Bold)
-    drawLabel(textMeasurer, "$current  >  $next", x + width - d(13f), y, 7f, accent, alignRight = true, weight = FontWeight.Bold)
 }

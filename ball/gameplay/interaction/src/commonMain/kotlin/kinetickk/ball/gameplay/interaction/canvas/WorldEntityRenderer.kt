@@ -3,6 +3,9 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
+import kinetickk.ball.gameplay.interaction.localization.GameplayText
+import kinetickk.foundation.common.localization.text
+
 import kinetickk.foundation.design.*
 
 import androidx.compose.ui.geometry.Offset
@@ -265,7 +268,7 @@ internal fun DrawScope.drawTotem(engine: GameplayRenderModel, shakeX: Float, sha
         drawPolygon(location, 30f, 6, totem.pulse * 0.25f, Acid.copy(alpha = 0.18f), Fill)
         drawPolygon(location, 30f, 6, totem.pulse * 0.25f, Acid, Stroke(2f))
         drawPolygon(location, 15f, 3, -totem.pulse, White, Stroke(1.5f))
-        drawLabel(textMeasurer, "WEAPON TOTEM", location.x, location.y + 43f, 10f, Acid, centered = true)
+        drawLabel(textMeasurer, textMeasurer.language.text(GameplayText.WeaponTotem), location.x, location.y + 43f, 10f, Acid, centered = true)
     } else {
         val margin = 34f
         val edge = Offset(clamp(location.x, margin, size.width - margin), clamp(location.y, margin, size.height - margin))

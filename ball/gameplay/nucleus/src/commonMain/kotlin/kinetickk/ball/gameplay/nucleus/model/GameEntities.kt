@@ -29,6 +29,8 @@ internal data class Enemy private constructor(
     var dead: Boolean = false,
     var relicKillProcsEligible: Boolean = false,
     var relicQualificationCooldown: Float = 0f,
+    var characterMarkTime: Float = 0f,
+    var lastCharacterDash: Int = -1,
     val relicCounters: CopyOnWriteIntArray,
     val relicTimers: CopyOnWriteFloatArray,
     val relicValues: CopyOnWriteFloatArray,
@@ -264,4 +266,5 @@ internal data class DelayedRelicHit(
     val enemyId: Int,
     var delay: Float,
     val damage: Float,
+    val linkedEnemyId: Int = -1,
 )

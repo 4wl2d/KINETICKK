@@ -22,7 +22,6 @@ import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PlayerProfile
-import kinetickk.ball.profile.api.ProfileModuleResultDelivery
 import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileSnapshot
@@ -38,8 +37,7 @@ internal val TestProfilePolicy: ProfilePolicySnapshot by lazy(::profilePolicyFix
 internal fun testProfileComponent(
     resource: ProfileResource = RecordingProfileResource(),
     policy: ProfilePolicySnapshot = TestProfilePolicy,
-    commandResultSink: (ProfileModuleResultDelivery) -> Unit = {},
-): DefaultProfileComponent = DefaultProfileComponent(resource, policy, commandResultSink)
+): DefaultProfileComponent = DefaultProfileComponent(resource, policy)
 
 internal fun testDefaultProfile(policy: ProfilePolicySnapshot = TestProfilePolicy): PlayerProfile {
     val defaultWeapon = policy.weapons.first().id
@@ -59,6 +57,7 @@ internal fun testDefaultProfile(policy: ProfilePolicySnapshot = TestProfilePolic
 
 internal fun representativeProfile(policy: ProfilePolicySnapshot = TestProfilePolicy): PlayerProfile =
     testDefaultProfile(policy).copy(
+        characterAchievements = kinetickk.ball.profile.api.CharacterAchievementProgress(eliteKills = 3, dashHits = 20),
         preferences = PlayerPreferences(
             soundEnabled = true,
             musicEnabled = false,
@@ -99,6 +98,7 @@ internal fun queriedProfile(component: DefaultProfileComponent): PlayerProfile {
         labProgress = lab.snapshot.progress,
         collection = collection.collection,
         rebirthProgress = rebirth.snapshot.progress,
+        characterAchievements = component.query(ProfileQuery.GetHomeProgress).characterAchievements,
     )
 }
 
@@ -166,9 +166,7 @@ internal class RecordingProfileResource(
 private fun profilePolicyFixture(): ProfilePolicySnapshot = ProfilePolicySnapshot(
     version = ContentVersion("test-content"),
     itemCount = 400,
-    coreShapes = listOf(0L, 25L, 90L).mapIndexed { index, cost ->
-        CoreShapeDefinition(CoreShape.entries[index], cost)
-    }.toImmutableList(),
+    coreShapes = CoreShape.entries.map { CoreShapeDefinition(it) }.toImmutableList(),
     weapons = intArrayOf(0, 25, 55, 95, 145, 215, 305, 430, 610, 860, 1_200, 1_650)
         .mapIndexed { index, cost ->
             WeaponDefinition(

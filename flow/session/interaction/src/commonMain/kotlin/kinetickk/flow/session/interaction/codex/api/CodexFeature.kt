@@ -11,6 +11,7 @@ import kinetickk.foundation.collections.immutableListOf
 
 data class CodexRunStacks(
     val itemStacks: ImmutableList<Int> = immutableListOf(),
+    val build: kinetickk.ball.gameplay.api.GameplayBuildSummaryProjection? = null,
 )
 
 data class CodexRenderModel(

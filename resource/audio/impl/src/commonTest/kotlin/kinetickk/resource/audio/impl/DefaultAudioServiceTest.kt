@@ -195,6 +195,11 @@ class DefaultAudioServiceTest {
         val player = RecordingTonePlayer()
         val service = DefaultAudioService(player)
 
+        service.updatePreferences(AudioPreferences(musicEnabled = false, masterVolume = 0.25f))
+        service.advance(0.016f, listOf(HURT_REQUEST))
+        assertEquals(HURT_REQUEST.copy(gain = 0.055f), player.tones.single())
+        player.tones.clear()
+
         service.updatePreferences(AudioPreferences(musicEnabled = false, masterVolume = Float.NaN))
         service.advance(0.016f, listOf(HURT_REQUEST))
         assertTrue(player.tones.isEmpty())

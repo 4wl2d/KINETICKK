@@ -3,32 +3,37 @@
 
 package kinetickk.ball.gameplay.impl.performance
 
+import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.gameplay.api.GameplayAcceptance
-import kinetickk.ball.gameplay.api.GameplayCommandIngressResult
-import kinetickk.ball.gameplay.api.GameplayCommandSource
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
-import kinetickk.ball.gameplay.api.GameplayModuleCommand
-import kinetickk.ball.gameplay.api.GameplayModuleCommandRequest
-import kinetickk.ball.gameplay.api.GameplayModuleResultDelivery
 import kinetickk.ball.gameplay.api.GameplayRunPhase
-import kinetickk.ball.gameplay.api.GameplaySemanticHandle
 import kinetickk.ball.gameplay.api.RunId
 import kinetickk.ball.gameplay.impl.GameComponent
+import kinetickk.ball.gameplay.impl.GameplayCommandTestCaller
+import kinetickk.ball.gameplay.api.GameplayRunStarted
 import kinetickk.ball.gameplay.impl.GameplayAudioExecutor
 import kinetickk.ball.gameplay.impl.SyntheticGameplayContent
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
+import kinetickk.ball.gameplay.interaction.fx.BuildNotificationProjection
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
+import kinetickk.ball.gameplay.nucleus.render.CharacterAbilityProjection
+import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot
-import kinetickk.ball.profile.api.GameplayProfileRoute
+import kinetickk.foundation.dispatch.InlineReply
+import kinetickk.ball.profile.api.ProfileReadPort
+import kinetickk.ball.profile.api.ProfileProgress
+import kinetickk.ball.profile.api.ProfileProgressApplied
+import kinetickk.ball.profile.api.ProfileRefusal
+import kinetickk.ball.profile.api.GameplayProgressUpdate
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.PlayerProfile
+import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PreferencesProjection
-import kinetickk.ball.profile.api.ProfileCommandIngressResult
-import kinetickk.ball.profile.api.ProfileModuleCommandRequest
 import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileRunBootstrapResult
@@ -40,7 +45,7 @@ import kinetickk.performance.BenchmarkValidation
 import kinetickk.performance.BenchmarkValidationContext
 import kinetickk.performance.runBenchmarkSuite
 
-private const val SUITE_VERSION = "gameplay-component-v2"
+private const val SUITE_VERSION = "gameplay-component-v3"
 private const val DEFAULT_SEED = 731_991
 private const val OPERATIONS_PER_ITERATION = 128
 private val BENCHMARK_RUN_ID = RunId(31)
@@ -236,26 +241,14 @@ private fun newPreparedPipeline(seed: Int, pauseBeforeProbe: Boolean): PreparedP
         content = SyntheticGameplayContent,
         profilePort = BenchmarkProfilePort,
         audioExecutor = audio,
-        commandResultSink = ::ignoreGameplayCommandResult,
+        profileProgress = BenchmarkProfilePort,
         seed = seed,
     )
-    val startRequest = GameplayModuleCommandRequest(
-        semanticHandle = GameplaySemanticHandle(
-            sourceInstance = GameplayCommandSource.LocalSession,
-            sourceRevision = 0L,
-            sourceOrdinal = 0,
-        ),
-        sourceOrdinal = 0,
-        targetInstance = component.instanceId,
-        command = GameplayModuleCommand.StartRun,
-    )
-    check(
-        component.acceptFromSession(
-            request = startRequest,
-            causalScope = 1L,
-            causalDepth = 0,
-        ) is GameplayCommandIngressResult.Accepted,
-    ) { "Benchmark GameComponent fixture could not start" }
+    val start = GameplayCommandTestCaller<GameplayRunStarted>()
+    start.call(component::startRun)
+    check(start.applied.single().runId == BENCHMARK_RUN_ID && start.refused.isEmpty()) {
+        "Benchmark GameComponent fixture could not start"
+    }
     check(component.stateSnapshot().revision.value == 1L)
     check(component.stateSnapshot().phase == GameplayRunPhase.RUNNING)
     if (pauseBeforeProbe) {
@@ -271,9 +264,7 @@ private fun newPreparedPipeline(seed: Int, pauseBeforeProbe: Boolean): PreparedP
     return PreparedPipeline(component, audio)
 }
 
-private fun ignoreGameplayCommandResult(@Suppress("UNUSED_PARAMETER") delivery: GameplayModuleResultDelivery) = Unit
-
-private object BenchmarkProfilePort : GameplayProfileRoute {
+private object BenchmarkProfilePort : ProfileReadPort, ProfileProgress {
     private val profile = PlayerProfile()
     private val snapshot = GameplayProfileSnapshot(
         preferences = profile.preferences,
@@ -286,14 +277,17 @@ private object BenchmarkProfilePort : GameplayProfileRoute {
 
     override val instanceId = LOCAL_PROFILE_INSTANCE_ID
 
-    override fun acceptFromGameplay(
-        request: ProfileModuleCommandRequest,
-        causalScope: Long,
-        causalDepth: Int,
-    ): ProfileCommandIngressResult = error(
-        "Opening-frame GameComponent benchmark unexpectedly attempted a Profile command: " +
-            "$request scope=$causalScope depth=$causalDepth",
-    )
+    override fun applyGameplayProgress(
+        update: GameplayProgressUpdate,
+        reply: InlineReply<ProfileProgressApplied, ProfileRefusal>,
+    ): Unit = error("Opening-frame GameComponent benchmark unexpectedly attempted Profile progress: $update")
+
+    override fun query(query: ProfileQuery.GetHomeProgress): kinetickk.ball.profile.api.HomeProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetCollection): kinetickk.ball.profile.api.CollectionProjection = error("unused")
+    override fun query(query: ProfileQuery.GetLabProgress): kinetickk.ball.profile.api.LabProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetLoadout): kinetickk.ball.profile.api.LoadoutProjection = error("unused")
+    override fun query(query: ProfileQuery.GetRebirthProgress): kinetickk.ball.profile.api.RebirthProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetPersistenceStatus): kinetickk.ball.profile.api.PersistenceStatusProjection = error("unused")
 
     override fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection =
         RunBootstrapProjection(
@@ -381,7 +375,7 @@ private fun canonicalPipelineFingerprint(
     check(state.revision.value == expectedPriorRevision + 1L)
     check(snapshot.renderModel === render)
     check(state.content === render.content)
-    check(state.pendingProfileCommand == null)
+    check(!state.progressPending)
     check(render.phase == state.phase.toRenderPhase())
 
     var signature = -3_750_763_034_362_895_579L
@@ -405,7 +399,7 @@ private fun canonicalRenderFingerprint(render: GameplayRenderModel): Long {
     var signature = -6_248_656_297_887_476_405L
     signature = mix(signature, render.content.version.value.hashCode())
     signature = mix(signature, render.phase.ordinal)
-    signature = mix(signature, render.settings.hashCode())
+    signature = mixLong(signature, canonicalPreferencesFingerprint(render.settings))
     signature = mix(signature, render.rebirthLevel)
     signature = mix(signature, render.screenWidth.toRawBits())
     signature = mix(signature, render.screenHeight.toRawBits())
@@ -472,7 +466,9 @@ private fun canonicalRenderFingerprint(render: GameplayRenderModel): Long {
     signature = mix(signature, render.acquiredItemCount)
     signature = mix(signature, render.recentItem?.id ?: -1)
     signature = mix(signature, render.equippedRelics.size)
-    render.equippedRelics.forEach { relic -> signature = mix(signature, relic.hashCode()) }
+    render.equippedRelics.forEach { relic ->
+        signature = mixLong(signature, canonicalRelicFingerprint(relic))
+    }
     signature = mix(signature, render.morningstarAngle.toRawBits())
     signature = mix(signature, render.morningstarX.toRawBits())
     signature = mix(signature, render.morningstarY.toRawBits())
@@ -482,15 +478,91 @@ private fun canonicalRenderFingerprint(render: GameplayRenderModel): Long {
     signature = mix(signature, render.weaponBeamEndX.toRawBits())
     signature = mix(signature, render.weaponBeamEndY.toRawBits())
     signature = mix(signature, render.coreShape.ordinal)
+    signature = mixLong(signature, canonicalCharacterAbilityFingerprint(render.characterAbility))
+    signature = mix(signature, render.pointsOfInterest.size)
+    render.pointsOfInterest.forEach { point ->
+        signature = mixLong(signature, canonicalPointOfInterestFingerprint(point))
+    }
+    signature = mix(signature, render.directedChoice.asInt())
     signature = mix(signature, render.choiceType.ordinal)
     signature = mix(signature, render.pendingRelicChoiceCount)
     signature = mix(signature, render.choices.size)
-    render.choices.forEach { choice -> signature = mix(signature, choice.hashCode()) }
+    render.choices.forEach { choice ->
+        signature = mixLong(signature, canonicalChoiceFingerprint(choice))
+    }
     signature = mix(signature, render.itemStacksSnapshot.size)
     render.itemStacksSnapshot.forEach { stack -> signature = mix(signature, stack) }
     signature = mix(signature, render.discoveredItemCount)
     RelicId.entries.forEach { relic -> signature = mix(signature, render.relicRank(relic)) }
     return appendRenderCollections(signature, render)
+}
+
+/** Enum hashCode is process identity on the JVM; cross-fork witnesses encode owned values. */
+internal fun canonicalPreferencesFingerprint(preferences: PlayerPreferences): Long {
+    var signature = 0L
+    signature = mix(signature, preferences.soundEnabled.asInt())
+    signature = mix(signature, preferences.musicEnabled.asInt())
+    signature = mix(signature, preferences.masterVolume.toRawBits())
+    signature = mix(signature, preferences.simulationSpeed.toRawBits())
+    signature = mix(signature, preferences.textScale.toRawBits())
+    signature = mix(signature, preferences.screenShake.asInt())
+    signature = mix(signature, preferences.particleDensity.ordinal)
+    signature = mix(signature, preferences.damageNumbers.asInt())
+    signature = mix(signature, preferences.damageNumberSize.ordinal)
+    signature = mix(signature, preferences.damageNumberFormat.ordinal)
+    return mix(signature, preferences.damageNumberTierThreshold)
+}
+
+internal fun canonicalRelicFingerprint(relic: EquippedRelic): Long =
+    mix(mix(0L, relic.id.ordinal), relic.rank)
+
+internal fun canonicalChoiceFingerprint(choice: ChoiceOption): Long {
+    var signature = mix(0L, choice.type.ordinal)
+    signature = mix(signature, choice.title.hashCode())
+    signature = mix(signature, choice.description.hashCode())
+    signature = mix(signature, choice.tag.hashCode())
+    signature = mix(signature, choice.itemId ?: -1)
+    signature = mix(signature, choice.weaponId?.ordinal ?: -1)
+    signature = mix(signature, choice.totemAction?.ordinal ?: -1)
+    signature = mix(signature, choice.relicId?.ordinal ?: -1)
+    signature = mix(signature, choice.relicAction?.ordinal ?: -1)
+    signature = mix(signature, choice.relicSlot ?: -1)
+    return mix(signature, choice.rewardFocus?.ordinal ?: -1)
+}
+
+internal fun canonicalCharacterAbilityFingerprint(ability: CharacterAbilityProjection): Long {
+    var signature = mix(0L, ability.charge.toRawBits())
+    signature = mix(signature, ability.barrier.toRawBits())
+    signature = mix(signature, ability.ringRadius.toRawBits())
+    signature = mix(signature, ability.parryWindow.toRawBits())
+    signature = mix(signature, ability.lattice.size)
+    ability.lattice.forEach { point ->
+        signature = mix(signature, point.x.toRawBits())
+        signature = mix(signature, point.y.toRawBits())
+    }
+    return signature
+}
+
+internal fun canonicalPointOfInterestFingerprint(point: PointOfInterestProjection): Long {
+    var signature = mix(0L, point.kind.ordinal)
+    signature = mix(signature, point.name.hashCode())
+    signature = mix(signature, point.x.toRawBits())
+    signature = mix(signature, point.y.toRawBits())
+    signature = mix(signature, point.active.asInt())
+    signature = mix(signature, point.remaining.toRawBits())
+    signature = mix(signature, point.nextBeacon)
+    signature = mix(signature, point.progress.toRawBits())
+    signature = mix(signature, point.defenderIds.size)
+    point.defenderIds.forEach { id -> signature = mix(signature, id) }
+    signature = mix(signature, point.warningRemaining.toRawBits())
+    return mix(signature, point.volleyAngle.toRawBits())
+}
+
+internal fun canonicalBuildNotificationFingerprint(notification: BuildNotificationProjection): Long {
+    var signature = mix(0L, notification.title.hashCode())
+    signature = mix(signature, notification.details.size)
+    notification.details.forEach { detail -> signature = mix(signature, detail.hashCode()) }
+    return mix(signature, notification.life.toRawBits())
 }
 
 private fun appendRenderCollections(initial: Long, render: GameplayRenderModel): Long {
@@ -572,7 +644,7 @@ private fun appendRenderCollections(initial: Long, render: GameplayRenderModel):
     return signature
 }
 
-private fun canonicalVisualFxFingerprint(visualFx: VisualFxProjection): Long {
+internal fun canonicalVisualFxFingerprint(visualFx: VisualFxProjection): Long {
     var signature = 1_469_598_103_934_665_603L
     signature = mix(signature, visualFx.particles.size)
     visualFx.particles.forEach { particle ->
@@ -619,6 +691,10 @@ private fun canonicalVisualFxFingerprint(visualFx: VisualFxProjection): Long {
         signature = mix(signature, arc.toX.toRawBits())
         signature = mix(signature, arc.toY.toRawBits())
         signature = mix(signature, arc.life.toRawBits())
+    }
+    signature = mix(signature, visualFx.buildNotifications.size)
+    visualFx.buildNotifications.forEach { notification ->
+        signature = mixLong(signature, canonicalBuildNotificationFingerprint(notification))
     }
     return signature
 }

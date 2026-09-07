@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.CoreShapeDefinition
 import kinetickk.ball.content.api.RebirthProfile
+import kinetickk.foundation.collections.ImmutableSet
 import kinetickk.foundation.collections.ImmutableList
 
 data class HomeUiModel(
@@ -21,12 +22,13 @@ data class HomeUiModel(
     val coreShapes: ImmutableList<CoreShapeDefinition>,
     val itemCount: Int,
     val weaponCount: Int,
+    val unlockedCoreShapes: ImmutableSet<CoreShape>,
 ) {
     fun coreShape(shape: CoreShape): CoreShapeDefinition =
         coreShapes.first { definition -> definition.id == shape }
 
     fun isCoreShapeUnlocked(shape: CoreShape): Boolean =
-        lifetimeMatter >= coreShape(shape).unlockLifetimeMatter
+        shape in unlockedCoreShapes
 }
 
 sealed interface HomeOutput {

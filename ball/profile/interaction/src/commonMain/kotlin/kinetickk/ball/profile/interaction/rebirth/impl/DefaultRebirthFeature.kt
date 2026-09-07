@@ -3,14 +3,8 @@
 
 package kinetickk.ball.profile.interaction.rebirth.impl
 
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.text.rememberTextMeasurer
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.profile.api.ProfilePort
 import kinetickk.ball.profile.api.ProfileQuery
@@ -18,7 +12,6 @@ import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.audio.ProfileAudioExecutor
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthFeature
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthOutput
-import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.resource.audio.api.AudioService
 
 class DefaultRebirthFeature(
@@ -53,12 +46,6 @@ class DefaultRebirthFeature(
         val textScale = remember(profilePort, routeToken) {
             profilePort.query(ProfileQuery.GetPreferences).preferences.textScale
         }
-        val composeTextMeasurer = rememberTextMeasurer(cacheSize = 64)
-        val textMeasurer = CanvasTextMeasurer(
-            delegate = composeTextMeasurer,
-            scale = textScale,
-        )
-
         fun dispatch(action: RebirthAction) {
             val reduction = RebirthReducer.reduce(
                 state = RebirthState(renderModelValue, confirmationArmed),
@@ -72,26 +59,6 @@ class DefaultRebirthFeature(
             }
         }
 
-        Canvas(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(routeToken, eligible, renderModelValue, confirmationArmed, onOutput) {
-                    detectTapGestures { position ->
-                        resolveRebirthPress(
-                            screenWidth = size.width.toFloat(),
-                            screenHeight = size.height.toFloat(),
-                            density = density,
-                            x = position.x,
-                            y = position.y,
-                        )?.let(::dispatch)
-                    }
-                },
-        ) {
-            drawRebirth(
-                model = renderModelValue,
-                confirmationArmed = confirmationArmed,
-                textMeasurer = textMeasurer,
-            )
-        }
+        RebirthContent(renderModelValue, confirmationArmed, textScale, ::dispatch)
     }
 }

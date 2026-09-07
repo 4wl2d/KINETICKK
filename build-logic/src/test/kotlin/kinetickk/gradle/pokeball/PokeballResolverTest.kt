@@ -126,14 +126,12 @@ class PokeballResolverTest {
         val first = resolvedManifestJson(
             leafProjects = expectedLeafProjects.reversed(),
             edges = edges.reversed(),
-            readRoutes = expectedReadRoutes.reversed(),
-            commandRoutes = expectedCommandRoutes.reversed(),
+            sources = emptyList(),
         )
         val second = resolvedManifestJson(
             leafProjects = expectedLeafProjects,
             edges = edges,
-            readRoutes = expectedReadRoutes,
-            commandRoutes = expectedCommandRoutes,
+            sources = emptyList(),
         )
 
         assertEquals(first, second)

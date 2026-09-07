@@ -3,6 +3,8 @@
 
 package kinetickk.foundation.design
 
+import kinetickk.foundation.common.localization.text
+import kinetickk.foundation.common.localization.AppLanguage
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -19,49 +21,32 @@ import androidx.compose.ui.unit.Constraints
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.sin
 
 private const val TAU = 6.2831855f
 
 fun DrawScope.drawOverlayFrame(bounds: Rect, accent: Color) {
     drawRect(OverlayPanel, bounds.topLeft, bounds.size)
-    drawRect(accent.copy(alpha = 0.85f), bounds.topLeft, bounds.size, style = Stroke(d(1.5f)))
-    drawRect(accent.copy(alpha = 0.09f), bounds.topLeft, Size(bounds.width, d(61f)))
+    drawLine(DarkLine, Offset(bounds.left, bounds.top + d(61f)), Offset(bounds.right, bounds.top + d(61f)), d(1f))
+    drawRect(accent, Offset(bounds.left, bounds.top + d(22f)), Size(d(2f), d(18f)))
 }
 
 fun DrawScope.drawFooterBack(textMeasurer: TextMeasurer, bounds: Rect, accent: Color) {
     val top = bounds.bottom - d(55f)
-    drawRect(accent.copy(alpha = 0.08f), Offset(bounds.left + d(20f), top), Size(bounds.width - d(40f), d(41f)))
-    drawRect(accent, Offset(bounds.left + d(20f), top), Size(bounds.width - d(40f), d(41f)), style = Stroke(d(1f)))
-    drawLabel(textMeasurer, "BACK [ESC / ENTER]", bounds.center.x, top + d(13f), 9f, accent, centered = true, weight = FontWeight.Bold)
-}
-
-fun DrawScope.drawStripFooter(textMeasurer: TextMeasurer, bounds: Rect, accent: Color) {
-    val top = bounds.bottom - d(55f)
-    drawRect(accent.copy(alpha = 0.08f), Offset(bounds.left, top), Size(bounds.width, d(55f)))
-    drawLine(accent.copy(alpha = 0.65f), Offset(bounds.left, top), Offset(bounds.right, top), d(1f))
-    drawLabel(textMeasurer, "BACK [ESC / ENTER]", bounds.center.x, top + d(18f), 9f, accent, centered = true, weight = FontWeight.Bold)
+    drawLine(DarkLine, Offset(bounds.left + d(20f), top), Offset(bounds.right - d(20f), top), d(1f))
+    drawLabel(textMeasurer, textMeasurer.language.text(NavigationText.Back), bounds.center.x, top + d(13f), 10f, White, centered = true)
 }
 
 fun DrawScope.drawPagedFooter(textMeasurer: TextMeasurer, bounds: Rect, page: Int, maxPage: Int, accent: Color) {
     val top = bounds.bottom - d(55f)
     val closeRight = bounds.left + bounds.width * 0.45f
     val nextLeft = bounds.right - d(85f)
-    drawRect(accent.copy(alpha = 0.07f), Offset(bounds.left, top), Size(bounds.width, d(55f)))
+    drawLine(DarkLine, Offset(bounds.left, top), Offset(bounds.right, top), d(1f))
     drawLine(DarkLine, Offset(closeRight, top), Offset(closeRight, bounds.bottom), d(1f))
     drawLine(DarkLine, Offset(nextLeft, top), Offset(nextLeft, bounds.bottom), d(1f))
-    drawLabel(textMeasurer, "BACK [ESC]", bounds.left + d(25f), top + d(18f), 9f, accent, weight = FontWeight.Bold)
-    drawLabel(textMeasurer, "‹  PAGE ${page + 1}/${maxPage + 1}", (closeRight + nextLeft) * 0.5f, top + d(18f), 9f, if (page > 0) White else Muted, centered = true)
-    drawLabel(textMeasurer, "NEXT ›", bounds.right - d(42f), top + d(18f), 8f, if (page < maxPage) White else Muted, centered = true)
-}
-
-fun DrawScope.overlayBounds(maxWidth: Float = 900f, maxHeight: Float = 650f): Rect {
-    val width = min(d(maxWidth), size.width - d(30f))
-    val height = min(d(maxHeight), size.height - d(30f))
-    val left = (size.width - width) * 0.5f
-    val top = (size.height - height) * 0.5f
-    return Rect(left, top, left + width, top + height)
+    drawLabel(textMeasurer, textMeasurer.language.text(NavigationText.BackEscape), bounds.left + d(25f), top + d(18f), 9f, accent, weight = FontWeight.Bold)
+    drawLabel(textMeasurer, textMeasurer.language.text(NavigationText.Page, page + 1, maxPage + 1), (closeRight + nextLeft) * 0.5f, top + d(18f), 9f, if (page > 0) White else Muted, centered = true)
+    drawLabel(textMeasurer, textMeasurer.language.text(NavigationText.Next), bounds.right - d(42f), top + d(18f), 8f, if (page < maxPage) White else Muted, centered = true)
 }
 
 enum class SystemGlyphStyle {
@@ -159,7 +144,7 @@ fun DrawScope.drawSystemGlyph(
 fun polar(center: Offset, radius: Float, angle: Float): Offset =
     Offset(center.x + cos(angle) * radius, center.y + sin(angle) * radius)
 
-fun formatCompact(value: Long): String {
+fun formatCompact(value: Long, language: AppLanguage = AppLanguage.English): String {
     val safe = value.coerceAtLeast(0L)
     val divisor = when {
         safe >= 1_000_000_000_000L -> 1_000_000_000_000L
@@ -168,14 +153,23 @@ fun formatCompact(value: Long): String {
         safe >= 1_000L -> 1_000L
         else -> return safe.toString()
     }
-    val suffix = when (divisor) {
-        1_000L -> "K"
-        1_000_000L -> "M"
-        1_000_000_000L -> "B"
-        else -> "T"
+    val suffix = when (language) {
+        AppLanguage.English -> when (divisor) {
+            1_000L -> "K"
+            1_000_000L -> "M"
+            1_000_000_000L -> "B"
+            else -> "T"
+        }
+        AppLanguage.Russian -> when (divisor) {
+            1_000L -> " тыс."
+            1_000_000L -> " млн"
+            1_000_000_000L -> " млрд"
+            else -> " трлн"
+        }
     }
     val tenths = safe / (divisor / 10L)
-    return if (tenths % 10L == 0L) "${tenths / 10L}$suffix" else "${tenths / 10L}.${tenths % 10L}$suffix"
+    val separator = if (language == AppLanguage.Russian) ',' else '.'
+    return if (tenths % 10L == 0L) "${tenths / 10L}$suffix" else "${tenths / 10L}$separator${tenths % 10L}$suffix"
 }
 
 fun DrawScope.drawBar(x: Float, y: Float, width: Float, height: Float, progress: Float, foreground: Color, background: Color) {
@@ -237,13 +231,15 @@ fun DrawScope.d(value: Float): Float = value * density
 
 fun positiveModulo(value: Float, modulus: Float): Float = ((value % modulus) + modulus) % modulus
 
-fun formatOneDecimal(value: Float): String {
+fun formatOneDecimal(value: Float, language: AppLanguage = AppLanguage.English): String {
     val scaled = (value * 10f).toInt()
-    return "${scaled / 10}.${abs(scaled % 10)}"
+    val separator = if (language == AppLanguage.Russian) ',' else '.'
+    return "${scaled / 10}$separator${abs(scaled % 10)}"
 }
 
-fun formatMultiplier(value: Float): String {
+fun formatMultiplier(value: Float, language: AppLanguage = AppLanguage.English): String {
     val hundredths = (value * 100f + 0.5f).toInt()
     val fraction = (hundredths % 100).toString().padStart(2, '0').trimEnd('0')
-    return if (fraction.isEmpty()) "${hundredths / 100}x" else "${hundredths / 100}.$fraction" + "x"
+    val separator = if (language == AppLanguage.Russian) ',' else '.'
+    return if (fraction.isEmpty()) "${hundredths / 100}x" else "${hundredths / 100}$separator${fraction}x"
 }

@@ -14,6 +14,7 @@ import kinetickk.ball.profile.impl.ProfilePersistenceCapability
 import kinetickk.ball.profile.impl.ProfilePersistenceContract
 import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
 import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
+import kinetickk.foundation.diagnostics.CrashDiagnostics
 import kinetickk.resource.audio.api.ToneRequest
 import kinetickk.resource.audio.api.ToneRequestLimits
 import kinetickk.resource.audio.api.ToneWave
@@ -23,8 +24,9 @@ import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.sin
 
-internal actual fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability =
+internal actual fun createPlatformProfilePersistenceCapability(diagnostics: CrashDiagnostics): ProfilePersistenceCapability =
     DesktopProfilePersistenceCapability(
+        diagnostics = diagnostics,
         profileNode = {
             Preferences.userRoot().node(ProfilePersistenceContract.DESKTOP_PROFILE_NODE)
         },
@@ -32,14 +34,15 @@ internal actual fun createPlatformProfilePersistenceCapability(): ProfilePersist
 
 private class DesktopProfilePersistenceCapability(
     private val profileNode: () -> Preferences,
+    private val diagnostics: CrashDiagnostics,
 ) : ProfilePersistenceCapability {
     override fun readSnapshot(): ProfilePersistenceReadResult {
         val node = try {
             profileNode()
         } catch (_: SecurityException) {
-            return ProfilePersistenceReadResult.Failed
+            return ProfilePersistenceReadResult.Failed.also { diagnostics.recordProfileRead(it) }
         } catch (_: IllegalStateException) {
-            return ProfilePersistenceReadResult.Failed
+            return ProfilePersistenceReadResult.Failed.also { diagnostics.recordProfileRead(it) }
         }
         return desktopProfileReadCall(
             exactKey = ProfilePersistenceContract.DESKTOP_SNAPSHOT,
@@ -47,24 +50,25 @@ private class DesktopProfilePersistenceCapability(
             loadExactValue = {
                 node.get(ProfilePersistenceContract.DESKTOP_SNAPSHOT, null)
             },
-        )
+        ).also { diagnostics.recordProfileRead(it) }
     }
 
     override fun writeSnapshot(payload: String): ProfilePersistenceMutationResult {
         desktopProfilePayloadAdmission(payload.length)?.let { return it }
+        diagnostics.recordProfileWriteAttempt(payload)
         val node = try {
             profileNode()
         } catch (_: SecurityException) {
-            return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
+            return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION.also { diagnostics.recordProfileWriteResult(payload, it) }
         } catch (_: IllegalStateException) {
-            return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
+            return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION.also { diagnostics.recordProfileWriteResult(payload, it) }
         }
         return desktopProfileMutationCall(
             mutate = {
                 node.put(ProfilePersistenceContract.DESKTOP_SNAPSHOT, payload)
             },
             flush = node::flush,
-        )
+        ).also { diagnostics.recordProfileWriteResult(payload, it) }
     }
 }
 

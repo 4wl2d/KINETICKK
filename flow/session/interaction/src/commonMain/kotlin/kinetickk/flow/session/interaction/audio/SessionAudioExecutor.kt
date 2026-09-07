@@ -36,18 +36,10 @@ class SessionAudioExecutor(
     }
 
     internal fun play(cue: SessionAudioCue) {
-        val requests = listOf(cue)
-            .sortedByDescending(SessionAudioCue::priority)
-            .map(SessionAudioCue::toToneRequest)
-        audioService.advance(0f, requests)
+        audioService.advance(0f, listOf(cue.toToneRequest()))
     }
 }
 
 private fun SessionAudioCue.toToneRequest(): ToneRequest = when (this) {
     SessionAudioCue.UI_CLICK -> ToneRequest(520f, 0.035f, 0.11f, ToneWave.SINE)
 }
-
-private val SessionAudioCue.priority: Int
-    get() = when (this) {
-        SessionAudioCue.UI_CLICK -> 20
-    }

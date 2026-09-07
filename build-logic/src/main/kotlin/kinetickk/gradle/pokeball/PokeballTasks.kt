@@ -36,18 +36,25 @@ abstract class GeneratePokeballResolvedManifestTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val architectureEdgeReportFiles: ConfigurableFileCollection
 
-    @get:InputFile
+    @get:InputFiles
     @get:PathSensitive(PathSensitivity.RELATIVE)
-    abstract val assemblyRecord: RegularFileProperty
+    abstract val productionSourceFiles: ConfigurableFileCollection
+
+    @get:Internal
+    abstract val repositoryRoot: DirectoryProperty
 
     @get:OutputFile
     abstract val outputFile: RegularFileProperty
 
     @TaskAction
     fun generate() {
-        val assembly = assemblyRecord.get().asFile.readText(StandardCharsets.UTF_8)
-        val reads = parseTableIds(assembly, "## Read dependencies")
-        val commands = parseTableIds(assembly, "## Command/result routes")
+        val root = repositoryRoot.get().asFile.toPath().toAbsolutePath().normalize()
+        val sources = productionSourceFiles.files.filter { it.isFile }.map { file ->
+            SourceDocument(
+                root.relativize(file.toPath().toAbsolutePath().normalize()).toString().replace('\\', '/'),
+                file.readText(StandardCharsets.UTF_8),
+            )
+        }
         val edges = loadArchitectureEdges(
             reportFiles = architectureEdgeReportFiles.files,
             expectedSourceProjectPaths = leafProjectPaths.get(),
@@ -55,8 +62,7 @@ abstract class GeneratePokeballResolvedManifestTask : DefaultTask() {
         val json = resolvedManifestJson(
             leafProjects = leafProjectPaths.get(),
             edges = edges.map(ProjectEdge::decode),
-            readRoutes = reads,
-            commandRoutes = commands,
+            sources = sources,
         )
         val output = outputFile.get().asFile
         output.parentFile.mkdirs()
@@ -168,6 +174,10 @@ abstract class VerifyPokeballArchitectureTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val architectureRecordFiles: ConfigurableFileCollection
 
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val behaviorTestReports: ConfigurableFileCollection
+
     @get:Internal
     abstract val repositoryRoot: DirectoryProperty
 
@@ -200,6 +210,8 @@ abstract class VerifyPokeballArchitectureTask : DefaultTask() {
             edges = declaredProjectDependencies.map(ProjectEdge::decode).toSet(),
             sources = sources,
             architectureRecords = records,
+        ) + behaviorEvidenceViolations(
+            behaviorTestReports.files.filter { it.isFile }.associate { it.name to it.readText() },
         )
 
         val report = buildString {
@@ -232,7 +244,7 @@ abstract class VerifyPokeballArchitectureTask : DefaultTask() {
         logger.lifecycle(
             "Pokeball architecture verified: ${leafProjectPaths.get().size} modules, " +
                 "${declaredProjectDependencies.size} declared edges, " +
-                "${expectedReadRoutes.size} read routes, ${expectedCommandRoutes.size} command mappings.",
+                "executed behavior evidence and source-derived dependency boundaries.",
         )
     }
 }
@@ -636,7 +648,7 @@ internal fun validateStrictAttestation(
         )
     }
     val exactClaim = "KINETICKK on implementation SHA $freeze conforms within the declared scope to " +
-        "Pokeball Core 1.4.0-draft at ${PokeballBaseline.CORE_COMMIT}"
+        "Pokeball Core ${PokeballBaseline.CORE_VERSION} at ${PokeballBaseline.CORE_COMMIT}"
     if (metadata.getValue("claimWording") != exactClaim) {
         add("Claim wording is not the exact bounded project claim")
     }

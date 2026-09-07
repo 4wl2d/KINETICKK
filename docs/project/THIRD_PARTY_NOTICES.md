@@ -16,7 +16,7 @@ release.
 
 | Component | Version | Files | License |
 |---|---:|---|---|
-| Gradle Wrapper | 9.7.0 | `gradlew`, `gradlew.bat`, `gradle/wrapper/gradle-wrapper.jar`, `gradle/wrapper/gradle-wrapper.properties` | [Apache License 2.0](https://github.com/gradle/gradle/blob/v9.7.0/LICENSE) |
+| Gradle Wrapper | 9.7.1 | `gradlew`, `gradlew.bat`, `gradle/wrapper/gradle-wrapper.jar`, `gradle/wrapper/gradle-wrapper.properties` | [Apache License 2.0](https://github.com/gradle/gradle/blob/v9.7.1/LICENSE) |
 
 The wrapper scripts contain their own Apache-2.0 headers, and
 `gradle-wrapper.jar` contains the full license at `META-INF/LICENSE`. Those
@@ -28,10 +28,10 @@ These components are fetched by Gradle and are not relicensed by KINETICKK:
 
 | Component family | Resolved version used by 0.1.0 | License / upstream |
 |---|---:|---|
-| Android Gradle Plugin | 9.3.1 | [Apache License 2.0](https://android.googlesource.com/platform/tools/base/+/studio-main/LICENSE.txt) |
-| Kotlin standard library and Gradle plugin | 2.4.20-RC | [Apache License 2.0](https://github.com/JetBrains/kotlin/blob/v2.4.20-RC/license/LICENSE.txt) |
-| Compose Multiplatform | 1.12.0-rc01 | [Apache License 2.0](https://github.com/JetBrains/compose-multiplatform/blob/v1.12.0-rc01/LICENSE.txt) |
-| AndroidX Compose runtime | 1.12.0-rc01 | [Apache License 2.0](https://github.com/androidx/androidx/blob/androidx-main/LICENSE.txt) |
+| Android Gradle Plugin | 9.4.0 | [Apache License 2.0](https://android.googlesource.com/platform/tools/base/+/studio-main/LICENSE.txt) |
+| Kotlin standard library and Gradle plugin | 2.4.20-RC3 | [Apache License 2.0](https://github.com/JetBrains/kotlin/blob/v2.4.20-RC3/license/LICENSE.txt) |
+| Compose Multiplatform | 1.12.0 | [Apache License 2.0](https://github.com/JetBrains/compose-multiplatform/blob/v1.12.0/LICENSE.txt) |
+| AndroidX Compose runtime | 1.12.0 | [Apache License 2.0](https://github.com/androidx/androidx/blob/androidx-main/LICENSE.txt) |
 | AndroidX Activity | 1.13.0 | [AndroidX licenses](https://github.com/androidx/androidx) |
 | AndroidX Test runner / rules / JUnit extension | 1.7.0 / 1.7.0 / 1.3.0 | [AndroidX licenses](https://github.com/android/android-test) |
 | AndroidX Collection / Annotation | 1.5.0 / 1.9.1 | [AndroidX licenses](https://github.com/androidx/androidx) |

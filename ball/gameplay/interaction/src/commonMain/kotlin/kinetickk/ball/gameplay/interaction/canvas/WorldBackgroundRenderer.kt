@@ -6,6 +6,8 @@ package kinetickk.ball.gameplay.interaction.canvas
 import kinetickk.foundation.design.*
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -24,8 +26,9 @@ internal fun DrawScope.drawBackdrop(engine: GameplayRenderModel, shakeX: Float, 
     val backdropCameraX = engine.cameraX
     val backdropCameraY = engine.cameraY
 
-    drawGridLayer(backdropCameraX, backdropCameraY, 172f, 0.42f, GridBlue.copy(alpha = 0.26f), 1.35f, shakeX, shakeY)
-    drawGridLayer(backdropCameraX, backdropCameraY, 86f, 1f, GridBlue.copy(alpha = 0.18f), 0.8f, shakeX, shakeY)
+    drawDistantSpace(engine, shakeX, shakeY, renderTime)
+    drawGridLayer(backdropCameraX, backdropCameraY, 172f, 0.42f, GridBlue.copy(alpha = 0.12f), 1.35f, shakeX, shakeY)
+    drawGridLayer(backdropCameraX, backdropCameraY, 86f, 1f, GridBlue.copy(alpha = 0.09f), 0.8f, shakeX, shakeY)
 
     val startCellX = floor((engine.cameraX - size.width * 0.5f) / 180f).toInt() - 1
     val endCellX = ceil((engine.cameraX + size.width * 0.5f) / 180f).toInt() + 1
@@ -37,7 +40,7 @@ internal fun DrawScope.drawBackdrop(engine: GameplayRenderModel, shakeX: Float, 
             if (hash % 4 == 0) {
                 val worldX = cellX * 180f + (hash % 91)
                 val worldY = cellY * 180f + ((hash / 97) % 113)
-                val point = world(engine, worldX, worldY, shakeX, shakeY)
+                val point = singularityLensPoint(world(engine, worldX, worldY, shakeX, shakeY), Offset(engine.pointerX, engine.pointerY))
                 val twinkle = 0.25f + (sin(renderTime * (0.8f + hash % 5 * 0.17f) + hash) + 1f) * 0.13f
                 drawCircle(if (hash % 3 == 0) Violet else Cyan, 0.9f + hash % 3 * 0.28f, point, alpha = twinkle)
             }
@@ -119,5 +122,48 @@ internal fun DrawScope.drawSpeedField(engine: GameplayRenderModel, shakeX: Float
 
         drawLine(Cyan.copy(alpha = alpha * 0.24f), start, end, width * 3f, StrokeCap.Round)
         drawLine(color.copy(alpha = alpha), start, end, width, StrokeCap.Round)
+    }
+}
+
+
+/** Cosmetic distortion never alters world positions or collision coordinates. */
+internal fun singularityLensPoint(point: Offset, singularity: Offset): Offset {
+    val delta = point - singularity
+    val radius = delta.getDistance()
+    if (radius <= 0.001f || radius >= 220f) return point
+    val displacement = 10f * sin(radius / 220f * kotlin.math.PI.toFloat())
+    return point + delta / radius * displacement
+}
+
+internal fun distantStarCount(density: ParticleDensity): Int = when (density) {
+    ParticleDensity.LOW -> 24
+    ParticleDensity.NORMAL -> 48
+    ParticleDensity.HIGH -> 72
+}
+
+private fun DrawScope.drawDistantSpace(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, renderTime: Float) {
+    val colors = arrayOf(Violet, Blue, Magenta)
+    val cloudRadius = max(size.width, size.height) * 0.48f
+    repeat(if (engine.settings.particleDensity == ParticleDensity.LOW) 1 else 3) { index ->
+        val center = Offset(
+            size.width * (0.17f + index * 0.34f) - sin(engine.cameraX * 0.0003f + index) * 55f,
+            size.height * (0.28f + index * 0.16f) - sin(engine.cameraY * 0.0002f + index) * 45f,
+        )
+        drawCircle(Brush.radialGradient(listOf(colors[index].copy(alpha = 0.055f), Color.Transparent), center, cloudRadius),
+            cloudRadius, center)
+    }
+    val count = distantStarCount(engine.settings.particleDensity)
+    repeat(count) { index ->
+        val depth = 0.04f + (index % 4) * 0.025f
+        val x = positiveModulo(index * 239f - engine.cameraX * depth, size.width)
+        val y = positiveModulo(index * 431f - engine.cameraY * depth, size.height)
+        val alpha = 0.1f + (sin(renderTime * 0.4f + index) + 1f) * 0.035f
+        drawCircle(White.copy(alpha = alpha), 0.5f + index % 3 * 0.2f, Offset(x + shakeX * depth, y + shakeY * depth))
+    }
+    val singularity = Offset(engine.pointerX + shakeX * 0.18f, engine.pointerY + shakeY * 0.18f)
+    repeat(3) { layer ->
+        val radius = 65f + layer * 42f
+        drawArc(Violet.copy(alpha = 0.06f - layer * 0.012f), renderTime * (12f - layer * 5f) + layer * 97f,
+            225f, false, singularity - Offset(radius, radius * 0.45f), Size(radius * 2f, radius * 0.9f), style = Stroke(1.2f))
     }
 }

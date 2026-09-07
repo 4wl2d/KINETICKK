@@ -3,32 +3,32 @@
 
 package kinetickk.ball.gameplay.impl
 
+import kinetickk.foundation.dispatch.InlineReply
+import kinetickk.ball.profile.api.ProfileReadPort
+import kinetickk.ball.profile.api.ProfileProgress
+import kinetickk.ball.profile.api.ProfileProgressApplied
+import kinetickk.ball.profile.api.ProfileRefusal
+import kinetickk.ball.profile.api.GameplayProgressUpdate
+import kinetickk.ball.gameplay.api.GameplayRunExited
+
 import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.api.GameplayAcceptance
-import kinetickk.ball.gameplay.api.GameplayCommandAdmissionFailureReason
-import kinetickk.ball.gameplay.api.GameplayCommandBoundaryResponse
-import kinetickk.ball.gameplay.api.GameplayCommandIngressResult
-import kinetickk.ball.gameplay.api.GameplayCommandSource
-import kinetickk.ball.gameplay.api.GameplayEffectiveProtocolIdentity
 import kinetickk.ball.gameplay.api.GameplayExitProgressResult
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
-import kinetickk.ball.gameplay.api.GameplayModuleCommand
-import kinetickk.ball.gameplay.api.GameplayModuleCommandRequest
-import kinetickk.ball.gameplay.api.GameplayModuleResult
-import kinetickk.ball.gameplay.api.GameplayModuleResultDelivery
 import kinetickk.ball.gameplay.api.GameplayQuery
 import kinetickk.ball.gameplay.api.GameplayRevision
 import kinetickk.ball.gameplay.api.GameplayRunPhase
-import kinetickk.ball.gameplay.api.GameplaySemanticHandle
 import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.api.GameplayRefusal
+import kinetickk.ball.gameplay.api.GameplaySettingsApplied
+import kinetickk.ball.gameplay.api.GameplayRunStarted
 import kinetickk.ball.gameplay.nucleus.GameplayNucleus
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.profile.api.CollectionProjection
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
-import kinetickk.ball.profile.api.GameplayProfileRoute
 import kinetickk.ball.profile.api.HomeProgressProjection
 import kinetickk.ball.profile.api.LabProgressProjection
 import kinetickk.ball.profile.api.LabProgress
@@ -39,26 +39,13 @@ import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.api.PreferencesProjection
-import kinetickk.ball.profile.api.ProfileAcceptance
 import kinetickk.ball.profile.api.ProfileBootstrapBlockReason
 import kinetickk.ball.profile.api.ProfileBootstrapStatus
-import kinetickk.ball.profile.api.ProfileCommandBoundaryResponse
-import kinetickk.ball.profile.api.ProfileCommandIngressResult
-import kinetickk.ball.profile.api.ProfileCommandRefusalEvidence
-import kinetickk.ball.profile.api.ProfileCommandSourceToken
-import kinetickk.ball.profile.api.ProfileEffectiveProtocolIdentity
-import kinetickk.ball.profile.api.ProfileModuleCommandRequest
-import kinetickk.ball.profile.api.ProfileModuleResult
-import kinetickk.ball.profile.api.ProfileModuleResultDelivery
-import kinetickk.ball.profile.api.ProfilePulse
 import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.api.ProfileReadFailure
 import kinetickk.ball.profile.api.ProfileRejection
-import kinetickk.ball.profile.api.ProfileResultIssuerProvenance
-import kinetickk.ball.profile.api.ProfileResultSourceToken
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileRunBootstrapResult
-import kinetickk.ball.profile.api.ProfileTargetBoundaryProvenance
 import kinetickk.ball.profile.api.RebirthProgressProjection
 import kinetickk.ball.profile.api.RunBootstrapProjection
 import kinetickk.foundation.collections.ImmutableList
@@ -85,11 +72,11 @@ class GameComponentTest {
         val render = component.renderSnapshot()
         assertEquals(GameplayRevision.ZERO, status.revision)
         assertEquals(GameplayRunPhase.CREATED, status.phase)
-        assertFalse(status.profileCommandPending)
+        assertFalse(status.progressPending)
         assertNull(render.renderModel)
         assertSame(SyntheticGameplayContent, component.stateSnapshot().content)
         assertNull(component.query(GameplayQuery.GetActiveWeapon).weapon)
-        assertTrue(component.query(GameplayQuery.GetCodexStacks).itemStacks.isEmpty())
+        assertTrue(component.query(GameplayQuery.GetBuildSummary).itemStacks.isEmpty())
         assertTrue(component.visualFxSnapshot().particles.isEmpty())
     }
 
@@ -225,7 +212,8 @@ class GameComponentTest {
         component.start()
         component.advanceUntilItemChoice()
         profile.calls.clear()
-        profile.deliveries.clear()
+        profile.results.clear()
+        profile.replies.clear()
         audio.frames.clear()
         events.clear()
         audio.throwOnAdvance = true
@@ -235,17 +223,11 @@ class GameComponentTest {
             component.accept(GameplayInteractionPulse.ChoiceSelected.fromValidated(0))
         }
 
-        val call = profile.calls.single()
-        val delivery = profile.deliveries.single()
-        assertTrue(call.causalScope > 0L)
-        assertEquals(0, call.causalDepth)
-        assertEquals(call.causalScope, delivery.resultSource.causalScope)
-        assertEquals(1, delivery.resultSource.causalDepth)
-        assertEquals(
-            listOf("profile:${call.causalScope}:0", "audio"),
-            events,
-        )
-        assertFalse(component.query(GameplayQuery.GetRunStatus).profileCommandPending)
+        assertEquals(1, profile.calls.size)
+        assertEquals(1, profile.results.size)
+        assertFailsWith<IllegalStateException> { profile.replies.single().checkAvailable() }
+        assertEquals(listOf("profile", "audio"), events)
+        assertFalse(component.query(GameplayQuery.GetRunStatus).progressPending)
         assertEquals(beforeRevision.value + 2L, component.stateSnapshot().revision.value)
         assertEquals(component.stateSnapshot().revision, component.renderSnapshot().revision)
     }
@@ -260,7 +242,8 @@ class GameComponentTest {
         component.start()
         component.advanceUntilItemChoice()
         profile.calls.clear()
-        profile.deliveries.clear()
+        profile.results.clear()
+        profile.replies.clear()
         audio.frames.clear()
         events.clear()
         profile.mode = ProfileMode.DeliverThenThrow
@@ -270,17 +253,12 @@ class GameComponentTest {
             component.accept(GameplayInteractionPulse.ChoiceSelected.fromValidated(0))
         }
 
-        val call = profile.calls.single()
-        val delivery = profile.deliveries.single()
-        assertEquals(0, call.causalDepth)
-        assertEquals(call.causalScope, delivery.resultSource.causalScope)
-        assertEquals(1, delivery.resultSource.causalDepth)
-        assertEquals(
-            listOf("profile:${call.causalScope}:0", "audio"),
-            events,
-        )
+        assertEquals(1, profile.calls.size)
+        assertEquals(1, profile.results.size)
+        assertFailsWith<IllegalStateException> { profile.replies.single().checkAvailable() }
+        assertEquals(listOf("profile", "audio"), events)
         assertEquals(1, audio.frames.size)
-        assertFalse(component.query(GameplayQuery.GetRunStatus).profileCommandPending)
+        assertFalse(component.query(GameplayQuery.GetRunStatus).progressPending)
         assertEquals(beforeRevision.value + 2L, component.stateSnapshot().revision.value)
         assertEquals(component.stateSnapshot().revision, component.renderSnapshot().revision)
     }
@@ -288,70 +266,41 @@ class GameComponentTest {
     @Test
     fun startReadsProfileAtBoundaryThenDeliversCanonicalResultAfterPublication() {
         val profile = TestProfilePort()
-        val results = mutableListOf<GameplayModuleResultDelivery>()
-        lateinit var component: GameComponent
-        component = component(profile) { delivery ->
-            results += delivery
+        val component = component(profile)
+        val caller = GameplayCommandTestCaller<GameplayRunStarted>()
+        caller.call { reply ->
+            component.startRun(reply)
             assertEquals(GameplayRunPhase.RUNNING, component.query(GameplayQuery.GetRunStatus).phase)
             assertSame(SyntheticGameplayContent, component.renderSnapshot().renderModel!!.content)
+            assertTrue(caller.applied.isEmpty())
         }
-        val request = component.request(GameplayModuleCommand.StartRun, sourceRevision = 7, ordinal = 2)
-
-        val ingress = assertIs<GameplayCommandIngressResult.Accepted>(
-            component.acceptFromSession(request, causalScope = 41, causalDepth = 2),
-        )
-
-        assertEquals(GameplayRevision(1), ingress.targetRevision)
+        val result = caller.applied.single()
+        assertEquals(GameplayRevision(1), result.revision)
         assertEquals(1, profile.bootstrapReadCount)
-        val delivery = results.single()
-        assertEquals(request.semanticHandle, delivery.commandSource.semanticHandle)
-        assertEquals(41, delivery.commandSource.causalScope)
-        assertEquals(2, delivery.commandSource.causalDepth)
-        assertEquals(GameplayEffectiveProtocolIdentity.SESSION_START, delivery.effectiveProtocolIdentity)
-        assertEquals(GameplayModuleResult.RunStarted, delivery.result)
-        assertEquals(41, delivery.resultSource.causalScope)
-        assertEquals(3, delivery.resultSource.causalDepth)
-        assertEquals(GameplayRevision(1), delivery.resultSource.targetRevision)
+        assertEquals(component.instanceId.runId, result.runId)
+        assertEquals(component.renderSnapshot().revision, result.revision)
     }
 
     @Test
     fun wrongTargetAndUnavailableBootstrapRefuseBeforePublication() {
+        val closed = GameplayCommandTestCaller<GameplayRunStarted>()
+        closed.call(component()::startRun)
         val profile = TestProfilePort()
-        val results = mutableListOf<GameplayModuleResultDelivery>()
-        val component = component(profile, commandResultSink = results::add)
-        val exact = component.request(GameplayModuleCommand.StartRun)
-        val wrongTarget = exact.copy(
-            targetInstance = kinetickk.ball.gameplay.api.GameplayInstanceId(RunId(99)),
-        )
-
-        val targetRefusal = assertIs<GameplayCommandIngressResult.RejectedBeforeAcceptance>(
-            component.acceptFromSession(wrongTarget, 4, 0),
-        )
-        assertIs<GameplayCommandBoundaryResponse.ValidationFailure>(
-            targetRefusal.refusal.boundaryResponse,
-        )
+        val component = component(profile)
+        assertFailsWith<IllegalStateException> { component.startRun(checkNotNull(closed.lastReply)) }
         assertEquals(GameplayRevision.ZERO, component.stateSnapshot().revision)
         assertEquals(0, profile.bootstrapReadCount)
-
         profile.bootstrapResult = ProfileRunBootstrapResult.Unavailable(
-            ProfileBootstrapStatus.Blocked(
-                ProfileBootstrapBlockReason.ResourceFailure(
-                    ProfileReadFailure.PROVIDER_READ_FAILED,
-                ),
-            ),
+            ProfileBootstrapStatus.Blocked(ProfileBootstrapBlockReason.ResourceFailure(
+                ProfileReadFailure.PROVIDER_READ_FAILED,
+            )),
         )
-        val bootstrapRefusal = assertIs<GameplayCommandIngressResult.RejectedBeforeAcceptance>(
-            component.acceptFromSession(exact, 5, 0),
-        )
-        val decision = assertIs<GameplayCommandBoundaryResponse.DecisionRejected>(
-            bootstrapRefusal.refusal.boundaryResponse,
-        )
-        assertEquals(
-            kinetickk.ball.gameplay.api.GameplayRejection.ProfileBootstrapUnavailable,
-            decision.reason,
-        )
+        val caller = GameplayCommandTestCaller<GameplayRunStarted>()
+        caller.call(component::startRun)
+        val decision = assertIs<GameplayRefusal.DecisionRejected>(caller.refused.single())
+        assertEquals(kinetickk.ball.gameplay.api.GameplayRejection.ProfileBootstrapUnavailable, decision.reason)
         assertEquals(GameplayRevision.ZERO, component.stateSnapshot().revision)
-        assertTrue(results.isEmpty())
+        assertTrue(caller.applied.isEmpty())
     }
 
     @Test
@@ -363,13 +312,9 @@ class GameComponentTest {
         }
         val component = component(profile)
 
-        val refusal = assertIs<GameplayCommandIngressResult.RejectedBeforeAcceptance>(
-            component.acceptFromSession(component.request(GameplayModuleCommand.StartRun), 9, 0),
-        )
-
-        val decision = assertIs<GameplayCommandBoundaryResponse.DecisionRejected>(
-            refusal.refusal.boundaryResponse,
-        )
+        val caller = GameplayCommandTestCaller<GameplayRunStarted>()
+        caller.call(component::startRun)
+        val decision = assertIs<GameplayRefusal.DecisionRejected>(caller.refused.single())
         assertIs<kinetickk.ball.gameplay.api.GameplayRejection.InvalidStartConfiguration>(
             decision.reason,
         )
@@ -387,237 +332,210 @@ class GameComponentTest {
             preferences = PlayerPreferences(masterVolume = Float.NaN),
         )
 
-        val refusal = assertIs<GameplayCommandIngressResult.RejectedBeforeAcceptance>(
-            component.acceptFromSession(
-                component.request(GameplayModuleCommand.ApplyPreferences),
-                causalScope = 11,
-                causalDepth = 0,
-            ),
-        )
+        val caller = GameplayCommandTestCaller<GameplaySettingsApplied>()
+        caller.call { component.applyPreferences(profile.snapshot.preferences, it) }
 
         assertEquals(
-            GameplayCommandBoundaryResponse.DecisionRejected(
+            GameplayRefusal.DecisionRejected(
                 kinetickk.ball.gameplay.api.GameplayRejection.InvalidPreferencesProjection,
             ),
-            refusal.refusal.boundaryResponse,
+            caller.refused.single(),
         )
         assertEquals(before, component.stateSnapshot())
     }
 
     @Test
-    fun applyPreferencesReadsCurrentProfileProjectionAtTheTargetBoundary() {
+    fun applyPreferencesUsesCapturedSourceValueAtTheTargetBoundary() {
         val profile = TestProfilePort()
-        val results = mutableListOf<GameplayModuleResultDelivery>()
-        val component = component(profile, commandResultSink = results::add)
+        val component = component(profile)
         component.start()
-        results.clear()
         profile.snapshot = profile.snapshot.copy(
             preferences = PlayerPreferences(masterVolume = 0.4f),
         )
+        val captured = profile.snapshot.preferences
+        profile.snapshot = profile.snapshot.copy(preferences = PlayerPreferences(masterVolume = 0.8f))
 
-        assertIs<GameplayCommandIngressResult.Accepted>(
-            component.acceptFromSession(
-                component.request(GameplayModuleCommand.ApplyPreferences, 8, 1),
-                causalScope = 19,
-                causalDepth = 1,
-            ),
-        )
+        val caller = GameplayCommandTestCaller<GameplaySettingsApplied>()
+        caller.call { component.applyPreferences(captured, it) }
 
-        assertEquals(1, profile.preferencesReadCount)
+        assertEquals(0, profile.preferencesReadCount)
         assertEquals(0.4f, component.renderSnapshot().renderModel!!.settings.masterVolume)
-        assertEquals(GameplayModuleResult.PreferencesApplied, results.single().result)
+        assertEquals(component.instanceId.runId, caller.applied.single().runId)
+        assertEquals(component.renderSnapshot().revision, caller.applied.single().revision)
+    }
+
+    @Test
+    fun closedSettingsScopeIsRejectedBeforeAnotherStateAndRenderPublication() {
+        val component = component()
+        component.start()
+        val caller = GameplayCommandTestCaller<GameplaySettingsApplied>()
+        caller.call { component.applyPreferences(PlayerPreferences(masterVolume = 0.4f), it) }
+        val beforeState = component.stateSnapshot()
+        val beforeRender = component.renderSnapshot()
+
+        assertFailsWith<IllegalStateException> {
+            component.applyPreferences(PlayerPreferences(masterVolume = 0.6f), caller.lastReply)
+        }
+        assertFailsWith<IllegalStateException> { caller.lastReply.accepted(caller.applied.single()) }
+
+        assertSame(beforeState, component.stateSnapshot())
+        assertSame(beforeRender, component.renderSnapshot())
+    }
+
+    @Test
+    fun settingsRefusalBeforeRunStartPreservesTheCreatedRun() {
+        val component = component()
+        val beforeState = component.stateSnapshot()
+        val beforeRender = component.renderSnapshot()
+        val caller = GameplayCommandTestCaller<GameplaySettingsApplied>()
+
+        caller.call { component.applyPreferences(PlayerPreferences(), it) }
+
+        assertEquals(
+            GameplayRefusal.DecisionRejected(kinetickk.ball.gameplay.api.GameplayRejection.NotStarted),
+            caller.refused.single(),
+        )
+        assertTrue(caller.applied.isEmpty())
+        assertSame(beforeState, component.stateSnapshot())
+        assertSame(beforeRender, component.renderSnapshot())
     }
 
     @Test
     fun acceptedProfileProgressPreservesScopeAndCompletesExitNonReentrantly() {
         val profile = TestProfilePort()
-        val results = mutableListOf<GameplayModuleResultDelivery>()
-        val component = component(profile, commandResultSink = results::add)
+        val component = component(profile)
         component.start()
-        results.clear()
         component.advanceUntilMatter()
         profile.calls.clear()
-
-        val ingress = assertIs<GameplayCommandIngressResult.Accepted>(
-            component.acceptFromSession(
-                component.request(GameplayModuleCommand.ExitRun, sourceRevision = 22, ordinal = 5),
-                causalScope = 77,
-                causalDepth = 1,
-            ),
-        )
-
-        assertEquals(GameplayRunPhase.EXITED, component.query(GameplayQuery.GetRunStatus).phase)
-        assertFalse(component.query(GameplayQuery.GetRunStatus).profileCommandPending)
-        assertEquals(77, profile.calls.single().causalScope)
-        assertEquals(2, profile.calls.single().causalDepth)
-        val delivery = results.single()
-        assertEquals(
-            GameplayModuleResult.RunExited(GameplayExitProgressResult.Applied),
-            delivery.result,
-        )
-        assertEquals(77, delivery.resultSource.causalScope)
-        assertEquals(4, delivery.resultSource.causalDepth)
-        assertTrue(delivery.resultSource.targetRevision.value > ingress.targetRevision.value)
+        val before = component.stateSnapshot().revision
+        val caller = GameplayCommandTestCaller<GameplayRunExited>()
+        profile.onProgress = {
+            assertEquals(GameplayRunPhase.EXITED, component.query(GameplayQuery.GetRunStatus).phase)
+            assertTrue(component.query(GameplayQuery.GetRunStatus).progressPending)
+            assertTrue(caller.applied.isEmpty())
+        }
+        caller.call { reply ->
+            component.exitRun(reply)
+            assertTrue(caller.applied.isEmpty())
+            assertFalse(component.query(GameplayQuery.GetRunStatus).progressPending)
+        }
+        val result = caller.applied.single()
+        assertEquals(GameplayExitProgressResult.Applied, result.progress)
+        assertEquals(component.instanceId.runId, result.runId)
+        assertEquals(before.value + 2, result.revision.value)
+        assertEquals(result.revision, component.stateSnapshot().revision)
+        assertEquals(1, profile.calls.size)
     }
 
     @Test
     fun verifiedProfilePreacceptRefusalUsesCallerOwnedControlCarrier() {
         val profile = TestProfilePort().apply { mode = ProfileMode.Refuse }
-        val results = mutableListOf<GameplayModuleResultDelivery>()
-        val component = component(profile, commandResultSink = results::add)
-        component.start()
-        results.clear()
-        component.advanceUntilMatter()
-
-        assertIs<GameplayCommandIngressResult.Accepted>(
-            component.acceptFromSession(
-                component.request(GameplayModuleCommand.ExitRun),
-                causalScope = 31,
-                causalDepth = 0,
-            ),
-        )
-
-        assertEquals(
-            GameplayModuleResult.RunExited(GameplayExitProgressResult.NotApplied),
-            results.single().result,
-        )
-        assertFalse(component.query(GameplayQuery.GetRunStatus).profileCommandPending)
-    }
-
-    @Test
-    fun forgedProfileDeliveryIsRejectedBeforeNucleusCarrierConstruction() {
-        val profile = TestProfilePort().apply { mode = ProfileMode.ForgeIdentity }
         val component = component(profile)
         component.start()
         component.advanceUntilMatter()
-
-        assertFailsWith<IllegalStateException> {
-            component.acceptFromSession(
-                component.request(GameplayModuleCommand.ExitRun),
-                causalScope = 35,
-                causalDepth = 0,
-            )
-        }
-        assertTrue(component.query(GameplayQuery.GetRunStatus).profileCommandPending)
+        val result = component.exit()
+        assertEquals(GameplayExitProgressResult.NotApplied, result.progress)
+        assertEquals(GameplayRunPhase.EXITED, component.query(GameplayQuery.GetRunStatus).phase)
+        assertFalse(component.query(GameplayQuery.GetRunStatus).progressPending)
     }
 
     @Test
-    fun profileResultMustNameTheAcceptedTargetFrameBeforeCarrierConstruction() {
-        val profile = TestProfilePort().apply { mode = ProfileMode.ForgeRevision }
+    fun previousProfileScopeCannotCompleteTheCurrentProgress() {
+        val profile = TestProfilePort()
+        val previous = component(profile)
+        previous.start()
+        previous.advanceUntilMatter()
+        previous.exit()
+        val current = component(profile)
+        current.start()
+        current.advanceUntilMatter()
+        profile.mode = ProfileMode.UsePreviousReply
+        assertFailsWith<IllegalStateException> { current.exit() }
+        assertTrue(current.query(GameplayQuery.GetRunStatus).progressPending)
+    }
+
+    @Test
+    fun duplicateProfileReplyKeepsTheFirstAcceptedProgress() {
+        val profile = TestProfilePort().apply { mode = ProfileMode.Duplicate }
         val component = component(profile)
         component.start()
         component.advanceUntilMatter()
-
-        assertFailsWith<IllegalStateException> {
-            component.acceptFromSession(
-                component.request(GameplayModuleCommand.ExitRun),
-                causalScope = 36,
-                causalDepth = 0,
-            )
-        }
-        assertTrue(component.query(GameplayQuery.GetRunStatus).profileCommandPending)
+        val caller = GameplayCommandTestCaller<GameplayRunExited>()
+        assertFailsWith<IllegalStateException> { caller.call(component::exitRun) }
+        assertEquals(GameplayExitProgressResult.Applied, caller.applied.single().progress)
+        assertEquals(component.stateSnapshot().revision, caller.applied.single().revision)
+        assertFalse(component.query(GameplayQuery.GetRunStatus).progressPending)
+        assertEquals(1, profile.results.size)
     }
 
     @Test
     fun validProfileResultIsDrainedBeforePostDeliveryInvocationFaultIsRethrown() {
         val profile = TestProfilePort().apply { mode = ProfileMode.DeliverThenThrow }
-        val results = mutableListOf<GameplayModuleResultDelivery>()
-        val component = component(profile, commandResultSink = results::add)
+        val component = component(profile)
         component.start()
-        results.clear()
         component.advanceUntilMatter()
-
-        assertFailsWith<ProfileInvocationFault> {
-            component.acceptFromSession(
-                component.request(GameplayModuleCommand.ExitRun),
-                causalScope = 37,
-                causalDepth = 0,
-            )
-        }
-
-        assertFalse(component.query(GameplayQuery.GetRunStatus).profileCommandPending)
+        val caller = GameplayCommandTestCaller<GameplayRunExited>()
+        assertFailsWith<ProfileInvocationFault> { caller.call(component::exitRun) }
+        assertFalse(component.query(GameplayQuery.GetRunStatus).progressPending)
         val status = component.query(GameplayQuery.GetRunStatus)
         val state = component.stateSnapshot()
         val render = component.renderSnapshot()
         assertEquals(status.revision, state.revision)
         assertEquals(state.revision, render.revision)
         assertSame(render, component.renderSnapshot())
-        assertEquals(
-            GameplayModuleResult.RunExited(GameplayExitProgressResult.Applied),
-            results.single().result,
-        )
+        assertEquals(GameplayExitProgressResult.Applied, caller.applied.single().progress)
     }
 
     @Test
     fun profileInvocationFaultBeforeResultPreservesPendingRouteWithoutFakeCarrier() {
         val profile = TestProfilePort().apply { mode = ProfileMode.ThrowBeforeResult }
-        val results = mutableListOf<GameplayModuleResultDelivery>()
-        val component = component(profile, commandResultSink = results::add)
+        val component = component(profile)
         component.start()
-        results.clear()
         component.advanceUntilMatter()
-
-        assertFailsWith<ProfileInvocationFault> {
-            component.acceptFromSession(
-                component.request(GameplayModuleCommand.ExitRun),
-                causalScope = 38,
-                causalDepth = 0,
-            )
-        }
-
-        assertTrue(component.query(GameplayQuery.GetRunStatus).profileCommandPending)
-        assertTrue(results.isEmpty())
+        val caller = GameplayCommandTestCaller<GameplayRunExited>()
+        assertFailsWith<ProfileInvocationFault> { caller.call(component::exitRun) }
+        assertTrue(component.query(GameplayQuery.GetRunStatus).progressPending)
+        assertTrue(caller.applied.isEmpty())
+        assertTrue(caller.refused.isEmpty())
     }
 
     @Test
     fun featureAcceptsOneActiveRunAndRefusesEveryFirstNPlusOneReplacement() {
         val profile = TestProfilePort()
         val feature = gameplayFeature(profile)
-        val run0 = assertIs<GameComponent>(feature.createRun(RunId(0), commandResultSink = {}))
-        profile.resultSink = feature::receiveProfileModuleResult
+        val run0 = assertIs<GameComponent>(feature.createRun(RunId(0)))
 
         assertSame(run0, feature.activeRun())
         assertFailsWith<IllegalStateException> {
-            feature.createRun(RunId(1), commandResultSink = {})
+            feature.createRun(RunId(1))
         }
         assertSame(run0, feature.activeRun())
 
         run0.start()
         assertFailsWith<IllegalStateException> {
-            feature.createRun(RunId(1), commandResultSink = {})
+            feature.createRun(RunId(1))
         }
-        assertIs<GameplayCommandIngressResult.Accepted>(
-            run0.acceptFromSession(
-                run0.request(GameplayModuleCommand.ExitRun),
-                causalScope = 2,
-                causalDepth = 0,
-            ),
-        )
+        run0.exit()
         assertEquals(GameplayRunPhase.EXITED, run0.query(GameplayQuery.GetRunStatus).phase)
         assertFailsWith<IllegalArgumentException> {
-            feature.createRun(RunId(0), commandResultSink = {})
+            feature.createRun(RunId(0))
         }
-        val run1 = feature.createRun(RunId(1), commandResultSink = {})
+        val run1 = feature.createRun(RunId(1))
         assertSame(run1, feature.activeRun())
 
         val pendingProfile = TestProfilePort().apply { mode = ProfileMode.ThrowBeforeResult }
         val pendingFeature = gameplayFeature(pendingProfile)
         val pendingRun = assertIs<GameComponent>(
-            pendingFeature.createRun(RunId(0), commandResultSink = {}),
+            pendingFeature.createRun(RunId(0)),
         )
-        pendingProfile.resultSink = pendingFeature::receiveProfileModuleResult
         pendingRun.start()
         pendingRun.advanceUntilMatter()
         assertFailsWith<ProfileInvocationFault> {
-            pendingRun.acceptFromSession(
-                pendingRun.request(GameplayModuleCommand.ExitRun),
-                causalScope = 3,
-                causalDepth = 0,
-            )
+            pendingRun.exit()
         }
-        assertTrue(pendingRun.query(GameplayQuery.GetRunStatus).profileCommandPending)
+        assertTrue(pendingRun.query(GameplayQuery.GetRunStatus).progressPending)
         assertFailsWith<IllegalStateException> {
-            pendingFeature.createRun(RunId(1), commandResultSink = {})
+            pendingFeature.createRun(RunId(1))
         }
         assertSame(pendingRun, pendingFeature.activeRun())
     }
@@ -627,8 +545,7 @@ class GameComponentTest {
         assertEquals(731_991, DEFAULT_GAMEPLAY_SEED)
         val profile = TestProfilePort()
         val feature = gameplayFeature(profile)
-        val run0 = assertIs<GameComponent>(feature.createRun(RunId(0), commandResultSink = {}))
-        profile.resultSink = feature::receiveProfileModuleResult
+        val run0 = assertIs<GameComponent>(feature.createRun(RunId(0)))
         assertSame(SyntheticGameplayContent, run0.stateSnapshot().content)
         run0.start()
         val run0Render = run0.renderSnapshot().renderModel!!
@@ -643,15 +560,9 @@ class GameComponentTest {
             run0Render.enemies,
             run0Render.choices,
         )
-        assertIs<GameplayCommandIngressResult.Accepted>(
-            run0.acceptFromSession(
-                run0.request(GameplayModuleCommand.ExitRun),
-                causalScope = 2,
-                causalDepth = 0,
-            ),
-        )
+        run0.exit()
 
-        val run1 = assertIs<GameComponent>(feature.createRun(RunId(1), commandResultSink = {}))
+        val run1 = assertIs<GameComponent>(feature.createRun(RunId(1)))
         assertSame(SyntheticGameplayContent, run1.stateSnapshot().content)
         run1.start()
         val run1Render = run1.renderSnapshot().renderModel!!
@@ -672,35 +583,31 @@ class GameComponentTest {
     }
 
     @Test
-    fun causalBudgetRefusalIsTypedAndPublishesNothing() {
-        val component = component()
-
-        val refusal = assertIs<GameplayCommandIngressResult.RejectedBeforeAcceptance>(
-            component.acceptFromSession(
-                component.request(GameplayModuleCommand.StartRun),
-                causalScope = 88,
-                causalDepth = 6,
-            ),
-        )
-        val admission = assertIs<GameplayCommandBoundaryResponse.AdmissionFailure>(
-            refusal.refusal.boundaryResponse,
-        )
-        val budget = assertIs<GameplayCommandAdmissionFailureReason.CausalBudgetExceeded>(
-            admission.reason,
-        )
-        assertEquals(88, budget.causalScope)
-        assertEquals(GameplayRevision.ZERO, component.stateSnapshot().revision)
+    fun busyCallRefusalIsTypedAndPublishesNothing() {
+        val profile = TestProfilePort()
+        val component = component(profile)
+        component.start()
+        component.advanceUntilMatter()
+        val busy = GameplayCommandTestCaller<GameplayRunExited>()
+        profile.onProgress = {
+            val before = component.stateSnapshot()
+            val render = component.renderSnapshot()
+            busy.call(component::exitRun)
+            assertEquals(GameplayRefusal.Busy, busy.refused.single())
+            assertSame(before, component.stateSnapshot())
+            assertSame(render, component.renderSnapshot())
+        }
+        component.exit()
+        assertTrue(busy.applied.isEmpty())
     }
 
     @Test
     fun audioFaultsPropagateAfterAcceptedFramesCommitAndDrainExactResults() {
         val unlockAudio = RecordingGameplayAudioExecutor()
-        val unlockResults = mutableListOf<GameplayModuleResultDelivery>()
         val unlockComponent = component(
             audio = unlockAudio,
-            commandResultSink = unlockResults::add,
         )
-        unlockComponent.start()
+        val unlockStart = unlockComponent.start()
         unlockAudio.throwOnUnlock = true
 
         assertFailsWith<AudioResourceFault> {
@@ -710,18 +617,16 @@ class GameComponentTest {
         assertEquals(GameplayRevision(2), started.revision)
         assertEquals(GameplayRunPhase.RUNNING, started.phase)
         assertEquals(1, unlockAudio.unlockCount)
-        assertEquals(GameplayModuleResult.RunStarted, unlockResults.single().result)
+        assertEquals(GameplayRevision(1), unlockStart.revision)
         assertEquals(started.revision, unlockComponent.stateSnapshot().revision)
         assertEquals(started.revision, unlockComponent.renderSnapshot().revision)
         assertSame(unlockComponent.renderSnapshot(), unlockComponent.renderSnapshot())
 
         val frameAudio = RecordingGameplayAudioExecutor()
-        val frameResults = mutableListOf<GameplayModuleResultDelivery>()
         val frameComponent = component(
             audio = frameAudio,
-            commandResultSink = frameResults::add,
         )
-        frameComponent.start()
+        val frameStart = frameComponent.start()
         frameAudio.throwOnAdvance = true
 
         assertFailsWith<AudioResourceFault> {
@@ -731,7 +636,7 @@ class GameComponentTest {
         assertEquals(GameplayRevision(2), advanced.revision)
         assertEquals(GameplayRunPhase.RUNNING, advanced.phase)
         assertEquals(1, frameAudio.frames.size)
-        assertEquals(listOf(GameplayModuleResult.RunStarted), frameResults.map { it.result })
+        assertEquals(GameplayRevision(1), frameStart.revision)
         assertEquals(advanced.revision, frameComponent.stateSnapshot().revision)
         assertEquals(advanced.revision, frameComponent.renderSnapshot().revision)
         assertSame(frameComponent.renderSnapshot(), frameComponent.renderSnapshot())
@@ -744,35 +649,33 @@ class GameComponentTest {
         assertFalse(completions.tryAddLast(8))
         assertEquals((0 until 8).toList(), List(8) { completions.removeFirstOrNull() })
 
-        repeat(8, ::requireGameplayCausalDepth)
-        assertFailsWith<IllegalStateException> { requireGameplayCausalDepth(8) }
         requireGameplayProfileOutputFanoutBound(1)
         assertFailsWith<IllegalStateException> { requireGameplayProfileOutputFanoutBound(2) }
         requireGameplayCompletionCapacity(1, 1)
         assertFailsWith<IllegalStateException> { requireGameplayCompletionCapacity(0, 1) }
 
         assertTrue(
-            hasGameplayCommandRevisionCapacity(
+            hasGameplayRevisionCapacity(
                 GameplayRevision(Long.MAX_VALUE - 1),
-                GameplayModuleCommand.StartRun,
+                requiredRevisions = 1L,
             ),
         )
         assertFalse(
-            hasGameplayCommandRevisionCapacity(
+            hasGameplayRevisionCapacity(
                 GameplayRevision(Long.MAX_VALUE),
-                GameplayModuleCommand.StartRun,
+                requiredRevisions = 1L,
             ),
         )
         assertTrue(
-            hasGameplayCommandRevisionCapacity(
+            hasGameplayRevisionCapacity(
                 GameplayRevision(Long.MAX_VALUE - 2),
-                GameplayModuleCommand.ExitRun,
+                requiredRevisions = 2L,
             ),
         )
         assertFalse(
-            hasGameplayCommandRevisionCapacity(
+            hasGameplayRevisionCapacity(
                 GameplayRevision(Long.MAX_VALUE - 1),
-                GameplayModuleCommand.ExitRun,
+                requiredRevisions = 2L,
             ),
         )
     }
@@ -782,34 +685,23 @@ private fun component(
     profile: TestProfilePort = TestProfilePort(),
     audio: GameplayAudioExecutor = RecordingGameplayAudioExecutor(),
     content: kinetickk.ball.content.api.GameplayContentSnapshot = SyntheticGameplayContent,
-    commandResultSink: (GameplayModuleResultDelivery) -> Unit = {},
 ): GameComponent {
     val component = GameComponent.create(
         runId = RunId(31),
         content = content,
         profilePort = profile,
         audioExecutor = audio,
-        commandResultSink = commandResultSink,
+        profileProgress = profile,
         seed = DEFAULT_GAMEPLAY_SEED,
     )
-    profile.resultSink = component::receiveProfileModuleResult
     return component
 }
 
-private fun GameComponent.request(
-    command: GameplayModuleCommand,
-    sourceRevision: Long = stateSnapshot().revision.value,
-    ordinal: Int = 0,
-): GameplayModuleCommandRequest {
-    val handle = GameplaySemanticHandle(GameplayCommandSource.LocalSession, sourceRevision, ordinal)
-    return GameplayModuleCommandRequest(handle, ordinal, instanceId, command)
-}
+private fun GameComponent.exit(): GameplayRunExited =
+    GameplayCommandTestCaller<GameplayRunExited>().also { it.call(this::exitRun) }.applied.single()
 
-private fun GameComponent.start() {
-    assertIs<GameplayCommandIngressResult.Accepted>(
-        acceptFromSession(request(GameplayModuleCommand.StartRun), causalScope = 1, causalDepth = 0),
-    )
-}
+private fun GameComponent.start(): GameplayRunStarted =
+    GameplayCommandTestCaller<GameplayRunStarted>().also { it.call(this::startRun) }.applied.single()
 
 private fun GameComponent.advanceUntilMatter() {
     repeat(1_200) { frameIndex ->
@@ -836,7 +728,7 @@ private fun GameComponent.advanceUntilItemChoice() {
             return
         }
         check(query(GameplayQuery.GetRunStatus).phase == GameplayRunPhase.RUNNING) {
-            "Run stopped before its first item choice at frame $frameIndex"
+            "Run stopped before its first item choice at frame $frameIndex: ${render.phase} / ${render.choiceType}"
         }
         val pickupTarget = render.pickups.firstOrNull()?.let { pickup -> pickup.x to pickup.y }
         val nearestEnemy = render.enemies.minByOrNull { enemy ->
@@ -883,6 +775,8 @@ private fun resilientLocalDispatchProfile(): GameplayProfileSnapshot = PlayerPro
 private val LocalDispatchGameplayContent by lazy {
     val rebirth = SyntheticGameplayContent.rebirth
     SyntheticGameplayContent.copy(
+        // This fixture exercises dispatch ordering; a single pickup reaches its item-choice boundary.
+        tempo = SyntheticGameplayContent.tempo.copy(dataPickupMultiplier = 20f),
         rebirth = rebirth.copy(
             profiles = rebirth.profiles.map { profile ->
                 profile.copy(
@@ -902,99 +796,49 @@ private val LocalDispatchGameplayContent by lazy {
     )
 }
 
-private enum class ProfileMode {
-    Accept,
-    Refuse,
-    ForgeIdentity,
-    ForgeRevision,
-    DeliverThenThrow,
-    ThrowBeforeResult,
-}
+private enum class ProfileMode { Accept, Refuse, UsePreviousReply, Duplicate, DeliverThenThrow, ThrowBeforeResult }
 
-private data class ProfileCall(
-    val request: ProfileModuleCommandRequest,
-    val causalScope: Long,
-    val causalDepth: Int,
-)
-
-private class TestProfilePort(
-    private val eventSink: (String) -> Unit = {},
-) : GameplayProfileRoute {
+private class TestProfilePort(private val eventSink: (String) -> Unit = {}) : ProfileReadPort, ProfileProgress {
     override val instanceId = LOCAL_PROFILE_INSTANCE_ID
     var snapshot: GameplayProfileSnapshot = PlayerProfile().toGameplaySnapshot()
     var bootstrapResult: ProfileRunBootstrapResult = ProfileRunBootstrapResult.Ready(snapshot)
     var mode: ProfileMode = ProfileMode.Accept
-    var resultSink: (ProfileModuleResultDelivery) -> Unit = {}
-    val calls = mutableListOf<ProfileCall>()
-    val deliveries = mutableListOf<ProfileModuleResultDelivery>()
+    var onProgress: (() -> Unit)? = null
+    val calls = mutableListOf<GameplayProgressUpdate>()
+    val replies = mutableListOf<InlineReply<ProfileProgressApplied, ProfileRefusal>>()
+    val results = mutableListOf<ProfileProgressApplied>()
     var bootstrapReadCount: Int = 0
     var preferencesReadCount: Int = 0
     private var revision = ProfileRevision(10)
 
-    override fun acceptFromGameplay(
-        request: ProfileModuleCommandRequest,
-        causalScope: Long,
-        causalDepth: Int,
-    ): ProfileCommandIngressResult {
-        calls += ProfileCall(request, causalScope, causalDepth)
-        eventSink("profile:$causalScope:$causalDepth")
-        val commandSource = ProfileCommandSourceToken(
-            request.semanticHandle,
-            request.targetInstance,
-            causalScope,
-            causalDepth,
-        )
-        if (mode == ProfileMode.ThrowBeforeResult) throw ProfileInvocationFault()
-        return when (mode) {
-            ProfileMode.Refuse -> ProfileCommandIngressResult.RejectedBeforeAcceptance(
-                ProfileCommandRefusalEvidence(
-                    commandSource = commandSource,
-                    effectiveProtocolIdentity = ProfileEffectiveProtocolIdentity.GAMEPLAY_PROGRESS,
-                    boundaryResponse = ProfileCommandBoundaryResponse.DecisionRejected(
-                        ProfileRejection.NoChange,
-                    ),
-                    targetBoundaryProvenance = ProfileTargetBoundaryProvenance(
-                        instanceId,
-                        ProfileEffectiveProtocolIdentity.GAMEPLAY_PROGRESS,
-                    ),
-                ),
-            )
-            ProfileMode.Accept,
-            ProfileMode.ForgeIdentity,
-            ProfileMode.ForgeRevision,
-            ProfileMode.DeliverThenThrow,
-            -> {
+    override fun applyGameplayProgress(update: GameplayProgressUpdate, reply: InlineReply<ProfileProgressApplied, ProfileRefusal>) {
+        reply.checkAvailable()
+        val previous = replies.lastOrNull()
+        calls += update
+        replies += reply
+        eventSink("profile")
+        onProgress?.invoke()
+        when (mode) {
+            ProfileMode.ThrowBeforeResult -> throw ProfileInvocationFault()
+            ProfileMode.Refuse -> reply.refused(ProfileRefusal.DecisionRejected(ProfileRejection.NoChange))
+            ProfileMode.UsePreviousReply -> checkNotNull(previous).accepted(ProfileProgressApplied(revision))
+            else -> {
                 revision = ProfileRevision(revision.value + 1)
-                val delivery = ProfileModuleResultDelivery(
-                    commandSource = commandSource,
-                    resultSource = ProfileResultSourceToken(
-                        semanticHandle = request.semanticHandle,
-                        targetInstance = instanceId,
-                        targetRevision = if (mode == ProfileMode.ForgeRevision) {
-                            ProfileRevision(revision.value + 1)
-                        } else {
-                            revision
-                        },
-                        sourceOrdinal = 1,
-                        causalScope = causalScope,
-                        causalDepth = causalDepth + 1,
-                    ),
-                    effectiveProtocolIdentity = if (mode == ProfileMode.ForgeIdentity) {
-                        ProfileEffectiveProtocolIdentity.SESSION_MUTE
-                    } else {
-                        ProfileEffectiveProtocolIdentity.GAMEPLAY_PROGRESS
-                    },
-                    result = ProfileModuleResult.GameplayProgressApplied,
-                    issuerProvenance = ProfileResultIssuerProvenance.LOCAL_PROFILE_STATIC_BINDING,
-                )
-                deliveries += delivery
-                resultSink(delivery)
+                val result = ProfileProgressApplied(revision)
+                results += result
+                reply.accepted(result)
                 if (mode == ProfileMode.DeliverThenThrow) throw ProfileInvocationFault()
-                ProfileCommandIngressResult.Accepted(instanceId, revision)
+                if (mode == ProfileMode.Duplicate) reply.accepted(ProfileProgressApplied(ProfileRevision(revision.value + 1)))
             }
-            ProfileMode.ThrowBeforeResult -> error("handled before result construction")
         }
     }
+
+    override fun query(query: ProfileQuery.GetHomeProgress): kinetickk.ball.profile.api.HomeProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetCollection): kinetickk.ball.profile.api.CollectionProjection = error("unused")
+    override fun query(query: ProfileQuery.GetLabProgress): kinetickk.ball.profile.api.LabProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetLoadout): kinetickk.ball.profile.api.LoadoutProjection = error("unused")
+    override fun query(query: ProfileQuery.GetRebirthProgress): kinetickk.ball.profile.api.RebirthProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetPersistenceStatus): kinetickk.ball.profile.api.PersistenceStatusProjection = error("unused")
 
     override fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection {
         bootstrapReadCount++
@@ -1119,6 +963,7 @@ private fun gameplayFeature(profile: TestProfilePort): DefaultGameplayFeature =
     DefaultGameplayFeature(
         gameplayContent = SyntheticGameplayContent,
         profilePort = profile,
+        profileProgress = profile,
         audioService = NoOpAudioService,
     )
 

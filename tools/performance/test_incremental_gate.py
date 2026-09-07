@@ -37,6 +37,18 @@ class IncrementalGateContractTest(unittest.TestCase):
         self.assertEqual("outcome-fingerprint", marker["gameplaySemanticContract"])
         self.assertEqual("exact-metadata", marker["profileSemanticContract"])
 
+    def test_workload_versions_match_the_native_adapters(self) -> None:
+        marker = json.loads(MARKER.read_text(encoding="utf-8"))
+        root = PERFORMANCE_ROOT.parent.parent
+        adapters = {
+            "gameplay": root / "ball/gameplay/nucleus/src/desktopTest/kotlin/kinetickk/ball/gameplay/nucleus/performance/GameplayPerformanceBenchmark.kt",
+            "profile": root / "ball/profile/resource/src/desktopTest/kotlin/kinetickk/ball/profile/resource/performance/ProfilePerformanceBenchmark.kt",
+        }
+        self.assertEqual(set(adapters), set(marker["suiteVersions"]))
+        for suite, adapter in adapters.items():
+            with self.subTest(suite=suite):
+                self.assertIn(f'"{marker["suiteVersions"][suite]}"', adapter.read_text(encoding="utf-8"))
+
     def test_runner_uses_marker_and_expected_raw_identity_flags(self) -> None:
         runner = RUNNER.read_text(encoding="utf-8")
 

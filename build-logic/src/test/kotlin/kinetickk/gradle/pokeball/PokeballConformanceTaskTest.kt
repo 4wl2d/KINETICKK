@@ -338,7 +338,7 @@ class PokeballConformanceTaskTest {
         put(
             "claimWording",
             "KINETICKK on implementation SHA $freeze conforms within the declared scope to " +
-                "Pokeball Core 1.4.0-draft at ${PokeballBaseline.CORE_COMMIT}",
+                "Pokeball Core ${PokeballBaseline.CORE_VERSION} at ${PokeballBaseline.CORE_COMMIT}",
         )
         put("claimBoundary", "Implementation $freeze bound to Pokeball Core ${PokeballBaseline.CORE_COMMIT}")
         put("claimScope", "Profile GameplayRun AppSession ContentCatalog across Android, Desktop, and Web")

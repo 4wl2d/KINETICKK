@@ -8,12 +8,10 @@ import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.PauseTarget
 import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
-import kinetickk.ball.gameplay.interaction.layout.choiceLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.containsInclusive
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.interaction.layout.gameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
-import kinetickk.ball.gameplay.interaction.layout.terminalLayoutGeometry
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 
@@ -44,8 +42,6 @@ fun GameplayRenderModel.resolveGameplayPress(x: Float, y: Float): GameplayInput?
         screenWidth = screenWidth,
         screenHeight = screenHeight,
         uiScale = uiScale,
-        choiceCount = choices.size,
-        choicesCanReroll = choicesCanReroll,
         x = x,
         y = y,
     )
@@ -66,8 +62,6 @@ internal fun GameplayHitTestState.resolveGameplayPress(x: Float, y: Float): Game
         screenWidth = screenWidth,
         screenHeight = screenHeight,
         uiScale = uiScale,
-        choiceCount = choiceCount,
-        choicesCanReroll = choicesCanReroll,
         x = x,
         y = y,
     )
@@ -87,24 +81,13 @@ private fun resolveGameplayPress(
     screenWidth: Float,
     screenHeight: Float,
     uiScale: Float,
-    choiceCount: Int,
-    choicesCanReroll: Boolean,
     x: Float,
     y: Float,
 ): GameplayInput? = when (phase) {
     GamePhase.RUNNING -> resolveHudPress(screenWidth, screenHeight, uiScale, x, y)
     GamePhase.PAUSED -> resolvePausePress(screenWidth, screenHeight, uiScale, x, y)
-    GamePhase.CHOICE -> resolveChoicePress(
-        screenWidth,
-        screenHeight,
-        uiScale,
-        choiceCount,
-        choicesCanReroll,
-        x,
-        y,
-    )
-    GamePhase.GAME_OVER, GamePhase.VICTORY ->
-        resolveEndPress(phase, screenWidth, screenHeight, uiScale, x, y)
+    GamePhase.CHOICE -> null // Compose activates on click, after scroll gestures resolve.
+    GamePhase.GAME_OVER, GamePhase.VICTORY -> null // TerminalContent owns click and scroll handling.
 }
 
 private fun isHudControlPosition(
@@ -134,58 +117,6 @@ private fun resolvePausePress(
         PauseTarget.SETTINGS -> GameplayInput.OpenSettings
         PauseTarget.PERFORMANCE -> GameplayInput.TogglePerformance
         PauseTarget.EXIT -> GameplayInput.ExitToHome
-    }
-}
-
-private fun resolveEndPress(
-    phase: GamePhase,
-    screenWidth: Float,
-    screenHeight: Float,
-    uiScale: Float,
-    x: Float,
-    y: Float,
-): GameplayInput? {
-    val layout = terminalLayoutGeometry(
-        width = screenWidth,
-        height = screenHeight,
-        scale = uiScale,
-        victory = phase == GamePhase.VICTORY,
-    )
-    return when {
-        containsInclusive(layout.restart, x, y) -> GameplayInput.RestartRun
-        layout.rebirth?.let { containsInclusive(it, x, y) } == true -> GameplayInput.OpenRebirth
-        containsInclusive(layout.exit, x, y) -> GameplayInput.ExitToHome
-        else -> null
-    }
-}
-
-private fun resolveChoicePress(
-    screenWidth: Float,
-    screenHeight: Float,
-    uiScale: Float,
-    choiceCount: Int,
-    choicesCanReroll: Boolean,
-    x: Float,
-    y: Float,
-): GameplayInput? {
-    val layout = choiceLayoutGeometry(
-        width = screenWidth,
-        height = screenHeight,
-        scale = uiScale,
-        choiceCount = choiceCount,
-        canReroll = choicesCanReroll,
-    )
-    layout.cards.forEachIndexed { index, bounds ->
-        if (containsInclusive(bounds, x, y)) {
-            return GameplayInput.Action(
-                GameplayInteractionPulse.ChoiceSelected.fromValidated(index),
-            )
-        }
-    }
-    return if (layout.reroll?.let { containsInclusive(it, x, y) } == true) {
-        GameplayInput.Action(GameplayInteractionPulse.ChoicesRerolled)
-    } else {
-        null
     }
 }
 

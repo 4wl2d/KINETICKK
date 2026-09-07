@@ -4,14 +4,12 @@
 package kinetickk.flow.session.nucleus
 
 import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.gameplay.api.GameplayModuleCommandRequest
 import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.RunId
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.ProfileBootstrapStatus
-import kinetickk.ball.profile.api.ProfileModuleCommandRequest
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.flow.session.api.AppDestination
@@ -22,16 +20,6 @@ import kinetickk.flow.session.api.SessionRevision
 import kinetickk.flow.session.api.SessionWorkflowFailureCode
 import kinetickk.flow.session.api.isBaseDestination
 import kinetickk.flow.session.api.isOverlayDestination
-
-sealed interface PendingParticipantCommand {
-    data class Profile(
-        val request: ProfileModuleCommandRequest,
-    ) : PendingParticipantCommand
-
-    data class Gameplay(
-        val request: GameplayModuleCommandRequest,
-    ) : PendingParticipantCommand
-}
 
 enum class RunStartReason {
     START,
@@ -45,51 +33,40 @@ sealed interface SettingsContinuation {
 }
 
 sealed interface PendingWorkflow {
-    val participant: PendingParticipantCommand
-
     data class StartingRun(
         val reason: RunStartReason,
         val runId: RunId,
-        override val participant: PendingParticipantCommand.Gameplay,
     ) : PendingWorkflow
 
     data class PausingForOverlay(
         val destination: AppDestination,
-        override val participant: PendingParticipantCommand.Gameplay,
+        val runId: RunId,
     ) : PendingWorkflow
 
     data class ApplyingSettings(
         val preferences: PlayerPreferences,
         val continuation: SettingsContinuation,
-        override val participant: PendingParticipantCommand.Gameplay,
+        val runId: RunId,
     ) : PendingWorkflow
 
     data class SelectingCoreShape(
         val shape: CoreShape,
-        override val participant: PendingParticipantCommand.Profile,
     ) : PendingWorkflow
 
-    data class TogglingMute(
-        override val participant: PendingParticipantCommand.Profile,
-    ) : PendingWorkflow
+    data object TogglingMute : PendingWorkflow
 
     data class PropagatingMute(
         val preferences: PlayerPreferences,
-        override val participant: PendingParticipantCommand.Gameplay,
+        val runId: RunId,
     ) : PendingWorkflow
 
-    data class AdvancingRebirth(
-        override val participant: PendingParticipantCommand.Profile,
-    ) : PendingWorkflow
+    data object AdvancingRebirth : PendingWorkflow
 
     data class StartingRebirthRun(
         val runId: RunId,
-        override val participant: PendingParticipantCommand.Gameplay,
     ) : PendingWorkflow
 
-    data class ExitingRun(
-        override val participant: PendingParticipantCommand.Gameplay,
-    ) : PendingWorkflow
+    data class ExitingRun(val runId: RunId) : PendingWorkflow
 
 }
 

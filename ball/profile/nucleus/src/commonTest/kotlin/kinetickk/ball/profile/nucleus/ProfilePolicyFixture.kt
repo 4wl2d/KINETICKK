@@ -11,9 +11,7 @@ internal val TestProfilePolicy: ProfilePolicySnapshot by lazy(::profilePolicyFix
 private fun profilePolicyFixture(): ProfilePolicySnapshot = ProfilePolicySnapshot(
     version = ContentVersion("test-content"),
     itemCount = 400,
-    coreShapes = listOf(0L, 25L, 90L).mapIndexed { index, cost ->
-        CoreShapeDefinition(CoreShape.entries[index], cost)
-    }.toImmutableList(),
+    coreShapes = CoreShape.entries.map { CoreShapeDefinition(it) }.toImmutableList(),
     weapons = intArrayOf(0, 25, 55, 95, 145, 215, 305, 430, 610, 860, 1_200, 1_650)
         .mapIndexed { index, cost ->
             WeaponDefinition(WeaponId.entries[index], "Weapon $index", "Test weapon $index", listOf("TEST"), cost)

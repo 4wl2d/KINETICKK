@@ -5,7 +5,7 @@ build/
 out/
 kotlin-js-store/
 node_modules/
-output/playwright/
+/output/
 .playwright-cli/
 __pycache__/
 *.py[cod]
@@ -31,6 +31,7 @@ secrets.properties
 
 # Local AI tooling and instructions
 AGENTS.md
+!/AGENTS.md
 CLAUDE.md
 CLAUDE.local.md
 CODEX.md
@@ -62,6 +63,9 @@ SKILL.md
 /docs/agents/
 /docs/pokeball-*.md
 /spec/pokeball-architecture-core.md
+
+# Generated benchmark reports belong in build/, not the source tree
+/docs/performance/results/
 
 # Logs, diagnostics, and operating-system files
 *.log

@@ -3,308 +3,180 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
-import kinetickk.foundation.design.*
-
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
+import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.interaction.layout.gameplayLayoutMode
-import kinetickk.ball.gameplay.nucleus.model.clamp
+import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.nucleus.model.formatRunTime
-import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
-import kotlin.math.max
+import kinetickk.foundation.common.localization.text
+import kinetickk.foundation.design.*
 import kotlin.math.min
-import kotlin.math.sin
 
 internal fun DrawScope.drawHud(engine: GameplayRenderModel, textMeasurer: TextMeasurer) {
-    val layoutMode = gameplayLayoutMode(size.width, size.height, density)
-    if (layoutMode != GameplayLayoutMode.REGULAR) {
-        drawCompactHud(engine, textMeasurer, layoutMode)
-        return
-    }
+    val mode = gameplayLayoutMode(size.width, size.height, density)
+    val spacingScale = textMeasurer.scale.coerceAtLeast(1f)
+    val portrait = mode == GameplayLayoutMode.COMPACT_PORTRAIT
+    val compact = mode != GameplayLayoutMode.REGULAR
     val narrow = size.width / density < 700f
-    val panelX = d(if (narrow) 10f else 18f)
-    val panelY = d(if (narrow) 10f else 18f)
-    val panelWidth = d(if (narrow) 185f else 250f)
-    val panelHeight = d(if (narrow) 119f else 137f)
-    val contentX = panelX + d(if (narrow) 10f else 13f)
-    val barWidth = d(if (narrow) 165f else 220f)
-    drawRect(Color(0xAA080A17), topLeft = Offset(panelX, panelY), size = Size(panelWidth, panelHeight))
-    drawRect(DarkLine, topLeft = Offset(panelX, panelY), size = Size(panelWidth, panelHeight), style = Stroke(d(1f)))
-    drawLabel(textMeasurer, "CORE // ${engine.coreShape.name}", contentX, panelY + d(10f), if (narrow) 9f else 11f, Cyan, weight = FontWeight.Bold)
-    drawLabel(textMeasurer, "LV ${engine.level}   DATA ${engine.data}/${engine.nextLevelData}", contentX, panelY + d(29f), if (narrow) 8f else 10f, Muted)
-    drawBar(contentX, panelY + d(52f), barWidth, d(7f), engine.hp / engine.maxHp, Cyan, DarkLine)
-    drawLabel(textMeasurer, "INTEGRITY ${engine.hp.toInt()}", contentX, panelY + d(63f), if (narrow) 7f else 9f, White)
+    val left = d(20f)
+    val top = d(if (portrait) 78f else 22f)
+    val width = min(d(if (compact) 164f else 204f), size.width * if (portrait) 0.52f else 0.28f)
+    val barLeft = left + d(22f)
+    val healthColor = if (engine.hp / engine.maxHp < 0.3f) Red else Cyan
+    drawInterfaceGlyph(InterfaceGlyph.PLUS, Offset(left + d(5f), top + d(8f * spacingScale)), d(7f), healthColor)
+    drawLabel(textMeasurer, engine.hp.toInt().toString(), barLeft, top, 14f, White, weight = FontWeight.Bold)
+    drawLabel(textMeasurer, textMeasurer.language.text(GameplayText.LevelShort, engine.level), left + width, top + d(3f), 9f, Muted, alignRight = true)
+    drawBar(barLeft, top + d(26f * spacingScale), width - d(22f), d(5f), engine.hp / engine.maxHp, healthColor, DarkLine)
+    drawBar(barLeft, top + d(35f * spacingScale), width - d(22f), d(2f), engine.data.toFloat() / engine.nextLevelData.coerceAtLeast(1), White.copy(alpha = 0.55f), DarkLine)
     if (engine.maxShield > 0f) {
-        drawBar(contentX, panelY + d(82f), barWidth, d(5f), engine.shield / engine.maxShield, Violet, DarkLine)
-        drawLabel(textMeasurer, "SHIELD ${engine.shield.toInt()}/${engine.maxShield.toInt()}", contentX, panelY + d(89f), 7f, Violet)
+        drawInterfaceGlyph(InterfaceGlyph.SHIELD, Offset(left + d(5f), top + d(51f * spacingScale)), d(6f), Violet)
+        drawBar(barLeft, top + d(49f * spacingScale), width - d(55f), d(3f), engine.shield / engine.maxShield, Violet, DarkLine)
+        drawLabel(textMeasurer, engine.shield.toInt().toString(), left + width, top + d(43f * spacingScale), 9f, Violet, alignRight = true)
     }
-    drawBar(contentX, panelY + d(111f), barWidth, d(6f), engine.heat / GameplayRenderModel.MAX_HEAT, if (engine.overheated) Red else Orange, DarkLine)
-    drawLabel(textMeasurer, if (engine.overheated) "HEAT // OFFLINE" else "HEAT", contentX + barWidth, panelY + d(91f), if (narrow) 7f else 9f, if (engine.overheated) Red else Muted, alignRight = true)
+    drawCharacterAbilityHud(engine, textMeasurer, left, top + d((if (engine.maxShield > 0f) 69f else 51f) * spacingScale), width)
 
-    val timeY = d(if (narrow) 145f else 25f)
-    val phaseY = d(if (narrow) 174f else 61f)
-    val progressY = d(if (narrow) 193f else 83f)
-    drawLabel(textMeasurer, formatRunTime(engine.elapsed), size.width * 0.5f, timeY, if (narrow) 20f else 25f, White, centered = true, weight = FontWeight.Bold)
-    val phaseLabel = if (narrow) {
-        "R${engine.rebirthLevel} // DRIFT > ARCHITECT"
-    } else {
-        "REBIRTH ${engine.rebirthLevel} // DRIFT  >  SURGE  >  ARCHITECT"
-    }
-    drawLabel(textMeasurer, phaseLabel, size.width * 0.5f, phaseY, if (narrow) 7f else 9f, Muted, centered = true)
-    val halfProgress = min(d(240f), size.width * 0.22f)
-    drawBar(size.width * 0.5f - halfProgress, progressY, halfProgress * 2f, d(4f), engine.runProgress, Violet, DarkLine)
-    val overdriveWidth = min(d(180f), size.width * 0.17f)
-    drawBar(size.width * 0.5f - overdriveWidth, progressY + d(14f), overdriveWidth * 2f, d(5f), engine.overdriveCharge / 100f, if (engine.overdriveTime > 0f) Acid else Magenta, DarkLine)
-    drawLabel(textMeasurer, if (engine.overdriveTime > 0f) "OVERDRIVE ACTIVE" else "OVERDRIVE ${engine.overdriveCharge.toInt()}%", size.width * 0.5f, progressY + d(22f), 7f, if (engine.overdriveTime > 0f) Acid else Muted, centered = true)
+    val timerX = if (portrait) d(20f) else size.width * 0.5f
+    val timerY = d(if (!compact && narrow) 126f else 20f)
+    drawLabel(textMeasurer, formatRunTime(engine.elapsed), timerX, timerY, if (compact) 20f else 24f,
+        White, centered = !portrait, weight = FontWeight.Medium)
+    val progressWidth = d(if (portrait) 94f else 132f)
+    drawBar(if (portrait) timerX else timerX - progressWidth * 0.5f, timerY + d(34f * spacingScale), progressWidth, d(2f), engine.runProgress, Muted, DarkLine)
+    // Charge and tether stability use distinct glyphs as well as color.
+    val meterY = if (portrait) top + d(104f * spacingScale) else timerY + d(54f * spacingScale)
+    val meterX = if (portrait) left else timerX - d(76f)
+    drawMeter(InterfaceGlyph.BOLT, meterX, meterY, d(64f), engine.overdriveCharge / 100f, if (engine.overdriveTime > 0f) Acid else Magenta)
     val polarityColor = when {
         engine.polarityStability < 0.22f -> Red
         engine.polarityStability < 0.58f -> Orange
-        else -> Cyan
+        else -> Muted
     }
-    val polarityWidth = min(d(130f), size.width * 0.13f)
-    drawBar(size.width * 0.5f - polarityWidth, progressY + d(38f), polarityWidth * 2f, d(4f), engine.polarityStability, polarityColor, DarkLine)
-    val polarityLabel = if (engine.polarityStability < 0.58f) {
-        "POLARITY ${(engine.polarityStability * 100f).toInt()}% // TURN OR RECENTER"
-    } else {
-        "POLARITY ${(engine.polarityStability * 100f).toInt()}%"
+    drawMeter(InterfaceGlyph.RING, meterX + d(88f), meterY, d(64f), engine.polarityStability, polarityColor)
+    if (engine.overdriveTime > 0f || engine.polarityStability < 0.58f) {
+        val warning = if (engine.polarityStability < 0.58f) {
+            textMeasurer.language.text(GameplayText.PolarityWarning, (engine.polarityStability * 100f).toInt())
+        } else textMeasurer.language.text(GameplayText.OverdriveActive)
+        drawLabel(textMeasurer, warning, if (portrait) left else timerX, meterY + d(15f * spacingScale), 8f,
+            if (engine.polarityStability < 0.58f) polarityColor else Acid, centered = !portrait)
     }
-    drawLabel(textMeasurer, polarityLabel, size.width * 0.5f, progressY + d(45f), 7f, polarityColor, centered = true)
 
-    val right = size.width - d(if (narrow) 10f else 22f)
-    val weaponColor = weaponColor(engine.weapon)
-    drawLabel(textMeasurer, engine.currentWeaponDefinition.name.uppercase(), right, d(if (narrow) 14f else 22f), if (narrow) 8f else 11f, weaponColor, alignRight = true, weight = FontWeight.Bold)
-    val nextMastery = engine.nextWeaponMastery
-    val masteryLabel = if (nextMastery == null) {
-        "LV ${engine.weaponLevel} // ${engine.currentWeaponMastery.displayLabel.uppercase()}"
-    } else {
-        "LV ${engine.weaponLevel} // ${engine.currentWeaponMastery.displayLabel.uppercase()} > ${nextMastery.displayLabel.uppercase()} ${nextMastery.minimumLevel}"
+    val right = size.width - d(22f)
+    val infoTop = if (compact) top else d(24f)
+    if (!compact) {
+        drawSystemGlyph(weaponGlyphStyle(engine.weapon), Offset(right - d(10f), infoTop + d(7f)), d(11f), 0f, weaponColor(engine.weapon))
+        drawLabel(textMeasurer, engine.currentWeaponDefinition.name.localizedContent(textMeasurer.language), right - d(29f), infoTop,
+            10f, White, alignRight = true, maxWidth = min(d(200f), size.width * 0.22f))
+        drawLabel(textMeasurer, textMeasurer.language.text(GameplayText.LevelShort, engine.weaponLevel), right - d(29f), infoTop + d(17f * spacingScale), 8f, Muted, alignRight = true)
+        drawBar(right - d(96f), infoTop + d(34f * spacingScale), d(96f), d(2f), engine.weaponMasteryProgress, weaponColor(engine.weapon), DarkLine)
     }
-    drawLabel(textMeasurer, masteryLabel, right, d(if (narrow) 34f else 44f), if (narrow) 6f else 8f, White, alignRight = true)
-    val masteryWidth = d(if (narrow) 120f else 170f)
-    drawBar(right - masteryWidth, d(if (narrow) 53f else 63f), masteryWidth, d(4f), engine.weaponMasteryProgress, weaponColor, DarkLine)
-    drawLabel(textMeasurer, "${VelocityNames[engine.velocityTier.coerceIn(VelocityNames.indices)]} // ${formatCompact(engine.speed.toLong())} u/s", right, d(if (narrow) 64f else 77f), if (narrow) 8f else 10f, White, alignRight = true)
-    drawLabel(textMeasurer, "MASS ${formatOneDecimal(engine.mass)}  COMBO x${max(1, engine.combo)}", right, d(if (narrow) 83f else 98f), if (narrow) 7f else 9f, Muted, alignRight = true)
-    drawLabel(textMeasurer, "ITEMS ${engine.acquiredItemCount}  MATTER ${formatCompact(engine.runMatter)}", right, d(if (narrow) 101f else 119f), if (narrow) 7f else 9f, Acid, alignRight = true)
-    engine.recentItem?.let { item ->
-        val recentY = d(if (narrow) 119f else 140f)
-        val accent = rarityColor(item.rarity)
-        drawLabel(textMeasurer, "+ ${item.name.uppercase()}", right - d(20f), recentY, 7f, accent, alignRight = true)
-        drawItemIcon(
-            item = item,
-            center = Offset(right - d(8f), recentY + d(7f)),
-            radius = d(7f),
-            accent = accent,
-            stack = engine.itemStack(item.id),
-        )
-    }
-    drawRelicMatrix(engine, textMeasurer, narrow, right)
+    val statY = infoTop + d((if (portrait) 0f else 53f) * spacingScale)
+    drawInterfaceGlyph(InterfaceGlyph.GAUGE, Offset(right - d(70f), statY + d(6f)), d(7f), Muted)
+    drawLabel(textMeasurer, formatCompact(engine.speed.toLong(), textMeasurer.language), right, statY - d(2f), 12f, White, alignRight = true)
+    drawInterfaceGlyph(InterfaceGlyph.DIAMOND, Offset(right - d(70f), statY + d(32f * spacingScale)), d(7f), Muted)
+    drawLabel(textMeasurer, formatCompact(engine.runMatter, textMeasurer.language), right, statY + d(24f * spacingScale), 12f, White, alignRight = true)
+    drawRelics(engine, textMeasurer, right, statY + d(54f * spacingScale))
 
     if (engine.combo >= 2 && engine.comboTime > 0f) {
-        val comboProgress = clamp(engine.comboTime / max(0.001f, engine.comboWindow), 0f, 1f)
-        val comboPulse = (sin(engine.elapsed * 12f) + 1f) * 0.5f
-        val comboY = size.height - d(if (narrow) 112f else 88f)
-        val comboWidth = d(118f)
-        drawLabel(
-            textMeasurer,
-            "CHAIN x${engine.combo}",
-            size.width * 0.5f,
-            comboY,
-            13f + min(5f, engine.combo * 0.12f) + comboPulse,
-            if (engine.velocityTier >= 2) Acid else Cyan,
-            centered = true,
-            weight = FontWeight.Bold,
-        )
-        drawBar(size.width * 0.5f - comboWidth * 0.5f, comboY + d(25f), comboWidth, d(3f), comboProgress, Magenta, DarkLine)
+        val comboY = size.height - d(75f)
+        drawLabel(textMeasurer, "×${engine.combo}", size.width * 0.5f, comboY, 22f, White, centered = true, weight = FontWeight.Bold)
+        drawBar(size.width * 0.5f - d(28f), comboY + d(30f), d(56f), d(2f), engine.comboTime / engine.comboWindow.coerceAtLeast(0.001f), Cyan, DarkLine)
     }
-
-    val danger = engine.tetherDistance < 75f
-    if (danger && engine.runGrace <= 0f) {
-        drawLabel(textMeasurer, "SINGULARITY PROXIMITY", size.width * 0.5f, size.height - d(52f), 12f, Red, centered = true, weight = FontWeight.Bold)
+    if (engine.tetherDistance < 75f && engine.runGrace <= 0f) {
+        drawLabel(textMeasurer, textMeasurer.language.text(GameplayText.SingularityClose), size.width * 0.5f,
+            size.height - d(114f), 10f, Red, centered = true, weight = FontWeight.Bold)
     }
     if (engine.messageTime > 0f) {
-        val alpha = clamp(engine.messageTime / 0.45f, 0f, 1f)
-        val messageY = size.height * if (narrow) 0.34f else 0.23f
-        drawLabel(textMeasurer, engine.message, size.width * 0.5f, messageY, 19f, if (engine.message == "OVERHEAT") Red else White, centered = true, weight = FontWeight.Bold, alpha = alpha)
-    }
-    if (engine.lastImpactTime > 0f && engine.phase == GamePhase.RUNNING) {
-        val alpha = clamp(engine.lastImpactTime / 0.22f, 0f, 1f)
-        drawLabel(textMeasurer, "IMPACT // ${engine.lastImpact.toInt()}", d(28f), size.height - d(45f), 12f, Acid, weight = FontWeight.Bold, alpha = alpha)
-        drawRect(Acid.copy(alpha = alpha * 0.65f), Offset(d(28f), size.height - d(21f)), Size(d(105f) * alpha, d(2f)))
+        drawLabel(textMeasurer, engine.message.localizedContent(textMeasurer.language), size.width * 0.5f,
+            maxOf(size.height * (if (compact || narrow) 0.39f else 0.21f), meterY + d(45f * spacingScale)), if (compact) 14f else 17f,
+            if (engine.message == "OVERHEAT") Red else White, centered = true,
+            alpha = (engine.messageTime / 0.45f).coerceIn(0f, 1f), maxWidth = size.width - d(40f), maxLines = 2)
     }
     drawControls(engine, textMeasurer)
 }
 
-private fun DrawScope.drawCompactHud(
-    engine: GameplayRenderModel,
-    textMeasurer: TextMeasurer,
-    layoutMode: GameplayLayoutMode,
-) {
-    val portrait = layoutMode == GameplayLayoutMode.COMPACT_PORTRAIT
-    val panelLeft = d(12f)
-    val panelTop = d(if (portrait) 70f else 10f)
-    val panelWidth = if (portrait) size.width - d(24f) else min(d(220f), size.width * 0.31f)
-    val panelHeight = d(92f)
-    val contentLeft = panelLeft + d(10f)
-    val barWidth = panelWidth - d(20f)
-    drawRect(Color(0xC4080A17), Offset(panelLeft, panelTop), Size(panelWidth, panelHeight))
-    drawRect(DarkLine, Offset(panelLeft, panelTop), Size(panelWidth, panelHeight), style = Stroke(d(1f)))
-    drawLabel(
-        textMeasurer,
-        "LV ${engine.level} // ${engine.currentWeaponDefinition.name.uppercase()}",
-        contentLeft,
-        panelTop + d(9f),
-        8f,
-        weaponColor(engine.weapon),
-        weight = FontWeight.Bold,
-        maxWidth = barWidth,
-    )
-    drawBar(contentLeft, panelTop + d(31f), barWidth, d(7f), engine.hp / engine.maxHp, Cyan, DarkLine)
-    drawLabel(textMeasurer, "HP ${engine.hp.toInt()}/${engine.maxHp.toInt()}", contentLeft, panelTop + d(41f), 7f, White)
-    val secondaryValue = if (engine.maxShield > 0f) engine.shield / engine.maxShield else engine.heat / GameplayRenderModel.MAX_HEAT
-    val secondaryColor = if (engine.maxShield > 0f) Violet else if (engine.overheated) Red else Orange
-    drawBar(contentLeft, panelTop + d(61f), barWidth, d(5f), secondaryValue, secondaryColor, DarkLine)
-    drawLabel(
-        textMeasurer,
-        if (engine.maxShield > 0f) "SHIELD ${engine.shield.toInt()} // HEAT ${engine.heat.toInt()}" else "HEAT ${engine.heat.toInt()}",
-        contentLeft,
-        panelTop + d(69f),
-        6f,
-        secondaryColor,
-        maxWidth = barWidth,
-    )
-
-    if (portrait) {
-        drawLabel(textMeasurer, formatRunTime(engine.elapsed), d(12f), d(14f), 18f, White, weight = FontWeight.Bold)
-        drawLabel(textMeasurer, "R${engine.rebirthLevel} // ${formatCompact(engine.runMatter)} MATTER", d(12f), d(42f), 7f, Acid)
-    } else {
-        drawLabel(textMeasurer, formatRunTime(engine.elapsed), size.width * 0.5f, d(13f), 18f, White, centered = true, weight = FontWeight.Bold)
-        drawLabel(textMeasurer, "R${engine.rebirthLevel} // ${formatCompact(engine.runMatter)} MATTER", size.width * 0.5f, d(42f), 7f, Acid, centered = true)
-        val progressWidth = min(d(220f), size.width * 0.28f)
-        drawBar(size.width * 0.5f - progressWidth * 0.5f, d(62f), progressWidth, d(4f), engine.runProgress, Violet, DarkLine)
-    }
-
-    forEachRunningControlBounds(
-        size.width,
-        size.height,
-        density,
-    ) { target, left, top, right, bottom ->
-        val center = Offset((left + right) * 0.5f, (top + bottom) * 0.5f)
-        when (target) {
-            RunningControlTarget.BRAKE -> {
-                drawCircle(Violet.copy(alpha = if (engine.braking) 0.28f else 0.12f), d(31f), center)
-                drawCircle(Violet, d(30f), center, style = Stroke(d(1.4f)))
-                drawLabel(textMeasurer, "BRAKE", center.x, center.y - d(6f), 8f, Violet, centered = true, weight = FontWeight.Bold)
-                drawLabel(textMeasurer, "HOLD", center.x, center.y + d(11f), 6f, White, centered = true)
-            }
-            RunningControlTarget.DASH -> {
-                val accent = if (engine.overheated) Red else Cyan
-                drawCircle(accent.copy(alpha = if (engine.dashReady) 0.18f else 0.08f), d(31f), center)
-                drawCircle(accent, d(30f), center, style = Stroke(d(1.4f)))
-                drawLabel(textMeasurer, "DASH", center.x, center.y - d(6f), 8f, accent, centered = true, weight = FontWeight.Bold)
-                drawLabel(textMeasurer, if (engine.overheated) "OFF" else if (engine.dashReady) "READY" else "WAIT", center.x, center.y + d(11f), 6f, White, centered = true)
-            }
-            RunningControlTarget.PERFORMANCE -> {
-                val topLeft = Offset(left, top)
-                val controlSize = Size(right - left, bottom - top)
-                drawRect(Color(0xC4080A17), topLeft, controlSize)
-                drawRect(Violet, topLeft, controlSize, style = Stroke(d(1f)))
-                drawLabel(textMeasurer, "PERF", center.x, center.y - d(5f), 7f, Violet, centered = true, weight = FontWeight.Bold)
-                drawLabel(textMeasurer, "METRICS", center.x, center.y + d(9f), 5f, Muted, centered = true)
-            }
-            RunningControlTarget.PAUSE -> {
-                val topLeft = Offset(left, top)
-                val controlSize = Size(right - left, bottom - top)
-                drawRect(Color(0xC4080A17), topLeft, controlSize)
-                drawRect(Cyan, topLeft, controlSize, style = Stroke(d(1f)))
-                drawLabel(textMeasurer, "Ⅱ", center.x, center.y - d(9f), 15f, Cyan, centered = true, weight = FontWeight.Bold)
-                drawLabel(textMeasurer, "PAUSE", center.x, center.y + d(10f), 5f, White, centered = true)
-            }
-        }
-    }
-
-    if (engine.combo >= 2 && engine.comboTime > 0f) {
-        drawLabel(textMeasurer, "CHAIN x${engine.combo}", size.width * 0.5f, size.height - d(51f), 11f, Acid, centered = true, weight = FontWeight.Bold)
-    }
-    if (engine.tetherDistance < 75f && engine.runGrace <= 0f) {
-        drawLabel(textMeasurer, "SINGULARITY CLOSE", size.width * 0.5f, size.height - d(24f), 8f, Red, centered = true, weight = FontWeight.Bold)
-    }
-    if (engine.messageTime > 0f) {
-        val alpha = clamp(engine.messageTime / 0.45f, 0f, 1f)
-        drawLabel(textMeasurer, engine.message, size.width * 0.5f, size.height * 0.44f, 15f, if (engine.message == "OVERHEAT") Red else White, centered = true, weight = FontWeight.Bold, alpha = alpha)
-    }
+private fun DrawScope.drawMeter(glyph: InterfaceGlyph, x: Float, y: Float, width: Float, progress: Float, color: Color) {
+    drawInterfaceGlyph(glyph, Offset(x + d(5f), y), d(6f), color)
+    drawBar(x + d(18f), y - d(1.5f), width - d(18f), d(3f), progress, color, DarkLine)
 }
 
-internal fun DrawScope.drawRelicMatrix(engine: GameplayRenderModel, textMeasurer: TextMeasurer, narrow: Boolean, right: Float) {
-    val relicPolicy = engine.content.relicPolicy
-    val slotSize = d(if (narrow) 31f else 36f)
-    val gap = d(6f)
-    val totalWidth = slotSize * relicPolicy.maxSlots + gap * (relicPolicy.maxSlots - 1)
-    val startX = right - totalWidth
-    val top = d(if (narrow) 156f else 174f)
-    drawLabel(
-        textMeasurer,
-        "RELIC MATRIX ${engine.equippedRelics.size}/${relicPolicy.maxSlots}",
-        right,
-        top - d(15f),
-        7f,
-        if (engine.equippedRelics.isEmpty()) Muted else Gold,
-        alignRight = true,
-        weight = FontWeight.Bold,
-    )
-    repeat(relicPolicy.maxSlots) { index ->
-        val left = startX + index * (slotSize + gap)
-        val center = Offset(left + slotSize * 0.5f, top + slotSize * 0.5f)
-        val equipped = engine.equippedRelics.getOrNull(index)
-        val accent = equipped?.let { relicAspectColor(engine.content.relic(it.id).aspect) } ?: DarkLine
-        drawRect(Color(0xB00B0D1D), Offset(left, top), Size(slotSize, slotSize))
-        drawRect(accent.copy(alpha = if (equipped == null) 0.7f else 0.95f), Offset(left, top), Size(slotSize, slotSize), style = Stroke(d(1f)))
-        drawLabel(textMeasurer, "${index + 1}", left + d(3f), top + d(2f), 5f, if (equipped == null) Muted else accent, weight = FontWeight.Bold)
-        if (equipped == null) {
-            drawCircle(DarkLine.copy(alpha = 0.46f), slotSize * 0.18f, center, style = Stroke(d(1f)))
-            drawLine(DarkLine, Offset(center.x - slotSize * 0.09f, center.y), Offset(center.x + slotSize * 0.09f, center.y), d(1f))
-        } else {
-            drawRelicIcon(
-                definition = engine.content.relic(equipped.id),
-                policy = relicPolicy,
-                center = center,
-                radius = slotSize * 0.31f,
-                rank = equipped.rank,
-                time = engine.elapsed,
-            )
-        }
+private fun DrawScope.drawRelics(engine: GameplayRenderModel, textMeasurer: TextMeasurer, right: Float, top: Float) {
+    val slot = d(28f)
+    engine.equippedRelics.forEachIndexed { index, relic ->
+        val center = Offset(right - d(12f) - slot * index, top + d(12f))
+        drawRelicIcon(engine.content.relic(relic.id), engine.content.relicPolicy, center, d(9f), relic.rank, 0f)
+        if (relic.rank > 1) drawLabel(textMeasurer, relic.rank.toString(), center.x + d(8f), center.y + d(5f), 6f, White)
     }
 }
 
 internal fun DrawScope.drawControls(engine: GameplayRenderModel, textMeasurer: TextMeasurer) {
-    val dash = Offset(size.width - d(82f), size.height - d(88f))
-    val brake = Offset(size.width - d(190f), size.height - d(67f))
-    val dashColor = if (engine.overheated) Red else Cyan
-    val dashPulse = (sin(engine.elapsed * 8f) + 1f) * 0.5f
-    if (engine.dashReady) drawCircle(Cyan.copy(alpha = 0.045f + dashPulse * 0.05f), d(58f + dashPulse * 4f), dash)
-    drawCircle(dashColor.copy(alpha = if (engine.overheated) 0.06f else 0.13f + dashPulse * 0.03f), d(49f), dash)
-    drawCircle(dashColor.copy(alpha = 0.75f), d(48f), dash, style = Stroke(d(1.5f)))
-    drawArc(
-        dashColor.copy(alpha = 0.9f),
-        -90f,
-        360f * clamp(1f - engine.heat / GameplayRenderModel.MAX_HEAT, 0f, 1f),
-        false,
-        Offset(dash.x - d(54f), dash.y - d(54f)),
-        Size(d(108f), d(108f)),
-        style = Stroke(d(2f), cap = StrokeCap.Round),
-    )
-    drawLabel(textMeasurer, "DASH", dash.x, dash.y - d(12f), 12f, dashColor, centered = true, weight = FontWeight.Bold)
-    drawLabel(textMeasurer, if (engine.overheated) "OFFLINE" else if (engine.dashReady) "READY" else "COOLING", dash.x, dash.y + d(11f), 7f, if (engine.dashReady) White else Muted, centered = true)
-    drawCircle(Violet.copy(alpha = if (engine.braking) 0.22f else 0.08f), d(39f), brake)
-    drawCircle(Violet.copy(alpha = 0.65f), d(38f), brake, style = Stroke(d(1.2f)))
-    drawLabel(textMeasurer, "BRAKE", brake.x, brake.y - d(10f), 9f, Violet, centered = true, weight = FontWeight.Bold)
-    drawLabel(textMeasurer, "SHIFT", brake.x, brake.y + d(9f), 7f, Muted, centered = true)
+    val regular = gameplayLayoutMode(size.width, size.height, density) == GameplayLayoutMode.REGULAR
+    forEachRunningControlBounds(size.width, size.height, density) { target, left, top, right, bottom ->
+        val center = Offset((left + right) * 0.5f, (top + bottom) * 0.5f)
+        val radius = min(right - left, bottom - top) * 0.5f - d(1f)
+        val accent = when (target) {
+            RunningControlTarget.DASH -> if (engine.overheated) Red else if (engine.dashReady) Cyan else Muted
+            RunningControlTarget.BRAKE -> if (engine.braking) Cyan else Muted
+            else -> Muted
+        }
+        val active = (target == RunningControlTarget.BRAKE && engine.braking) || (target == RunningControlTarget.DASH && engine.dashPhaseTime > 0f)
+        drawCircle(if (active) accent.copy(alpha = 0.18f) else OverlayPanel, radius, center)
+        drawCircle(if (active) accent else DarkLine, radius, center, style = Stroke(d(1f)))
+        val glyph = when (target) {
+            RunningControlTarget.DASH -> InterfaceGlyph.BOLT
+            RunningControlTarget.BRAKE -> InterfaceGlyph.SHIELD
+            RunningControlTarget.PAUSE -> InterfaceGlyph.PAUSE
+            RunningControlTarget.PERFORMANCE -> InterfaceGlyph.CHART
+        }
+        drawInterfaceGlyph(glyph, center.copy(y = center.y - d(if (regular) 5f else 0f)), d(11f), accent)
+        if (target == RunningControlTarget.DASH) {
+            drawArc(accent, -90f, 360f * (1f - engine.heat / GameplayRenderModel.MAX_HEAT).coerceIn(0f, 1f),
+                false, center - Offset(radius, radius), Size(radius * 2f, radius * 2f), style = Stroke(d(2f), cap = StrokeCap.Round))
+        }
+        if (regular) {
+            drawLabel(textMeasurer, if (target == RunningControlTarget.BRAKE) "Shift" else "Space",
+                center.x, center.y + d(11f), 7f, Muted, centered = true)
+        }
+    }
+}
+
+private fun DrawScope.drawCharacterAbilityHud(engine: GameplayRenderModel, textMeasurer: TextMeasurer, left: Float, top: Float, width: Float) {
+    val ability = engine.characterAbility
+    if (engine.coreShape == CoreShape.SHARD) {
+        drawInterfaceGlyph(InterfaceGlyph.BOLT, Offset(left + d(5f), top + d(5f)), d(6f), Muted)
+        drawLabel(textMeasurer, "→", left + d(22f), top - d(2f), 9f, Muted)
+        drawInterfaceGlyph(InterfaceGlyph.TARGET, Offset(left + d(44f), top + d(5f)), d(6f), Muted)
+        return
+    }
+    val glyph = when (engine.coreShape) {
+        CoreShape.ORB, CoreShape.RING -> InterfaceGlyph.RING
+        CoreShape.PRISM, CoreShape.DIAMOND -> InterfaceGlyph.SHIELD
+        CoreShape.SHARD -> InterfaceGlyph.BOLT
+        CoreShape.TESSERACT -> InterfaceGlyph.LAYERS
+    }
+    val amount = when (engine.coreShape) {
+        CoreShape.PRISM -> ability.barrier.toInt().toString()
+        CoreShape.RING -> ability.ringRadius.toInt().toString()
+        CoreShape.TESSERACT -> ability.lattice.size.toString()
+        else -> "${(ability.charge * 100f).toInt()}%"
+    }
+    val accent = if (ability.parryWindow > 0f) Cyan else Muted
+    drawInterfaceGlyph(glyph, Offset(left + d(5f), top + d(5f)), d(6f), accent)
+    when (engine.coreShape) {
+        CoreShape.TESSERACT -> repeat(4) { index ->
+            drawCircle(if (index < ability.lattice.size) Cyan else DarkLine, d(2.5f), Offset(left + d(26f + index * 12f), top + d(5f)))
+        }
+        CoreShape.RING -> Unit
+        else -> drawBar(left + d(22f), top + d(4f), width - d(64f), d(2f), ability.charge, accent, DarkLine)
+    }
+    drawLabel(textMeasurer, amount, left + width, top - d(2f), 8f, Muted, alignRight = true)
 }

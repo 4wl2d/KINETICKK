@@ -32,7 +32,7 @@ fact or writing authority.
 |---|---|---|
 | item, weapon, meta-upgrade, relic, and Rebirth definitions/policy | ContentCatalog | typed Content queries and captured immutable snapshots |
 | preferences and mute state | Profile | Profile queries; captured into Gameplay after accepted Session workflow |
-| economy, permanent Lab ranks, loadout, collection, Rebirth progress | Profile | target-owned Profile queries; Gameplay obtains run bootstrap and preferences only through `GameplayProfileRoute`, then captures the validated values in its accepted frame |
+| economy, permanent Lab ranks, loadout, collection, Rebirth progress | Profile | target-owned Profile queries; Gameplay captures the run-bootstrap result through a read capability, while later preferences arrive as explicit values in typed settings calls |
 | current `ProfileSnapshot` bootstrap and persistence outcome | Profile | Resource exposes only `readSnapshot`/`writeSnapshot` and typed outcomes; Session reads bootstrap/persistence status |
 | live simulation, deterministic RNG, run matter, discoveries, active weapon, Codex stacks, run terminal result | GameplayRun | Gameplay queries and target-owned result to Session/Profile routes |
 | navigation, overlay policy, start/restart/exit ordering, settings propagation, Rebirth orchestration, bootstrap-unavailable lifecycle | AppSession | Session projection consumed by Session Interaction |
@@ -47,9 +47,9 @@ The closed platform bindings are actuals inside the `app:shared` KMP leaf:
 application/packaging host with exactly one production project edge to
 `app:shared`; it adds no authority, business fact, writer, or semantic route.
 For Profile persistence, those mutually exclusive platform bindings select
-exactly one current location: Android preferences `kinetickk.profile` key
-`snapshot`, Desktop node `kinetickk/profile` key `snapshot`, or Web key
-`kinetickk_profile`. No Ball or Flow can select another storage root or key.
+exactly one current location: Android preferences `kinetickk.profile.v2` key
+`snapshot`, Desktop node `kinetickk/profile-v2` key `snapshot`, or Web key
+`kinetickk_profile_v2`. No Ball or Flow can select another storage root or key.
 
 Home and Codex may combine independent Profile and Gameplay reads only in
 Session Interaction and must label the result non-atomic. Assembly never joins
@@ -74,13 +74,15 @@ does not branch on business state or construct business payloads.
 The physical implementation remains one Profile component and one active
 Gameplay host, without façade fan-out. Only `app:shared` Assembly may hold the
 Impl composites `ProfileComponent` and `GameplayCompositionComponent`.
-Downstream roles receive least-authority views: `ProfilePort` for local Profile
-Interaction, `ProfileReadPort` for Home/Codex, `SessionProfileRoute` for
-AppSession, `GameplayProfileRoute` for GameplayRun, `GameplaySessionHost` and
-`GameplaySessionRunPort` for Session, and `GameplayPresentation` plus
-`GameplayPresentationPort` for rendering. Result deliveries are validated in
-the corresponding Impl before construction of a Nucleus-private
-`ModuleResultPulse` or flattened pre-acceptance carrier.
+Assembly supplies target-owned read, settings, loadout, rebirth, progress,
+run-lifecycle or presentation capabilities according to each consumer's work.
+Read capabilities expose immutable projections and no mutation authority;
+`ProfilePort` additionally admits local Profile interactions and stays within
+that owner and Assembly. The API keeps no registry of consumers. Immediate
+command results enter the source's serialized handler through the shared call
+scope, which rejects duplicate and late completion before another invocation
+can consume it. Business phases and result interpretation stay in the source
+Nucleus; target acceptance and persistence stay in the target owner.
 
 ## Writer and transition rules
 
@@ -91,10 +93,11 @@ then the acceptor publishes State/revision exactly once before dispatch. A
 same-state accepted Decision still advances the owning revision when the
 protocol defines acceptance.
 
-No acceptor is reentrant. Synchronous command completion enters the source only
-through the bounded Foundation completion deque after the target acceptor has
-returned. A caller-owned Gameplay Interaction root is decided directly under
-the non-reentrant guard and uses a reusable causal-metadata carrier only while
-dispatching its outputs; the deque remains reserved for nested completions.
-Resource outcomes become typed target-owned facts; an
-`OutcomeUnknown` never rewrites the accepted frame.
+No acceptor is reentrant. Owners reuse the Foundation Inline acceptance and
+completion mechanism. A command result enters serialized source processing
+after its target call returns and stays retained until the source accepts its
+complete frame. Completion context belongs to that current input. Business
+State, decisions, bounds and effect handling remain owner-specific. Gameplay
+publishes its State and consistent render snapshot together. Resource outcomes
+become typed owner inputs; neither uncertainty nor a later execution fault
+rewrites an already accepted frame.

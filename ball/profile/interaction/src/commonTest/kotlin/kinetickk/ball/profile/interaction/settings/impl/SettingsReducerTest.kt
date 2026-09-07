@@ -8,6 +8,7 @@ import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.ProfilePreferenceAdjustment
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
+import kinetickk.foundation.common.localization.AppLanguage
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -15,9 +16,65 @@ import kotlin.test.assertTrue
 
 class SettingsReducerTest {
     @Test
+    fun exactVolumeValidatesInputAndRequestsOneAcceptedChangeWithoutClickSpam() {
+        val initial = SettingsState(PlayerPreferences().toRenderModel(), 0, SettingsGroup.SOUND)
+        for (percent in listOf(0, 37, 100)) {
+            val action = SettingsAction.SetMasterVolume(percent)
+            val reduction = SettingsReducer.reduce(initial, action)
+            assertEquals(initial, reduction.state)
+            assertEquals(listOf(SettingsEffect.AdjustPreference(ProfilePreferenceAdjustment.SetMasterVolume(percent))), reduction.effects)
+            assertEquals(reduction, SettingsReducer.reduce(initial, action))
+        }
+        for (percent in listOf(-1, 101, 65, Int.MIN_VALUE, Int.MAX_VALUE)) {
+            assertEquals(SettingsReduction(initial), SettingsReducer.reduce(initial, SettingsAction.SetMasterVolume(percent)))
+        }
+    }
+
+    @Test
+    fun switchingGroupsResetsThePageWithoutChangingPreferences() {
+        val initial = SettingsState(PlayerPreferences().toRenderModel(), page = 1, group = SettingsGroup.GRAPHICS)
+        val action = SettingsAction.SelectGroup(SettingsGroup.SOUND)
+        val changed = SettingsReducer.reduce(initial, action)
+        assertEquals(initial.model, changed.state.model)
+        assertEquals(SettingsGroup.SOUND, changed.state.group)
+        assertEquals(0, changed.state.page)
+        assertTrue(changed.effects.none { it is SettingsEffect.AdjustPreference })
+        assertEquals(changed, SettingsReducer.reduce(initial, action))
+        assertEquals(SettingsReduction(initial), SettingsReducer.reduce(initial, SettingsAction.SelectGroup(SettingsGroup.GRAPHICS)))
+    }
+
+    @Test
+    fun languageSelectionRequestsAcceptedProfileChangeAndSameLanguageIsInert() {
+        val initial = SettingsState(PlayerPreferences(language = AppLanguage.Russian).toRenderModel(), 0)
+        val changed = SettingsReducer.reduce(initial, SettingsAction.SelectLanguage(AppLanguage.English))
+        assertEquals(initial, changed.state)
+        assertEquals(ProfilePreferenceAdjustment.SetLanguage(AppLanguage.English),
+            assertIs<SettingsEffect.AdjustPreference>(changed.effects.first()).adjustment)
+        assertEquals(changed, SettingsReducer.reduce(initial, SettingsAction.SelectLanguage(AppLanguage.English)))
+        assertTrue(SettingsReducer.reduce(initial, SettingsAction.SelectLanguage(AppLanguage.Russian)).effects.isEmpty())
+        assertTrue(SettingsReducer.reduce(initial, SettingsAction.Adjust(SettingsRow.LANGUAGE, 1)).effects.isEmpty())
+    }
+
+    @Test
+    fun textualSettingsUseTheSelectedLanguage() {
+        val russian = PlayerPreferences(language = AppLanguage.Russian, soundEnabled = false)
+        val english = russian.copy(language = AppLanguage.English)
+        assertEquals("Выкл", settingValue(russian, SettingsRow.SFX))
+        assertEquals("Off", settingValue(english, SettingsRow.SFX))
+        assertEquals("Норма", settingValue(russian, SettingsRow.PARTICLES))
+        assertEquals("Normal", settingValue(english, SettingsRow.PARTICLES))
+        assertEquals("Кратко", settingValue(russian, SettingsRow.DAMAGE_NUMBER_FORMAT))
+        assertEquals("Compact", settingValue(english, SettingsRow.DAMAGE_NUMBER_FORMAT))
+        assertEquals("Справа", settingValue(russian, SettingsRow.RUN_STATISTICS_SIDE))
+        assertEquals("Слева", settingValue(russian.copy(runStatisticsOnLeft = true), SettingsRow.RUN_STATISTICS_SIDE))
+        assertEquals("Left", settingValue(english.copy(runStatisticsOnLeft = true), SettingsRow.RUN_STATISTICS_SIDE))
+    }
+
+    @Test
     fun rowsMapToClosedProfileAdjustmentsWithoutOptimisticStateChanges() {
         val initial = SettingsState(PlayerPreferences().toRenderModel(), page = 0)
         val increasingAdjustments = listOf(
+            SettingsRow.RUN_STATISTICS_SIDE to ProfilePreferenceAdjustment.ToggleRunStatisticsSide,
             SettingsRow.SFX to ProfilePreferenceAdjustment.ToggleSoundEffects,
             SettingsRow.MUSIC to ProfilePreferenceAdjustment.ToggleMusic,
             SettingsRow.MASTER_VOLUME to ProfilePreferenceAdjustment.StepMasterVolume(
@@ -96,6 +153,7 @@ class SettingsReducerTest {
         assertEquals(2f, model.preferences.simulationSpeed)
         assertEquals(1f, model.preferences.textScale)
         assertEquals("65%", settingValue(PlayerPreferences(), SettingsRow.MASTER_VOLUME))
-        assertEquals("50/200/1K", settingValue(PlayerPreferences(), SettingsRow.DAMAGE_COLOR_THRESHOLDS))
+        assertEquals("50/200/1 тыс.", settingValue(PlayerPreferences(), SettingsRow.DAMAGE_COLOR_THRESHOLDS))
+        assertEquals("50/200/1K", settingValue(PlayerPreferences(language = AppLanguage.English), SettingsRow.DAMAGE_COLOR_THRESHOLDS))
     }
 }

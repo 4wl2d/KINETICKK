@@ -12,24 +12,26 @@ trigger.
 | Concern | Why it is present | Required construction/evidence |
 |---|---|---|
 | always-applicable boundary/state/decision laws | four semantic authorities mutate or publish owned facts | one writer, closed Pulse/query/output inventories, pure Nuclei, atomic accepted frames, reentrancy tests |
-| cross-authority reads | Session, Gameplay, and Profile consume exactly 14 target-owned snapshot routes | target-owned query/result pairs, source-bound query views, explicit freshness, Assembly bindings, non-atomic multi-read disclosure |
-| same-stack commands and results | Session coordinates Profile/Gameplay; Gameplay reports progress to Profile through exactly 8 command/result routes | target-owned `ModuleCommand`/`ModuleResult` mappings, semantic-handle correlation, Nucleus-private result Pulses, flattened refusal carriers, depth reservation, completion deque |
-| Flow composition | Session owns lifecycle, ordering, branching, recovery, and terminal navigation | one coordinator, two `FlowParticipation` rows, finite routes, one pending command |
+| cross-authority reads | Session, Gameplay, and Profile consume target-owned snapshot operations | target-owned query/result pairs, read-only capabilities, explicit freshness, Assembly bindings, non-atomic multi-read disclosure |
+| same-stack commands and results | Session coordinates Profile/Gameplay; Gameplay reports progress to Profile | accepted source/target ordering, call-scoped typed completion, pre-acceptance refusal versus later failure, retained bounded completion storage |
+| Flow composition | Session owns lifecycle, ordering, branching, recovery, and terminal navigation | one coordinator, actual bound participant interfaces, complete finite workflow, one pending command |
 | external persistence Resource effects | one current local `ProfileSnapshot` | minimum `readSnapshot`/`writeSnapshot` capability, one platform-owned exact key, commit-before-dispatch, closed provider outcomes/Facts, exact failure-before-execution versus possible-execution classification, and runtime-fault propagation |
 | live mechanical Audio Projection (Core §9.13) | accepted Gameplay outputs project bounded tones through Resource/platform mechanics | minimum tone capability, commit-before-dispatch, no typed Audio Fact/result/status, and exact runtime-fault/projection-loss split |
 | raw trust/representation edge | current persisted JSON and platform provider data are untrusted | independent 65536-byte codec gate before decode, Desktop 8192-code-unit value gate before write, and 64-key returned-inventory admission before project-owned membership iteration; strict decoding, provenance quarantine, and validation/business-stage tests; no bound is claimed for provider enumeration/allocation |
-| finite variable dimensions | catalog, simulation, output, audio, causal, and workflow collections exist | exact `N/N+1`, no truncation or partial acceptance, static graph counts |
+| finite variable dimensions | catalog, simulation, output, audio, and completion collections exist | exact `N/N+1`, no truncation or partial acceptance, and complete finite workflow structure |
 | shared Foundation | two or more Balls share immutable collections, PRNG, dispatch guard, or completion deque | project scan proving mechanical-only exports and no mutable business meaning/communication |
 
-The finite physical graph has exactly 23 leaf modules. The separate
+The generated manifest records the finite physical graph. The separate
 `app:android` packaging host is mechanical AppAssembly infrastructure: its
 complete production project-dependency set is the single edge
 `implementation -> :app:shared`. That intra-AppAssembly packaging edge is not a
 business command, read route, output route, or additional authority.
 
-The product is pre-`1.0.0`, so persistence compatibility and migration are not
-active concerns. The current `ProfileSnapshot` shape is the entire supported
-contract. An absent, rejected, non-canonical, or policy-incompatible current
+The product is pre-`1.0.0` and has no versioned compatibility or migration
+subsystem. The current `ProfileSnapshot` wire schema is the entire supported
+contract, including optional `languageCode` and `runStatisticsOnLeft` fields:
+omission selects Russian and `false`, respectively. These defaults do not
+select another schema. An absent, rejected, non-canonical, or policy-incompatible current
 payload constructs the default Profile. A provider read failure is different:
 it blocks Session bootstrap and renders the input-blocking Profile-unavailable
 UI. Keys outside the single platform-selected current key are not inspected and
@@ -81,7 +83,7 @@ Only after a frozen implementation commit and all local/browser gates pass may
 the next docs-only commit say:
 
 > KINETICKK on implementation SHA `<sha>` conforms within the declared scope
-> to Pokeball Core 1.4.0-draft at `de9ef7384795680c836d5e6c2c9b394286058670`.
+> to Pokeball Core 1.5.0-draft at `b4a8219ecb70ae5e81214edd6b509b61d9db0637`.
 
 This is a project self-attestation, not external certification. It does not
 guarantee crash-atomic persistence, exactly-once or eventual delivery,

@@ -3,27 +3,22 @@
 
 package kinetickk.ball.gameplay.nucleus
 
+import kinetickk.ball.profile.api.ProfileProgressApplied
+import kinetickk.ball.profile.api.ProfileRefusal
+
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.api.BrakeSource
-import kinetickk.ball.gameplay.api.GameplayCommandIssuerProvenance
-import kinetickk.ball.gameplay.api.GameplayCommandSource
-import kinetickk.ball.gameplay.api.GameplayCommandSourceToken
 import kinetickk.ball.gameplay.api.GameplayConfigurationRejection
-import kinetickk.ball.gameplay.api.GameplayEffectiveProtocolIdentity
 import kinetickk.ball.gameplay.api.GameplayExitProgressResult
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
-import kinetickk.ball.gameplay.api.GameplayModuleCommand
-import kinetickk.ball.gameplay.api.GameplayModuleCommandPulse
-import kinetickk.ball.gameplay.api.GameplayModuleResult
-import kinetickk.ball.gameplay.api.GameplayModuleResultOutput
 import kinetickk.ball.gameplay.api.GameplayPointerAxis
 import kinetickk.ball.gameplay.api.GameplayQuery
 import kinetickk.ball.gameplay.api.GameplayRejection
 import kinetickk.ball.gameplay.api.GameplayRevision
 import kinetickk.ball.gameplay.api.GameplayRunPhase
-import kinetickk.ball.gameplay.api.GameplaySemanticHandle
 import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.api.GameplayRunStarted
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.reducer.EngineState
@@ -36,22 +31,12 @@ import kinetickk.ball.gameplay.nucleus.simulation.takeSoundCues
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.LabProgress
-import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PlayerProfile
-import kinetickk.ball.profile.api.ProfileCommandBoundaryResponse
-import kinetickk.ball.profile.api.ProfileCommandSource
-import kinetickk.ball.profile.api.ProfileCommandSourceToken
-import kinetickk.ball.profile.api.ProfileEffectiveProtocolIdentity
-import kinetickk.ball.profile.api.ProfileModuleResult
-import kinetickk.ball.profile.api.ProfileResultIssuerProvenance
-import kinetickk.ball.profile.api.ProfileResultSourceToken
 import kinetickk.ball.profile.api.ProfileRevision
-import kinetickk.ball.profile.api.ProfileSemanticHandle
-import kinetickk.ball.profile.api.ProfileTargetBoundaryProvenance
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
@@ -78,9 +63,9 @@ class GameplayNucleusTest {
         assertNull(GameplayNucleus.renderSnapshot(state).renderModel)
         val status = GameplayNucleus.query(state, GameplayQuery.GetRunStatus)
         val weapon = GameplayNucleus.query(state, GameplayQuery.GetActiveWeapon)
-        val codex = GameplayNucleus.query(state, GameplayQuery.GetCodexStacks)
+        val codex = GameplayNucleus.query(state, GameplayQuery.GetBuildSummary)
         assertEquals(GameplayRunPhase.CREATED, status.phase)
-        assertFalse(status.profileCommandPending)
+        assertFalse(status.progressPending)
         assertNull(weapon.weapon)
         assertTrue(codex.itemStacks.isEmpty())
         listOf(status, weapon, codex).forEach { projection ->
@@ -92,12 +77,11 @@ class GameplayNucleusTest {
     @Test
     fun acceptedStartUsesTrustedContextAndCompletesWithCanonicalSource() {
         val initial = initial(2)
-        val pulse = modulePulse(initial, GameplayModuleCommand.StartRun, sourceRevision = 8, ordinal = 3)
         val inputs = validStartInputs(seed = 91_337)
         val frame = accepted(
             GameplayNucleus.decide(
                 initial,
-                GameplayNucleusPulse.ModuleCommand(pulse),
+                GameplayNucleusPulse.StartRun,
                 GameplayContext(start = GameplayStartContext.Ready(inputs)),
             ),
         )
@@ -109,11 +93,9 @@ class GameplayNucleusTest {
         val renderModel = checkNotNull(GameplayNucleus.renderSnapshot(frame.nextState).renderModel)
         assertSame(inputs.content, renderModel.content)
         assertEquals(KINETICKK_CONTENT_VERSION, renderModel.content.version)
-        val completion = assertIs<GameplayOutput.CompleteCommand>(frame.outputs.single())
-        assertEquals(pulse.commandSource, completion.result.commandSource)
-        assertEquals(pulse.commandSource.semanticHandle, completion.result.semanticHandle)
-        assertEquals(0, completion.result.sourceOrdinal)
-        assertEquals(GameplayModuleResult.RunStarted, completion.result.result)
+        val completion = assertIs<GameplayOutput.RunStarted>(frame.outputs.single())
+        assertEquals(initial.instanceId.runId, completion.result.runId)
+        assertEquals(frame.nextState.revision, completion.result.revision)
         assertNull(initial.engine)
         assertEquals(GameplayRevision.ZERO, initial.revision)
     }
@@ -121,12 +103,11 @@ class GameplayNucleusTest {
     @Test
     fun startRequiresAlreadyValidatedTrustedInputs() {
         val state = initial(3)
-        val pulse = modulePulse(state, GameplayModuleCommand.StartRun)
 
         assertFailsWith<IllegalStateException> {
             GameplayNucleus.decide(
                 state,
-                GameplayNucleusPulse.ModuleCommand(pulse),
+                GameplayNucleusPulse.StartRun,
                 GameplayContext.Empty,
             )
         }
@@ -267,125 +248,78 @@ class GameplayNucleusTest {
     fun lifecycleAndModuleOperationMatrixIsClosed() {
         val created = initial(12)
         assertIntentRejection(created, GameplayInteractionPulse.DashRequested, GameplayRejection.NotStarted)
-        assertModuleRejection(created, GameplayModuleCommand.PauseForOverlay, GameplayRejection.NotStarted)
-        assertModuleRejection(created, GameplayModuleCommand.ApplyPreferences, GameplayRejection.NotStarted)
-        assertModuleRejection(created, GameplayModuleCommand.ExitRun, GameplayRejection.NotStarted)
+        assertRejection(GameplayNucleus.decide(created, GameplayNucleusPulse.PauseForOverlay), GameplayRejection.NotStarted)
+        assertRejection(
+            GameplayNucleus.decide(created, GameplayNucleusPulse.ApplyPreferences(PlayerPreferences())),
+            GameplayRejection.NotStarted,
+        )
+        assertRejection(GameplayNucleus.decide(created, GameplayNucleusPulse.ExitRun), GameplayRejection.NotStarted)
 
         val running = start(created).nextState
-        val paused = module(running, GameplayModuleCommand.PauseForOverlay).nextState
+        val paused = accepted(GameplayNucleus.decide(running, GameplayNucleusPulse.PauseForOverlay)).nextState
         assertEquals(GameplayRunPhase.PAUSED, paused.phase)
-        assertModuleRejection(paused, GameplayModuleCommand.PauseForOverlay, GameplayRejection.PauseUnavailable)
+        assertRejection(GameplayNucleus.decide(paused, GameplayNucleusPulse.PauseForOverlay), GameplayRejection.PauseUnavailable)
         val resumed = interaction(paused, GameplayInteractionPulse.PauseToggled).nextState
         assertEquals(GameplayRunPhase.RUNNING, resumed.phase)
 
-        val applied = module(
+        val applied = assertIs<GameplayDecision.Accepted>(GameplayNucleus.decide(
             resumed,
-            GameplayModuleCommand.ApplyPreferences,
-            GameplayContext(preferences = PlayerPreferences(masterVolume = 0.4f)),
-        )
+            GameplayNucleusPulse.ApplyPreferences(PlayerPreferences(masterVolume = 0.4f)),
+        )).frame
         assertEquals(0.4f, applied.nextState.engine!!.model.settings.masterVolume)
-        assertModuleRejection(running, GameplayModuleCommand.StartRun, GameplayRejection.AlreadyStarted)
+        assertRejection(GameplayNucleus.decide(running, GameplayNucleusPulse.StartRun,
+            GameplayContext(start = GameplayStartContext.Ready(validStartInputs()))), GameplayRejection.AlreadyStarted)
 
-        val exited = module(running, GameplayModuleCommand.ExitRun).nextState
+        val exited = exit(running).nextState
         assertEquals(GameplayRunPhase.EXITED, exited.phase)
         assertIntentRejection(exited, GameplayInteractionPulse.DashRequested, GameplayRejection.RunExited)
-        assertModuleRejection(exited, GameplayModuleCommand.ExitRun, GameplayRejection.RunExited)
-        assertModuleRejection(exited, GameplayModuleCommand.StartRun, GameplayRejection.RunExited)
+        assertRejection(GameplayNucleus.decide(exited, GameplayNucleusPulse.ExitRun), GameplayRejection.RunExited)
+        assertRejection(GameplayNucleus.decide(exited, GameplayNucleusPulse.StartRun,
+            GameplayContext(start = GameplayStartContext.Ready(validStartInputs()))), GameplayRejection.RunExited)
     }
 
     @Test
     fun exitWithoutProgressCompletesImmediately() {
         val state = start(initial(20)).nextState
-        val frame = module(state, GameplayModuleCommand.ExitRun)
+        val frame = exit(state)
 
         assertEquals(GameplayRunPhase.EXITED, frame.nextState.phase)
-        assertNull(frame.nextState.pendingProfileCommand)
-        val completion = assertIs<GameplayOutput.CompleteCommand>(frame.outputs.single())
+        assertFalse(frame.nextState.progressPending)
+        val completion = assertIs<GameplayOutput.RunExited>(frame.outputs.single())
         assertEquals(
-            GameplayModuleResult.RunExited(GameplayExitProgressResult.NoProgress),
-            completion.result.result,
+            GameplayExitProgressResult.NoProgress,
+            completion.result.progress,
         )
     }
 
     @Test
     fun exitWithProgressDefersCompletionAndBuildsExactProfileRequest() {
         val state = startedWithProgress(runId = 21, bankedMatter = 9)
-        val pulse = modulePulse(
-            state,
-            GameplayModuleCommand.ExitRun,
-            sourceRevision = 44,
-            ordinal = 6,
-        )
-        val frame = accepted(
-            GameplayNucleus.decide(
-                state,
-                GameplayNucleusPulse.ModuleCommand(pulse),
-                GameplayContext.Empty,
-            ),
-        )
-
+        val frame = exit(state)
         assertEquals(GameplayRunPhase.EXITED, frame.nextState.phase)
         val sent = assertIs<GameplayOutput.SendProfileCommand>(frame.outputs.single())
-        assertEquals(ProfileCommandSource.GameplayRun(21), sent.request.semanticHandle.sourceInstance)
-        assertEquals(LOCAL_PROFILE_INSTANCE_ID, sent.request.targetInstance)
-        assertEquals(frame.nextState.revision.value, sent.request.semanticHandle.sourceRevision)
-        assertEquals(0, sent.request.sourceOrdinal)
-        val pending = checkNotNull(frame.nextState.pendingProfileCommand)
-        assertEquals(sent.request, pending.request)
-        assertEquals(pulse.commandSource, pending.exitCompletion)
-        assertTrue(frame.outputs.none { it is GameplayOutput.CompleteCommand })
+        assertEquals(9L, sent.update.bankedMatter)
+        assertTrue(frame.nextState.progressPending)
+        assertTrue(frame.outputs.none { it is GameplayOutput.RunExited })
     }
 
     @Test
     fun acceptedAndPreacceptProfileCarriersCompleteTheReservedExit() {
-        val exiting = module(startedWithProgress(22, 7), GameplayModuleCommand.ExitRun).nextState
-        val pending = checkNotNull(exiting.pendingProfileCommand)
-        val commandSource = profileCommandSource(pending.request.semanticHandle)
-        val acceptedFrame = accepted(
-            GameplayNucleus.decide(
-                exiting,
-                GameplayNucleusPulse.ProfileModuleResultPulse(
-                    commandSource = commandSource,
-                    resultSource = ProfileResultSourceToken(
-                        semanticHandle = pending.request.semanticHandle,
-                        targetInstance = LOCAL_PROFILE_INSTANCE_ID,
-                        targetRevision = ProfileRevision(18),
-                        sourceOrdinal = 1,
-                        causalScope = 17,
-                        causalDepth = 2,
-                    ),
-                    effectiveProtocolIdentity = ProfileEffectiveProtocolIdentity.GAMEPLAY_PROGRESS,
-                    result = ProfileModuleResult.GameplayProgressApplied,
-                    issuerProvenance = ProfileResultIssuerProvenance.LOCAL_PROFILE_STATIC_BINDING,
-                ),
-            ),
-        )
-        assertNull(acceptedFrame.nextState.pendingProfileCommand)
-        assertEquals(
-            GameplayModuleResult.RunExited(GameplayExitProgressResult.Applied),
-            assertIs<GameplayOutput.CompleteCommand>(acceptedFrame.outputs.single()).result.result,
-        )
-
-        val refusedFrame = accepted(
-            GameplayNucleus.decide(
-                exiting,
-                GameplayNucleusPulse.ProfileCommandRejectedBeforeAcceptance(
-                    commandSource = commandSource,
-                    effectiveProtocolIdentity = ProfileEffectiveProtocolIdentity.GAMEPLAY_PROGRESS,
-                    boundaryResponse = ProfileCommandBoundaryResponse.DecisionRejected(
-                        kinetickk.ball.profile.api.ProfileRejection.NoChange,
-                    ),
-                    targetBoundaryProvenance = ProfileTargetBoundaryProvenance(
-                        LOCAL_PROFILE_INSTANCE_ID,
-                        ProfileEffectiveProtocolIdentity.GAMEPLAY_PROGRESS,
-                    ),
-                ),
-            ),
-        )
-        assertEquals(
-            GameplayModuleResult.RunExited(GameplayExitProgressResult.NotApplied),
-            assertIs<GameplayOutput.CompleteCommand>(refusedFrame.outputs.single()).result.result,
-        )
+        val exiting = exit(startedWithProgress(22, 7)).nextState
+        val acceptedFrame = accepted(GameplayNucleus.decide(
+            exiting,
+            GameplayNucleusPulse.ProgressApplied(ProfileProgressApplied(ProfileRevision(18))),
+        ))
+        assertFalse(acceptedFrame.nextState.progressPending)
+        assertEquals(GameplayExitProgressResult.Applied,
+            assertIs<GameplayOutput.RunExited>(acceptedFrame.outputs.single()).result.progress)
+        val refusedFrame = accepted(GameplayNucleus.decide(
+            exiting,
+            GameplayNucleusPulse.ProgressRefused(ProfileRefusal.Busy),
+        ))
+        assertFalse(refusedFrame.nextState.progressPending)
+        assertEquals(GameplayExitProgressResult.NotApplied,
+            assertIs<GameplayOutput.RunExited>(refusedFrame.outputs.single()).result.progress)
     }
 
     @Test
@@ -396,21 +330,20 @@ class GameplayNucleusTest {
             state.copy(engine = EngineState(firstCandidate)),
             GameplayInteractionPulse.FrameElapsed.fromValidated(0f),
         ).nextState
-        assertTrue(first.pendingProfileCommand != null)
+        assertTrue(first.progressPending)
 
-        val retainedPending = checkNotNull(first.pendingProfileCommand)
         val stateOnlyFrame = interaction(
             first,
             GameplayInteractionPulse.PointerMoved.fromValidated(900f, 360f),
         )
         assertTrue(stateOnlyFrame.outputs.isEmpty())
-        assertSame(retainedPending, stateOnlyFrame.nextState.pendingProfileCommand)
+        assertTrue(stateOnlyFrame.nextState.progressPending)
 
         val secondCandidate = first.engine!!.model.copyForReduction().apply { pendingBankedMatter = 4 }
         assertIntentRejection(
             first.copy(engine = EngineState(secondCandidate)),
             GameplayInteractionPulse.FrameElapsed.fromValidated(0f),
-            GameplayRejection.ProfileCommandPending,
+            GameplayRejection.ProgressPending,
         )
     }
 
@@ -482,19 +415,11 @@ class GameplayNucleusTest {
                 ),
             )
         }
-        val commandSource = modulePulse(state, GameplayModuleCommand.StartRun).commandSource
         assertFailsWith<IllegalArgumentException> {
             GameplayAcceptedFrame(
                 state,
                 immutableListOf(
-                    GameplayOutput.CompleteCommand(
-                        GameplayModuleResultOutput(
-                            commandSource.semanticHandle,
-                            0,
-                            commandSource,
-                            GameplayModuleResult.RunStarted,
-                        ),
-                    ),
+                    GameplayOutput.RunStarted(GameplayRunStarted(state.instanceId.runId, state.revision)),
                     GameplayOutput.EnsureAudioUnlocked,
                 ),
             )
@@ -506,7 +431,7 @@ class GameplayNucleusTest {
     fun retainedRenderAndQueryCollectionsStayImmutable() {
         val state = start(initial(27)).nextState
         val retainedRender = GameplayNucleus.renderSnapshot(state).renderModel!!
-        val retainedStacks = GameplayNucleus.query(state, GameplayQuery.GetCodexStacks).itemStacks
+        val retainedStacks = GameplayNucleus.query(state, GameplayQuery.GetBuildSummary).itemStacks
         val retainedCoreX = retainedRender.coreX
         val advanced = interaction(
             state,
@@ -583,27 +508,17 @@ class GameplayNucleusTest {
         GameplayState.initial(RunId(runId), canonicalGameplayContent)
 
     private fun start(state: GameplayState, seed: Int = 731_991): GameplayAcceptedFrame {
-        val pulse = modulePulse(state, GameplayModuleCommand.StartRun)
         return accepted(
             GameplayNucleus.decide(
                 state,
-                GameplayNucleusPulse.ModuleCommand(pulse),
+                GameplayNucleusPulse.StartRun,
                 GameplayContext(start = GameplayStartContext.Ready(validStartInputs(seed))),
             ),
         )
     }
 
-    private fun module(
-        state: GameplayState,
-        command: GameplayModuleCommand,
-        context: GameplayContext = GameplayContext.Empty,
-    ): GameplayAcceptedFrame = accepted(
-        GameplayNucleus.decide(
-            state,
-            GameplayNucleusPulse.ModuleCommand(modulePulse(state, command)),
-            context,
-        ),
-    )
+    private fun exit(state: GameplayState): GameplayAcceptedFrame =
+        accepted(GameplayNucleus.decide(state, GameplayNucleusPulse.ExitRun))
 
     private fun interaction(
         state: GameplayState,
@@ -620,55 +535,6 @@ class GameplayNucleusTest {
         GameplayNucleus.decide(state, GameplayNucleusPulse.Intent(intent)),
         expected,
     )
-
-    private fun assertModuleRejection(
-        state: GameplayState,
-        command: GameplayModuleCommand,
-        expected: GameplayRejection,
-    ) {
-        val context = when (command) {
-            GameplayModuleCommand.StartRun -> GameplayContext(
-                start = GameplayStartContext.Ready(validStartInputs()),
-            )
-            GameplayModuleCommand.ApplyPreferences -> GameplayContext(preferences = PlayerPreferences())
-            GameplayModuleCommand.PauseForOverlay,
-            GameplayModuleCommand.ExitRun,
-            -> GameplayContext.Empty
-        }
-        assertRejection(
-            GameplayNucleus.decide(
-                state,
-                GameplayNucleusPulse.ModuleCommand(modulePulse(state, command)),
-                context,
-            ),
-            expected,
-        )
-    }
-
-    private fun modulePulse(
-        state: GameplayState,
-        command: GameplayModuleCommand,
-        sourceRevision: Long = state.revision.value,
-        ordinal: Int = 0,
-    ): GameplayModuleCommandPulse {
-        val handle = GameplaySemanticHandle(GameplayCommandSource.LocalSession, sourceRevision, ordinal)
-        return GameplayModuleCommandPulse(
-            commandSource = GameplayCommandSourceToken(
-                semanticHandle = handle,
-                targetInstance = state.instanceId,
-                causalScope = 17,
-                causalDepth = 0,
-            ),
-            effectiveProtocolIdentity = when (command) {
-                GameplayModuleCommand.StartRun -> GameplayEffectiveProtocolIdentity.SESSION_START
-                GameplayModuleCommand.PauseForOverlay -> GameplayEffectiveProtocolIdentity.SESSION_PAUSE
-                GameplayModuleCommand.ApplyPreferences -> GameplayEffectiveProtocolIdentity.SESSION_PREFERENCES
-                GameplayModuleCommand.ExitRun -> GameplayEffectiveProtocolIdentity.SESSION_EXIT
-            },
-            command = command,
-            issuerProvenance = GameplayCommandIssuerProvenance.LOCAL_SESSION_STATIC_BINDING,
-        )
-    }
 
     private fun startedWithProgress(runId: Long, bankedMatter: Long): GameplayState {
         val state = start(initial(runId)).nextState
@@ -693,14 +559,6 @@ private fun PlayerProfile.toGameplaySnapshot(): GameplayProfileSnapshot = Gamepl
     collection,
     rebirthProgress,
 )
-
-private fun profileCommandSource(handle: ProfileSemanticHandle): ProfileCommandSourceToken =
-    ProfileCommandSourceToken(
-        semanticHandle = handle,
-        targetInstance = LOCAL_PROFILE_INSTANCE_ID,
-        causalScope = 17,
-        causalDepth = 1,
-    )
 
 private fun accepted(decision: GameplayDecision): GameplayAcceptedFrame =
     assertIs<GameplayDecision.Accepted>(decision).frame

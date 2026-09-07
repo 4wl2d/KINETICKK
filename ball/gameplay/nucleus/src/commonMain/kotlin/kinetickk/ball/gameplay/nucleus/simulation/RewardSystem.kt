@@ -18,18 +18,25 @@ import kotlin.math.sin
 
 internal fun MutableGameState.onEnemyKilled(enemy: Enemy) {
     if (enemy.dead) return
+    recordPointDefenderKilled(enemy)
+    if (enemy.type == EnemyType.ELITE) pendingEliteKills++
     enemy.dead = true
     kills++
     combo++
+    bestCombo = maxOf(bestCombo, combo)
+    if (enemy.type == EnemyType.ELITE) eliteKills++
     comboTime = comboWindow
-    if (enemy.relicKillProcsEligible) triggerRelicKillEffects(enemy)
+    if (enemy.relicKillProcsEligible) {
+        onSynergyKill(enemy)
+        triggerRelicKillEffects(enemy)
+    }
     val baseMatter = when (enemy.type) {
         EnemyType.ELITE -> 4f
         EnemyType.ARCHITECT -> 30f
         else -> 1f
     }
     val comboMultiplier = 1f + min(combo, 50) * 0.01f + velocityTier * 0.15f
-    grantMatter(baseMatter * comboMultiplier)
+    grantMatter(baseMatter * comboMultiplier * content.tempo.matterRewardMultiplier)
     val dataCount = when (enemy.type) {
         EnemyType.DRIFTER -> 1
         EnemyType.SHOOTER -> 2
@@ -69,6 +76,7 @@ internal fun MutableGameState.onEnemyKilled(enemy: Enemy) {
         message = "ARCHITECT DISMANTLED"
         messageTime = 10f
         pendingClearedRebirthLevel = rebirthLevel
+        pendingArchitectDefeatedWith = coreShape
         bankRunMatter()
         emitSound(GameplayAudioCue.VICTORY)
     }
@@ -82,7 +90,7 @@ internal fun MutableGameState.triggerRelicKillEffects(enemy: Enemy) {
     }
 
     val eventideRank = relicRank(RelicId.EVENTIDE_ANCHOR)
-    if (eventideRank > 0) {
+    if (eventideRank > 0 && !hasSynergy(kinetickk.ball.content.api.SynergyId.CHARGED_ANCHOR)) {
         val radius = 72f + 18f * eventideRank
         for (index in enemies.indices) {
             val target = enemies[index]
@@ -164,7 +172,7 @@ internal fun MutableGameState.fireRelicProjectile(x: Float, y: Float, target: En
 }
 
 internal fun MutableGameState.spawnSplitterFragments(enemy: Enemy) {
-    val difficulty = 1f + elapsed / 470f
+    val difficulty = content.tempo.enemyHealthMultiplier(elapsed)
     val fragmentLimit = rebirthProfile.enemyCap(90)
     val fragmentCount = min(2, max(0, fragmentLimit - enemies.count { !it.dead }))
     repeat(fragmentCount) { index ->

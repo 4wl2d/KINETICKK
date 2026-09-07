@@ -6,6 +6,7 @@ package kinetickk.app.shared
 import kinetickk.ball.profile.impl.ProfilePersistenceCapability
 import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
 import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
+import kinetickk.foundation.diagnostics.CrashDiagnostics
 import kinetickk.resource.audio.api.ToneRequest
 import kinetickk.resource.audio.api.ToneWave
 import kotlinx.browser.localStorage
@@ -105,28 +106,28 @@ class PlatformCapabilitiesWebTest {
         withWebStorageMethodFailure("getItem", "SecurityError", programmingFault = false) {
             assertEquals(
                 ProfilePersistenceReadResult.Failed,
-                createPlatformProfilePersistenceCapability().readSnapshot(),
+                createPlatformProfilePersistenceCapability(CrashDiagnostics.None).readSnapshot(),
             )
         }
         withWebStorageMethodFailure("setItem", "QuotaExceededError", programmingFault = false) {
             assertEquals(
                 ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION,
-                createPlatformProfilePersistenceCapability().writeSnapshot("payload"),
+                createPlatformProfilePersistenceCapability(CrashDiagnostics.None).writeSnapshot("payload"),
             )
         }
         withWebStorageMethodFailure("getItem", "ignored", programmingFault = true) {
             assertFailsWith<JsException> {
-                createPlatformProfilePersistenceCapability().readSnapshot()
+                createPlatformProfilePersistenceCapability(CrashDiagnostics.None).readSnapshot()
             }
         }
         withWebStorageMethodFailure("setItem", "ignored", programmingFault = true) {
             assertFailsWith<JsException> {
-                createPlatformProfilePersistenceCapability().writeSnapshot("payload")
+                createPlatformProfilePersistenceCapability(CrashDiagnostics.None).writeSnapshot("payload")
             }
         }
         withWebStorageMethodFailure("getItem", "InvalidStateError", programmingFault = false) {
             assertFailsWith<JsException> {
-                createPlatformProfilePersistenceCapability().readSnapshot()
+                createPlatformProfilePersistenceCapability(CrashDiagnostics.None).readSnapshot()
             }
         }
     }

@@ -21,6 +21,7 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            implementation(projects.foundation.design)
             implementation(libs.compose.runtime)
             implementation(projects.resource.audio.api)
             implementation(projects.resource.audio.impl)
@@ -37,7 +38,19 @@ kotlin {
             implementation(projects.foundation.common)
             implementation(projects.ball.gameplay.api)
             implementation(projects.ball.gameplay.interaction)
+            implementation(projects.ball.gameplay.nucleus)
             implementation(projects.flow.session.api)
+        }
+        desktopTest.dependencies {
+            implementation(libs.compose.foundation)
+            implementation(libs.compose.ui.test.junit4)
+            val os = when {
+                System.getProperty("os.name").startsWith("Mac") -> "macos"
+                System.getProperty("os.name").startsWith("Windows") -> "windows"
+                else -> "linux"
+            }
+            val arch = if (System.getProperty("os.arch") in setOf("aarch64", "arm64")) "arm64" else "x64"
+            runtimeOnly("org.jetbrains.skiko:skiko-awt-runtime-$os-$arch:${libs.versions.skiko.get()}")
         }
         if (!isolatedProjectsProfileEnabled()) {
             wasmJsTest.dependencies {

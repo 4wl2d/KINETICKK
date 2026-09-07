@@ -3,58 +3,48 @@
 
 package kinetickk.flow.session.impl
 
-import kinetickk.ball.gameplay.api.GameplayCommandBoundaryResponse
-import kinetickk.ball.gameplay.api.GameplayCommandIngressResult
-import kinetickk.ball.gameplay.api.GameplayCommandIssuerProvenance
-import kinetickk.ball.gameplay.api.GameplayCommandRefusalEvidence
-import kinetickk.ball.gameplay.api.GameplayCommandSourceToken
-import kinetickk.ball.gameplay.api.GameplayEffectiveProtocolIdentity
+import kinetickk.ball.profile.api.ProfileReadPort
+import kinetickk.ball.gameplay.api.GameplayRunExited
+
 import kinetickk.ball.gameplay.api.GameplayExitProgressResult
 import kinetickk.ball.gameplay.api.GameplayInstanceId
-import kinetickk.ball.gameplay.api.GameplayModuleCommand
-import kinetickk.ball.gameplay.api.GameplayModuleCommandRequest
-import kinetickk.ball.gameplay.api.GameplayModuleResult
-import kinetickk.ball.gameplay.api.GameplayModuleResultDelivery
 import kinetickk.ball.gameplay.api.GameplayQuery
-import kinetickk.ball.gameplay.api.GameplayResultIssuerProvenance
-import kinetickk.ball.gameplay.api.GameplayResultSourceToken
 import kinetickk.ball.gameplay.api.GameplayRevision
 import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.GameplayRunStatusProjection
-import kinetickk.ball.gameplay.api.GameplaySessionRunPort
-import kinetickk.ball.gameplay.api.GameplayTargetBoundaryProvenance
+import kinetickk.ball.gameplay.api.GameplayRunPort
 import kinetickk.ball.gameplay.api.RunId
-import kinetickk.ball.gameplay.interaction.GameplaySessionHost
+import kinetickk.ball.gameplay.api.GameplaySettingsApplied
+import kinetickk.ball.gameplay.api.GameplayRefusal
+import kinetickk.ball.gameplay.api.GameplayRunStarted
+import kinetickk.ball.gameplay.api.GameplayOverlayPaused
+import kinetickk.ball.gameplay.interaction.GameplayRunHost
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.PreferencesProjection
 import kinetickk.ball.profile.api.ProfileBootstrapStatus
-import kinetickk.ball.profile.api.ProfileCommandBoundaryResponse
-import kinetickk.ball.profile.api.ProfileCommandIngressResult
-import kinetickk.ball.profile.api.ProfileCommandRefusalEvidence
-import kinetickk.ball.profile.api.ProfileCommandSourceToken
-import kinetickk.ball.profile.api.ProfileEffectiveProtocolIdentity
-import kinetickk.ball.profile.api.ProfileModuleCommand
-import kinetickk.ball.profile.api.ProfileModuleCommandRequest
-import kinetickk.ball.profile.api.ProfileModuleResult
-import kinetickk.ball.profile.api.ProfileModuleResultDelivery
 import kinetickk.ball.profile.api.ProfilePersistenceStatus
 import kinetickk.ball.profile.api.ProfileQuery
-import kinetickk.ball.profile.api.ProfileResultIssuerProvenance
-import kinetickk.ball.profile.api.ProfileResultSourceToken
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileRunBootstrapResult
-import kinetickk.ball.profile.api.ProfileTargetBoundaryProvenance
-import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.RebirthProfileSnapshot
+import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.RebirthProgressProjection
 import kinetickk.ball.profile.api.RunBootstrapProjection
-import kinetickk.ball.profile.api.SessionProfileRoute
+import kinetickk.ball.profile.api.ProfileSettings
+import kinetickk.ball.profile.api.ProfileSettingsChanged
+import kinetickk.ball.profile.api.ProfileRefusal
+import kinetickk.foundation.dispatch.InlineReply
+import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.profile.api.ProfileRebirth
+import kinetickk.ball.profile.api.ProfileRebirthAdvanced
+import kinetickk.ball.profile.api.ProfileLoadout
+import kinetickk.ball.profile.api.ProfileCoreShapeSelected
 
 internal class AppSessionTestRig(
-    val profile: FakeSessionProfileRoute = FakeSessionProfileRoute(),
+    val profile: FakeProfileCapabilities = FakeProfileCapabilities(),
     val gameplay: FakeSessionGameplayHost = FakeSessionGameplayHost(),
 ) {
     val audioPreferences = mutableListOf<PlayerPreferences>()
@@ -63,8 +53,11 @@ internal class AppSessionTestRig(
     var rebirthAcceptedFeedbackCount: Int = 0
 
     val component: DefaultAppSessionComponent = createAppSessionComponent(
-        profileRoute = profile,
-        gameplaySessionHost = gameplay,
+        profilePort = profile,
+        profileSettings = profile,
+        profileLoadout = profile,
+        profileRebirth = profile,
+        gameplayRunHost = gameplay,
         updateAudioPreferences = { preferences ->
             effectEvents += "audio"
             audioPreferences += preferences
@@ -77,98 +70,78 @@ internal class AppSessionTestRig(
             effectEvents += "rebirth"
             rebirthAcceptedFeedbackCount += 1
         },
-    ).let { it as DefaultAppSessionComponent }.also { component ->
-        profile.resultSink = component::receiveProfileModuleResult
-    }
+    ).let { it as DefaultAppSessionComponent }
 }
 
-internal data class ProfileCommandCall(
-    val request: ProfileModuleCommandRequest,
-    val causalScope: Long,
-    val causalDepth: Int,
-)
-
-internal class FakeSessionProfileRoute(
+internal class FakeProfileCapabilities(
     var profile: PlayerProfile = PlayerProfile(
         rebirthProgress = RebirthProgress(level = 0, highestCleared = 0),
     ),
-) : SessionProfileRoute {
+) : ProfileReadPort, ProfileSettings, ProfileLoadout, ProfileRebirth {
     override val instanceId = kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 
     var revision: ProfileRevision = ProfileRevision(1L)
     var bootstrap: ProfileBootstrapStatus = ProfileBootstrapStatus.Ready
     var persistence: ProfilePersistenceStatus = ProfilePersistenceStatus.NotAttempted
     var projectionInstanceId = instanceId
-    var resultSink: (ProfileModuleResultDelivery) -> Unit = {}
-    var commandHandler: ((ProfileCommandCall) -> ProfileCommandIngressResult)? = null
-    var onCommandObserved: ((ProfileCommandCall) -> Unit)? = null
-    val commands = mutableListOf<ProfileCommandCall>()
-    val deliveries = mutableListOf<ProfileModuleResultDelivery>()
     val queries = mutableListOf<String>()
+    val muteCalls = mutableListOf<InlineReply<ProfileSettingsChanged, ProfileRefusal>>()
+    var muteHandler: ((InlineReply<ProfileSettingsChanged, ProfileRefusal>) -> Unit)? = null
+    var onMuteObserved: (() -> Unit)? = null
+    val shapeCalls = mutableListOf<CoreShape>()
+    val shapeReplies = mutableListOf<InlineReply<ProfileCoreShapeSelected, ProfileRefusal>>()
+    var shapeHandler: ((CoreShape, InlineReply<ProfileCoreShapeSelected, ProfileRefusal>) -> Unit)? = null
 
-    override fun acceptFromSession(
-        request: ProfileModuleCommandRequest,
-        causalScope: Long,
-        causalDepth: Int,
-    ): ProfileCommandIngressResult {
-        val call = ProfileCommandCall(request, causalScope, causalDepth)
-        commands += call
-        onCommandObserved?.invoke(call)
-        return commandHandler?.invoke(call) ?: completeAutomatically(call)
+    override fun selectCoreShape(shape: CoreShape, reply: InlineReply<ProfileCoreShapeSelected, ProfileRefusal>) {
+        reply.checkAvailable()
+        shapeCalls += shape
+        shapeReplies += reply
+        shapeHandler?.invoke(shape, reply) ?: completeShape(shape, reply)
     }
 
-    fun complete(
-        call: ProfileCommandCall,
-        result: ProfileModuleResult,
-        deliveryTransform: (ProfileModuleResultDelivery) -> ProfileModuleResultDelivery = { it },
-    ): ProfileCommandIngressResult.Accepted {
-        val acceptedRevision = ProfileRevision(revision.value + 1L)
-        revision = acceptedRevision
-        applyResult(result)
-        val resultOrdinal = when (call.request.command) {
-            is ProfileModuleCommand.SelectCoreShape,
-            ProfileModuleCommand.ToggleMute,
-            ProfileModuleCommand.AdvanceRebirth,
-            -> 1
-            is ProfileModuleCommand.ApplyGameplayProgress -> error("Not a Session command")
-        }
-        val resultDepth = call.causalDepth + 1
-        val delivery = deliveryTransform(
-            ProfileModuleResultDelivery(
-                    commandSource = commandSource(call),
-                    resultSource = ProfileResultSourceToken(
-                        semanticHandle = call.request.semanticHandle,
-                        targetInstance = instanceId,
-                        targetRevision = revision,
-                        sourceOrdinal = resultOrdinal,
-                        causalScope = call.causalScope,
-                        causalDepth = resultDepth,
-                    ),
-                    effectiveProtocolIdentity = call.request.command.effectiveIdentity,
-                    result = result,
-                    issuerProvenance = ProfileResultIssuerProvenance.LOCAL_PROFILE_STATIC_BINDING,
-                ),
-        )
-        deliveries += delivery
-        resultSink(delivery)
-        return ProfileCommandIngressResult.Accepted(instanceId, acceptedRevision)
+    fun completeShape(
+        shape: CoreShape,
+        reply: InlineReply<ProfileCoreShapeSelected, ProfileRefusal>,
+        transform: (ProfileCoreShapeSelected) -> ProfileCoreShapeSelected = { it },
+    ) {
+        revision = ProfileRevision(revision.value + 1L)
+        profile = profile.copy(loadout = profile.loadout.copy(coreShape = shape))
+        reply.accepted(transform(ProfileCoreShapeSelected(revision, shape)))
     }
 
-    fun refuse(
-        call: ProfileCommandCall,
-        response: ProfileCommandBoundaryResponse,
-    ): ProfileCommandIngressResult.RejectedBeforeAcceptance =
-        ProfileCommandIngressResult.RejectedBeforeAcceptance(
-            ProfileCommandRefusalEvidence(
-                commandSource = commandSource(call),
-                effectiveProtocolIdentity = call.request.command.effectiveIdentity,
-                boundaryResponse = response,
-                targetBoundaryProvenance = ProfileTargetBoundaryProvenance(
-                    instanceId,
-                    call.request.command.effectiveIdentity,
-                ),
-            ),
-        )
+    val rebirthReplies = mutableListOf<InlineReply<ProfileRebirthAdvanced, ProfileRefusal>>()
+    var rebirthHandler: ((InlineReply<ProfileRebirthAdvanced, ProfileRefusal>) -> Unit)? = null
+
+    override fun advanceRebirth(reply: InlineReply<ProfileRebirthAdvanced, ProfileRefusal>) {
+        reply.checkAvailable()
+        rebirthReplies += reply
+        rebirthHandler?.invoke(reply) ?: completeRebirth(reply)
+    }
+
+    fun completeRebirth(reply: InlineReply<ProfileRebirthAdvanced, ProfileRefusal>) {
+        revision = ProfileRevision(revision.value + 1)
+        profile = profile.copy(rebirthProgress = profile.rebirthProgress.copy(level = profile.rebirthProgress.level + 1))
+        reply.accepted(ProfileRebirthAdvanced(revision, profile.rebirthProgress))
+    }
+
+    override fun toggleMute(reply: InlineReply<ProfileSettingsChanged, ProfileRefusal>) {
+        reply.checkAvailable()
+        muteCalls += reply
+        onMuteObserved?.invoke()
+        muteHandler?.invoke(reply) ?: completeMute(reply)
+    }
+
+    fun completeMute(
+        reply: InlineReply<ProfileSettingsChanged, ProfileRefusal>,
+        preferences: PlayerPreferences = profile.preferences.let { current ->
+            val enable = !current.soundEnabled && !current.musicEnabled
+            current.copy(soundEnabled = enable, musicEnabled = enable)
+        },
+    ) {
+        revision = ProfileRevision(revision.value + 1L)
+        profile = profile.copy(preferences = preferences)
+        reply.accepted(ProfileSettingsChanged(revision, preferences))
+    }
 
     override fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection {
         queries += "runBootstrap"
@@ -203,187 +176,121 @@ internal class FakeSessionProfileRoute(
         return PersistenceStatusProjection(projectionInstanceId, revision, bootstrap, persistence)
     }
 
-    private fun completeAutomatically(call: ProfileCommandCall): ProfileCommandIngressResult =
-        when (val command = call.request.command) {
-            is ProfileModuleCommand.SelectCoreShape -> complete(
-                call,
-                ProfileModuleResult.CoreShapeSelected(command.shape),
-            )
-            ProfileModuleCommand.ToggleMute -> {
-                val preferences = profile.preferences.copy(
-                    soundEnabled = !profile.preferences.soundEnabled,
-                    musicEnabled = !profile.preferences.musicEnabled,
-                )
-                complete(call, ProfileModuleResult.PreferencesChanged(preferences))
-            }
-            ProfileModuleCommand.AdvanceRebirth -> complete(
-                call,
-                ProfileModuleResult.RebirthAdvanced(
-                    profile.rebirthProgress.copy(level = profile.rebirthProgress.level + 1),
-                ),
-            )
-            is ProfileModuleCommand.ApplyGameplayProgress -> error("Not a Session command")
-        }
-
-    private fun applyResult(result: ProfileModuleResult) {
-        when (result) {
-            is ProfileModuleResult.CoreShapeSelected ->
-                profile = profile.copy(loadout = profile.loadout.copy(coreShape = result.shape))
-            is ProfileModuleResult.PreferencesChanged ->
-                profile = profile.copy(preferences = result.preferences)
-            is ProfileModuleResult.RebirthAdvanced ->
-                profile = profile.copy(rebirthProgress = result.progress)
-            ProfileModuleResult.GameplayProgressApplied,
-            -> Unit
-        }
-    }
-
-    private fun commandSource(call: ProfileCommandCall): ProfileCommandSourceToken =
-        ProfileCommandSourceToken(
-            call.request.semanticHandle,
-            instanceId,
-            call.causalScope,
-            call.causalDepth,
-        )
+    override fun query(query: ProfileQuery.GetHomeProgress): kinetickk.ball.profile.api.HomeProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetCollection): kinetickk.ball.profile.api.CollectionProjection = error("unused")
+    override fun query(query: ProfileQuery.GetLabProgress): kinetickk.ball.profile.api.LabProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetLoadout): kinetickk.ball.profile.api.LoadoutProjection = error("unused")
 
     private fun canAdvanceRebirth(): Boolean =
         profile.rebirthProgress.highestCleared >= profile.rebirthProgress.level
 }
 
-internal data class GameplayCommandCall(
-    val request: GameplayModuleCommandRequest,
-    val causalScope: Long,
-    val causalDepth: Int,
-)
-
-internal class FakeSessionGameplayHost : GameplaySessionHost {
+internal class FakeSessionGameplayHost : GameplayRunHost {
     val createdRunIds = mutableListOf<RunId>()
     var onCreateRun: (RunId) -> Unit = {}
-    var configureRun: (FakeGameplaySessionRunPort) -> Unit = {}
-    private var active: FakeGameplaySessionRunPort? = null
+    var configureRun: (FakeGameplayRunPort) -> Unit = {}
+    private var active: FakeGameplayRunPort? = null
 
     override fun createRun(
         runId: RunId,
-        commandResultSink: (GameplayModuleResultDelivery) -> Unit,
-    ): GameplaySessionRunPort {
+    ): GameplayRunPort {
         createdRunIds += runId
         onCreateRun(runId)
-        return FakeGameplaySessionRunPort(runId, commandResultSink).also { run ->
+        return FakeGameplayRunPort(runId).also { run ->
             configureRun(run)
             active = run
         }
     }
 
-    override fun activeRun(): GameplaySessionRunPort? = active
+    override fun activeRun(): GameplayRunPort? = active
 
-    fun activeFakeRun(): FakeGameplaySessionRunPort? = active
+    fun activeFakeRun(): FakeGameplayRunPort? = active
 }
 
-internal class FakeGameplaySessionRunPort(
+internal class FakeGameplayRunPort(
     runId: RunId,
-    private val resultSink: (GameplayModuleResultDelivery) -> Unit,
-) : GameplaySessionRunPort {
+) : GameplayRunPort {
     override val instanceId = GameplayInstanceId(runId)
 
     var revision: GameplayRevision = GameplayRevision.ZERO
     var phase: GameplayRunPhase = GameplayRunPhase.CREATED
-    var profileCommandPending: Boolean = false
+    var progressPending: Boolean = false
     var statusInstanceId: GameplayInstanceId = instanceId
-    var commandHandler: ((GameplayCommandCall) -> GameplayCommandIngressResult)? = null
-    var onCommandObserved: ((GameplayCommandCall) -> Unit)? = null
-    val commands = mutableListOf<GameplayCommandCall>()
-    val deliveries = mutableListOf<GameplayModuleResultDelivery>()
+    val settingsCalls = mutableListOf<PlayerPreferences>()
+    val settingsReplies = mutableListOf<InlineReply<GameplaySettingsApplied, GameplayRefusal>>()
+    var settingsHandler: ((PlayerPreferences, InlineReply<GameplaySettingsApplied, GameplayRefusal>) -> Unit)? = null
+    var onSettingsObserved: ((PlayerPreferences) -> Unit)? = null
+    val startReplies = mutableListOf<InlineReply<GameplayRunStarted, GameplayRefusal>>()
+    val pauseReplies = mutableListOf<InlineReply<GameplayOverlayPaused, GameplayRefusal>>()
+    var startHandler: ((InlineReply<GameplayRunStarted, GameplayRefusal>) -> Unit)? = null
+    var pauseHandler: ((InlineReply<GameplayOverlayPaused, GameplayRefusal>) -> Unit)? = null
+    var onStartObserved: (() -> Unit)? = null
+    var onPauseObserved: (() -> Unit)? = null
 
-    override fun acceptFromSession(
-        request: GameplayModuleCommandRequest,
-        causalScope: Long,
-        causalDepth: Int,
-    ): GameplayCommandIngressResult {
-        val call = GameplayCommandCall(request, causalScope, causalDepth)
-        commands += call
-        onCommandObserved?.invoke(call)
-        return commandHandler?.invoke(call) ?: completeAutomatically(call)
+    override fun startRun(reply: InlineReply<GameplayRunStarted, GameplayRefusal>) {
+        reply.checkAvailable()
+        startReplies += reply
+        onStartObserved?.invoke()
+        startHandler?.invoke(reply) ?: completeStart(reply)
     }
 
-    fun complete(
-        call: GameplayCommandCall,
-        result: GameplayModuleResult,
-        nestedExit: Boolean = false,
-        deliveryTransform: (GameplayModuleResultDelivery) -> GameplayModuleResultDelivery = { it },
-    ): GameplayCommandIngressResult.Accepted {
-        val acceptedRevision = GameplayRevision(revision.value + 1L)
-        revision = if (nestedExit) {
-            GameplayRevision(acceptedRevision.value + 1L)
-        } else {
-            acceptedRevision
-        }
-        phase = when (result) {
-            GameplayModuleResult.RunStarted -> GameplayRunPhase.RUNNING
-            GameplayModuleResult.OverlayPaused -> GameplayRunPhase.PAUSED
-            GameplayModuleResult.PreferencesApplied -> phase
-            is GameplayModuleResult.RunExited -> GameplayRunPhase.EXITED
-        }
-        val delivery = deliveryTransform(
-            GameplayModuleResultDelivery(
-                    commandSource = commandSource(call),
-                    resultSource = GameplayResultSourceToken(
-                        semanticHandle = call.request.semanticHandle,
-                        targetInstance = instanceId,
-                        targetRevision = revision,
-                        sourceOrdinal = 0,
-                        causalScope = call.causalScope,
-                        causalDepth = call.causalDepth + if (nestedExit) 3 else 1,
-                    ),
-                    effectiveProtocolIdentity = call.request.command.effectiveIdentity,
-                    result = result,
-                    issuerProvenance = GameplayResultIssuerProvenance.GAMEPLAY_RUN_STATIC_BINDING,
-                ),
-        )
-        deliveries += delivery
-        resultSink(delivery)
-        return GameplayCommandIngressResult.Accepted(instanceId, acceptedRevision)
+    override fun pauseForOverlay(reply: InlineReply<GameplayOverlayPaused, GameplayRefusal>) {
+        reply.checkAvailable()
+        pauseReplies += reply
+        onPauseObserved?.invoke()
+        pauseHandler?.invoke(reply) ?: completePause(reply)
     }
 
-    fun refuse(
-        call: GameplayCommandCall,
-        response: GameplayCommandBoundaryResponse,
-    ): GameplayCommandIngressResult.RejectedBeforeAcceptance =
-        GameplayCommandIngressResult.RejectedBeforeAcceptance(
-            GameplayCommandRefusalEvidence(
-                commandSource = commandSource(call),
-                effectiveProtocolIdentity = call.request.command.effectiveIdentity,
-                boundaryResponse = response,
-                targetBoundaryProvenance = GameplayTargetBoundaryProvenance(
-                    instanceId,
-                    call.request.command.effectiveIdentity,
-                ),
-            ),
-        )
+    fun completeStart(reply: InlineReply<GameplayRunStarted, GameplayRefusal>) {
+        revision = GameplayRevision(revision.value + 1L)
+        phase = GameplayRunPhase.RUNNING
+        reply.accepted(GameplayRunStarted(instanceId.runId, revision))
+    }
+
+    fun completePause(reply: InlineReply<GameplayOverlayPaused, GameplayRefusal>) {
+        revision = GameplayRevision(revision.value + 1L)
+        phase = GameplayRunPhase.PAUSED
+        reply.accepted(GameplayOverlayPaused(instanceId.runId, revision))
+    }
+
+    override fun applyPreferences(
+        preferences: PlayerPreferences,
+        reply: InlineReply<GameplaySettingsApplied, GameplayRefusal>,
+    ) {
+        reply.checkAvailable()
+        settingsCalls += preferences
+        settingsReplies += reply
+        onSettingsObserved?.invoke(preferences)
+        settingsHandler?.invoke(preferences, reply) ?: completeSettings(reply)
+    }
+
+    fun completeSettings(reply: InlineReply<GameplaySettingsApplied, GameplayRefusal>) {
+        revision = GameplayRevision(revision.value + 1L)
+        reply.accepted(GameplaySettingsApplied(instanceId.runId, revision))
+    }
+
+    val exitReplies = mutableListOf<InlineReply<GameplayRunExited, GameplayRefusal>>()
+    var exitHandler: ((InlineReply<GameplayRunExited, GameplayRefusal>) -> Unit)? = null
+
+    override fun exitRun(reply: InlineReply<GameplayRunExited, GameplayRefusal>) {
+        reply.checkAvailable()
+        exitReplies += reply
+        exitHandler?.invoke(reply) ?: completeExit(reply)
+    }
+
+    fun completeExit(
+        reply: InlineReply<GameplayRunExited, GameplayRefusal>,
+        progress: GameplayExitProgressResult = GameplayExitProgressResult.NoProgress,
+    ) {
+        revision = GameplayRevision(revision.value + if (progress === GameplayExitProgressResult.NoProgress) 1 else 2)
+        phase = GameplayRunPhase.EXITED
+        reply.accepted(GameplayRunExited(instanceId.runId, revision, progress))
+    }
 
     override fun query(query: GameplayQuery.GetRunStatus): GameplayRunStatusProjection =
-        GameplayRunStatusProjection(statusInstanceId, revision, phase, profileCommandPending)
+        GameplayRunStatusProjection(statusInstanceId, revision, phase, progressPending)
 
-    private fun completeAutomatically(call: GameplayCommandCall): GameplayCommandIngressResult =
-        when (call.request.command) {
-            GameplayModuleCommand.StartRun -> complete(call, GameplayModuleResult.RunStarted)
-            GameplayModuleCommand.PauseForOverlay -> complete(call, GameplayModuleResult.OverlayPaused)
-            GameplayModuleCommand.ApplyPreferences -> complete(
-                call,
-                GameplayModuleResult.PreferencesApplied,
-            )
-            GameplayModuleCommand.ExitRun -> complete(
-                call,
-                GameplayModuleResult.RunExited(GameplayExitProgressResult.NoProgress),
-            )
-        }
 
-    private fun commandSource(call: GameplayCommandCall): GameplayCommandSourceToken =
-        GameplayCommandSourceToken(
-            call.request.semanticHandle,
-            instanceId,
-            call.causalScope,
-            call.causalDepth,
-        )
 }
 
 internal fun PlayerProfile.toGameplaySnapshot(): GameplayProfileSnapshot = GameplayProfileSnapshot(
@@ -394,19 +301,3 @@ internal fun PlayerProfile.toGameplaySnapshot(): GameplayProfileSnapshot = Gamep
     collection = collection,
     rebirthProgress = rebirthProgress,
 )
-
-private val ProfileModuleCommand.effectiveIdentity: ProfileEffectiveProtocolIdentity
-    get() = when (this) {
-        is ProfileModuleCommand.SelectCoreShape -> ProfileEffectiveProtocolIdentity.SESSION_CORE_SHAPE
-        ProfileModuleCommand.ToggleMute -> ProfileEffectiveProtocolIdentity.SESSION_MUTE
-        ProfileModuleCommand.AdvanceRebirth -> ProfileEffectiveProtocolIdentity.SESSION_REBIRTH
-        is ProfileModuleCommand.ApplyGameplayProgress -> ProfileEffectiveProtocolIdentity.GAMEPLAY_PROGRESS
-    }
-
-private val GameplayModuleCommand.effectiveIdentity: GameplayEffectiveProtocolIdentity
-    get() = when (this) {
-        GameplayModuleCommand.StartRun -> GameplayEffectiveProtocolIdentity.SESSION_START
-        GameplayModuleCommand.PauseForOverlay -> GameplayEffectiveProtocolIdentity.SESSION_PAUSE
-        GameplayModuleCommand.ApplyPreferences -> GameplayEffectiveProtocolIdentity.SESSION_PREFERENCES
-        GameplayModuleCommand.ExitRun -> GameplayEffectiveProtocolIdentity.SESSION_EXIT
-    }

@@ -11,7 +11,6 @@ import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.runningControlBounds
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
@@ -23,8 +22,8 @@ class GameplayInputMappingTest {
     fun runningHudMapsOnlyToLiveRunActions() {
         val model = hitTestState(GamePhase.RUNNING)
 
-        val dash = assertIs<GameplayInput.Action>(model.resolveGameplayPress(1_198f, 632f))
-        val brake = assertIs<GameplayInput.Action>(model.resolveGameplayPress(1_090f, 653f))
+        val dash = assertIs<GameplayInput.Action>(model.resolveGameplayPress(1_222f, 662f))
+        val brake = assertIs<GameplayInput.Action>(model.resolveGameplayPress(1_146f, 662f))
 
         assertSame(GameplayInteractionPulse.DashRequested, dash.action)
         assertIs<GameplayInteractionPulse.BrakeChanged>(brake.action)
@@ -71,30 +70,27 @@ class GameplayInputMappingTest {
     }
 
     @Test
-    fun choiceCardsAndRerollRemainTypedGameplayActions() {
+    fun canvasPressNeverSelectsChoiceCardsOrReroll() {
         val choice = hitTestState(
             phase = GamePhase.CHOICE,
             choiceCount = 3,
             choicesCanReroll = true,
         )
 
-        val selected = assertIs<GameplayInput.Action>(choice.resolveGameplayPress(800f, 260f))
-        val rerolled = assertIs<GameplayInput.Action>(choice.resolveGameplayPress(640f, 648f))
-
-        assertEquals(2, assertIs<GameplayInteractionPulse.ChoiceSelected>(selected.action).index)
-        assertSame(GameplayInteractionPulse.ChoicesRerolled, rerolled.action)
+        assertNull(choice.resolveGameplayPress(800f, 260f))
+        assertNull(choice.resolveGameplayPress(640f, 648f))
     }
 
     @Test
-    fun terminalButtonsEmitOnlySessionOwnedShellRequests() {
+    fun terminalCanvasCannotActivateHiddenOrDuplicateActions() {
         val gameOver = hitTestState(GamePhase.GAME_OVER)
         val victory = hitTestState(GamePhase.VICTORY)
 
-        assertSame(GameplayInput.RestartRun, gameOver.resolveGameplayPress(640f, 518f))
-        assertSame(GameplayInput.ExitToHome, gameOver.resolveGameplayPress(640f, 600f))
-        assertSame(GameplayInput.RestartRun, victory.resolveGameplayPress(640f, 518f))
-        assertSame(GameplayInput.OpenRebirth, victory.resolveGameplayPress(640f, 580f))
-        assertSame(GameplayInput.ExitToHome, victory.resolveGameplayPress(640f, 650f))
+        assertNull(gameOver.resolveGameplayPress(640f, 518f))
+        assertNull(gameOver.resolveGameplayPress(640f, 600f))
+        assertNull(victory.resolveGameplayPress(640f, 518f))
+        assertNull(victory.resolveGameplayPress(640f, 580f))
+        assertNull(victory.resolveGameplayPress(640f, 650f))
     }
 
     @Test
@@ -158,17 +154,11 @@ class GameplayInputMappingTest {
             choice.choiceCount,
             choice.choicesCanReroll,
         )
-        layout.cards.forEachIndexed { index, bounds ->
-            val input = assertIs<GameplayInput.Action>(
-                choice.resolveGameplayPress(bounds.center.x, bounds.center.y),
-            )
-            assertEquals(index, assertIs<GameplayInteractionPulse.ChoiceSelected>(input.action).index)
+        layout.cards.forEach { bounds ->
+            assertNull(choice.resolveGameplayPress(bounds.center.x, bounds.center.y))
         }
         val reroll = requireNotNull(layout.reroll).center
-        assertSame(
-            GameplayInteractionPulse.ChoicesRerolled,
-            assertIs<GameplayInput.Action>(choice.resolveGameplayPress(reroll.x, reroll.y)).action,
-        )
+        assertNull(choice.resolveGameplayPress(reroll.x, reroll.y))
     }
 
     private fun hitTestState(

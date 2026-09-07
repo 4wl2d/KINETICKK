@@ -21,12 +21,14 @@ import kinetickk.ball.gameplay.nucleus.model.damageNumberTier
 import kinetickk.ball.gameplay.nucleus.model.DamageNumberTier
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kotlin.math.atan2
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.PI
 import kotlin.math.sin
+import kotlin.math.cos
 import kotlin.math.sqrt
 
 internal fun DrawScope.drawWorld(
@@ -39,19 +41,22 @@ internal fun DrawScope.drawWorld(
     val core = world(engine, engine.coreX, engine.coreY, shakeX, shakeY)
     val pointer = Offset(engine.pointerX + shakeX * 0.18f, engine.pointerY + shakeY * 0.18f)
 
+    drawPointsOfInterest(engine, shakeX, shakeY, textMeasurer)
+    drawCharacterField(engine, core, shakeX, shakeY)
     drawTotem(engine, shakeX, shakeY, textMeasurer)
     drawShockwaves(engine, visualFx, shakeX, shakeY)
     drawMotionEchoes(engine, visualFx, shakeX, shakeY)
     drawTrail(engine, shakeX, shakeY)
     drawWeaponNodes(engine, shakeX, shakeY)
     drawPickups(engine, shakeX, shakeY)
-    drawProjectiles(engine, shakeX, shakeY)
-    for (index in engine.enemies.indices) {
-        drawEnemy(engine, engine.enemies[index], shakeX, shakeY)
-    }
     drawWeapon(engine, core, shakeX, shakeY)
     drawWeaponArcs(engine, visualFx, shakeX, shakeY)
     drawParticles(engine, visualFx, shakeX, shakeY)
+    // Telegraphs and threats remain readable over cosmetic trails and secondary effects.
+    for (index in engine.enemies.indices) {
+        drawEnemy(engine, engine.enemies[index], shakeX, shakeY)
+    }
+    drawProjectiles(engine, shakeX, shakeY)
 
     val danger = engine.tetherDistance < 75f
     val tetherColor = when {
@@ -63,9 +68,11 @@ internal fun DrawScope.drawWorld(
     }
     val tetherPulse = (sin(engine.elapsed * 10f) + 1f) * 0.5f
     val strained = engine.polarityStability < 0.58f
-    drawLine(tetherColor.copy(alpha = 0.08f + if (danger || strained) tetherPulse * 0.08f else 0f), core, pointer, if (danger || strained) 13f else 9f, StrokeCap.Round)
-    drawLine(tetherColor.copy(alpha = if (danger || strained) 0.78f else 0.55f), core, pointer, if (danger || strained) 2f else 1.4f, StrokeCap.Round, dashEffect)
-    drawCore(engine, core)
+    if (engine.phase != kinetickk.ball.gameplay.nucleus.render.GamePhase.GAME_OVER) {
+        drawLine(tetherColor.copy(alpha = 0.08f + if (danger || strained) tetherPulse * 0.08f else 0f), core, pointer, if (danger || strained) 13f else 9f, StrokeCap.Round)
+        drawLine(tetherColor.copy(alpha = if (danger || strained) 0.78f else 0.55f), core, pointer, if (danger || strained) 2f else 1.4f, StrokeCap.Round, dashEffect)
+        drawCore(engine, core)
+    }
     drawSingularity(pointer, engine.elapsed, danger)
 
     val settings = engine.settings
@@ -76,7 +83,7 @@ internal fun DrawScope.drawWorld(
             val tier = damageNumberTier(number.amount, settings.damageNumberTierThreshold, number.critical)
             drawLabel(
                 textMeasurer = textMeasurer,
-                text = number.formattedAmount(settings.damageNumberFormat),
+                text = number.formattedAmount(settings.damageNumberFormat, textMeasurer.language),
                 x = location.x,
                 y = location.y,
                 fontSize = 12f * settings.damageNumberSize.scale * damageNumberScale(tier),
@@ -130,6 +137,8 @@ internal fun DrawScope.drawShockwaves(
 internal fun DrawScope.drawTrail(engine: GameplayRenderModel, shakeX: Float, shakeY: Float) {
     var previousLocation: Offset? = null
     var previousLife = 0f
+    val accent = characterAccent(engine.coreShape)
+    val lowParticles = engine.settings.particleDensity == ParticleDensity.LOW
     for (index in engine.trail.indices) {
         val point = engine.trail[index]
         val location = world(engine, point.x, point.y, shakeX, shakeY)
@@ -137,9 +146,9 @@ internal fun DrawScope.drawTrail(engine: GameplayRenderModel, shakeX: Float, sha
         previousLocation?.let { previous ->
             val segmentLife = min(previousLife, life)
             if (segmentLife > 0f && (isOnScreen(previous, 50f) || isOnScreen(location, 50f))) {
-                drawLine(Violet.copy(alpha = segmentLife * 0.1f), previous, location, 17f + segmentLife * 13f, StrokeCap.Round)
-                drawLine(Magenta.copy(alpha = segmentLife * 0.28f), previous, location, 7f + segmentLife * 7f, StrokeCap.Round)
-                drawLine(Cyan.copy(alpha = segmentLife * 0.42f), previous, location, 1.4f + segmentLife * 2f, StrokeCap.Round)
+                if (!lowParticles) drawLine(accent.copy(alpha = segmentLife * 0.08f), previous, location, 17f + segmentLife * 13f, StrokeCap.Round)
+                drawLine(accent.copy(alpha = segmentLife * 0.22f), previous, location, 7f + segmentLife * 7f, StrokeCap.Round)
+                drawLine(accent.copy(alpha = segmentLife * 0.42f), previous, location, 1.4f + segmentLife * 2f, StrokeCap.Round)
             }
         }
         previousLocation = location
@@ -297,8 +306,9 @@ internal fun DrawScope.drawWeaponArcs(
 internal fun DrawScope.drawCore(engine: GameplayRenderModel, center: Offset) {
     val speedRatio = speedVisualRatio(engine.speed)
     val phase = engine.dashPhaseTime > 0f
-    val main = if (phase) White else Cyan
-    drawCircle(Cyan.copy(alpha = 0.06f + speedRatio * 0.08f), 50f + speedRatio * 15f, center)
+    val accent = characterAccent(engine.coreShape)
+    val main = if (phase) White else accent
+    drawCircle(accent.copy(alpha = 0.06f + speedRatio * 0.08f), 50f + speedRatio * 15f, center)
     drawCircle(Violet.copy(alpha = 0.18f), 31f, center)
     if (engine.overdriveTime > 0f) {
         val pulse = (sin(engine.elapsed * 9f) + 1f) * 0.5f
@@ -331,7 +341,7 @@ internal fun DrawScope.drawCore(engine: GameplayRenderModel, center: Offset) {
         val length = 42f + 118f * speedRatio
         val magnitude = max(1f, engine.speed)
         val tail = Offset(center.x - engine.velocityX / magnitude * length, center.y - engine.velocityY / magnitude * length)
-        drawLine(Cyan.copy(alpha = 0.24f + if (phase) 0.18f else 0f), tail, center, if (phase) 22f else 13f, StrokeCap.Round)
+        drawLine(accent.copy(alpha = 0.24f + if (phase) 0.18f else 0f), tail, center, if (phase) 22f else 13f, StrokeCap.Round)
         drawLine(White.copy(alpha = 0.7f), tail, center, 2f, StrokeCap.Round)
     }
     if (engine.maxShield > 0f && engine.shield > 0f) {
@@ -362,6 +372,99 @@ internal fun DrawScope.drawCore(engine: GameplayRenderModel, center: Offset) {
             drawPolygon(center, 14f, 3, -engine.elapsed * 1.7f, SpaceBlack, Fill)
             drawCircle(Magenta, 4f, center)
         }
+        CoreShape.RING -> {
+            drawCircle(main, GameplayRenderModel.CORE_RADIUS, center, style = Stroke(4f))
+            drawCircle(SpaceBlack, 10f, center)
+            drawCircle(accent, 3f, center)
+        }
+        CoreShape.DIAMOND -> {
+            drawPolygon(center, 23f, 4, 0f, main, Fill)
+            drawPolygon(center, 14f, 4, 0f, SpaceBlack, Fill)
+            drawLine(main, center - Offset(7f, 0f), center + Offset(7f, 0f), 1.5f)
+            drawCircle(accent, 3f, center)
+        }
+        CoreShape.TESSERACT -> drawTesseractCore(center, engine.elapsed, main)
+    }
+    if (engine.characterAbility.charge > 0f && engine.coreShape != CoreShape.RING) {
+        drawArc(accent, -90f, 360f * engine.characterAbility.charge.coerceIn(0f, 1f), false,
+            center - Offset(24f, 24f), Size(48f, 48f), style = Stroke(2f))
+    }
+    if (engine.characterAbility.barrier > 0f) {
+        drawPolygon(center, 32f, 4, (PI / 4).toFloat(), Violet.copy(alpha = 0.7f), Stroke(2.5f))
+    }
+    if (engine.characterAbility.parryWindow > 0f) {
+        drawPolygon(center, 35f, 4, 0f, White, Stroke(3f))
+    }
+    val mastery = engine.content.weaponMasteryForLevel(engine.weaponLevel).ordinal
+    if (mastery > 0) {
+        repeat(mastery) { layer ->
+            val radius = 25f + layer * 5f
+            drawArc(accent.copy(alpha = 0.45f), engine.elapsed * (35f + 10f * layer) + layer * 120f,
+                42f + mastery * 8f, false, center - Offset(radius, radius), Size(radius * 2f, radius * 2f),
+                style = Stroke(1.2f, cap = StrokeCap.Round))
+        }
+
     }
     if (engine.dashPhaseTime > 0f) drawCircle(White.copy(alpha = 0.8f), 28f + engine.dashPhaseTime * 50f, center, style = Stroke(2f))
+}
+
+
+private fun DrawScope.drawCharacterField(engine: GameplayRenderModel, core: Offset, shakeX: Float, shakeY: Float) {
+    val ability = engine.characterAbility
+    if (engine.coreShape == CoreShape.RING) {
+        val active = engine.speed >= 40f
+        val radius = ability.ringRadius
+        drawCircle(Acid.copy(alpha = if (active) 0.09f else 0.025f), radius, core, style = Stroke(36f))
+        drawCircle(Acid.copy(alpha = if (active) 0.5f else 0.2f), radius - 18f, core, style = Stroke(1f))
+        drawCircle(Acid.copy(alpha = if (active) 0.65f else 0.2f), radius + 18f, core, style = Stroke(1.5f))
+    }
+    if (engine.coreShape == CoreShape.TESSERACT && ability.lattice.isNotEmpty()) {
+        ability.lattice.forEachIndexed { index, point ->
+            val position = world(engine, point.x, point.y, shakeX, shakeY)
+            drawPolygon(position, 10f, 4, (PI / 4).toFloat(), Violet.copy(alpha = 0.7f), Stroke(1.5f))
+            if (index > 0) {
+                val previous = ability.lattice[index - 1]
+                drawLine(Violet.copy(alpha = 0.5f), world(engine, previous.x, previous.y, shakeX, shakeY), position, 1.5f)
+            }
+        }
+    }
+}
+
+private fun characterAccent(shape: CoreShape): Color = when (shape) {
+    CoreShape.ORB -> Cyan
+    CoreShape.PRISM -> Violet
+    CoreShape.SHARD -> Magenta
+    CoreShape.RING -> Acid
+    CoreShape.DIAMOND -> Orange
+    CoreShape.TESSERACT -> Color(0xFFB7A7FF)
+}
+
+/** A 4D rotating wireframe projected to Canvas; the fixed 2D core remains visible. */
+internal fun DrawScope.drawTesseractCore(center: Offset, elapsed: Float, color: Color) {
+    drawCircle(color.copy(alpha = 0.28f), GameplayRenderModel.CORE_RADIUS, center, style = Stroke(1f))
+    val angle = elapsed * 0.65f
+    val c = cos(angle)
+    val s = sin(angle)
+    val c2 = cos(angle * 0.73f)
+    val s2 = sin(angle * 0.73f)
+    val vertices = Array(16) { index ->
+        val x = if (index and 1 == 0) -1f else 1f
+        val y = if (index and 2 == 0) -1f else 1f
+        val z = if (index and 4 == 0) -1f else 1f
+        val w = if (index and 8 == 0) -1f else 1f
+        val rotatedX = x * c - w * s
+        val rotatedW = x * s + w * c
+        val rotatedY = y * c2 - z * s2
+        val rotatedZ = y * s2 + z * c2
+        val perspective = 18f / (2.8f - rotatedW * 0.55f)
+        center + Offset((rotatedX + rotatedZ * 0.35f) * perspective, (rotatedY + rotatedZ * 0.25f) * perspective)
+    }
+    vertices.forEachIndexed { index, vertex ->
+        repeat(4) { axis ->
+            val other = index xor (1 shl axis)
+            if (index < other) drawLine(color.copy(alpha = if (axis == 3) 0.4f else 0.8f), vertex, vertices[other], 1.3f)
+        }
+    }
+    drawCircle(SpaceBlack, 6f, center)
+    drawCircle(White, 3f, center)
 }

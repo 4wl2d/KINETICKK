@@ -94,7 +94,7 @@ class ContentBalanceCharacterizationTest {
             },
         )
         assertEquals(
-            "3d19c0391c2422a3",
+            "4542ace8c0367bdd",
             goldenFingerprint {
                 add("weapons")
                 ui.weapons.forEach { weapon ->

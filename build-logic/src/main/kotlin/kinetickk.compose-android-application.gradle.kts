@@ -22,7 +22,7 @@ extensions.configure<ApplicationExtension> {
         applicationId = "com.vladislavtomilov.kinetickk"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
+        versionCode = 2
         versionName = project.version.toString()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

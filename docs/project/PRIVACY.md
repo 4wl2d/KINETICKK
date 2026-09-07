@@ -1,24 +1,27 @@
 <!-- SPDX-FileCopyrightText: 2026 Vladislav Tomilov -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# KINETICKK 0.1.0 privacy note
+# KINETICKK 0.2.0 privacy note
 
-Effective: 15 July 2026
+Updated: 7 September 2026
 
-The KINETICKK `0.1.0` application code does not implement user accounts,
-advertising, analytics, telemetry, tracking pixels, remote APIs, or its own
-cookies. It does not transmit gameplay or settings to Vladislav Tomilov.
+The game has no user accounts, advertising, analytics service, tracking pixels,
+remote APIs, or application cookies. Gameplay and settings are not uploaded.
 
-The desktop build stores settings and progress locally through JVM Preferences.
-The browser build stores settings and progress locally in the browser's
-`localStorage`. A user can remove that data with the operating system or browser
-controls. Uninstalling the app or clearing site storage may also remove it.
+Progress and settings stay on the device: Android uses SharedPreferences,
+desktop uses JVM Preferences, and the web build uses browser localStorage.
+Clearing application or site data may remove saved progress.
 
-This note covers only the application code in version `0.1.0`. GitHub, a web
-host, an app store, a payment provider, or another distribution platform may
-process logs, account data, cookies, or purchases under its own privacy terms.
-Those services are outside this note.
+Desktop also keeps local crash reports and session logs in
+`~/.kinetickk/crashes/` (or a configured location). Reports can contain exception
+stacks, system and runtime details, recent game inputs, console output, and
+copies of save payloads. Ten crash reports and three completed session logs
+are retained. No report is sent automatically; sharing one is a user action.
+Android and web do not use the desktop crash reporter.
 
-This file must be reviewed before a release that adds networking, crash
-reporting, telemetry, accounts, payments, cloud saves, advertising, or any other
-collection or transmission of personal data.
+The optional performance HUD measures frame timing and entity counts locally.
+It does not transmit measurements.
+
+This note covers the 0.2.0 application code. GitHub, hosting providers, and app
+stores may process their own logs, account information, or purchases under
+their separate privacy terms.

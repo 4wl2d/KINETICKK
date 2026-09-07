@@ -17,10 +17,10 @@ import kotlin.test.Test
 
 class GameSystemsTest {
     @Test
-    fun defaultSimulationSpeedIsSlightlyAccelerated() {
+    fun freshProfileUsesTheOneTimesBalanceBaseline() {
         val engine = gameScenario(seed = 10, initialMatter = 0)
 
-        assertEquals(1.15f, engine.settings.simulationSpeed)
+        assertEquals(1f, engine.settings.simulationSpeed)
     }
 
     @Test

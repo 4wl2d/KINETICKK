@@ -5,18 +5,11 @@ package kinetickk.ball.gameplay.nucleus
 
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
-import kinetickk.ball.gameplay.api.GameplayCommandSourceToken
 import kinetickk.ball.gameplay.api.GameplayInstanceId
 import kinetickk.ball.gameplay.api.GameplayRevision
 import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.RunId
 import kinetickk.ball.gameplay.nucleus.reducer.EngineState
-import kinetickk.ball.profile.api.ProfileModuleCommandRequest
-
-data class PendingProfileCommand(
-    val request: ProfileModuleCommandRequest,
-    val exitCompletion: GameplayCommandSourceToken?,
-)
 
 @ConsistentCopyVisibility
 data class GameplayState internal constructor(
@@ -25,7 +18,8 @@ data class GameplayState internal constructor(
     val phase: GameplayRunPhase,
     val content: GameplayContentSnapshot,
     val engine: EngineState?,
-    val pendingProfileCommand: PendingProfileCommand?,
+    /** Earned progress was submitted and its outcome has not yet been accepted. */
+    val progressPending: Boolean,
 ) {
     init {
         require((phase == GameplayRunPhase.CREATED) == (engine == null)) {
@@ -45,7 +39,7 @@ data class GameplayState internal constructor(
             phase = GameplayRunPhase.CREATED,
             content = content,
             engine = null,
-            pendingProfileCommand = null,
+            progressPending = false,
         )
     }
 }

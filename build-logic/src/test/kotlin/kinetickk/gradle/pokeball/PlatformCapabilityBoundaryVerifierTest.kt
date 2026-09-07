@@ -102,7 +102,7 @@ class PlatformCapabilityBoundaryVerifierTest {
     @Test
     fun arbitraryKeysBulkOperationsAndExtraCapabilityOperationsFail() {
         val changedPhysicalKey = mutate(PROFILE_FACTORY_PATH_FIXTURE) { source ->
-            source.replace("kinetickk_profile", "caller_selected_profile")
+            source.replace("kinetickk_profile_v2", "caller_selected_profile")
         }
         val bulkClear = mutate(WEB_PATH) { source ->
             source.replace(
@@ -326,9 +326,9 @@ class PlatformCapabilityBoundaryVerifierTest {
                 fun createProfileComponent(persistence: ProfilePersistenceCapability) = persistence
 
                 object ProfilePersistenceContract {
-                    const val DESKTOP_PROFILE_NODE: String = "kinetickk/profile"
+                    const val DESKTOP_PROFILE_NODE: String = "kinetickk/profile-v2"
                     const val DESKTOP_SNAPSHOT: String = "snapshot"
-                    const val WEB_SNAPSHOT: String = "kinetickk_profile"
+                    const val WEB_SNAPSHOT: String = "kinetickk_profile_v2"
                 }
 
                 private class ProfilePersistenceAdapter(
@@ -360,14 +360,14 @@ class PlatformCapabilityBoundaryVerifierTest {
 
                 internal class AppCompositionOwner {
                     private val profile = createProfileComponent(
-                        persistence = createPlatformProfilePersistenceCapability(),
+                        persistence = createPlatformProfilePersistenceCapability(diagnostics),
                     )
                     private val audio = DefaultAudioService(
                         createPlatformTonePlaybackCapability(),
                     )
                 }
 
-                internal expect fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability
+                internal expect fun createPlatformProfilePersistenceCapability(diagnostics: CrashDiagnostics): ProfilePersistenceCapability
                 internal expect fun createPlatformTonePlaybackCapability(): TonePlaybackCapability
             """.trimIndent(),
         ),
@@ -386,7 +386,7 @@ class PlatformCapabilityBoundaryVerifierTest {
             import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
             import kinetickk.resource.audio.impl.TonePlaybackCapability
 
-            internal actual fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability =
+            internal actual fun createPlatformProfilePersistenceCapability(diagnostics: CrashDiagnostics): ProfilePersistenceCapability =
                 DesktopProfilePersistenceCapability(
                     profileNode = {
                         Preferences.userRoot().node(ProfilePersistenceContract.DESKTOP_PROFILE_NODE)
@@ -537,10 +537,10 @@ class PlatformCapabilityBoundaryVerifierTest {
             import kinetickk.ball.profile.impl.ProfilePersistenceCapability
             import kinetickk.resource.audio.impl.TonePlaybackCapability
 
-            private const val ANDROID_PROFILE_PREFERENCES = "kinetickk.profile"
+            private const val ANDROID_PROFILE_PREFERENCES = "kinetickk.profile.v2"
             private const val ANDROID_SNAPSHOT = "snapshot"
 
-            internal actual fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability {
+            internal actual fun createPlatformProfilePersistenceCapability(diagnostics: CrashDiagnostics): ProfilePersistenceCapability {
                 val context = AndroidApplicationContext.requireContext()
                 return AndroidProfilePersistenceCapability(
                     profile = context.getSharedPreferences(ANDROID_PROFILE_PREFERENCES, Context.MODE_PRIVATE),
@@ -646,7 +646,7 @@ class PlatformCapabilityBoundaryVerifierTest {
             import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
             import kinetickk.resource.audio.impl.TonePlaybackCapability
 
-            internal actual fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability =
+            internal actual fun createPlatformProfilePersistenceCapability(diagnostics: CrashDiagnostics): ProfilePersistenceCapability =
                 WebProfilePersistenceCapability()
 
             private class WebProfilePersistenceCapability : ProfilePersistenceCapability {

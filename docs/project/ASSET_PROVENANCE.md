@@ -11,6 +11,16 @@ KINETICKK version `0.1.0`, or retained in its reachable Git history.
 | `docs/assets/kinetickk.png` | Screenshot generated from KINETICKK by Vladislav Tomilov (`@4wl2d`) | 2026-07-15 | `416e32d6d8657feffe51185f5c6e63513de490dd3add786c2720aa9e58f23c7a` | GPL-3.0-or-later; see sidecar |
 | `docs/assets/kinetic-void.jpg` (removed, retained in Git history) | Screenshot generated from the former Kinetic Void build by Vladislav Tomilov (`@4wl2d`) | 2026-07-15 | `c40ca51fe652524e04f2186c5a0acf0525045b7b44e47a689f1a0e8bc274d951` | Relicensed under GPL-3.0-or-later by the current NOTICE |
 
+The Android launcher icon was added on 2026-09-06. Its editable XML was generated
+with Codex from the project's Core and singularity geometry and palette, without
+external artwork. These project-authored resources use GPL-3.0-or-later:
+
+| Source | SHA-256 |
+|---|---|
+| `app/android/src/main/res/drawable/ic_launcher_foreground.xml` | `8f29fcfdc4a0bb164119ba5d52b4b1b94ffebb513af47b2561197e4af1b6455a` |
+| `app/android/src/main/res/mipmap-anydpi/ic_launcher.xml` | `9bd8ccfedb57bab70c2f6c373314018d1cc094626b00236c58421bd608a49440` |
+| `app/android/src/main/res/values/colors.xml` | `5a79b48550bb79d73fcba14e57073eade497392cebede004603586a64a47612b` |
+
 The game currently stores no external music, sound-effect, model, font, or
 texture files. Audio is synthesized at runtime by project code, visuals are
 drawn by project code, and the UI requests a system monospace font rather than

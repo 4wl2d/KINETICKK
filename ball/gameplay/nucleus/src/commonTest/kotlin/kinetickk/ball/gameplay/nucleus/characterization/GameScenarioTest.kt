@@ -80,7 +80,7 @@ class GameScenarioTest {
     fun runClockFormatsForHud() {
         assertEquals("00:00", formatRunTime(0f))
         assertEquals("03:07", formatRunTime(187.9f))
-        assertEquals("20:00", formatRunTime(GameScenario.RUN_DURATION_SECONDS))
+        assertEquals("12:00", formatRunTime(kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent.tempo.bossAtSeconds))
     }
 
     @Test

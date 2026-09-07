@@ -22,14 +22,14 @@ class GameplayPresentationPolicyTest {
     }
 
     @Test
-    fun compactStatusOverlaysUseChoiceStrengthScrimWithoutChangingRegularColors() {
-        val compactScrim = Color(0xF2050610)
-
-        assertEquals(compactScrim, pauseOverlayScrimColor(GameplayLayoutMode.COMPACT_LANDSCAPE))
-        assertEquals(compactScrim, pauseOverlayScrimColor(GameplayLayoutMode.COMPACT_PORTRAIT))
-        assertEquals(compactScrim, terminalOverlayScrimColor(GameplayLayoutMode.COMPACT_LANDSCAPE))
-        assertEquals(compactScrim, terminalOverlayScrimColor(GameplayLayoutMode.COMPACT_PORTRAIT))
-        assertEquals(Color(0xC9050610), pauseOverlayScrimColor(GameplayLayoutMode.REGULAR))
-        assertEquals(Color(0xDE050610), terminalOverlayScrimColor(GameplayLayoutMode.REGULAR))
+    fun statusOverlaysSeparateMenusFromPlayAcrossViewportClasses() {
+        for (mode in GameplayLayoutMode.entries) {
+            assertTrue(pauseOverlayScrimColor(mode).alpha >= 0.9f)
+            assertTrue(terminalOverlayScrimColor(mode).alpha >= pauseOverlayScrimColor(mode).alpha)
+        }
+        assertEquals(pauseOverlayScrimColor(GameplayLayoutMode.COMPACT_LANDSCAPE),
+            pauseOverlayScrimColor(GameplayLayoutMode.COMPACT_PORTRAIT))
+        assertEquals(terminalOverlayScrimColor(GameplayLayoutMode.COMPACT_LANDSCAPE),
+            terminalOverlayScrimColor(GameplayLayoutMode.COMPACT_PORTRAIT))
     }
 }

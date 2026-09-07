@@ -3,10 +3,14 @@
 
 package kinetickk.app.shared
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.NonRestartableComposable
 import androidx.compose.runtime.remember
+import kinetickk.foundation.design.LocalCrashDiagnostics
+import kinetickk.foundation.diagnostics.CrashDiagnostics
 import kinetickk.ball.content.api.ContentCatalog
 import kinetickk.ball.content.impl.createContentCatalog
 import kinetickk.ball.gameplay.impl.DefaultGameplayFeature
@@ -23,7 +27,7 @@ import kinetickk.ball.profile.interaction.rebirth.api.RebirthFeature
 import kinetickk.ball.profile.interaction.rebirth.impl.DefaultRebirthFeature
 import kinetickk.ball.profile.interaction.settings.api.SettingsFeature
 import kinetickk.ball.profile.interaction.settings.impl.DefaultSettingsFeature
-import kinetickk.flow.session.impl.AppSessionComponent
+import kinetickk.flow.session.api.AppSessionPort
 import kinetickk.flow.session.impl.createAppSessionComponent
 import kinetickk.flow.session.interaction.AppSessionContent
 import kinetickk.flow.session.interaction.audio.SessionAudioExecutor
@@ -39,21 +43,22 @@ import kinetickk.resource.audio.impl.TonePlaybackCapability
 
 /** The single UI entry point used by Android, Desktop, and Web hosts. */
 @Composable
-fun KinetickkApp() {
-    val ownerValue = remember { AppCompositionOwner() }
+fun KinetickkApp(onLanguageChanged: (String) -> Unit = {}) {
+    val diagnostics = LocalCrashDiagnostics.current
+    val ownerValue = remember { AppCompositionOwner(diagnostics = diagnostics) }
     DisposableEffect(ownerValue) {
         onDispose(ownerValue::close)
     }
-    ownerValue.Content()
+    ownerValue.Content(onLanguageChanged)
 }
 
-/** Static Assembly: constructs components and binds the two declared result routes. */
+/** Static Assembly: constructs owners and passes their capabilities to collaborators. */
 internal class AppCompositionOwner(
     contentCatalog: ContentCatalog = createContentCatalog(),
     profileComponent: ProfileComponent? = null,
     audioService: AudioService? = null,
     gameplayComponent: GameplayCompositionComponent? = null,
-    appSessionComponent: AppSessionComponent? = null,
+    appSessionComponent: AppSessionPort? = null,
     homeFeature: HomeFeature? = null,
     settingsFeature: SettingsFeature? = null,
     labFeature: LabFeature? = null,
@@ -61,16 +66,15 @@ internal class AppCompositionOwner(
     rebirthFeature: RebirthFeature? = null,
     codexFeature: CodexFeature? = null,
     profileUnavailableFeature: ProfileUnavailableFeature? = null,
+    private val diagnostics: CrashDiagnostics = CrashDiagnostics.None,
 ) {
     private val profilePolicy = contentCatalog.profilePolicy()
     private val gameplayContent = contentCatalog.gameplayContent()
     private val uiCatalog = contentCatalog.uiCatalog()
-    private val profileResultRouter = ProfileModuleResultRouter()
 
     private val profileComponent: ProfileComponent = profileComponent ?: createProfileComponent(
-        persistence = createPlatformProfilePersistenceCapability(),
+        persistence = createPlatformProfilePersistenceCapability(diagnostics),
         policy = profilePolicy,
-        commandResultSink = profileResultRouter::route,
     )
     private val profilePort: ProfilePort = this.profileComponent
     private val audioService: AudioService = audioService ?: DefaultAudioService(
@@ -81,7 +85,9 @@ internal class AppCompositionOwner(
         DefaultGameplayFeature(
             gameplayContent = gameplayContent,
             profilePort = this.profileComponent,
+            profileProgress = this.profileComponent,
             audioService = this.audioService,
+            diagnostics = diagnostics,
         )
     private val homeFeature: HomeFeature = homeFeature ?: DefaultHomeFeature(
         profilePort = this.profilePort,
@@ -115,29 +121,27 @@ internal class AppCompositionOwner(
     )
     private val profileUnavailableFeature: ProfileUnavailableFeature =
         profileUnavailableFeature ?: DefaultProfileUnavailableFeature()
-    private val appSessionComponent: AppSessionComponent = appSessionComponent ?:
+    private val appSessionComponent: AppSessionPort = appSessionComponent ?:
         createAppSessionComponent(
-            profileRoute = this.profileComponent,
-            gameplaySessionHost = this.gameplayComponent,
+            profilePort = this.profileComponent,
+            profileSettings = this.profileComponent,
+            profileLoadout = this.profileComponent,
+            profileRebirth = this.profileComponent,
+            gameplayRunHost = this.gameplayComponent,
             updateAudioPreferences = sessionAudioExecutor::updatePreferences,
             playMuteFeedback = sessionAudioExecutor::playUiClick,
             playRebirthAcceptedFeedback = this.rebirthFeature::playAcceptedFeedback,
         )
-
-    init {
-        profileResultRouter.bind(
-            sessionSink = this.appSessionComponent::receiveProfileModuleResult,
-            gameplaySink = this.gameplayComponent::receiveProfileModuleResult,
-        )
-    }
 
     internal val sessionPort
         get() = appSessionComponent
 
     @Composable
     @NonRestartableComposable
-    fun Content() {
+    fun Content(onLanguageChanged: (String) -> Unit = {}) {
         AppSessionContent(
+            profileReadPort = profilePort,
+            onLanguageChanged = { language -> onLanguageChanged(language.code) },
             sessionPort = appSessionComponent,
             audioExecutor = sessionAudioExecutor,
             gameplayPresentation = gameplayComponent,
@@ -157,7 +161,7 @@ internal class AppCompositionOwner(
 }
 
 /** Platform authority is acquired only by app composition actuals. */
-internal expect fun createPlatformProfilePersistenceCapability(): ProfilePersistenceCapability
+internal expect fun createPlatformProfilePersistenceCapability(diagnostics: CrashDiagnostics): ProfilePersistenceCapability
 
 /** Platform authority is acquired only by app composition actuals. */
 internal expect fun createPlatformTonePlaybackCapability(): TonePlaybackCapability

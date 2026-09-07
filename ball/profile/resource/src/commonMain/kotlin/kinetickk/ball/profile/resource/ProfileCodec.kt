@@ -7,6 +7,8 @@ import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.foundation.collections.toImmutableSet
+import kinetickk.ball.profile.api.CharacterAchievementProgress
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
@@ -22,6 +24,9 @@ import kinetickk.ball.profile.api.ProfileSnapshot
 import kinetickk.ball.profile.api.ProfileSnapshotRejection
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
+import kinetickk.foundation.common.localization.AppLanguage
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.decodeFromString
@@ -41,7 +46,7 @@ internal sealed interface ProfileDecodeResult {
     data class Rejected(val reason: ProfileSnapshotRejection) : ProfileDecodeResult
 }
 
-/** Strict, canonical codec for the only profile schema supported before 1.0.0. */
+/** Strict, canonical codec; profiles predating language selection retain the Russian default. */
 internal object ProfileCodec {
     private val json = Json {
         encodeDefaults = true
@@ -125,8 +130,10 @@ private data class PlayerProfileDto(
     val labProgress: LabProgressDto,
     val collection: PlayerCollectionDto,
     val rebirthProgress: RebirthProgressDto,
+    val characterAchievements: CharacterAchievementProgressDto,
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 private data class PlayerPreferencesDto(
     val soundEnabled: Boolean,
@@ -140,6 +147,12 @@ private data class PlayerPreferencesDto(
     val damageNumberSizeId: String,
     val damageNumberFormatId: String,
     val damageNumberTierThreshold: Int,
+    // Absence is accepted only for saves created before language selection was introduced.
+    // Omitting this sentinel during canonical re-encoding preserves validation of those saves.
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val languageCode: String? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val runStatisticsOnLeft: Boolean? = null,
 )
 
 @Serializable
@@ -177,6 +190,15 @@ private data class RebirthProgressDto(
     val highestCleared: Int,
 )
 
+@Serializable
+private data class CharacterAchievementProgressDto(
+    val eliteKills: String,
+    val dashHits: String,
+    val completedOrbits: String,
+    val architectVictories: String,
+    val victoriousCharacterIds: List<String>,
+)
+
 private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
     validateProfile(profile)
     rejectUnless(revision.value >= 0L, ProfileSnapshotRejection.INVALID_DECIMAL)
@@ -206,6 +228,8 @@ private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
                 damageNumberSizeId = preferences.damageNumberSize.wireId(),
                 damageNumberFormatId = preferences.damageNumberFormat.wireId(),
                 damageNumberTierThreshold = preferences.damageNumberTierThreshold,
+                languageCode = preferences.language.code,
+                runStatisticsOnLeft = preferences.runStatisticsOnLeft,
             ),
             economy = PlayerEconomyDto(
                 matter = profile.economy.matter.toString(),
@@ -221,6 +245,13 @@ private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
             labProgress = LabProgressDto(ranks),
             collection = PlayerCollectionDto(
                 profile.collection.discoveredItemIds.sorted(),
+            ),
+            characterAchievements = CharacterAchievementProgressDto(
+                eliteKills = profile.characterAchievements.eliteKills.toString(),
+                dashHits = profile.characterAchievements.dashHits.toString(),
+                completedOrbits = profile.characterAchievements.completedOrbits.toString(),
+                architectVictories = profile.characterAchievements.architectVictories.toString(),
+                victoriousCharacterIds = profile.characterAchievements.victoriousCharacters.map(CoreShape::wireId).sorted(),
             ),
             rebirthProgress = RebirthProgressDto(
                 level = profile.rebirthProgress.level,
@@ -249,6 +280,12 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
         ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
     )
 
+    rejectUnless(
+        profile.characterAchievements.victoriousCharacterIds ==
+            profile.characterAchievements.victoriousCharacterIds.distinct().sorted(),
+        ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
+    )
+
     val metaRanks = MutableList(MetaUpgradeId.entries.size) { 0 }
     profile.labProgress.ranks.forEach { record ->
         val id = record.id.metaUpgradeId()
@@ -268,6 +305,8 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
             damageNumberSize = profile.preferences.damageNumberSizeId.damageNumberSize(),
             damageNumberFormat = profile.preferences.damageNumberFormatId.damageNumberFormat(),
             damageNumberTierThreshold = profile.preferences.damageNumberTierThreshold,
+            language = profile.preferences.languageCode?.appLanguage() ?: AppLanguage.Russian,
+            runStatisticsOnLeft = profile.preferences.runStatisticsOnLeft ?: false,
         ),
         economy = PlayerEconomy(
             matter = profile.economy.matter.parseCanonicalNonNegativeLong(),
@@ -280,6 +319,13 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
         ),
         labProgress = LabProgress(metaRanks),
         collection = PlayerCollection(profile.collection.discoveredItemIds.toSet()),
+        characterAchievements = CharacterAchievementProgress(
+            eliteKills = profile.characterAchievements.eliteKills.parseCanonicalNonNegativeLong(),
+            dashHits = profile.characterAchievements.dashHits.parseCanonicalNonNegativeLong(),
+            completedOrbits = profile.characterAchievements.completedOrbits.parseCanonicalNonNegativeLong(),
+            architectVictories = profile.characterAchievements.architectVictories.parseCanonicalNonNegativeLong(),
+            victoriousCharacters = profile.characterAchievements.victoriousCharacterIds.map { it.coreShape() }.toImmutableSet(),
+        ),
         rebirthProgress = RebirthProgress(
             level = profile.rebirthProgress.level,
             highestCleared = profile.rebirthProgress.highestCleared,
@@ -297,6 +343,14 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
 }
 
 private fun validateProfile(profile: PlayerProfile) {
+    val achievements = profile.characterAchievements
+    rejectUnless(
+        achievements.eliteKills >= 0L && achievements.dashHits >= 0L &&
+            achievements.completedOrbits >= 0L && achievements.architectVictories >= 0L &&
+            achievements.victoriousCharacters.size <= CoreShape.entries.size &&
+            achievements.victoriousCharacters.size.toLong() <= achievements.architectVictories,
+        ProfileSnapshotRejection.INCONSISTENT_PROFILE,
+    )
     val preferences = profile.preferences
     rejectUnless(
         preferences.masterVolume.isFinite() && preferences.masterVolume in 0f..1f &&
@@ -361,12 +415,18 @@ private fun CoreShape.wireId(): String = when (this) {
     CoreShape.ORB -> "ORB"
     CoreShape.PRISM -> "PRISM"
     CoreShape.SHARD -> "SHARD"
+    CoreShape.RING -> "RING"
+    CoreShape.DIAMOND -> "DIAMOND"
+    CoreShape.TESSERACT -> "TESSERACT"
 }
 
 private fun String.coreShape(): CoreShape = when (this) {
     "ORB" -> CoreShape.ORB
     "PRISM" -> CoreShape.PRISM
     "SHARD" -> CoreShape.SHARD
+    "RING" -> CoreShape.RING
+    "DIAMOND" -> CoreShape.DIAMOND
+    "TESSERACT" -> CoreShape.TESSERACT
     else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
 }
 
@@ -460,6 +520,12 @@ private fun DamageNumberFormat.wireId(): String = when (this) {
 private fun String.damageNumberFormat(): DamageNumberFormat = when (this) {
     "COMPACT" -> DamageNumberFormat.COMPACT
     "FULL" -> DamageNumberFormat.FULL
+    else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
+}
+
+private fun String.appLanguage(): AppLanguage = when (this) {
+    "ru" -> AppLanguage.Russian
+    "en" -> AppLanguage.English
     else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
 }
 

@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.interaction
 
 /** Presentation-owned requests delivered to the AppSession host. */
 sealed interface GameplayInteractionOutput {
+    data object OpenCodex : GameplayInteractionOutput
     data object OpenSettings : GameplayInteractionOutput
     data object OpenRebirth : GameplayInteractionOutput
     data object ExitToHome : GameplayInteractionOutput

@@ -10,23 +10,14 @@ import kinetickk.ball.content.api.ProfilePolicySnapshot
 import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.ball.content.impl.createContentCatalog
 import kinetickk.ball.gameplay.api.GameplayActiveWeaponProjection
-import kinetickk.ball.gameplay.api.GameplayCodexStacksProjection
-import kinetickk.ball.gameplay.api.GameplayCommandIngressResult
-import kinetickk.ball.gameplay.api.GameplayCommandSourceToken
-import kinetickk.ball.gameplay.api.GameplayEffectiveProtocolIdentity
+import kinetickk.ball.gameplay.api.GameplayBuildSummaryProjection
 import kinetickk.ball.gameplay.api.GameplayInstanceId
-import kinetickk.ball.gameplay.api.GameplayModuleCommand
-import kinetickk.ball.gameplay.api.GameplayModuleCommandRequest
-import kinetickk.ball.gameplay.api.GameplayModuleResult
-import kinetickk.ball.gameplay.api.GameplayModuleResultDelivery
 import kinetickk.ball.gameplay.api.GameplayPresentationPort
 import kinetickk.ball.gameplay.api.GameplayQuery
-import kinetickk.ball.gameplay.api.GameplayResultIssuerProvenance
-import kinetickk.ball.gameplay.api.GameplayResultSourceToken
 import kinetickk.ball.gameplay.api.GameplayRevision
 import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.GameplayRunStatusProjection
-import kinetickk.ball.gameplay.api.GameplaySessionRunPort
+import kinetickk.ball.gameplay.api.GameplayRunPort
 import kinetickk.ball.gameplay.api.RunId
 import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.gameplay.impl.GameplayCompositionComponent
@@ -42,12 +33,18 @@ import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.PreferencesProjection
 import kinetickk.ball.profile.api.ProfileAcceptance
 import kinetickk.ball.profile.api.ProfileBootstrapStatus
-import kinetickk.ball.profile.api.ProfileCommandIngressResult
-import kinetickk.ball.profile.api.ProfileModuleCommandRequest
 import kinetickk.ball.profile.api.ProfilePersistenceStatus
 import kinetickk.ball.profile.api.ProfilePulse
 import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.api.ProfileRevision
+import kinetickk.ball.profile.api.ProfileSettingsChanged
+import kinetickk.ball.profile.api.ProfileRefusal
+import kinetickk.ball.profile.api.ProfileCoreShapeSelected
+import kinetickk.ball.gameplay.api.GameplayRunStarted
+import kinetickk.ball.gameplay.api.GameplayOverlayPaused
+import kinetickk.ball.gameplay.api.GameplaySettingsApplied
+import kinetickk.ball.gameplay.api.GameplayRefusal
+import kinetickk.foundation.dispatch.InlineReply
 import kinetickk.ball.profile.api.ProfileRunBootstrapResult
 import kinetickk.ball.profile.api.RebirthProgressProjection
 import kinetickk.ball.profile.api.RunBootstrapProjection
@@ -81,10 +78,7 @@ class AppCompositionOwnerTest {
 
         assertEquals(listOf(RunId(0L), RunId(1L)), fixture.gameplay.createdRunIds)
         assertEquals(
-            listOf<GameplayModuleCommand>(
-                GameplayModuleCommand.StartRun,
-                GameplayModuleCommand.StartRun,
-            ),
+            listOf(RunId(0), RunId(1)),
             fixture.gameplay.acceptedCommands,
         )
         assertEquals(1, fixture.content.profilePolicyCalls)
@@ -184,17 +178,21 @@ private class ReadyProfileComponent(
 
     override fun accept(pulse: ProfilePulse.Business): ProfileAcceptance = error("unused")
 
-    override fun acceptFromSession(
-        request: ProfileModuleCommandRequest,
-        causalScope: Long,
-        causalDepth: Int,
-    ): ProfileCommandIngressResult = error("unused")
+    override fun applyGameplayProgress(
+        update: kinetickk.ball.profile.api.GameplayProgressUpdate,
+        reply: InlineReply<kinetickk.ball.profile.api.ProfileProgressApplied, ProfileRefusal>,
+    ): Unit = error("unused")
 
-    override fun acceptFromGameplay(
-        request: ProfileModuleCommandRequest,
-        causalScope: Long,
-        causalDepth: Int,
-    ): ProfileCommandIngressResult = error("unused")
+    override fun advanceRebirth(
+        reply: InlineReply<kinetickk.ball.profile.api.ProfileRebirthAdvanced, ProfileRefusal>,
+    ): Unit = error("unused")
+
+    override fun toggleMute(reply: InlineReply<ProfileSettingsChanged, ProfileRefusal>): Unit = error("unused")
+
+    override fun selectCoreShape(
+        shape: kinetickk.ball.content.api.CoreShape,
+        reply: InlineReply<ProfileCoreShapeSelected, ProfileRefusal>,
+    ): Unit = error("unused")
 
     override fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection =
         RunBootstrapProjection(
@@ -232,7 +230,7 @@ private fun PlayerProfile.toGameplaySnapshot(): GameplayProfileSnapshot = Gamepl
 
 private class RecordingGameplayComponent : GameplayCompositionComponent {
     val createdRunIds = mutableListOf<RunId>()
-    val acceptedCommands = mutableListOf<GameplayModuleCommand>()
+    val acceptedCommands = mutableListOf<RunId>()
     private var activeRunValue: RecordingGameplayRun? = null
 
     fun finishActiveRun() {
@@ -241,19 +239,15 @@ private class RecordingGameplayComponent : GameplayCompositionComponent {
 
     override fun createRun(
         runId: RunId,
-        commandResultSink: (GameplayModuleResultDelivery) -> Unit,
-    ): GameplaySessionRunPort {
+    ): GameplayRunPort {
         createdRunIds += runId
-        return RecordingGameplayRun(runId, commandResultSink, acceptedCommands::add)
+        return RecordingGameplayRun(runId, acceptedCommands::add)
             .also { activeRunValue = it }
     }
 
-    override fun activeRun(): GameplaySessionRunPort? = activeRunValue
+    override fun activeRun(): GameplayRunPort? = activeRunValue
 
     override fun activePresentation(): GameplayPresentationPort? = activeRunValue
-
-    override fun receiveProfileModuleResult(delivery: kinetickk.ball.profile.api.ProfileModuleResultDelivery) =
-        Unit
 
     @Composable
     override fun Content(
@@ -264,61 +258,44 @@ private class RecordingGameplayComponent : GameplayCompositionComponent {
 
 private class RecordingGameplayRun(
     runId: RunId,
-    private val commandResultSink: (GameplayModuleResultDelivery) -> Unit,
-    private val recordCommand: (GameplayModuleCommand) -> Unit,
-) : GameplaySessionRunPort, GameplayPresentationPort {
+    private val recordCommand: (RunId) -> Unit,
+) : GameplayRunPort, GameplayPresentationPort {
     override val instanceId = GameplayInstanceId(runId)
     private var revision = GameplayRevision.ZERO
     var phase: GameplayRunPhase = GameplayRunPhase.CREATED
 
-    override fun acceptFromSession(
-        request: GameplayModuleCommandRequest,
-        causalScope: Long,
-        causalDepth: Int,
-    ): GameplayCommandIngressResult {
-        assertEquals(instanceId, request.targetInstance)
-        assertEquals(GameplayModuleCommand.StartRun, request.command)
-        recordCommand(request.command)
-        val commandSource = GameplayCommandSourceToken(
-            semanticHandle = request.semanticHandle,
-            targetInstance = request.targetInstance,
-            causalScope = causalScope,
-            causalDepth = causalDepth,
-        )
+    override fun applyPreferences(
+        preferences: PlayerPreferences,
+        reply: InlineReply<GameplaySettingsApplied, GameplayRefusal>,
+    ): Unit = error("unused")
+
+    override fun startRun(reply: InlineReply<GameplayRunStarted, GameplayRefusal>) {
+        reply.checkAvailable()
+        recordCommand(instanceId.runId)
         revision = GameplayRevision(revision.value + 1L)
         phase = GameplayRunPhase.RUNNING
-        commandResultSink(
-            GameplayModuleResultDelivery(
-                commandSource = commandSource,
-                resultSource = GameplayResultSourceToken(
-                    semanticHandle = request.semanticHandle,
-                    targetInstance = instanceId,
-                    targetRevision = revision,
-                    sourceOrdinal = 0,
-                    causalScope = causalScope,
-                    causalDepth = causalDepth + 1,
-                ),
-                effectiveProtocolIdentity = GameplayEffectiveProtocolIdentity.SESSION_START,
-                result = GameplayModuleResult.RunStarted,
-                issuerProvenance = GameplayResultIssuerProvenance.GAMEPLAY_RUN_STATIC_BINDING,
-            ),
-        )
-        return GameplayCommandIngressResult.Accepted(instanceId, revision)
+        reply.accepted(GameplayRunStarted(instanceId.runId, revision))
     }
+
+    override fun pauseForOverlay(reply: InlineReply<GameplayOverlayPaused, GameplayRefusal>): Unit =
+        error("unused")
+
+    override fun exitRun(reply: InlineReply<kinetickk.ball.gameplay.api.GameplayRunExited, GameplayRefusal>): Unit =
+        error("unused")
 
     override fun query(query: GameplayQuery.GetRunStatus): GameplayRunStatusProjection =
         GameplayRunStatusProjection(
             instanceId = instanceId,
             revision = revision,
             phase = phase,
-            profileCommandPending = false,
+            progressPending = false,
         )
 
     override fun query(query: GameplayQuery.GetActiveWeapon): GameplayActiveWeaponProjection =
         GameplayActiveWeaponProjection(instanceId, revision, weapon = null)
 
-    override fun query(query: GameplayQuery.GetCodexStacks): GameplayCodexStacksProjection =
-        GameplayCodexStacksProjection(instanceId, revision, immutableListOf())
+    override fun query(query: GameplayQuery.GetBuildSummary): GameplayBuildSummaryProjection =
+        GameplayBuildSummaryProjection(instanceId, revision, immutableListOf())
 }
 
 private class RecordingAudioService : AudioService {

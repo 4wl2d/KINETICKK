@@ -13,6 +13,7 @@ import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
+import kinetickk.foundation.collections.immutableListOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -26,6 +27,17 @@ class ContentCatalogTest {
     private val gameplay = catalog.gameplayContent()
     private val profile = catalog.profilePolicy()
     private val ui = catalog.uiCatalog()
+
+    @Test
+    fun itemFamilyCapacityFollowsTheCapturedItemsWhenTheSnapshotIsCopied() {
+        assertEquals(20, gameplay.itemFamilyCount)
+        assertEquals(0, gameplay.copy(items = immutableListOf()).itemFamilyCount)
+        assertEquals(
+            3,
+            gameplay.copy(items = immutableListOf(gameplay.items.first().copy(id = 40))).itemFamilyCount,
+        )
+        assertEquals(20, gameplay.itemFamilyCount)
+    }
 
     @Test
     fun authorityPublishesOneVersionedSetOfCachedQuerySnapshots() {
@@ -145,9 +157,9 @@ class ContentCatalogTest {
     @Test
     fun coreShapeUnlockPolicyIsCapturedInStableIdOrder() {
         assertEquals(CoreShape.entries.toList(), profile.coreShapes.map { definition -> definition.id })
-        assertEquals(0L, profile.coreShape(CoreShape.ORB).unlockLifetimeMatter)
-        assertEquals(25L, profile.coreShape(CoreShape.PRISM).unlockLifetimeMatter)
-        assertEquals(90L, profile.coreShape(CoreShape.SHARD).unlockLifetimeMatter)
+        assertEquals(0, profile.coreShape(CoreShape.ORB).unlockTarget)
+        assertEquals(3, profile.coreShape(CoreShape.PRISM).unlockTarget)
+        assertEquals(20, profile.coreShape(CoreShape.SHARD).unlockTarget)
     }
 
     private fun mechanicalSignature(item: ItemDefinition): List<Pair<Int, Int>> {
