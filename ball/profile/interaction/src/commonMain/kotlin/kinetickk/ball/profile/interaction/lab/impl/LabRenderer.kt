@@ -19,7 +19,7 @@ import kinetickk.foundation.design.*
 internal fun LabContent(model: LabRenderModel, scale: Float, onAction: (LabAction) -> Unit) {
     val language = LocalAppLanguage.current
     ProfilePanel(language.text(ProfileText.LabTitle), language.text(ProfileText.LabSummary, formatCompact(model.matter, language)),
-        scale, "profile-lab", onBack = { onAction(LabAction.Back) }) { wide ->
+        scale, "profile-lab", onBack = { onAction(LabAction.Back) }, accent = Cyan) { wide ->
         model.upgrades.chunked(if (wide) 2 else 1).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
                 row.forEach { upgrade ->

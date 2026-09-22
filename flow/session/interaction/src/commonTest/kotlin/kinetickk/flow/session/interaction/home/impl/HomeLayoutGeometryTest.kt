@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 
 class HomeLayoutGeometryTest {
     @Test
-    fun fourTargetDeviceClassesKeepEveryActionVisibleAndTouchableInBothOrientations() {
+    fun targetViewportsKeepEveryActionVisibleAndTouchableInBothOrientations() {
         TargetDeviceProfiles.forEach { device ->
             listOf(
                 device.widthPx to device.heightPx,
@@ -70,6 +70,7 @@ private data class TargetDeviceProfile(
 )
 
 private val TargetDeviceProfiles = listOf(
+    TargetDeviceProfile("Compact browser", widthPx = 390f, heightPx = 600f, density = 1f),
     TargetDeviceProfile("CPH2411", widthPx = 1_080f, heightPx = 2_412f, density = 3f),
     TargetDeviceProfile("RMX2002", widthPx = 1_080f, heightPx = 2_400f, density = 3f),
     TargetDeviceProfile("SM-A325F", widthPx = 1_080f, heightPx = 2_400f, density = 2.625f),

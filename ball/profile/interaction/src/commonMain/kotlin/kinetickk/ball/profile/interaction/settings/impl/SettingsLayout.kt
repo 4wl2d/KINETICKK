@@ -36,22 +36,29 @@ internal fun settingsLayout(
     page: Int,
 ): SettingsLayout {
     fun d(value: Float): Float = value * density
-    val width = min(d(640f), screenWidth - d(30f)).coerceAtLeast(0f)
-    val height = min(d(468f), screenHeight - d(30f)).coerceAtLeast(0f)
+    val width = min(d(900f), screenWidth - d(30f)).coerceAtLeast(0f)
+    val height = min(d(620f), screenHeight - d(30f)).coerceAtLeast(0f)
     val left = (screenWidth - width) * 0.5f
     val top = (screenHeight - height) * 0.5f
     val bounds = Rect(left, top, left + width, top + height)
-    val tabWidth = ((width - d(40f) - d(6f) * (SettingsGroup.entries.size - 1)) / SettingsGroup.entries.size).coerceAtLeast(0f)
+    val compact = screenHeight / density < 480f
+    val columns = if (!compact && screenWidth / density < 520f) 2 else SettingsGroup.entries.size
+    val header = if (compact) 70f else 94f
+    val rowStart = if (compact) 116f else if (columns == 2) 196f else 146f
+    val tabWidth = ((width - d(40f) - d(6f) * (columns - 1)) / columns).coerceAtLeast(0f)
     val tabs = SettingsGroup.entries.mapIndexed { index, tabGroup ->
-        val tabLeft = left + d(20f) + (tabWidth + d(6f)) * index
-        SettingsGroupTab(tabGroup, Rect(tabLeft, top + d(70f), tabLeft + tabWidth, top + d(106f)))
+        val tabLeft = left + d(20f) + (tabWidth + d(6f)) * (index % columns)
+        val tabTop = top + d(header + 46f * (index / columns))
+        SettingsGroupTab(tabGroup, Rect(tabLeft, tabTop, tabLeft + tabWidth, tabTop + d(40f)))
     }
-    val startY = top + d(116f)
+    val startY = top + d(rowStart)
     val availableHeight = (bounds.bottom - d(64f) - startY).coerceAtLeast(0f)
-    val rowsPerPage = floor(availableHeight / d(32f)).toInt().coerceIn(1, group.rows.size)
+    val rowsPerPage = floor(availableHeight / d(44f)).toInt().coerceIn(1, group.rows.size)
     val maxPage = group.rows.lastIndex / rowsPerPage
     val visiblePage = page.coerceIn(0, maxPage)
     val pageStart = visiblePage * rowsPerPage
     val visibleRows = group.rows.subList(pageStart, min(pageStart + rowsPerPage, group.rows.size))
-    return SettingsLayout(bounds, tabs, visibleRows, startY, min(d(48f), availableHeight / visibleRows.size), visiblePage, maxPage)
+    // Sound reserves at least 54 dp for the slider/editor even on a 360 dp landscape viewport.
+    val rowLimit = if (group == SettingsGroup.SOUND) 48f else 64f
+    return SettingsLayout(bounds, tabs, visibleRows, startY, min(d(rowLimit), availableHeight / visibleRows.size), visiblePage, maxPage)
 }

@@ -3,6 +3,7 @@
 
 plugins {
     id("kinetickk.compose-wasm-application")
+    id("org.jetbrains.compose")
 }
 
 kotlin {

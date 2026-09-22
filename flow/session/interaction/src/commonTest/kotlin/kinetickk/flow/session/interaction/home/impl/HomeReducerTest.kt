@@ -90,8 +90,8 @@ class HomeReducerTest {
                 resolveHomePress(viewport, it.x, it.y)
             },
         )
-        assertEquals(HomeAction.StartRun, resolveHomePress(viewport, 640f, 720f * 0.70f))
-        assertEquals(HomeAction.OpenRebirth, resolveHomePress(viewport, 640f, 720f * 0.84f))
+        assertEquals(HomeAction.StartRun, resolveHomePress(viewport, 300f, 275f))
+        assertEquals(HomeAction.OpenRebirth, resolveHomePress(viewport, 300f, 460f))
     }
 }
 

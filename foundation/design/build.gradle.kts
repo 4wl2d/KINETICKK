@@ -1,19 +1,22 @@
 // SPDX-FileCopyrightText: 2026 Vladislav Tomilov
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import kinetickk.gradle.configureSkikoWasmRuntime
-
 plugins {
-    id("kinetickk.kmp-shared")
+    id("kinetickk.compose-library")
+    id("org.jetbrains.compose")
 }
 
-configureSkikoWasmRuntime(libs.versions.skiko.get())
+compose.resources {
+    packageOfResClass = "kinetickk.foundation.design.generated.resources"
+}
 
 kotlin {
+    android { androidResources.enable = true }
     sourceSets {
         commonMain.dependencies {
             api(libs.compose.ui)
             api(projects.foundation.common)
+            implementation(libs.compose.resources)
         }
         desktopTest.dependencies {
             val os = when {

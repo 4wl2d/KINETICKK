@@ -51,26 +51,10 @@ internal inline fun forEachRunningControlBounds(
 ) {
     val safeScale = scale.coerceAtLeast(1f)
     if (gameplayLayoutMode(width, height, safeScale) == GameplayLayoutMode.REGULAR) {
-        val dashCenterX = width - 58f * safeScale
-        val dashCenterY = height - 58f * safeScale
-        val dashRadius = 32f * safeScale
-        action(
-            RunningControlTarget.DASH,
-            dashCenterX - dashRadius,
-            dashCenterY - dashRadius,
-            dashCenterX + dashRadius,
-            dashCenterY + dashRadius,
-        )
-        val brakeCenterX = width - 134f * safeScale
-        val brakeCenterY = height - 58f * safeScale
-        val brakeRadius = 26f * safeScale
-        action(
-            RunningControlTarget.BRAKE,
-            brakeCenterX - brakeRadius,
-            brakeCenterY - brakeRadius,
-            brakeCenterX + brakeRadius,
-            brakeCenterY + brakeRadius,
-        )
+        val bottom = height - 20f * safeScale
+        val top = bottom - 64f * safeScale
+        action(RunningControlTarget.DASH, width - 180f * safeScale, top, width - 20f * safeScale, bottom)
+        action(RunningControlTarget.BRAKE, width - 352f * safeScale, top, width - 192f * safeScale, bottom)
     } else {
         val margin = 12f * safeScale
         val controlSize = 64f * safeScale

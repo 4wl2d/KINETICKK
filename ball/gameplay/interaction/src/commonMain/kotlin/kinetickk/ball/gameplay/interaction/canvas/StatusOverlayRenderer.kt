@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -17,9 +18,10 @@ import kotlin.math.min
 
 internal fun DrawScope.drawPause(textMeasurer: TextMeasurer, layout: PauseLayoutGeometry) {
     drawRect(pauseOverlayScrimColor(layout.mode))
-    val titleSize = min(26f, ((layout.actions.firstOrNull()?.bounds?.top ?: size.height) - layout.titleY - d(12f)) / density / (textMeasurer.scale * 1.3f))
-    drawLabel(textMeasurer, textMeasurer.language.text(GameplayText.SystemPaused), size.width * 0.5f,
-        layout.titleY, titleSize, White, centered = true, weight = FontWeight.Medium)
+    drawKineticOrbits(Offset(size.width * 0.78f, size.height * 0.36f), size.minDimension * 0.22f, 0f, KineticAccent.copy(alpha = 0.45f))
+    val titleSize = min(54f, ((layout.actions.firstOrNull()?.bounds?.top ?: size.height) - layout.titleY - d(12f)) / density / (textMeasurer.scale * 1.3f))
+    drawLabel(textMeasurer, textMeasurer.language.text(GameplayText.SystemPaused).uppercase(), size.width * 0.5f,
+        layout.titleY, titleSize, White, centered = true, display = true)
     layout.actions.forEach { action ->
         val label = when (action.target) {
             PauseTarget.RESUME -> GameplayText.Resume
@@ -40,8 +42,8 @@ internal fun terminalOverlayScrimColor(mode: GameplayLayoutMode): Color =
 private val compactStatusOverlayScrim = Color(0xFA0B0D11)
 
 private fun DrawScope.drawActionButton(textMeasurer: TextMeasurer, bounds: Rect, label: String, prominent: Boolean = false) {
-    drawRect(if (prominent) Cyan else White.copy(alpha = 0.04f), bounds.topLeft, bounds.size)
-    drawLabel(textMeasurer, label, bounds.center.x, bounds.center.y - d(8f), 12f,
+    drawKineticRibbon(bounds, if (prominent) KineticAccent else OverlayPanel)
+    drawLabel(textMeasurer, label.uppercase(), bounds.center.x, bounds.center.y - d(12f * textMeasurer.scale), 18f,
         if (prominent) SpaceBlack else White, centered = true, weight = if (prominent) FontWeight.Medium else FontWeight.Normal,
-        maxWidth = bounds.width - d(24f))
+        maxWidth = bounds.width - d(24f), display = true)
 }

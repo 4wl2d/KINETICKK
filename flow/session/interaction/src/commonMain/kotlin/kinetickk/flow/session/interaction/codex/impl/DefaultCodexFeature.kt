@@ -28,6 +28,10 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -70,8 +74,8 @@ class DefaultCodexFeature(
 private enum class CodexGridContentType { NOTICE, HEADING, SLOT, STAT, SYNERGY }
 
 private val LocalCodexInputEnabled = staticCompositionLocalOf { true }
-private val CodexBackground = Color(0xFF0B0D11)
-private val CodexPanel = Color(0xFF15181D)
+private val CodexBackground = SpaceBlack
+private val CodexPanel = OverlayPanel
 private val SelectionSaver = listSaver<CodexSelection, Any>(
     save = { listOf(it.pinnedKey.orEmpty(), it.sheetOpen) },
     restore = { CodexSelection(pinnedKey = (it[0] as String).ifEmpty { null }, sheetOpen = it[1] as Boolean) },
@@ -152,7 +156,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
         }
     }
     LaunchedEffect(Unit) { listFocus.requestFocus() }
-    BoxWithConstraints(Modifier.fillMaxSize().background(CodexBackground).testTag("codex")) {
+    BoxWithConstraints(Modifier.fillMaxSize().drawBehind { drawSectionAtmosphere(Gold) }.testTag("codex")) {
         val availableWidth = maxWidth
         val availableHeight = maxHeight
         val wide = codexUsesSidePanel(availableWidth.value, availableHeight.value)
@@ -168,7 +172,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
         }) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 if (compactHeader) CodexNavigationTabs(tab, scale, Modifier.weight(1f)) { tabValue = it }
-                else CodexLabel(language.text(SessionText.CODEX), scale, White, bold = true)
+                else BasicText(language.text(SessionText.CODEX).uppercase(), style = interfaceTextStyle(36f * scale, White, display = true))
                 CodexButton(language.text(SessionText.CLOSE), scale, "codex-close", onClick = onClose)
             }
             if (!compactHeader) CodexNavigationTabs(tab, scale, Modifier.fillMaxWidth()) { tabValue = it }
@@ -185,7 +189,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                     }
                 }
                 BasicTextField(enabled = !sheetVisible, value = search, onValueChange = { searchValue = codexSearchInput(it) }, singleLine = true,
-                    textStyle = TextStyle(color = White, fontSize = (13f * scale).sp), cursorBrush = SolidColor(Cyan),
+                    textStyle = interfaceTextStyle(14f * scale, White), cursorBrush = SolidColor(Cyan),
                     modifier = Modifier.padding(top = 8.dp).fillMaxWidth().background(CodexPanel).border(1.dp, DarkLine)
                         .focusRequester(searchFocus).testTag("codex-search").semantics { contentDescription = language.text(SessionText.SEARCH_DESCRIPTION) }.padding(12.dp),
                     decorationBox = { inner -> Box { if (search.isEmpty()) CodexLabel(language.text(SessionText.SEARCH_PLACEHOLDER), scale, Muted); inner() } })
@@ -205,7 +209,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                             if (priorKeysValue != null && priorKeysValue != resultKey) grid.scrollToItem(0)
                             priorKeysValue = resultKey
                         }
-                        LazyVerticalGrid(GridCells.Adaptive(80.dp), Modifier.fillMaxSize().focusRequester(listFocus).focusable(enabled = !sheetVisible).testTag("codex-grid"),
+                        LazyVerticalGrid(GridCells.Adaptive(104.dp), Modifier.fillMaxSize().focusRequester(listFocus).focusable(enabled = !sheetVisible).testTag("codex-grid"),
                             state = grid, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
                             if (emptyState != CodexEmptyState.NONE) item(key = "empty", contentType = CodexGridContentType.NOTICE, span = { GridItemSpan(maxLineSpan) }) {
                                 EmptyNotice(emptyState, scale)
@@ -291,7 +295,7 @@ private fun CodexSlot(entry: CodexEntry, catalog: UiCatalogSnapshot, scale: Floa
         CodexIcon(entry.icon, catalog, entry.color, Modifier.align(Alignment.Center).fillMaxSize().padding(8.dp))
         if (entry.rarity > 0) BasicText("•".repeat(entry.rarity), Modifier.align(Alignment.TopStart), style = TextStyle(color = entry.color, fontSize = 10.sp))
         if (!entry.discovered) BasicText("?", Modifier.align(Alignment.TopEnd), style = TextStyle(color = White, fontSize = 12.sp))
-        BasicText(entry.quantity, Modifier.align(Alignment.BottomEnd).background(CodexBackground).padding(horizontal = 2.dp), style = TextStyle(color = White, fontSize = (10f * scale).sp, fontWeight = FontWeight.Bold))
+        BasicText(entry.quantity, Modifier.align(Alignment.BottomEnd).background(CodexBackground).padding(horizontal = 2.dp), style = interfaceTextStyle(12f * scale, White, FontWeight.Bold))
     }
 }
 
@@ -318,7 +322,7 @@ private fun slotModifier(entry: CodexEntry, selection: CodexSelection, focus: Mu
         }
     }
     val highlighted = selection.previewKey == entry.key || selection.pinnedKey == entry.key
-    return Modifier.background(if (highlighted) Color(0xFF252A31) else CodexPanel)
+    return Modifier.background(if (highlighted) Color(0xFF30372A) else CodexPanel)
         .border(if (highlighted) 2.dp else 1.dp, if (highlighted) entry.color else DarkLine)
         .testTag("codex-slot-${entry.key}").semantics { contentDescription = "${entry.title} · ${entry.kind} · ${entry.quantity} · ${entry.availability}"; selected = selection.pinnedKey == entry.key }
         .focusRequester(requester).focusProperties { canFocus = inputEnabled }.onFocusChanged { state ->
@@ -425,12 +429,19 @@ private fun CodexNavigationTabs(tab: Int, scale: Float, modifier: Modifier, onSe
 @Composable
 private fun CodexButton(text: String, scale: Float, tag: String, selected: Boolean = false, enabled: Boolean = true, role: Role = Role.Button, onClick: () -> Unit) {
     val inputEnabled = enabled && LocalCodexInputEnabled.current
-    BasicText(text, Modifier.testTag(tag).semantics { this.selected = selected }.background(if (selected) Color(0xFF252A31) else CodexPanel)
-        .border(1.dp, if (selected) Cyan.copy(alpha = 0.7f) else Color.Transparent).clickable(enabled = inputEnabled, role = role, onClick = onClick)
-        .padding(horizontal = 10.dp, vertical = 10.dp), style = TextStyle(color = if (!inputEnabled) Muted.copy(alpha = 0.5f) else if (selected) Cyan else White, fontSize = (12f * scale).sp, fontWeight = FontWeight.Bold))
+    val interactions = remember { MutableInteractionSource() }
+    val hovered by interactions.collectIsHoveredAsState()
+    val focused by interactions.collectIsFocusedAsState()
+    val highlighted = inputEnabled && (selected || hovered || focused)
+    BasicText(text, Modifier.testTag(tag).semantics { this.selected = selected }
+        .drawBehind { drawKineticRibbon(Rect(Offset.Zero, size), if (highlighted) Gold else CodexPanel, 6.dp.toPx()) }
+        .border(1.dp, if (focused) White else Color.Transparent)
+        .hoverable(interactions).clickable(enabled = inputEnabled, role = role, interactionSource = interactions, indication = null, onClick = onClick)
+        .padding(horizontal = 14.dp, vertical = 11.dp), style = interfaceTextStyle(14f * scale,
+            if (!inputEnabled) Muted.copy(alpha = 0.5f) else if (highlighted) SpaceBlack else White, FontWeight.Bold, display = true))
 }
 
 @Composable
 private fun CodexLabel(text: String, scale: Float, color: Color = White, bold: Boolean = false, modifier: Modifier = Modifier) {
-    BasicText(text, modifier, style = TextStyle(color = color, fontSize = ((if (bold) 14f else 12f) * scale).sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal))
+    BasicText(text, modifier, style = interfaceTextStyle((if (bold) 18f else 14f) * scale, color, if (bold) FontWeight.Bold else FontWeight.Normal, display = bold))
 }

@@ -67,9 +67,9 @@ class GameplayLayoutGeometryTest {
 
         val dash = controls.getValue(RunningControlTarget.DASH).bounds
         val brake = controls.getValue(RunningControlTarget.BRAKE).bounds
-        assertEquals(1_222f, dash.center.x)
-        assertEquals(1_146f, brake.center.x)
-        assertEquals(662f, dash.center.y)
+        assertEquals(1_180f, dash.center.x)
+        assertEquals(1_008f, brake.center.x)
+        assertEquals(668f, dash.center.y)
         assertEquals(dash.center.y, brake.center.y)
         assertTrue(brake.width >= 48f && dash.width >= 48f)
         assertTrue(brake.right < dash.left)

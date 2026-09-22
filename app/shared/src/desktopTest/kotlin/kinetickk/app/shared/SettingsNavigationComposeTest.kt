@@ -86,7 +86,7 @@ class SettingsNavigationComposeTest {
                     }
                 }
                 fun render(expected: AppDestination) {
-                    repeat(3) { mainClock.advanceTimeByFrame() }
+                    mainClock.advanceTimeBy(260)
                     waitForIdle()
                     assertEquals(expected, owner.sessionPort.query(AppSessionQuery.GetShell).active)
                     val rendered = onNodeWithTag(APP_TAG).captureToImage()
@@ -110,12 +110,13 @@ class SettingsNavigationComposeTest {
                     }
                     render(expected)
                 }
-                val panelWidth = min(640f, width - 30f)
-                val panelHeight = min(468f, height - 30f)
+                val panelWidth = min(900f, width - 30f)
+                val panelHeight = min(620f, height - 30f)
                 val right = (width + panelWidth) * 0.5f
                 val bottom = (height + panelHeight) * 0.5f
-                val startY = (height - panelHeight) * 0.5f + 116f
-                val rowsPerPage = floor((panelHeight - 180f) / 32f).toInt().coerceAtLeast(1)
+                val rowStart = if (height < 480) 116f else if (width < 520) 196f else 146f
+                val startY = (height - panelHeight) * 0.5f + rowStart
+                val rowsPerPage = floor((panelHeight - rowStart - 64f) / 44f).toInt().coerceAtLeast(1)
                 fun selectGroup(group: String) {
                     val before = profile.query(ProfileQuery.GetPreferences).preferences
                     onNodeWithTag("kinetickk.settings.group.$group").performClick()
@@ -136,7 +137,8 @@ class SettingsNavigationComposeTest {
                     val before = profile.query(ProfileQuery.GetPreferences).preferences
                     val pageStart = (row / rowsPerPage) * rowsPerPage
                     val visibleCount = min(rowsPerPage, rowCount - pageStart)
-                    val spacing = min(48f, (panelHeight - 180f) / visibleCount)
+                    val isSound = onAllNodesWithTag("kinetickk.settings.sfx.increase").fetchSemanticsNodes().isNotEmpty()
+                    val spacing = min(if (isSound) 48f else 64f, (panelHeight - rowStart - 64f) / visibleCount)
                     tap(right - if (increase) 41f else 169f, startY + spacing * (row % rowsPerPage + 0.5f))
                     assertNotEquals(before, profile.query(ProfileQuery.GetPreferences).preferences, "Settings row $row did not change")
                 }
@@ -325,6 +327,7 @@ class SettingsNavigationComposeTest {
                 onNodeWithTag("codex-close").performClick()
                 render(AppDestination.Home)
 
+                onNodeWithTag("kinetickk.home.start").performSemanticsAction(SemanticsActions.RequestFocus) { assertTrue(it()) }
                 key(Key.Enter, AppDestination.Gameplay)
                 key(Key.P, AppDestination.Gameplay)
                 assertEquals(GameplayRunPhase.PAUSED, gameplay.activeRun()?.query(GameplayQuery.GetRunStatus)?.phase)

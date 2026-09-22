@@ -6,7 +6,6 @@ package kinetickk.flow.session.interaction.home.impl
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.flow.session.interaction.localization.SessionText
-import kinetickk.ball.content.api.localizedContent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -22,6 +21,7 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -31,13 +31,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Fill
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -55,7 +53,6 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
@@ -68,10 +65,7 @@ import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.flow.session.interaction.audio.SessionAudioExecutor
 import kinetickk.flow.session.interaction.home.api.HomeFeature
 import kinetickk.flow.session.interaction.home.api.HomeOutput
-import kinetickk.flow.session.interaction.home.api.HomeUiModel
 import kinetickk.resource.audio.api.AudioService
-import kotlin.math.PI
-import kotlin.math.min
 import kotlin.math.roundToInt
 
 class DefaultHomeFeature(
@@ -97,13 +91,22 @@ class DefaultHomeFeature(
         var viewportValue by remember { mutableStateOf(HomeViewport(0f, 0f, density)) }
         var renderTimeSecondsValue by remember { mutableFloatStateOf(0f) }
         var previewShapeValue by remember { mutableStateOf<CoreShape?>(null) }
+        var activeTargetValue by remember { mutableStateOf(HomeLayoutTarget.START) }
+        var cursorValue by remember { mutableStateOf(Offset.Zero) }
+        val menuMotion = remember { HomeMenuMotion() }
+        val actionFocus = remember { HomeLayoutTarget.entries.associateWith { FocusRequester() } }
+        LaunchedEffect(inputEnabled, viewportValue.width > 0f) {
+            if (inputEnabled && viewportValue.width > 0f) actionFocus.getValue(activeTargetValue).requestFocus()
+        }
         @Suppress("UNUSED_EXPRESSION")
         revisionValue
         val uiModel = reducer.uiModel(profilePort.query(ProfileQuery.GetHomeProgress))
         val textScale = profilePort.query(ProfileQuery.GetPreferences).preferences.textScale
-        val textMeasurer = remember(composeTextMeasurer, textScale, language) {
+        val typography = kinetickk.foundation.design.rememberInterfaceTypography()
+        val textMeasurer = remember(composeTextMeasurer, textScale, language, typography) {
             CanvasTextMeasurer(
                 delegate = composeTextMeasurer,
+                typography = typography,
                 scale = textScale,
                 language = language,
             )
@@ -123,6 +126,7 @@ class DefaultHomeFeature(
         val currentTapHandlerValue by rememberUpdatedState<(Offset) -> Unit> { position ->
             if (inputEnabled) {
                 val action = resolveHomePress(viewportValue, position.x, position.y)
+                if (action is HomeAction.SelectCoreShape) previewShapeValue = action.shape
                 val enabled = action !is HomeAction.SelectCoreShape ||
                     uiModel.isCoreShapeUnlocked(action.shape)
                 if (action != null && enabled) dispatch(action)
@@ -136,6 +140,7 @@ class DefaultHomeFeature(
                 renderTimeSecondsValue += selectHomePresentationFrameDeltaSeconds(
                     (frame - previousFrame) / 1_000_000_000f,
                 )
+                menuMotion.advance(activeTargetValue, cursorValue, viewportValue, (frame - previousFrame) / 1_000_000_000f)
                 previousFrame = frame
             }
         }
@@ -152,11 +157,31 @@ class DefaultHomeFeature(
                 .fillMaxSize()
                 .background(SpaceBlack)
                 .testTag(HOME_ROOT_TAG)
+                .onPreviewKeyEvent { event ->
+                    if (!inputEnabled || event.type != KeyEventType.KeyDown ||
+                        (event.key != Key.DirectionDown && event.key != Key.DirectionUp)) false
+                    else {
+                        val targets = listOf(HomeLayoutTarget.START, HomeLayoutTarget.LAB, HomeLayoutTarget.ARMORY,
+                            HomeLayoutTarget.REBIRTH, HomeLayoutTarget.CODEX, HomeLayoutTarget.SETTINGS)
+                        val step = if (event.key == Key.DirectionDown) 1 else -1
+                        activeTargetValue = targets[(targets.indexOf(activeTargetValue) + step + targets.size) % targets.size]
+                        actionFocus.getValue(activeTargetValue).requestFocus()
+                        true
+                    }
+                }
                 .semantics {
                     contentDescription = language.text(SessionText.HOME_DESCRIPTION)
                 }
                 .onSizeChanged { size ->
                     viewportValue = HomeViewport(size.width.toFloat(), size.height.toFloat(), density)
+                }
+                .pointerInput(inputEnabled) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            if (inputEnabled) event.changes.firstOrNull()?.let { cursorValue = it.position }
+                        }
+                    }
                 }
                 .pointerInput(Unit) {
                     detectTapGestures { position -> currentTapHandlerValue(position) }
@@ -164,23 +189,31 @@ class DefaultHomeFeature(
         ) {
             Canvas(Modifier.fillMaxSize()) {
                 drawRect(SpaceBlack)
-                drawHome(uiModel, textMeasurer, renderTimeSecondsValue, layout, previewShapeValue)
+                drawHome(uiModel, textMeasurer, renderTimeSecondsValue, layout, previewShapeValue, activeTargetValue, menuMotion)
             }
             if (inputEnabled && viewportValue.width > 0f && viewportValue.height > 0f) {
                 layout.actions.forEach { action ->
-                    val shape = action.target.coreShapeOrNull()
-                    val enabled = shape == null || uiModel.isCoreShapeUnlocked(shape)
-                    HomeSemanticAction(
-                        action = action,
-                        density = localDensity,
-                        enabled = enabled,
-                        selected = shape != null && uiModel.coreShape == shape,
-                        onPreview = { active ->
-                            if (active && shape != null) previewShapeValue = shape
-                            else if (previewShapeValue == shape) previewShapeValue = null
-                        },
-                        onClick = { dispatch(action.target.toHomeAction()) },
-                    )
+                    key(action.target) {
+                        val shape = action.target.coreShapeOrNull()
+                        val enabled = shape == null || uiModel.isCoreShapeUnlocked(shape)
+                        HomeSemanticAction(
+                            action = action,
+                            density = localDensity,
+                            enabled = enabled,
+                            selected = shape != null && uiModel.coreShape == shape,
+                            focusRequester = actionFocus.getValue(action.target),
+                            onPreview = { active ->
+                                if (active) {
+                                    if (shape != null) previewShapeValue = shape
+                                    else {
+                                        activeTargetValue = action.target
+                                        previewShapeValue = null
+                                    }
+                                } else if (previewShapeValue == shape) previewShapeValue = null
+                            },
+                            onClick = { dispatch(action.target.toHomeAction()) },
+                        )
+                    }
                 }
             }
         }
@@ -193,6 +226,7 @@ private fun HomeSemanticAction(
     density: Density,
     enabled: Boolean,
     selected: Boolean,
+    focusRequester: FocusRequester,
     onPreview: (Boolean) -> Unit,
     onClick: () -> Unit,
 ) {
@@ -205,10 +239,14 @@ private fun HomeSemanticAction(
     Box(
         Modifier
             .placeInHomeBounds(action.bounds, density)
+            .focusRequester(focusRequester)
             .drawBehind {
                 if (focused || (hovered && enabled)) {
                     drawRect(White.copy(alpha = 0.06f))
-                    if (focused) drawRect(White, style = Stroke(1.dp.toPx()))
+                    if (focused) {
+                        drawLine(White, Offset(8.dp.toPx(), size.height - 2.dp.toPx()),
+                            Offset(size.width - 18.dp.toPx(), size.height - 2.dp.toPx()), 2.dp.toPx())
+                    }
                 }
             }
             .hoverable(interactions)
@@ -302,127 +340,3 @@ internal const val MAX_HOME_PRESENTATION_FRAME_DELTA_SECONDS: Float = 0.1f
 
 internal fun selectHomePresentationFrameDeltaSeconds(frameDeltaSeconds: Float): Float =
     frameDeltaSeconds.coerceAtMost(MAX_HOME_PRESENTATION_FRAME_DELTA_SECONDS)
-
-private fun DrawScope.drawHome(
-    engine: HomeUiModel,
-    textMeasurer: TextMeasurer,
-    renderTime: Float,
-    layout: HomeLayoutGeometry,
-    previewShape: CoreShape?,
-) {
-    val language = textMeasurer.language
-    val landscape = layout.mode == HomeLayoutMode.COMPACT_LANDSCAPE
-    val regular = layout.mode == HomeLayoutMode.REGULAR
-    val firstCore = layout.bounds(HomeLayoutTarget.CORE_ORB)
-    val titleX = if (landscape) firstCore.left * 0.48f else size.width * 0.5f
-    val titleY = size.height * if (landscape) 0.24f else if (regular) 0.19f else 0.16f
-    val titleWidth = if (landscape) firstCore.left - d(24f) else size.width - d(32f)
-    drawLabel(textMeasurer, "KINETICKK", titleX, titleY, minOf(if (regular) 42f else 28f, titleWidth / density / (5.8f * textMeasurer.scale)),
-        White, centered = true, weight = FontWeight.Bold, maxWidth = titleWidth)
-
-    // A small moving tether demonstrates the game's motion without a decorative hero panel.
-    val orbitCenter = Offset(titleX, titleY - d(if (regular) 36f else 28f))
-    val orbitPoint = polar(orbitCenter, d(22f), renderTime * 0.6f)
-    drawLine(Muted.copy(alpha = 0.4f), orbitCenter, orbitPoint, d(1f))
-    drawCircle(Cyan, d(4f), orbitCenter)
-    drawCircle(Magenta, d(4f), orbitPoint, style = Stroke(d(1.5f)))
-    drawLabel(textMeasurer, language.text(if (regular) SessionText.HOME_INSTRUCTIONS else SessionText.COMPACT_INSTRUCTIONS), titleX,
-        titleY + d((if (regular) 68f else 46f) * textMeasurer.scale), 9f, Muted, centered = true,
-        maxWidth = titleWidth, maxLines = if (landscape) 2 else 1)
-
-    if (!landscape) {
-        drawInterfaceGlyph(InterfaceGlyph.DIAMOND, Offset(d(25f), d(26f)), d(7f), Muted)
-        drawLabel(textMeasurer, formatCompact(engine.totalMatter, language), d(40f), d(18f), 11f, White)
-        if (engine.rebirthLevel > 0) {
-            drawInterfaceGlyph(InterfaceGlyph.CYCLE, Offset(size.width - d(55f), d(26f)), d(7f), Muted)
-            drawLabel(textMeasurer, engine.rebirthLevel.toString(), size.width - d(36f), d(18f), 11f, White)
-        }
-    } else {
-        drawLabel(textMeasurer, language.text(SessionText.MATTER, formatCompact(engine.totalMatter, language)),
-            titleX, size.height * 0.64f, 9f, Muted, centered = true, maxWidth = titleWidth)
-    }
-
-    layout.actions.forEach { action ->
-        action.target.coreShapeOrNull()?.let { shape -> drawCoreCard(engine, textMeasurer, shape, action.bounds) }
-    }
-    val start = layout.bounds(HomeLayoutTarget.START)
-    drawRect(Cyan, start.topLeft, start.size)
-    drawInterfaceGlyph(InterfaceGlyph.PLAY, Offset(start.left + d(26f), start.center.y), d(8f), SpaceBlack)
-    drawLabel(textMeasurer, language.text(SessionText.START_RUN), start.center.x, start.center.y - d(8f),
-        13f, SpaceBlack, centered = true, weight = FontWeight.Bold, maxWidth = start.width - d(72f))
-    if (regular) drawLabel(textMeasurer, "↵", start.right - d(24f), start.center.y - d(8f), 12f, SpaceBlack, centered = true)
-
-    listOf(
-        Triple(HomeLayoutTarget.LAB, SessionText.LAB, InterfaceGlyph.FLASK),
-        Triple(HomeLayoutTarget.ARMORY, SessionText.ARMORY, InterfaceGlyph.TARGET),
-        Triple(HomeLayoutTarget.REBIRTH, SessionText.REBIRTH, InterfaceGlyph.CYCLE),
-        Triple(HomeLayoutTarget.CODEX, SessionText.CODEX, InterfaceGlyph.BOOK),
-        Triple(HomeLayoutTarget.SETTINGS, SessionText.SETTINGS, InterfaceGlyph.SLIDERS),
-    ).forEach { (target, label, glyph) ->
-        val bounds = layout.bounds(target)
-        val accent = if (target == HomeLayoutTarget.REBIRTH && engine.canRebirth) Cyan else Muted
-        drawInterfaceGlyph(glyph, Offset(bounds.center.x, bounds.center.y - d(8f)), d(9f), accent)
-        drawLabel(textMeasurer, language.text(label), bounds.center.x, bounds.center.y + d(9f),
-            if (landscape) 6.5f else 8f, accent, centered = true, maxWidth = bounds.width - d(6f))
-    }
-    if (regular) {
-        previewShape?.let { shape ->
-            val definition = engine.coreShape(shape)
-            val description = if (engine.isCoreShapeUnlocked(shape)) definition.mechanicDescription else definition.unlockDescription
-            drawLabel(textMeasurer, description.localizedContent(language), size.width * 0.5f,
-                firstCore.bottom + d(14f), 10f, Muted, centered = true,
-                maxWidth = min(d(520f), size.width - d(48f)), maxLines = if (size.height / density < 620f) 1 else 2)
-        }
-        drawLabel(textMeasurer, language.text(SessionText.COPYRIGHT), size.width * 0.5f, size.height - d(26f),
-            6f, Muted, centered = true, maxWidth = size.width - d(24f))
-        drawLabel(textMeasurer, language.text(SessionText.LICENSE_NOTICE), size.width * 0.5f, size.height - d(15f),
-            6f, Muted, centered = true, maxWidth = size.width - d(24f))
-    } else if (!landscape) {
-        drawLabel(textMeasurer, language.text(SessionText.COMPACT_LICENSE), size.width * 0.5f, size.height - d(10f),
-            5f, Muted, centered = true, maxWidth = size.width - d(16f))
-    }
-}
-
-private fun DrawScope.drawCoreCard(
-    engine: HomeUiModel,
-    textMeasurer: TextMeasurer,
-    shape: CoreShape,
-    bounds: Rect,
-) {
-    val language = textMeasurer.language
-    val selected = engine.coreShape == shape
-    val unlocked = engine.isCoreShapeUnlocked(shape)
-    val accent = if (selected) Cyan else if (unlocked) White else Muted.copy(alpha = 0.45f)
-    if (selected) {
-        drawRect(Cyan.copy(alpha = 0.07f), bounds.topLeft, bounds.size)
-        drawLine(Cyan, Offset(bounds.left, bounds.bottom), Offset(bounds.right, bounds.bottom), d(2f))
-    }
-    val center = Offset(bounds.center.x, bounds.top + bounds.height * 0.32f)
-    val radius = d(12f)
-    when (shape) {
-        CoreShape.ORB -> drawCircle(accent, radius, center)
-        CoreShape.PRISM -> drawPolygon(center, radius * 1.15f, 4, (PI / 4).toFloat(), accent, Fill)
-        CoreShape.SHARD -> drawPolygon(center, radius * 1.25f, 3, -(PI / 2).toFloat(), accent, Fill)
-        CoreShape.RING -> drawCircle(accent, radius, center, style = Stroke(d(2f)))
-        CoreShape.DIAMOND -> drawPolygon(center, radius * 1.15f, 4, 0f, accent, Fill)
-        CoreShape.TESSERACT -> {
-            drawPolygon(center, radius * 1.15f, 4, (PI / 4).toFloat(), accent, Stroke(d(1.5f)))
-            drawPolygon(center, radius * 0.6f, 4, (PI / 4).toFloat(), accent, Stroke(d(1.5f)))
-        }
-    }
-    if (!unlocked) drawInterfaceGlyph(InterfaceGlyph.LOCK, Offset(bounds.right - d(10f), bounds.top + d(10f)), d(4f), Muted)
-    drawLabel(textMeasurer, engine.coreShape(shape).displayName.localizedContent(language), bounds.center.x,
-        bounds.top + bounds.height * 0.57f, 8f, if (selected) White else Muted, centered = true, maxWidth = bounds.width - d(8f))
-    if (!unlocked) drawLabel(textMeasurer, shortUnlockLabel(engine.coreShape(shape), language),
-        bounds.center.x, bounds.bottom - d(11f), 5.5f, Muted, centered = true, maxWidth = bounds.width - d(8f))
-}
-
-private fun shortUnlockLabel(definition: kinetickk.ball.content.api.CoreShapeDefinition, language: AppLanguage): String =
-    when (definition.unlockRequirement) {
-        kinetickk.ball.content.api.CharacterUnlockRequirement.AVAILABLE -> language.text(SessionText.AVAILABLE)
-        kinetickk.ball.content.api.CharacterUnlockRequirement.ELITE_KILLS -> language.text(SessionText.ELITES_TARGET, definition.unlockTarget)
-        kinetickk.ball.content.api.CharacterUnlockRequirement.DASH_HITS -> language.text(SessionText.DASH_TARGET, definition.unlockTarget)
-        kinetickk.ball.content.api.CharacterUnlockRequirement.COMPLETED_ORBITS -> language.text(SessionText.ORBIT_CLEAR)
-        kinetickk.ball.content.api.CharacterUnlockRequirement.ARCHITECT_VICTORIES -> language.text(SessionText.ARCHITECT_WIN)
-        kinetickk.ball.content.api.CharacterUnlockRequirement.DISTINCT_CHARACTER_VICTORIES -> language.text(SessionText.FORMS_TARGET, definition.unlockTarget)
-    }

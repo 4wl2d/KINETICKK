@@ -44,7 +44,7 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
     val scale = density.coerceAtLeast(1f)
     val logicalWidth = width / scale
     val logicalHeight = height / scale
-    val compactPhone = logicalWidth <= 480f || (logicalHeight <= 480f && logicalWidth <= 1_000f)
+    val compactPhone = logicalWidth < 900f || logicalHeight < 560f
     val mode = when {
         !compactPhone -> HomeLayoutMode.REGULAR
         logicalWidth <= logicalHeight -> HomeLayoutMode.COMPACT_PORTRAIT
@@ -67,81 +67,59 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
         HomeLayoutTarget.CODEX,
         HomeLayoutTarget.SETTINGS,
     )
-    val actions = when (mode) {
-        HomeLayoutMode.REGULAR -> {
-            val center = width * 0.5f
-            val cardY = height * 0.49f
-            val cardWidth = minOf(d(108f), (width - d(48f)) / 6f)
-            val centers = List(6) { center + (it - 2.5f) * cardWidth }
-            val startY = height * 0.70f
-            val navY = height * 0.84f
-            val spacing = minOf(d(132f), width * 0.19f)
-            val navStart = center - spacing * 2f
-            buildList {
-                coreTargets.forEachIndexed { index, target ->
-                    add(HomeActionBounds(target, Rect(centers[index] - cardWidth * 0.46f, cardY - d(40f), centers[index] + cardWidth * 0.46f, cardY + d(40f))))
+    val menuTargets = listOf(HomeLayoutTarget.START) + navigationTargets
+    val actions = buildList {
+        when (mode) {
+            HomeLayoutMode.REGULAR -> {
+                val margin = d(36f)
+                val menuRight = width * 0.48f
+                val rowHeight = minOf(d(72f), height * 0.085f)
+                val menuTop = height * 0.34f
+                menuTargets.forEachIndexed { index, target ->
+                    val top = menuTop + index * rowHeight
+                    add(HomeActionBounds(target, Rect(margin, top, menuRight, top + rowHeight - d(3f))))
                 }
-                add(HomeActionBounds(HomeLayoutTarget.START, Rect(center - d(120f), startY - d(25f), center + d(120f), startY + d(25f))))
-                navigationTargets.forEachIndexed { index, target ->
-                    val itemCenter = navStart + spacing * index
-                    add(HomeActionBounds(target, Rect(itemCenter - spacing * 0.44f, navY - d(28f), itemCenter + spacing * 0.44f, navY + d(28f))))
+                val coreLeft = width * 0.54f
+                val coreWidth = (width - coreLeft - margin) / 6f
+                val coreTop = minOf(height * 0.78f, height - d(165f))
+                coreTargets.forEachIndexed { index, target ->
+                    val left = coreLeft + index * coreWidth
+                    add(HomeActionBounds(target, Rect(left, coreTop, left + coreWidth - d(3f), coreTop + d(68f))))
                 }
             }
-        }
-        HomeLayoutMode.COMPACT_PORTRAIT -> {
-            val margin = d(12f)
-            val gap = d(8f)
-            val cardWidth = (width - margin * 2f - gap * 2f) / 3f
-            val cardHeight = d(68f)
-            val cardTop = height * 0.43f
-            val startTop = height * 0.68f
-            val startHeight = d(56f)
-            val navTop = height * 0.79f
-            // Keep a small rounding margin above the 48 dp accessibility floor.
-            val navHeight = d(50f)
-            val navWidth = (width - margin * 2f - gap * 2f) / 3f
-            buildList {
+            HomeLayoutMode.COMPACT_PORTRAIT -> {
+                val margin = d(16f)
+                val gap = d(3f)
+                val coreWidth = (width - margin * 2f - gap * 5f) / 6f
+                val coreTop = height * 0.40f
                 coreTargets.forEachIndexed { index, target ->
-                    val left = margin + (index % 3) * (cardWidth + gap)
-                    val top = cardTop + (index / 3) * (cardHeight + gap)
-                    add(HomeActionBounds(target, Rect(left, top, left + cardWidth, top + cardHeight)))
+                    val left = margin + index * (coreWidth + gap)
+                    add(HomeActionBounds(target, Rect(left, coreTop, left + coreWidth, coreTop + d(52f))))
                 }
-                add(HomeActionBounds(HomeLayoutTarget.START, Rect(margin, startTop, width - margin, startTop + startHeight)))
-                navigationTargets.forEachIndexed { index, target ->
-                    val row = index / 3
-                    val rowCount = if (row == 0) 3 else 2
-                    val column = index % 3
-                    val rowStart = (width - (navWidth * rowCount + gap * (rowCount - 1))) * 0.5f
-                    val left = rowStart + column * (navWidth + gap)
-                    val top = navTop + row * (navHeight + gap)
-                    add(HomeActionBounds(target, Rect(left, top, left + navWidth, top + navHeight)))
+                val rowHeight = d(51f)
+                val columns = if (logicalHeight < 660f) 2 else 1
+                val menuWidth = (width - margin * 2f - d(8f) * (columns - 1)) / columns
+                val menuTop = height - d(28f) - rowHeight * (6 / columns)
+                menuTargets.forEachIndexed { index, target ->
+                    val left = margin + (index % columns) * (menuWidth + d(8f))
+                    val top = menuTop + (index / columns) * rowHeight
+                    add(HomeActionBounds(target, Rect(left, top, left + menuWidth, top + d(49f))))
                 }
             }
-        }
-        HomeLayoutMode.COMPACT_LANDSCAPE -> {
-            val margin = d(12f)
-            val gap = d(8f)
-            val leftPaneWidth = minOf(d(250f), width * 0.32f)
-            val contentLeft = leftPaneWidth + margin
-            val contentWidth = width - contentLeft - margin
-            val cardWidth = (contentWidth - gap * 2f) / 3f
-            val cardTop = d(30f)
-            val cardHeight = d(60f)
-            val startTop = d(170f)
-            // Keep a small rounding margin above the 48 dp accessibility floor.
-            val navHeight = d(50f)
-            val navTop = height - margin - navHeight
-            val navWidth = (contentWidth - gap * 4f) / 5f
-            buildList {
-                coreTargets.forEachIndexed { index, target ->
-                    val left = contentLeft + (index % 3) * (cardWidth + gap)
-                    val top = cardTop + (index / 3) * (cardHeight + gap)
-                    add(HomeActionBounds(target, Rect(left, top, left + cardWidth, top + cardHeight)))
+            HomeLayoutMode.COMPACT_LANDSCAPE -> {
+                val margin = d(12f)
+                val menuRight = width * 0.46f
+                val rowHeight = ((height - d(60f)) / 6f).coerceAtLeast(d(49f))
+                menuTargets.forEachIndexed { index, target ->
+                    val top = d(48f) + index * rowHeight
+                    add(HomeActionBounds(target, Rect(margin, top, menuRight, top + rowHeight - d(1f))))
                 }
-                add(HomeActionBounds(HomeLayoutTarget.START, Rect(contentLeft, startTop, width - margin, startTop + d(56f))))
-                navigationTargets.forEachIndexed { index, target ->
-                    val left = contentLeft + index * (navWidth + gap)
-                    add(HomeActionBounds(target, Rect(left, navTop, left + navWidth, navTop + navHeight)))
+                val coreLeft = width * 0.53f
+                val coreWidth = (width - coreLeft - margin - d(8f)) / 3f
+                coreTargets.forEachIndexed { index, target ->
+                    val left = coreLeft + (index % 3) * (coreWidth + d(4f))
+                    val top = height - d(130f) + (index / 3) * d(54f)
+                    add(HomeActionBounds(target, Rect(left, top, left + coreWidth, top + d(50f))))
                 }
             }
         }

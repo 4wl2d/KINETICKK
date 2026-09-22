@@ -75,7 +75,7 @@ class SettingsPointerResolverTest {
     @Test
     fun shortViewportPaginatesWithinGraphicsAndKeepsFooterZones() {
         val layout = settingsLayout(720f, 360f, 1f, SettingsGroup.GRAPHICS, page = 0)
-        assertEquals(4, layout.visibleRows.size)
+        assertEquals(3, layout.visibleRows.size)
         assertEquals(1, layout.maxPage)
 
         assertEquals(
@@ -88,7 +88,7 @@ class SettingsPointerResolverTest {
         )
         assertEquals(
             SettingsAction.Adjust(SettingsRow.DAMAGE_COLOR_THRESHOLDS, 1),
-            resolveSettingsPress(720f, 360f, 1f, page = 1, x = 639f, y = 203f, group = SettingsGroup.GRAPHICS),
+            resolveSettingsPress(720f, 360f, 1f, page = 1, x = 639f, y = 255f, group = SettingsGroup.GRAPHICS),
         )
         assertNull(resolveSettingsPress(720f, 360f, 1f, page = 0, x = 220f, y = 350f))
     }

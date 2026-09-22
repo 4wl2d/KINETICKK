@@ -15,6 +15,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -26,6 +28,7 @@ import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.*
 
 private val LocalPanelFocus = staticCompositionLocalOf<FocusRequester?> { null }
+private val LocalPanelAccent = staticCompositionLocalOf { KineticAccent }
 
 /** Shared layout only; actions and profile decisions remain with each feature. */
 @Composable
@@ -35,22 +38,24 @@ internal fun ProfilePanel(
     scale: Float,
     tag: String,
     onBack: () -> Unit,
+    accent: Color = KineticAccent,
     contentKey: Any = Unit,
     footer: (@Composable RowScope.() -> Unit)? = null,
     content: @Composable ColumnScope.(wide: Boolean) -> Unit,
 ) {
     val panelFocus = remember { FocusRequester() }
     LaunchedEffect(contentKey) { panelFocus.requestFocus() }
-    CompositionLocalProvider(LocalPanelFocus provides panelFocus) {
-    BoxWithConstraints(Modifier.fillMaxSize().background(SpaceBlack.copy(alpha = 0.96f)).padding(15.dp), contentAlignment = Alignment.Center) {
+    CompositionLocalProvider(LocalPanelFocus provides panelFocus, LocalPanelAccent provides accent) {
+    BoxWithConstraints(Modifier.fillMaxSize().drawBehind { drawSectionAtmosphere(accent) }.padding(16.dp), contentAlignment = Alignment.Center) {
         val wide = maxWidth >= (640f * scale.coerceAtMost(1.5f)).dp
-        Column(Modifier.widthIn(max = 900.dp).fillMaxWidth().heightIn(max = 650.dp).fillMaxHeight()
-            .background(OverlayPanel).testTag(tag).focusRequester(panelFocus).focusable()) {
+        val compact = maxHeight < 480.dp
+        Column(Modifier.widthIn(max = 1160.dp).fillMaxWidth().heightIn(max = 880.dp).fillMaxHeight()
+            .background(SpaceBlack.copy(alpha = 0.92f)).testTag(tag).focusRequester(panelFocus).focusable()) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                ProfileLabel(title, scale, size = 20f, bold = true)
+                ProfileLabel(title.uppercase(), scale, size = if (compact) 25f else 38f, bold = true)
                 ProfileLabel(subtitle, scale, Muted, size = 11f)
             }
-            ProfileDivider()
+            Box(Modifier.padding(horizontal = 24.dp).width(72.dp).height(4.dp).background(accent))
             key(contentKey) {
                 val scroll = rememberScrollState()
                 Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -75,8 +80,9 @@ internal fun ProfilePanel(
 }
 
 @Composable
-internal fun ProfileLabel(text: String, scale: Float, color: Color = White, size: Float = 12f, bold: Boolean = false, modifier: Modifier = Modifier) {
-    BasicText(text, modifier, style = textStyle(size * scale, color, if (bold) FontWeight.Medium else FontWeight.Normal))
+internal fun ProfileLabel(text: String, scale: Float, color: Color = White, size: Float = 14f, bold: Boolean = false, modifier: Modifier = Modifier) {
+    BasicText(text, modifier, style = interfaceTextStyle(size.coerceAtLeast(14f) * scale, color,
+        if (bold) FontWeight.Bold else FontWeight.Normal, display = bold && size >= 18f))
 }
 
 @Composable
@@ -89,7 +95,11 @@ internal fun ProfileButton(text: String, scale: Float, tag: String, modifier: Mo
     val focused by interactions.collectIsFocusedAsState()
     val hovered by interactions.collectIsHoveredAsState()
     val panelFocus = LocalPanelFocus.current
-    Box(modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).background(if (focused || hovered) White.copy(alpha = 0.08f) else Color.Transparent)
+    val panelAccent = LocalPanelAccent.current
+    val highlighted = enabled && (focused || hovered)
+    Box(modifier.sizeIn(minWidth = 48.dp, minHeight = 52.dp).drawBehind {
+        drawKineticRibbon(Rect(Offset.Zero, size), if (highlighted) panelAccent else OverlayPanel, 8.dp.toPx())
+    }
         .border(1.dp, if (focused) White else Color.Transparent).testTag(tag)
         .semantics { contentDescription = description }
         .hoverable(interactions, enabled).clickable(enabled = enabled, interactionSource = interactions, indication = null, role = Role.Button, onClick = {
@@ -99,6 +109,6 @@ internal fun ProfileButton(text: String, scale: Float, tag: String, modifier: Mo
             onClick()
         })
         .padding(horizontal = 12.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
-        ProfileLabel(text, scale, if (enabled) accent else Muted, size = 11f, bold = true)
+        ProfileLabel(text, scale, if (highlighted) SpaceBlack else if (enabled) accent else Muted, size = 13f, bold = true)
     }
 }
