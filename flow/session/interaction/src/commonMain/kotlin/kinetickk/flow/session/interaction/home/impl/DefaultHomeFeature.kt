@@ -204,6 +204,7 @@ class DefaultHomeFeature(
                             focusRequester = actionFocus.getValue(action.target),
                             onPreview = { active ->
                                 if (active) {
+                                    if (enabled) actionFocus.getValue(action.target).requestFocus()
                                     if (shape != null) previewShapeValue = shape
                                     else {
                                         activeTargetValue = action.target

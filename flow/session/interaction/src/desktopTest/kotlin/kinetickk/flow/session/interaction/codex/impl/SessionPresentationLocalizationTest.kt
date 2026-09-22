@@ -52,6 +52,7 @@ class SessionPresentationLocalizationTest {
         onNodeWithTag("kinetickk.home.lab").performMouseInput { moveTo(center) }
         mainClock.advanceTimeBy(500)
         assertTrue(outputs.isEmpty(), "Hover changes the scene without navigating or starting a run")
+        onNodeWithTag("kinetickk.home.lab").assertIsFocused()
         onNodeWithTag("kinetickk.home.core.orb").assertIsSelected()
         // Hover selected Lab; Down selects Armory and Enter dispatches one action.
         onRoot().performKeyInput { pressKey(Key.DirectionDown) }
