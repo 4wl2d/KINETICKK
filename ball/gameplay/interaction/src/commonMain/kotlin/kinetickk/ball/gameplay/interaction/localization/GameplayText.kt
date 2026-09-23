@@ -6,6 +6,7 @@ package kinetickk.ball.gameplay.interaction.localization
 import kinetickk.foundation.common.localization.TextResource
 
 internal enum class GameplayText : TextResource {
+    NewDiscovery,
     StackChange,
     PreviewAfterSlot,
     NoStatChange,

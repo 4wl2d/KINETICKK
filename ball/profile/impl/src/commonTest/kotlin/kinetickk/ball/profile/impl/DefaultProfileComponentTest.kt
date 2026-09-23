@@ -41,6 +41,33 @@ import kotlin.test.assertTrue
 
 class DefaultProfileComponentTest {
     @Test
+    fun discoveriesAreNewOnlyOnceAndViewingPersistsWithoutLosingCollection() {
+        val initial = representativeProfile().copy(collection = kinetickk.ball.profile.api.PlayerCollection(setOf(0)))
+        val resource = RecordingProfileResource(ProfileSnapshotReadResult.Observed(profileSnapshot(initial)))
+        val component = testProfileComponent(resource)
+        val relic = kinetickk.ball.content.api.RelicId.KINETIC_FLYWHEEL
+        val update = GameplayProgressUpdate(discoveredItemIds = setOf(0, 1), discoveredRelicIds = setOf(relic))
+        ProfileCommandTestCaller<ProfileProgressApplied>().call { component.applyGameplayProgress(update, it) }
+        val discovered = component.query(ProfileQuery.GetCollection).collection
+        assertEquals(setOf(0, 1), discovered.discoveredItemIds.toSet())
+        assertEquals(setOf(1), discovered.newItemIds.toSet())
+        assertEquals(setOf(relic), discovered.discoveredRelicIds.toSet())
+        assertEquals(setOf(relic), discovered.newRelicIds.toSet())
+        assertIs<ProfileAcceptance.Accepted>(component.markViewed(kinetickk.ball.profile.api.CollectionEntry.Item(1)))
+        assertIs<ProfileAcceptance.Accepted>(component.markViewed(kinetickk.ball.profile.api.CollectionEntry.Relic(relic)))
+        val viewed = component.query(ProfileQuery.GetCollection).collection
+        assertTrue(viewed.newItemIds.isEmpty() && viewed.newRelicIds.isEmpty())
+        assertEquals(discovered.discoveredItemIds, viewed.discoveredItemIds)
+        assertEquals(discovered.discoveredRelicIds, viewed.discoveredRelicIds)
+        val writes = resource.writes.size
+        ProfileCommandTestCaller<ProfileProgressApplied>().call { component.applyGameplayProgress(update, it) }
+        assertIs<ProfileAcceptance.Rejected>(component.markViewed(kinetickk.ball.profile.api.CollectionEntry.Item(399)))
+        assertEquals(writes, resource.writes.size)
+        val restored = testProfileComponent(RecordingProfileResource(ProfileSnapshotReadResult.Observed(resource.writes.last())))
+        assertEquals(viewed, restored.query(ProfileQuery.GetCollection).collection)
+    }
+
+    @Test
     fun gameplayProgressCapabilityPublishesEveryCapturedFieldBeforeSaveAndReply() {
         val initial = representativeProfile().copy(rebirthProgress = RebirthProgress(2, 1))
         val resource = RecordingProfileResource(ProfileSnapshotReadResult.Observed(profileSnapshot(initial)))

@@ -232,7 +232,7 @@ private fun HomeSemanticAction(
     onClick: () -> Unit,
 ) {
     val language = LocalAppLanguage.current
-    val description = action.target.homeContentDescription(language)
+    val description = if (!enabled && action.target.coreShapeOrNull() != null) language.text(SessionText.UNKNOWN_CORE) else action.target.homeContentDescription(language)
     val interactions = remember { MutableInteractionSource() }
     val focused by interactions.collectIsFocusedAsState()
     val hovered by interactions.collectIsHoveredAsState()

@@ -6,6 +6,7 @@ package kinetickk.ball.profile.api
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.RelicId
 import kinetickk.foundation.collections.ImmutableSet
 import kinetickk.foundation.collections.immutableSetOf
 import kinetickk.foundation.collections.toImmutableSet
@@ -46,6 +47,7 @@ data class GameplayProgressUpdate(
     val dashHits: Int = 0,
     val completedOrbits: Int = 0,
     val architectDefeatedWith: CoreShape? = null,
+    val discoveredRelicIds: ImmutableSet<RelicId> = immutableSetOf(),
 ) {
     constructor(
         bankedMatter: Long = 0L,
@@ -55,10 +57,21 @@ data class GameplayProgressUpdate(
         dashHits: Int = 0,
         completedOrbits: Int = 0,
         architectDefeatedWith: CoreShape? = null,
+        discoveredRelicIds: Set<RelicId> = emptySet(),
     ) : this(
         bankedMatter, discoveredItemIds.toImmutableSet(), clearedRebirthLevel,
-        eliteKills, dashHits, completedOrbits, architectDefeatedWith,
+        eliteKills, dashHits, completedOrbits, architectDefeatedWith, discoveredRelicIds.toImmutableSet(),
     )
+}
+
+sealed interface CollectionEntry {
+    data class Item(val id: Int) : CollectionEntry
+    data class Relic(val id: RelicId) : CollectionEntry
+}
+
+/** Narrow Profile capability used by the collection's presentation. */
+fun interface ProfileCollectionVisits {
+    fun markViewed(entry: CollectionEntry): ProfileAcceptance
 }
 
 /** Closed local Interaction intent inventory. */
@@ -76,6 +89,8 @@ sealed interface ProfilePulse {
     data class PurchaseOrEquipWeapon(
         val id: WeaponId,
     ) : Business
+
+    data class MarkCollectionEntryViewed(val entry: CollectionEntry) : Business
 }
 
 sealed interface ProfileGameplayProgressRejection {

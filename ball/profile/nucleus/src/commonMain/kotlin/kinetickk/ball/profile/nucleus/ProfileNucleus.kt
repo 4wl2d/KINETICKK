@@ -5,6 +5,7 @@ package kinetickk.ball.profile.nucleus
 
 import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.profile.api.CollectionProjection
+import kinetickk.ball.profile.api.CollectionEntry
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
@@ -17,7 +18,6 @@ import kinetickk.ball.profile.api.LoadoutProfileSnapshot
 import kinetickk.ball.profile.api.LoadoutProjection
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.profile.api.PersistenceStatusProjection
-import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.api.PlayerPreferences
@@ -152,6 +152,17 @@ object ProfileNucleus {
         is ProfilePulse.AdjustPreference -> adjustPreference(state, pulse.adjustment)
         is ProfilePulse.PurchaseMetaUpgrade -> purchaseMetaUpgrade(state, pulse.id)
         is ProfilePulse.PurchaseOrEquipWeapon -> purchaseOrEquipWeapon(state, pulse.id)
+        is ProfilePulse.MarkCollectionEntryViewed -> markCollectionEntryViewed(state, pulse.entry)
+    }
+
+    private fun markCollectionEntryViewed(state: ProfileState, entry: CollectionEntry): ProfileDecision {
+        val collection = state.profile.collection
+        val next = when (entry) {
+            is CollectionEntry.Item -> collection.copy(newItemIds = (collection.newItemIds - entry.id).toImmutableSet())
+            is CollectionEntry.Relic -> collection.copy(newRelicIds = (collection.newRelicIds - entry.id).toImmutableSet())
+        }
+        if (next == collection) return rejected(ProfileRejection.NoChange)
+        return acceptedMutation(state, state.profile.copy(collection = next))
     }
 
     private fun adjustPreference(
@@ -356,7 +367,14 @@ object ProfileNucleus {
         val next = state.profile.copy(
             characterAchievements = achievements,
             economy = economy,
-            collection = PlayerCollection(discoveries),
+            collection = state.profile.collection.copy(
+                discoveredItemIds = discoveries.toImmutableSet(),
+                newItemIds = (state.profile.collection.newItemIds +
+                    (update.discoveredItemIds - state.profile.collection.discoveredItemIds)).toImmutableSet(),
+                discoveredRelicIds = (state.profile.collection.discoveredRelicIds + update.discoveredRelicIds).toImmutableSet(),
+                newRelicIds = (state.profile.collection.newRelicIds +
+                    (update.discoveredRelicIds - state.profile.collection.discoveredRelicIds)).toImmutableSet(),
+            ),
             rebirthProgress = rebirth,
         )
         if (next == state.profile) return rejected(ProfileRejection.NoChange)

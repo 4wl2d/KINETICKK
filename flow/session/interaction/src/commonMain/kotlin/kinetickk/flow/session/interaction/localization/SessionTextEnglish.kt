@@ -4,6 +4,13 @@
 package kinetickk.flow.session.interaction.localization
 
 internal fun englishSessionText(text: SessionText): String = when (text) {
+    SessionText.UNKNOWN_CORE -> "Unknown core"
+    SessionText.UNKNOWN_DISCOVERY -> "Unknown discovery"
+    SessionText.DISCOVERY_HELP -> "Find it during a run to reveal its collection entry."
+    SessionText.UNLOCK_PROGRESS -> "Progress · {0} / {1}"
+    SessionText.COLLECTION_PROGRESS -> "Discovered {0} / {1}"
+    SessionText.NEW_DISCOVERY -> "New!"
+
     SessionText.HOME_DESCRIPTION -> "KINETICKK home"
     SessionText.SELECTED_STATE -> "Selected"
     SessionText.AVAILABLE_STATE -> "Available"
@@ -118,10 +125,10 @@ internal fun englishSessionText(text: SessionText): String = when (text) {
     SessionText.NO_RUN_HELP -> "Begin a run to inspect your character, weapon and inventory. The full catalog remains available."
     SessionText.NO_MATCHES -> "NO MATCHES"
     SessionText.NO_MATCHES_HELP -> "Try another name or clear the search."
-    SessionText.EMPTY_INVENTORY -> "EMPTY INVENTORY"
-    SessionText.EMPTY_INVENTORY_HELP -> "No items match this inventory or filter yet."
+    SessionText.EMPTY_INVENTORY -> "COLLECTION EMPTY"
+    SessionText.EMPTY_INVENTORY_HELP -> "Find items and relics during runs to keep them in your collection."
     SessionText.TAB_BUILD -> "Build"
-    SessionText.TAB_CATALOG -> "Catalog"
+    SessionText.TAB_CATALOG -> "Collection"
     SessionText.TAB_SYNERGIES -> "Synergies"
     SessionText.COMPACT_LICENSE -> "GPLV3+ // SOURCE: GITHUB.COM/4WL2D/KINETICKK"
 }

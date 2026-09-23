@@ -12,6 +12,47 @@ import kinetickk.foundation.collections.*
 import kotlin.test.*
 
 class CodexReducerTest {
+    @Test fun collectionDoesNotExposeUnfoundItemsThroughSearchOrDetails() {
+        val catalog = codexTestCatalog()
+        val empty = CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items)
+        assertTrue(codexCatalogEntries(0, "", CodexItemFilter.ALL, empty, catalog, codexTestProgress()).isEmpty())
+        assertTrue(codexFilteredItems(empty, catalog.items.first().name, CodexItemFilter.ALL).isEmpty())
+        val hidden = codexItemEntry(catalog.items.first(), empty)
+        assertIs<CodexIcon.Unknown>(hidden.icon)
+        assertNotEquals(catalog.items.first().name, hidden.title)
+        assertFalse(hidden.description.contains(catalog.items.first().description))
+        val found = empty.copy(discoveredItemIds = immutableSetOf(0), newItemIds = immutableSetOf(0))
+        assertEquals(listOf(0), codexFilteredItems(found, "", CodexItemFilter.ALL).map { it.id })
+        assertTrue(codexItemEntry(catalog.items.first(), found).isNew)
+        assertFalse(codexItemEntry(catalog.items.first(), found.copy(newItemIds = immutableSetOf())).isNew)
+    }
+
+    @Test fun lockedCharactersRevealTheirUnlockGoalButNotTheirIdentityOrPower() {
+        val catalog = codexTestCatalog()
+        val shape = catalog.coreShape(CoreShape.PRISM).copy(mechanicDescription = "Hidden power",
+            unlockDescription = "Defeat three elites", unlockTarget = 3, unlockRequirement = CharacterUnlockRequirement.ELITE_KILLS)
+        val progress = codexTestProgress().copy(characterAchievements = CharacterAchievementProgress(eliteKills = 2))
+        val entry = codexShapeEntry(shape, model(), progress)
+        assertEquals("Unknown core", entry.title)
+        assertEquals("Defeat three elites", entry.description)
+        assertEquals("Progress · 2 / 3", entry.availability)
+        assertFalse(entry.discovered)
+        assertTrue(codexCatalogEntries(3, shape.displayName, CodexItemFilter.ALL, model(), catalog, progress).isEmpty())
+        val opened = codexShapeEntry(shape, model(), progress.copy(unlockedCoreShapes = immutableSetOf(CoreShape.ORB, CoreShape.PRISM)))
+        assertEquals(shape.displayName, opened.title)
+        assertTrue(opened.description.contains("Hidden power"))
+    }
+
+    @Test fun relicsAndSynergyRecipesAppearOnlyAfterTheirComponentsAreFound() {
+        val catalog = codexTestCatalog()
+        val empty = CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items)
+        assertTrue(codexCatalogEntries(2, "", CodexItemFilter.ALL, empty, catalog, codexTestProgress()).isEmpty())
+        assertFalse(codexSynergyDiscovered(catalog.synergies.first(), empty, catalog))
+        val found = empty.copy(discoveredRelicIds = immutableSetOf(RelicId.KINETIC_FLYWHEEL, RelicId.GHOST_VECTOR))
+        assertEquals(2, codexCatalogEntries(2, "", CodexItemFilter.ALL, found, catalog, codexTestProgress()).size)
+        assertTrue(codexSynergyDiscovered(catalog.synergies.first(), found, catalog))
+    }
+
     @Test fun catalogAcceptsFourHundredAndRejectsFourHundredOne() {
         assertEquals(400, model().items.size)
         assertFailsWith<IllegalArgumentException> { CodexReducer(testItems(401)) }
@@ -32,7 +73,7 @@ class CodexReducerTest {
 
     @Test fun searchAndFiltersPreserveCatalogOrderAndUseProfileDiscovery() {
         val model = model()
-        assertEquals(listOf(2, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29) + (200..299), codexFilteredItems(model, "iTeM 2", CodexItemFilter.ALL).map { it.id })
+        assertEquals(listOf(2), codexFilteredItems(model, "iTeM 2", CodexItemFilter.ALL).map { it.id })
         assertEquals(listOf(2, 399), codexFilteredItems(model, "", CodexItemFilter.DISCOVERED).map { it.id })
         assertEquals(listOf(2), codexFilteredItems(model, "", CodexItemFilter.IN_BUILD).map { it.id })
         assertTrue(codexFilteredItems(model.copy(runStacks = CodexRunStacks()), "", CodexItemFilter.IN_BUILD).isEmpty())
@@ -40,10 +81,11 @@ class CodexReducerTest {
 
     @Test fun everyCategoryUsesCaseInsensitiveNameSubstringWithoutReordering() {
         val catalog = codexTestCatalog()
+        val known = model().copy(discoveredRelicIds = RelicId.entries.toImmutableSet())
         for (category in 0..3) {
-            val entries = codexCatalogEntries(category, "", CodexItemFilter.ALL, model(), catalog, codexTestProgress())
-            val query = entries.last().title.takeLast(3).lowercase()
-            assertEquals(entries.filter { it.title.contains(query, ignoreCase = true) }, codexCatalogEntries(category, query, CodexItemFilter.ALL, model(), catalog, codexTestProgress()))
+            val entries = codexCatalogEntries(category, "", CodexItemFilter.ALL, known, catalog, codexTestProgress())
+            val query = entries.last { it.discovered }.title.takeLast(3).lowercase()
+            assertEquals(entries.filter { it.discovered && it.title.contains(query, ignoreCase = true) }, codexCatalogEntries(category, query, CodexItemFilter.ALL, known, catalog, codexTestProgress()))
         }
     }
 

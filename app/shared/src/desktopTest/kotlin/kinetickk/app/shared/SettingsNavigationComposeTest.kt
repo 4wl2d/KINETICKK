@@ -34,6 +34,7 @@ import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
 import kinetickk.resource.audio.api.ToneRequest
 import org.jetbrains.skia.Image
+import kinetickk.foundation.dispatch.call
 import java.io.File
 import kotlin.math.floor
 import kotlin.math.min
@@ -294,7 +295,7 @@ class SettingsNavigationComposeTest {
                 onNodeWithTag("codex-empty-NO_RUN").assertExists()
                 onNodeWithTag("codex-tab-1").performClick()
                 render(AppDestination.Codex)
-                onNodeWithTag("codex-filter-1").performClick()
+                onNodeWithTag("codex-filter-0").performClick()
                 render(AppDestination.Codex)
                 onNodeWithTag("codex-empty-EMPTY_INVENTORY").assertExists()
                 onNodeWithTag("codex-filter-0").performClick()
@@ -304,6 +305,22 @@ class SettingsNavigationComposeTest {
                 onNodeWithTag("codex-search").performTextClearance()
                 render(AppDestination.Codex)
                 val ui = catalog.uiCatalog()
+                // Populate the collection through Profile's real accepted gameplay-progress path.
+                val discoveryCall = kinetickk.foundation.dispatch.InlineAcceptance(kinetickk.foundation.dispatch.BoundedCompletionDeque<Boolean>(1))
+                discoveryCall.dispatch {
+                    discoveryCall.acceptAndDrain(rootItem = false, rootFrame = kinetickk.foundation.collections.immutableListOf(Unit),
+                        outputs = { it }, acceptFrame = { _, _ -> },
+                        decideCompletion = { accepted -> assertTrue(accepted); kinetickk.foundation.collections.immutableListOf<Unit>() },
+                        execute = { _, _ -> discoveryCall.call(
+                            invoke = { reply: kinetickk.foundation.dispatch.InlineReply<kinetickk.ball.profile.api.ProfileProgressApplied, kinetickk.ball.profile.api.ProfileRefusal> ->
+                                profile.applyGameplayProgress(kinetickk.ball.profile.api.GameplayProgressUpdate(
+                                    discoveredItemIds = setOf(ui.items.last().id), discoveredRelicIds = setOf(ui.relics.last().id)), reply) },
+                            acceptedInput = { true }, refusedInput = { false },
+                        ) })
+                }
+                onNodeWithTag("codex-close").performClick()
+                render(AppDestination.Home)
+                key(Key.C, AppDestination.Codex)
                 for ((category, entryKey) in listOf(
                     0 to "item/${ui.items.last().id}",
                     1 to "weapon/${ui.weapons.last().id}",
@@ -314,8 +331,17 @@ class SettingsNavigationComposeTest {
                     render(AppDestination.Codex)
                     onNodeWithTag("codex-grid").performScrollToKey(entryKey)
                     render(AppDestination.Codex)
+                    if (category == 0 || category == 2) {
+                        onNodeWithTag("codex-new-$entryKey", useUnmergedTree = true).assertIsDisplayed()
+                    }
                     onNodeWithTag("codex-slot-$entryKey").performClick()
                     render(AppDestination.Codex)
+                    if (category == 0 || category == 2) {
+                        onNodeWithTag("codex-new-$entryKey", useUnmergedTree = true).assertDoesNotExist()
+                        val collection = profile.query(ProfileQuery.GetCollection).collection
+                        if (category == 0) assertTrue(ui.items.last().id !in collection.newItemIds)
+                        else assertTrue(ui.relics.last().id !in collection.newRelicIds)
+                    }
                     onNodeWithTag("codex-detail-title").assertExists()
                     if (width < 900 || height < 480) {
                         onNodeWithTag("codex-sheet-close").performClick()

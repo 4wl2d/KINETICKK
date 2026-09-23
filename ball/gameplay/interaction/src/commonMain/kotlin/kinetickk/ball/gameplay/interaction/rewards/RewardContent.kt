@@ -238,7 +238,7 @@ internal fun RewardCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     RewardIcon(presentation, renderTime, Modifier.size(40.dp))
-                    RewardText("0${index + 1}", accent, 12f * textScale, bold = true)
+                    if (!presentation.isNewDiscovery) RewardText("0${index + 1}", accent, 12f * textScale, bold = true)
                 }
             } else {
                 Box(
@@ -280,6 +280,8 @@ internal fun RewardCard(
                 RewardText(language.text(GameplayText.Select, index + 1), if (highlighted) SpaceBlack else accent, 12f * textScale, bold = true, centered = true)
             }
         }
+        if (presentation.isNewDiscovery) DiscoveryBadge(language.text(GameplayText.NewDiscovery), textScale,
+            Modifier.align(Alignment.TopEnd).padding(top = 8.dp, end = 7.dp).testTag("kinetickk.gameplay.choice.${index + 1}.new"))
     }
 }
 

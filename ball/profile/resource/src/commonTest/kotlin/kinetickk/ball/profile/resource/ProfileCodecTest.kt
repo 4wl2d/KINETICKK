@@ -27,6 +27,30 @@ import kotlin.test.assertIs
 
 class ProfileCodecTest {
     @Test
+    fun collectionDiscoveriesRoundTripAndLegacyProfilesKeepTheirProgress() {
+        val old = testSnapshot(PlayerProfile(economy = PlayerEconomy(42L, 600L), collection = PlayerCollection(setOf(1, 3))), revision = 19L)
+        val legacy = requireEncoded(old)
+        kotlin.test.assertFalse(legacy.contains("newItemIds"))
+        kotlin.test.assertFalse(legacy.contains("discoveredRelicIds"))
+        assertEquals(old, assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(legacy)).snapshot)
+        val relics = kinetickk.ball.content.api.RelicId.entries.toSet()
+        val maximum = old.copy(profile = old.profile.copy(collection = PlayerCollection(
+            (0 until ContentBounds.MAX_ITEMS).toSet(), (0 until ContentBounds.MAX_ITEMS).toSet(), relics, relics,
+        )))
+        assertEquals(maximum, assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(requireEncoded(maximum))).snapshot)
+    }
+
+    @Test
+    fun unseenMarkersCannotInventDiscoveriesAndRelicWireIdsAreValidated() {
+        val snapshot = testSnapshot(PlayerProfile(collection = PlayerCollection(setOf(1), setOf(1),
+            setOf(kinetickk.ball.content.api.RelicId.KINETIC_FLYWHEEL), setOf(kinetickk.ball.content.api.RelicId.KINETIC_FLYWHEEL))))
+        val encoded = requireEncoded(snapshot)
+        assertEquals(ProfileSnapshotRejection.INCONSISTENT_PROFILE, decodeRejection(encoded.replace("\"newItemIds\":[1]", "\"newItemIds\":[2]")))
+        assertEquals(ProfileSnapshotRejection.INVALID_STABLE_ID, decodeRejection(encoded.replace("KINETIC_FLYWHEEL", "UNKNOWN_RELIC")))
+        assertEquals(ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE, decodeRejection(encoded.replace("\"newItemIds\":[1]", "\"newItemIds\":[1,1]")))
+    }
+
+    @Test
     fun statisticsSideRoundTripsAndOlderSavesKeepAllProgress() {
         for (onLeft in listOf(false, true)) {
             val snapshot = testSnapshot(PlayerProfile(

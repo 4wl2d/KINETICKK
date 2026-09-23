@@ -116,6 +116,7 @@ internal class AppCompositionOwner(
     )
     private val codexFeature: CodexFeature = codexFeature ?: DefaultCodexFeature(
         profilePort = this.profilePort,
+        collectionVisits = this.profileComponent,
         uiCatalog = uiCatalog,
         audioService = this.audioService,
     )

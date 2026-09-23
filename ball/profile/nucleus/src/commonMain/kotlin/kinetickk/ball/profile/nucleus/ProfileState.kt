@@ -143,7 +143,10 @@ private fun isPolicyCompatibleAtConstruction(
     }
     if (
         profile.collection.discoveredItemIds.size > policy.itemCount ||
-        profile.collection.discoveredItemIds.any { !policy.containsItem(it) }
+        profile.collection.discoveredItemIds.any { !policy.containsItem(it) } ||
+        !profile.collection.discoveredItemIds.containsAll(profile.collection.newItemIds) ||
+        !profile.collection.discoveredRelicIds.containsAll(profile.collection.newRelicIds) ||
+        profile.collection.discoveredRelicIds.size > kinetickk.ball.content.api.ContentBounds.MAX_RELICS
     ) return false
     if (
         profile.rebirthProgress.level !in policy.rebirth.minimumLevel..policy.rebirth.maximumLevel ||

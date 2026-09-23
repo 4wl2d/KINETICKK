@@ -104,6 +104,18 @@ class GameplayLocalizedRenderingTest {
     val compose = createComposeRule()
 
     @Test
+    fun rewardNewMarkerUsesPersistedDiscoveryRatherThanTheCurrentRunStack() {
+        val scenario = Scenario(1000, 720, Scene.REWARDS)
+        val unseen = model(scenario)
+        val item = unseen.content.items.first()
+        val choice = ChoiceOption(ChoiceType.ITEM, item.name, item.description, "", itemId = item.id)
+        kotlin.test.assertTrue(unseen.rewardCardPresentation(choice, 0).isNewDiscovery)
+        val oldCollection = kinetickk.ball.profile.api.PlayerCollection(setOf(item.id))
+        val known = requireNotNull(GameplayNucleus.renderSnapshot(startedState(scenario, oldCollection)).renderModel)
+        kotlin.test.assertFalse(known.rewardCardPresentation(choice, 0).isNewDiscovery)
+    }
+
+    @Test
     fun russianGameplayAndRewardsRenderAtDesktopAndCompactBounds() {
         val scenario = mutableStateOf(Scenario(1000, 720, Scene.HUD))
         compose.setContent {
@@ -175,9 +187,9 @@ class GameplayLocalizedRenderingTest {
     private fun model(scenario: Scenario): GameplayRenderModel =
         requireNotNull(GameplayNucleus.renderSnapshot(startedState(scenario)).renderModel)
 
-    private fun startedState(scenario: Scenario): GameplayState {
+    private fun startedState(scenario: Scenario, collection: kinetickk.ball.profile.api.PlayerCollection = kinetickk.ball.profile.api.PlayerCollection()): GameplayState {
         val content = localizationFixtureContent()
-        val profile = PlayerProfile(preferences = PlayerPreferences(language = AppLanguage.Russian, textScale = scenario.textScale))
+        val profile = PlayerProfile(preferences = PlayerPreferences(language = AppLanguage.Russian, textScale = scenario.textScale), collection = collection)
         val initial = GameplayState.initial(RunId(1), content)
         val started = assertIs<GameplayDecision.Accepted>(GameplayNucleus.decide(
             initial,

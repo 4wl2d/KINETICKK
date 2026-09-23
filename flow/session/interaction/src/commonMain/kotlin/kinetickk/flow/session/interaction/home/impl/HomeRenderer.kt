@@ -83,8 +83,6 @@ internal fun DrawScope.drawHome(
     // The cut continues through the wordmark and into the orbital composition.
     val cutY = titleY + d(titleSize * text.scale * 0.9f)
     drawLine(SpaceBlack, Offset(margin, cutY), Offset(margin + titleWidth, cutY - d(titleSize * 0.25f)), d(2.5f))
-    if (regular) drawLabel(text, text.language.text(SessionText.HOME_INSTRUCTIONS), margin,
-        size.height * 0.27f, 11f, Muted, maxWidth = titleWidth, maxLines = 2)
 
     val center = when {
         regular -> Offset(size.width * 0.77f, size.height * 0.43f)
@@ -97,7 +95,8 @@ internal fun DrawScope.drawHome(
         else -> min(size.width * 0.09f, size.height * 0.16f)
     }
     drawKineticOrbits(center, radius, time, motion.accent, -28f + motion.cursor.x * 12f + motion.position * 3f)
-    if (previewShape != null) drawCoreShape(previewShape, center, radius, White, time * 0.06f)
+    if (previewShape != null) drawCoreShape(previewShape, center, radius,
+        if (model.isCoreShapeUnlocked(previewShape)) White else Muted.copy(alpha = 0.28f), time * 0.06f)
     else motion.sceneWeights.forEachIndexed { index, opacity ->
         if (opacity > 0.01f) {
             val color = White.copy(alpha = opacity)
@@ -124,6 +123,9 @@ internal fun DrawScope.drawHome(
         drawLine(motion.accent, center - Offset(radius * 1.7f, -radius * 0.05f),
             center + Offset(radius * 1.9f, radius * 0.04f), d(2.5f))
     }
+    if (previewShape != null && !model.isCoreShapeUnlocked(previewShape)) {
+        drawInterfaceGlyph(InterfaceGlyph.LOCK, center, radius * 0.32f, White)
+    }
     if (regular || portrait) {
         drawInterfaceGlyph(InterfaceGlyph.DIAMOND, Offset(size.width - margin - d(35f), d(27f)), d(8f), White)
         drawLabel(text, formatCompact(model.totalMatter, text.language), size.width - margin, d(13f), 17f,
@@ -142,23 +144,21 @@ internal fun DrawScope.drawHome(
         if (portrait && active) drawKineticRibbon(bounds, motion.accent, d(8f))
         val ink = if (portrait) { if (active) SpaceBlack else White } else
             lerp(White, SpaceBlack, (1f - abs(index - motion.position) * 2.5f).coerceIn(0f, 1f))
-        val numberWidth = d(if (regular) 32f else if (portrait) 28f else 25f)
+        val labelInset = d(18f)
         val fontSize = (if (regular) 31f else if (portrait) 23f else 22f) / text.scale.coerceAtLeast(1.25f) * 1.25f
         val y = bounds.center.y - d(fontSize * text.scale * 0.66f)
-        drawLabel(text, "0${index + 1}", bounds.left + d(9f), bounds.center.y - d(7f * text.scale),
-            if (regular) 10f else 8f, if (active) ink else Muted)
-        drawLabel(text, text.language.text(menuLabels[index]).uppercase(), bounds.left + numberWidth + d(8f), y,
-            fontSize, ink, display = true, maxWidth = bounds.width - numberWidth - d(if (portrait) 20f else 64f), fitWidth = true)
+        drawLabel(text, text.language.text(menuLabels[index]).uppercase(), bounds.left + labelInset, y,
+            fontSize, ink, display = true, maxWidth = bounds.width - labelInset - d(if (portrait) 16f else 56f), fitWidth = true)
         if (!portrait) {
             if (active) drawKineticArrow(Offset(bounds.right - d(28f), bounds.center.y), d(22f), SpaceBlack)
             else drawLabel(text, menuKeys[index], bounds.right - d(22f), bounds.center.y - d(7f), 10f, Muted, centered = true)
         }
-        if (!active) drawLine(DarkLine, bounds.bottomLeft + Offset(numberWidth + d(8f), 0f), bounds.bottomRight - Offset(d(14f), 0f), d(0.7f))
+        if (!active) drawLine(DarkLine, bounds.bottomLeft + Offset(labelInset, 0f), bounds.bottomRight - Offset(d(14f), 0f), d(0.7f))
     }
     layout.actions.forEach { action ->
         action.target.coreShapeOrNull()?.let { shape -> drawCoreChoice(model, text, shape, action.bounds, previewShape == shape) }
     }
-    if (regular) {
+    if (regular && model.isCoreShapeUnlocked(previewShape ?: model.coreShape)) {
         val firstCore = layout.bounds(HomeLayoutTarget.CORE_ORB)
         val shape = previewShape ?: model.coreShape
         val definition = model.coreShape(shape)
@@ -167,7 +167,7 @@ internal fun DrawScope.drawHome(
         drawLabel(text, (if (model.isCoreShapeUnlocked(shape)) definition.mechanicDescription else definition.unlockDescription).localizedContent(text.language),
             firstCore.left, firstCore.bottom + d(16f), 11f, Muted, maxWidth = size.width - firstCore.left - margin, maxLines = 2)
     }
-    if (portrait) {
+    if (portrait && model.isCoreShapeUnlocked(previewShape ?: model.coreShape)) {
         val shape = previewShape ?: model.coreShape
         val definition = model.coreShape(shape)
         drawLabel(text, definition.displayName.localizedContent(text.language).uppercase(), margin,
@@ -194,7 +194,13 @@ private fun DrawScope.drawCoreChoice(model: HomeUiModel, text: TextMeasurer, sha
         }
     }
     drawCoreShape(shape, Offset(bounds.center.x, bounds.top + bounds.height * 0.35f), d(13f), accent, 0f)
-    if (!unlocked) drawInterfaceGlyph(InterfaceGlyph.LOCK, Offset(bounds.right - d(8f), bounds.top + d(8f)), d(4f), Muted)
+    if (!unlocked) {
+        drawRect(Muted.copy(alpha = 0.07f), bounds.topLeft, bounds.size)
+        drawLine(Muted.copy(alpha = 0.35f), bounds.topLeft, bounds.bottomLeft, d(2f))
+        drawLine(Muted.copy(alpha = 0.35f), bounds.topRight, bounds.bottomRight, d(2f))
+        drawInterfaceGlyph(InterfaceGlyph.LOCK, Offset(bounds.center.x, bounds.top + bounds.height * 0.77f), d(9f), White.copy(alpha = 0.85f))
+        return
+    }
     drawLabel(text, model.coreShape(shape).displayName.localizedContent(text.language).uppercase(), bounds.center.x,
         bounds.top + bounds.height * 0.66f, 10f / text.scale.coerceAtLeast(1f), if (selected) White else Muted,
         centered = true, display = true, maxWidth = bounds.width - d(5f), fitWidth = true)

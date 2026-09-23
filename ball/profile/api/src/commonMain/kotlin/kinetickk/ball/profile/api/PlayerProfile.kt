@@ -12,6 +12,7 @@ import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.RelicId
 import kinetickk.foundation.common.localization.AppLanguage
 
 /** Persistent ordinal order; append-only changes require an explicit save-format decision. */
@@ -110,8 +111,15 @@ data class LabProgress(
 
 data class PlayerCollection(
     val discoveredItemIds: ImmutableSet<Int> = immutableSetOf(),
+    val newItemIds: ImmutableSet<Int> = immutableSetOf(),
+    val discoveredRelicIds: ImmutableSet<RelicId> = immutableSetOf(),
+    val newRelicIds: ImmutableSet<RelicId> = immutableSetOf(),
 ) {
-    constructor(discoveredItemIds: Set<Int>) : this(discoveredItemIds.toImmutableSet())
+    constructor(discoveredItemIds: Set<Int>, newItemIds: Set<Int> = emptySet(),
+        discoveredRelicIds: Set<RelicId> = emptySet(), newRelicIds: Set<RelicId> = emptySet()) : this(
+        discoveredItemIds.toImmutableSet(), newItemIds.toImmutableSet(),
+        discoveredRelicIds.toImmutableSet(), newRelicIds.toImmutableSet(),
+    )
 }
 
 data class RebirthProgress(

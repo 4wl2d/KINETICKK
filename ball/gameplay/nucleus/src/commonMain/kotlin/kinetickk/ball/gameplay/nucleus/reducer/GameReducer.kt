@@ -224,6 +224,7 @@ internal class GameReducer {
             !visualFxCues.isEmpty() ||
             pendingBankedMatter != 0L ||
             pendingDiscoveredItemIds.isNotEmpty() ||
+            pendingDiscoveredRelicMask != 0L ||
             pendingClearedRebirthLevel != null ||
             pendingEliteKills != 0 ||
             pendingDashHits != 0 ||

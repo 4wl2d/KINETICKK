@@ -14,6 +14,28 @@ import kotlin.test.assertTrue
 
 class PendingOutputBufferIsolationTest {
     @Test
+    fun relicDiscoveryBelongsToTheAcceptedAcquisitionAndSurvivesReplacement() {
+        val source = MutableGameState(canonicalGameplayContent, seed = 9001)
+        val retained = source.toRenderModel()
+        val candidate = source.copyForReduction()
+        val first = kinetickk.ball.content.api.RelicId.KINETIC_FLYWHEEL
+        val second = kinetickk.ball.content.api.RelicId.GHOST_VECTOR
+        candidate.acquireRelic(first)
+        assertTrue(candidate.toRenderModel().isRelicDiscovered(first))
+        assertFalse(retained.isRelicDiscovered(first))
+        assertFalse(source.toRenderModel().isRelicDiscovered(first))
+        assertNull(source.takeProgressUpdate())
+        assertEquals(setOf(first), candidate.takeProgressUpdate()?.discoveredRelicIds?.toSet())
+        assertNull(candidate.takeProgressUpdate())
+        candidate.acquireRelic(first)
+        assertNull(candidate.takeProgressUpdate())
+        candidate.replaceRelic(0, second)
+        assertEquals(setOf(second), candidate.takeProgressUpdate()?.discoveredRelicIds?.toSet())
+        assertTrue(candidate.toRenderModel().isRelicDiscovered(first))
+        assertTrue(candidate.toRenderModel().isRelicDiscovered(second))
+    }
+
+    @Test
     fun emptyReductionCopyKeepsEveryOutputStorageUnmaterialized() {
         val source = MutableGameState(canonicalGameplayContent, seed = 10_101)
         val candidate = source.copyForReduction()

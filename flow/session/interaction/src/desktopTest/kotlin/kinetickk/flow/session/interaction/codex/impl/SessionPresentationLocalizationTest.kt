@@ -22,6 +22,7 @@ import kinetickk.ball.profile.api.*
 import kinetickk.flow.session.interaction.codex.api.CodexRenderModel
 import kinetickk.flow.session.interaction.codex.api.CodexRunStacks
 import kinetickk.flow.session.interaction.home.impl.DefaultHomeFeature
+import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.collections.immutableSetOf
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.LocalAppLanguage
@@ -70,11 +71,11 @@ class SessionPresentationLocalizationTest {
         setContent {
             CompositionLocalProvider(LocalAppLanguage provides languageValue) {
                 Box(Modifier.requiredSize(1000.dp, 700.dp)) {
-                    CodexContent(catalog, CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items), codexTestProgress(), 1f) { }
+                    CodexContent(catalog, CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items, discoveredRelicIds = kinetickk.ball.content.api.RelicId.entries.toImmutableSet()), codexTestProgress(), 1f) { }
                 }
             }
         }
-        onNodeWithTag("codex-tab-1").assertTextEquals("Каталог")
+        onNodeWithTag("codex-tab-1").assertTextEquals("Коллекция")
         onNodeWithTag("codex-category-3").performClick()
         onNodeWithTag("codex-search").performTextInput("крУг")
         onNodeWithTag("codex-slot-shape/ORB").performClick()
@@ -82,7 +83,7 @@ class SessionPresentationLocalizationTest {
         saveLocalizationCapture("codex-ru")
         onNodeWithTag("codex-search").performTextClearance()
         runOnIdle { languageValue = AppLanguage.English }
-        onNodeWithTag("codex-tab-1").assertTextEquals("Catalog")
+        onNodeWithTag("codex-tab-1").assertTextEquals("Collection")
         onNodeWithTag("codex-slot-shape/ORB").assertIsSelected()
         onNodeWithTag("codex-detail-title").assertTextEquals("Circle")
         onNodeWithTag("codex-search").performTextInput("CiRcLe")
@@ -97,7 +98,7 @@ class SessionPresentationLocalizationTest {
         setContent {
             CompositionLocalProvider(LocalAppLanguage provides languageValue) {
                 Box(Modifier.requiredSize(1000.dp, 700.dp)) {
-                    CodexContent(catalog, CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items), codexTestProgress(), 1f) { }
+                    CodexContent(catalog, CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items, discoveredRelicIds = kinetickk.ball.content.api.RelicId.entries.toImmutableSet()), codexTestProgress(), 1f) { }
                 }
             }
         }

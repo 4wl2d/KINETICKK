@@ -17,6 +17,7 @@ kotlin {
             api(libs.compose.ui)
             api(projects.foundation.common)
             implementation(libs.compose.resources)
+            implementation(libs.compose.foundation)
         }
         desktopTest.dependencies {
             val os = when {
