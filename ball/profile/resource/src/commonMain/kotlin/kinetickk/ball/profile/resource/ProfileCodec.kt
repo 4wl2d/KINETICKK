@@ -294,10 +294,12 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
         ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
     )
 
-    rejectUnless(profile.collection.newItemIds == profile.collection.newItemIds.distinct().sorted() &&
-        profile.collection.discoveredRelicIds == profile.collection.discoveredRelicIds.distinct().sorted() &&
-        profile.collection.newRelicIds == profile.collection.newRelicIds.distinct().sorted(),
-        ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE)
+    rejectUnless(
+        profile.collection.newItemIds.isStrictlySorted() &&
+            profile.collection.discoveredRelicIds.isStrictlySorted() &&
+            profile.collection.newRelicIds.isStrictlySorted(),
+        ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
+    )
 
     val metaRanks = MutableList(MetaUpgradeId.entries.size) { 0 }
     profile.labProgress.ranks.forEach { record ->
@@ -331,8 +333,12 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
             unlockedWeapons = profile.loadout.unlockedWeaponIds.mapTo(mutableSetOf()) { it.weaponId() },
         ),
         labProgress = LabProgress(metaRanks),
-        collection = PlayerCollection(profile.collection.discoveredItemIds.toSet(), profile.collection.newItemIds.toSet(),
-            profile.collection.discoveredRelicIds.map { it.relicId() }.toSet(), profile.collection.newRelicIds.map { it.relicId() }.toSet()),
+        collection = PlayerCollection(
+            discoveredItemIds = profile.collection.discoveredItemIds.toSet(),
+            newItemIds = profile.collection.newItemIds.toSet(),
+            discoveredRelicIds = profile.collection.discoveredRelicIds.relicIds(),
+            newRelicIds = profile.collection.newRelicIds.relicIds(),
+        ),
         characterAchievements = CharacterAchievementProgress(
             eliteKills = profile.characterAchievements.eliteKills.parseCanonicalNonNegativeLong(),
             dashHits = profile.characterAchievements.dashHits.parseCanonicalNonNegativeLong(),
@@ -414,6 +420,16 @@ private fun validateProfile(profile: PlayerProfile) {
         ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
     )
 }
+
+private fun <T : Comparable<T>> List<T>.isStrictlySorted(): Boolean {
+    for (index in 1 until size) {
+        if (this[index - 1] >= this[index]) return false
+    }
+    return true
+}
+
+private fun List<String>.relicIds(): Set<RelicId> =
+    if (isEmpty()) emptySet() else mapTo(mutableSetOf()) { it.relicId() }
 
 private fun Float.toPercent(): Int {
     rejectUnless(isFinite(), ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)

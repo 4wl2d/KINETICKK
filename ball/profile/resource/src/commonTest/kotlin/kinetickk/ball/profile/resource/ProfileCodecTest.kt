@@ -6,6 +6,7 @@ package kinetickk.ball.profile.resource
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.DamageNumberFormat
@@ -48,6 +49,31 @@ class ProfileCodecTest {
         assertEquals(ProfileSnapshotRejection.INCONSISTENT_PROFILE, decodeRejection(encoded.replace("\"newItemIds\":[1]", "\"newItemIds\":[2]")))
         assertEquals(ProfileSnapshotRejection.INVALID_STABLE_ID, decodeRejection(encoded.replace("KINETIC_FLYWHEEL", "UNKNOWN_RELIC")))
         assertEquals(ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE, decodeRejection(encoded.replace("\"newItemIds\":[1]", "\"newItemIds\":[1,1]")))
+    }
+
+    @Test
+    fun discoveryFieldsRejectUnsortedValuesAndDuplicates() {
+        val relics = setOf(RelicId.GHOST_VECTOR, RelicId.KINETIC_FLYWHEEL)
+        val snapshot = testSnapshot(PlayerProfile(
+            collection = PlayerCollection(setOf(1, 3), setOf(1, 3), relics, relics),
+        ))
+        val encoded = requireEncoded(snapshot)
+        val fields = mapOf(
+            "newItemIds" to listOf("1", "3"),
+            "discoveredRelicIds" to listOf("\"GHOST_VECTOR\"", "\"KINETIC_FLYWHEEL\""),
+            "newRelicIds" to listOf("\"GHOST_VECTOR\"", "\"KINETIC_FLYWHEEL\""),
+        )
+        for ((field, values) in fields) {
+            val canonical = "\"$field\":[${values.joinToString(",")}]"
+            for (invalid in listOf(values.reversed(), listOf(values.first(), values.first()))) {
+                val payload = encoded.replace(canonical, "\"$field\":[${invalid.joinToString(",")}]")
+                assertEquals(
+                    ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
+                    decodeRejection(payload),
+                    field,
+                )
+            }
+        }
     }
 
     @Test
