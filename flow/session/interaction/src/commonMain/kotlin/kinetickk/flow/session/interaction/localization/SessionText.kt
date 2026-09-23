@@ -6,6 +6,13 @@ package kinetickk.flow.session.interaction.localization
 import kinetickk.foundation.common.localization.TextResource
 
 internal enum class SessionText : TextResource {
+    UNKNOWN_CORE,
+    UNKNOWN_DISCOVERY,
+    DISCOVERY_HELP,
+    UNLOCK_PROGRESS,
+    COLLECTION_PROGRESS,
+    NEW_DISCOVERY,
+
     HOME_DESCRIPTION,
     SELECTED_STATE,
     AVAILABLE_STATE,

@@ -17,10 +17,16 @@ release.
 | Component | Version | Files | License |
 |---|---:|---|---|
 | Gradle Wrapper | 9.7.1 | `gradlew`, `gradlew.bat`, `gradle/wrapper/gradle-wrapper.jar`, `gradle/wrapper/gradle-wrapper.properties` | [Apache License 2.0](https://github.com/gradle/gradle/blob/v9.7.1/LICENSE) |
+| Oswald | Static weight 700, obtained 2026-09-22 | `foundation/design/src/commonMain/composeResources/font/oswald.ttf` | [SIL Open Font License 1.1](https://github.com/google/fonts/tree/main/ofl/oswald); complete notice in `composeResources/files/oswald-OFL.txt` |
+| Onest | Static weight 450, obtained 2026-09-22 | `foundation/design/src/commonMain/composeResources/font/onest.ttf` | [SIL Open Font License 1.1](https://github.com/google/fonts/tree/main/ofl/onest); complete notice in `composeResources/files/onest-OFL.txt` |
 
 The wrapper scripts contain their own Apache-2.0 headers, and
 `gradle-wrapper.jar` contains the full license at `META-INF/LICENSE`. Those
 notices must remain intact.
+
+The bundled font files are static instances of the upstream Google Fonts variable
+fonts. Their complete OFL notices are packaged with the Compose resources on every
+target. They are bundled locally; the interface does not fetch them from a font CDN.
 
 ## Downloaded build and runtime components
 

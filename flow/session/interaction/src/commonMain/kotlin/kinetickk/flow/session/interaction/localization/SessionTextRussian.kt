@@ -4,6 +4,13 @@
 package kinetickk.flow.session.interaction.localization
 
 internal fun russianSessionText(text: SessionText): String = when (text) {
+    SessionText.UNKNOWN_CORE -> "Неизвестное ядро"
+    SessionText.UNKNOWN_DISCOVERY -> "Неизвестная находка"
+    SessionText.DISCOVERY_HELP -> "Найдите в забеге, чтобы открыть запись в коллекции."
+    SessionText.UNLOCK_PROGRESS -> "Прогресс · {0} / {1}"
+    SessionText.COLLECTION_PROGRESS -> "Открыто {0} / {1}"
+    SessionText.NEW_DISCOVERY -> "Новый!"
+
     SessionText.HOME_DESCRIPTION -> "Главная KINETICKK"
     SessionText.SELECTED_STATE -> "Выбрано"
     SessionText.AVAILABLE_STATE -> "Доступно"
@@ -118,10 +125,10 @@ internal fun russianSessionText(text: SessionText): String = when (text) {
     SessionText.NO_RUN_HELP -> "Начните забег, чтобы просмотреть персонажа, оружие и инвентарь. Полный каталог доступен всегда."
     SessionText.NO_MATCHES -> "НИЧЕГО НЕ НАЙДЕНО"
     SessionText.NO_MATCHES_HELP -> "Попробуйте другое название или очистите поиск."
-    SessionText.EMPTY_INVENTORY -> "ИНВЕНТАРЬ ПУСТ"
-    SessionText.EMPTY_INVENTORY_HELP -> "Пока нет предметов в инвентаре или подходящих под фильтр."
+    SessionText.EMPTY_INVENTORY -> "КОЛЛЕКЦИЯ ПУСТА"
+    SessionText.EMPTY_INVENTORY_HELP -> "Находите предметы и реликвии в забегах — они останутся в коллекции."
     SessionText.TAB_BUILD -> "Сборка"
-    SessionText.TAB_CATALOG -> "Каталог"
+    SessionText.TAB_CATALOG -> "Коллекция"
     SessionText.TAB_SYNERGIES -> "Синергии"
     SessionText.COMPACT_LICENSE -> "GPLV3+ // КОД: GITHUB.COM/4WL2D/KINETICKK"
 }

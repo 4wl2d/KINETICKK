@@ -28,6 +28,10 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -35,6 +39,8 @@ import androidx.compose.ui.unit.sp
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.ball.gameplay.api.BuildStatSource
+import kinetickk.ball.profile.api.CollectionEntry
+import kinetickk.ball.profile.api.ProfileCollectionVisits
 import kinetickk.ball.profile.api.HomeProgressProjection
 import kinetickk.ball.profile.api.ProfileReadPort
 import kinetickk.ball.profile.api.ProfileQuery
@@ -46,6 +52,7 @@ import kinetickk.resource.audio.api.AudioService
 
 class DefaultCodexFeature(
     private val profilePort: ProfileReadPort,
+    private val collectionVisits: ProfileCollectionVisits,
     private val uiCatalog: UiCatalogSnapshot,
     audioService: AudioService,
 ) : CodexFeature {
@@ -54,11 +61,16 @@ class DefaultCodexFeature(
 
     @Composable
     override fun Content(runStacks: CodexRunStacks, onOutput: (CodexOutput) -> Unit) {
+        var collectionValue by remember(profilePort) { mutableStateOf(profilePort.query(ProfileQuery.GetCollection)) }
         CodexContent(
             catalog = uiCatalog,
-            model = reducer.renderModel(profilePort.query(ProfileQuery.GetCollection), runStacks),
+            model = reducer.renderModel(collectionValue, runStacks),
             progress = profilePort.query(ProfileQuery.GetHomeProgress),
             scale = profilePort.query(ProfileQuery.GetPreferences).preferences.textScale,
+            onEntryViewed = { entry ->
+                collectionVisits.markViewed(entry)
+                collectionValue = profilePort.query(ProfileQuery.GetCollection)
+            },
             onClose = {
                 audioExecutor.play(SessionAudioCue.UI_CLICK)
                 onOutput(CodexOutput.Back)
@@ -70,8 +82,8 @@ class DefaultCodexFeature(
 private enum class CodexGridContentType { NOTICE, HEADING, SLOT, STAT, SYNERGY }
 
 private val LocalCodexInputEnabled = staticCompositionLocalOf { true }
-private val CodexBackground = Color(0xFF0B0D11)
-private val CodexPanel = Color(0xFF15181D)
+private val CodexBackground = SpaceBlack
+private val CodexPanel = OverlayPanel
 private val SelectionSaver = listSaver<CodexSelection, Any>(
     save = { listOf(it.pinnedKey.orEmpty(), it.sheetOpen) },
     restore = { CodexSelection(pinnedKey = (it[0] as String).ifEmpty { null }, sheetOpen = it[1] as Boolean) },
@@ -79,7 +91,7 @@ private val SelectionSaver = listSaver<CodexSelection, Any>(
 
 /** All navigation, search, expansion and selection here belong to this local Compose lifetime. */
 @Composable
-internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, progress: HomeProgressProjection, scale: Float, onClose: () -> Unit) {
+internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, progress: HomeProgressProjection, scale: Float, onEntryViewed: (CollectionEntry) -> Unit = {}, onClose: () -> Unit) {
     val language = LocalAppLanguage.current
     var tabValue by rememberSaveable { mutableIntStateOf(if (model.runStacks.build == null) 1 else 0) }
     var categoryValue by rememberSaveable { mutableIntStateOf(0) }
@@ -89,7 +101,8 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
     var statsExpandedValue by rememberSaveable { mutableStateOf(false) }
     var statValue by rememberSaveable { mutableStateOf<String?>(null) }
     val build = model.runStacks.build
-    val filter = CodexItemFilter.entries[filterValue]
+    // A restored legacy discovery-only filter is equivalent to the collected catalog.
+    val filter = if (filterValue == CodexItemFilter.IN_BUILD.ordinal) CodexItemFilter.IN_BUILD else CodexItemFilter.ALL
     val searchFocus = remember { FocusRequester() }
     val listFocus = remember { FocusRequester() }
     val slotFocus = remember { mutableMapOf<String, FocusRequester>() }
@@ -115,8 +128,8 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
             addAll(model.items.filter { model.itemStack(it.id) > 0 }.map { codexItemEntry(it, model, language) })
         }
         1 -> codexCatalogEntries(category, search, filter, model, catalog, progress, language)
-        else -> catalog.synergies.map { synergy ->
-            val owned = build?.relics?.map { it.id }?.toSet().orEmpty()
+        else -> catalog.synergies.filter { codexSynergyDiscovered(it, model, catalog) }.map { synergy ->
+            val owned = model.discoveredRelicIds + build?.relics?.map { it.id }.orEmpty()
             val components = codexSynergyComponents(synergy, catalog, owned)
             val summary = build?.synergies?.firstOrNull { it.id == synergy.id.name }
             val active = summary?.active == true
@@ -128,6 +141,23 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                 if (active) language.text(SessionText.ACTIVE) else if (build == null) language.text(SessionText.NO_RUN_INACTIVE) else language.text(SessionText.INACTIVE),
                 CodexIcon.Synergy(components), if (active) Acid else synergy.requiredAspect?.let(::relicAspectColor) ?: Violet)
         }
+    }
+    LaunchedEffect(selectionValue.pinnedKey, selectionValue.sheetOpen) {
+        val entry = entries.firstOrNull { it.key == selectionValue.pinnedKey }
+        if (selectionValue.sheetOpen && entry?.isNew == true) {
+            when (val icon = entry.icon) {
+                is CodexIcon.Item -> onEntryViewed(CollectionEntry.Item(icon.definition.id))
+                is CodexIcon.Relic -> onEntryViewed(CollectionEntry.Relic(icon.definition.id))
+                else -> Unit
+            }
+        }
+    }
+    val collectionTotal = when (category) { 0 -> catalog.items.size; 1 -> catalog.weapons.size; 2 -> catalog.relics.size; else -> catalog.coreShapes.size }
+    val collectionDiscovered = when (category) {
+        0 -> catalog.items.count { model.isDiscovered(it.id) }
+        1 -> catalog.weapons.count { it.id in progress.loadout.unlockedWeapons }
+        2 -> catalog.relics.count { model.isRelicDiscovered(it.id) }
+        else -> progress.unlockedCoreShapes.size
     }
     val emptyState = codexEmptyState(tab, build != null, if (tab == 1) search else "", entries.size)
     val keys = entries.map { it.key }.toSet()
@@ -152,7 +182,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
         }
     }
     LaunchedEffect(Unit) { listFocus.requestFocus() }
-    BoxWithConstraints(Modifier.fillMaxSize().background(CodexBackground).testTag("codex")) {
+    BoxWithConstraints(Modifier.fillMaxSize().drawBehind { drawSectionAtmosphere(Gold) }.testTag("codex")) {
         val availableWidth = maxWidth
         val availableHeight = maxHeight
         val wide = codexUsesSidePanel(availableWidth.value, availableHeight.value)
@@ -168,30 +198,41 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
         }) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 if (compactHeader) CodexNavigationTabs(tab, scale, Modifier.weight(1f)) { tabValue = it }
-                else CodexLabel(language.text(SessionText.CODEX), scale, White, bold = true)
+                else BasicText(language.text(SessionText.CODEX).uppercase(), style = interfaceTextStyle(36f * scale, White, display = true))
+                if (compactHeader && tab == 1) CodexLabel("$collectionDiscovered/$collectionTotal", scale, Gold,
+                    modifier = Modifier.padding(horizontal = 8.dp).testTag("codex-collection-progress"))
                 CodexButton(language.text(SessionText.CLOSE), scale, "codex-close", onClick = onClose)
             }
             if (!compactHeader) CodexNavigationTabs(tab, scale, Modifier.fillMaxWidth()) { tabValue = it }
             if (tab == 1) {
+                if (!compactHeader) {
+                    CodexLabel(language.text(SessionText.COLLECTION_PROGRESS, collectionDiscovered, collectionTotal), scale, Gold,
+                        modifier = Modifier.padding(top = 6.dp).testTag("codex-collection-progress"))
+                    Canvas(Modifier.fillMaxWidth().height(3.dp)) {
+                        drawBar(0f, 0f, size.width, size.height, collectionDiscovered.toFloat() / collectionTotal.coerceAtLeast(1), Gold, DarkLine)
+                    }
+                }
                 Row(Modifier.padding(top = 8.dp).fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     listOf(language.text(SessionText.ITEMS_TITLE), language.text(SessionText.WEAPONS_TITLE), language.text(SessionText.RELICS_TITLE), language.text(SessionText.FORMS_TITLE)).forEachIndexed { index, title ->
                         CodexButton(title, scale, "codex-category-$index", category == index, role = Role.Tab) { categoryValue = index }
                     }
                     if (compactHeader && category == 0) {
                         Spacer(Modifier.width(8.dp))
-                        listOf(SessionText.FILTER_ALL, SessionText.FILTER_DISCOVERED, SessionText.FILTER_BUILD).map { language.text(it) }.forEachIndexed { index, title ->
-                            CodexButton(title, scale, "codex-filter-$index", filterValue == index, enabled = index != 2 || build != null) { filterValue = index }
+                        listOf(0 to SessionText.FILTER_ALL, 2 to SessionText.FILTER_BUILD).forEach { (index, label) ->
+                            val title = language.text(label)
+                            CodexButton(title, scale, "codex-filter-$index", filter.ordinal == index, enabled = index != 2 || build != null) { filterValue = index }
                         }
                     }
                 }
                 BasicTextField(enabled = !sheetVisible, value = search, onValueChange = { searchValue = codexSearchInput(it) }, singleLine = true,
-                    textStyle = TextStyle(color = White, fontSize = (13f * scale).sp), cursorBrush = SolidColor(Cyan),
+                    textStyle = interfaceTextStyle(14f * scale, White), cursorBrush = SolidColor(Cyan),
                     modifier = Modifier.padding(top = 8.dp).fillMaxWidth().background(CodexPanel).border(1.dp, DarkLine)
                         .focusRequester(searchFocus).testTag("codex-search").semantics { contentDescription = language.text(SessionText.SEARCH_DESCRIPTION) }.padding(12.dp),
                     decorationBox = { inner -> Box { if (search.isEmpty()) CodexLabel(language.text(SessionText.SEARCH_PLACEHOLDER), scale, Muted); inner() } })
                 if (category == 0 && !compactHeader) Row(Modifier.fillMaxWidth().padding(top = 6.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf(SessionText.FILTER_ALL, SessionText.FILTER_DISCOVERED, SessionText.FILTER_BUILD).map { language.text(it) }.forEachIndexed { index, title ->
-                        CodexButton(title, scale, "codex-filter-$index", filterValue == index, enabled = index != 2 || build != null) { filterValue = index }
+                    listOf(0 to SessionText.FILTER_ALL, 2 to SessionText.FILTER_BUILD).forEach { (index, label) ->
+                            val title = language.text(label)
+                        CodexButton(title, scale, "codex-filter-$index", filter.ordinal == index, enabled = index != 2 || build != null) { filterValue = index }
                     }
                 }
             }
@@ -205,7 +246,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                             if (priorKeysValue != null && priorKeysValue != resultKey) grid.scrollToItem(0)
                             priorKeysValue = resultKey
                         }
-                        LazyVerticalGrid(GridCells.Adaptive(80.dp), Modifier.fillMaxSize().focusRequester(listFocus).focusable(enabled = !sheetVisible).testTag("codex-grid"),
+                        LazyVerticalGrid(GridCells.Adaptive(104.dp), Modifier.fillMaxSize().focusRequester(listFocus).focusable(enabled = !sheetVisible).testTag("codex-grid"),
                             state = grid, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
                             if (emptyState != CodexEmptyState.NONE) item(key = "empty", contentType = CodexGridContentType.NOTICE, span = { GridItemSpan(maxLineSpan) }) {
                                 EmptyNotice(emptyState, scale)
@@ -290,8 +331,9 @@ private fun CodexSlot(entry: CodexEntry, catalog: UiCatalogSnapshot, scale: Floa
     Box(slotModifier(entry, selection, focus, onSelection).aspectRatio(1f).padding(6.dp)) {
         CodexIcon(entry.icon, catalog, entry.color, Modifier.align(Alignment.Center).fillMaxSize().padding(8.dp))
         if (entry.rarity > 0) BasicText("•".repeat(entry.rarity), Modifier.align(Alignment.TopStart), style = TextStyle(color = entry.color, fontSize = 10.sp))
-        if (!entry.discovered) BasicText("?", Modifier.align(Alignment.TopEnd), style = TextStyle(color = White, fontSize = 12.sp))
-        BasicText(entry.quantity, Modifier.align(Alignment.BottomEnd).background(CodexBackground).padding(horizontal = 2.dp), style = TextStyle(color = White, fontSize = (10f * scale).sp, fontWeight = FontWeight.Bold))
+        if (entry.isNew) DiscoveryBadge(LocalAppLanguage.current.text(SessionText.NEW_DISCOVERY), scale,
+            Modifier.align(Alignment.TopEnd).testTag("codex-new-${entry.key}"))
+        BasicText(entry.quantity, Modifier.align(Alignment.BottomEnd).background(CodexBackground).padding(horizontal = 2.dp), style = interfaceTextStyle(12f * scale, White, FontWeight.Bold))
     }
 }
 
@@ -318,9 +360,9 @@ private fun slotModifier(entry: CodexEntry, selection: CodexSelection, focus: Mu
         }
     }
     val highlighted = selection.previewKey == entry.key || selection.pinnedKey == entry.key
-    return Modifier.background(if (highlighted) Color(0xFF252A31) else CodexPanel)
+    return Modifier.background(if (highlighted) Color(0xFF30372A) else CodexPanel)
         .border(if (highlighted) 2.dp else 1.dp, if (highlighted) entry.color else DarkLine)
-        .testTag("codex-slot-${entry.key}").semantics { contentDescription = "${entry.title} · ${entry.kind} · ${entry.quantity} · ${entry.availability}"; selected = selection.pinnedKey == entry.key }
+        .testTag("codex-slot-${entry.key}").semantics { contentDescription = "${entry.title} · ${entry.kind} · ${entry.quantity} · ${entry.availability}" + if (!entry.discovered) " · ${entry.description}" else ""; selected = selection.pinnedKey == entry.key }
         .focusRequester(requester).focusProperties { canFocus = inputEnabled }.onFocusChanged { state ->
             onSelection { current ->
                 if (state.isFocused) current.copy(focusKey = entry.key, hoverKey = null)
@@ -357,16 +399,21 @@ private fun CodexDetails(entry: CodexEntry?, catalog: UiCatalogSnapshot, scale: 
             CodexLabel(language.text(SessionText.SELECT_SLOT), scale, Cyan, bold = true)
             CodexLabel(language.text(SessionText.SELECT_SLOT_HELP), scale, Muted)
         } else {
-            CodexIcon(entry.icon, catalog, entry.color, Modifier.align(Alignment.CenterHorizontally).size(160.dp))
+            CodexIcon(entry.icon, catalog, entry.color, Modifier.align(Alignment.CenterHorizontally).size(if (entry.discovered) 160.dp else 88.dp))
             CodexLabel(entry.title, scale, entry.color, bold = true, modifier = Modifier.testTag("codex-detail-title"))
             val quantity = when (entry.icon) {
                 is CodexIcon.Relic -> language.text(SessionText.RANK_QUANTITY, entry.quantity)
                 is CodexIcon.Item -> language.text(SessionText.STACK_QUANTITY, entry.quantity)
                 else -> entry.quantity
             }
-            CodexLabel("${entry.kind} · $quantity", scale, entry.color)
-            CodexLabel(entry.availability, scale, White)
-            CodexLabel(entry.description, scale, White)
+            if (entry.discovered) {
+                CodexLabel("${entry.kind} · $quantity", scale, entry.color)
+                CodexLabel(entry.availability, scale, White)
+                CodexLabel(entry.description, scale, White)
+            } else {
+                CodexLabel(entry.description, scale, White)
+                CodexLabel(entry.availability, scale, Gold)
+            }
             Spacer(Modifier.height(12.dp))
         }
     }
@@ -392,6 +439,9 @@ private fun CodexIcon(icon: CodexIcon, catalog: UiCatalogSnapshot, color: Color,
                 val point = center.copy(x = size.width * (if (index == 0) 0.26f else 0.74f))
                 if (id == null) drawCircle(color, radius * 0.53f, point, style = Stroke(radius * 0.07f))
                 else drawRelicIcon(catalog.relic(id), catalog.relicPolicy, point, radius * 0.53f, time = 0f)
+            }
+            CodexIcon.Unknown -> {
+                drawInterfaceGlyph(InterfaceGlyph.LOCK, center, radius * 0.7f, Muted)
             }
             CodexIcon.Empty -> { drawCircle(color.copy(alpha = 0.35f), radius, center, style = Stroke(radius * 0.06f)); drawLine(color, center.copy(x = center.x - radius * 0.4f), center.copy(x = center.x + radius * 0.4f), radius * 0.06f) }
         }
@@ -425,12 +475,19 @@ private fun CodexNavigationTabs(tab: Int, scale: Float, modifier: Modifier, onSe
 @Composable
 private fun CodexButton(text: String, scale: Float, tag: String, selected: Boolean = false, enabled: Boolean = true, role: Role = Role.Button, onClick: () -> Unit) {
     val inputEnabled = enabled && LocalCodexInputEnabled.current
-    BasicText(text, Modifier.testTag(tag).semantics { this.selected = selected }.background(if (selected) Color(0xFF252A31) else CodexPanel)
-        .border(1.dp, if (selected) Cyan.copy(alpha = 0.7f) else Color.Transparent).clickable(enabled = inputEnabled, role = role, onClick = onClick)
-        .padding(horizontal = 10.dp, vertical = 10.dp), style = TextStyle(color = if (!inputEnabled) Muted.copy(alpha = 0.5f) else if (selected) Cyan else White, fontSize = (12f * scale).sp, fontWeight = FontWeight.Bold))
+    val interactions = remember { MutableInteractionSource() }
+    val hovered by interactions.collectIsHoveredAsState()
+    val focused by interactions.collectIsFocusedAsState()
+    val highlighted = inputEnabled && (selected || hovered || focused)
+    BasicText(text, Modifier.testTag(tag).semantics { this.selected = selected }
+        .drawBehind { drawKineticRibbon(Rect(Offset.Zero, size), if (highlighted) Gold else CodexPanel, 6.dp.toPx()) }
+        .border(1.dp, if (focused) White else Color.Transparent)
+        .hoverable(interactions).clickable(enabled = inputEnabled, role = role, interactionSource = interactions, indication = null, onClick = onClick)
+        .padding(horizontal = 14.dp, vertical = 11.dp), style = interfaceTextStyle(14f * scale,
+            if (!inputEnabled) Muted.copy(alpha = 0.5f) else if (highlighted) SpaceBlack else White, FontWeight.Bold, display = true))
 }
 
 @Composable
 private fun CodexLabel(text: String, scale: Float, color: Color = White, bold: Boolean = false, modifier: Modifier = Modifier) {
-    BasicText(text, modifier, style = TextStyle(color = color, fontSize = ((if (bold) 14f else 12f) * scale).sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal))
+    BasicText(text, modifier, style = interfaceTextStyle((if (bold) 18f else 14f) * scale, color, if (bold) FontWeight.Bold else FontWeight.Normal, display = bold))
 }

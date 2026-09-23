@@ -68,6 +68,6 @@ class GameplayApiContractTest {
 
     @Test
     fun configurationRejectionInventoryRemainsExact() {
-        assertEquals(9, GameplayConfigurationRejection.entries.size)
+        assertEquals(10, GameplayConfigurationRejection.entries.size)
     }
 }

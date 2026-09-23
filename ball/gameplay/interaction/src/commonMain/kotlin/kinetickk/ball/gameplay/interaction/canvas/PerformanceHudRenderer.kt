@@ -93,11 +93,11 @@ private fun DrawScope.drawCompactPerformanceHud(
     val controlReserve = d(136f)
     val width = min(d(220f), size.width - d(16f) - controlReserve).coerceAtLeast(d(180f))
     val height = d(100f)
-    val fontSize = 6f
+    val fontSize = 8f
     val textLeft = left + d(8f)
     val maxTextWidth = width - d(16f)
 
-    drawRect(Color(0xE9050610), Offset(left, top), Size(width, height))
+    drawRect(kinetickk.foundation.design.OverlayPanel, Offset(left, top), Size(width, height))
     drawRect(Cyan.copy(alpha = 0.82f), Offset(left, top), Size(width, height), style = Stroke(d(1f)))
     drawLabel(
         textMeasurer = textMeasurer,
@@ -129,11 +129,11 @@ private fun DrawScope.drawRegularPerformanceHud(
 ) {
     val width = min(d(610f), size.width - d(16f)).coerceAtLeast(d(180f))
     val height = d(116f)
-    val fontSize = if (size.width / density < 760f) 5.5f else 7f
+    val fontSize = if (size.width / density < 760f) 8f else 9f
     val textLeft = left + d(8f)
     val maxTextWidth = width - d(16f)
 
-    drawRect(Color(0xE9050610), Offset(left, top), Size(width, height))
+    drawRect(kinetickk.foundation.design.OverlayPanel, Offset(left, top), Size(width, height))
     drawRect(Cyan.copy(alpha = 0.82f), Offset(left, top), Size(width, height), style = Stroke(d(1f)))
     drawLabel(
         textMeasurer = textMeasurer,

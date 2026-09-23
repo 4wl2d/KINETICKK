@@ -10,9 +10,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
-import kinetickk.foundation.design.Cyan
+import kinetickk.foundation.design.*
 import kinetickk.foundation.design.DarkLine
 import kinetickk.foundation.design.Gold
 import kinetickk.foundation.design.Muted
@@ -42,19 +41,22 @@ internal fun DrawScope.drawSettings(
     group: SettingsGroup,
     textMeasurer: TextMeasurer,
 ) {
-    drawRect(Color(0xD9050610))
+    drawSectionAtmosphere(Violet)
     val layout = settingsLayout(size.width, size.height, density, group, page)
     val bounds = layout.bounds
     drawOverlayFrame(bounds, Violet)
-    drawLabel(textMeasurer, textMeasurer.language.text(ProfileText.SettingsTitle), bounds.left + d(24f), bounds.top + d(12f), 19f, White, weight = FontWeight.Bold)
+    val compact = size.height / density < 480f
+    val narrow = size.width / density < 600f
+    drawLabel(textMeasurer, textMeasurer.language.text(ProfileText.SettingsTitle).uppercase(), bounds.left + d(24f), bounds.top + d(8f),
+        if (compact) 26f else 32f, White, display = true, maxWidth = bounds.width - d(48f))
 
     layout.tabs.forEach { tab ->
         val selected = tab.group == group
-        if (selected) drawLine(Cyan, tab.bounds.bottomLeft, tab.bounds.bottomRight, d(2f))
+        if (selected) drawKineticRibbon(tab.bounds, Violet, d(7f))
         drawLabel(
             textMeasurer, textMeasurer.language.text(tab.group.label), tab.bounds.center.x,
-            tab.bounds.center.y - d(6f * textMeasurer.scale), 10f, if (selected) White else Muted,
-            centered = true, weight = FontWeight.Bold, maxWidth = tab.bounds.width - d(12f),
+            tab.bounds.center.y - d(12f * textMeasurer.scale), 12f, if (selected) SpaceBlack else Muted,
+            centered = true, display = true, maxWidth = tab.bounds.width - d(12f),
         )
     }
     val spacing = layout.spacing
@@ -66,12 +68,12 @@ internal fun DrawScope.drawSettings(
         val controlRight = bounds.right - d(20f)
         val controlTop = top + d(4f)
         val controlHeight = rowHeight - d(8f)
-        val labelY = top + d(3f)
-        val valueY = top + max(0f, (rowHeight - d(8f * textMeasurer.scale)) * 0.5f)
+        val labelY = top + d(10f)
+        val valueY = top + max(0f, (rowHeight - d(12f * textMeasurer.scale)) * 0.5f)
         val buttonY = top + max(0f, (rowHeight - d(14f * textMeasurer.scale)) * 0.5f)
         val value = settingValue(model.preferences, row, textMeasurer.language)
         drawLine(DarkLine.copy(alpha = 0.5f), Offset(bounds.left + d(20f), top + rowHeight), Offset(bounds.right - d(20f), top + rowHeight), d(1f))
-        drawLabel(textMeasurer, textMeasurer.language.text(SETTINGS_LABELS[row.ordinal]), bounds.left + d(30f), labelY, 10f, White, maxWidth = controlLeft - bounds.left - d(40f), maxLines = 2)
+        drawLabel(textMeasurer, textMeasurer.language.text(SETTINGS_LABELS[row.ordinal]), bounds.left + d(30f), labelY, if (narrow) 11f else 14f, White, maxWidth = controlLeft - bounds.left - d(40f), maxLines = 2)
         if (row == SettingsRow.LANGUAGE) {
             AppLanguage.entries.forEachIndexed { languageIndex, language ->
                 val optionWidth = (controlRight - controlLeft) * 0.5f
@@ -79,7 +81,7 @@ internal fun DrawScope.drawSettings(
                 val selected = model.preferences.language == language
                 if (selected) drawRect(White.copy(alpha = 0.08f), Offset(optionLeft, controlTop), Size(optionWidth, controlHeight))
                 if (selected) drawLine(Cyan, Offset(optionLeft, controlTop + controlHeight), Offset(optionLeft + optionWidth, controlTop + controlHeight), d(2f))
-                drawLabel(textMeasurer, language.nativeName, optionLeft + optionWidth * 0.5f, valueY, 8f, if (selected) White else Muted, centered = true, maxWidth = optionWidth - d(6f))
+                drawLabel(textMeasurer, language.nativeName, optionLeft + optionWidth * 0.5f, valueY, if (narrow) 9f else 11f, if (selected) White else Muted, centered = true, maxWidth = optionWidth - d(6f))
             }
             return@forEachIndexed
         }
@@ -100,7 +102,7 @@ internal fun DrawScope.drawSettings(
         val valueColor = when {
             value == textMeasurer.language.text(ProfileText.Off) -> Muted
             row == SettingsRow.DAMAGE_COLOR_THRESHOLDS -> Orange
-            else -> Cyan
+            else -> KineticAccent
         }
         val displayValue = if (row == SettingsRow.DAMAGE_COLOR_THRESHOLDS && value.length > 12) {
             value.replace('/', '\n')
@@ -109,7 +111,7 @@ internal fun DrawScope.drawSettings(
         drawLabel(
             textMeasurer, displayValue, (controlLeft + controlRight) * 0.5f,
             if (stackedValue) top + d(1f) else valueY,
-            if (stackedValue) 5.5f else 8f, valueColor, centered = true, weight = FontWeight.Bold,
+            if (stackedValue) 7f else if (narrow) 9f else 11f, valueColor, centered = true, weight = FontWeight.Bold,
             maxWidth = controlRight - controlLeft - d(86f), maxLines = if (stackedValue) 3 else 1,
         )
     }

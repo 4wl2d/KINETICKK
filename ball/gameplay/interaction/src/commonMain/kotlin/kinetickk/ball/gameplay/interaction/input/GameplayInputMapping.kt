@@ -5,12 +5,10 @@ package kinetickk.ball.gameplay.interaction.input
 
 import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
-import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.PauseTarget
 import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
 import kinetickk.ball.gameplay.interaction.layout.containsInclusive
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
-import kinetickk.ball.gameplay.interaction.layout.gameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
@@ -145,7 +143,6 @@ private fun runningControlTargetAt(
     x: Float,
     y: Float,
 ): RunningControlTarget? {
-    val mode = gameplayLayoutMode(screenWidth, screenHeight, uiScale)
     var matched: RunningControlTarget? = null
     forEachRunningControlBounds(
         screenWidth,
@@ -153,18 +150,8 @@ private fun runningControlTargetAt(
         uiScale,
     ) { target, left, top, right, bottom ->
         if (matched != null) return@forEachRunningControlBounds
-        val hit = if (mode == GameplayLayoutMode.REGULAR) {
-            val radius = (right - left) * 0.5f
-            distanceSquared(x, y, (left + right) * 0.5f, (top + bottom) * 0.5f) <
-                square(radius)
-        } else {
-            x in left..right && y in top..bottom
-        }
+        val hit = x in left..right && y in top..bottom
         if (hit) matched = target
     }
     return matched
 }
-
-private fun square(value: Float): Float = value * value
-private fun distanceSquared(ax: Float, ay: Float, bx: Float, by: Float): Float =
-    square(ax - bx) + square(ay - by)

@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.interaction.localization
 
 internal fun russianGameplayText(key: GameplayText): String = when (key) {
+    GameplayText.NewDiscovery -> "Новый!"
     GameplayText.DetailedStatistics -> "Статистика забега"
     GameplayText.CombatStatistics -> "БОЙ"
     GameplayText.LootStatistics -> "СБОР И РАЗВИТИЕ"

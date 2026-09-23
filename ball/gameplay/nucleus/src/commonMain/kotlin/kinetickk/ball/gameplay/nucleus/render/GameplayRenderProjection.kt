@@ -232,6 +232,7 @@ class GameplayRenderModel(
     val characterAbility: CharacterAbilityProjection = CharacterAbilityProjection(),
     val effectiveWeaponPower: Float = weaponPower,
     val rewardPreviews: ImmutableList<RewardPreview> = kinetickk.foundation.collections.immutableListOf(),
+    internal val discoveredRelicMask: Long = 0L,
 ) {
     val speed: Float get() = vectorLength(velocityX, velocityY)
     val runProgress: Float get() = content.tempo.progress(elapsed)
@@ -252,6 +253,8 @@ class GameplayRenderModel(
             else -> 0
         }
     val discoveredItemCount: Int get() = discoveredItemIds.size
+    fun isItemDiscovered(id: Int): Boolean = id in discoveredItemIds
+    fun isRelicDiscovered(id: kinetickk.ball.content.api.RelicId): Boolean = discoveredRelicMask and (1L shl id.ordinal) != 0L
     val currentWeaponDefinition: WeaponDefinition get() = content.weapon(weapon)
     val currentWeaponMastery: WeaponMastery get() = content.weaponMasteryForLevel(weaponLevel)
     val nextWeaponMastery: WeaponMastery? get() = content.weaponMasteryAfter(weaponLevel)

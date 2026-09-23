@@ -25,14 +25,15 @@ internal class CodexReducer(private val items: ImmutableList<ItemDefinition>) {
     }
 
     fun renderModel(projection: CollectionProjection, runStacks: CodexRunStacks): CodexRenderModel =
-        CodexRenderModel(projection.collection.discoveredItemIds, runStacks, items)
+        CodexRenderModel(projection.collection.discoveredItemIds, runStacks, items,
+            projection.collection.newItemIds, projection.collection.discoveredRelicIds, projection.collection.newRelicIds)
 }
 
 internal fun codexSearchInput(input: String): String = input.take(CODEX_SEARCH_LIMIT)
 
 internal fun codexFilteredItems(model: CodexRenderModel, search: String, filter: CodexItemFilter, language: AppLanguage = AppLanguage.English): List<ItemDefinition> =
     model.items.filter { item ->
-        item.name.localizedContent(language).contains(search, ignoreCase = true) && when (filter) {
+        model.isDiscovered(item.id) && item.name.localizedContent(language).contains(search, ignoreCase = true) && when (filter) {
             CodexItemFilter.ALL -> true
             CodexItemFilter.DISCOVERED -> model.isDiscovered(item.id)
             CodexItemFilter.IN_BUILD -> model.runStacks.build != null && model.itemStack(item.id) > 0

@@ -8,9 +8,7 @@ import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.foundation.common.localization.text
 
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.foundation.design.*
@@ -27,8 +25,8 @@ internal fun DrawScope.drawBuildNotifications(fx: VisualFxProjection, textMeasur
     notices.forEachIndexed { index, notice ->
         val top = bottom - (notices.size - index) * rowHeight
         val alpha = (notice.life / 0.6f).coerceIn(0f, 1f)
-        drawRect(Color(0xE80D1729).copy(alpha = 0.9f * alpha), Offset(right - width, top), Size(width, rowHeight - d(4f)))
-        drawLabel(textMeasurer, notice.title.localizedContent(textMeasurer.language), right - width + d(9f), top + d(6f), 8f, Cyan, maxWidth = width - d(18f), maxLines = 1, alpha = alpha)
-        drawLabel(textMeasurer, notice.details.joinToString(" · ") { it.localizedContent(textMeasurer.language) }.ifEmpty { textMeasurer.language.text(GameplayText.BuildUpdated) }, right - width + d(9f), top + d(22f), 7f, White, maxWidth = width - d(18f), maxLines = 3, alpha = alpha)
+        drawKineticRibbon(Rect(right - width, top, right, top + rowHeight - d(4f)), OverlayPanel.copy(alpha = alpha), d(8f))
+        drawLabel(textMeasurer, notice.title.localizedContent(textMeasurer.language), right - width + d(9f), top + d(6f), 12f, KineticAccent, maxWidth = width - d(18f), maxLines = 1, alpha = alpha)
+        drawLabel(textMeasurer, notice.details.joinToString(" · ") { it.localizedContent(textMeasurer.language) }.ifEmpty { textMeasurer.language.text(GameplayText.BuildUpdated) }, right - width + d(9f), top + d(28f), 10f, White, maxWidth = width - d(18f), maxLines = 3, alpha = alpha)
     }
 }

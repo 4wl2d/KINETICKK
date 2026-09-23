@@ -4,6 +4,7 @@
 package kinetickk.ball.profile.resource
 
 import kinetickk.ball.content.api.ContentBounds
+import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.WeaponId
@@ -179,9 +180,13 @@ private data class MetaUpgradeRankDto(
     val rank: Int,
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 private data class PlayerCollectionDto(
     val discoveredItemIds: List<Int>,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val newItemIds: List<Int> = emptyList(),
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val discoveredRelicIds: List<String> = emptyList(),
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val newRelicIds: List<String> = emptyList(),
 )
 
 @Serializable
@@ -245,6 +250,9 @@ private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
             labProgress = LabProgressDto(ranks),
             collection = PlayerCollectionDto(
                 profile.collection.discoveredItemIds.sorted(),
+                profile.collection.newItemIds.sorted(),
+                profile.collection.discoveredRelicIds.map(RelicId::wireId).sorted(),
+                profile.collection.newRelicIds.map(RelicId::wireId).sorted(),
             ),
             characterAchievements = CharacterAchievementProgressDto(
                 eliteKills = profile.characterAchievements.eliteKills.toString(),
@@ -267,22 +275,27 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
     val expectedRankIds = MetaUpgradeId.entries.map { it.wireId() }.sorted()
     val actualRankIds = profile.labProgress.ranks.map(MetaUpgradeRankDto::id)
     rejectUnless(
-        actualRankIds == actualRankIds.distinct().sorted() && actualRankIds == expectedRankIds,
+        actualRankIds.isStrictlySorted() && actualRankIds == expectedRankIds,
         ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
     )
     rejectUnless(
-        profile.loadout.unlockedWeaponIds == profile.loadout.unlockedWeaponIds.distinct().sorted(),
+        profile.loadout.unlockedWeaponIds.isStrictlySorted(),
         ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
     )
     rejectUnless(
-        profile.collection.discoveredItemIds ==
-            profile.collection.discoveredItemIds.distinct().sorted(),
+        profile.collection.discoveredItemIds.isStrictlySorted(),
         ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
     )
 
     rejectUnless(
-        profile.characterAchievements.victoriousCharacterIds ==
-            profile.characterAchievements.victoriousCharacterIds.distinct().sorted(),
+        profile.characterAchievements.victoriousCharacterIds.isStrictlySorted(),
+        ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
+    )
+
+    rejectUnless(
+        profile.collection.newItemIds.isStrictlySorted() &&
+            profile.collection.discoveredRelicIds.isStrictlySorted() &&
+            profile.collection.newRelicIds.isStrictlySorted(),
         ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
     )
 
@@ -318,7 +331,12 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
             unlockedWeapons = profile.loadout.unlockedWeaponIds.mapTo(mutableSetOf()) { it.weaponId() },
         ),
         labProgress = LabProgress(metaRanks),
-        collection = PlayerCollection(profile.collection.discoveredItemIds.toSet()),
+        collection = PlayerCollection(
+            discoveredItemIds = profile.collection.discoveredItemIds.toSet(),
+            newItemIds = profile.collection.newItemIds.toSet(),
+            discoveredRelicIds = profile.collection.discoveredRelicIds.relicIds(),
+            newRelicIds = profile.collection.newRelicIds.relicIds(),
+        ),
         characterAchievements = CharacterAchievementProgress(
             eliteKills = profile.characterAchievements.eliteKills.parseCanonicalNonNegativeLong(),
             dashHits = profile.characterAchievements.dashHits.parseCanonicalNonNegativeLong(),
@@ -389,11 +407,27 @@ private fun validateProfile(profile: PlayerProfile) {
         ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
     )
     rejectUnless(
+        profile.collection.discoveredItemIds.containsAll(profile.collection.newItemIds) &&
+            profile.collection.discoveredRelicIds.containsAll(profile.collection.newRelicIds) &&
+            profile.collection.discoveredRelicIds.size <= ContentBounds.MAX_RELICS,
+        ProfileSnapshotRejection.INCONSISTENT_PROFILE,
+    )
+    rejectUnless(
         profile.rebirthProgress.level in ContentBounds.MIN_REBIRTH_LEVEL..ContentBounds.MAX_REBIRTH_LEVEL &&
             profile.rebirthProgress.highestCleared in -1..profile.rebirthProgress.level,
         ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
     )
 }
+
+private fun <T : Comparable<T>> List<T>.isStrictlySorted(): Boolean {
+    for (index in 1 until size) {
+        if (this[index - 1] >= this[index]) return false
+    }
+    return true
+}
+
+private fun List<String>.relicIds(): Set<RelicId> =
+    if (isEmpty()) emptySet() else mapTo(mutableSetOf()) { it.relicId() }
 
 private fun Float.toPercent(): Int {
     rejectUnless(isFinite(), ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
@@ -481,6 +515,94 @@ private fun String.metaUpgradeId(): MetaUpgradeId = when (this) {
     "SALVAGE_PROTOCOL" -> MetaUpgradeId.SALVAGE_PROTOCOL
     "DATA_ARCHIVE" -> MetaUpgradeId.DATA_ARCHIVE
     "ARMORY_LICENSE" -> MetaUpgradeId.ARMORY_LICENSE
+    else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
+}
+
+
+private fun RelicId.wireId(): String = when (this) {
+    RelicId.KINETIC_FLYWHEEL -> "KINETIC_FLYWHEEL"
+    RelicId.GHOST_VECTOR -> "GHOST_VECTOR"
+    RelicId.OVERTAKE_PROTOCOL -> "OVERTAKE_PROTOCOL"
+    RelicId.SLIPSTREAM_RELAY -> "SLIPSTREAM_RELAY"
+    RelicId.BRAKEPOINT_MEMORY -> "BRAKEPOINT_MEMORY"
+    RelicId.POLARITY_SLING -> "POLARITY_SLING"
+    RelicId.ORBITAL_NAIL -> "ORBITAL_NAIL"
+    RelicId.EVENTIDE_ANCHOR -> "EVENTIDE_ANCHOR"
+    RelicId.PERIAPSIS_HOOK -> "PERIAPSIS_HOOK"
+    RelicId.CRUSH_DEPTH -> "CRUSH_DEPTH"
+    RelicId.MASS_ECHO -> "MASS_ECHO"
+    RelicId.TIDAL_LOCK -> "TIDAL_LOCK"
+    RelicId.VOLTAIC_FILAMENT -> "VOLTAIC_FILAMENT"
+    RelicId.STATIC_CHORUS -> "STATIC_CHORUS"
+    RelicId.ION_DEBT -> "ION_DEBT"
+    RelicId.CIRCUIT_BREAKER -> "CIRCUIT_BREAKER"
+    RelicId.RETURN_CIRCUIT -> "RETURN_CIRCUIT"
+    RelicId.STORM_INDEX -> "STORM_INDEX"
+    RelicId.ECHO_CHAMBER -> "ECHO_CHAMBER"
+    RelicId.PALIMPSEST_ROUND -> "PALIMPSEST_ROUND"
+    RelicId.SECOND_HAND -> "SECOND_HAND"
+    RelicId.FRACTURE_GATE -> "FRACTURE_GATE"
+    RelicId.SPLIT_HORIZON -> "SPLIT_HORIZON"
+    RelicId.BORROWED_MOMENT -> "BORROWED_MOMENT"
+    RelicId.GLASS_WITNESS -> "GLASS_WITNESS"
+    RelicId.FRACTURE_LENS -> "FRACTURE_LENS"
+    RelicId.SPECTRAL_FAN -> "SPECTRAL_FAN"
+    RelicId.HARDLIGHT_EDGE -> "HARDLIGHT_EDGE"
+    RelicId.CHROMA_FEEDBACK -> "CHROMA_FEEDBACK"
+    RelicId.MIRROR_CUT -> "MIRROR_CUT"
+    RelicId.HEAT_DEBT -> "HEAT_DEBT"
+    RelicId.SCAR_TISSUE -> "SCAR_TISSUE"
+    RelicId.QUIETUS_BLOOM -> "QUIETUS_BLOOM"
+    RelicId.DEVOURERS_TOLL -> "DEVOURERS_TOLL"
+    RelicId.DOOM_CLOCK -> "DOOM_CLOCK"
+    RelicId.LAST_LIGHT -> "LAST_LIGHT"
+    RelicId.AGONY_SCEPTER -> "AGONY_SCEPTER"
+    RelicId.CROWN_OF_FOUR_WINDS -> "CROWN_OF_FOUR_WINDS"
+    RelicId.MIRROR_OF_THE_HUNT -> "MIRROR_OF_THE_HUNT"
+    RelicId.ENGINE_OF_PARADOX -> "ENGINE_OF_PARADOX"
+}
+
+private fun String.relicId(): RelicId = when (this) {
+    "KINETIC_FLYWHEEL" -> RelicId.KINETIC_FLYWHEEL
+    "GHOST_VECTOR" -> RelicId.GHOST_VECTOR
+    "OVERTAKE_PROTOCOL" -> RelicId.OVERTAKE_PROTOCOL
+    "SLIPSTREAM_RELAY" -> RelicId.SLIPSTREAM_RELAY
+    "BRAKEPOINT_MEMORY" -> RelicId.BRAKEPOINT_MEMORY
+    "POLARITY_SLING" -> RelicId.POLARITY_SLING
+    "ORBITAL_NAIL" -> RelicId.ORBITAL_NAIL
+    "EVENTIDE_ANCHOR" -> RelicId.EVENTIDE_ANCHOR
+    "PERIAPSIS_HOOK" -> RelicId.PERIAPSIS_HOOK
+    "CRUSH_DEPTH" -> RelicId.CRUSH_DEPTH
+    "MASS_ECHO" -> RelicId.MASS_ECHO
+    "TIDAL_LOCK" -> RelicId.TIDAL_LOCK
+    "VOLTAIC_FILAMENT" -> RelicId.VOLTAIC_FILAMENT
+    "STATIC_CHORUS" -> RelicId.STATIC_CHORUS
+    "ION_DEBT" -> RelicId.ION_DEBT
+    "CIRCUIT_BREAKER" -> RelicId.CIRCUIT_BREAKER
+    "RETURN_CIRCUIT" -> RelicId.RETURN_CIRCUIT
+    "STORM_INDEX" -> RelicId.STORM_INDEX
+    "ECHO_CHAMBER" -> RelicId.ECHO_CHAMBER
+    "PALIMPSEST_ROUND" -> RelicId.PALIMPSEST_ROUND
+    "SECOND_HAND" -> RelicId.SECOND_HAND
+    "FRACTURE_GATE" -> RelicId.FRACTURE_GATE
+    "SPLIT_HORIZON" -> RelicId.SPLIT_HORIZON
+    "BORROWED_MOMENT" -> RelicId.BORROWED_MOMENT
+    "GLASS_WITNESS" -> RelicId.GLASS_WITNESS
+    "FRACTURE_LENS" -> RelicId.FRACTURE_LENS
+    "SPECTRAL_FAN" -> RelicId.SPECTRAL_FAN
+    "HARDLIGHT_EDGE" -> RelicId.HARDLIGHT_EDGE
+    "CHROMA_FEEDBACK" -> RelicId.CHROMA_FEEDBACK
+    "MIRROR_CUT" -> RelicId.MIRROR_CUT
+    "HEAT_DEBT" -> RelicId.HEAT_DEBT
+    "SCAR_TISSUE" -> RelicId.SCAR_TISSUE
+    "QUIETUS_BLOOM" -> RelicId.QUIETUS_BLOOM
+    "DEVOURERS_TOLL" -> RelicId.DEVOURERS_TOLL
+    "DOOM_CLOCK" -> RelicId.DOOM_CLOCK
+    "LAST_LIGHT" -> RelicId.LAST_LIGHT
+    "AGONY_SCEPTER" -> RelicId.AGONY_SCEPTER
+    "CROWN_OF_FOUR_WINDS" -> RelicId.CROWN_OF_FOUR_WINDS
+    "MIRROR_OF_THE_HUNT" -> RelicId.MIRROR_OF_THE_HUNT
+    "ENGINE_OF_PARADOX" -> RelicId.ENGINE_OF_PARADOX
     else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
 }
 

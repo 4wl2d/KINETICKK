@@ -3,6 +3,8 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.foundation.collections.toImmutableSet
+
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
@@ -228,9 +230,18 @@ internal fun MutableGameState.openRelicBindChoice() {
     phase = GamePhase.CHOICE
 }
 
+private fun MutableGameState.discoverRelic(id: RelicId) {
+    val bit = 1L shl id.ordinal
+    if (discoveredRelicMask and bit == 0L) {
+        discoveredRelicMask = discoveredRelicMask or bit
+        pendingDiscoveredRelicMask = pendingDiscoveredRelicMask or bit
+    }
+}
+
 internal fun MutableGameState.acquireRelic(id: RelicId) {
     val currentIndex = equippedRelics.indexOfFirst { it.id == id }
     if (currentIndex >= 0) {
+        discoverRelic(id)
         val current = equippedRelics[currentIndex]
         if (current.rank >= content.relicPolicy.maxRank) {
             grantMatter(8f)
@@ -246,6 +257,7 @@ internal fun MutableGameState.acquireRelic(id: RelicId) {
         return
     }
     if (equippedRelics.size >= content.relicPolicy.maxSlots) return
+    discoverRelic(id)
     equippedRelics = equippedRelics + EquippedRelic(id, 1)
     relicRanks[id.ordinal] = 1
     message = content.relic(id).name.uppercase() + " // BOUND"
@@ -257,6 +269,7 @@ internal fun MutableGameState.replaceRelic(slot: Int, id: RelicId) {
     val replaced = equippedRelics[slot]
     clearRelicRuntime(replaced.id)
     val updated = equippedRelics.toMutableList()
+    discoverRelic(id)
     updated[slot] = EquippedRelic(id, 1)
     equippedRelics = updated.toList()
     relicRanks[replaced.id.ordinal] = 0
@@ -449,7 +462,7 @@ internal fun MutableGameState.bankRunMatter() {
 internal fun MutableGameState.takeProgressUpdate(): GameplayProgressUpdate? {
     if (
         pendingBankedMatter == 0L &&
-        pendingDiscoveredItemIds.isEmpty() &&
+        pendingDiscoveredItemIds.isEmpty() && pendingDiscoveredRelicMask == 0L &&
         pendingClearedRebirthLevel == null && pendingEliteKills == 0 && pendingDashHits == 0 &&
         pendingCompletedOrbits == 0 && pendingArchitectDefeatedWith == null
     ) {
@@ -458,12 +471,14 @@ internal fun MutableGameState.takeProgressUpdate(): GameplayProgressUpdate? {
     val update = GameplayProgressUpdate(
         bankedMatter = pendingBankedMatter,
         discoveredItemIds = pendingDiscoveredItemIds.toImmutableSet(),
+        discoveredRelicIds = RelicId.entries.filter { pendingDiscoveredRelicMask and (1L shl it.ordinal) != 0L }.toImmutableSet(),
         clearedRebirthLevel = pendingClearedRebirthLevel,
         eliteKills = pendingEliteKills, dashHits = pendingDashHits,
         completedOrbits = pendingCompletedOrbits, architectDefeatedWith = pendingArchitectDefeatedWith,
     )
     pendingBankedMatter = 0L
     pendingDiscoveredItemIds.clear()
+    pendingDiscoveredRelicMask = 0L
     pendingClearedRebirthLevel = null
     pendingEliteKills = 0
     pendingDashHits = 0

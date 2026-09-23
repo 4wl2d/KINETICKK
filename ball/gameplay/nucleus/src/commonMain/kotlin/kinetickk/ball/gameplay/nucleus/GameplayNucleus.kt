@@ -379,6 +379,9 @@ object GameplayNucleus {
         if (profile.collection.discoveredItemIds.any { content.item(it) == null }) {
             return GameplayConfigurationRejection.UNKNOWN_DISCOVERED_ITEM
         }
+        if (profile.collection.discoveredRelicIds.any { id -> content.relics.none { it.id == id } }) {
+            return GameplayConfigurationRejection.UNKNOWN_DISCOVERED_RELIC
+        }
         if (
             profile.rebirthProgress.level !in content.rebirth.minimumLevel..content.rebirth.maximumLevel ||
             profile.rebirthProgress.highestCleared !in -1..profile.rebirthProgress.level

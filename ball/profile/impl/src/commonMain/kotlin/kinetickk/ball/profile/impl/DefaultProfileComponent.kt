@@ -55,6 +55,9 @@ internal class DefaultProfileComponent(
     override fun accept(pulse: ProfilePulse.Business): ProfileAcceptance =
         dispatchLocal(pulse)
 
+    override fun markViewed(entry: kinetickk.ball.profile.api.CollectionEntry): ProfileAcceptance =
+        accept(ProfilePulse.MarkCollectionEntryViewed(entry))
+
     override fun toggleMute(reply: InlineReply<ProfileSettingsChanged, ProfileRefusal>) =
         dispatchCommand(ProfileWorkItem.Settings(reply))
 

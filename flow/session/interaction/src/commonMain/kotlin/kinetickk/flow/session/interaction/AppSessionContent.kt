@@ -7,6 +7,10 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.CompositionLocalProvider
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.LocalCrashDiagnostics
@@ -90,8 +94,8 @@ fun AppSessionContent(
     }
 
     SideEffect(sessionPort, shellValue.base, shellValue.overlay) {
-        // Home has no focus owner of its own. Reclaim keyboard input after an
-        // overlay disposes its focused control; Gameplay restores its own focus.
+        // Establish fallback routing after an overlay disposes its focused control.
+        // Home can focus a semantic action after layout; Gameplay restores its own focus.
         if (shellValue.base == AppDestination.Home && shellValue.overlay == null) {
             focusRequester.requestFocus()
         }
@@ -100,10 +104,16 @@ fun AppSessionContent(
     SideEffect(languageValue, onLanguageChanged) { onLanguageChanged(languageValue) }
 
     val normalInputEnabled = shellValue.normalInputEnabled
+    val entrance = remember { Animatable(1f) }
+    LaunchedEffect(shellValue.base, shellValue.overlay) {
+        entrance.snapTo(0.55f)
+        entrance.animateTo(1f, tween(220))
+    }
     CompositionLocalProvider(LocalAppLanguage provides languageValue) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .graphicsLayer { alpha = entrance.value }
                 .focusRequester(focusRequester)
                 .onPreviewKeyEvent { event ->
                     // Codex owns text entry, slot activation and its two-step Escape.

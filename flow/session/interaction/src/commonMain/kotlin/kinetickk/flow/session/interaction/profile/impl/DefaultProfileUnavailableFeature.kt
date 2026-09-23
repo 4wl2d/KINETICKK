@@ -30,7 +30,7 @@ class DefaultProfileUnavailableFeature : ProfileUnavailableFeature {
     @Composable
     override fun Content() {
         val language = LocalAppLanguage.current
-        val textMeasurer = CanvasTextMeasurer(rememberTextMeasurer(cacheSize = 8), scale = 1f, language = language)
+        val textMeasurer = CanvasTextMeasurer(rememberTextMeasurer(cacheSize = 8), scale = 1f, language = language, typography = kinetickk.foundation.design.rememberInterfaceTypography())
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
@@ -53,7 +53,7 @@ class DefaultProfileUnavailableFeature : ProfileUnavailableFeature {
 
 private fun DrawScope.drawProfileUnavailable(textMeasurer: TextMeasurer) {
     val language = textMeasurer.language
-    drawRect(SpaceBlack.copy(alpha = 0.94f))
+    drawRect(SpaceBlack)
     val width = minOf(d(720f), size.width - d(30f))
     val height = minOf(d(300f), size.height - d(30f))
     val left = (size.width - width) * 0.5f
@@ -65,7 +65,7 @@ private fun DrawScope.drawProfileUnavailable(textMeasurer: TextMeasurer) {
         language.text(SessionText.PROFILE_UNAVAILABLE),
         bounds.left + d(32f),
         bounds.top + d(34f),
-        20f,
+        26f,
         Red,
         weight = FontWeight.Bold,
     )
@@ -74,7 +74,7 @@ private fun DrawScope.drawProfileUnavailable(textMeasurer: TextMeasurer) {
         language.text(SessionText.PROFILE_UNAVAILABLE_BODY),
         bounds.left + d(40f),
         bounds.top + d(112f),
-        10f,
+        14f,
         White,
         maxWidth = bounds.width - d(80f),
         maxLines = 4,

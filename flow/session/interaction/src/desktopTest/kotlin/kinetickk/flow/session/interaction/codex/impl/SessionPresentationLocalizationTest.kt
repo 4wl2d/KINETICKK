@@ -15,11 +15,14 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.input.key.Key
+import kinetickk.flow.session.interaction.home.api.HomeOutput
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.profile.api.*
 import kinetickk.flow.session.interaction.codex.api.CodexRenderModel
 import kinetickk.flow.session.interaction.codex.api.CodexRunStacks
 import kinetickk.flow.session.interaction.home.impl.DefaultHomeFeature
+import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.collections.immutableSetOf
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.LocalAppLanguage
@@ -30,9 +33,37 @@ import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
 import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 @OptIn(ExperimentalTestApi::class)
 class SessionPresentationLocalizationTest {
+    @Test
+    fun homePreviewDoesNotActivateRoutesAndArrowNavigationActivatesExactlyOnce() = runComposeUiTest {
+        mainClock.autoAdvance = false
+        val outputs = mutableListOf<HomeOutput>()
+        val feature = DefaultHomeFeature(LocalizationProfilePort(), codexTestCatalog(), LocalizationSilentAudio)
+        setContent {
+            Box(Modifier.requiredSize(1000.dp, 700.dp)) {
+                feature.Content(inputEnabled = true, onOutput = outputs::add)
+            }
+        }
+        mainClock.advanceTimeBy(300)
+        onNodeWithTag("kinetickk.home.lab").performMouseInput { moveTo(center) }
+        mainClock.advanceTimeBy(500)
+        assertTrue(outputs.isEmpty(), "Hover changes the scene without navigating or starting a run")
+        onNodeWithTag("kinetickk.home.lab").assertIsFocused()
+        onNodeWithTag("kinetickk.home.core.orb").assertIsSelected()
+        // Hover selected Lab; Down selects Armory and Enter dispatches one action.
+        onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+        mainClock.advanceTimeByFrame()
+        onNodeWithTag("kinetickk.home.armory").assertIsFocused()
+        onRoot().performKeyInput { pressKey(Key.Enter) }
+        assertEquals(1, outputs.size)
+        assertIs<HomeOutput.OpenArmory>(outputs.single())
+    }
+
     @Test
     fun languageSwitchUpdatesPinnedCodexDetailsAndSearchUsesVisibleLanguage() = runComposeUiTest {
         var languageValue by mutableStateOf(AppLanguage.Russian)
@@ -40,11 +71,11 @@ class SessionPresentationLocalizationTest {
         setContent {
             CompositionLocalProvider(LocalAppLanguage provides languageValue) {
                 Box(Modifier.requiredSize(1000.dp, 700.dp)) {
-                    CodexContent(catalog, CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items), codexTestProgress(), 1f) { }
+                    CodexContent(catalog, CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items, discoveredRelicIds = kinetickk.ball.content.api.RelicId.entries.toImmutableSet()), codexTestProgress(), 1f) { }
                 }
             }
         }
-        onNodeWithTag("codex-tab-1").assertTextEquals("Каталог")
+        onNodeWithTag("codex-tab-1").assertTextEquals("Коллекция")
         onNodeWithTag("codex-category-3").performClick()
         onNodeWithTag("codex-search").performTextInput("крУг")
         onNodeWithTag("codex-slot-shape/ORB").performClick()
@@ -52,7 +83,7 @@ class SessionPresentationLocalizationTest {
         saveLocalizationCapture("codex-ru")
         onNodeWithTag("codex-search").performTextClearance()
         runOnIdle { languageValue = AppLanguage.English }
-        onNodeWithTag("codex-tab-1").assertTextEquals("Catalog")
+        onNodeWithTag("codex-tab-1").assertTextEquals("Collection")
         onNodeWithTag("codex-slot-shape/ORB").assertIsSelected()
         onNodeWithTag("codex-detail-title").assertTextEquals("Circle")
         onNodeWithTag("codex-search").performTextInput("CiRcLe")
@@ -67,7 +98,7 @@ class SessionPresentationLocalizationTest {
         setContent {
             CompositionLocalProvider(LocalAppLanguage provides languageValue) {
                 Box(Modifier.requiredSize(1000.dp, 700.dp)) {
-                    CodexContent(catalog, CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items), codexTestProgress(), 1f) { }
+                    CodexContent(catalog, CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items, discoveredRelicIds = kinetickk.ball.content.api.RelicId.entries.toImmutableSet()), codexTestProgress(), 1f) { }
                 }
             }
         }

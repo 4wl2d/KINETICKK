@@ -22,15 +22,15 @@ class GameplayInputMappingTest {
     fun runningHudMapsOnlyToLiveRunActions() {
         val model = hitTestState(GamePhase.RUNNING)
 
-        val dash = assertIs<GameplayInput.Action>(model.resolveGameplayPress(1_222f, 662f))
-        val brake = assertIs<GameplayInput.Action>(model.resolveGameplayPress(1_146f, 662f))
+        val dash = assertIs<GameplayInput.Action>(model.resolveGameplayPress(1_180f, 668f))
+        val brake = assertIs<GameplayInput.Action>(model.resolveGameplayPress(1_008f, 668f))
 
         assertSame(GameplayInteractionPulse.DashRequested, dash.action)
         assertIs<GameplayInteractionPulse.BrakeChanged>(brake.action)
     }
 
     @Test
-    fun regularBrakeBoundingSquareCornersRemainOutsideTheCanonicalCircle() {
+    fun rectangularBrakeTargetIncludesItsCornersAndDoesNotStealTheArenaAbove() {
         val running = hitTestState(GamePhase.RUNNING)
         val brakeBounds = runningControlBounds(
             running.screenWidth,
@@ -40,8 +40,10 @@ class GameplayInputMappingTest {
         val cornerX = brakeBounds.left + 1f
         val cornerY = brakeBounds.top + 1f
 
-        assertNull(running.resolveGameplayPress(cornerX, cornerY))
-        assertFalse(running.isHudControlPosition(cornerX, cornerY))
+        assertIs<GameplayInput.Action>(running.resolveGameplayPress(cornerX, cornerY))
+        assertTrue(running.isHudControlPosition(cornerX, cornerY))
+        assertNull(running.resolveGameplayPress(brakeBounds.center.x, brakeBounds.top - 1f))
+        assertFalse(running.isHudControlPosition(brakeBounds.center.x, brakeBounds.top - 1f))
     }
 
     @Test

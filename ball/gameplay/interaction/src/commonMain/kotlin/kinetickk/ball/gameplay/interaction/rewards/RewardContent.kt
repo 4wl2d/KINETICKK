@@ -6,6 +6,11 @@ package kinetickk.ball.gameplay.interaction.rewards
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.LocalAppLanguage
+import kinetickk.foundation.design.*
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ScrollState
@@ -91,9 +96,9 @@ import kinetickk.ball.content.api.RelicPolicy
 import kinetickk.ball.content.api.CoreShape
 import kotlin.math.roundToInt
 
-private val RewardPanel = Color(0xFF15181D)
-private val RewardBackground = Color(0xFF050610)
-private val RewardShape = RoundedCornerShape(4.dp)
+private val RewardPanel = OverlayPanel
+private val RewardBackground = SpaceBlack
+private val RewardShape = RoundedCornerShape(0.dp)
 
 /** Visible controls use the original pixel rectangles without changing mobile spacing. */
 @Composable
@@ -125,7 +130,7 @@ internal fun RewardContent(
     val language = LocalAppLanguage.current
     val scale = textScale
     var previewIndexValue by remember(presentation.cards.map { it.choice }) { mutableStateOf<Int?>(null) }
-    Box(Modifier.fillMaxSize().testTag("kinetickk.gameplay.rewards")) {
+    Box(Modifier.fillMaxSize().drawBehind { drawSectionAtmosphere(KineticAccent) }.testTag("kinetickk.gameplay.rewards")) {
         val headerBottom = layout.cards.minOfOrNull { it.top } ?: layout.subtitleY
         Column(
             Modifier.rewardBounds(Rect(12f * uiScale, layout.titleY, screenWidth - 12f * uiScale, headerBottom - 8f * uiScale))
@@ -134,9 +139,9 @@ internal fun RewardContent(
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             RewardText(
-                presentation.heading,
+                presentation.heading.uppercase(),
                 White,
-                (if (layout.mode == GameplayLayoutMode.REGULAR) 24f else 14f) * scale,
+                (if (layout.mode == GameplayLayoutMode.REGULAR) 34f else 20f) * scale,
                 bold = true,
                 centered = true,
             )
@@ -167,9 +172,9 @@ internal fun RewardContent(
             val accent = presentation.rerollAccent
             Box(
                 Modifier.rewardBounds(bounds)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RewardShape)
                     .background(RewardPanel)
-                    .border(1.dp, Color(0xFF2A2E36), RoundedCornerShape(8.dp))
+                    .border(1.dp, KineticAccent, RewardShape)
                     .testTag("kinetickk.gameplay.reroll")
                     .clickable(enabled = enabled, role = Role.Button, onClick = onReroll)
                     .padding(5.dp),
@@ -200,6 +205,7 @@ internal fun RewardCard(
     val highlighted = enabled && (hoveredValue || focusedValue || pressedValue)
     LaunchedEffect(highlighted) { onPreview(highlighted) }
     val accent = presentation.accent
+    val lift by animateFloatAsState(if (highlighted) -5f else 0f, tween(160))
     val scrollState = rememberScrollState()
     BoxWithConstraints(
         modifier.clip(RewardShape)
@@ -223,6 +229,7 @@ internal fun RewardCard(
     ) {
         val compact = rewardCardIsCompact(maxWidth.value, maxHeight.value)
         Column(Modifier.fillMaxSize()) {
+            Box(Modifier.fillMaxWidth().height(4.dp).background(if (highlighted) accent else accent.copy(alpha = 0.45f)))
             if (compact) {
                 Row(
                     Modifier.fillMaxWidth().height(44.dp).background(Color.Transparent)
@@ -231,15 +238,15 @@ internal fun RewardCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     RewardIcon(presentation, renderTime, Modifier.size(40.dp))
-                    RewardText("0${index + 1}", accent, 12f * textScale, bold = true)
+                    if (!presentation.isNewDiscovery) RewardText("0${index + 1}", accent, 12f * textScale, bold = true)
                 }
             } else {
                 Box(
-                    Modifier.fillMaxWidth().height(60.dp).background(Color.Transparent)
+                    Modifier.fillMaxWidth().height(88.dp).background(Color.Transparent)
                         .testTag("kinetickk.gameplay.choice.${index + 1}.expanded"),
                     contentAlignment = Alignment.Center,
                 ) {
-                    RewardIcon(presentation, renderTime, Modifier.size(56.dp))
+                    RewardIcon(presentation, renderTime, Modifier.size(72.dp).graphicsLayer { scaleX = 1f - lift * 0.015f; scaleY = scaleX })
                     BasicText(
                         "0${index + 1}",
                         Modifier.align(Alignment.TopStart).padding(10.dp),
@@ -254,7 +261,7 @@ internal fun RewardCard(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     RewardText(presentation.tag, accent, 9f * textScale, bold = true)
-                    RewardText(presentation.title, White, 15f * textScale, bold = true)
+                    RewardText(presentation.title.uppercase(), White, 20f * textScale, bold = true)
                     presentation.changes.forEach { change -> RewardStat(change, textScale) }
                     presentation.descriptions.forEach { description ->
                         RewardText(description, Muted, 12f * textScale)
@@ -265,14 +272,16 @@ internal fun RewardCard(
                     .fillMaxHeight().width(4.dp).testTag("kinetickk.gameplay.choice.${index + 1}.scroll"))
             }
             Box(
-                Modifier.fillMaxWidth().background(accent.copy(alpha = if (highlighted) 0.16f else 0.05f))
+                Modifier.fillMaxWidth().background(if (highlighted) accent else accent.copy(alpha = 0.10f))
                     .testTag("kinetickk.gameplay.choice.${index + 1}.action")
                     .padding(horizontal = 6.dp, vertical = 9.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                RewardText(language.text(GameplayText.Select, index + 1), accent, 11f * textScale, bold = true, centered = true)
+                RewardText(language.text(GameplayText.Select, index + 1), if (highlighted) SpaceBlack else accent, 12f * textScale, bold = true, centered = true)
             }
         }
+        if (presentation.isNewDiscovery) DiscoveryBadge(language.text(GameplayText.NewDiscovery), textScale,
+            Modifier.align(Alignment.TopEnd).padding(top = 8.dp, end = 7.dp).testTag("kinetickk.gameplay.choice.${index + 1}.new"))
     }
 }
 
@@ -287,7 +296,7 @@ private fun RewardStat(change: RewardStatPresentation, textScale: Float) {
                 withStyle(SpanStyle(color = Muted)) { append(" → ") }
                 withStyle(SpanStyle(color = if (change.improved) Color(0xFF74F5A0) else Color(0xFFFF8790))) { append(change.after) }
             },
-            style = TextStyle(fontSize = (14f * textScale).sp, fontWeight = FontWeight.Bold),
+            style = TextStyle(fontFamily = rememberInterfaceTypography().body, fontSize = (15f * textScale).sp, fontWeight = FontWeight.Bold),
         )
     }
 }
@@ -394,7 +403,8 @@ private fun RewardText(text: String, color: Color, size: Float, bold: Boolean = 
         text,
         style = TextStyle(
             color = color,
-            fontSize = size.sp,
+            fontSize = size.coerceAtLeast(12f).sp,
+            fontFamily = if (bold && size >= 18f) rememberInterfaceTypography().display else rememberInterfaceTypography().body,
             fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
             textAlign = if (centered) TextAlign.Center else TextAlign.Start,
         ),

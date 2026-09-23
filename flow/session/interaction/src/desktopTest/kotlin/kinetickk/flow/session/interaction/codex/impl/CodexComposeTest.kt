@@ -129,7 +129,7 @@ class CodexComposeTest {
         var itemsValue by mutableStateOf(catalog.items)
         setContent {
             Box(Modifier.requiredSize(390.dp, 720.dp)) {
-                CodexContent(catalog, CodexRenderModel(immutableSetOf(), CodexRunStacks(), itemsValue), codexTestProgress(), 1f) { }
+                CodexContent(catalog, CodexRenderModel((0 until 400).toImmutableSet(), CodexRunStacks(), itemsValue), codexTestProgress(), 1f) { }
             }
         }
         onNodeWithTag("codex-slot-item/0").performClick()
@@ -173,7 +173,7 @@ class CodexComposeTest {
                 KeyboardShell(port, object : CodexFeature {
                     @Composable override fun Content(runStacks: CodexRunStacks, onOutput: (CodexOutput) -> Unit) {
                         val catalog = remember { codexTestCatalog() }
-                        CodexContent(catalog, CodexRenderModel(immutableSetOf(), runStacks, catalog.items), codexTestProgress(), 1f) { onOutput(CodexOutput.Back) }
+                        CodexContent(catalog, CodexRenderModel((0 until 400).toImmutableSet(), runStacks, catalog.items), codexTestProgress(), 1f) { onOutput(CodexOutput.Back) }
                     }
                 })
             }
@@ -204,18 +204,18 @@ class CodexComposeTest {
         val catalog = codexTestCatalog()
         restoration.setContent {
             Box(Modifier.requiredSize(1000.dp, 700.dp)) {
-                CodexContent(catalog, CodexRenderModel((0 until 400).toSet().toImmutableSet(), CodexRunStacks(), catalog.items), codexTestProgress(), 1f) { }
+                CodexContent(catalog, CodexRenderModel((0 until 400).toSet().toImmutableSet(), CodexRunStacks(), catalog.items, discoveredRelicIds = kinetickk.ball.content.api.RelicId.entries.toImmutableSet()), codexTestProgress(), 1f) { }
             }
         }
         onNodeWithTag("codex-search").performClick().performTextInput("Item")
-        onNodeWithTag("codex-filter-1").performClick()
+        onNodeWithTag("codex-filter-0").performClick()
         onNodeWithTag("codex-grid").performScrollToKey("item/399")
         onNodeWithTag("codex-slot-item/399").performClick()
         val bounds = onNodeWithTag("codex-slot-item/399").fetchSemanticsNode().boundsInRoot
         restoration.emulateSaveAndRestore()
         onNodeWithTag("codex-tab-1").assertIsSelected()
         onNodeWithTag("codex-search").assertTextEquals("Item")
-        onNodeWithTag("codex-filter-1").assertIsSelected()
+        onNodeWithTag("codex-filter-0").assertIsSelected()
         onNodeWithTag("codex-detail-title").assertTextEquals("Item 399")
         assertEquals(bounds, onNodeWithTag("codex-slot-item/399").fetchSemanticsNode().boundsInRoot)
         onNodeWithTag("codex-category-2").performClick()
@@ -296,12 +296,12 @@ class CodexComposeTest {
     }
 
     @Test fun searchPasteIsBoundedAndNoRunInventoryAndFilterStatesAreDistinct() = runComposeUiTest {
-        setContent { TestCodex(1000, 700) }
+        setContent { TestCodex(1000, 700, discovered = false) }
         onNodeWithTag("codex-filter-2").assertIsNotEnabled()
         onNodeWithTag("codex-tab-0").performClick()
         onNodeWithTag("codex-empty-NO_RUN").assertIsDisplayed()
         onNodeWithTag("codex-tab-1").performClick()
-        onNodeWithTag("codex-filter-1").performClick()
+        onNodeWithTag("codex-filter-0").performClick()
         onNodeWithTag("codex-empty-EMPTY_INVENTORY").assertIsDisplayed()
         onNodeWithTag("codex-search").performTextInput("a".repeat(129))
         onNodeWithTag("codex-search").assertTextEquals("a".repeat(128))
@@ -310,11 +310,11 @@ class CodexComposeTest {
 }
 
 @Composable
-private fun TestCodex(width: Int, height: Int, scale: Float = 1f, onClose: () -> Unit = {}) {
+private fun TestCodex(width: Int, height: Int, scale: Float = 1f, discovered: Boolean = true, onClose: () -> Unit = {}) {
     val catalog = remember { codexTestCatalog() }
     Box(Modifier.requiredSize(width.dp, height.dp)) {
         CompositionLocalProvider(LocalAppLanguage provides AppLanguage.English) {
-            CodexContent(catalog, CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items), codexTestProgress(), scale, onClose)
+            CodexContent(catalog, CodexRenderModel(if (discovered) (0 until 400).toImmutableSet() else immutableSetOf(), CodexRunStacks(), catalog.items, discoveredRelicIds = if (discovered) kinetickk.ball.content.api.RelicId.entries.toImmutableSet() else immutableSetOf()), codexTestProgress(), scale, onClose = onClose)
         }
     }
 }

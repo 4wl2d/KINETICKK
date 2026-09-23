@@ -1,19 +1,32 @@
 // SPDX-FileCopyrightText: 2026 Vladislav Tomilov
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import kinetickk.gradle.configureSkikoWasmRuntime
+import kinetickk.gradle.isolatedProjectsProfileEnabled
+import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 
 plugins {
-    id("kinetickk.kmp-shared")
+    id("kinetickk.compose-library")
+    id("org.jetbrains.compose")
 }
 
-configureSkikoWasmRuntime(libs.versions.skiko.get())
+compose.resources {
+    packageOfResClass = "kinetickk.foundation.design.generated.resources"
+}
 
 kotlin {
+    android { androidResources.enable = true }
+    if (!isolatedProjectsProfileEnabled()) {
+        @OptIn(ExperimentalWasmDsl::class)
+        wasmJs {
+            binaries.executable()
+        }
+    }
     sourceSets {
         commonMain.dependencies {
             api(libs.compose.ui)
             api(projects.foundation.common)
+            implementation(libs.compose.resources)
+            implementation(libs.compose.foundation)
         }
         desktopTest.dependencies {
             val os = when {

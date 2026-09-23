@@ -54,6 +54,22 @@ class RewardContentTest {
     val compose = createComposeRule()
 
     @Test
+    fun firstDiscoveryBadgeIsVisibleAndDoesNotCreateASecondSelectionTarget() {
+        val fresh = mutableStateOf(true)
+        var selections = 0
+        compose.setContent {
+            CompositionLocalProvider(LocalAppLanguage provides AppLanguage.Russian, LocalDensity provides Density(1f)) {
+                RewardCard(card().copy(isNewDiscovery = fresh.value), 0, 1.25f, 0f, true,
+                    Modifier.requiredSize(200.dp, 300.dp), onSelect = { selections++ })
+            }
+        }
+        compose.onNodeWithTag("kinetickk.gameplay.choice.1.new", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithTag("kinetickk.gameplay.choice.1").performClick()
+        compose.runOnIdle { assertEquals(1, selections); fresh.value = false }
+        compose.onNodeWithTag("kinetickk.gameplay.choice.1.new", useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    @Test
     fun conciseDeltasAndConnectionsFollowHoverAndKeyboardFocusWithoutSelection() {
         var selections = 0
         val cards = mutableStateOf(conciseCards())

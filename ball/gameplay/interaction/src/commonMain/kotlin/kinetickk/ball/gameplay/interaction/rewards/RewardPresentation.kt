@@ -67,6 +67,7 @@ internal data class RewardCardPresentation(
     val title: String = choice.title,
     val changes: List<RewardStatPresentation> = emptyList(),
     val connections: List<RewardConnection> = emptyList(),
+    val isNewDiscovery: Boolean = false,
 )
 
 internal data class RewardStatPresentation(val name: String, val before: String, val after: String, val improved: Boolean, val source: String? = null)
@@ -179,6 +180,10 @@ internal fun GameplayRenderModel.rewardCardPresentation(
             }?.let { content.relic(it).name.localizedContent(language) })
         }.orEmpty(),
         connections = rewardConnections(choice, language),
+        isNewDiscovery = when {
+            item != null -> !isItemDiscovered(item.id)
+            else -> choice.relicId?.let { !isRelicDiscovered(it) } ?: false
+        },
     )
 }
 

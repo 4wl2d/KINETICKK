@@ -22,7 +22,7 @@ internal fun RebirthContent(model: RebirthRenderModel, confirmationArmed: Boolea
     val current = model.current
     val next = model.next
     ProfilePanel(language.text(ProfileText.RebirthTitle), language.text(ProfileText.ThreatTier, current.tier, next.tier),
-        scale, "profile-rebirth", onBack = { onAction(RebirthAction.Back) }) { wide ->
+        scale, "profile-rebirth", onBack = { onAction(RebirthAction.Back) }, accent = Magenta) { wide ->
         if (wide) Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             TierSummary(current, language.text(ProfileText.CurrentCycle), scale, Modifier.weight(1f))
             TierSummary(next, language.text(ProfileText.NextCycle), scale, Modifier.weight(1f))

@@ -3,6 +3,12 @@
 
 package kinetickk.ball.profile.interaction.settings.impl
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.ui.draw.drawBehind
+import kinetickk.foundation.common.localization.text
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.focusable
 import androidx.compose.runtime.LaunchedEffect
@@ -71,6 +77,7 @@ class DefaultSettingsFeature(
         val composeTextMeasurer = rememberTextMeasurer(cacheSize = 64)
         val textMeasurer = CanvasTextMeasurer(
             delegate = composeTextMeasurer,
+            typography = kinetickk.foundation.design.rememberInterfaceTypography(),
             language = LocalAppLanguage.current,
             scale = renderModelValue.preferences.textScale,
         )
@@ -130,6 +137,30 @@ class DefaultSettingsFeature(
                     viewportValue.width.toFloat(), viewportValue.height.toFloat(),
                     localDensity.density, group, pageValue,
                 )
+                layout.visibleRows.forEachIndexed { index, row ->
+                    if (row != SettingsRow.LANGUAGE && row != SettingsRow.MASTER_VOLUME) {
+                        val top = layout.startY + layout.spacing * index
+                        listOf(-1, 1).forEach { direction ->
+                            val left = layout.bounds.right - (if (direction < 0) 190f else 62f) * localDensity.density
+                            SettingsSemanticButton(
+                                androidx.compose.ui.geometry.Rect(left, top, left + 42f * localDensity.density, top + layout.spacing - 4f * localDensity.density),
+                                localDensity, "kinetickk.settings.${row.name.lowercase()}.${if (direction < 0) "decrease" else "increase"}",
+                                (if (direction < 0) "− " else "+ ") + settingValue(renderModelValue.preferences, row, textMeasurer.language),
+                            ) { dispatch(SettingsAction.Adjust(row, direction)) }
+                        }
+                    }
+                }
+                val footerTop = layout.bounds.bottom - 55f * localDensity.density
+                val backRight = if (layout.maxPage > 0) layout.bounds.left + layout.bounds.width * 0.45f else layout.bounds.right
+                SettingsSemanticButton(androidx.compose.ui.geometry.Rect(layout.bounds.left, footerTop, backRight, layout.bounds.bottom),
+                    localDensity, "kinetickk.settings.back", textMeasurer.language.text(kinetickk.ball.profile.interaction.localization.ProfileText.Back)) { dispatch(SettingsAction.Back) }
+                if (layout.maxPage > 0) {
+                    val nextLeft = layout.bounds.right - 85f * localDensity.density
+                    SettingsSemanticButton(androidx.compose.ui.geometry.Rect(backRight, footerTop, nextLeft, layout.bounds.bottom),
+                        localDensity, "kinetickk.settings.previous", "←") { dispatch(SettingsAction.PageSelected((layout.page - 1).coerceAtLeast(0))) }
+                    SettingsSemanticButton(androidx.compose.ui.geometry.Rect(nextLeft, footerTop, layout.bounds.right, layout.bounds.bottom),
+                        localDensity, "kinetickk.settings.next", "→") { dispatch(SettingsAction.PageSelected((layout.page + 1).coerceAtMost(layout.maxPage))) }
+                }
                 layout.volumeBounds(localDensity.density)?.let { bounds ->
                     SettingsVolumeControl(
                         percent = (renderModelValue.preferences.masterVolume * 100f).roundToInt(),
@@ -184,4 +215,21 @@ class DefaultSettingsFeature(
             }
         }
     }
+}
+
+@Composable
+private fun SettingsSemanticButton(bounds: androidx.compose.ui.geometry.Rect, density: androidx.compose.ui.unit.Density,
+    tag: String, description: String, onClick: () -> Unit) {
+    val interactions = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val focused by interactions.collectIsFocusedAsState()
+    val hovered by interactions.collectIsHoveredAsState()
+    Box(Modifier.offset { IntOffset(bounds.left.roundToInt(), bounds.top.roundToInt()) }
+        .requiredSize(with(density) { bounds.width.toDp() }, with(density) { bounds.height.toDp() })
+        .testTag(tag).semantics { contentDescription = description }
+        .drawBehind {
+            if (hovered || focused) drawRect(kinetickk.foundation.design.White.copy(alpha = 0.10f))
+            if (focused) drawRect(kinetickk.foundation.design.KineticAccent, style = androidx.compose.ui.graphics.drawscope.Stroke(2f))
+        }
+        .hoverable(interactions)
+        .clickable(interactionSource = interactions, indication = null, role = Role.Button, onClick = onClick))
 }

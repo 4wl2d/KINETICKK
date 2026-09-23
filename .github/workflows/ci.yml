@@ -138,7 +138,8 @@ jobs:
                 sub(/:[^:]+$/, "", module)
                 name = task
                 sub(/^.*:/, "", name)
-                if (module != ":app:android") {
+                # The design library packages the bundled Compose fonts.
+                if (module != ":app:android" && module != ":foundation:design") {
                   if (name ~ /^(compile.*LibraryResources|package.*Resources|parse.*LocalResources|generate.*RFile|merge.*Resources)$/) {
                     print task
                   }

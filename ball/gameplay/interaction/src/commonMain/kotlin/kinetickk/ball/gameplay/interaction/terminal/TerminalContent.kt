@@ -26,7 +26,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,7 +37,10 @@ import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
-import kinetickk.foundation.design.Cyan
+import kinetickk.foundation.design.*
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Offset
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.Muted
 import kinetickk.foundation.design.SpaceBlack
@@ -123,7 +125,7 @@ internal fun TerminalContent(
     val actionsEnabled = enabled && terminalActionsReady(elapsed, presentation.victory)
     BoxWithConstraints(
         Modifier.fillMaxSize().testTag("kinetickk.gameplay.results")
-            .background(Color(0xFF090C10).copy(alpha = 0.96f * reveal)),
+            .drawBehind { drawSectionAtmosphere(if (presentation.victory) KineticAccent else Red) },
         contentAlignment = Alignment.Center,
     ) {
         val wide = maxWidth >= (820f * (textScale / 1.25f).coerceAtLeast(1f)).dp
@@ -136,7 +138,7 @@ internal fun TerminalContent(
             ) {
                 val summary: @Composable RowScope.() -> Unit = {
                     SummaryPanel(presentation, textScale, actionsEnabled, onInput,
-                        Modifier.weight(0.95f).fillMaxHeight().verticalScroll(rememberScrollState()).reveal(reveal))
+                        Modifier.weight(0.95f).fillMaxHeight().reveal(reveal), pinActions = true)
                 }
                 val statistics: @Composable RowScope.() -> Unit = {
                     StatisticsPanel(presentation, textScale, elapsed - delay,
@@ -166,35 +168,38 @@ private fun SummaryPanel(
     enabled: Boolean,
     onInput: (GameplayInput) -> Unit,
     modifier: Modifier,
+    pinActions: Boolean = false,
 ) {
     val language = LocalAppLanguage.current
     Column(modifier.testTag("kinetickk.gameplay.results.summary"), verticalArrangement = Arrangement.Center) {
-        Box(Modifier.padding(top = 12.dp, bottom = 24.dp).width(42.dp).height(3.dp).background(Cyan))
-        Label(language.text(GameplayText.RunRecord), 10f * scale, Cyan, weight = FontWeight.Medium)
-        Spacer(Modifier.height(16.dp))
-        Label(language.text(if (presentation.victory) GameplayText.RunConquered else GameplayText.SingularityRemembers),
-            34f * scale, White, Modifier.semantics { heading() }, FontWeight.Medium)
-        Spacer(Modifier.height(14.dp))
-        Label(presentation.reason, 10f * scale, Muted)
-        Spacer(Modifier.height(36.dp))
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            if (maxWidth < (310f * scale).dp) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    CompactSummaryMetric(GameplayText.RunDuration, presentation.time, scale, White)
-                    CompactSummaryMetric(GameplayText.EnemiesDestroyed, presentation.kills, scale, White)
-                    CompactSummaryMetric(GameplayText.MatterEarned, presentation.matter, scale, Cyan)
-                }
-            } else {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    SummaryMetric(GameplayText.RunDuration, presentation.time, scale, White, Modifier.weight(1f))
-                    SummaryMetric(GameplayText.EnemiesDestroyed, presentation.kills, scale, White, Modifier.weight(1f))
-                    SummaryMetric(GameplayText.MatterEarned, presentation.matter, scale, Cyan, Modifier.weight(1f))
+        Column(if (pinActions) Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()) else Modifier.fillMaxWidth()) {
+            Box(Modifier.padding(top = 12.dp, bottom = 24.dp).width(42.dp).height(3.dp).background(Cyan))
+            Label(language.text(GameplayText.RunRecord), 13f * scale, KineticAccent, weight = FontWeight.Medium)
+            Spacer(Modifier.height(16.dp))
+            Label(language.text(if (presentation.victory) GameplayText.RunConquered else GameplayText.SingularityRemembers),
+                38f * scale, White, Modifier.semantics { heading() }, FontWeight.Medium)
+            Spacer(Modifier.height(14.dp))
+            Label(presentation.reason, 10f * scale, Muted)
+            Spacer(Modifier.height(36.dp))
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                if (maxWidth < (310f * scale).dp) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        CompactSummaryMetric(GameplayText.RunDuration, presentation.time, scale, White)
+                        CompactSummaryMetric(GameplayText.EnemiesDestroyed, presentation.kills, scale, White)
+                        CompactSummaryMetric(GameplayText.MatterEarned, presentation.matter, scale, Cyan)
+                    }
+                } else {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        SummaryMetric(GameplayText.RunDuration, presentation.time, scale, White, Modifier.weight(1f))
+                        SummaryMetric(GameplayText.EnemiesDestroyed, presentation.kills, scale, White, Modifier.weight(1f))
+                        SummaryMetric(GameplayText.MatterEarned, presentation.matter, scale, Cyan, Modifier.weight(1f))
+                    }
                 }
             }
+            Spacer(Modifier.height(22.dp))
+            Label(presentation.weapon, 11f * scale, Muted)
+            Spacer(Modifier.height(24.dp))
         }
-        Spacer(Modifier.height(22.dp))
-        Label(presentation.weapon, 11f * scale, Muted)
-        Spacer(Modifier.height(40.dp))
         TerminalButton(language.text(GameplayText.Reenter), "restart", scale, true, enabled) { onInput(GameplayInput.RestartRun) }
         if (presentation.victory) {
             Spacer(Modifier.height(10.dp))
@@ -267,15 +272,15 @@ private fun TerminalButton(label: String, tag: String, scale: Float, prominent: 
     val active = focusedValue || hoveredValue
     Box(
         Modifier.fillMaxWidth().heightIn(min = 52.dp)
-            .background(if (prominent) Cyan else White.copy(alpha = if (active) 0.10f else 0.045f))
+            .drawBehind { drawKineticRibbon(Rect(Offset.Zero, size), if (prominent || active) KineticAccent else OverlayPanel) }
             .border(1.dp, if (active) White else Color.Transparent)
             .testTag("kinetickk.gameplay.$tag")
             .hoverable(interactions, enabled)
             .clickable(interactionSource = interactions, indication = null, enabled = enabled, role = Role.Button, onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 18.dp),
+            .padding(horizontal = 20.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Label(label, 12f * scale, if (prominent) SpaceBlack else White, weight = FontWeight.Medium)
+        Label(label.uppercase(), 18f * scale, if (prominent || active) SpaceBlack else White, weight = FontWeight.Medium)
     }
 }
 
@@ -286,5 +291,5 @@ private fun Modifier.reveal(progress: Float): Modifier = (if (progress == 0f) cl
 
 @Composable
 private fun Label(text: String, size: Float, color: Color, modifier: Modifier = Modifier, weight: FontWeight = FontWeight.Normal) {
-    BasicText(text, modifier, TextStyle(color = color, fontSize = size.sp, fontWeight = weight, lineHeight = (size * 1.3f).sp))
+    BasicText(text, modifier, interfaceTextStyle(size.coerceAtLeast(12f), color, weight, display = size >= 22f || weight >= FontWeight.Medium).copy(lineHeight = (size.coerceAtLeast(12f) * 1.3f).sp))
 }

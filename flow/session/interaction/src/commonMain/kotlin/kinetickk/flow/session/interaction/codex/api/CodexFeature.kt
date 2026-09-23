@@ -8,6 +8,8 @@ import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.ImmutableSet
 import kinetickk.foundation.collections.immutableListOf
+import kinetickk.foundation.collections.immutableSetOf
+import kinetickk.ball.content.api.RelicId
 
 data class CodexRunStacks(
     val itemStacks: ImmutableList<Int> = immutableListOf(),
@@ -18,8 +20,12 @@ data class CodexRenderModel(
     val discoveredItemIds: ImmutableSet<Int>,
     val runStacks: CodexRunStacks,
     val items: ImmutableList<ItemDefinition>,
+    val newItemIds: ImmutableSet<Int> = immutableSetOf(),
+    val discoveredRelicIds: ImmutableSet<RelicId> = immutableSetOf(),
+    val newRelicIds: ImmutableSet<RelicId> = immutableSetOf(),
 ) {
-    fun isDiscovered(itemId: Int): Boolean = itemId in discoveredItemIds
+    fun isDiscovered(itemId: Int): Boolean = itemId in discoveredItemIds || itemStack(itemId) > 0
+    fun isRelicDiscovered(id: RelicId): Boolean = id in discoveredRelicIds || runStacks.build?.relics?.any { it.id == id } == true
     fun itemStack(itemId: Int): Int = runStacks.itemStacks.getOrElse(itemId) { 0 }
 }
 

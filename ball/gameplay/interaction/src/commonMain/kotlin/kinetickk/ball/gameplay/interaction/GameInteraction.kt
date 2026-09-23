@@ -20,9 +20,7 @@ import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -260,9 +258,11 @@ fun GameplayContent(
     }
 
     val textScale = renderModelValue.settings.textScale
-    val textMeasurer = remember(composeTextMeasurer, textScale, language) {
+    val typography = kinetickk.foundation.design.rememberInterfaceTypography()
+    val textMeasurer = remember(composeTextMeasurer, textScale, language, typography) {
         CanvasTextMeasurer(
             delegate = composeTextMeasurer,
+            typography = typography,
             scale = textScale,
             language = language,
         )
@@ -833,11 +833,11 @@ private fun BuildButton(modifier: Modifier, textScale: Float, onClick: () -> Uni
             Canvas(Modifier.fillMaxSize().padding(13.dp)) {
                 drawInterfaceGlyph(InterfaceGlyph.LAYERS, center.copy(y = center.y - 3.dp.toPx()), 9.dp.toPx(), White)
             }
-            BasicText("I", Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp), TextStyle(color = Muted, fontSize = 8.sp))
+            BasicText("I", Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp), kinetickk.foundation.design.interfaceTextStyle(11f, Muted, display = true))
         }
         if (focused || hovered) {
             BasicText(label, Modifier.offset(x = 54.dp).background(Color(0xFF191C22)).padding(10.dp),
-                TextStyle(color = White, fontSize = (11f * textScale).sp))
+                kinetickk.foundation.design.interfaceTextStyle(14f * textScale, White, display = true))
         }
     }
 }

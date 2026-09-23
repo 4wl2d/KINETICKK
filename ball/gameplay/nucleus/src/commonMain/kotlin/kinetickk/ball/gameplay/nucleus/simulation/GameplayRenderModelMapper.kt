@@ -304,6 +304,7 @@ internal fun MutableGameState.toRenderModel(
             reusableCollections?.itemStacks,
         ) ?: itemStacks.reuseIfContentEqual(reusableCollections?.itemStacks)
             ?: itemStacks.toImmutableList(),
+        discoveredRelicMask = discoveredRelicMask,
         discoveredItemIds = discoveredItemIds.reuseIfStorageShared(
             identitySource?.discoveredItemIds,
             reusableCollections?.discoveredItemIds,

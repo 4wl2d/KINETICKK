@@ -177,6 +177,7 @@ private class ReadyProfileComponent(
     private val revision = ProfileRevision(1L)
 
     override fun accept(pulse: ProfilePulse.Business): ProfileAcceptance = error("unused")
+    override fun markViewed(entry: kinetickk.ball.profile.api.CollectionEntry): ProfileAcceptance = error("unused")
 
     override fun applyGameplayProgress(
         update: kinetickk.ball.profile.api.GameplayProgressUpdate,

@@ -97,6 +97,9 @@ internal class MutableGameState(
                 ?.filterTo(mutableSetOf()) { content.item(it) != null }
                 ?: mutableSetOf(),
         )
+    internal var discoveredRelicMask: Long = reductionSource?.discoveredRelicMask
+        ?: bootstrapProgress?.collection?.discoveredRelicIds?.fold(0L) { mask, id -> mask or (1L shl id.ordinal) } ?: 0L
+    internal var pendingDiscoveredRelicMask: Long = reductionSource?.pendingDiscoveredRelicMask ?: 0L
     internal var pendingDiscoveredItemIdStorage: CopyOnWriteMutableSet<Int>? =
         reductionSource?.pendingDiscoveredItemIdStorage?.fork()
     internal val pendingDiscoveredItemIds: PendingDiscoveredItemIdBuffer

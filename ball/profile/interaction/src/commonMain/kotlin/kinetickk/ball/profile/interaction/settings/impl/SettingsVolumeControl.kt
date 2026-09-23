@@ -3,6 +3,10 @@
 
 package kinetickk.ball.profile.interaction.settings.impl
 
+import kinetickk.foundation.design.interfaceTextStyle
+import kinetickk.foundation.design.OverlayPanel
+import kinetickk.foundation.design.KineticAccent
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,7 +27,6 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.key.*
@@ -65,8 +68,8 @@ internal fun SettingsVolumeControl(
         focusManager.clearFocus()
         onEditingFinished()
     }
-    Column(modifier.background(Color(0x66101225)).border(1.dp, DarkLine).padding(horizontal = 10.dp, vertical = 4.dp)) {
-        BasicText(language.text(ProfileText.MasterVolume), style = textStyle(9f * textScale, White, FontWeight.Bold))
+    Column(modifier.background(OverlayPanel).border(1.dp, DarkLine).padding(horizontal = 10.dp, vertical = 4.dp)) {
+        BasicText(language.text(ProfileText.MasterVolume), style = interfaceTextStyle(11f * textScale, White, FontWeight.Bold))
         Row(Modifier.fillMaxWidth().weight(1f), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             VolumeSlider(percent, language.text(ProfileText.MasterVolume), onPercentChange,
@@ -82,7 +85,7 @@ internal fun SettingsVolumeControl(
                     }
                 },
                 singleLine = true,
-                textStyle = textStyle(12f * textScale, Cyan, FontWeight.Bold),
+                textStyle = interfaceTextStyle(13f * textScale, KineticAccent, FontWeight.Bold),
                 cursorBrush = SolidColor(Cyan),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { finishInput() }),
@@ -106,7 +109,7 @@ internal fun SettingsVolumeControl(
                 decorationBox = { inner ->
                     Row(Modifier.fillMaxSize().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.weight(1f)) { inner() }
-                        BasicText("%", modifier = Modifier.clearAndSetSemantics { }, style = textStyle(12f * textScale, Muted))
+                        BasicText("%", modifier = Modifier.clearAndSetSemantics { }, style = interfaceTextStyle(12f * textScale, Muted))
                     }
                 },
             )

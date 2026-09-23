@@ -36,7 +36,7 @@ enum class ProfilePersistenceMutationResult {
 }
 
 /** Assembly-only composite implemented by the one application-lifetime Profile component. */
-interface ProfileComponent : ProfilePort, ProfileSettings, ProfileLoadout, ProfileRebirth, ProfileProgress
+interface ProfileComponent : ProfilePort, ProfileSettings, ProfileLoadout, ProfileRebirth, ProfileProgress, kinetickk.ball.profile.api.ProfileCollectionVisits
 
 /** Closed physical key contract implemented only by platform composition. */
 object ProfilePersistenceContract {

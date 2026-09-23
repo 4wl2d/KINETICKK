@@ -100,7 +100,7 @@ class DefaultArmoryFeature(
 
         ProfilePanel(language.text(ProfileText.ArmoryTitle), language.text(ProfileText.ArmorySummary,
             weapons.size, model.unlockedWeapons.size, formatCompact(model.totalMatter, language)),
-            textScale, "profile-armory", onBack = { dispatch(ArmoryAction.Back) }, contentKey = pageValue,
+            textScale, "profile-armory", onBack = { dispatch(ArmoryAction.Back) }, accent = Orange, contentKey = pageValue,
             footer = {
                 ProfileButton("‹", textScale, "profile-armory-previous", enabled = pageValue > 0, description = language.text(ProfileText.PreviousPage)) { dispatch(ArmoryAction.PreviousPage) }
                 ProfileLabel("${pageValue + 1}/${reducer.maxPage + 1}", textScale, Muted, size = 10f)
@@ -136,9 +136,12 @@ private fun WeaponCard(model: ArmoryRenderModel, definition: WeaponDefinition, s
     val affordable = unlocked || model.totalMatter >= definition.permanentUnlockCost
     val accent = if (unlocked) armoryWeaponColor(definition.id) else Muted
     Column(modifier.semantics { selected = equipped }, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Canvas(Modifier.fillMaxWidth().height(150.dp)) {
+            drawKineticOrbits(center, 40.dp.toPx(), renderTime * 0.25f, accent.copy(alpha = 0.22f))
+            drawSystemGlyph(armoryWeaponGlyphStyle(definition.id), center, 48.dp.toPx(), renderTime, accent)
+        }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Canvas(Modifier.size(48.dp)) { drawSystemGlyph(armoryWeaponGlyphStyle(definition.id), center, 16.dp.toPx(), renderTime, accent) }
-            ProfileLabel(definition.name.localizedContent(language), scale, bold = true, modifier = Modifier.weight(1f))
+            ProfileLabel(definition.name.localizedContent(language).uppercase(), scale, size = 23f, bold = true, modifier = Modifier.weight(1f))
             if (equipped) Canvas(Modifier.size(18.dp)) { drawInterfaceGlyph(InterfaceGlyph.CHECK, center, 6.dp.toPx(), Cyan) }
         }
         ProfileLabel(definition.description.localizedContent(language), scale, Muted, size = 11f)

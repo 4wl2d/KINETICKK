@@ -38,6 +38,21 @@ class TerminalContentTest {
     @get:Rule val compose = createComposeRule()
 
     @Test
+    fun desktopReportKeepsActionsVisibleAtMaximumTextSizeWithoutScrolling() {
+        compose.setContent {
+            // Fit a 1280 dp layout into the offscreen test host without cropping the capture.
+            CompositionLocalProvider(LocalDensity provides Density(0.75f), LocalAppLanguage provides AppLanguage.Russian) {
+                Box(Modifier.requiredSize(1280.dp, 720.dp).testTag("terminal-capture")) {
+                    TerminalContent(report(AppLanguage.Russian), 1.75f, false, 3f, true) {}
+                }
+            }
+        }
+        compose.onNodeWithTag("kinetickk.gameplay.restart").assertIsDisplayed()
+        compose.onNodeWithTag("kinetickk.gameplay.exit").assertIsDisplayed()
+        capture("death-report-desktop-large-actions")
+    }
+
+    @Test
     fun deathReportWaitsForCoreRuptureAndRevealsStatisticsFromTopToBottom() {
         val elapsed = mutableStateOf(0f)
         compose.setContent {
