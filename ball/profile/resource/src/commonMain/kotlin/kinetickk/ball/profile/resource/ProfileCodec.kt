@@ -275,22 +275,20 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
     val expectedRankIds = MetaUpgradeId.entries.map { it.wireId() }.sorted()
     val actualRankIds = profile.labProgress.ranks.map(MetaUpgradeRankDto::id)
     rejectUnless(
-        actualRankIds == actualRankIds.distinct().sorted() && actualRankIds == expectedRankIds,
+        actualRankIds.isStrictlySorted() && actualRankIds == expectedRankIds,
         ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
     )
     rejectUnless(
-        profile.loadout.unlockedWeaponIds == profile.loadout.unlockedWeaponIds.distinct().sorted(),
+        profile.loadout.unlockedWeaponIds.isStrictlySorted(),
         ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
     )
     rejectUnless(
-        profile.collection.discoveredItemIds ==
-            profile.collection.discoveredItemIds.distinct().sorted(),
+        profile.collection.discoveredItemIds.isStrictlySorted(),
         ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
     )
 
     rejectUnless(
-        profile.characterAchievements.victoriousCharacterIds ==
-            profile.characterAchievements.victoriousCharacterIds.distinct().sorted(),
+        profile.characterAchievements.victoriousCharacterIds.isStrictlySorted(),
         ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
     )
 
