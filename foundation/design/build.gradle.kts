@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Vladislav Tomilov
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import kinetickk.gradle.isolatedProjectsProfileEnabled
+import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
+
 plugins {
     id("kinetickk.compose-library")
     id("org.jetbrains.compose")
@@ -12,6 +15,12 @@ compose.resources {
 
 kotlin {
     android { androidResources.enable = true }
+    if (!isolatedProjectsProfileEnabled()) {
+        @OptIn(ExperimentalWasmDsl::class)
+        wasmJs {
+            binaries.executable()
+        }
+    }
     sourceSets {
         commonMain.dependencies {
             api(libs.compose.ui)
