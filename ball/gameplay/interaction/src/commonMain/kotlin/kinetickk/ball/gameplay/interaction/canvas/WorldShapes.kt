@@ -89,14 +89,23 @@ internal object WorldPaths {
     private val ArchitectInner = floatArrayOf(50f, 30f, 74f, 72f, 26f, 72f)
 }
 
+/** Kill shard outline (x, y pairs around the origin): a parallelogram, symmetric about its center. */
+internal val ShardOutline = floatArrayOf(-0.5f, -0.21f, 0.3f, -0.21f, 0.5f, 0.21f, -0.3f, 0.21f)
+
 /** Unit shapes for fills that scale freely under a transform (no stroke to distort). */
 internal object WorldUnitShapes {
-    /** A kill shard: a sharp triangle pointing along +x, about one unit long. */
+    /**
+     * A kill shard: a sheared quad sliver about one unit long with blunt, parallel ends. It is
+     * point-symmetric ([ShardOutline]), so no rotation makes it read as an arrowhead.
+     */
     val shard: Path by lazy {
         Path().apply {
-            moveTo(0.6f, 0f)
-            lineTo(-0.4f, -0.34f)
-            lineTo(-0.28f, 0.3f)
+            moveTo(ShardOutline[0], ShardOutline[1])
+            var index = 2
+            while (index < ShardOutline.size) {
+                lineTo(ShardOutline[index], ShardOutline[index + 1])
+                index += 2
+            }
             close()
         }
     }
@@ -173,8 +182,7 @@ private object EdgeGlowCache {
 /** Strings for per-frame numbers, created once per value and language. */
 internal object WorldStrings {
     private val timers = arrayOfNulls<String>(600)
-    private val englishDistances = arrayOfNulls<String>(512)
-    private val russianDistances = arrayOfNulls<String>(512)
+    private val distanceSuffixes = arrayOfNulls<String>(AppLanguage.entries.size)
     private val crit = arrayOfNulls<String>(AppLanguage.entries.size)
 
     /** Remaining time as `m:ss` (mono readout, no unit). */
@@ -184,13 +192,10 @@ internal object WorldStrings {
         return timers[whole] ?: format(whole).also { timers[whole] = it }
     }
 
-    /** World distance rounded to tens, with the localized short unit. */
-    fun distance(distance: Float, language: AppLanguage): String {
-        val tens = (distance / 10f + 0.5f).toInt().coerceAtLeast(0)
-        val cache = if (language == AppLanguage.Russian) russianDistances else englishDistances
-        if (tens >= cache.size) return language.text(WorldRedesignText.Distance, tens * 10)
-        return cache[tens] ?: language.text(WorldRedesignText.Distance, tens * 10).also { cache[tens] = it }
-    }
+    /** The constant unit after an edge-marker distance, display-cased once per language. */
+    fun distanceSuffix(language: AppLanguage): String =
+        distanceSuffixes[language.ordinal] ?: language.text(WorldRedesignText.Distance, "").uppercase()
+            .also { distanceSuffixes[language.ordinal] = it }
 
     fun crit(language: AppLanguage): String =
         crit[language.ordinal] ?: language.text(WorldRedesignText.CriticalHit).also { crit[language.ordinal] = it }

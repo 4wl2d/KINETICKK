@@ -59,6 +59,7 @@ internal fun DrawScope.drawWorld(
     val core = world(engine, engine.coreX, engine.coreY, shakeX, shakeY)
     val pointer = Offset(engine.pointerX + shakeX * 0.18f, engine.pointerY + shakeY * 0.18f)
 
+    worldHudKeepOut(engine, textMeasurer)
     drawPointsOfInterest(engine, shakeX, shakeY, textMeasurer)
     drawCharacterField(engine, shakeX, shakeY, roles)
     drawTotem(engine, shakeX, shakeY, textMeasurer)
@@ -113,14 +114,28 @@ private fun DrawScope.drawDamageNumbers(
         val location = world(engine, number.x + number.driftX * drift, number.y + number.driftY * drift, shakeX, shakeY)
         if (!isOnScreen(location, 80f)) continue
         val tier = damageNumberTier(number.amount, settings.damageNumberTierThreshold, number.critical)
-        val size = DAMAGE_NUMBER_BASE_SP * settings.damageNumberSize.scale * damageNumberScale(tier)
+        val fontSize = DAMAGE_NUMBER_BASE_SP * settings.damageNumberSize.scale * damageNumberScale(tier)
         val color = damageNumberColor(tier, roles)
         val text = number.formattedAmount(settings.damageNumberFormat, textMeasurer.language)
-        val face = measureKkText(textMeasurer, text, typography.condStyle(size, tabular = true, lineHeightEm = 1f, color = color))
-        val shadow = measureKkText(textMeasurer, text, typography.condStyle(size, tabular = true, lineHeightEm = SHADOW_LINE_HEIGHT, color = Kk.Ink))
+        val face = measureKkText(textMeasurer, text, typography.condStyle(fontSize, tabular = true, lineHeightEm = 1f, color = color))
+        val shadow = measureKkText(textMeasurer, text, typography.condStyle(fontSize, tabular = true, lineHeightEm = SHADOW_LINE_HEIGHT, color = Kk.Ink))
         val tilt = ((number.amount % 9L).toInt() - 4) * 1.1f
+        // Keep the whole number (and its crit stamp) inside the screen, e.g. long Russian amounts
+        // at phone edges.
+        val half = face.size.width * 0.5f * pop + 2f
+        val halfHeight = face.kkBoxHeight * 0.5f * pop + 2f
+        var right = half
+        var up = halfHeight
+        if (number.critical) {
+            val stamp = kkStampSize(textMeasurer, WorldStrings.crit(textMeasurer.language), density, 11f)
+            right = half + (stamp.width + 3f) * pop
+            up = max(halfHeight, (face.kkBoxHeight * 0.5f + 6f + stamp.height) * pop)
+        }
+        val edge = d(6f)
+        val x = keepInside(location.x, half, right, size.width, edge)
+        val y = keepInside(location.y, up, halfHeight, size.height, edge)
         withTransform({
-            translate(location.x, location.y)
+            translate(x, y)
             rotate(tilt, Offset.Zero)
             scale(pop, pop, Offset.Zero)
         }) {
@@ -140,6 +155,16 @@ private fun DrawScope.drawDamageNumbers(
             }
         }
     }
+}
+
+/**
+ * Moves a label centered at [center] with extents [before]/[after] along one axis so it lies
+ * within [edge]..[length] − [edge]; centered when it cannot fit.
+ */
+internal fun keepInside(center: Float, before: Float, after: Float, length: Float, edge: Float): Float {
+    val low = edge + before
+    val high = length - edge - after
+    return if (low > high) (low + high) * 0.5f else center.coerceIn(low, high)
 }
 
 /**
@@ -318,10 +343,11 @@ internal fun DrawScope.drawWeapon(engine: GameplayRenderModel, core: Offset, sha
             drawCircle(Kk.Bone.copy(alpha = 0.22f), 132f - pulse * 18f, core, style = WorldStrokes.dashedHair)
         }
         WeaponId.NULL_LANCE -> {
+            // A lance with a square block end aligned to its shaft (a turned square would read as a head).
             val tip = polar(core, 48f, motionAngle)
             drawLine(you.copy(alpha = 0.2f), core, polar(core, 115f, motionAngle), 7f)
             drawLine(Kk.Bone, core, tip, 2f)
-            rotate(motionAngle * RADIANS_TO_DEGREES + 45f, tip) {
+            rotate(motionAngle * RADIANS_TO_DEGREES, tip) {
                 drawRect(you, Offset(tip.x - 4f, tip.y - 4f), Size(8f, 8f))
             }
         }
@@ -384,18 +410,30 @@ internal fun DrawScope.drawWeapon(engine: GameplayRenderModel, core: Offset, sha
     }
 }
 
+/**
+ * The Morningstar head: a bone disc with a you-color rim and eight short blunt studs (square
+ * ends, never pointed spikes) that turn with the flail, and an ink hub.
+ */
 private fun DrawScope.drawMorningstarBall(center: Offset, radius: Float, angle: Float, accent: Color) {
-    val path = WorldPaths.silhouette(EnemySilhouette.OCTAGON, radius)
     drawCircle(accent.copy(alpha = 0.12f), radius + 12f, center)
+    val studWidth = radius * 0.28f
+    val studLength = radius * 0.3f
     withTransform({
         translate(center.x, center.y)
         rotate(angle * RADIANS_TO_DEGREES, Offset.Zero)
     }) {
-        drawPath(path, Kk.Bone)
-        drawPath(path, accent, style = kkStroke(2.5f))
+        for (stud in 0 until MORNINGSTAR_STUDS) {
+            rotate(stud * (360f / MORNINGSTAR_STUDS), Offset.Zero) {
+                drawRect(accent, Offset(-studWidth * 0.5f, -radius - studLength + 1f), Size(studWidth, studLength))
+            }
+        }
     }
+    drawCircle(Kk.Bone, radius, center)
+    drawCircle(accent, radius - 1.25f, center, style = kkStroke(2.5f))
     drawCircle(Kk.Ink, radius * 0.22f, center)
 }
+
+private const val MORNINGSTAR_STUDS = 8
 
 /** Gravity mines: a you-color core with a dashed ring that tightens as the fuse runs down. */
 internal fun DrawScope.drawWeaponNodes(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, roles: KkRolePalette) {

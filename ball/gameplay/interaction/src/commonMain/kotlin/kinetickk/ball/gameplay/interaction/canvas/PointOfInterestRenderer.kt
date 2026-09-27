@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
 import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
 import kinetickk.foundation.design.*
@@ -21,12 +22,42 @@ import kotlin.math.sqrt
 /** Radius inside which a passing Core accepts an offered point (PointOfInterestSystem). */
 private const val OFFER_RADIUS = 65f
 
+/** Half extent of an offer's mark (anomaly diamond with its corner brackets). */
+private const val OFFER_MARK_HALF = 46f
+
+/** Half extent of the active vault mark (anomaly diamond) and of a circuit beacon stack. */
+private const val VAULT_MARK_HALF = 30f
+private const val BEACON_MARK_HALF = 62f
+
+/** Distance from the collapsing-orbit center to its timer label (just outside the progress arc). */
+internal const val ORBIT_LABEL_OFFSET = 212f
+
+/** HUD regions and the edge-marker table for the current frame (draw-thread confined). */
+internal object WorldOverlayScratch {
+    val keepOut = WorldHudKeepOut()
+    val planner = EdgeMarkerPlanner()
+}
+
+/** Updates the HUD keep-out for this frame: trial panel while a trial runs, boss bar while a boss lives. */
+internal fun DrawScope.worldHudKeepOut(engine: GameplayRenderModel, textMeasurer: TextMeasurer): WorldHudKeepOut {
+    var trial = false
+    val points = engine.pointsOfInterest
+    for (index in points.indices) if (points[index].active) trial = true
+    var boss = false
+    val enemies = engine.enemies
+    for (index in enemies.indices) {
+        val enemy = enemies[index]
+        if (!enemy.dead && (enemy.type == EnemyType.ELITE || enemy.type == EnemyType.ARCHITECT)) boss = true
+    }
+    return WorldOverlayScratch.keepOut.update(size.width, size.height, density, textMeasurer.scale, trial, boss)
+}
+
 /**
  * Points of interest as world markers: the sealed anomaly is a gravitic diamond with threat
  * corner brackets, the collapsing orbit a bone ring with a you-color progress arc, the resonant
  * circuit stacked sheared plates with a you-color key block. Each carries only a short timer; the
- * trial's name and rules live in the HUD's trial panel. Off-screen points are marked at the
- * screen edge by [drawPointOfInterestEdgeMarkers], drawn over the world.
+ * trial's name and rules live in the HUD's trial panel. A mark that would be cut by the screen
+ * edge is replaced by its edge marker ([drawPointOfInterestEdgeMarkers], drawn over the world).
  */
 internal fun DrawScope.drawPointsOfInterest(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, textMeasurer: TextMeasurer) {
     for (index in engine.pointsOfInterest.indices) {
@@ -40,17 +71,39 @@ internal fun DrawScope.drawPointsOfInterest(engine: GameplayRenderModel, shakeX:
     }
 }
 
-/** Edge markers for points of interest whose center is off-screen: a small mark and the distance. */
+/** Edge markers for points of interest whose mark is not fully on screen: a small mark and the distance. */
 internal fun DrawScope.drawPointOfInterestEdgeMarkers(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, textMeasurer: TextMeasurer) {
     for (index in engine.pointsOfInterest.indices) {
         val point = engine.pointsOfInterest[index]
-        val center = world(engine, point.x, point.y, shakeX, shakeY)
-        if (isOnScreen(center, 30f)) continue
-        val dx = point.x - engine.coreX
-        val dy = point.y - engine.coreY
-        drawEdgeMarker(center, sqrt(dx * dx + dy * dy), point.kind.edgeIcon(), textMeasurer)
+        // An active circuit leads to its next beacon; every other point to its center.
+        val targetX: Float
+        val targetY: Float
+        if (point.active && point.kind == PointOfInterestKind.RESONANT_CIRCUIT) {
+            val beacon = point.nextBeacon % 3
+            targetX = point.x + beaconDx(beacon)
+            targetY = point.y + beaconDy(beacon)
+        } else {
+            targetX = point.x
+            targetY = point.y
+        }
+        val target = world(engine, targetX, targetY, shakeX, shakeY)
+        if (markFullyVisible(target, markHalf(point))) continue
+        val dx = targetX - engine.coreX
+        val dy = targetY - engine.coreY
+        drawEdgeMarker(target, sqrt(dx * dx + dy * dy), point.kind.edgeIcon(), textMeasurer)
     }
 }
+
+private fun markHalf(point: PointOfInterestProjection): Float = when {
+    !point.active -> OFFER_MARK_HALF
+    point.kind == PointOfInterestKind.SEALED_ANOMALY -> VAULT_MARK_HALF
+    point.kind == PointOfInterestKind.RESONANT_CIRCUIT -> BEACON_MARK_HALF
+    else -> 0f // the collapsing orbit's ring reaches well past its center
+}
+
+/** Whether a mark of half extent [half] around [center] lies fully on screen. */
+internal fun DrawScope.markFullyVisible(center: Offset, half: Float): Boolean =
+    center.x >= half && center.y >= half && center.x <= size.width - half && center.y <= size.height - half
 
 private fun PointOfInterestKind.edgeIcon(): EdgeMarkerIcon = when (this) {
     PointOfInterestKind.RESONANT_CIRCUIT -> EdgeMarkerIcon.RESONANT_CIRCUIT
@@ -58,7 +111,10 @@ private fun PointOfInterestKind.edgeIcon(): EdgeMarkerIcon = when (this) {
     PointOfInterestKind.COLLAPSING_ORBIT -> EdgeMarkerIcon.COLLAPSING_ORBIT
 }
 
-/** An offer the Core can still fly into: the kind's mark inside a dashed entry ring and its timer. */
+/**
+ * An offer the Core can still fly into: the kind's mark inside a dashed entry ring and its timer.
+ * The mark is drawn only while it is fully on screen (its edge marker takes over otherwise).
+ */
 private fun DrawScope.drawOfferedPoint(
     engine: GameplayRenderModel,
     point: PointOfInterestProjection,
@@ -70,6 +126,7 @@ private fun DrawScope.drawOfferedPoint(
     rotate(engine.elapsed * 15f, center) {
         drawCircle(Kk.Bone.copy(alpha = 0.22f + pulse * 0.1f), OFFER_RADIUS, center, style = WorldStrokes.dashedThin)
     }
+    if (!markFullyVisible(center, OFFER_MARK_HALF)) return
     when (point.kind) {
         PointOfInterestKind.SEALED_ANOMALY -> {
             drawKkIcon(KkIcon.SYSTEM_ANOMALY, center, 52f, Kk.AGravitic, alpha = 0.75f + pulse * 0.25f, strokeWidth = 1.8f)
@@ -82,7 +139,7 @@ private fun DrawScope.drawOfferedPoint(
         }
         PointOfInterestKind.RESONANT_CIRCUIT -> drawTotemPlates(center, 1.2f, roles.you, keyBlock = true, keyIcon = true)
     }
-    drawPointTimer(point, center.x, center.y + OFFER_RADIUS + 8f, textMeasurer, KkVAlign.TOP)
+    drawPointTimer(point, center, OFFER_RADIUS + 8f, textMeasurer)
 }
 
 private fun DrawScope.drawActivePoint(
@@ -96,15 +153,16 @@ private fun DrawScope.drawActivePoint(
     val roles = textMeasurer.roles
     when (point.kind) {
         PointOfInterestKind.RESONANT_CIRCUIT -> {
-            // Beacon 1 is the center; the circuit visits 2, 3 and returns to 1 (nextBeacon 1..3).
+            // Beacon order 1 is the center; the circuit visits 2, 3 and returns to 1 (nextBeacon 1..3).
             val targetIndex = point.nextBeacon % 3
             for (index in 0 until 3) {
-                val from = beaconOffset(center, index)
-                val to = beaconOffset(center, (index + 1) % 3)
+                val from = Offset(center.x + beaconDx(index), center.y + beaconDy(index))
+                val next = (index + 1) % 3
+                val to = Offset(center.x + beaconDx(next), center.y + beaconDy(next))
                 drawLine(Kk.Bone.copy(alpha = 0.16f), from, to, 1.5f, pathEffect = WorldStrokes.dashEffect)
             }
             for (index in 0 until 3) {
-                val beacon = beaconOffset(center, index)
+                val beacon = Offset(center.x + beaconDx(index), center.y + beaconDy(index))
                 if (!isOnScreen(beacon, 80f)) continue
                 val target = index == targetIndex
                 val visited = !target && visitOrder(index) < point.nextBeacon
@@ -113,8 +171,8 @@ private fun DrawScope.drawActivePoint(
                         drawCircle(roles.you.copy(alpha = 0.55f), 55f, beacon, style = WorldStrokes.dashedMedium)
                     }
                 }
-                drawBeacon(beacon, index, target, visited, textMeasurer)
-                if (target) drawPointTimer(point, beacon.x, beacon.y + 62f, textMeasurer, KkVAlign.TOP)
+                drawBeacon(beacon, index, target, visited, roles)
+                if (target && markFullyVisible(beacon, BEACON_MARK_HALF)) drawPointTimer(point, beacon, BEACON_MARK_HALF + 16f, textMeasurer)
             }
         }
         PointOfInterestKind.SEALED_ANOMALY -> {
@@ -122,9 +180,11 @@ private fun DrawScope.drawActivePoint(
                 drawCircle(Kk.AGravitic.copy(alpha = 0.025f), 290f, center)
                 drawCircle(Kk.AGravitic.copy(alpha = 0.3f), 290f, center, style = WorldStrokes.dashedHair)
             }
-            val pulse = (sin(engine.elapsed * 3.1f) + 1f) * 0.5f
-            drawKkIcon(KkIcon.SYSTEM_ANOMALY, center, 52f, Kk.AGravitic, alpha = 0.7f + pulse * 0.3f, strokeWidth = 1.8f)
-            drawPointTimer(point, center.x, center.y + 40f, textMeasurer, KkVAlign.TOP)
+            if (markFullyVisible(center, VAULT_MARK_HALF)) {
+                val pulse = (sin(engine.elapsed * 3.1f) + 1f) * 0.5f
+                drawKkIcon(KkIcon.SYSTEM_ANOMALY, center, 52f, Kk.AGravitic, alpha = 0.7f + pulse * 0.3f, strokeWidth = 1.8f)
+                drawPointTimer(point, center, 40f, textMeasurer)
+            }
             for (index in engine.enemies.indices) {
                 val enemy = engine.enemies[index]
                 if (enemy.dead || !point.isDefender(enemy.id)) continue
@@ -160,13 +220,27 @@ private fun DrawScope.drawActivePoint(
                 drawArc(roles.you, -90f, 360f * progress, false, Offset(center.x - 198f, center.y - 198f),
                     Size(396f, 396f), style = WorldStrokes.arc6)
             }
-            val layout = measureKkText(textMeasurer, WorldStrings.timer(point.remaining), textMeasurer.typography.condStyle(24f, tabular = true, color = Kk.Bone))
-            // Above the ring; below it when the ring reaches the HUD's top row (timer, trial panel).
-            // The trial panel already shows the clock, so a label that fits neither band is skipped.
-            val baseline = orbitTimerBaseline(center.y, layout.firstBaseline, size.width, size.height, density)
-            if (!baseline.isNaN()) drawKkText(layout, center.x, baseline, Kk.Bone, KkAlign.CENTER, KkVAlign.BASELINE)
+            drawOrbitTimer(engine, point, center, textMeasurer)
         }
     }
+}
+
+/**
+ * The collapsing-orbit timer, above the ring or below it, kept on screen horizontally and clear of
+ * the HUD (top row, trial panel, bottom clusters). The trial panel already shows the clock, so a
+ * label that fits nowhere is skipped.
+ */
+private fun DrawScope.drawOrbitTimer(engine: GameplayRenderModel, point: PointOfInterestProjection, center: Offset, textMeasurer: TextMeasurer) {
+    val layout = measureKkText(textMeasurer, WorldStrings.timer(point.remaining), textMeasurer.typography.condStyle(24f, tabular = true, color = Kk.Bone))
+    val half = layout.size.width * 0.5f
+    val edge = d(12f)
+    val x = if (size.width > half * 2f + edge * 2f) center.x.coerceIn(half + edge, size.width - half - edge) else size.width * 0.5f
+    val keepOut = worldHudKeepOut(engine, textMeasurer)
+    val boxBottom = layout.size.height - layout.firstBaseline
+    val baseline = orbitTimerBaseline(center.y, layout.firstBaseline, size.width, size.height, density) { top, base ->
+        !keepOut.intersects(x - half, top, x + half, base + boxBottom)
+    }
+    if (!baseline.isNaN()) drawKkText(layout, x, baseline, Kk.Bone, KkAlign.CENTER, KkVAlign.BASELINE)
 }
 
 /** Index scan without boxing the id (ImmutableList<Int>.contains would box large ids). */
@@ -175,29 +249,39 @@ private fun PointOfInterestProjection.isDefender(id: Int): Boolean {
     return false
 }
 
-/** Beacon positions relative to the circuit center (PointOfInterestState.beacon). */
-private fun beaconOffset(center: Offset, index: Int): Offset = when (index) {
-    1 -> Offset(center.x + 230f, center.y + 200f)
-    2 -> Offset(center.x - 230f, center.y + 200f)
-    else -> center
+/** Beacon offsets from the circuit center (PointOfInterestState.beacon): order 1 center, 2 right, 3 left. */
+private fun beaconDx(index: Int): Float = when (index) {
+    1 -> 230f
+    2 -> -230f
+    else -> 0f
 }
+
+private fun beaconDy(index: Int): Float = if (index == 0) 0f else 200f
 
 /** The nextBeacon value at which each beacon has been reached: 2 first, then 3, then back to 1. */
 private fun visitOrder(index: Int): Int = if (index == 0) 3 else index
 
-/** A circuit beacon: stacked plates whose middle block carries the beacon's number. */
-private fun DrawScope.drawBeacon(center: Offset, index: Int, target: Boolean, visited: Boolean, textMeasurer: TextMeasurer) {
-    val roles = textMeasurer.roles
+/**
+ * A circuit beacon: stacked plates (the target's middle plate is the you-color key block) with its
+ * place in the circuit shown as 1–3 sheared pips below, never as a numeral.
+ */
+private fun DrawScope.drawBeacon(center: Offset, index: Int, target: Boolean, visited: Boolean, roles: KkRolePalette) {
     val accent = when {
         target -> roles.you
         visited -> Kk.Bone
-        else -> Kk.Mute2
+        else -> Kk.Mute
     }
-    drawTotemPlates(center, 1.4f, accent, keyBlock = target, keyIcon = false)
-    val numberColor = if (target) Kk.Ink else accent
-    val layout = measureKkText(textMeasurer, kkIntString(index + 1), textMeasurer.typography.wideStyle(15f, tabular = true, color = numberColor))
-    drawKkText(layout, center.x, center.y, numberColor, KkAlign.CENTER, KkVAlign.CENTER)
+    drawTotemPlates(center, 1.4f, accent, keyBlock = target, keyIcon = target)
+    val pips = beaconPips(index)
+    val pipWidth = 13f
+    val pipGap = 5f
+    val total = pips * pipWidth + (pips - 1) * pipGap
+    drawKkPips(Offset(center.x - total * 0.5f, center.y + BEACON_MARK_HALF - 5f), pips, pips, accent,
+        sizeDp = 8f / density, widthDp = pipWidth / density, gapDp = pipGap / density)
 }
+
+/** Pips under a beacon: its place in the circuit (1 at the center, 2 right, 3 left). */
+internal fun beaconPips(index: Int): Int = index.coerceIn(0, 2) + 1
 
 /** `.brackets`: two opposite 14 px corner brackets around a square of half size [half]. */
 private fun DrawScope.drawCornerBrackets(center: Offset, half: Float, color: Color) {
@@ -212,17 +296,27 @@ private fun DrawScope.drawCornerBrackets(center: Offset, half: Float, color: Col
     drawRect(color, Offset(right - 2f, bottom - arm), Size(2f, arm))
 }
 
-private fun DrawScope.drawPointTimer(point: PointOfInterestProjection, x: Float, y: Float, textMeasurer: TextMeasurer, valign: KkVAlign) {
+/** A short mono timer [gap] below the mark at [center], or above it when the screen edge is too close. */
+private fun DrawScope.drawPointTimer(point: PointOfInterestProjection, center: Offset, gap: Float, textMeasurer: TextMeasurer) {
     val layout = measureKkText(textMeasurer, WorldStrings.timer(point.remaining), textMeasurer.typography.monoStyle(11f, color = Kk.Mute))
-    drawKkText(layout, x, y, Kk.Mute, KkAlign.CENTER, valign)
+    val below = center.y + gap + layout.kkBoxHeight <= size.height - d(8f)
+    if (below) {
+        drawKkText(layout, center.x, center.y + gap, Kk.Mute, KkAlign.CENTER, KkVAlign.TOP)
+    } else {
+        drawKkText(layout, center.x, center.y - gap - layout.kkBoxHeight, Kk.Mute, KkAlign.CENTER, KkVAlign.TOP)
+    }
 }
 
 /** Kinds of off-screen targets; each draws a small mark (no arrow shapes). */
 internal enum class EdgeMarkerIcon { TOTEM, SEALED_ANOMALY, COLLAPSING_ORBIT, RESONANT_CIRCUIT }
 
+/** The widest distance an edge marker is laid out for (world units; four digits). */
+private const val EDGE_DISTANCE_LAYOUT_VALUE = 8_880L
+
 /**
  * An off-screen target at the screen edge along the direction from the screen center: a small
- * mark and the world distance from the Core, kept clear of the HUD corners (`HUD-Elite.png`).
+ * mark and the world distance from the Core (`HUD-Elite.png`), placed by [EdgeMarkerPlanner] so it
+ * hugs the edge and stays clear of the HUD. The distance is drawn from cached digit layouts.
  */
 internal fun DrawScope.drawEdgeMarker(
     target: Offset,
@@ -231,13 +325,25 @@ internal fun DrawScope.drawEdgeMarker(
     textMeasurer: TextMeasurer,
 ) {
     val roles = textMeasurer.roles
-    val marker = edgeMarkerPosition(target, size.width, size.height, density)
     val color = when (icon) {
         EdgeMarkerIcon.TOTEM, EdgeMarkerIcon.RESONANT_CIRCUIT -> roles.you
         EdgeMarkerIcon.SEALED_ANOMALY -> Kk.AGravitic
         EdgeMarkerIcon.COLLAPSING_ORBIT -> Kk.Bone
     }
-    val iconSize = d(18f)
+    // The style carries the color. Layouts that differ only in color share one paragraph, and
+    // painting it in another color rebuilds it every frame, so each marker color also gets its
+    // own (imperceptibly different) line height and with it its own digit layouts.
+    val colorGroup = when (icon) {
+        EdgeMarkerIcon.TOTEM, EdgeMarkerIcon.RESONANT_CIRCUIT -> 0
+        EdgeMarkerIcon.SEALED_ANOMALY -> 1
+        EdgeMarkerIcon.COLLAPSING_ORBIT -> 2
+    }
+    val style = textMeasurer.typography.monoStyle(11f, lineHeightEm = 1.35f + colorGroup * 0.001f, color = color)
+    val suffix = WorldStrings.distanceSuffix(textMeasurer.language)
+    val textWidth = kkTabularNumberWidth(textMeasurer, EDGE_DISTANCE_LAYOUT_VALUE, style, suffix = suffix)
+    val keepOut = WorldOverlayScratch.keepOut
+    val marker = WorldOverlayScratch.planner.prepare(keepOut, size.width, size.height, density, textWidth).position(target)
+    val iconSize = d(EDGE_ICON_DP)
     when (icon) {
         EdgeMarkerIcon.TOTEM, EdgeMarkerIcon.RESONANT_CIRCUIT -> drawTotemIcon(marker, iconSize, color)
         EdgeMarkerIcon.SEALED_ANOMALY -> drawKkIcon(KkIcon.SYSTEM_ANOMALY, marker, iconSize, color)
@@ -247,48 +353,15 @@ internal fun DrawScope.drawEdgeMarker(
                 Size(iconSize * 0.96f, iconSize * 0.96f), style = kkStroke(d(2f)))
         }
     }
-    // The style carries the color: a layout repainted in another color is rebuilt.
-    val layout = measureKkText(textMeasurer, WorldStrings.distance(distance, textMeasurer.language),
-        textMeasurer.typography.monoStyle(11f, color = color), uppercase = true)
     val onRight = marker.x > size.width * 0.5f
-    val textX = if (onRight) marker.x - iconSize * 0.5f - d(8f) else marker.x + iconSize * 0.5f + d(8f)
-    drawKkText(layout, textX, marker.y, color, if (onRight) KkAlign.END else KkAlign.START, KkVAlign.CENTER)
+    val textX = if (onRight) marker.x - iconSize * 0.5f - d(EDGE_TEXT_GAP_DP) else marker.x + iconSize * 0.5f + d(EDGE_TEXT_GAP_DP)
+    drawKkTabularNumber(textMeasurer, roundedDistance(distance), style, textX, marker.y, color,
+        if (onRight) KkAlign.END else KkAlign.START, KkVAlign.CENTER, suffix = suffix)
 }
 
-/**
- * Where an off-screen [target] is marked: the ray from the screen center to the target meets a
- * rectangle inset from the edges, then slides along that edge out of the HUD corners (top row,
- * bottom clusters). Pure geometry for tests.
- */
-internal fun edgeMarkerPosition(target: Offset, width: Float, height: Float, density: Float): Offset {
-    val portrait = height > width
-    val left = 24f * density
-    val right = width - 24f * density
-    val top = hudSafeTop(height, density)
-    val bottom = hudSafeBottom(width, height, density)
-    val centerX = width * 0.5f
-    val centerY = height * 0.5f
-    val dx = target.x - centerX
-    val dy = target.y - centerY
-    val tx = when {
-        dx > 0f -> (right - centerX) / dx
-        dx < 0f -> (left - centerX) / dx
-        else -> Float.POSITIVE_INFINITY
-    }
-    val ty = when {
-        dy > 0f -> (bottom - centerY) / dy
-        dy < 0f -> (top - centerY) / dy
-        else -> Float.POSITIVE_INFINITY
-    }
-    val t = min(tx, ty).coerceAtLeast(0f)
-    val x = centerX + dx * t
-    val y = centerY + dy * t
-    return if (tx <= ty) {
-        Offset(x.coerceIn(left, right), y.coerceIn(max(top, height * 0.2f), min(bottom, if (portrait) height * 0.66f else height * 0.74f)))
-    } else {
-        Offset(x.coerceIn(max(left, width * 0.26f), min(right, width * 0.74f)), y.coerceIn(top, bottom))
-    }
-}
+/** Edge-marker distance: world units rounded to tens, at most the laid-out four digits. */
+internal fun roundedDistance(distance: Float): Long =
+    (((distance / 10f) + 0.5f).toLong() * 10L).coerceIn(0L, 9_990L)
 
 /** World labels stay below the HUD's top row (level badge, timer, chips, trial panel). */
 internal fun hudSafeTop(height: Float, density: Float): Float = max(80f * density, height * 0.16f)
@@ -298,11 +371,23 @@ internal fun hudSafeBottom(width: Float, height: Float, density: Float): Float =
     if (height > width) height * 0.66f else height - 110f * density
 
 /**
- * Baseline of the collapsing-orbit timer: above the 212 px ring when that clears the HUD's top
- * row, otherwise below the ring; NaN when neither fits between the HUD bands.
+ * Baseline of the collapsing-orbit timer: above the ring when the whole label clears the HUD's top
+ * row, otherwise below the ring; either candidate must lie between the HUD bands and be [clear]
+ * of other HUD regions (label top, baseline). NaN when neither fits.
  */
-internal fun orbitTimerBaseline(centerY: Float, firstBaseline: Float, width: Float, height: Float, density: Float): Float {
-    val above = centerY - 212f
-    val baseline = if (above - firstBaseline >= hudSafeTop(height, density)) above else centerY + 212f + firstBaseline
-    return if (baseline <= hudSafeBottom(width, height, density)) baseline else Float.NaN
+internal inline fun orbitTimerBaseline(
+    centerY: Float,
+    firstBaseline: Float,
+    width: Float,
+    height: Float,
+    density: Float,
+    clear: (top: Float, baseline: Float) -> Boolean = { _, _ -> true },
+): Float {
+    val top = hudSafeTop(height, density)
+    val bottom = hudSafeBottom(width, height, density)
+    val above = centerY - ORBIT_LABEL_OFFSET
+    if (above - firstBaseline >= top && above <= bottom && clear(above - firstBaseline, above)) return above
+    val below = centerY + ORBIT_LABEL_OFFSET + firstBaseline
+    if (below - firstBaseline >= top && below <= bottom && clear(below - firstBaseline, below)) return below
+    return Float.NaN
 }

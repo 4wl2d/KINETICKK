@@ -98,7 +98,10 @@ class WorldHotPathAllocationTest {
     }
 
     private fun assertFrameIsAllocationFree(roles: KkRolePalette, weapon: WeaponId) {
-        val model = busyModel(weapon)
+        // The off-screen totem and sealed-anomaly offer move every frame, so their edge-marker
+        // distances change every frame (drawn from cached digit layouts, never re-measured).
+        val models = Array(37) { frame -> busyModel(weapon, drift = frame * 23f) }
+        var next = 0
         val fx = busyFx()
         val measurer = measurer(roles)
         val bitmap = ImageBitmap(WIDTH, HEIGHT)
@@ -114,6 +117,8 @@ class WorldHotPathAllocationTest {
         }
         val baseline = bytesPerFrame { }
         val world = bytesPerFrame {
+            val model = models[next]
+            next = (next + 1) % models.size
             drawBackdrop(model, 1.5f, -1f, 2f, roles)
             drawWorld(model, fx, 1.5f, -1f, measurer)
             drawScreenFx(model, 2f, roles)
@@ -154,7 +159,7 @@ class WorldHotPathAllocationTest {
         weaponArcs = immutableListOf(WeaponArcProjection(CORE, CORE, CORE + 180f, CORE + 60f, 0.1f)),
     )
 
-    private fun busyModel(weapon: WeaponId): GameplayRenderModel {
+    private fun busyModel(weapon: WeaponId, drift: Float = 0f): GameplayRenderModel {
         val enemies = EnemyType.entries.mapIndexed { index, type ->
             val angle = index * 0.7f
             val distance = if (type == EnemyType.ARCHITECT) 260f else 180f + index * 12f
@@ -175,7 +180,7 @@ class WorldHotPathAllocationTest {
             weapon = weapon, weaponLevel = 3, overdriveCharge = 10f, overdriveTime = 0f, rerollsRemaining = 1, acquiredItemCount = 0,
             recentItem = null, equippedRelics = immutableListOf(), morningstarAngle = 0.3f, morningstarX = CORE + 60f,
             morningstarY = CORE + 40f, weaponBeamTime = 0f, weaponBeamStartX = 0f, weaponBeamStartY = 0f, weaponBeamEndX = 0f,
-            weaponBeamEndY = 0f, totem = TotemProjection(CORE - 1_600f, CORE + 100f, 1f), coreShape = CoreShape.TESSERACT,
+            weaponBeamEndY = 0f, totem = TotemProjection(CORE - 1_600f - drift, CORE + 100f + drift * 0.3f, 1f), coreShape = CoreShape.TESSERACT,
             enemies = enemies.toImmutableList(),
             projectiles = (0 until 12).map { index ->
                 ProjectileProjection(CORE - 200f + index * 25f, CORE + 120f, 0f, 0f, 4.5f, 1f, index % 3 != 0, 1f, 0, 0, null,
@@ -191,7 +196,7 @@ class WorldHotPathAllocationTest {
             pointsOfInterest = immutableListOf(
                 PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Orbit", CORE + 60f, CORE + 40f, true, 14f, 1, 0.4f,
                     immutableListOf(), 0.5f, 0.3f),
-                PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed", CORE + 2_000f, CORE - 300f, false, 20f, 1, 0f,
+                PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed", CORE + 900f + drift, CORE - 300f, false, 20f, 1, 0f,
                     immutableListOf(), 0f, 0f),
             ),
         )

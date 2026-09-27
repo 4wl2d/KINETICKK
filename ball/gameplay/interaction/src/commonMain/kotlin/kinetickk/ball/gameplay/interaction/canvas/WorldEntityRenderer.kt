@@ -276,8 +276,8 @@ private fun DrawScope.drawPickupPlate(center: Offset, outline: androidx.compose.
 }
 
 /**
- * Particles: the first shards of a burst fly as sharp triangles pointed along their travel;
- * the rest are short sparks along their velocity.
+ * Particles: the first shards of a burst fly as tumbling sheared slivers (never pointed); the rest
+ * are short sparks along their velocity.
  */
 internal fun DrawScope.drawParticles(
     engine: GameplayRenderModel,
@@ -298,7 +298,7 @@ internal fun DrawScope.drawParticles(
             val length = particle.size * 2.6f
             withTransform({
                 translate(center.x, center.y)
-                rotate(heading * RAD_TO_DEG + (1f - alpha) * 140f, Offset.Zero)
+                rotate(shardTumble(heading, index, alpha), Offset.Zero)
                 scale(length, length, Offset.Zero)
             }) {
                 drawPath(WorldUnitShapes.shard, color, alpha = min(1f, alpha * 1.4f))
@@ -313,6 +313,10 @@ internal fun DrawScope.drawParticles(
         }
     }
 }
+
+/** Shards tumble: a per-shard phase plus a turn over their life, never aligned to their travel. */
+internal fun shardTumble(heading: Float, index: Int, life: Float): Float =
+    heading * RAD_TO_DEG + 55f + (index % 4) * 17f + (1f - life) * 220f
 
 /**
  * The weapon totem: stacked sheared ink plates with you-color edge lines around a you-color key
