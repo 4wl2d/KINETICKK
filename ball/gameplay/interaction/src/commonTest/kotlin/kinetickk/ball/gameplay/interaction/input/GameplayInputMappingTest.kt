@@ -18,12 +18,27 @@ class GameplayInputMappingTest {
     @Test
     fun runningHudMapsOnlyToLiveRunActions() {
         val model = hitTestState(GamePhase.RUNNING)
+        val controls = runningControlBounds(model.screenWidth, model.screenHeight, model.uiScale).associate { it.target to it.bounds }
+        val dashCenter = controls.getValue(RunningControlTarget.DASH).center
+        val brakeCenter = controls.getValue(RunningControlTarget.BRAKE).center
 
-        val dash = assertIs<GameplayInput.Action>(model.resolveGameplayPress(1_180f, 668f))
-        val brake = assertIs<GameplayInput.Action>(model.resolveGameplayPress(1_008f, 668f))
+        val dash = assertIs<GameplayInput.Action>(model.resolveGameplayPress(dashCenter.x, dashCenter.y))
+        val brake = assertIs<GameplayInput.Action>(model.resolveGameplayPress(brakeCenter.x, brakeCenter.y))
 
         assertSame(GameplayInteractionPulse.DashRequested, dash.action)
         assertIs<GameplayInteractionPulse.BrakeChanged>(brake.action)
+    }
+
+    @Test
+    fun desktopPauseButtonTogglesPauseLikeTheKeyboardAndIsNotSteering() {
+        val model = hitTestState(GamePhase.RUNNING)
+        val pause = runningControlBounds(model.screenWidth, model.screenHeight, model.uiScale)
+            .single { it.target == RunningControlTarget.PAUSE }.bounds
+
+        val input = assertIs<GameplayInput.Action>(model.resolveGameplayPress(pause.center.x, pause.center.y))
+        assertSame(GameplayInteractionPulse.PauseToggled, input.action)
+        assertTrue(model.isHudControlPosition(pause.left, pause.top))
+        assertFalse(model.isHudControlPosition(pause.center.x, pause.bottom + 1f))
     }
 
     @Test

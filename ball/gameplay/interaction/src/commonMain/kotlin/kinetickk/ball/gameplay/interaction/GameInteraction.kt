@@ -7,20 +7,16 @@ import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.LocalAppLanguage
-import kinetickk.foundation.design.InterfaceGlyph
-import kinetickk.foundation.design.drawInterfaceGlyph
-import kinetickk.foundation.design.White
-import kinetickk.foundation.design.Muted
+import kinetickk.foundation.design.LocalKkRolePalette
+import kinetickk.foundation.design.Kk
+import kinetickk.foundation.design.drawKkSlab
+import kinetickk.foundation.design.kkStroke
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.hoverable
-import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.layout.padding
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -28,8 +24,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredSize
-import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.NonRestartableComposable
 import androidx.compose.runtime.SideEffect
@@ -43,8 +39,10 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -71,10 +69,14 @@ import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.LocalCrashDiagnostics
 import kinetickk.foundation.diagnostics.CrashDiagnostics
+import kinetickk.ball.gameplay.interaction.canvas.HudPresentationMemory
+import kinetickk.ball.gameplay.interaction.canvas.HudTrialPanelLayout
+import kinetickk.ball.gameplay.interaction.canvas.activeTrial
 import kinetickk.ball.gameplay.interaction.canvas.drawGameplay
 import kinetickk.ball.gameplay.interaction.canvas.drawPerformanceHud
 import kinetickk.ball.gameplay.interaction.canvas.shouldDrawRunningPresentation
 import kinetickk.ball.gameplay.interaction.canvas.toPerformanceHudProjection
+import kinetickk.ball.gameplay.interaction.canvas.trialRules
 import kinetickk.ball.gameplay.interaction.input.GameInteractionValidator
 import kinetickk.ball.gameplay.interaction.input.GameplayInput
 import kinetickk.ball.gameplay.interaction.input.InteractionValidationResult
@@ -85,8 +87,12 @@ import kinetickk.ball.gameplay.interaction.layout.PauseTarget
 import kinetickk.ball.gameplay.interaction.layout.PauseLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
 import kinetickk.ball.gameplay.interaction.layout.choiceLayoutGeometry
+import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
+import kinetickk.ball.gameplay.interaction.layout.gameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
+import kinetickk.ball.gameplay.interaction.layout.regularHudUnit
+import kinetickk.ball.gameplay.interaction.layout.runningBuildButtonBounds
 import kinetickk.ball.gameplay.interaction.rewards.RewardContent
 import kinetickk.ball.gameplay.interaction.terminal.TerminalContent
 import kinetickk.ball.gameplay.interaction.terminal.terminalActionsReady
@@ -129,6 +135,8 @@ fun GameplayContent(
         mutableStateOf(GameplayPerformanceSnapshot.Empty)
     }
     val performanceEnabledState = rememberUpdatedState(performanceEnabledValue)
+    val hudMemory = remember(component) { HudPresentationMemory() }
+    var trialInfoFocusedValue by remember(component) { mutableStateOf(false) }
 
     fun dispatch(
         pulse: GameplayInteractionPulse,
@@ -260,12 +268,14 @@ fun GameplayContent(
 
     val textScale = renderModelValue.settings.textScale
     val typography = kinetickk.foundation.design.rememberInterfaceTypography()
-    val textMeasurer = remember(composeTextMeasurer, textScale, language, typography) {
+    val roles = LocalKkRolePalette.current
+    val textMeasurer = remember(composeTextMeasurer, textScale, language, typography, roles) {
         CanvasTextMeasurer(
             delegate = composeTextMeasurer,
             typography = typography,
             scale = textScale,
             language = language,
+            roles = roles,
         )
     }
     val layoutDimensions = remember(
@@ -322,7 +332,7 @@ fun GameplayContent(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF050610))
+            .background(Kk.Ink)
             .testTag(GAMEPLAY_ROOT_TAG)
             .semantics {
                 contentDescription = language.text(GameplayText.Gameplay)
@@ -522,6 +532,8 @@ fun GameplayContent(
                 renderTime = renderTimeSecondsValue,
                 pauseLayout = pauseLayout,
                 terminalElapsed = terminalElapsed,
+                hudMemory = hudMemory,
+                trialInfoFocused = trialInfoFocusedValue,
             )
             if (drawStartedAt != null) {
                 // State writes can invalidate the draw scope before recomposition publishes the
@@ -564,12 +576,18 @@ fun GameplayContent(
         }
         // Pause and reward overlays present Codex as their own menu item and button.
         if (inputEnabled && renderModelValue.phase == GamePhase.RUNNING) {
+            val buildBounds = remember(layoutDimensions) {
+                runningBuildButtonBounds(layoutDimensions.width, layoutDimensions.height, layoutDimensions.scale)
+            }
             BuildButton(
-                modifier = Modifier.align(when {
-                    kinetickk.ball.gameplay.interaction.layout.gameplayLayoutMode(renderModelValue.screenWidth, renderModelValue.screenHeight, density) == kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode.REGULAR -> Alignment.BottomStart
-                    else -> Alignment.BottomCenter
-                }).padding(12.dp),
-                textScale = renderModelValue.settings.textScale,
+                modifier = Modifier.placeInGameplayBounds(buildBounds, localDensity),
+                regularUnit = if (gameplayLayoutMode(layoutDimensions.width, layoutDimensions.height, layoutDimensions.scale) ==
+                    GameplayLayoutMode.REGULAR
+                ) {
+                    regularHudUnit(layoutDimensions.width, layoutDimensions.scale)
+                } else {
+                    0f
+                },
                 onClick = { onOutput(GameplayInteractionOutput.OpenCodex) },
             )
         }
@@ -579,6 +597,7 @@ fun GameplayContent(
                 density = localDensity,
                 performanceEnabled = performanceEnabledValue,
                 pauseLayout = pauseLayout,
+                onTrialInfoFocusChanged = { trialInfoFocusedValue = it },
                 onInput = { input ->
                     dispatch(GameplayInteractionPulse.UserGestureObserved)
                     dispatchInput(input)
@@ -603,10 +622,22 @@ private fun GameplaySemanticControls(
     density: Density,
     performanceEnabled: Boolean,
     pauseLayout: PauseLayoutGeometry?,
+    onTrialInfoFocusChanged: (Boolean) -> Unit,
     onInput: (GameplayInput) -> Unit,
     onBrakeChanged: (Boolean) -> Unit,
 ) {
     val language = LocalAppLanguage.current
+    if (engine.phase == GamePhase.RUNNING) {
+        val trial = engine.activeTrial()
+        if (trial != null) {
+            TrialInfoSemanticNode(
+                engine = engine,
+                density = density,
+                description = engine.trialRules(trial, language),
+                onFocusChanged = onTrialInfoFocusChanged,
+            )
+        }
+    }
     when (engine.phase) {
         GamePhase.RUNNING -> forEachRunningControlBounds(
             width = engine.screenWidth,
@@ -698,6 +729,38 @@ private fun GameplaySemanticControls(
     }
 }
 
+/**
+ * The trial panel's (!) is drawn on the Canvas, where the pointer steers the singularity; its rules
+ * are exposed as a focusable node whose description is the rule text. Focus shows the tooltip.
+ */
+@Composable
+private fun TrialInfoSemanticNode(
+    engine: GameplayRenderModel,
+    density: Density,
+    description: String,
+    onFocusChanged: (Boolean) -> Unit,
+) {
+    val bounds = remember(engine.screenWidth, engine.screenHeight, engine.uiScale, engine.settings.textScale) {
+        HudTrialPanelLayout()
+            .update(engine.screenWidth, engine.screenHeight, engine.uiScale, engine.settings.textScale)
+            .infoTarget(engine.uiScale)
+    }
+    val currentOnFocusChanged = rememberUpdatedState(onFocusChanged)
+    DisposableEffect(Unit) {
+        onDispose { currentOnFocusChanged.value(false) }
+    }
+    Box(
+        Modifier
+            .placeInGameplayBounds(bounds, density)
+            .testTag(GAMEPLAY_TRIAL_INFO_TAG)
+            .onFocusChanged { currentOnFocusChanged.value(it.isFocused) }
+            .semantics(mergeDescendants = true) {
+                contentDescription = description
+            }
+            .focusable(),
+    )
+}
+
 @Composable
 @NonRestartableComposable
 private fun PerformanceSemanticAction(
@@ -787,6 +850,7 @@ private fun Modifier.placeInGameplayBounds(bounds: Rect, density: Density): Modi
         )
 
 private const val GAMEPLAY_ROOT_TAG = "kinetickk.gameplay"
+internal const val GAMEPLAY_TRIAL_INFO_TAG = "kinetickk.gameplay.trial-info"
 internal val GAMEPLAY_BRAKE_DESCRIPTION = GameplayText.BrakeDescription.english
 internal val GAMEPLAY_BRAKE_SEMANTIC_ACTION_LABEL = GameplayText.BrakeAction.english
 
@@ -827,26 +891,48 @@ private fun reportInvalidInteractionInput(failure: ValidationFailure) {
     println("KINETICKK interaction input dropped: ${failure.code}")
 }
 
+/** Ghost icon button (`.ibtn`) opening the build overview (Codex) during a run; no key letter. */
 @Composable
-private fun BuildButton(modifier: Modifier, textScale: Float, onClick: () -> Unit) {
+private fun BuildButton(modifier: Modifier, regularUnit: Float, onClick: () -> Unit) {
     val label = LocalAppLanguage.current.text(GameplayText.Build)
     val interactions = remember { MutableInteractionSource() }
     val focused by interactions.collectIsFocusedAsState()
     val hovered by interactions.collectIsHoveredAsState()
-    Box(modifier) {
-        Box(Modifier.size(48.dp).background(if (focused || hovered) Color(0xFF292D34) else Color(0xE6101216))
+    Box(
+        modifier
             .testTag("kinetickk.gameplay.build")
             .semantics { contentDescription = label }
             .hoverable(interactions)
-            .clickable(interactionSource = interactions, indication = null, role = Role.Button, onClick = onClick)) {
-            Canvas(Modifier.fillMaxSize().padding(13.dp)) {
-                drawInterfaceGlyph(InterfaceGlyph.LAYERS, center.copy(y = center.y - 3.dp.toPx()), 9.dp.toPx(), White)
-            }
-            BasicText("I", Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp), kinetickk.foundation.design.interfaceTextStyle(11f, Muted, display = true))
+            .clickable(interactionSource = interactions, indication = null, role = Role.Button, onClick = onClick),
+    ) {
+        Canvas(Modifier.fillMaxSize()) {
+            val unit = if (regularUnit > 0f) regularUnit else density
+            val width = (if (regularUnit > 0f) 40f else 44f) * unit
+            val height = (if (regularUnit > 0f) 36f else 40f) * unit
+            val left = center.x - width * 0.5f
+            val top = center.y - height * 0.5f
+            val active = focused || hovered
+            drawBuildButton(Rect(left, top, left + width, top + height), active, focused, unit)
         }
-        if (focused || hovered) {
-            BasicText(label, Modifier.offset(x = 54.dp).background(Color(0xFF191C22)).padding(10.dp),
-                kinetickk.foundation.design.interfaceTextStyle(14f * textScale, White, display = true))
-        }
+    }
+}
+
+/** Ink-3 slab (bone when hovered/focused) with a stacked-plates mark; focus adds the bone outline. */
+private fun DrawScope.drawBuildButton(bounds: Rect, active: Boolean, focused: Boolean, unit: Float) {
+    val cut = 8f * density
+    drawKkSlab(bounds, if (active) Kk.Bone else Kk.Ink3, cut)
+    val ink = if (active) Kk.Ink else Kk.Bone
+    val plateWidth = 16f * unit
+    val plateHeight = 3f * unit
+    for (index in 0 until 3) {
+        val y = bounds.center.y - 7f * unit + index * 6f * unit
+        val x = bounds.center.x - plateWidth * 0.5f + (1 - index) * 2f * unit
+        drawRect(ink, Offset(x, y), androidx.compose.ui.geometry.Size(plateWidth, plateHeight))
+    }
+    if (focused) {
+        val gap = 4f * density
+        drawRect(Kk.Bone, Offset(bounds.left - gap, bounds.top - gap),
+            androidx.compose.ui.geometry.Size(bounds.width + gap * 2f, bounds.height + gap * 2f),
+            style = kkStroke(2f * density))
     }
 }
