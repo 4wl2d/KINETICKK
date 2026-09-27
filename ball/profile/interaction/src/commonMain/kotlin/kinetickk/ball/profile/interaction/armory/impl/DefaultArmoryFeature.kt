@@ -5,10 +5,10 @@ package kinetickk.ball.profile.interaction.armory.impl
 
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import kinetickk.ball.content.api.WeaponDefinition
@@ -24,7 +24,6 @@ import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.audio.ProfileAudioExecutor
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.resource.audio.api.AudioService
-import kotlinx.coroutines.launch
 
 class DefaultArmoryFeature(
     private val profilePort: ProfilePort,
@@ -51,7 +50,13 @@ class DefaultArmoryFeature(
         val textScale = profilePort.query(ProfileQuery.GetPreferences).preferences.textScale
         val gridScroll = rememberScrollState()
         val holder = remember { ArmoryLayoutHolder() }
-        val scope = rememberCoroutineScope()
+        // A page step records its target; the effect below animates the grid to it.
+        var gridScrollTargetValue by remember { mutableStateOf<Int?>(null) }
+        LaunchedEffect(gridScrollTargetValue) {
+            val target = gridScrollTargetValue ?: return@LaunchedEffect
+            gridScroll.animateScrollTo(target)
+            gridScrollTargetValue = null
+        }
 
         fun dispatch(action: ArmoryAction) {
             val reduction = reducer.reduce(state, model, action)
@@ -73,7 +78,7 @@ class DefaultArmoryFeature(
                         val layout = holder.layout ?: return@forEach
                         val target = armoryGridScrollTarget(gridScroll.value.toFloat(), gridScroll.maxValue.toFloat(),
                             layout.gridViewport.height, layout.rowPitch, effect.forward)
-                        scope.launch { gridScroll.animateScrollTo(target.toInt()) }
+                        gridScrollTargetValue = target.toInt()
                     }
                 }
             }
