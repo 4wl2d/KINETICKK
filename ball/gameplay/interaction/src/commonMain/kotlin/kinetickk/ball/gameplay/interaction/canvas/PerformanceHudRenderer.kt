@@ -105,7 +105,7 @@ private fun DrawScope.drawCompactPerformanceHud(
     drawPerformancePanel(frame, left, top, width, height, roles)
     val textLeft = left + padding
     val maxTextWidth = width - padding * 2f
-    drawPerformanceLine(textMeasurer, HudText.PERF_TITLE, textMeasurer.language.text(GameplayText.PerformanceCompactTitle),
+    drawPerformanceLine(textMeasurer, HudText.PERF_TITLE, textMeasurer.language.text(GameplayText.PerformanceTitle),
         textLeft, top + padding, fontSize, roles.you, maxTextWidth, label = true)
     val lines = projection.compactLines
     for (index in lines.indices) {
@@ -186,5 +186,3 @@ private fun Double.tenths(language: AppLanguage): String {
     val separator = if (language == AppLanguage.Russian) ',' else '.'
     return "${scaled / 10}$separator${abs(scaled % 10)}"
 }
-
-internal val COMPACT_PERFORMANCE_TITLE = GameplayText.PerformanceCompactTitle.english

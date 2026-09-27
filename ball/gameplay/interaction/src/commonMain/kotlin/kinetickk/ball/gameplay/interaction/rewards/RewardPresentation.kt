@@ -623,28 +623,6 @@ private fun GameplayRenderModel.rewardConnections(choice: ChoiceOption, language
     }
 }.distinct()
 
-/** Legacy operation line (kept for localization tests); the redesign shows [rewardRelicAction]. */
-internal fun relicRewardOperation(
-    action: RelicChoiceAction,
-    ownedRank: Int,
-    slotRank: Int?,
-    slotIndex: Int,
-    maxRank: Int,
-    language: AppLanguage = AppLanguage.English,
-): String = when (action) {
-    RelicChoiceAction.ACQUIRE -> when {
-        ownedRank >= maxRank -> language.text(GameplayText.SalvageResonance)
-        ownedRank > 0 -> language.text(GameplayText.MeldRank, ownedRank, (ownedRank + 1).coerceAtMost(maxRank))
-        else -> language.text(GameplayText.BindMatrix)
-    }
-    RelicChoiceAction.MELD -> language.text(GameplayText.MeldSlot)
-    RelicChoiceAction.REPLACE -> language.text(GameplayText.ReplaceSlot, slotIndex + 1)
-    RelicChoiceAction.MELD_TARGET -> {
-        val rank = slotRank ?: 1
-        if (rank >= maxRank) language.text(GameplayText.SalvageExcess) else language.text(GameplayText.MeldRank, rank, rank + 1)
-    }
-}
-
 internal fun rewardCardIsCompact(widthDp: Float, heightDp: Float): Boolean =
     widthDp < 180f || heightDp < 240f
 

@@ -201,7 +201,7 @@ class TerminalContentTest {
 
 private fun report(language: AppLanguage = AppLanguage.English) = TerminalPresentation(
     victory = false, reason = "CORE FRACTURED".localizedContent(language), time = "08:42", kills = "486", matter = "1248",
-    weapon = language.text(GameplayText.WeaponLevel, "Flux Wake".localizedContent(language), 7),
+    weapon = "Flux Wake".localizedContent(language),
     combat = listOf(
         TerminalStatistic(GameplayText.EnemiesDestroyed, "486"),
         TerminalStatistic(GameplayText.ElitesDestroyed, "12"),

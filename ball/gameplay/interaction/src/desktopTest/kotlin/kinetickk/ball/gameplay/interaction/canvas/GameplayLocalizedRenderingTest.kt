@@ -140,7 +140,7 @@ class GameplayLocalizedRenderingTest {
                         RewardContent(
                             RewardPresentation(
                                 AppLanguage.Russian.text(GameplayText.ChooseArtifact),
-                                AppLanguage.Russian.text(GameplayText.TimeSuspended),
+                                "",
                                 cards, White, Violet, 3,
                             ),
                             choiceLayoutGeometry(current.width.toFloat(), current.height.toFloat(), 1f, 3, true),

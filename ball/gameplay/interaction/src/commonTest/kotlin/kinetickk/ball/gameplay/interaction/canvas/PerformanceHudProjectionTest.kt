@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
+import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.performance.GameplayPerformanceSnapshot
 import kinetickk.ball.gameplay.interaction.performance.PerformanceDurationStats
 import kotlin.test.Test
@@ -41,7 +42,6 @@ class PerformanceHudProjectionTest {
             peakTrailPoints = 3_400,
         ).toPerformanceHudProjection()
 
-        assertEquals("PERFORMANCE // TAP PERF // ROLLING", COMPACT_PERFORMANCE_TITLE)
         assertEquals(5, projection.compactLines.size)
         assertEquals("FRM P50 10.1 P95 20.2 P99 30.3 MAX 40.4", projection.compactLines[0])
         assertEquals("N 12.3K W 600 | PIPE P50 10.1 P95 20.2", projection.compactLines[1])
@@ -49,7 +49,8 @@ class PerformanceHudProjectionTest {
         assertEquals(">16 5.1% >33 1.2% | E 120/650 PRJ 2.4K/12.3K", projection.compactLines[3])
         assertEquals("PICK 42/84 TRAIL 1.2K/3.4K", projection.compactLines[4])
         assertTrue(projection.compactLines.all { it.length <= MAX_COMPACT_HUD_LINE_CHARACTERS })
-        assertFalse((listOf(COMPACT_PERFORMANCE_TITLE) + projection.compactLines).any { "F3" in it })
+        val titles = listOf(GameplayText.PerformanceTitle.english, GameplayText.PerformanceTitle.russian)
+        assertFalse((titles + projection.compactLines).any { "F3" in it || "TAP" in it })
     }
 
     @Test
