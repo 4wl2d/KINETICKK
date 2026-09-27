@@ -498,7 +498,8 @@ fun kkTooltipRect(
 
 /**
  * Tooltip slip (`.info .tipbox`): bone slip with a 10 dp top-right cut, ink body text 14 px,
- * 270 dp wide, placed around [anchor] (see [kkTooltipRect]). Returns the slip rect.
+ * 270 dp wide, placed around [anchor] (see [kkTooltipRect]). Returns the slip rect. Allocates
+ * its rects per call: fine for menus; in-run screens cache the placement and draw the slip.
  */
 fun DrawScope.drawKkTooltip(
     measurer: CanvasTextMeasurer,

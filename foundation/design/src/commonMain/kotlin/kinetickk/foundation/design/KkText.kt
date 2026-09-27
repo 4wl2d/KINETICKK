@@ -302,6 +302,11 @@ fun kkTabularNumberWidth(
  * from cached per-digit layouts, so a new value never measures text: allocation-free once each
  * digit, [prefix] and [suffix] have been measured. [style] should use tabular figures (every digit
  * advances by the width of "0"). Returns the drawn width.
+ *
+ * Text caveats that also apply here: Compose shares one paragraph between layouts whose styles
+ * differ only in color, so drawing such layouts in alternating colors (or with a changing alpha)
+ * repaints the paragraph every frame. Give each color its own style (a negligible tracking or
+ * line-height difference) and keep text alpha steady; animate plates and halos instead.
  */
 fun DrawScope.drawKkTabularNumber(
     measurer: CanvasTextMeasurer,
@@ -398,8 +403,14 @@ private fun measureUncached(
  * uppercase, width limit, line limit). With memoized role styles and unchanged strings, repeated
  * frames reuse layouts without measuring or allocating. Draw-thread confined, bounded.
  */
+/**
+ * Layout memo with second-chance (clock) eviction: an entry read since the clock last passed it
+ * survives one more round, so layouts drawn every frame (HUD digits, labels) stay resident while
+ * one-off strings (damage numbers) cycle through the remaining slots.
+ */
 private object KkMeasureMemo {
     private const val CAPACITY = 128
+    private val used = BooleanArray(CAPACITY)
     private val texts = arrayOfNulls<String>(CAPACITY)
     private val styles = arrayOfNulls<TextStyle>(CAPACITY)
     private val delegates = arrayOfNulls<Any>(CAPACITY)
@@ -416,14 +427,23 @@ private object KkMeasureMemo {
             if (styles[index] !== style || delegates[index] !== delegate) continue
             if (scales[index] == measurer.scale && upper[index] == uppercase && lines[index] == maxLines &&
                 widths[index] == maxWidth && texts[index] == text
-            ) return results[index]
+            ) {
+                used[index] = true
+                return results[index]
+            }
         }
         return null
     }
 
     fun put(measurer: CanvasTextMeasurer, text: String, style: TextStyle, uppercase: Boolean, maxWidth: Float, maxLines: Int, result: TextLayoutResult) {
-        val index = next
-        next = (next + 1) % CAPACITY
+        var index = next
+        // Bounded: after one full round every flag is cleared, so this ends within CAPACITY steps.
+        while (used[index]) {
+            used[index] = false
+            index = (index + 1) % CAPACITY
+        }
+        next = (index + 1) % CAPACITY
+        used[index] = false
         texts[index] = text
         styles[index] = style
         delegates[index] = measurer.delegate
