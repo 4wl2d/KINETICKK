@@ -7,6 +7,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
@@ -25,7 +26,6 @@ import kinetickk.foundation.design.KkButtonSize
 import kinetickk.foundation.design.KkButtonVariant
 import kinetickk.foundation.design.KkPathCache
 import kinetickk.foundation.design.KkRolePalette
-import kinetickk.foundation.design.KkTooltipPlacement
 import kinetickk.foundation.design.KkVAlign
 import kinetickk.foundation.design.condStyle
 import kinetickk.foundation.design.drawKkButton
@@ -39,7 +39,10 @@ import kinetickk.foundation.design.drawKkStepButton
 import kinetickk.foundation.design.drawKkTab
 import kinetickk.foundation.design.drawKkText
 import kinetickk.foundation.design.drawKkToggle
-import kinetickk.foundation.design.drawKkTooltip
+import kinetickk.foundation.design.drawKkSlip
+import kinetickk.foundation.design.drawKkThreatHatch
+import kinetickk.foundation.design.kkBoxHeight
+import kinetickk.foundation.design.measureKkTooltip
 import kinetickk.foundation.design.formatCompact
 import kinetickk.foundation.design.formatMultiplier
 import kinetickk.foundation.design.kkShearOffset
@@ -97,8 +100,8 @@ internal fun settingsMeasurers(
 /** Text widths for [settingsLayout], measured exactly as the renderer draws them. */
 internal fun SettingsMeasurers.metrics(mode: SettingsLayoutMode): SettingsTextMetrics {
     val type = settingsType(mode)
-    return SettingsTextMetrics { text, kind ->
-        when (kind) {
+    return object : SettingsTextMetrics {
+        override fun width(text: String, kind: SettingsTextKind): Float = when (kind) {
             SettingsTextKind.TITLE -> measureKkText(body, text, titleStyle(type), uppercase = true).size.width.toFloat()
             SettingsTextKind.BUTTON -> measureKkText(ui, text, typography.condStyle(KkButtonSize.SM.fontSp, trackingEm = 0.02f, lineHeightEm = 1f), uppercase = true).size.width.toFloat()
             SettingsTextKind.TAB -> measureKkText(ui, text, typography.condStyle(21f, trackingEm = 0.03f), uppercase = true).size.width.toFloat()
@@ -106,8 +109,15 @@ internal fun SettingsMeasurers.metrics(mode: SettingsLayoutMode): SettingsTextMe
             SettingsTextKind.OUTPUT -> measureKkText(ui, text, outputStyle(), uppercase = true).size.width.toFloat()
             SettingsTextKind.ROW_LABEL -> measureKkText(body, text, typography.condStyle(type.rowLabel), uppercase = true).size.width.toFloat()
         }
+
+        override fun rowLabelLineHeight(): Float =
+            measureKkText(body, ROW_LABEL_PROBE, typography.condStyle(type.rowLabel), uppercase = true).kkBoxHeight
     }
 }
+
+/** Tallest Latin and Cyrillic capitals, for the row label line box. */
+private const val ROW_LABEL_PROBE = "ЁЙAG"
+
 
 private fun SettingsMeasurers.titleStyle(type: SettingsType): TextStyle = typography.condStyle(type.title, lineHeightEm = 1f)
 
@@ -182,8 +192,11 @@ internal fun DrawScope.drawSettings(frame: SettingsFrame, measurers: SettingsMea
     layout.preview?.let { drawSettingsPreview(it, frame, measurers) }
 
     frame.openInfo?.let { open ->
-        layout.row(open)?.let { row ->
-            drawKkTooltip(measurers.body, row.info, open.about(measurers.language), KkTooltipPlacement.ABOVE_END)
+        // `.tipbox`: bone slip with a 10 px top-right cut, placed clear of the navigation.
+        val body = measureKkTooltip(measurers.body, open.about(measurers.language), density)
+        layout.tooltipRect(open, body.kkBoxHeight)?.let { rect ->
+            drawKkSlip(rect, cutDp = 10f)
+            drawKkText(body, rect.left + d(13f), rect.top + d(11f), Kk.Ink)
         }
     }
 }
@@ -223,6 +236,7 @@ private fun DrawScope.drawSettingsRow(
                     hovered = frame.hover == target, focused = frame.focus == target,
                 )
             }
+            if (row.swatches.isNotEmpty()) drawSettingsSwatches(row.swatches, preferences.colorVision.previewPalette(), measurers)
         }
         SettingsControl.TOGGLE -> {
             val toggle = row.toggle ?: return
@@ -262,6 +276,44 @@ internal fun DrawScope.drawSettingsFocus(bounds: Rect) {
         Size(bounds.width + inset * 2f, bounds.height + inset * 2f), style = kkStroke(d(2f)),
     )
 }
+
+/**
+ * Compact role swatches (YOU, THREAT, HEAT, SHIELD, POLARITY) in the palette being edited, named
+ * inside each sheared chip. Mono hatches the threat chip and keeps its name on a solid face.
+ */
+private fun DrawScope.drawSettingsSwatches(chips: List<Rect>, palette: KkRolePalette, measurers: SettingsMeasurers) {
+    val measurer = measurers.at(min(measurers.bodyScale, 1.15f))
+    val style = measurers.typography.labelStyle(11f, trackingEm = 0.05f)
+    settingsRoleSwatches(palette).forEachIndexed { index, (name, color) ->
+        val chip = chips.getOrNull(index) ?: return
+        drawKkSheared(chip, color)
+        if (index == SETTINGS_THREAT_SWATCH && palette.hatchThreats) {
+            drawKkThreatHatch(chip, palette, Kk.Ink)
+            val rim = d(3f)
+            drawKkSheared(Rect(chip.left + rim, chip.top + rim, chip.right - rim, chip.bottom - rim), color)
+        }
+        val text = measurers.language.text(name)
+        val natural = measureKkText(measurer, text, style, uppercase = true)
+        val lane = chip.width - d(8f)
+        val layout = if (natural.size.width <= lane) natural else {
+            measureKkText(measurers.at(measurer.scale * lane / natural.size.width), text, style, uppercase = true)
+        }
+        val ink = if (color.luminance() > 0.3f) Kk.Ink else Kk.Bone
+        drawKkText(layout, chip.center.x, chip.center.y, ink, align = KkAlign.CENTER, valign = KkVAlign.CENTER)
+    }
+}
+
+/** Index of the threat chip in [settingsRoleSwatches]. */
+internal const val SETTINGS_THREAT_SWATCH = 1
+
+/** The five role swatches in their board order with the palette's colors. */
+internal fun settingsRoleSwatches(palette: KkRolePalette): List<Pair<SettingsRedesignText, Color>> = listOf(
+    SettingsRedesignText.RoleYou to palette.you,
+    SettingsRedesignText.RoleThreat to palette.threat,
+    SettingsRedesignText.RoleHeat to palette.heat,
+    SettingsRedesignText.RoleShield to palette.shield,
+    SettingsRedesignText.RolePolarity to palette.pol,
+)
 
 private fun DrawScope.d(value: Float): Float = value * density
 

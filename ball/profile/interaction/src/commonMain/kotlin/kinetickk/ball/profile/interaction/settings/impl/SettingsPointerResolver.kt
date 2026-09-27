@@ -83,11 +83,13 @@ internal fun SettingsLayout.targetAt(x: Float, y: Float): SettingsTarget? {
 /** Vertical band of a row's control: the whole row, or the control line of a stacked row. */
 private fun SettingsLayout.controlBand(row: SettingsRowLayout): Pair<Float, Float> {
     val control = row.options.firstOrNull() ?: row.toggle ?: row.decrease ?: return row.bounds.top to row.bounds.bottom
+    // The role swatches under Color vision are a readout; presses on them choose nothing.
+    val bottom = row.swatches.firstOrNull()?.top ?: row.bounds.bottom
     return if (control.top >= row.info.bottom) {
-        // Stacked portrait row: the control line owns the lower part of the row.
-        (control.center.y - SETTINGS_TOUCH_DP * density * 0.5f).coerceAtLeast(row.info.bottom) to row.bounds.bottom
+        // Stacked portrait row: the control line owns the row below the label line.
+        row.label.bottom to bottom
     } else {
-        row.bounds.top to row.bounds.bottom
+        row.bounds.top to bottom
     }
 }
 

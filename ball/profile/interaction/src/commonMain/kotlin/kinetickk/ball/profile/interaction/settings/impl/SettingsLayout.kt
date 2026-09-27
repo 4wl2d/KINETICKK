@@ -4,11 +4,12 @@
 package kinetickk.ball.profile.interaction.settings.impl
 
 import androidx.compose.ui.geometry.Rect
+import kinetickk.foundation.design.KkTooltipPlacement
+import kinetickk.foundation.design.kkTooltipRect
 import kinetickk.ball.profile.interaction.localization.ProfileText
 import kinetickk.ball.profile.interaction.localization.SettingsRedesignText
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
-import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 
@@ -29,11 +30,14 @@ internal fun settingsLayoutMode(width: Float, height: Float, density: Float): Se
 internal enum class SettingsTextKind { TITLE, BUTTON, TAB, SEGMENT, OUTPUT, ROW_LABEL }
 
 /**
- * Rendered text width in px for the layout's base text scale. The feature measures with the same
+ * Rendered text sizes in px for the layout's base text scale. The feature measures with the same
  * text measurer the renderer draws with; tests supply a deterministic stand-in.
  */
-internal fun interface SettingsTextMetrics {
+internal interface SettingsTextMetrics {
     fun width(text: String, kind: SettingsTextKind): Float
+
+    /** Height of one line box of a row label (labels wrap to a second line in compact landscape). */
+    fun rowLabelLineHeight(): Float
 }
 
 /** Mode-dependent type sizes in sp (before the text-size scale). */
@@ -69,6 +73,8 @@ internal data class SettingsRowLayout(
     val increase: Rect? = null,
     val output: Rect? = null,
     val controlScale: Float = 1f,
+    /** Color vision only, where no side preview shows the palette: the five role swatches under the cells. */
+    val swatches: List<Rect> = emptyList(),
 ) {
     /** The slider's full control strip (steppers, track and value), vertically centered on the control. */
     val sliderBounds: Rect?
@@ -105,6 +111,31 @@ internal data class SettingsLayout(
 
     /** Area of the Compose volume slider and its numeric editor; null when the row is not shown. */
     fun volumeBounds(): Rect? = row(SettingsRow.MASTER_VOLUME)?.sliderBounds
+
+    /** Navigation the (!) explanations must never cover: Back, title, tabs and page pips. */
+    val navigation: List<Rect> get() = listOf(back, title) + tabs.map(SettingsGroupTab::bounds) + pages
+
+    /**
+     * Where [row]'s (!) explanation of [bodyHeight] px sits: above the (!) at its end (`.tip-r`),
+     * or below it when above would leave the screen or cover navigation.
+     */
+    fun tooltipRect(row: SettingsRow, bodyHeight: Float, widthDp: Float = 270f): Rect? {
+        val anchor = row(row)?.info ?: return null
+        val above = kkTooltipRect(anchor, bodyHeight, density, bounds, KkTooltipPlacement.ABOVE_END, widthDp)
+        if (navigation.none { it.overlaps(above) }) return above
+        val height = bodyHeight + 22f * density
+        val margin = 8f * density
+        val lowest = bounds.bottom - margin - height
+        val below = min(anchor.bottom + 12f * density, lowest).coerceAtLeast(bounds.top + margin)
+        // Otherwise the free position nearest the (!), scanning the column in 4 dp steps.
+        val step = 4f * density
+        val tops = generateSequence(bounds.top + margin) { it + step }.takeWhile { it <= lowest }
+        val top = (sequenceOf(below) + tops.sortedBy { kotlin.math.abs(it - below) }).firstOrNull { candidate ->
+            val rect = Rect(above.left, candidate, above.right, candidate + height)
+            navigation.none { it.overlaps(rect) }
+        } ?: below
+        return Rect(above.left, top, above.right, top + height)
+    }
 }
 
 /** Minimum touch target in dp (Adaptive board: menus 44 px minimum). */
@@ -147,6 +178,13 @@ private class SettingsGeometry(
     val cellGap = d(3f)
     val cellHeight = if (regular) d(34f) else d(32f)
     val pagerHeight = d(40f)
+    val swatchGap = d(5f)
+    val swatchHeight = d(18f)
+
+    var rowsLeft = 0f
+    var rowsRight = 0f
+    /** No side preview: Color vision carries its own role swatches. */
+    var swatchStrip = false
 
     fun build(group: SettingsGroup, requestedPage: Int): SettingsLayout {
         val backWidth = metrics.width(language.text(SettingsRedesignText.Back), SettingsTextKind.BUTTON) + d(40f)
@@ -157,8 +195,6 @@ private class SettingsGeometry(
         val rule: Rect?
         val title: Rect
         val tabs: List<SettingsGroupTab>
-        val rowsLeft: Float
-        val rowsRight: Float
         val rowsTop: Float
         val rowsBottom: Float
         var preview: Rect? = null
@@ -219,6 +255,7 @@ private class SettingsGeometry(
             }
         }
 
+        swatchStrip = panelEdgeX == null
         val heights = group.rows.map(::rowHeight)
         val available = max(0f, rowsBottom - rowsTop)
         val fitsOnePage = heights.sum() + rowGap * (heights.size - 1) <= available
@@ -226,15 +263,16 @@ private class SettingsGeometry(
         val maxPage = pages.lastIndex
         val visiblePage = requestedPage.coerceIn(0, maxPage)
         val pageRows = pages[visiblePage]
-        // Landscape rows share the height evenly (never below the touch minimum).
-        val stretched = if (mode == SettingsLayoutMode.COMPACT_LANDSCAPE) {
+        // Landscape rows share the spare height (up to 12 dp each) above their own minimum.
+        val grow = if (mode == SettingsLayoutMode.COMPACT_LANDSCAPE) {
             val space = available - if (maxPage > 0) pagerHeight else 0f
-            ((space + rowGap) / pageRows.count() - rowGap).coerceIn(d(SETTINGS_TOUCH_DP), d(56f))
-        } else null
+            val used = pageRows.sumOf { heights[it].toDouble() }.toFloat() + rowGap * (pageRows.count() - 1)
+            ((space - used) / pageRows.count()).coerceIn(0f, d(12f))
+        } else 0f
         var top = rowsTop
         val rows = pageRows.map { index ->
             val row = group.rows[index]
-            val rowHeight = stretched ?: heights[index]
+            val rowHeight = heights[index] + grow
             val layout = rowLayout(row, Rect(rowsLeft, top, rowsRight, top + rowHeight))
             top += rowHeight + rowGap
             layout
@@ -283,11 +321,26 @@ private class SettingsGeometry(
     /** Portrait stacks the segmented and slider controls under their label; the rest is one line. */
     fun twoLine(row: SettingsRow): Boolean = portrait && row.control != SettingsControl.TOGGLE
 
-    fun rowHeight(row: SettingsRow): Float = when {
-        regular -> d(62f)
-        twoLine(row) -> d(88f)
-        portrait -> d(52f)
-        else -> d(SETTINGS_TOUCH_DP)
+    fun hasSwatches(row: SettingsRow): Boolean = swatchStrip && row == SettingsRow.COLOR_VISION
+
+    /** Height of the control line (plus the swatch strip on Color vision). */
+    fun rowHeight(row: SettingsRow): Float {
+        val line = when {
+            regular -> d(62f)
+            twoLine(row) -> d(if (hasSwatches(row)) 95f else 90f)
+            portrait -> d(52f)
+            else -> landscapeLineHeight(row)
+        }
+        return line + if (hasSwatches(row)) swatchGap + swatchHeight else 0f
+    }
+
+    /** Compact landscape: a label that needs its second line gets the height for it. */
+    fun landscapeLineHeight(row: SettingsRow): Float {
+        val probe = rowLayout(row, Rect(rowsLeft, 0f, rowsRight, d(SETTINGS_TOUCH_DP)), strip = false)
+        val lines = if (metrics.width(row.label(language), SettingsTextKind.ROW_LABEL) <= probe.label.width) 1 else 2
+        // Above a swatch strip the cells keep a 44 dp hit band between the row top and the strip.
+        val minimum = if (hasSwatches(row)) d(52f) else d(SETTINGS_TOUCH_DP)
+        return max(minimum, metrics.rowLabelLineHeight() * lines + d(14f))
     }
 
     fun paginate(heights: List<Float>, available: Float): List<IntRange> {
@@ -308,7 +361,24 @@ private class SettingsGeometry(
         return pages
     }
 
-    fun rowLayout(row: SettingsRow, bounds: Rect): SettingsRowLayout {
+    fun rowLayout(row: SettingsRow, bounds: Rect, strip: Boolean = hasSwatches(row)): SettingsRowLayout {
+        val layout = lineLayout(row, bounds, if (strip) bounds.bottom - swatchGap - swatchHeight else bounds.bottom)
+        if (!strip || layout.options.isEmpty()) return layout
+        // Five sheared role chips under the cells, spanning the same width.
+        val left = layout.options.first().left
+        val right = layout.options.last().right
+        val top = layout.options.last().bottom + swatchGap
+        val gap = d(4f)
+        val chip = (right - left - gap * 4f) / 5f
+        val swatches = (0 until 5).map { index ->
+            val x = left + (chip + gap) * index
+            Rect(x, top, x + chip, top + swatchHeight)
+        }
+        return layout.copy(swatches = swatches)
+    }
+
+    /** Lays out a row whose control line ends at [lineEnd] (the swatch strip, if any, sits below it). */
+    fun lineLayout(row: SettingsRow, bounds: Rect, lineEnd: Float): SettingsRowLayout {
         val padLeft = when (mode) {
             SettingsLayoutMode.REGULAR -> d(28f)
             SettingsLayoutMode.COMPACT_LANDSCAPE -> d(16f)
@@ -318,12 +388,12 @@ private class SettingsGeometry(
         val controlGap = if (regular) d(20f) else d(12f)
         val labelLeft = bounds.left + padLeft
         val lineTop = bounds.top
-        val lineBottom = if (twoLine(row)) bounds.top + d(46f) else bounds.bottom
+        val lineBottom = if (twoLine(row)) bounds.top + d(46f) else lineEnd
         val lineCenter = (lineTop + lineBottom) * 0.5f
         val infoLeft = bounds.right - padRight - d(26f)
         val info = Rect(infoLeft, lineCenter - d(12f), infoLeft + d(24f), lineCenter + d(12f))
         if (twoLine(row)) {
-            val controlCenter = bounds.bottom - d(10f) - cellHeight * 0.5f
+            val controlCenter = lineEnd - d(10f) - cellHeight * 0.5f
             val label = Rect(labelLeft, lineTop, info.left - controlGap, lineBottom)
             return controlLayout(row, bounds, label, info, labelLeft, bounds.right - padRight, controlCenter, labelLeft)
         }
@@ -340,10 +410,10 @@ private class SettingsGeometry(
         val labelWidth = max(longestWord, metrics.width(label, SettingsTextKind.ROW_LABEL) / lines * 1.1f) + d(8f)
         val minLabel = max(modeMinimum, min(labelWidth, (controlRight - labelLeft) * 0.45f))
         val controlMinLeft = labelLeft + minLabel + controlGap
-        val placeholder = Rect(labelLeft, bounds.top, controlRight, bounds.bottom)
+        val placeholder = Rect(labelLeft, lineTop, controlRight, lineBottom)
         val layout = controlLayout(row, bounds, placeholder, info, controlMinLeft, controlRight, lineCenter, labelLeft)
         val controlLeft = layout.options.firstOrNull()?.left ?: layout.toggle?.left ?: layout.decrease?.left ?: controlRight
-        return layout.copy(label = Rect(labelLeft, bounds.top, max(labelLeft, controlLeft - controlGap), bounds.bottom))
+        return layout.copy(label = Rect(labelLeft, lineTop, max(labelLeft, controlLeft - controlGap), lineBottom))
     }
 
     fun controlLayout(

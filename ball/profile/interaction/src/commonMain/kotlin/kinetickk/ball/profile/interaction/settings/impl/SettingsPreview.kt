@@ -22,6 +22,7 @@ import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.interaction.localization.ProfileText
 import kinetickk.ball.profile.interaction.localization.SettingsRedesignText
+import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkAlign
@@ -166,7 +167,10 @@ private class PreviewScope(
                 val wave = 0.5f - 0.5f * cos(phase * 2f * PI.toFloat())
                 val barHeight = height * (0.35f + 0.65f * wave)
                 val barLeft = centerX - total * 0.5f + (barWidth + gap) * bar
-                draw.drawKkSheared(rect(barLeft, baseline - barHeight, barLeft + barWidth, baseline), color.copy(alpha = if (level > 0f) 1f else 0.35f))
+                // Upright bars: the board's pv-eq transform replaces the skew, and sheared bars this
+                // tall would lean into their neighbours.
+                val bar = rect(barLeft, baseline - barHeight, barLeft + barWidth, baseline)
+                draw.drawRect(color, bar.topLeft, bar.size, alpha = if (level > 0f) 1f else 0.35f)
             }
             draw.drawKkText(
                 text, label, measurers.typography.labelStyle(12f), x(centerX), y(250f - 22f), Kk.Bone,
@@ -186,20 +190,14 @@ private class PreviewScope(
             }
         }
         // Role swatches: five sheared chips with their names.
-        val names = listOf(
-            SettingsRedesignText.RoleYou to palette.you,
-            SettingsRedesignText.RoleThreat to palette.threat,
-            SettingsRedesignText.RoleHeat to palette.heat,
-            SettingsRedesignText.RoleShield to palette.shield,
-            SettingsRedesignText.RolePolarity to palette.pol,
-        )
+        val names = settingsRoleSwatches(palette)
         val gap = 6f
         val width = (PREVIEW_UNITS - gap * 4f) / 5f
         names.forEachIndexed { index, (name, color) ->
             val chipLeft = (width + gap) * index
             val chip = rect(chipLeft, 312f, chipLeft + width, 342f)
             draw.drawKkSheared(chip, color)
-            if (index == 1) draw.drawKkThreatHatch(chip, palette, Kk.Ink)
+            if (index == SETTINGS_THREAT_SWATCH) draw.drawKkThreatHatch(chip, palette, Kk.Ink)
             // `.t-mono` 9 px; a longer translation falls back to the condensed label face.
             val label = language.text(name)
             val lane = (width + 4f) * u
@@ -229,7 +227,7 @@ private class PreviewScope(
         polygon(floatArrayOf(250f, 60f, 268f, 78f, 250f, 96f, 232f, 78f), enemy, palette)
         polygon(floatArrayOf(262f, 190f, 288f, 190f, 288f, 216f, 262f, 216f), enemy, palette)
         for ((bx, by) in listOf(120f to 200f, 140f to 186f, 232f to 170f)) {
-            draw.drawCircle(palette.threat, 4.5f * u, at(bx, by))
+            bullet(at(bx, by), palette)
         }
         // Tether from the Core towards the singularity.
         draw.drawLine(palette.you.copy(alpha = 0.45f), at(168f, 150f), at(58f, 205f), 10f * u)
@@ -247,6 +245,24 @@ private class PreviewScope(
         arc(singularity, 22f, 0f, 260f, palette.pol, 2.5f)
         particles(palette.you)
         if (preferences.damageNumbers) damageNumbers(palette)
+    }
+
+    /**
+     * Hostile bullet: a solid threat dot; Mono (where threat and you share white) draws a ring
+     * with the threat hatch inside, so it never reads as a you particle.
+     */
+    fun bullet(center: Offset, palette: KkRolePalette) {
+        if (!palette.hatchThreats) {
+            draw.drawCircle(palette.threat, 4.5f * u, center)
+            return
+        }
+        val r = 6f * u
+        val path = scratch.apply {
+            rewind()
+            addOval(Rect(center.x - r, center.y - r, center.x + r, center.y + r))
+        }
+        draw.drawKkThreatHatch(path, palette)
+        draw.drawCircle(palette.threat, r, center, style = Stroke(1.5f * u))
     }
 
     fun particles(color: Color) {
@@ -308,14 +324,20 @@ private class PreviewScope(
         val roles = measurers.roles
         val sampleBox = rect(0f, 0f, PREVIEW_UNITS, 110f)
         panel(sampleBox)
+        // The text size on game words and numbers (never the (!) explanation itself).
         val textScale = preferences.textScale / SETTINGS_TEXT_BASELINE
-        val body = measurers.at(u / draw.density * textScale)
-        val layout = measureKkText(
-            body, SettingsRow.TEXT_SIZE.about(language), measurers.typography.bodyStyle(18f, lineHeightEm = 1.2f),
-            maxWidth = sampleBox.width - 24f * u, maxLines = 3,
-        )
+        val sized = measurers.at(u / draw.density * textScale)
+        val labelStyle = measurers.typography.bodyStyle(18f, lineHeightEm = 1.2f)
+        val valueStyle = measurers.typography.condStyle(24f, tabular = true, lineHeightEm = 1f)
         draw.clipRect(sampleBox.left, sampleBox.top, sampleBox.right, sampleBox.bottom) {
-            drawKkText(layout, sampleBox.left + 12f * u, sampleBox.top + 12f * u, Kk.Bone)
+            settingsTextSizeSample(language).forEachIndexed { line, (label, value) ->
+                val centerY = sampleBox.top + (30f + 50f * line) * u
+                val valueLayout = measureKkText(sized, value, valueStyle)
+                val valueLeft = sampleBox.right - 12f * u - valueLayout.size.width
+                val labelLayout = measureKkText(sized, label, labelStyle, maxWidth = valueLeft - sampleBox.left - 24f * u)
+                drawKkText(labelLayout, sampleBox.left + 12f * u, centerY, Kk.Bone, valign = KkVAlign.CENTER)
+                drawKkText(valueLayout, sampleBox.right - 12f * u, centerY, roles.you, align = KkAlign.END, valign = KkVAlign.CENTER)
+            }
         }
         val statsWidth = 120f
         val rowTop = 122f
@@ -380,6 +402,12 @@ private class PreviewScope(
 
     private val scratch: Path get() = PreviewPaths.scratch
 }
+
+/** Text size sample: two game terms with sample values (a stat readout, not an explanation). */
+internal fun settingsTextSizeSample(language: AppLanguage): List<Pair<String, String>> = listOf(
+    language.text(ProfileText.PlayerPower) to "140",
+    language.text(ProfileText.CoreIntegrity) to "100",
+)
 
 private class DamageSample(val amount: Long, val x: Float, val y: Float, val lane: Float, val tierScale: Float, val delay: Float)
 

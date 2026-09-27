@@ -170,6 +170,71 @@ class SettingsPointerResolverTest {
         assertEquals(toggle.center.y, shake.info.center.y, 0.5f)
     }
 
+    @Test
+    fun colorVisionShowsRoleSwatchesWheneverNoSidePreviewShowsThePalette() {
+        for ((width, height, density) in viewports) for (language in AppLanguage.entries) for (scale in listOf(1f, 1.4f)) {
+            val layout = layout(width, height, density, SettingsGroup.GRAPHICS, 0, language, scale)
+            val where = "$width x $height @$density $language x$scale"
+            val row = assertNotNull(layout.row(SettingsRow.COLOR_VISION), where)
+            if (layout.panelEdgeX != null) {
+                assertTrue(row.swatches.isEmpty(), "$where: the side preview already shows the palette")
+                continue
+            }
+            assertEquals(5, row.swatches.size, where)
+            val cells = row.options
+            row.swatches.forEach { swatch ->
+                assertTrue(swatch.top >= cells.maxOf { it.bottom }, "$where swatch under the cells")
+                assertTrue(swatch.bottom <= row.bounds.bottom + 0.01f && swatch.left >= cells.first().left - 0.01f &&
+                    swatch.right <= cells.last().right + 0.01f, "$where swatch inside the cell span")
+                assertTrue(swatch.width >= 24f * density, "$where swatch width ${swatch.width}")
+                // The strip is a readout: pressing it chooses nothing.
+                assertNull(resolveSettingsPress(layout, swatch.center.x, swatch.center.y), where)
+            }
+            row.swatches.zipWithNext().forEach { (a, b) -> assertTrue(a.right <= b.left, "$where swatches overlap") }
+            // Every cell keeps a 44 dp tall hit band above the strip.
+            cells.forEachIndexed { option, cell ->
+                val band = (0..200).map { cell.top - 30f * density + it * density * 0.5f }
+                    .filter { resolveSettingsPress(layout, cell.center.x, it) == SettingsAction.Select(SettingsRow.COLOR_VISION, option) }
+                assertTrue(band.max() - band.min() >= SETTINGS_TOUCH_DP * density - density, "$where cell $option band")
+            }
+        }
+    }
+
+    @Test
+    fun explanationsNeverCoverNavigationAndStayOnScreen() {
+        for ((width, height, density) in viewports) for (group in SettingsGroup.entries) {
+            val maxPage = layout(width, height, density, group).maxPage
+            for (page in 0..maxPage) {
+                val layout = layout(width, height, density, group, page)
+                for (row in layout.visibleRows) for (bodyDp in listOf(40f, 90f, 150f)) {
+                    val rect = assertNotNull(layout.tooltipRect(row, bodyDp * density))
+                    val where = "$width x $height @$density $group p$page $row $bodyDp"
+                    assertTrue(rect.inside(layout.bounds), "$where on screen $rect")
+                    layout.navigation.forEach { assertTrue(!it.overlaps(rect), "$where covers $it") }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun compactLandscapeRowsMakeRoomForTwoLineLabelsAtLargeText() {
+        for ((width, height) in listOf(720f to 360f, 844f to 390f, 640f to 300f)) for (language in AppLanguage.entries) {
+            for (group in SettingsGroup.entries) {
+                val first = layout(width, height, 1f, group, 0, language, scale = 1.4f)
+                for (page in 0..first.maxPage) {
+                    val layout = layout(width, height, 1f, group, page, language, scale = 1.4f)
+                    val line = stubSettingsMetrics(1f, 1.4f).rowLabelLineHeight()
+                    layout.rows.forEach { row ->
+                        val natural = stubSettingsMetrics(1f, 1.4f).width(row.row.label(language), SettingsTextKind.ROW_LABEL)
+                        val lines = if (natural <= row.label.width) 1 else 2
+                        assertTrue(row.label.height >= line * lines + 12f,
+                            "$width x $height $language ${row.row}: $lines lines need ${line * lines} in ${row.label.height}")
+                    }
+                }
+            }
+        }
+    }
+
     private fun press(layout: SettingsLayout, rect: Rect): SettingsAction? =
         resolveSettingsPress(layout, rect.center.x, rect.center.y)
 
@@ -177,17 +242,21 @@ class SettingsPointerResolverTest {
         left >= outer.left - 0.01f && top >= outer.top - 0.01f && right <= outer.right + 0.01f && bottom <= outer.bottom + 0.01f
 }
 
-/** Deterministic text widths: 0.55 em per character at the kind's reference size. */
-internal fun stubSettingsMetrics(density: Float): SettingsTextMetrics = SettingsTextMetrics { text, kind ->
-    val size = when (kind) {
-        SettingsTextKind.TITLE -> 44f
-        SettingsTextKind.BUTTON -> 19f
-        SettingsTextKind.TAB -> 21f
-        SettingsTextKind.SEGMENT -> 16f
-        SettingsTextKind.OUTPUT -> 22f
-        SettingsTextKind.ROW_LABEL -> 27f
+/** Deterministic text sizes: 0.55 em per character at the kind's reference size, times [scale]. */
+internal fun stubSettingsMetrics(density: Float, scale: Float = 1f): SettingsTextMetrics = object : SettingsTextMetrics {
+    override fun width(text: String, kind: SettingsTextKind): Float {
+        val size = when (kind) {
+            SettingsTextKind.TITLE -> 44f
+            SettingsTextKind.BUTTON -> 19f
+            SettingsTextKind.TAB -> 21f
+            SettingsTextKind.SEGMENT -> 16f
+            SettingsTextKind.OUTPUT -> 22f
+            SettingsTextKind.ROW_LABEL -> 21f
+        }
+        return text.length * size * 0.55f * density * scale
     }
-    text.length * size * 0.55f * density
+
+    override fun rowLabelLineHeight(): Float = 21f * 0.86f * density * scale
 }
 
 internal fun layout(
@@ -197,4 +266,5 @@ internal fun layout(
     group: SettingsGroup = SettingsGroup.GAME,
     page: Int = 0,
     language: AppLanguage = AppLanguage.English,
-): SettingsLayout = settingsLayout(width, height, density, group, page, language, stubSettingsMetrics(density))
+    scale: Float = 1f,
+): SettingsLayout = settingsLayout(width, height, density, group, page, language, stubSettingsMetrics(density, scale))
