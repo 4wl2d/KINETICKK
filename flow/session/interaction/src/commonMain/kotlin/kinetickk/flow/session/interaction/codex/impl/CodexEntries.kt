@@ -54,7 +54,7 @@ internal data class CodexEntry(
 ) {
     /** Accessible summary: title, kind, amount and state as separate phrases. */
     val summary: String
-        get() = listOf(title, kind, quantity, availability.replace('\n', ' '))
+        get() = listOf(title, kind, quantity, availability.replace("\n", ", "))
             .filter { it.isNotBlank() && it != CODEX_NONE }
             .joinToString(", ") + if (!discovered && help != null) ", $help" else ""
 }

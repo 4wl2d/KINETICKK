@@ -11,8 +11,6 @@ internal enum class SessionRedesignText(
     override val russian: String,
 ) : TextResource {
     MATTER("Matter", "Материя"),
-    REBIRTH("Rebirth", "Перерождение"),
-    CODEX("Codex", "Справочник"),
     FORM("Form", "Форма"),
     STARTING_WEAPON("Starting weapon", "Стартовое оружие"),
     MAXED("Maxed", "На максимуме"),
@@ -22,7 +20,6 @@ internal enum class SessionRedesignText(
     UNLOCKABLE("Unlockable", "Можно открыть"),
     LANGUAGE("Language", "Язык"),
     TEXT_SIZE("Text size", "Размер текста"),
-    UNLOCK_PROGRESS("Progress {0}/{1}", "Прогресс {0}/{1}"),
 
     LAB_INFO(
         "Permanent upgrades bought with Matter. Every form shares them, and they stay after every rebirth.",

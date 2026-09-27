@@ -313,17 +313,24 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                                     EmptyNotice(emptyState, scale)
                                 }
                                 if (tab == 0 && build != null) {
-                                    fun section(key: String, title: String, sectionEntries: List<CodexEntry>) {
+                                    fun section(key: String, title: String, sectionEntries: List<CodexEntry>, value: String? = null) {
                                         item(key = "heading/$key", contentType = CodexGridContentType.HEADING, span = { GridItemSpan(maxLineSpan) }) {
-                                            BasicText(title.uppercase(), Modifier.padding(top = 12.dp, bottom = 2.dp), style = typography.labelStyle(14f * min(scale, 1.4f), color = Kk.Mute))
+                                            // Label and value are separate texts (no separator glyph between them).
+                                            Row(Modifier.padding(top = 12.dp, bottom = 2.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                                val headingStyle = typography.labelStyle(14f * min(scale, 1.4f), color = Kk.Mute)
+                                                BasicText(title.uppercase(), style = headingStyle)
+                                                value?.let { BasicText(it.uppercase(), style = headingStyle) }
+                                            }
                                         }
                                         items(sectionEntries, key = { it.key }, contentType = { CodexGridContentType.SLOT }) { entry ->
                                             CodexSlot(entry, catalog, scale, selectionValue, slotFocus, band = false, { selectionValue = it(selectionValue) })
                                         }
                                     }
                                     section("character", language.text(SessionText.CHARACTER), entries.filter { it.icon is CodexIcon.Shape })
-                                    section("weapon", language.text(SessionText.WEAPON_LEVEL, build.weaponLevel), entries.filter { it.icon is CodexIcon.Weapon })
-                                    section("relics", language.text(SessionText.RELIC_COUNT, build.relics.size, catalog.relicPolicy.maxSlots), entries.filter { it.icon is CodexIcon.Relic || it.icon == CodexIcon.Empty })
+                                    section("weapon", language.text(SessionText.WEAPON), entries.filter { it.icon is CodexIcon.Weapon },
+                                        language.text(SessionText.LEVEL_SHORT, build.weaponLevel))
+                                    section("relics", language.text(SessionText.RELICS_TITLE), entries.filter { it.icon is CodexIcon.Relic || it.icon == CodexIcon.Empty },
+                                        "${build.relics.size}/${catalog.relicPolicy.maxSlots}")
                                     section("items", language.text(SessionText.ITEMS), entries.filter { it.icon is CodexIcon.Item })
                                     if (entries.none { it.icon is CodexIcon.Item }) item(key = "empty-inventory", contentType = CodexGridContentType.NOTICE, span = { GridItemSpan(maxLineSpan) }) { EmptyNotice(CodexEmptyState.EMPTY_INVENTORY, scale) }
                                     item(key = "stats-heading", contentType = CodexGridContentType.HEADING, span = { GridItemSpan(maxLineSpan) }) {

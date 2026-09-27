@@ -370,7 +370,7 @@ internal fun homeFacts(model: HomeUiModel, target: HomeLayoutTarget, language: A
             label,
             directive.displayName.localizedContent(language),
             buildList {
-                add(language.text(SessionRedesignText.REBIRTH) to model.rebirthLevel.toString())
+                add(language.text(SessionText.REBIRTH) to model.rebirthLevel.toString())
                 add(language.text(SessionRedesignText.FORM) to model.coreShape(model.coreShape).displayName.localizedContent(language))
             },
             directive.description.localizedContent(language),
@@ -399,7 +399,7 @@ internal fun homeFormInfo(model: HomeUiModel, shape: CoreShape, language: AppLan
         definition.mechanicDescription.localizedContent(language)
     } else {
         definition.unlockDescription.localizedContent(language) + "\n" + language.text(
-            SessionRedesignText.UNLOCK_PROGRESS,
+            SessionText.UNLOCK_PROGRESS,
             coreShapeUnlockProgress(definition, model.characterAchievements),
             definition.unlockTarget,
         )
@@ -780,8 +780,8 @@ private class HomeChip(val gem: Boolean, val value: String, val label: String?, 
 
 private fun homeChip(model: HomeUiModel, language: AppLanguage, compact: Boolean, index: Int): HomeChip = when (index) {
     0 -> HomeChip(true, homeNumber(model.totalMatter, language), if (compact) null else language.text(SessionRedesignText.MATTER), false)
-    1 -> HomeChip(false, model.rebirthLevel.toString(), language.text(SessionRedesignText.REBIRTH), true)
-    2 -> HomeChip(false, "${model.discoveredItemCount}/${model.itemCount}", language.text(SessionRedesignText.CODEX), false)
+    1 -> HomeChip(false, model.rebirthLevel.toString(), language.text(SessionText.REBIRTH), true)
+    2 -> HomeChip(false, "${model.discoveredItemCount}/${model.itemCount}", language.text(SessionText.CODEX), false)
     else -> HomeChip(false, "${model.unlockedWeaponCount}/${model.weaponCount}", language.text(SessionText.WEAPONS_TITLE), false)
 }
 
