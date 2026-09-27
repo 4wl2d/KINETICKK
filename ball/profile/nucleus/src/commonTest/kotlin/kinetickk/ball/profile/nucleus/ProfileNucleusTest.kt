@@ -7,7 +7,12 @@ import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.profile.api.CollectionProjection
+import kinetickk.ball.profile.api.ColorVision
+import kinetickk.ball.profile.api.DamageNumberFormat
+import kinetickk.ball.profile.api.DamageNumberSize
 import kinetickk.ball.profile.api.GameplayProgressUpdate
+import kinetickk.ball.profile.api.ParticleDensity
+import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kinetickk.ball.profile.api.HomeProgressProjection
 import kinetickk.ball.profile.api.LabProgressProjection
 import kinetickk.ball.profile.api.LoadoutProjection
@@ -110,6 +115,63 @@ class ProfileNucleusTest {
             assertEquals(expected, assertIs<ProfileOutput.PersistSnapshot>(frame.outputs.single()).snapshot.profile)
             assertEquals(language, ProfileNucleus.query(frame.nextState, ProfileQuery.GetPreferences).preferences.language)
             assertEquals(previousLanguage, state.profile.preferences.language)
+        }
+    }
+
+    @Test
+    fun colorVisionSelectionOwnsPreferenceAndSnapshotAndCurrentChoiceIsNoChange() {
+        ColorVision.entries.forEach { target ->
+            ColorVision.entries.forEach { previous ->
+                val default = defaultPlayerProfile(TestProfilePolicy)
+                val state = readyState(profile = default.copy(
+                    preferences = default.preferences.copy(colorVision = previous),
+                ))
+                val pulse = ProfileNucleusPulse.Intent(ProfilePulse.AdjustPreference(
+                    ProfilePreferenceAdjustment.SetColorVision(target),
+                ))
+                val decision = ProfileNucleus.decide(state, pulse)
+                assertEquals(decision, ProfileNucleus.decide(state, pulse))
+                if (target == previous) {
+                    assertEquals(ProfileRejection.NoChange, decision.rejection())
+                } else {
+                    val frame = decision.acceptedFrame()
+                    val expected = state.profile.copy(preferences = state.profile.preferences.copy(colorVision = target))
+                    assertEquals(expected, frame.nextState.profile)
+                    assertEquals(expected, assertIs<ProfileOutput.PersistSnapshot>(frame.outputs.single()).snapshot.profile)
+                    assertEquals(target, ProfileNucleus.query(frame.nextState, ProfileQuery.GetPreferences).preferences.colorVision)
+                }
+                assertEquals(previous, state.profile.preferences.colorVision)
+            }
+        }
+        assertEquals(ColorVision.DEFAULT, defaultPlayerProfile(TestProfilePolicy).preferences.colorVision)
+    }
+
+    @Test
+    fun segmentedPreferencesAcceptEveryDirectChoiceAndRejectTheCurrentOne() {
+        val state = readyState()
+        val current = state.profile.preferences
+        val choices = SIMULATION_SPEED_OPTIONS.map { speed ->
+            ProfilePreferenceAdjustment.SetSimulationSpeed(speed) to current.copy(simulationSpeed = speed)
+        } + ParticleDensity.entries.map { density ->
+            ProfilePreferenceAdjustment.SetParticleDensity(density) to current.copy(particleDensity = density)
+        } + DamageNumberSize.entries.map { size ->
+            ProfilePreferenceAdjustment.SetDamageNumberSize(size) to current.copy(damageNumberSize = size)
+        } + DamageNumberFormat.entries.map { format ->
+            ProfilePreferenceAdjustment.SetDamageNumberFormat(format) to current.copy(damageNumberFormat = format)
+        }
+        choices.forEach { (adjustment, expected) ->
+            val decision = ProfileNucleus.decide(state, ProfileNucleusPulse.Intent(ProfilePulse.AdjustPreference(adjustment)))
+            if (expected == current) {
+                assertEquals(ProfileRejection.NoChange, decision.rejection(), adjustment.toString())
+            } else {
+                val frame = decision.acceptedFrame()
+                assertEquals(expected, frame.nextState.profile.preferences, adjustment.toString())
+                assertEquals(expected, assertIs<ProfileOutput.PersistSnapshot>(frame.outputs.single()).snapshot.profile.preferences)
+            }
+        }
+        assertEquals(readyState(), state)
+        for (unlisted in listOf(0.5f, 1.1f, Float.fromBits(1f.toBits() + 1), 2.5f, Float.NaN)) {
+            assertFailsWith<IllegalArgumentException> { ProfilePreferenceAdjustment.SetSimulationSpeed(unlisted) }
         }
     }
 

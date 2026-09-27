@@ -40,6 +40,32 @@ class ProfileApiContractTest {
     }
 
     @Test
+    fun colorVisionDefaultsForEveryExistingConstructionAndKeepsItsOptionOrder() {
+        assertEquals(
+            listOf(ColorVision.DEFAULT, ColorVision.PROTAN, ColorVision.DEUTAN, ColorVision.TRITAN, ColorVision.MONO),
+            ColorVision.entries,
+        )
+        assertEquals(ColorVision.DEFAULT, PlayerPreferences().colorVision)
+        assertEquals(ColorVision.DEFAULT, PlayerProfile().preferences.colorVision)
+        val mono = PlayerPreferences(colorVision = ColorVision.MONO)
+        assertEquals(ColorVision.MONO, mono.normalized().colorVision)
+        assertEquals(
+            ProfilePulse.AdjustPreference(ProfilePreferenceAdjustment.SetColorVision(ColorVision.TRITAN)),
+            ProfilePulse.AdjustPreference(ProfilePreferenceAdjustment.SetColorVision(ColorVision.TRITAN)),
+        )
+    }
+
+    @Test
+    fun directSimulationSpeedChoiceAcceptsOnlyListedOptions() {
+        SIMULATION_SPEED_OPTIONS.forEach { speed ->
+            assertEquals(speed, ProfilePreferenceAdjustment.SetSimulationSpeed(speed).speed)
+        }
+        for (unlisted in listOf(0f, 0.7f, 1.05f, 3f, Float.NaN, Float.POSITIVE_INFINITY)) {
+            assertFailsWith<IllegalArgumentException> { ProfilePreferenceAdjustment.SetSimulationSpeed(unlisted) }
+        }
+    }
+
+    @Test
     fun resourceSnapshotCarriesOnlyRevisionAndValidatedBusinessProfile() {
         val profile = PlayerProfile()
         val snapshot = ProfileSnapshot(ProfileRevision(3L), profile)

@@ -190,6 +190,7 @@ object ProfileNucleus {
                     ],
                 )
             }
+            is ProfilePreferenceAdjustment.SetSimulationSpeed -> current.copy(simulationSpeed = adjustment.speed)
             is ProfilePreferenceAdjustment.StepTextScale -> current.copy(
                 textScale = stepPercentage(current.textScale, adjustment.direction, 1f, 1.75f),
             )
@@ -203,6 +204,7 @@ object ProfileNucleus {
                         .coerceIn(ParticleDensity.entries.indices)
                 ],
             )
+            is ProfilePreferenceAdjustment.SetParticleDensity -> current.copy(particleDensity = adjustment.density)
             ProfilePreferenceAdjustment.ToggleDamageNumbers ->
                 current.copy(damageNumbers = !current.damageNumbers)
             is ProfilePreferenceAdjustment.StepDamageNumberSize -> current.copy(
@@ -211,12 +213,15 @@ object ProfileNucleus {
                         .coerceIn(DamageNumberSize.entries.indices)
                 ],
             )
+            is ProfilePreferenceAdjustment.SetDamageNumberSize -> current.copy(damageNumberSize = adjustment.size)
             is ProfilePreferenceAdjustment.StepDamageNumberFormat -> current.copy(
                 damageNumberFormat = DamageNumberFormat.entries[
                     (current.damageNumberFormat.ordinal + adjustment.direction.delta)
                         .coerceIn(DamageNumberFormat.entries.indices)
                 ],
             )
+            is ProfilePreferenceAdjustment.SetDamageNumberFormat -> current.copy(damageNumberFormat = adjustment.format)
+            is ProfilePreferenceAdjustment.SetColorVision -> current.copy(colorVision = adjustment.colorVision)
             is ProfilePreferenceAdjustment.StepDamageNumberTierThreshold -> {
                 val currentIndex = DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS.indices.minByOrNull { index ->
                     abs(DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS[index] - current.damageNumberTierThreshold)

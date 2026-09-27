@@ -4,6 +4,7 @@
 package kinetickk.ball.profile.impl
 
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.profile.api.ColorVision
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.ProfileAcceptance
@@ -375,6 +376,30 @@ class DefaultProfileComponentTest {
             ProfilePreferenceAdjustment.SetLanguage(AppLanguage.Russian),
         )))
         assertEquals(AppLanguage.Russian, restored.query(ProfileQuery.GetPreferences).preferences.language)
+    }
+
+    @Test
+    fun selectedColorVisionIsPersistedRestoredAndPublishedThroughPreferenceQuery() {
+        val resource = RecordingProfileResource()
+        val component = testProfileComponent(resource)
+        assertEquals(ColorVision.DEFAULT, component.query(ProfileQuery.GetPreferences).preferences.colorVision)
+        val selectMono = ProfilePulse.AdjustPreference(ProfilePreferenceAdjustment.SetColorVision(ColorVision.MONO))
+
+        assertIs<ProfileAcceptance.Accepted>(component.accept(selectMono))
+        assertEquals(ColorVision.MONO, component.query(ProfileQuery.GetPreferences).preferences.colorVision)
+        val persisted = resource.writes.single()
+        assertEquals(ColorVision.MONO, persisted.profile.preferences.colorVision)
+        assertEquals(ProfileRejection.NoChange, assertIs<ProfileAcceptance.Rejected>(
+            component.accept(selectMono),
+        ).reason)
+        assertEquals(1, resource.writes.size)
+
+        val restored = testProfileComponent(RecordingProfileResource(ProfileSnapshotReadResult.Observed(persisted)))
+        assertEquals(ColorVision.MONO, restored.query(ProfileQuery.GetPreferences).preferences.colorVision)
+        assertIs<ProfileAcceptance.Accepted>(restored.accept(ProfilePulse.AdjustPreference(
+            ProfilePreferenceAdjustment.SetColorVision(ColorVision.DEFAULT),
+        )))
+        assertEquals(ColorVision.DEFAULT, restored.query(ProfileQuery.GetPreferences).preferences.colorVision)
     }
 
     @Test
