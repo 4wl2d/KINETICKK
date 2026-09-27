@@ -35,13 +35,19 @@ internal sealed interface CodexIcon {
     data object Empty : CodexIcon
 }
 
+/**
+ * One labelled value of an entry (label and value are separate texts, never a sentence caption).
+ * [info] is an explanation shown only behind the value's (!) button.
+ */
+internal data class CodexFact(val label: String, val value: String, val info: String? = null, val isStatus: Boolean = false)
+
 internal data class CodexEntry(
     val key: String,
     val title: String,
     val description: String,
     val kind: String,
     val quantity: String,
-    val availability: String,
+    val facts: List<CodexFact>,
     val icon: CodexIcon,
     val color: Color,
     val discovered: Boolean = true,
@@ -52,7 +58,15 @@ internal data class CodexEntry(
     /** True for the equipped form or an active synergy (shown with color, not a glyph). */
     val active: Boolean = false,
 ) {
-    /** Accessible summary: title, kind, amount and state as separate phrases. */
+    /** The facts as "label value" lines (accessibility and search summaries). */
+    val availability: String
+        get() = facts.joinToString("\n") { "${it.label} ${it.value}" }
+
+    /** Short status value of the entry (its Status fact), if it has one. */
+    val status: String?
+        get() = facts.firstOrNull { it.isStatus }?.value
+
+    /** Accessible summary: title, kind, amount and facts as separate phrases. */
     val summary: String
         get() = listOf(title, kind, quantity, availability.replace("\n", ", "))
             .filter { it.isNotBlank() && it != CODEX_NONE }
@@ -62,44 +76,67 @@ internal data class CodexEntry(
 /** Placeholder for "no value" in entry fields; never rendered as a label. */
 internal const val CODEX_NONE = "—"
 
+internal fun codexStatus(language: AppLanguage, value: String, info: String? = null): CodexFact =
+    CodexFact(language.text(SessionText.STATUS), value, info, isStatus = true)
+
 internal fun codexItemEntry(item: ItemDefinition, model: CodexRenderModel, language: AppLanguage = AppLanguage.English): CodexEntry {
     if (!model.isDiscovered(item.id)) return unknownEntry("item/${item.id}", language)
     val stack = model.itemStack(item.id)
     val build = model.runStacks.build
-    val availability = when {
-        stack >= item.maxStacks -> language.text(SessionText.STACK_LIMIT)
-        build != null && item.id in build.eligibleItemIds -> language.text(SessionText.NEXT_ACQUISITION)
-        build != null -> language.text(SessionText.OFFER_LIMIT)
-        else -> language.text(SessionText.OFFERS_FROM_LEVEL, item.unlockLevel)
+    val facts = buildList {
+        // Offers depend on the run: the stack limit, then the game's current eligibility.
+        when {
+            stack >= item.maxStacks -> add(codexStatus(language, language.text(SessionText.STACK_LIMIT)))
+            build != null && item.id in build.eligibleItemIds -> add(codexStatus(language, language.text(SessionText.NEXT_ACQUISITION)))
+            build != null -> add(codexStatus(language, language.text(SessionText.OFFER_LIMIT), language.text(SessionText.OFFER_LIMIT_HELP)))
+        }
+        add(CodexFact(language.text(SessionText.OFFERS_FROM_LEVEL), language.text(SessionText.LEVEL_SHORT, item.unlockLevel),
+            language.text(SessionText.OFFERS_FROM_LEVEL_HELP)))
     }
     return CodexEntry(
         "item/${item.id}", item.name.localizedContent(language),
         "${item.description.localizedContent(language)}\n\n${item.primary.effect.displayLabel.localizedContent(language)}: ${modifier(item.primary, language)}\n${item.secondary.effect.displayLabel.localizedContent(language)}: ${modifier(item.secondary, language)}",
-        item.rarity.displayLabel.localizedContent(language), "$stack/${item.maxStacks}",
-        "$availability\n${if (model.isDiscovered(item.id)) language.text(SessionText.DISCOVERED) else language.text(SessionText.UNDISCOVERED)}",
-        CodexIcon.Item(item, stack), codexRarityColor(item.rarity), model.isDiscovered(item.id), item.rarity.rank, item.id in model.newItemIds,
+        item.rarity.displayLabel.localizedContent(language), "$stack/${item.maxStacks}", facts,
+        CodexIcon.Item(item, stack), codexRarityColor(item.rarity), true, item.rarity.rank, item.id in model.newItemIds,
     )
 }
 
 internal fun codexWeaponEntry(weapon: WeaponDefinition, model: CodexRenderModel, progress: HomeProgressProjection, language: AppLanguage = AppLanguage.English, allowCurrentRun: Boolean = true): CodexEntry {
     val build = model.runStacks.build
     val equipped = build?.weapon == weapon.id
-    if (weapon.id !in progress.loadout.unlockedWeapons && !(allowCurrentRun && equipped)) return unknownEntry("weapon/${weapon.id}", language).copy(
-        description = language.text(SessionText.START_WEAPON_LOCKED, weapon.permanentUnlockCost), availability = language.text(SessionText.LOCKED))
-    val availability = if (weapon.id in progress.loadout.unlockedWeapons) {
-        if (weapon.id == progress.loadout.selectedWeapon) language.text(SessionText.START_WEAPON_SELECTED) else language.text(SessionText.START_WEAPON_UNLOCKED)
-    } else language.text(SessionText.START_WEAPON_LOCKED, weapon.permanentUnlockCost)
+    val unlocked = weapon.id in progress.loadout.unlockedWeapons
+    val costFact = CodexFact(language.text(SessionText.UNLOCK_COST), weapon.permanentUnlockCost.toString())
+    if (!unlocked && !(allowCurrentRun && equipped)) return unknownEntry("weapon/${weapon.id}", language).copy(
+        facts = listOf(codexStatus(language, language.text(SessionText.LOCKED)), costFact),
+        help = language.text(SessionText.WEAPON_LOCKED_HELP),
+    )
+    val facts = buildList {
+        add(codexStatus(language, language.text(when {
+            !unlocked -> SessionText.LOCKED
+            weapon.id == progress.loadout.selectedWeapon -> SessionText.START_WEAPON_SELECTED
+            else -> SessionText.START_WEAPON_UNLOCKED
+        })))
+        if (!unlocked) add(costFact)
+        if (equipped) {
+            add(CodexFact(language.text(SessionText.WEAPON_LEVEL), language.text(SessionText.LEVEL_SHORT, build.weaponLevel)))
+            add(CodexFact(language.text(SessionText.MASTERY), build.mastery.localizedContent(language)))
+        }
+    }
     return CodexEntry("weapon/${weapon.id}", weapon.name.localizedContent(language), weapon.description.localizedContent(language),
-        language.text(SessionText.WEAPON), if (equipped) language.text(SessionText.LEVEL_SHORT, build.weaponLevel) else CODEX_NONE, "$availability${if (equipped) "\n" + language.text(SessionText.EQUIPPED_MASTERY, build.mastery.localizedContent(language)) else ""}",
-        CodexIcon.Weapon(weapon.id), Kk.Bone, weapon.id in progress.loadout.unlockedWeapons || equipped,
+        language.text(SessionText.WEAPON), if (equipped) language.text(SessionText.LEVEL_SHORT, build.weaponLevel) else CODEX_NONE, facts,
+        CodexIcon.Weapon(weapon.id), Kk.Bone, unlocked || equipped,
         help = language.text(SessionText.WEAPON_HELP), active = equipped)
 }
 
 internal fun codexRelicEntry(relic: RelicDefinition, model: CodexRenderModel, catalog: UiCatalogSnapshot, language: AppLanguage = AppLanguage.English): CodexEntry {
     if (!model.isRelicDiscovered(relic.id)) return unknownEntry("relic/${relic.id}", language)
     val rank = model.runStacks.build?.relics?.firstOrNull { it.id == relic.id }?.rank
+    val facts = buildList {
+        add(codexStatus(language, language.text(if (rank != null) SessionText.EQUIPPED else SessionText.RELIC_AVAILABLE)))
+        if (rank != null) add(CodexFact(language.text(SessionText.RANK), "$rank/${catalog.relicPolicy.maxRank}"))
+    }
     return CodexEntry("relic/${relic.id}", relic.name.localizedContent(language), "${relic.description.localizedContent(language)}\n\n${relic.rankEffect.localizedContent(language)}", relic.aspect.displayLabel.localizedContent(language),
-        "${rank ?: 0}/${catalog.relicPolicy.maxRank}", if (rank != null) language.text(SessionText.EQUIPPED) else language.text(SessionText.RELIC_AVAILABLE),
+        "${rank ?: 0}/${catalog.relicPolicy.maxRank}", facts,
         CodexIcon.Relic(relic, rank), relicAspectColor(relic.aspect), isNew = relic.id in model.newRelicIds, active = rank != null)
 }
 
@@ -107,13 +144,19 @@ internal fun codexShapeEntry(shape: CoreShapeDefinition, model: CodexRenderModel
     val unlocked = shape.id in progress.unlockedCoreShapes
     val current = coreShapeUnlockProgress(shape, progress.characterAchievements)
     val requirement = shape.unlockDescription.localizedContent(language)
-    val unlockProgress = if (unlocked) language.text(SessionText.UNLOCKED) else
-        language.text(SessionText.UNLOCK_PROGRESS, current, shape.unlockTarget)
     val equipped = shape.id == model.runStacks.build?.character
+    val facts = buildList {
+        add(codexStatus(language, language.text(when {
+            equipped -> SessionText.EQUIPPED
+            unlocked -> SessionText.UNLOCKED
+            else -> SessionText.LOCKED
+        })))
+        if (!unlocked) add(CodexFact(language.text(SessionText.PROGRESS), "$current/${shape.unlockTarget}"))
+    }
     return CodexEntry("shape/${shape.id}", if (unlocked) shape.displayName.localizedContent(language) else language.text(SessionText.UNKNOWN_CORE),
         if (unlocked) "${shape.mechanicDescription.localizedContent(language)}\n\n$requirement" else requirement,
         language.text(SessionText.CHARACTER), if (equipped) language.text(SessionText.EQUIPPED) else CODEX_NONE,
-        unlockProgress, CodexIcon.Shape(shape.id), if (unlocked) Kk.Bone else Kk.Mute, unlocked,
+        facts, CodexIcon.Shape(shape.id), if (unlocked) Kk.Bone else Kk.Mute, unlocked,
         help = if (unlocked) language.text(SessionText.CHARACTER_LAB_HELP) else null, active = equipped)
 }
 
@@ -126,8 +169,8 @@ internal fun codexCatalogEntries(category: Int, search: String, filter: CodexIte
 
 internal fun unknownEntry(key: String, language: AppLanguage): CodexEntry = CodexEntry(
     key, language.text(SessionText.UNKNOWN_DISCOVERY), "",
-    CODEX_NONE, CODEX_NONE, language.text(SessionText.UNDISCOVERED), CodexIcon.Unknown, Kk.Mute, discovered = false,
-    help = language.text(SessionText.DISCOVERY_HELP),
+    CODEX_NONE, CODEX_NONE, listOf(codexStatus(language, language.text(SessionText.UNDISCOVERED))), CodexIcon.Unknown, Kk.Mute,
+    discovered = false, help = language.text(SessionText.DISCOVERY_HELP),
 )
 
 internal fun codexSynergyDiscovered(definition: kinetickk.ball.content.api.SynergyDefinition,

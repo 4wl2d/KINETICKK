@@ -27,6 +27,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalDensity
@@ -138,7 +142,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                 val relic = build.relics.getOrNull(index)
                 add(if (relic != null) codexRelicEntry(catalog.relic(relic.id), model, catalog, language) else CodexEntry(
                     "empty-relic/$index", language.text(SessionText.EMPTY_RELIC_SLOT, index + 1), "", language.text(SessionText.RELIC_SLOT), CODEX_NONE,
-                    language.text(SessionText.EMPTY), CodexIcon.Empty, Kk.Mute, help = language.text(SessionText.EMPTY_RELIC_HELP),
+                    listOf(codexStatus(language, language.text(SessionText.EMPTY))), CodexIcon.Empty, Kk.Mute, help = language.text(SessionText.EMPTY_RELIC_HELP),
                 ))
             }
             addAll(model.items.filter { model.itemStack(it.id) > 0 }.map { codexItemEntry(it, model, language) })
@@ -154,7 +158,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
             CodexEntry("synergy/${synergy.id}", synergy.name.localizedContent(language), "${synergy.description.localizedContent(language)}\n\n${language.text(SessionText.REQUIRES, required)}" +
                 (summary?.missingComponents?.takeIf { it.isNotEmpty() }?.let { missing -> "\n" + language.text(SessionText.MISSING, missing.joinToString { it.localizedContent(language) }) } ?: ""),
                 synergy.requiredAspect?.displayLabel?.localizedContent(language) ?: language.text(SessionText.COMBINATION), CODEX_NONE,
-                if (active) language.text(SessionText.ACTIVE) else if (build == null) language.text(SessionText.NO_RUN_INACTIVE) else language.text(SessionText.INACTIVE),
+                listOf(codexStatus(language, language.text(if (active) SessionText.ACTIVE else if (build == null) SessionText.NO_RUN_INACTIVE else SessionText.INACTIVE))),
                 CodexIcon.Synergy(components), synergy.requiredAspect?.let(::relicAspectColor) ?: Kk.Bone, active = active)
         }
     }
@@ -278,15 +282,15 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                 }
                 Column(Modifier.weight(1f).fillMaxHeight()) {
                     if (tab == 1 && !wide) {
-                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                            categoryTitles.forEachIndexed { index, title ->
-                                CodexTab(title, category == index, "codex-category-$index", controlScale) { categoryValue = index }
-                            }
-                            if (compactHeader && category == 0) {
-                                Spacer(Modifier.width(8.dp))
-                                CodexFilters(filterTitles, filter, build != null, controlScale) { filterValue = it }
-                            }
-                        }
+                        val trailingFilters = compactHeader && category == 0
+                        val filtersWidth = if (trailingFilters) codexFiltersWidth(filterTitles.map { language.text(it.second) }) + 8.dp else 0.dp
+                        CodexTabRow(categoryTitles, category, "codex-category-", controlScale, Modifier.fillMaxWidth(), reserved = filtersWidth,
+                            trailing = {
+                                if (trailingFilters) {
+                                    Spacer(Modifier.width(8.dp))
+                                    CodexFilters(filterTitles, filter, build != null, controlScale) { filterValue = it }
+                                }
+                            }) { categoryValue = it }
                         Spacer(Modifier.height(if (compactHeader) 4.dp else 8.dp))
                         CodexSearchField(search, !sheetVisible, scale, inlineLabel = true, searchFocus, dense = compactHeader) { searchValue = codexSearchInput(it) }
                         if (category == 0 && !compactHeader) {
@@ -424,10 +428,14 @@ private fun CodexSlot(
     val pinned = selection.pinnedKey == entry.key
     val previewed = selection.previewKey == entry.key
     val badge = entry.cellBadge()
+    val density = LocalDensity.current.density
+    val newLabel = LocalAppLanguage.current.text(SessionText.NEW_DISCOVERY)
+    val stampFont = codexNewStampFont(measurer)
+    val stamp = if (entry.isNew) remember(measurer, newLabel, density) { kkStampSize(measurer, newLabel, density, stampFont) } else null
     Box(slotModifier(entry, selection, focus, interaction, onSelection).aspectRatio(1f).drawBehind {
         val gap = CodexCellGap.toPx()
         if (band) drawRect(roles.you.copy(alpha = 0.10f), Offset(-gap * 0.5f, -gap * 0.5f), Size(size.width + gap, size.height + gap))
-        drawCodexCell(entry, catalog, measurer, band, hoveredValue || focusedValue)
+        drawCodexCell(entry, catalog, measurer, band, hoveredValue || focusedValue, codexNewBand(stamp, density))
         if (pinned) {
             // Selected: 3 dp ink gap and a 2 dp bone ring (box-shadow 0 0 0 3px ink, 0 0 0 5px bone).
             val inner = 1.5.dp.toPx()
@@ -439,9 +447,10 @@ private fun CodexSlot(
             drawRect(roles.you, Offset(-outer, -outer), Size(size.width + outer * 2f, size.height + outer * 2f), style = kkStroke(2.dp.toPx()))
         }
     }) {
-        if (entry.isNew) DiscoveryBadge(LocalAppLanguage.current.text(SessionText.NEW_DISCOVERY), min(scale, 1.25f) * 0.8f,
-            Modifier.align(Alignment.TopEnd).wrapContentSize(Alignment.TopEnd, unbounded = true).offset(x = 6.dp, y = (-6).dp)
-                .testTag("codex-new-${entry.key}"))
+        // The discovery stamp sits in its own band at the top of the cell; the glyph moves below it.
+        if (stamp != null) Box(Modifier.align(Alignment.TopStart).offset(CodexNewInset, CodexNewInset)
+            .size((stamp.width / density).dp, (stamp.height / density).dp).testTag("codex-new-${entry.key}")
+            .drawBehind { drawKkStamp(measurer, newLabel, Offset.Zero, fontSize = stampFont) })
         if (badge != null) BasicText(badge, Modifier.align(Alignment.BottomEnd).padding(3.dp).background(Kk.Ink).padding(horizontal = 3.dp),
             style = measurer.typography.monoStyle(9f * min(scale, 1.4f), color = Kk.Bone))
     }
@@ -455,11 +464,34 @@ private fun CodexEntry.cellBadge(): String? = when (val icon = icon) {
     else -> null
 }
 
+/** Inset of the NEW stamp from the cell's top-left corner. */
+private val CodexNewInset = 3.dp
+
+/** NEW stamp font: 10 px on screen whatever the text size (it must stay inside a 64 dp cell). */
+internal fun codexNewStampFont(measurer: CanvasTextMeasurer): Float = 10f / measurer.scale.coerceAtLeast(0.1f)
+
+/** Height (px) of the band a NEW stamp of [stamp] size takes at the cell top (0 without a stamp). */
+internal fun codexNewBand(stamp: Size?, density: Float): Float =
+    if (stamp == null) 0f else CodexNewInset.value * density + stamp.height + 4f * density
+
+/**
+ * Glyph circle of a cell of [cellPx] (center y and radius, px): centered, or below a NEW band of
+ * [bandPx] so the stamp never covers the glyph (rotated corners included).
+ */
+internal fun codexCellGlyph(cellPx: Float, bandPx: Float, density: Float): Pair<Float, Float> {
+    val radius = cellPx * 0.36f
+    if (bandPx <= 0f) return cellPx * 0.5f to radius
+    val top = bandPx
+    val bottom = cellPx - 3f * density
+    val fitted = min(radius, (bottom - top) * 0.5f)
+    return (top + bottom) * 0.5f to fitted
+}
+
 /** Cell face: rarity (items) or aspect (relics) color when discovered, hatch when not. */
-private fun DrawScope.drawCodexCell(entry: CodexEntry, catalog: UiCatalogSnapshot, measurer: CanvasTextMeasurer, band: Boolean, hovered: Boolean) {
+private fun DrawScope.drawCodexCell(entry: CodexEntry, catalog: UiCatalogSnapshot, measurer: CanvasTextMeasurer, band: Boolean, hovered: Boolean, newBand: Float = 0f) {
     val rect = Rect(Offset.Zero, size)
-    val center = rect.center
-    val radius = size.minDimension * 0.36f
+    val (centerY, radius) = codexCellGlyph(size.minDimension, newBand, density)
+    val center = Offset(size.width * 0.5f, centerY)
     when (val icon = entry.icon) {
         is CodexIcon.Item -> {
             drawRect(entry.color, alpha = if (band || hovered) 1f else 0.84f)
@@ -468,7 +500,8 @@ private fun DrawScope.drawCodexCell(entry: CodexEntry, catalog: UiCatalogSnapsho
         is CodexIcon.Relic -> {
             drawRect(Kk.Ink2)
             drawRect(entry.color, style = kkStroke(2.dp.toPx()))
-            drawRelicIcon(icon.definition, catalog.relicPolicy, center, radius, rank = icon.rank, time = 0f)
+            // The rank is the cell's badge; the medallion's rank markers would read as stray dots.
+            drawRelicIcon(icon.definition, catalog.relicPolicy, center, radius, rank = null, time = 0f)
         }
         is CodexIcon.Weapon -> {
             drawRect(if (hovered) Kk.Ink3 else Kk.Ink2)
@@ -535,35 +568,86 @@ private fun SynergySlot(entry: CodexEntry, catalog: UiCatalogSnapshot, model: Co
     val hoveredValue by interaction.collectIsHoveredAsState()
     val highlighted = selection.previewKey == entry.key || selection.pinnedKey == entry.key
     val components = (entry.icon as CodexIcon.Synergy).components
-    Row(slotModifier(entry, selection, focus, interaction, onSelection).fillMaxWidth()
+    val fg = if (highlighted) Kk.Ink else Kk.Bone
+    val titleSize = 24f * min(scale, 1.4f)
+    BoxWithConstraints(slotModifier(entry, selection, focus, interaction, onSelection).fillMaxWidth()
         .drawBehind {
             drawKkListRowBackground(Rect(Offset.Zero, size), roles, if (highlighted) 1f else 0f, hoveredValue || focusedValue)
             if (!highlighted) drawKkSlab(Rect(Offset.Zero, size), Kk.Ink2, 9.dp.toPx())
         }
-        .padding(horizontal = 18.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        val fg = if (highlighted) Kk.Ink else Kk.Bone
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            BasicText(entry.title.uppercase(), style = measurer.typography.condStyle(24f * min(scale, 1.4f), color = fg))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        .padding(horizontal = 18.dp, vertical = 10.dp)) {
+        // Narrow rows (phones) put smaller diamonds beside the title and the tags under both,
+        // so neither the title nor a tag is ever squeezed into breaking inside a word.
+        val narrow = maxWidth < SynergyStackBelow
+        val diagramWidth = if (narrow) 96.dp else 150.dp
+        val tags: @Composable () -> Unit = {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 CodexTag(entry.kind, if (highlighted) Kk.Ink else entry.color, if (highlighted) Kk.Bone else Kk.Ink, scale)
-                CodexTag(entry.availability, if (entry.active) roles.you else Color.Transparent, if (entry.active) Kk.Ink else kkListRowSecondary(if (highlighted) 1f else 0f), scale)
+                entry.status?.let { status ->
+                    CodexTag(status, if (entry.active) roles.you else Color.Transparent,
+                        if (entry.active) Kk.Ink else kkListRowSecondary(if (highlighted) 1f else 0f), scale)
+                }
             }
         }
-        // Components as relic diamonds joined by a link bar; the ones in the run are ringed.
-        Canvas(Modifier.size(width = 150.dp, height = 56.dp)) {
-            val left = Offset(size.width * 0.2f, size.height * 0.5f)
-            val right = Offset(size.width * 0.8f, size.height * 0.5f)
-            drawKkSynergyLink(left, right, if (entry.active) roles.you else Kk.Line2)
-            components.forEachIndexed { index, id ->
-                val center = if (index == 0) left else right
-                val relic = id?.let(catalog::relic)
-                val present = id != null && model.runStacks.build?.relics?.any { it.id == id } == true
-                drawKkRelicSlot(center, relic?.let { relicAspectColor(it.aspect) } ?: Color.Unspecified,
-                    icon = relic?.let { KkIcon.Aspects[it.aspect.ordinal] }, sizeDp = 44f,
-                    ring = if (present) roles.you else Color.Unspecified)
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CodexFitText(entry.title, { size -> measurer.typography.condStyle(size, color = fg) }, titleSize, 16f)
+                    if (!narrow) tags()
+                }
+                SynergyDiagram(components, catalog, model, entry.active, diagramWidth, if (narrow) 34f else 44f)
             }
+            if (narrow) tags()
         }
     }
+}
+
+/** Rows narrower than this stack their tags under the title (phones). */
+internal val SynergyStackBelow = 420.dp
+
+/** The two components as relic diamonds joined by a link bar; the ones in the run are ringed. */
+@Composable
+private fun SynergyDiagram(components: List<kinetickk.ball.content.api.RelicId?>, catalog: UiCatalogSnapshot, model: CodexRenderModel, active: Boolean, width: Dp, slotDp: Float) {
+    val roles = LocalKkRolePalette.current
+    Canvas(Modifier.size(width = width, height = (slotDp + 14f).dp)) {
+        val left = Offset(size.width * 0.2f, size.height * 0.5f)
+        val right = Offset(size.width * 0.8f, size.height * 0.5f)
+        drawKkSynergyLink(left, right, if (active) roles.you else Kk.Line2)
+        components.forEachIndexed { index, id ->
+            val center = if (index == 0) left else right
+            val relic = id?.let(catalog::relic)
+            val present = id != null && model.runStacks.build?.relics?.any { it.id == id } == true
+            drawKkRelicSlot(center, relic?.let { relicAspectColor(it.aspect) } ?: Color.Unspecified,
+                icon = relic?.let { KkIcon.Aspects[it.aspect.ordinal] }, sizeDp = slotDp,
+                ring = if (present) roles.you else Color.Unspecified)
+        }
+    }
+}
+
+/**
+ * Display text that wraps only between words: shrinks from [maxSize] toward [minSize] until its
+ * longest word fits the width (the words themselves are never split).
+ */
+@Composable
+private fun CodexFitText(text: String, style: (Float) -> TextStyle, maxSize: Float, minSize: Float, modifier: Modifier = Modifier) {
+    val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer(8)
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val maxPx = constraints.maxWidth
+        val size = remember(text, maxPx, maxSize, style(maxSize)) {
+            codexFittingSize(text.uppercase(), maxPx, maxSize, minSize) { word, candidate ->
+                textMeasurer.measure(word, style(candidate)).size.width
+            }
+        }
+        KkLabel(text, style(size), modifier)
+    }
+}
+
+/** Largest size in [minSize]..[maxSize] (1 px steps) at which every word of [text] is at most [maxPx] wide. */
+internal fun codexFittingSize(text: String, maxPx: Int, maxSize: Float, minSize: Float, width: (String, Float) -> Int): Float {
+    val words = text.split(' ').filter { it.isNotEmpty() }
+    var candidate = maxSize
+    while (candidate > minSize && words.any { word -> width(word, candidate) > maxPx }) candidate -= 1f
+    return candidate.coerceAtLeast(minSize)
 }
 
 @Composable
@@ -581,11 +665,10 @@ private fun CodexDetails(entry: CodexEntry?, catalog: UiCatalogSnapshot, scale: 
             val item = itemIcon?.definition
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 when {
-                    !entry.discovered && entry.kind == CODEX_NONE -> CodexTag(language.text(SessionText.UNDISCOVERED), Color.Transparent, Kk.Mute, scale, line = true)
+                    entry.kind == CODEX_NONE -> Unit
                     item != null || entry.icon is CodexIcon.Relic -> CodexTag(entry.kind, entry.color, Kk.Ink, scale, height = 26.dp)
                     else -> CodexTag(entry.kind, Color.Transparent, Kk.Bone, scale, line = true, height = 26.dp)
                 }
-                if (entry.active) CodexTag(language.text(SessionText.ACTIVE), roles.you, Kk.Ink, scale, height = 26.dp)
                 entry.help?.let { KkInfoButton(it, placement = KkTooltipPlacement.BELOW, textScale = min(scale, 1.25f)) }
             }
             CodexDetailTitle(entry.title, if (entry.discovered) Kk.Bone else Kk.Mute, scale)
@@ -598,11 +681,6 @@ private fun CodexDetails(entry: CodexEntry?, catalog: UiCatalogSnapshot, scale: 
                 CodexStatPanel(item.primary.effect.displayLabel.localizedContent(language), codexModifierValue(item.primary, language), roles.you, scale, panel)
                 CodexStatPanel(item.secondary.effect.displayLabel.localizedContent(language), codexModifierValue(item.secondary, language), Kk.Bone, scale, panel)
             } else {
-                val amount = when (entry.icon) {
-                    is CodexIcon.Relic -> language.text(SessionText.RANK_QUANTITY, entry.quantity)
-                    else -> entry.quantity.takeIf { it != CODEX_NONE && it.isNotBlank() }
-                }
-                if (amount != null && entry.discovered) CodexTag(amount, Color.Transparent, Kk.Bone, scale, line = true)
                 if (!entry.discovered && entry.description.isBlank()) {
                     Box(Modifier.fillMaxWidth().height(120.dp).background(panel).kkHatch(), contentAlignment = Alignment.Center) {
                         BasicText("?", style = typography.condStyle(64f, color = Kk.Mute))
@@ -612,11 +690,26 @@ private fun CodexDetails(entry: CodexEntry?, catalog: UiCatalogSnapshot, scale: 
                     BasicText(paragraph, style = typography.bodyStyle(16f * scale, color = Kk.Bone2))
                 }
             }
-            entry.availability.split("\n").filter { it.isNotBlank() }.forEach { line ->
-                BasicText(line, style = typography.monoStyle(11f * scale, color = Kk.Mute))
+            // Facts: a label and its value (Lvl N, counts, status words); explanations sit behind (!).
+            if (entry.facts.isNotEmpty()) Column(Modifier.fillMaxWidth().testTag("codex-facts"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                entry.facts.forEach { fact -> CodexFactRow(fact, scale) }
             }
             Spacer(Modifier.height(12.dp))
         }
+    }
+}
+
+/** A fact row: mono label (mute) on the left, cond value on the right, then its (!) if any. */
+@Composable
+private fun CodexFactRow(fact: CodexFact, scale: Float) {
+    val typography = codexMeasurer().typography
+    Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { }, verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        BasicText(fact.label.uppercase(), Modifier.weight(1f), style = typography.monoStyle(11f * min(scale, 1.4f), color = Kk.Mute),
+            softWrap = false, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        BasicText(fact.value.uppercase(), style = typography.condStyle(21f * min(scale, 1.4f), tabular = true, lineHeightEm = 1f, color = Kk.Bone),
+            softWrap = false, maxLines = 1)
+        fact.info?.let { KkInfoButton(it, placement = KkTooltipPlacement.BELOW, textScale = min(scale, 1.25f)) }
     }
 }
 
@@ -624,19 +717,8 @@ private fun CodexDetails(entry: CodexEntry?, catalog: UiCatalogSnapshot, scale: 
 @Composable
 private fun CodexDetailTitle(title: String, color: Color, scale: Float) {
     val typography = codexMeasurer().typography
-    val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer(8)
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val maxPx = constraints.maxWidth
-        val size = remember(title, maxPx, scale, typography) {
-            val words = title.uppercase().split(' ').filter { it.isNotEmpty() }
-            var candidate = 30f * min(scale, 1.25f)
-            while (candidate > 18f && words.any { word ->
-                    textMeasurer.measure(word, typography.wideStyle(candidate)).size.width > maxPx
-                }) candidate -= 1f
-            candidate
-        }
-        KkLabel(title, typography.wideStyle(size, lineHeightEm = 1.05f, color = color), Modifier.testTag("codex-detail-title"))
-    }
+    CodexFitText(title, { size -> typography.wideStyle(size, lineHeightEm = 1.05f, color = color) }, 30f * min(scale, 1.25f), 18f,
+        Modifier.testTag("codex-detail-title"))
 }
 
 /** Stat panel (`.panel`): effect label left (body), value right (wide, tabular). */
@@ -670,6 +752,7 @@ private fun CodexTag(text: String, background: Color, foreground: Color, scale: 
             if (line) drawKkSlab(Rect(Offset(0.75f, 0.75f), Size(this.size.width - 1.5f, this.size.height - 1.5f)), Kk.Line2, cut, style = kkStroke(1.5.dp.toPx()))
         }.padding(horizontal = 10.dp, vertical = 4.dp),
         style = typography.labelStyle(size * min(scale, 1.4f), trackingEm = 0.1f, color = foreground),
+        softWrap = false, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
     )
 }
 
@@ -701,16 +784,67 @@ private fun EmptyNotice(state: CodexEmptyState, scale: Float) {
 @Composable
 private fun CodexNavigationTabs(tab: Int, controlScale: Float, modifier: Modifier, onSelect: (Int) -> Unit) {
     val language = LocalAppLanguage.current
-    Row(modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        listOf(SessionText.TAB_BUILD, SessionText.TAB_CATALOG, SessionText.TAB_SYNERGIES).map { language.text(it) }.forEachIndexed { index, title ->
-            CodexTab(title, tab == index, "codex-tab-$index", controlScale) { onSelect(index) }
+    val titles = listOf(SessionText.TAB_BUILD, SessionText.TAB_CATALOG, SessionText.TAB_SYNERGIES).map { language.text(it) }
+    CodexTabRow(titles, tab, "codex-tab-", controlScale, modifier, onSelect = onSelect)
+}
+
+/** Smallest scale tabs shrink to before their row scrolls instead. */
+internal const val CODEX_TAB_MIN_SCALE = 0.6f
+
+/** Common scale for a row of tabs of [natural] widths (dp) so they fit [available] dp (1 when they fit). */
+internal fun codexTabScale(natural: List<Float>, available: Float): Float =
+    if (natural.isEmpty()) 1f else (available / natural.sum()).coerceIn(CODEX_TAB_MIN_SCALE, 1f)
+
+/**
+ * A row of tabs that fits its width: all tabs shrink together (to 60 %) so none is clipped at
+ * rest. Only if that is still too wide does the row scroll, with a fade at the edge that has more.
+ */
+@Composable
+private fun CodexTabRow(
+    titles: List<String>,
+    selected: Int,
+    tagPrefix: String,
+    controlScale: Float,
+    modifier: Modifier,
+    reserved: Dp = 0.dp,
+    trailing: @Composable () -> Unit = {},
+    onSelect: (Int) -> Unit,
+) {
+    val measurer = codexMeasurer()
+    val density = LocalDensity.current.density
+    val gap = 6.dp
+    BoxWithConstraints(modifier) {
+        val natural = remember(measurer, titles, density) { titles.map { kkTabWidth(measurer, it, density) / density } }
+        val available = maxWidth.value - reserved.value - gap.value * (titles.size - 1).coerceAtLeast(0)
+        val tabScale = codexTabScale(natural, available)
+        val scrolls = natural.sum() * tabScale > available + 0.5f
+        val scroll = rememberScrollState()
+        Row(
+            Modifier.then(if (scrolls) Modifier.horizontalScroll(scroll) else Modifier)
+                .drawWithContent {
+                    drawContent()
+                    val fade = 28.dp.toPx()
+                    if (scrolls && scroll.canScrollForward) {
+                        drawRect(Brush.horizontalGradient(listOf(Color.Transparent, Kk.Ink), startX = size.width - fade, endX = size.width),
+                            Offset(size.width - fade, 0f), Size(fade, size.height))
+                    }
+                    if (scrolls && scroll.canScrollBackward) {
+                        drawRect(Brush.horizontalGradient(listOf(Kk.Ink, Color.Transparent), startX = 0f, endX = fade), Offset.Zero, Size(fade, size.height))
+                    }
+                },
+            horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.CenterVertically,
+        ) {
+            titles.forEachIndexed { index, title ->
+                CodexTab(title, selected == index, "$tagPrefix$index", controlScale, tabScale) { onSelect(index) }
+            }
+            trailing()
         }
     }
 }
 
-/** Tab (`.tab`): drawn uppercase; semantics keep the game's wording, role Tab and selection. */
+/** Tab (`.tab`), drawn at [tabScale]: uppercase; semantics keep the game's wording, role Tab and selection. */
 @Composable
-private fun CodexTab(text: String, selected: Boolean, tag: String, controlScale: Float, onClick: () -> Unit) {
+private fun CodexTab(text: String, selected: Boolean, tag: String, controlScale: Float, tabScale: Float = 1f, onClick: () -> Unit) {
     val measurer = codexMeasurer()
     val inputEnabled = LocalCodexInputEnabled.current
     val interactions = remember { MutableInteractionSource() }
@@ -722,10 +856,22 @@ private fun CodexTab(text: String, selected: Boolean, tag: String, controlScale:
     Box(Modifier.testTag(tag).semantics { this.selected = selected; this.text = AnnotatedString(text) }
         .hoverable(interactions, enabled = inputEnabled)
         .clickable(enabled = inputEnabled, role = Role.Tab, interactionSource = interactions, indication = null, onClick = onClick)
-        .size(width.dp, (height + 8f).dp)
+        .size((width * tabScale).dp, (height * tabScale + 8f).dp)
         .drawBehind {
-            drawKkTab(measurer, Rect(0f, 0f, size.width, height * density), text, selected, hovered && inputEnabled, focused && inputEnabled)
+            withTransform({ scale(tabScale, tabScale, Offset.Zero) }) {
+                drawKkTab(measurer, Rect(0f, 0f, width * density, height * density), text, selected, hovered && inputEnabled, focused && inputEnabled)
+            }
         })
+}
+
+/** Natural width of the filter segments (plus their 3 dp gaps). */
+@Composable
+private fun codexFiltersWidth(labels: List<String>): Dp {
+    val measurer = codexMeasurer()
+    val density = LocalDensity.current.density
+    return remember(measurer, labels, density) {
+        (labels.sumOf { (kkSegmentWidth(measurer, it, density) / density).toDouble() }.toFloat() + 3f * (labels.size - 1)).dp
+    }
 }
 
 /** Section row (`.lrow`) with a mono count, as a tab of the collection. */
@@ -743,8 +889,19 @@ private fun CodexNavRow(text: String, count: String, selected: Boolean, tag: Str
         .fillMaxWidth().height((46f * controlScale).dp)
         .drawBehind {
             drawKkListRow(measurer, Rect(Offset.Zero, size), text, count, selection, hovered || focused, titleSize = 24f / controlScale.coerceAtLeast(1f))
-            if (focused) drawRect(Kk.Bone, style = kkStroke(2.dp.toPx()))
+            if (focused) {
+                // Around the drawn slab, which a selected row shifts left.
+                val ring = codexNavFocusRing(size, selection, density)
+                drawRect(Kk.Bone, ring.topLeft, ring.size, style = kkStroke(2.dp.toPx()))
+            }
         })
+}
+
+/** Focus ring of a nav row of [size] px: 3 dp outside its slab, following the selected shift. */
+internal fun codexNavFocusRing(size: Size, selection: Float, density: Float): Rect {
+    val shift = KK_LIST_ROW_SELECTED_SHIFT_DP * density * selection.coerceIn(0f, 1.2f)
+    val out = 3f * density
+    return Rect(shift - out, -out, size.width + shift + out, size.height + out)
 }
 
 /** The game's filters (All / In build) as a segmented control. */

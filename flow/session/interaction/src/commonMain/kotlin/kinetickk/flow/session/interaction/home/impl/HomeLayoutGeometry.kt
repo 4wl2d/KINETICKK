@@ -74,6 +74,8 @@ internal class HomeScene(
     val legalRight: Float,
     val legalBaseline: Float,
     val legalSize: Float,
+    /** The legal line (right-aligned at [legalRight]) must stay right of this x. */
+    val legalLeft: Float,
 )
 
 internal class HomeLayoutGeometry(
@@ -145,7 +147,9 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
                 actions += HomeActionBounds(target, rect(left, by(680f), left + 86f * s, by(756f)))
             }
             infos += info(HomeInfoTarget.FORM, rx(1368f), by(620f))
-            infos += info(HomeInfoTarget.FACTS, lx(572f), by(686f))
+            // The facts card keeps at least 480 px (board 560) on smaller desktops, short of the form panel.
+            val factsRight = max(lx(616f), min(lx(56f) + 480f, rx(826f) - 24f))
+            infos += info(HomeInfoTarget.FACTS, factsRight - 44f * s, by(686f))
             HomeScene(
                 unit = px(s),
                 gridSpacing = px(48f * s),
@@ -163,7 +167,7 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
                 wordSize = px(200f * s),
                 menuFontSize = px(64f * s),
                 menuColumns = 1,
-                facts = rect(lx(56f), by(640f), lx(616f), by(732f)),
+                facts = rect(lx(56f), by(640f), factsRight, by(732f)),
                 formNameLeft = px(rx(826f)),
                 formNameCenterY = px(by(620f)),
                 formNameSize = px(30f * s),
@@ -171,6 +175,7 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
                 legalRight = px(rx(1392f)),
                 legalBaseline = px(by(788f)),
                 legalSize = px(11f * s),
+                legalLeft = px(factsRight + 24f),
             )
         }
         HomeLayoutMode.COMPACT_LANDSCAPE -> {
@@ -196,7 +201,8 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
             }
             val tilesRight = side + (if (singleRow) 6 else 3) * (tileWidth + 6f) - 6f
             val nameCenter = tilesTop - 24f
-            infos += info(HomeInfoTarget.FORM, tilesRight - 24f, nameCenter)
+            // The (!) leads the form name at the left edge, clear of the selected menu slab and trail.
+            infos += info(HomeInfoTarget.FORM, side, nameCenter)
             val regionTop = 44f
             val regionBottom = nameCenter - 16f
             val heroRadius = min(135f, min((menuLeft - 45f - side) * 0.42f, (regionBottom - regionTop) * 0.9f))
@@ -219,13 +225,14 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
                 menuFontSize = px(36f),
                 menuColumns = 1,
                 facts = null,
-                formNameLeft = px(side),
+                formNameLeft = px(side + 36f),
                 formNameCenterY = px(nameCenter),
                 formNameSize = px(14f),
                 formDescription = null,
                 legalRight = px(w - side),
                 legalBaseline = px(h - 5f),
                 legalSize = px(8f),
+                legalLeft = px(tilesRight + 12f),
             )
         }
         HomeLayoutMode.COMPACT_PORTRAIT -> {
@@ -283,10 +290,28 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
                 legalRight = px(w - side),
                 legalBaseline = px(h - 4f),
                 legalSize = px(8f),
+                legalLeft = px(side),
             )
         }
     }
     return HomeLayoutGeometry(mode, actions, infos, scene)
+}
+
+/** Right end (px) of the form name: up to its (!) when that follows the name, else the tile row. */
+internal fun homeFormNameRight(layout: HomeLayoutGeometry, density: Float): Float {
+    val info = layout.info(HomeInfoTarget.FORM)?.bounds
+    return if (info != null && info.left > layout.scene.formNameLeft) info.left - 12f * density
+    else HomeCoreTargets.maxOf { layout.bounds(it).right }
+}
+
+/**
+ * Area a selected menu item covers (px) for a menu font of [fontSizePx]: the item moves 26 board
+ * px left, its three speed lines reach 170 px further left, and its slab and echo add 6 px above
+ * and 16 px below (`.mi` in kk.css, scaled by font / 64).
+ */
+internal fun homeSelectedMenuExtent(bounds: Rect, fontSizePx: Float): Rect {
+    val k = fontSizePx / 64f
+    return Rect(bounds.left - (26f + 20f + 150f) * k, bounds.top - 6f * k, bounds.right, bounds.bottom + 16f * k)
 }
 
 internal fun HomeLayoutTarget.toHomeAction(): HomeAction = when (this) {

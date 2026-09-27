@@ -12,7 +12,6 @@ internal enum class SessionRedesignText(
 ) : TextResource {
     MATTER("Matter", "Материя"),
     FORM("Form", "Форма"),
-    STARTING_WEAPON("Starting weapon", "Стартовое оружие"),
     MAXED("Maxed", "На максимуме"),
     DIRECTIVE("Directive", "Директива"),
     STATUS("Status", "Статус"),
@@ -45,6 +44,7 @@ internal enum class SessionRedesignText(
     VERSION("v0.2.0", "v0.2.0"),
     COPYRIGHT("© 2026 Vladislav Tomilov", "© 2026 Владислав Томилов"),
     LICENSE("GPL v3+", "GPL v3+"),
+    NO_WARRANTY("No warranty", "Без гарантий"),
     SOURCE("github.com/4wl2d/KINETICKK", "github.com/4wl2d/KINETICKK"),
 
     BACK("Back", "Назад"),

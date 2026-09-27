@@ -126,6 +126,48 @@ class HomeInfoGeometryTest {
     }
 }
 
+class HomeMenuClearanceTest {
+    @Test
+    fun theFormInfoStaysClearOfEverySelectedMenuSlabAndTrail() {
+        val viewports = listOf(844f to 390f, 800f to 360f, 600f to 390f, 873f to 393f, 1_440f to 810f, 1_000f to 700f, 390f to 844f, 390f to 600f)
+        viewports.forEach { (width, height) ->
+            val layout = homeLayoutGeometry(width, height, 1f)
+            val info = requireNotNull(layout.info(HomeInfoTarget.FORM)).touch
+            HomeMenuTargets.forEach { target ->
+                val extent = homeSelectedMenuExtent(layout.bounds(target), layout.scene.menuFontSize)
+                assertFalse(
+                    info.left < extent.right && info.right > extent.left && info.top < extent.bottom && info.bottom > extent.top,
+                    "Selected $target crowds the form (!) at ${width}x$height",
+                )
+            }
+        }
+    }
+
+    @Test
+    fun theFormNameKeepsARowOfItsOwnBesideItsInfo() {
+        listOf(1_440f to 810f, 1_000f to 700f, 844f to 390f, 600f to 390f, 390f to 844f, 390f to 600f).forEach { (width, height) ->
+            val layout = homeLayoutGeometry(width, height, 1f)
+            val nameRight = homeFormNameRight(layout, 1f)
+            assertTrue(nameRight - layout.scene.formNameLeft >= 160f, "form name gets ${nameRight - layout.scene.formNameLeft} px at ${width}x$height")
+            val info = requireNotNull(layout.info(HomeInfoTarget.FORM)).bounds
+            assertTrue(info.right <= layout.scene.formNameLeft || info.left >= nameRight, "the (!) sits outside the name at ${width}x$height")
+        }
+    }
+
+    @Test
+    fun theSpeedLinesComeToRestWithAllThreeFullyDrawn() {
+        // kk-trail: a 0.9 s cycle per line, delayed 0 / 0.15 / 0.3 s, opaque from 18 % to 72 %.
+        val rest = homeTrailTime(10f)
+        assertEquals(HOME_TRAIL_REST_SECONDS, rest)
+        listOf(0f, 0.15f, 0.3f).forEach { delay ->
+            val phase = kinetickk.foundation.design.kkLoop(rest, 0.9f, delay)
+            assertTrue(phase in 0.18f..0.72f, "line delayed $delay is at $phase")
+        }
+        assertEquals(0f, homeTrailTime(0f))
+        assertEquals(0.2f, homeTrailTime(0.2f))
+    }
+}
+
 private val RegularViewports = listOf(
     Triple(900f, 560f, 1f),
     Triple(1_000f, 700f, 1f),

@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.text.TextLayoutResult
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.flow.session.interaction.home.api.HomeUiModel
@@ -91,7 +92,9 @@ internal class HomeMenuMotion {
 
     fun advance(target: HomeLayoutTarget, coreShape: CoreShape, deltaSeconds: Float) {
         val delta = deltaSeconds.coerceIn(0f, MAX_HOME_PRESENTATION_FRAME_DELTA_SECONDS)
-        activeIndex = HomeMenuTargets.indexOf(target).coerceAtLeast(0)
+        val index = HomeMenuTargets.indexOf(target).coerceAtLeast(0)
+        selectedSeconds = if (index == activeIndex) selectedSeconds + delta else 0f
+        activeIndex = index
         val step = delta * 1000f / KkTime.MenuSelect
         for (index in menu.indices) {
             menu[index] = if (index == activeIndex) min(1f, menu[index] + step) else max(0f, menu[index] - step)
@@ -108,6 +111,11 @@ internal class HomeMenuMotion {
         accentElapsedMs = min(KkTime.PaletteShift.toFloat(), accentElapsedMs + delta * 1000f)
         accent = lerp(accentFrom, accentTo, KkEase.Out.transform(accentElapsedMs / KkTime.PaletteShift))
     }
+
+    private var selectedSeconds = HOME_TRAIL_REST_SECONDS
+
+    /** Speed-line clock of the selected item: the lines draw in once, then hold (never loop). */
+    val trailTime: Float get() = homeTrailTime(selectedSeconds)
 
     /** Selection slab progress of menu item [index] (Pull overshoot while growing). */
     fun menuSelection(index: Int): Float =
@@ -231,32 +239,25 @@ internal class HomeMenuMotion {
     private var labelKeyModel: Any? = null
     private var labelKeyMeasurer: CanvasTextMeasurer? = null
     private var labelKeyWidth = 0f
-    private var labelSizeValue = 0f
 
-    /**
-     * One label size for every form tile (13 down to 10 px) so all unlocked names fit their
-     * tiles; 0 hides the labels (icons only) when even 10 px does not fit or the tile is short.
-     */
-    fun tileLabelSize(model: HomeUiModel, text: CanvasTextMeasurer, tile: Rect, density: Float): Float {
-        if (labelKeyModel === model && labelKeyMeasurer === text && labelKeyWidth == tile.width) return labelSizeValue
-        labelKeyModel = model
-        labelKeyMeasurer = text
-        labelKeyWidth = tile.width
-        val names = model.coreShapes.filter { model.isCoreShapeUnlocked(it.id) }
-            .map { it.displayName.localizedContent(text.language) }
-        labelSizeValue = if (tile.height < 60f * density) 0f else {
-            TileLabelSizes.firstOrNull { size ->
-                names.all { name ->
-                    measureKkText(text, name, text.typography.labelStyle(size), uppercase = true).size.width <=
-                        tile.width - 10f * density
+    private val labelSizes = FloatArray(CoreShape.entries.size)
+
+    /** Label size of each form tile (see [homeTileLabelSize]), cached per model, measurer and tile. */
+    fun tileLabelSize(model: HomeUiModel, text: CanvasTextMeasurer, tile: Rect, density: Float, shape: CoreShape): Float {
+        if (labelKeyModel !== model || labelKeyMeasurer !== text || labelKeyWidth != tile.width) {
+            labelKeyModel = model
+            labelKeyMeasurer = text
+            labelKeyWidth = tile.width
+            CoreShape.entries.forEach { entry ->
+                labelSizes[entry.ordinal] = homeTileLabelSize(model.coreShape(entry).displayName.localizedContent(text.language), tile, density) { name, size ->
+                    measureKkText(text, name, text.typography.labelStyle(size), uppercase = true).size.width
                 }
-            } ?: 0f
+            }
         }
-        return labelSizeValue
+        return labelSizes[shape.ordinal]
     }
 
     private companion object {
-        val TileLabelSizes = floatArrayOf(13f, 12f, 11f, 10f).toList()
         const val TRAIL_START = 100f
         const val TRAIL_SWEEP = 167f
 
@@ -271,6 +272,34 @@ internal class HomeMenuMotion {
         }
     }
 }
+
+/** Cut of a form tile's slab (px): smaller tiles use the smaller cut. */
+internal fun homeTileCut(tile: Rect, density: Float): Float = (if (tile.width < 70f * density) 8f else 12f) * density
+
+/** Horizontal padding kept on both sides of a tile label, inside the slanted face (px per dp). */
+internal const val HOME_TILE_LABEL_PADDING_DP = 6f
+
+/**
+ * Label size (13 down to 7 px) at which [name] fits its tile's face with padding: the slanted face
+ * near the label is the tile width minus one cut. 0 hides the label (icon only) when even 7 px
+ * does not fit or the tile is too short.
+ */
+internal fun homeTileLabelSize(name: String, tile: Rect, density: Float, width: (String, Float) -> Int): Float {
+    if (tile.height < 60f * density) return 0f
+    val available = tile.width - homeTileCut(tile, density) - 2f * HOME_TILE_LABEL_PADDING_DP * density
+    return HomeTileLabelSizes.firstOrNull { size -> width(name, size) <= available } ?: 0f
+}
+
+private val HomeTileLabelSizes = listOf(13f, 12f, 11f, 10f, 9f, 8f, 7f)
+
+/**
+ * Seconds into the menu trail cycle (`kk-trail`: 0.9 s, lines delayed 0 / 0.15 / 0.3 s, opaque
+ * between 18 % and 72 % of a cycle) at which all three speed lines are fully drawn.
+ */
+internal const val HOME_TRAIL_REST_SECONDS: Float = 0.55f
+
+/** The trail runs from selection until [HOME_TRAIL_REST_SECONDS] and then rests there. */
+internal fun homeTrailTime(secondsSinceSelected: Float): Float = secondsSinceSelected.coerceIn(0f, HOME_TRAIL_REST_SECONDS)
 
 /** Home palette accent of the selected/hovered menu item (applies to the items the game has). */
 internal fun menuAccent(target: HomeLayoutTarget): Color = when (target) {
@@ -324,7 +353,7 @@ internal fun homeFacts(model: HomeUiModel, target: HomeLayoutTarget, language: A
             label,
             "${model.unlockedWeaponCount}/${model.weaponCount}",
             buildList {
-                if (weapon != null) add(language.text(SessionRedesignText.STARTING_WEAPON) to weapon)
+                if (weapon != null) add(language.text(SessionText.WEAPON) to weapon)
                 add(language.text(SessionRedesignText.MATTER) to matter)
             },
             language.text(SessionRedesignText.ARMORY_INFO),
@@ -446,7 +475,7 @@ internal fun DrawScope.drawHome(
     drawBackgroundWord(text, facts.label, scene, accent)
     drawHero(model, text, time, scene, state, motion)
     drawHeader(model, text, scene, accent)
-    drawMenu(model, tinted, time, layout, motion)
+    drawMenu(model, tinted, layout, motion)
     scene.facts?.let { drawFactsCard(tinted, it, facts, layout, state, motion, accent) }
     drawFormPanel(model, tinted, layout, state, motion)
     drawLegal(text, layout)
@@ -847,7 +876,6 @@ private val chipPath = Path()
 private fun DrawScope.drawMenu(
     model: HomeUiModel,
     tinted: CanvasTextMeasurer,
-    time: Float,
     layout: HomeLayoutGeometry,
     motion: HomeMenuMotion,
 ) {
@@ -862,7 +890,7 @@ private fun DrawScope.drawMenu(
             drawKkMenuItem(
                 tinted, bounds.left, bounds.center.y, label,
                 selection = selection,
-                time = time,
+                time = motion.trailTime,
                 fontSize = displaySize(tinted, scene.menuFontSize),
                 // The board keeps the stamp right after the label; the sub value joins when selected.
                 // Two-column phone menus have no room for either.
@@ -873,6 +901,61 @@ private fun DrawScope.drawMenu(
         }
         if (scene.menuColumns == 1) draw() else clipRect(bounds.left - 4f * density, bounds.top - 2f * density, bounds.right + 4f * density, bounds.bottom + 2f * density) { draw() }
     }
+}
+
+/** Measured facts card: the label and big value on the left, then one row per fact. */
+internal class HomeFactsCardLayout(
+    val label: TextLayoutResult,
+    val big: TextLayoutResult,
+    val left: Float,
+    val columnLeft: Float,
+    val columnRight: Float,
+    val rows: List<Pair<TextLayoutResult, TextLayoutResult>>,
+)
+
+/**
+ * Lays out the facts card inside [rect] (px, [unit] = px per board px) left of [infoLeft]. All rows
+ * share one text size that shrinks (to 70 %) until the widest key/value pair fits the column, so
+ * the key and value are shown whole; only content that cannot fit even then is truncated.
+ */
+internal fun homeFactsCardLayout(
+    text: CanvasTextMeasurer,
+    rect: Rect,
+    facts: HomeFacts,
+    unit: Float,
+    infoLeft: Float,
+    density: Float,
+): HomeFactsCardLayout {
+    fun display(px: Float) = max(1f, px / density / text.scale)
+    val label = measureKkText(text, facts.label, text.typography.labelStyle(15f), uppercase = true)
+    val bigSize = if (facts.big.length > 6) 24f else 40f
+    val maxLeft = min(240f * unit, (infoLeft - rect.left) * 0.5f)
+    val big = measureKkText(text, facts.big, text.typography.wideStyle(display(bigSize * unit), tabular = true), uppercase = true, maxWidth = maxLeft)
+    val leftWidth = max(110f * unit, max(label.size.width.toFloat(), big.size.width.toFloat()))
+    val left = rect.left + 22f * unit
+    val columnLeft = left + leftWidth + 26f * unit
+    val columnRight = infoLeft - 22f * unit
+    val column = columnRight - columnLeft
+    val rows = if (column <= 0f || facts.facts.isEmpty()) emptyList() else {
+        val gap = 12f * density
+        val widest = facts.facts.maxOf { (key, value) ->
+            measureKkText(text, key, text.typography.monoStyle(11f), uppercase = true).size.width +
+                measureKkText(text, value, text.typography.condStyle(21f, tabular = true), uppercase = true).size.width + gap
+        }
+        // A small margin keeps rounding of the scaled glyph advances from truncating a pair.
+        val fit = (column * 0.97f / widest).coerceIn(0.7f, 1f)
+        val keyStyle = text.typography.monoStyle(11f * fit)
+        val valueStyle = text.typography.condStyle(21f * fit, tabular = true)
+        facts.facts.map { (key, value) ->
+            val keyWidth = measureKkText(text, key, keyStyle, uppercase = true).size.width.toFloat()
+            val valueWidth = measureKkText(text, value, valueStyle, uppercase = true).size.width.toFloat()
+            val keyMax = if (keyWidth + valueWidth + gap <= column + 1f) keyWidth else min(keyWidth, column * 0.45f)
+            val keyLayout = measureKkText(text, key, keyStyle, uppercase = true, maxWidth = keyMax + 2f)
+            val valueLayout = measureKkText(text, value, valueStyle, uppercase = true, maxWidth = column - keyLayout.size.width - gap + 2f)
+            keyLayout to valueLayout
+        }
+    }
+    return HomeFactsCardLayout(label, big, left, columnLeft, columnRight, rows)
 }
 
 private fun DrawScope.drawFactsCard(
@@ -888,46 +971,20 @@ private fun DrawScope.drawFactsCard(
     drawPath(motion.factsPath(rect, 16f * u), Kk.Ink2.copy(alpha = 0.92f))
     val info = layout.info(HomeInfoTarget.FACTS)
     val infoLeft = info?.bounds?.left ?: (rect.right - 44f * u)
-    val labelLayout = measureKkText(text, facts.label, text.typography.labelStyle(15f), uppercase = true)
-    val bigSize = if (facts.big.length > 6) 24f else 40f
-    val maxLeft = min(240f * u, (infoLeft - rect.left) * 0.5f)
-    val bigLayout = measureKkText(text, facts.big, text.typography.wideStyle(displaySize(text, bigSize * u), tabular = true), uppercase = true, maxWidth = maxLeft)
-    val leftWidth = max(150f * u, max(labelLayout.size.width.toFloat(), bigLayout.size.width.toFloat()))
-    val blockHeight = labelLayout.kkBoxHeight + 8f * u + bigLayout.kkBoxHeight
+    val card = homeFactsCardLayout(text, rect, facts, u, infoLeft, density)
+    val blockHeight = card.label.kkBoxHeight + 8f * u + card.big.kkBoxHeight
     var y = rect.center.y - blockHeight * 0.5f
-    val left = rect.left + 22f * u
-    drawKkText(labelLayout, left, y, accent)
-    y += labelLayout.kkBoxHeight + 8f * u
-    drawKkText(bigLayout, left, y, Kk.Bone)
-    val columnLeft = left + leftWidth + 26f * u
-    val columnRight = infoLeft - 26f * u
-    if (columnRight > columnLeft && facts.facts.isNotEmpty()) {
-        val column = columnRight - columnLeft
-        val gap = 12f * density
-        // One text size for all rows: shrink (to 75 %) until the widest key/value pair fits, then
-        // let the key keep up to 45 % and the value the rest.
-        val widest = facts.facts.maxOf { (key, value) ->
-            measureKkText(text, key, text.typography.monoStyle(11f), uppercase = true).size.width +
-                measureKkText(text, value, text.typography.condStyle(21f, tabular = true), uppercase = true).size.width + gap
-        }
-        val fit = (column / widest).coerceIn(0.75f, 1f)
-        val keyStyle = text.typography.monoStyle(11f * fit)
-        val valueStyle = text.typography.condStyle(21f * fit, tabular = true)
-        val rows = facts.facts.map { (key, value) ->
-            val keyWidth = measureKkText(text, key, keyStyle, uppercase = true).size.width.toFloat()
-            val valueWidth = measureKkText(text, value, valueStyle, uppercase = true).size.width.toFloat()
-            val keyMax = if (keyWidth + valueWidth + gap <= column) keyWidth else min(keyWidth, column * 0.45f)
-            val keyLayout = measureKkText(text, key, keyStyle, uppercase = true, maxWidth = keyMax + 1f)
-            val valueLayout = measureKkText(text, value, valueStyle, uppercase = true, maxWidth = column - keyLayout.size.width - gap)
-            keyLayout to valueLayout
-        }
-        val rowHeight = rows.maxOf { (key, value) -> max(key.kkBoxHeight, value.kkBoxHeight) }
+    drawKkText(card.label, card.left, y, accent)
+    y += card.label.kkBoxHeight + 8f * u
+    drawKkText(card.big, card.left, y, Kk.Bone)
+    if (card.rows.isNotEmpty()) {
+        val rowHeight = card.rows.maxOf { (key, value) -> max(key.kkBoxHeight, value.kkBoxHeight) }
         val rowGap = 6f * density
-        var rowY = rect.center.y - (rowHeight * rows.size + rowGap * (rows.size - 1)) * 0.5f
-        rows.forEach { (key, value) ->
+        var rowY = rect.center.y - (rowHeight * card.rows.size + rowGap * (card.rows.size - 1)) * 0.5f
+        card.rows.forEach { (key, value) ->
             val center = rowY + rowHeight * 0.5f
-            drawKkText(key, columnLeft, center, Kk.Mute, valign = KkVAlign.CENTER)
-            drawKkText(value, columnRight, center, Kk.Bone, align = KkAlign.END, valign = KkVAlign.CENTER)
+            drawKkText(key, card.columnLeft, center, Kk.Mute, valign = KkVAlign.CENTER)
+            drawKkText(value, card.columnRight, center, Kk.Bone, align = KkAlign.END, valign = KkVAlign.CENTER)
             rowY += rowHeight + rowGap
         }
     }
@@ -949,7 +1006,7 @@ private fun DrawScope.drawFormPanel(
     val unlocked = model.isCoreShapeUnlocked(shape)
     val definition = model.coreShape(shape)
     val info = layout.info(HomeInfoTarget.FORM)
-    val nameRight = (info?.bounds?.left ?: size.width) - 12f * density
+    val nameRight = homeFormNameRight(layout, density)
     val name = if (unlocked) definition.displayName.localizedContent(language) else language.text(SessionText.UNKNOWN_CORE)
     drawKkText(
         text, name, text.typography.wideStyle(displaySize(text, scene.formNameSize)),
@@ -967,10 +1024,10 @@ private fun DrawScope.drawFormPanel(
         )
         drawKkText(layoutText, description.left, description.center.y, Kk.Bone2, valign = KkVAlign.CENTER)
     }
-    val labelSize = motion.tileLabelSize(model, text, layout.bounds(HomeLayoutTarget.CORE_ORB), density)
     HomeCoreTargets.forEach { target ->
         val tileShape = requireNotNull(target.coreShapeOrNull())
         val bounds = layout.bounds(target)
+        val labelSize = motion.tileLabelSize(model, text, bounds, density, tileShape)
         val tileUnlocked = model.isCoreShapeUnlocked(tileShape)
         val label = if (tileUnlocked && labelSize > 0f) model.coreShape(tileShape).displayName.localizedContent(language) else null
         val iconSize = min(24f, bounds.height / density * 0.42f)
@@ -982,7 +1039,7 @@ private fun DrawScope.drawFormPanel(
             selected = motion.tileSelection(tileShape),
             hovered = state.hoveredTarget == target || state.previewShape == tileShape,
             locked = !tileUnlocked,
-            cutDp = if (bounds.width < 70f * density) 8f else 12f,
+            cutDp = homeTileCut(bounds, density) / density,
             iconSizeDp = iconSize,
             focused = state.focusedTarget == target,
         )
@@ -995,20 +1052,42 @@ private fun DrawScope.drawFormPanel(
 
 private fun DrawScope.drawLegal(text: CanvasTextMeasurer, layout: HomeLayoutGeometry) {
     val scene = layout.scene
-    val language = text.language
-    val style = text.typography.monoStyle(scene.legalSize / density / text.scale)
-    val parts = if (layout.mode == HomeLayoutMode.REGULAR) {
-        LegalRegular
-    } else {
-        LegalCompact
-    }
+    val legal = homeLegalLayout(text, layout, density)
     var right = scene.legalRight
-    for (index in parts.indices.reversed()) {
-        val layoutText = measureKkText(text, language.text(parts[index]), style, uppercase = parts[index] != SessionRedesignText.SOURCE)
-        drawKkText(layoutText, right, scene.legalBaseline, Kk.Mute, align = KkAlign.END, valign = KkVAlign.BASELINE)
-        right -= layoutText.size.width + scene.legalSize * 2f
+    for (index in legal.parts.indices.reversed()) {
+        val part = legal.parts[index]
+        drawKkText(part, right, scene.legalBaseline, Kk.Mute, align = KkAlign.END, valign = KkVAlign.BASELINE)
+        right -= part.size.width + legal.gap
     }
 }
 
-private val LegalRegular = listOf(SessionRedesignText.COPYRIGHT, SessionRedesignText.LICENSE, SessionRedesignText.VERSION)
-private val LegalCompact = listOf(SessionRedesignText.LICENSE, SessionRedesignText.SOURCE)
+/** The legal line as separate mono texts (no separators) and the gap between them (px). */
+internal class HomeLegalLayout(val parts: List<TextLayoutResult>, val gap: Float) {
+    val width: Float get() = parts.sumOf { it.size.width.toDouble() }.toFloat() + gap * (parts.size - 1).coerceAtLeast(0)
+}
+
+/**
+ * GPL notices kept visible on Home: copyright, license, no-warranty note, source and version on
+ * desktop; copyright, license and source on phones. The size shrinks (to 70 %) to fit between
+ * [HomeScene.legalLeft] and [HomeScene.legalRight].
+ */
+internal fun homeLegalLayout(text: CanvasTextMeasurer, layout: HomeLayoutGeometry, density: Float): HomeLegalLayout {
+    val scene = layout.scene
+    val parts = if (layout.mode == HomeLayoutMode.REGULAR) LegalRegular else LegalCompact
+    val strings = parts.map { text.language.text(it) }
+    val available = scene.legalRight - scene.legalLeft
+    fun measure(sizePx: Float): HomeLegalLayout {
+        val style = text.typography.monoStyle(max(1f, sizePx / density / text.scale))
+        val measured = strings.mapIndexed { index, value -> measureKkText(text, value, style, uppercase = parts[index] != SessionRedesignText.SOURCE) }
+        return HomeLegalLayout(measured, sizePx * 2f)
+    }
+    val full = measure(scene.legalSize)
+    if (full.width <= available) return full
+    return measure(scene.legalSize * (available / full.width * 0.98f).coerceIn(0.7f, 1f))
+}
+
+private val LegalRegular = listOf(
+    SessionRedesignText.COPYRIGHT, SessionRedesignText.LICENSE, SessionRedesignText.NO_WARRANTY,
+    SessionRedesignText.SOURCE, SessionRedesignText.VERSION,
+)
+private val LegalCompact = listOf(SessionRedesignText.COPYRIGHT, SessionRedesignText.LICENSE, SessionRedesignText.SOURCE)

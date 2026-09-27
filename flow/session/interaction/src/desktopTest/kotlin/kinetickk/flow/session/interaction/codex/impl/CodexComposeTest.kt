@@ -295,6 +295,73 @@ class CodexComposeTest {
         }
     }
 
+    @Test fun tabRowsFitThePhoneWidthInBothLanguagesAtEveryTextScale() {
+        for (language in AppLanguage.entries) runComposeUiTest {
+            var widthValue by mutableIntStateOf(390)
+            var heightValue by mutableIntStateOf(844)
+            var scaleValue by mutableFloatStateOf(1f)
+            setContent {
+                CompositionLocalProvider(LocalAppLanguage provides language) {
+                    Box(Modifier.requiredSize(widthValue.dp, heightValue.dp)) {
+                        val catalog = remember { codexTestCatalog() }
+                        CodexContent(catalog, CodexRenderModel((0 until 400).toImmutableSet(), CodexRunStacks(), catalog.items), codexTestProgress(), scaleValue) { }
+                    }
+                }
+            }
+            for ((width, height) in listOf(390 to 844, 360 to 800, 844 to 390)) for (scale in listOf(1f, 1.25f, 1.75f)) {
+                runOnIdle { widthValue = width; heightValue = height; scaleValue = scale }
+                val root = onRoot().fetchSemanticsNode().boundsInRoot
+                ((0..2).map { "codex-tab-$it" } + (0..3).map { "codex-category-$it" })
+                    .forEach { tag ->
+                        val bounds = onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
+                        assertTrue(bounds.left >= root.left && bounds.right <= root.right + 0.5f,
+                            "$tag clipped at ${width}x$height ${language.code} @$scale: $bounds")
+                    }
+            }
+        }
+    }
+
+    @Test fun newStampSitsInItsOwnBandAboveTheCellGlyph() = runComposeUiTest {
+        val catalog = codexTestCatalog()
+        setContent {
+            Box(Modifier.requiredSize(1000.dp, 700.dp)) {
+                CompositionLocalProvider(LocalAppLanguage provides AppLanguage.Russian) {
+                    CodexContent(catalog, CodexRenderModel((0 until 400).toImmutableSet(), CodexRunStacks(), catalog.items,
+                        newItemIds = immutableSetOf(0)), codexTestProgress(), 1.75f) { }
+                }
+            }
+        }
+        val cell = onNodeWithTag("codex-slot-item/0").fetchSemanticsNode().boundsInRoot
+        val stamp = onNodeWithTag("codex-new-item/0", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertTrue(stamp.left >= cell.left && stamp.right <= cell.right, "The stamp stays inside its cell: $stamp in $cell")
+        val band = codexNewBand(androidx.compose.ui.geometry.Size(stamp.width, stamp.height), 1f)
+        val (centerY, radius) = codexCellGlyph(cell.width, band, 1f)
+        // Rotated −6°, the stamp's lowest corner sits sin(6°) × width / 2 below its box.
+        val stampBottom = stamp.bottom + stamp.width * 0.5f * 0.1045f
+        assertTrue(stampBottom <= cell.top + centerY - radius, "stamp bottom $stampBottom covers the glyph from ${cell.top + centerY - radius}")
+        assertTrue(radius >= cell.width * 0.25f, "The glyph stays readable")
+    }
+
+    @Test fun synergyRowsOnPhonesNeverSqueezeTagsIntoLetterColumns() = runComposeUiTest {
+        val catalog = codexTestCatalog()
+        setContent {
+            Box(Modifier.requiredSize(390.dp, 844.dp)) {
+                CompositionLocalProvider(LocalAppLanguage provides AppLanguage.Russian) {
+                    CodexContent(catalog, CodexRenderModel((0 until 400).toImmutableSet(), CodexRunStacks(), catalog.items,
+                        discoveredRelicIds = kinetickk.ball.content.api.RelicId.entries.toImmutableSet()), codexTestProgress(), 1.25f) { }
+                }
+            }
+        }
+        onNodeWithTag("codex-tab-2").performClick()
+        val rows = onAllNodes(hasTestTagPrefix("codex-slot-synergy/")).fetchSemanticsNodes()
+        assertTrue(rows.isNotEmpty())
+        rows.forEach { row ->
+            // Title (up to two lines at a fitted size), a tag line and the diagram: letter-by-letter
+            // wrapping made these rows several times taller.
+            assertTrue(row.boundsInRoot.height <= 150f, "${row.config.getOrElse(SemanticsProperties.TestTag) { "" }} is ${row.boundsInRoot.height} dp tall")
+        }
+    }
+
     @Test fun searchPasteIsBoundedAndNoRunInventoryAndFilterStatesAreDistinct() = runComposeUiTest {
         setContent { TestCodex(1000, 700, discovered = false) }
         onNodeWithTag("codex-filter-2").assertIsNotEnabled()
