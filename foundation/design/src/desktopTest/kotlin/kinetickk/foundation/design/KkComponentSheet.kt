@@ -359,7 +359,6 @@ internal fun DrawScope.drawKkFoundationExtrasSheet(m: CanvasTextMeasurer, time: 
     drawPath(shapes.diamond(4, left + 750f, shapesTop + 30f, 30f), m.roles.you)
     drawPath(shapes.sheared(5, Rect(left + 810f, shapesTop, left + 970f, shapesTop + 60f)), m.roles.pol)
     drawKkSeparator(left + 1000f, shapesTop + 30f, 30f, Kk.Bone)
-    drawKineticArrow(Offset(left + 1080f, shapesTop + 30f), 60f, Kk.Bone)
 
     // Role palettes per Color vision mode.
     KkVisionMode.entries.forEachIndexed { row, mode ->

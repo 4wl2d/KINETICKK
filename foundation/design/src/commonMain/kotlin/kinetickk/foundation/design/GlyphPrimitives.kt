@@ -15,7 +15,7 @@ import kotlin.math.cos
 import kotlin.math.PI
 import kotlin.math.sin
 
-private val GlyphCutout = Color(0xFF050610)
+private val GlyphCutout = Kk.Ink
 private const val GLYPH_TAU = 6.2831855f
 
 /** A mechanical visual style. Semantic identifiers are mapped by each Interaction owner. */

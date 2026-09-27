@@ -89,9 +89,7 @@ import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.LocalAppLanguage
-import kinetickk.foundation.design.SpaceBlack
-import kinetickk.foundation.design.Violet
-import kinetickk.foundation.design.White
+import kinetickk.foundation.design.Kk
 import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
@@ -141,7 +139,7 @@ class GameplayLocalizedRenderingTest {
                             RewardPresentation(
                                 AppLanguage.Russian.text(GameplayText.ChooseArtifact),
                                 "",
-                                cards, White, Violet, 3,
+                                cards, Kk.Bone, Kk.Pol, 3,
                             ),
                             choiceLayoutGeometry(current.width.toFloat(), current.height.toFloat(), 1f, 3, true),
                             current.width.toFloat(), 1f, current.textScale, 0f, true, {}, {},
@@ -156,7 +154,7 @@ class GameplayLocalizedRenderingTest {
                             if (current.scene == Scene.HUD) {
                                 drawGameplay(model, VisualFxProjection.EMPTY, textMeasurer, 0f, null)
                             } else if (current.scene == Scene.PAUSE) {
-                                drawRect(SpaceBlack)
+                                drawRect(Kk.Ink)
                                 drawPause(model, textMeasurer, pauseLayoutGeometry(size.width, size.height, 1f))
 
                             }
@@ -282,7 +280,7 @@ class GameplayLocalizedRenderingTest {
             val model = remember { model(Scenario(640, 420, Scene.GAME_OVER)) }
             Box(Modifier.requiredSize(640.dp, 420.dp).testTag("localized-gameplay")) {
                 Canvas(Modifier.fillMaxSize()) {
-                    drawRect(SpaceBlack)
+                    drawRect(Kk.Ink)
                     drawCoreDeath(model, time.value, kinetickk.foundation.design.KkRolePalette.Default)
                 }
             }
@@ -291,7 +289,7 @@ class GameplayLocalizedRenderingTest {
             val pixels = compose.onNodeWithTag("localized-gameplay").captureToImage().toPixelMap()
             var count = 0
             for (y in 0 until pixels.height) for (x in 0 until pixels.width) {
-                if (pixels[x, y].toArgb() != SpaceBlack.toArgb()) count++
+                if (pixels[x, y].toArgb() != Kk.Ink.toArgb()) count++
             }
             return count
         }

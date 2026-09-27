@@ -12,14 +12,6 @@ import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkIcon
 import kinetickk.foundation.design.KkRebirthTiers
 import kinetickk.foundation.design.KkRolePalette
-import kinetickk.foundation.design.SystemGlyphStyle
-
-/**
- * Accent list kept for reward presentation, which indexes it by position (identity accents from
- * the aspect tokens, not role colors). World rendering maps the nucleus color indices by meaning
- * through [fxColor] instead.
- */
-internal val ParticleColors = listOf(Kk.AIon, Kk.AGravitic, Kk.ARift, Kk.RUncommon, Kk.AEntropy)
 
 /**
  * Presentation meaning of a nucleus visual color index: 0 dash/Core, 1 kill or pickup, 2 weapon
@@ -50,22 +42,6 @@ internal fun damageNumberScale(tier: DamageNumberTier): Float = when (tier) {
 
 internal fun rarityColor(rarity: ItemRarity): Color = Kk.rarity(rarity.rank)
 
-/** One identity color per weapon for reward and build UI (aspect/rarity tokens, not role colors). */
-internal fun weaponColor(id: WeaponId): Color = when (id) {
-    WeaponId.FLUX_WAKE -> Kk.AIon
-    WeaponId.MORNINGSTAR -> Kk.AGravitic
-    WeaponId.PHASE_LATTICE -> Kk.ARift
-    WeaponId.NULL_LANCE -> Kk.RUncommon
-    WeaponId.GRAVITY_MINES -> Kk.RLegend
-    WeaponId.ION_SWARM -> Kk.AIon
-    WeaponId.RIFT_BLADES -> Kk.ARift
-    WeaponId.ARC_COIL -> Kk.AGravitic
-    WeaponId.QUASAR_CANNON -> Kk.RLegend
-    WeaponId.ENTROPY_FIELD -> Kk.AEntropy
-    WeaponId.SINGULARITY_SPEAR -> Kk.Bone
-    WeaponId.PRISM_RELAY -> Kk.APrism
-}
-
 /** The redesign icon of a weapon (`icons.json weapons.*`), for HUD slots and reward cards. */
 internal fun weaponIcon(id: WeaponId): KkIcon = when (id) {
     WeaponId.FLUX_WAKE -> KkIcon.WEAPONS_FLUX_WAKE
@@ -80,21 +56,6 @@ internal fun weaponIcon(id: WeaponId): KkIcon = when (id) {
     WeaponId.ENTROPY_FIELD -> KkIcon.WEAPONS_ENTROPY_FIELD
     WeaponId.SINGULARITY_SPEAR -> KkIcon.WEAPONS_SINGULARITY_SPEAR
     WeaponId.PRISM_RELAY -> KkIcon.WEAPONS_PRISM_RELAY
-}
-
-internal fun weaponGlyphStyle(id: WeaponId): SystemGlyphStyle = when (id) {
-    WeaponId.FLUX_WAKE -> SystemGlyphStyle.DIAGONAL_SLASH
-    WeaponId.MORNINGSTAR -> SystemGlyphStyle.ORBITING_NODE
-    WeaponId.PHASE_LATTICE -> SystemGlyphStyle.CONCENTRIC_RING
-    WeaponId.NULL_LANCE -> SystemGlyphStyle.ARROW_LINE
-    WeaponId.GRAVITY_MINES -> SystemGlyphStyle.HEX_ORBIT
-    WeaponId.ION_SWARM -> SystemGlyphStyle.DIAMOND_TRIAD
-    WeaponId.RIFT_BLADES -> SystemGlyphStyle.TWIN_DIAMONDS
-    WeaponId.ARC_COIL -> SystemGlyphStyle.ZIGZAG_RING
-    WeaponId.QUASAR_CANNON -> SystemGlyphStyle.RINGED_BEAM
-    WeaponId.ENTROPY_FIELD -> SystemGlyphStyle.HEPTAGON_ORBIT
-    WeaponId.SINGULARITY_SPEAR -> SystemGlyphStyle.SPEAR_LINE
-    WeaponId.PRISM_RELAY -> SystemGlyphStyle.TRIANGLE_NETWORK
 }
 
 /**

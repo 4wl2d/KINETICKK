@@ -16,7 +16,7 @@ import kotlin.math.PI
 import kotlin.math.sin
 
 private val RuneInk = Color(0xFFF4F6FF)
-private val RuneBackground = Color(0xFF050610)
+private val RuneBackground = Kk.Ink
 private const val RUNE_TAU = 6.2831855f
 
 /** Geometric rune styles; Content identifiers are mapped only inside Interaction. */

@@ -32,9 +32,8 @@ import org.jetbrains.compose.resources.Font
  * - [body]: Sofia Sans Semi Condensed 400/500/700 (descriptions, tooltips).
  * - [mono]: Martian Mono 500/700 (readouts, small data).
  *
- * [display] is the legacy heading family used by untouched call sites (`drawLabel(display =
- * true)`, `interfaceTextStyle(display = true)`): its bold weight resolves to cond 900 italic so
- * old headings already carry the new look. New code uses the role builders in `KkText.kt`.
+ * [display] is the heading family for plain [textStyle] call sites: its bold weight resolves to
+ * cond 900 italic. New code uses the role builders in `KkText.kt`.
  */
 @Immutable
 data class InterfaceTypography(
@@ -79,11 +78,4 @@ fun rememberInterfaceTypography(): InterfaceTypography {
             mono = FontFamily(monoMedium, monoBold),
         )
     }
-}
-
-/** Legacy composable style helper; new code uses [bodyStyle]/[condStyle] and friends. */
-@Composable
-fun interfaceTextStyle(size: Float, color: Color = Kk.Bone, weight: FontWeight = FontWeight.Normal, display: Boolean = false): androidx.compose.ui.text.TextStyle {
-    val typography = rememberInterfaceTypography()
-    return textStyle(size, color, if (display) FontWeight.Bold else weight, if (display) typography.display else typography.body)
 }

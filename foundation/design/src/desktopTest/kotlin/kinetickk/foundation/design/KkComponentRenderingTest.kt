@@ -252,20 +252,4 @@ class KkComponentRenderingTest {
         val after = image(320, 180) { drawRect(Color.White); drawKkShutter(KkShutter.TOTAL_MS.toFloat(), KkRolePalette.Default) }
         assertTrue(after.argb().all { it == Color.White.toArgb() })
     }
-
-    @Test
-    fun legacyArrowMarkIsAPointSymmetricBar() {
-        val mark = image(120, 60) { drawKineticArrow(Offset(60f, 30f), 60f, Color.White) }
-        val pixels = mark.argb()
-        var mismatched = 0
-        for (y in 0 until 60) for (x in 0 until 120) {
-            val mirrored = pixels[(59 - y) * 120 + (119 - x)]
-            if (colorDistance(pixels[y * 120 + x], mirrored) > 90) mismatched++
-        }
-        assertTrue(mismatched < 30, "no arrowhead: the mark is symmetric under 180 deg rotation ($mismatched)")
-        assertTrue(pixels.count { it != Kk.Ink.toArgb() } > 200)
-        assertFalse(NavigationText.entries.any { entry ->
-            listOf(entry.english, entry.russian).any { text -> text.any { it in "·‹›→" } || "Esc" in text }
-        })
-    }
 }

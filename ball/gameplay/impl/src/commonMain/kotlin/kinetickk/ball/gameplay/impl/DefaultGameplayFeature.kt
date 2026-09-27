@@ -20,7 +20,7 @@ import kinetickk.ball.gameplay.interaction.GameplayContent
 import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.profile.api.ProfileReadPort
 import kinetickk.ball.profile.api.ProfileProgress
-import kinetickk.foundation.design.SpaceBlack
+import kinetickk.foundation.design.Kk
 import kinetickk.foundation.diagnostics.CrashDiagnostics
 import kinetickk.resource.audio.api.AudioService
 
@@ -61,7 +61,7 @@ class DefaultGameplayFeature(
     ) {
         val component = componentValue
         if (component == null) {
-            Canvas(Modifier.fillMaxSize()) { drawRect(SpaceBlack) }
+            Canvas(Modifier.fillMaxSize()) { drawRect(Kk.Ink) }
         } else {
             GameplayContent(
                 component = component,
