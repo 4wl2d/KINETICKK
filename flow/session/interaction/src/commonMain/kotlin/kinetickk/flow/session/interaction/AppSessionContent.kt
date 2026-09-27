@@ -19,10 +19,12 @@ import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkShutter
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.LocalCrashDiagnostics
+import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.LocalKkRolePalette
 import kinetickk.foundation.design.drawKkShutter
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
+import kinetickk.ball.profile.api.ColorVision
 import kinetickk.ball.profile.api.ProfileReadPort
 import kinetickk.ball.profile.api.ProfileQuery
 import androidx.compose.runtime.SideEffect
@@ -80,6 +82,9 @@ fun AppSessionContent(
     var languageValue by remember(sessionPort, profileReadPort) {
         mutableStateOf(profileReadPort?.query(ProfileQuery.GetPreferences)?.preferences?.language ?: initialLanguage)
     }
+    var colorVisionValue by remember(sessionPort, profileReadPort) {
+        mutableStateOf(profileReadPort?.query(ProfileQuery.GetPreferences)?.preferences?.colorVision ?: ColorVision.DEFAULT)
+    }
     val focusRequester = remember(sessionPort) { FocusRequester() }
     var shellValue by remember(sessionPort) {
         mutableStateOf(sessionPort.query(AppSessionQuery.GetShell))
@@ -126,7 +131,10 @@ fun AppSessionContent(
         }
         transition.finish()
     }
-    CompositionLocalProvider(LocalAppLanguage provides languageValue) {
+    CompositionLocalProvider(
+        LocalAppLanguage provides languageValue,
+        LocalKkRolePalette provides colorVisionValue.rolePalette(),
+    ) {
         val roles = LocalKkRolePalette.current
         Box(
             modifier = Modifier
@@ -204,7 +212,12 @@ fun AppSessionContent(
                     routeToken = shellValue.routeToken.value,
                     onOutput = { output ->
                         when (output) {
-                            is SettingsOutput.LanguageChanged -> languageValue = output.language
+                            is SettingsOutput.LanguageChanged -> {
+                                languageValue = output.language
+                                // Settings reports every accepted preference change through this output.
+                                profileReadPort?.query(ProfileQuery.GetPreferences)?.preferences?.colorVision
+                                    ?.let { colorVisionValue = it }
+                            }
                             SettingsOutput.Back -> output.toSessionPulse()?.let { dispatch(it) }
                         }
                     },
@@ -235,6 +248,8 @@ fun AppSessionContent(
             if (shellValue.lifecycle.showsProfileUnavailable()) {
                 profileUnavailableFeature.Content()
             }
+            // The accepted Rebirth advance plays its draw-only sequence over whatever comes next.
+            rebirthFeature.AcceptedFeedback()
         }
     }
 }
@@ -309,6 +324,15 @@ internal class SessionTransitionState {
     fun finish() {
         kind = SessionTransitionKind.NONE
     }
+}
+
+/** Presentation projection of the accepted Color vision preference onto the role palette. */
+internal fun ColorVision.rolePalette(): KkRolePalette = when (this) {
+    ColorVision.DEFAULT -> KkRolePalette.Default
+    ColorVision.PROTAN -> KkRolePalette.Protan
+    ColorVision.DEUTAN -> KkRolePalette.Deutan
+    ColorVision.TRITAN -> KkRolePalette.Tritan
+    ColorVision.MONO -> KkRolePalette.Mono
 }
 
 internal fun SessionLifecycle.showsProfileUnavailable(): Boolean =
