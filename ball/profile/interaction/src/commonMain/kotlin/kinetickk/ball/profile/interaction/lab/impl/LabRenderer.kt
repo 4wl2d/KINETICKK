@@ -32,7 +32,6 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -68,6 +67,8 @@ import kinetickk.ball.profile.interaction.lab.api.LabUpgradeRenderModel
 import kinetickk.ball.profile.interaction.localization.ProfileScreensRedesignText
 import kinetickk.ball.profile.interaction.localization.ProfileText
 import kinetickk.ball.profile.interaction.profileHeaderBackWidth
+import kinetickk.ball.profile.interaction.profileScrollCue
+import kinetickk.ball.profile.interaction.PROFILE_WRAPPED_LINE_HEIGHT
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.*
@@ -106,10 +107,25 @@ internal fun LabContent(
         SideEffect { holder.layout = layout }
         val selected = state.selectedUpgrade
         val list = layout.listViewport
+        // A selected row that is entirely off screen (a phone list scrolled away, a restored
+        // selection) scrolls into view; partly visible rows stay put.
+        val selectedIndex = model.upgrades.indexOfFirst { it.id == selected?.id }
+        val opening = remember { booleanArrayOf(true) }
+        LaunchedEffect(selectedIndex, list.height, layout.listContentHeight) {
+            val row = layout.rows.getOrNull(selectedIndex) ?: return@LaunchedEffect
+            // Opening on a selection reveals its whole row; later changes move the list only for
+            // a row that is entirely hidden.
+            val first = opening[0]
+            opening[0] = false
+            val target = labRevealScroll(listScroll.value.toFloat(), row.top, row.bottom, list.height, layout.listScrollMax,
+                whenHidden = !first) ?: return@LaunchedEffect
+            if (first) listScroll.scrollTo(target.roundToInt()) else listScroll.animateScrollTo(target.roundToInt())
+        }
         Box(
             Modifier.offset { IntOffset(list.left.roundToInt(), list.top.roundToInt()) }
                 .size(frame.dp(list.width), frame.dp(list.height))
                 .semantics { contentDescription = language.text(ProfileScreensRedesignText.UpgradesList) }
+                .profileScrollCue(listScroll, Kk.Ink, frame.d(24f))
                 .verticalScroll(listScroll)
                 .testTag("profile-lab-scroll"),
         ) {
@@ -122,10 +138,11 @@ internal fun LabContent(
         }
         if (selected != null) {
             val detail = layout.detailViewport
-            val detailScroll = rememberScrollState()
+            val detailScroll = remember(selected.id) { ScrollState(0) }
             Box(
                 Modifier.offset { IntOffset(detail.left.roundToInt(), detail.top.roundToInt()) }
                     .size(frame.dp(detail.width), frame.dp(detail.height))
+                    .profileScrollCue(detailScroll, Kk.Ink1, frame.d(24f))
                     .verticalScroll(detailScroll)
                     .testTag("profile-lab-detail"),
             ) {
@@ -138,8 +155,16 @@ internal fun LabContent(
                         .drawBehind {
                             translate(-detail.left, -detail.top) { drawLabDetail(measurer, frame, type, layout, selected, language) }
                         },
-                ) {
-                    val buy = layout.buy
+                )
+            }
+            // Buy rank stays on screen: outside the details' scroll, pinned on a band when they overflow.
+            val buy = layout.buy
+            if (layout.buyPinned) {
+                Box(Modifier.offset { IntOffset(detail.left.roundToInt(), detail.bottom.roundToInt()) }
+                    .size(frame.dp(detail.width), frame.dp(buy.bottom + frame.d(8f) - detail.bottom))
+                    .drawBehind { drawRect(Kk.Ink1) })
+            }
+            run {
                     val label = if (selected.isMaxed) language.text(ProfileText.MaximumSynchrony) else language.text(ProfileScreensRedesignText.BuyRank)
                     ProfileSlabButton(
                         label = label,
@@ -155,10 +180,9 @@ internal fun LabContent(
                         textScale = scale,
                         contentDescription = if (selected.isMaxed) label else
                             label + " " + language.text(ProfileScreensRedesignText.CostMatter, formatMatter(selected.nextCost, language)),
-                        modifier = Modifier.offset { IntOffset((buy.left - detail.left).roundToInt(), (buy.top - detail.top).roundToInt()) }
+                        modifier = Modifier.offset { IntOffset(buy.left.roundToInt(), buy.top.roundToInt()) }
                             .size(frame.dp(buy.width), frame.dp(buy.height)),
                     )
-                }
             }
         }
     }
@@ -225,6 +249,16 @@ private fun LabRow(
     )
 }
 
+/** The one flashing row's slab (only one row flashes at a time). */
+private val LabFlashPaths = KkPathCache(1)
+
+/** The largest stamp font (at most [size]) whose stamp fits [room] px. */
+internal fun labStampFont(measurer: CanvasTextMeasurer, text: String, size: Float, room: Float, density: Float): Float {
+    var font = size
+    while (font > size * 0.4f && kkStampSize(measurer, text, density, font).width > room) font -= size * 0.05f
+    return font
+}
+
 /** Nudge of the purchase feedback: out to 8 px by 30 % and back by 100 % (Pull), in px. */
 internal fun labFlashNudge(progress: Float, distance: Float): Float = when {
     progress <= 0f || progress >= 1f -> 0f
@@ -253,39 +287,60 @@ private fun DrawScope.drawLabRow(
     val k = frame.k
     val roles = measurer.roles
     val bounds = Rect(Offset.Zero, size)
+    val inverted = labFlashInverted(flash)
     translate(labFlashNudge(flash, frame.d(8f)), 0f) {
-        val fg = drawKkListRowBackground(bounds, roles, selected = selection, hovered = hovered)
-        val on = selection > 0.5f
+        // The purchase frame draws the row inverted (ink slab, bone content) on the row's own
+        // slab, so its sheared ends stay background.
+        val fg = if (inverted) {
+            val shift = KK_LIST_ROW_SELECTED_SHIFT_DP * density * selection.coerceIn(0f, 1.2f)
+            drawPath(LabFlashPaths.slab(0, bounds.left + shift, bounds.top, bounds.right + shift, bounds.bottom, density * 9f),
+                if (selection > 0.5f) Kk.Ink else Kk.Bone)
+            if (selection > 0.5f) Kk.Bone else Kk.Ink
+        } else {
+            drawKkListRowBackground(bounds, roles, selected = selection, hovered = hovered)
+        }
+        val on = (selection > 0.5f) != inverted
         translate(KK_LIST_ROW_SELECTED_SHIFT_DP * density * selection.coerceIn(0f, 1.2f), 0f) {
             val line1 = columns.firstLineY
             val line2 = columns.secondLineY
             drawLabIcon(upgrade.id, Offset(columns.iconCenterX, line1), columns.iconSize, fg)
-            val nameLayout = fitKkText(measurer, name, type.rowName * k, columns.nameWidth, minFactor = 0.7f) {
+            val nameLayout = fitKkText(measurer, name, type.rowName * k, columns.nameWidth, minFactor = 0.4f) {
                 measurer.typography.condStyle(it, lineHeightEm = 1f)
             }
             drawKkText(nameLayout, columns.nameLeft, line1, fg, valign = KkVAlign.CENTER)
-            val pipColor = if (on) Kk.Ink else roles.you
+            val pipColor = when {
+                inverted -> fg
+                on -> Kk.Ink
+                else -> roles.you
+            }
             drawKkPips(
                 Offset(columns.pipsLeft, line2 - columns.pipHeight * 0.5f), upgrade.maxRanks, upgrade.rank, pipColor,
                 sizeDp = columns.pipHeight / density, widthDp = columns.pipWidth / density, gapDp = columns.pipGap / density,
-                emptyColor = if (on) Color(0xFF9C9B92) else Kk.Line2, nextOutlined = !upgrade.isMaxed, emptyOutlined = true,
+                emptyColor = if (on || inverted) Color(0xFF9C9B92) else Kk.Line2, nextOutlined = !upgrade.isMaxed, emptyOutlined = true,
             )
-            val valueStyle = measurer.typography.condStyle(type.rowValue * k, tabular = true, lineHeightEm = 1f)
-            val valueLayout = measureKkText(measurer, value, valueStyle, uppercase = true, maxWidth = columns.valueWidth)
+            val valueLayout = fitKkText(measurer, value, type.rowValue * k, columns.valueWidth, minFactor = 0.5f) {
+                measurer.typography.condStyle(it, tabular = true, lineHeightEm = 1f)
+            }
             if (columns.twoLines) {
                 drawKkText(valueLayout, columns.costRight, line2, fg, align = KkAlign.END, valign = KkVAlign.CENTER)
             } else {
                 drawKkText(valueLayout, columns.valueLeft, line1, fg, valign = KkVAlign.CENTER)
             }
+            val costRoom = columns.costRight - columns.costLeft
             if (upgrade.isMaxed) {
-                val stampSize = kkStampSize(measurer, stamp, density, type.stamp * k)
+                // The stamp shrinks into the cost column so it never covers the value.
+                val stampFont = labStampFont(measurer, stamp, type.stamp * k, costRoom, density)
+                val stampSize = kkStampSize(measurer, stamp, density, stampFont)
                 drawKkStamp(measurer, stamp, Offset(columns.costRight - stampSize.width, line1 - stampSize.height * 0.5f),
-                    fontSize = type.stamp * k)
+                    fontSize = stampFont)
             } else {
-                val costLayout = measureKkText(measurer, cost, valueStyle, uppercase = true)
                 val gemSize = 11f * k
+                val costLayout = fitKkText(measurer, cost, type.rowValue * k, costRoom - frame.d(6f) - gemSize * density, minFactor = 0.5f) {
+                    measurer.typography.condStyle(it, tabular = true, lineHeightEm = 1f)
+                }
                 val gemColor = when {
                     !upgrade.isAffordable -> Kk.Mute
+                    inverted -> fg
                     on -> Kk.Ink
                     else -> roles.you
                 }
@@ -294,7 +349,6 @@ private fun DrawScope.drawLabRow(
                 drawKkText(costLayout, costLeft, line1, fg, valign = KkVAlign.CENTER)
             }
         }
-        if (labFlashInverted(flash)) drawRect(Color.White, blendMode = BlendMode.Difference)
         if (focused) drawRect(Kk.Bone, Offset(-density * 5f, -density * 5f), Size(size.width + density * 10f, size.height + density * 10f),
             style = kkStroke(density * 2f))
     }
@@ -311,11 +365,11 @@ private fun DrawScope.drawLabDetail(
     val k = frame.k
     val roles = measurer.roles
     drawLabIcon(upgrade.id, layout.icon.center, layout.icon.width, roles.you)
-    val name = fitKkText(measurer, upgrade.name.localizedContent(language), type.name * k, layout.name.width, minFactor = 0.55f) {
+    val name = fitKkText(measurer, upgrade.name.localizedContent(language), type.name * k, layout.name.width, minFactor = 0.4f) {
         measurer.typography.wideStyle(it, lineHeightEm = 1.05f)
     }
     drawKkText(name, layout.name.left, layout.name.center.y, Kk.Bone, valign = KkVAlign.CENTER)
-    val descriptionLines = (layout.description.height / (frame.d(type.body) * 1.4f * measurer.scale)).toInt().coerceAtLeast(1)
+    val descriptionLines = (layout.description.height / (frame.d(type.body) * 1.4f * measurer.scale) + 0.01f).toInt().coerceAtLeast(1)
     val description = measureKkText(measurer, upgrade.description.localizedContent(language),
         measurer.typography.bodyStyle(type.body * k), maxWidth = layout.description.width, maxLines = descriptionLines)
     drawKkText(description, layout.description.left, layout.description.top, Kk.Bone)
@@ -345,10 +399,10 @@ private fun DrawScope.drawLabPanel(
     if (underline != null) drawRect(underline, Offset(rect.left, rect.bottom - frame.d(3f)), Size(rect.width, frame.d(3f)))
     val padX = frame.d(if (frame.regular) 14f else 10f)
     val padY = frame.d(if (frame.regular) 12f else 8f)
-    val labelLayout = measureKkText(measurer, label, measurer.typography.monoStyle(type.mono * k), uppercase = true,
-        maxWidth = rect.width - padX * 2f)
+    val labelLayout = fitKkText(measurer, label, type.mono * k, rect.width - padX * 2f, minFactor = 0.5f) { measurer.typography.monoStyle(it) }
     drawKkText(labelLayout, rect.left + padX, rect.top + padY, labelColor)
-    val valueLayout = fitKkText(measurer, value, type.panelValue * k, rect.width - padX * 2f, minFactor = 0.6f) {
+    // Words such as "Максимум" shrink to fit the panel instead of truncating.
+    val valueLayout = fitKkText(measurer, value, type.panelValue * k, rect.width - padX * 2f, minFactor = 0.34f) {
         measurer.typography.wideStyle(it, tabular = true)
     }
     drawKkText(valueLayout, rect.left + padX, rect.bottom - padY - valueLayout.kkBoxHeight, valueColor)

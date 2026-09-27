@@ -10,6 +10,7 @@ import kinetickk.ball.profile.interaction.profileFrame
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -70,27 +71,59 @@ class ArmoryLayoutTest {
         val y = grid.top + firstCenter.y
 
         assertEquals(WeaponId.FLUX_WAKE, assertIs<ArmoryAction.Activate>(
-            resolveArmoryPress(layout, TestWeapons, WeaponId.FLUX_WAKE, 0f, 0f, x, y)).id)
+            resolveArmoryPress(layout, TestWeapons, WeaponId.FLUX_WAKE, 0f, x, y)).id)
         assertEquals(reversed.first().id, assertIs<ArmoryAction.Activate>(
-            resolveArmoryPress(layout, reversed, WeaponId.FLUX_WAKE, 0f, 0f, x, y)).id)
+            resolveArmoryPress(layout, reversed, WeaponId.FLUX_WAKE, 0f, x, y)).id)
 
         // Scrolling the grid by (up to) one row maps the same point to the tile one row below.
         assertTrue(layout.gridScrollMax >= layout.rowPitch)
         val scroll = layout.rowPitch
         assertEquals(TestWeapons[layout.columns].id, assertIs<ArmoryAction.Activate>(
-            resolveArmoryPress(layout, TestWeapons, WeaponId.FLUX_WAKE, scroll, 0f, x, y)).id)
+            resolveArmoryPress(layout, TestWeapons, WeaponId.FLUX_WAKE, scroll, x, y)).id)
 
-        // The detail panel scrolls too (large text): at its end the action maps to the inspected weapon.
+        // The primary action does not scroll: it maps at its screen position to the inspected weapon.
         val action = layout.action.center
-        val detailScroll = layout.detailScrollMax
-        assertTrue(layout.action.bottom - detailScroll <= layout.detailViewport.bottom + 0.01f)
         assertEquals(WeaponId.ARC_COIL, assertIs<ArmoryAction.Apply>(
-            resolveArmoryPress(layout, TestWeapons, WeaponId.ARC_COIL, 0f, detailScroll, action.x, action.y - detailScroll)).id)
-        assertIs<ArmoryAction.Back>(resolveArmoryPress(layout, TestWeapons, WeaponId.FLUX_WAKE, 0f, 0f,
+            resolveArmoryPress(layout, TestWeapons, WeaponId.ARC_COIL, 0f, action.x, action.y)).id)
+        assertIs<ArmoryAction.Back>(resolveArmoryPress(layout, TestWeapons, WeaponId.FLUX_WAKE, 0f,
             layout.back.center.x, layout.back.center.y))
         // The gap between two tiles and the empty panel area below the action do not act.
         val gapX = grid.left + (layout.tiles[0].right + layout.tiles[1].left) * 0.5f
-        assertNull(resolveArmoryPress(layout, TestWeapons, WeaponId.FLUX_WAKE, 0f, 0f, gapX, y))
+        assertNull(resolveArmoryPress(layout, TestWeapons, WeaponId.FLUX_WAKE, 0f, gapX, y))
+    }
+
+    @Test
+    fun primaryActionStaysOnScreenAtEveryTextSize() {
+        for ((width, height) in listOf(1440f to 810f, 1000f to 700f, 844f to 390f, 720f to 360f, 390f to 844f)) {
+            for (textScale in listOf(1f, 1.75f)) {
+                val layout = layout(width, height, textScale = textScale)
+                val action = layout.action
+                assertTrue(action.top >= layout.frame.headerHeight && action.bottom <= height, "$width x $height @$textScale $action")
+                if (layout.actionPinned) {
+                    // Pinned under the scrolling details, never beneath them.
+                    assertTrue(layout.detailViewport.bottom <= action.top, "$width x $height @$textScale")
+                    assertTrue(layout.detailScrollMax > 0f, "$width x $height @$textScale")
+                } else {
+                    // The details fit, so nothing scrolls and the action follows the ladder.
+                    assertEquals(0f, layout.detailScrollMax, "$width x $height @$textScale")
+                    assertTrue(layout.ladder.bottom <= action.top, "$width x $height @$textScale")
+                }
+            }
+        }
+        // The board frame keeps the natural position under the ladder.
+        val board = layout(1440f, 810f)
+        assertFalse(board.actionPinned)
+        assertEquals(board.ladder.bottom + 26f, board.action.top, 0.01f)
+        assertTrue(layout(390f, 844f, textScale = 1.75f).actionPinned)
+    }
+
+    @Test
+    fun lockedWeaponsKeepRoomForTheShortfall() {
+        val frame = profileFrame(844f, 390f, 1f)
+        val wide = armoryLayout(frame, TestWeapons.size, 1f, 80f, actionWidth = 10_000f, needRoom = true)
+        assertTrue(wide.need.width >= (wide.detailViewport.width - 24f) * 0.3f)
+        val owned = armoryLayout(frame, TestWeapons.size, 1f, 80f, actionWidth = 10_000f, needRoom = false)
+        assertEquals(owned.detailViewport.right - 12f, owned.action.right, 0.01f)
     }
 
     @Test

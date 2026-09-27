@@ -28,8 +28,8 @@ internal class RebirthType(
 
 internal fun rebirthType(mode: ProfileLayoutMode): RebirthType = when (mode) {
     ProfileLayoutMode.REGULAR -> RebirthType(58f, 30f, 300f, 230f, 64f, 13f, 20f, 20f, 15f, 15f, 11f, 34f)
-    ProfileLayoutMode.COMPACT_LANDSCAPE -> RebirthType(26f, 16f, 130f, 100f, 30f, 10f, 12f, 13f, 11f, 12f, 9.5f, 22f)
-    ProfileLayoutMode.COMPACT_PORTRAIT -> RebirthType(28f, 17f, 170f, 130f, 34f, 10f, 12f, 14f, 12f, 14f, 10f, 22f)
+    ProfileLayoutMode.COMPACT_LANDSCAPE -> RebirthType(30f, 16f, 130f, 100f, 30f, 10f, 12f, 13f, 11f, 12f, 9.5f, 22f)
+    ProfileLayoutMode.COMPACT_PORTRAIT -> RebirthType(32f, 17f, 170f, 130f, 34f, 10f, 12f, 14f, 12f, 14f, 10f, 22f)
 }
 
 /**
@@ -53,6 +53,8 @@ internal class RebirthLayout(
     val compensationRows: List<Rect>,
     val action: Rect,
     val info: Rect,
+    /** True when the content overflows and [action] is pinned to the bottom of the screen. */
+    val actionPinned: Boolean = false,
 ) {
     val scrollMax: Float get() = max(0f, contentHeight - viewport.height)
 }
@@ -106,7 +108,7 @@ internal fun rebirthLayout(
         ProfileLayoutMode.COMPACT_LANDSCAPE -> {
             sectionLeft = frame.left; sectionRight = frame.width * 0.47f
             asideLeft = frame.width * 0.52f; asideRight = frame.right
-            fromTop = frame.headerHeight + d(8f); fromHeight = d(24f)
+            fromTop = frame.headerHeight + d(8f); fromHeight = d(28f)
             numeralTop = fromTop + fromHeight + d(4f); numeralHeight = d(120f)
             nameOffset = d(if (twoDigits) 190f else 115f); nameTop = numeralTop + d(30f)
             ladderGap = d(14f); ladderHeight = d(36f)
@@ -116,7 +118,7 @@ internal fun rebirthLayout(
         ProfileLayoutMode.COMPACT_PORTRAIT -> {
             sectionLeft = frame.left; sectionRight = frame.right
             asideLeft = frame.left; asideRight = frame.right
-            fromTop = frame.headerHeight + d(10f); fromHeight = d(26f)
+            fromTop = frame.headerHeight + d(10f); fromHeight = d(30f)
             numeralTop = fromTop + fromHeight + d(6f); numeralHeight = d(150f)
             nameOffset = d(if (twoDigits) 200f else 130f); nameTop = numeralTop + d(38f)
             ladderGap = d(16f); ladderHeight = d(36f)
@@ -150,7 +152,12 @@ internal fun rebirthLayout(
     }
     // Landscape phones keep Advance on screen: it sits under the ladder instead of the table.
     val landscape = frame.mode == ProfileLayoutMode.COMPACT_LANDSCAPE
-    val actionTop = if (landscape) ladder.bottom + d(16f) else compensationRows.last().bottom + actionGap
+    val naturalTop = if (landscape) ladder.bottom + d(16f) else compensationRows.last().bottom + actionGap
+    // Advance never sits below the fold: when the content overflows (phones, large text) it is
+    // pinned to the bottom of the screen and the content scrolls above it.
+    val pinnedTop = frame.height - d(12f) - actionHeight
+    val actionPinned = naturalTop > pinnedTop
+    val actionTop = if (actionPinned) pinnedTop else naturalTop
     val actionLeft = if (landscape) sectionLeft else asideLeft
     val actionRight = if (landscape) sectionRight else asideRight
     val infoSize = frame.density * 24f
@@ -158,10 +165,10 @@ internal fun rebirthLayout(
     val info = Rect(actionRight - infoSize, actionTop + (actionHeight - infoSize) * 0.5f, actionRight,
         actionTop + (actionHeight + infoSize) * 0.5f)
     val action = Rect(actionLeft, actionTop, info.left - infoGap, actionTop + actionHeight)
-    val viewport = Rect(0f, frame.headerHeight, frame.width, frame.height)
-    val bottom = maxOf(action.bottom, ladder.bottom, compensationRows.last().bottom) + d(16f)
+    val viewport = Rect(0f, frame.headerHeight, frame.width, if (actionPinned) action.top - d(12f) else frame.height)
+    val bottom = maxOf(if (actionPinned) 0f else action.bottom, ladder.bottom, compensationRows.last().bottom) + d(16f)
     return RebirthLayout(frame, back, viewport, bottom - viewport.top, from, numeral, name, ladder, cells, tableHeader,
-        hostileRows, compensationLabel, compensationRows, action, info)
+        hostileRows, compensationLabel, compensationRows, action, info, actionPinned)
 }
 
 /** Maps a press to the Rebirth action it hits: header Back or the Advance button. */
@@ -173,6 +180,7 @@ internal fun resolveRebirthPress(
 ): RebirthAction? {
     if (layout.back.contains(Offset(x, y))) return RebirthAction.Back
     if (y < layout.viewport.top) return null
-    val contentY = y + scroll.coerceIn(0f, layout.scrollMax)
+    // A pinned Advance does not scroll; otherwise it moves with the content.
+    val contentY = if (layout.actionPinned) y else y + scroll.coerceIn(0f, layout.scrollMax)
     return if (layout.action.contains(Offset(x, contentY))) RebirthAction.AdvanceRequested else null
 }

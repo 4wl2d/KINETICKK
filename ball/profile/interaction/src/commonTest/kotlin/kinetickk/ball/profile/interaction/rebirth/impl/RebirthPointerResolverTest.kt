@@ -43,6 +43,20 @@ class RebirthPointerResolverTest {
     }
 
     @Test
+    fun phoneBandAndStrikeStayClearOfContent() {
+        for ((width, height) in listOf(844f to 390f, 390f to 844f)) {
+            val layout = layout(width, height, target = 6)
+            val band = rebirthBandRect(layout.frame, androidx.compose.ui.geometry.Offset.Zero, 1f, width)
+            // The tier 5+ band runs along the header's lower edge, above every content row.
+            assertTrue(band.bottom <= layout.from.top, "$width x $height $band ${layout.from}")
+            assertTrue(band.bottom <= layout.tableHeader.top, "$width x $height")
+        }
+        // The strike keeps the board's proportion: 8 px on the 58 px board numeral.
+        assertEquals(8f, rebirthStrikeThickness(58f * 0.9f), 0.05f)
+        assertTrue(rebirthStrikeThickness(30f * 0.9f) < 5f)
+    }
+
+    @Test
     fun compactLayoutsScrollToTheAdvanceButton() {
         for ((size, mode) in listOf(
             (844f to 390f) to ProfileLayoutMode.COMPACT_LANDSCAPE,
@@ -51,11 +65,15 @@ class RebirthPointerResolverTest {
         )) {
             val layout = layout(size.first, size.second, textScale = 1.75f)
             assertEquals(mode, layout.frame.mode)
-            val scroll = layout.scrollMax
-            // At the end of the scroll the whole button is inside the viewport and still maps.
-            assertTrue(layout.action.bottom - scroll <= layout.viewport.bottom + 0.01f, "$size")
+            // Advance is on screen without scrolling (pinned when the content overflows) and maps
+            // at the same place whatever the scroll.
+            assertTrue(layout.action.bottom <= layout.frame.height && layout.action.top >= layout.viewport.top, "$size")
             val center = layout.action.center
-            assertEquals(RebirthAction.AdvanceRequested, resolveRebirthPress(layout, scroll, center.x, center.y - scroll), "$size")
+            for (scroll in listOf(0f, layout.scrollMax)) {
+                val y = if (layout.actionPinned) center.y else center.y - scroll
+                assertEquals(RebirthAction.AdvanceRequested, resolveRebirthPress(layout, scroll, center.x, y), "$size $scroll")
+            }
+            if (layout.actionPinned) assertTrue(layout.viewport.bottom <= layout.action.top, "$size")
             assertTrue(layout.cells.last().right <= layout.frame.width, "$size")
         }
     }
