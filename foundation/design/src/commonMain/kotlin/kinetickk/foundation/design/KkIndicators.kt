@@ -618,7 +618,12 @@ fun DrawScope.drawKkStamp(
         } else {
             if (shadow) drawRect(Kk.Ink, Offset(rect.left + d(3f) * k, rect.top + d(3f) * k), rect.size, alpha)
             drawRect(face, rect.topLeft, rect.size, alpha)
-            if (variant == KkStampVariant.THREAT) drawKkThreatHatch(rect, roles, Kk.Ink)
+            if (variant == KkStampVariant.THREAT && roles.hatchThreats) {
+                // MONO: the hatch stays a rim so the label keeps a solid face.
+                drawKkThreatHatch(rect, roles, Kk.Ink)
+                val rim = d(3f) * k
+                drawRect(face, Offset(rect.left + rim, rect.top + rim), Size(rect.width - rim * 2f, rect.height - rim * 2f), alpha)
+            }
             drawKkText(layout, rect.center.x, rect.center.y + d(0.5f) * k, Kk.Ink, KkAlign.CENTER, KkVAlign.CENTER, alpha)
         }
     }
@@ -695,7 +700,12 @@ fun DrawScope.drawKkToast(
     val warning = tone == KkToastTone.WARNING
     val path = KkPathMemo.slab(rect, d(10f))
     drawPath(path, if (warning) roles.threat else Kk.Ink2, alpha)
-    if (warning) drawKkThreatHatch(path, roles, Kk.Ink)
+    if (warning && roles.hatchThreats) {
+        // MONO: the hatch stays a rim so the title keeps a solid face.
+        drawKkThreatHatch(path, roles, Kk.Ink)
+        val rim = d(3f)
+        drawPath(KkPathMemo.slab(rect.left + rim, rect.top + rim, rect.right - rim, rect.bottom - rim, d(9f)), roles.threat, alpha)
+    }
     var x = rect.left + d(12f)
     val cy = rect.center.y
     if (icon != null) drawKkIcon(icon, Offset(x + lead * 0.5f, cy), lead, iconColor, alpha)

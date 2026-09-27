@@ -125,7 +125,12 @@ fun DrawScope.drawKkButton(
             drawPath(facePath, face)
             if (armed && interactive) drawPath(facePath, Color.White, alpha = 0.2f * kkPulse(time, 0.9f))
             if (locked) drawKkHatch(facePath)
-            if ((variant == KkButtonVariant.HAZARD || armed) && interactive) drawKkThreatHatch(facePath, roles, Kk.Ink)
+            if ((variant == KkButtonVariant.HAZARD || armed) && interactive && roles.hatchThreats) {
+                // MONO: the hatch stays a rim so the label keeps a solid face.
+                drawKkThreatHatch(facePath, roles, Kk.Ink)
+                val rim = d(4f)
+                drawPath(KkPathMemo.slab(bounds.left + rim, bounds.top + rim, bounds.right - rim, bounds.bottom - rim, cut), face)
+            }
             if (holdProgress > 0f && interactive) {
                 val holdLeft = bounds.left + d(10f)
                 val holdRight = holdLeft + (bounds.width - d(20f)) * holdProgress.coerceIn(0f, 1f)
