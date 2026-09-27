@@ -281,7 +281,7 @@ class GameplayLocalizedRenderingTest {
             Box(Modifier.requiredSize(640.dp, 420.dp).testTag("localized-gameplay")) {
                 Canvas(Modifier.fillMaxSize()) {
                     drawRect(SpaceBlack)
-                    drawCoreDeath(model, time.value)
+                    drawCoreDeath(model, time.value, kinetickk.foundation.design.KkRolePalette.Default)
                 }
             }
         }

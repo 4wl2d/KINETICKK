@@ -156,7 +156,11 @@ internal fun DrawScope.drawTrail(engine: GameplayRenderModel, shakeX: Float, sha
     }
 }
 
-internal fun DrawScope.drawScreenFx(engine: GameplayRenderModel, renderTime: Float) {
+internal fun DrawScope.drawScreenFx(
+    engine: GameplayRenderModel,
+    renderTime: Float,
+    @Suppress("UNUSED_PARAMETER") roles: KkRolePalette,
+) {
     if (engine.damageFlash > 0f) {
         drawRect(Red.copy(alpha = engine.damageFlash * 0.08f))
         drawRect(Red.copy(alpha = engine.damageFlash * 0.72f), style = Stroke(5f + engine.damageFlash * 10f))

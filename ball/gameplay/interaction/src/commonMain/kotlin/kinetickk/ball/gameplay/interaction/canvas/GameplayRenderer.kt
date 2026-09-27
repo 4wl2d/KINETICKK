@@ -25,11 +25,11 @@ internal fun DrawScope.drawGameplay(
     val shake = if (engine.settings.screenShake && engine.phase == GamePhase.RUNNING) engine.screenShake else 0f
     val shakeX = if (shake > 0f) sin(engine.elapsed * 91f) * shake else 0f
     val shakeY = if (shake > 0f) cos(engine.elapsed * 77f) * shake else 0f
-    drawBackdrop(engine, shakeX, shakeY, renderTime)
+    drawBackdrop(engine, shakeX, shakeY, renderTime, textMeasurer.roles)
 
     drawWorld(engine, visualFx, shakeX, shakeY, textMeasurer)
-    if (engine.phase == GamePhase.GAME_OVER) drawCoreDeath(engine, terminalElapsed)
-    else drawScreenFx(engine, renderTime)
+    if (engine.phase == GamePhase.GAME_OVER) drawCoreDeath(engine, terminalElapsed, textMeasurer.roles)
+    else drawScreenFx(engine, renderTime, textMeasurer.roles)
     if (shouldDrawRunningPresentation(engine.phase)) {
         drawHud(engine, textMeasurer)
         drawBuildNotifications(visualFx, textMeasurer)

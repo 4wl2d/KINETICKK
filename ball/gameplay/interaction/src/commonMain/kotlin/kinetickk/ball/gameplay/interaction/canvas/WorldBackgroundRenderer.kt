@@ -22,7 +22,13 @@ import kotlin.math.max
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-internal fun DrawScope.drawBackdrop(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, renderTime: Float) {
+internal fun DrawScope.drawBackdrop(
+    engine: GameplayRenderModel,
+    shakeX: Float,
+    shakeY: Float,
+    renderTime: Float,
+    @Suppress("UNUSED_PARAMETER") roles: KkRolePalette,
+) {
     val backdropCameraX = engine.cameraX
     val backdropCameraY = engine.cameraY
 

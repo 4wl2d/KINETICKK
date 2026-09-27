@@ -12,12 +12,17 @@ import kinetickk.ball.gameplay.interaction.canvas.drawCore
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.foundation.design.Cyan
+import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.White
 import kotlin.math.cos
 import kotlin.math.sin
 
 /** Bounded presentation only: the accepted run is already finished and cannot gain rewards. */
-internal fun DrawScope.drawCoreDeath(engine: GameplayRenderModel, elapsed: Float) {
+internal fun DrawScope.drawCoreDeath(
+    engine: GameplayRenderModel,
+    elapsed: Float,
+    @Suppress("UNUSED_PARAMETER") roles: KkRolePalette,
+) {
     val core = Offset(engine.coreX - engine.cameraX + size.width * 0.5f,
         engine.coreY - engine.cameraY + size.height * 0.5f)
     if (elapsed < 0.12f) {
