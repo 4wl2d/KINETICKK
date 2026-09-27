@@ -16,7 +16,7 @@ internal enum class SettingsRedesignText(override val english: String, override 
     ColorVisionMono("Mono", "Моно"),
     AboutColorVision(
         "Remaps you, threat, heat, shield and polarity to pairs you can tell apart. Mono adds hatching to every threat.",
-        "Перекрашивает вас, угрозы, нагрев, щит и полярность в пары цветов, которые легко различить. Моно добавляет штриховку на каждую угрозу.",
+        "Перекрашивает вас, угрозы, нагрев, щит и полярность в пары цветов, которые легко различить. В режиме «Моно» все угрозы дополнительно заштрихованы.",
     ),
     AboutLanguage("Changes the language of every menu and of the run.", "Меняет язык всех меню и забега."),
     AboutSimulationSpeed(
