@@ -19,13 +19,21 @@ release.
 | Gradle Wrapper | 9.7.1 | `gradlew`, `gradlew.bat`, `gradle/wrapper/gradle-wrapper.jar`, `gradle/wrapper/gradle-wrapper.properties` | [Apache License 2.0](https://github.com/gradle/gradle/blob/v9.7.1/LICENSE) |
 | Oswald | Static weight 700, obtained 2026-09-22 | `foundation/design/src/commonMain/composeResources/font/oswald.ttf` | [SIL Open Font License 1.1](https://github.com/google/fonts/tree/main/ofl/oswald); complete notice in `composeResources/files/oswald-OFL.txt` |
 | Onest | Static weight 450, obtained 2026-09-22 | `foundation/design/src/commonMain/composeResources/font/onest.ttf` | [SIL Open Font License 1.1](https://github.com/google/fonts/tree/main/ofl/onest); complete notice in `composeResources/files/onest-OFL.txt` |
+| Unbounded | Static weights 900 and 700, subset, obtained 2026-09-27 | `foundation/design/src/commonMain/composeResources/font/kk_wide_black.ttf`, `kk_wide_bold.ttf` | [SIL Open Font License 1.1](https://github.com/google/fonts/tree/main/ofl/unbounded); complete notice in `composeResources/files/unbounded-OFL.txt` |
+| Sofia Sans Extra Condensed | Static weights 900 italic, 900 and 800, subset, obtained 2026-09-27 | `foundation/design/src/commonMain/composeResources/font/kk_cond_black_italic.ttf`, `kk_cond_black.ttf`, `kk_cond_extrabold.ttf` | [SIL Open Font License 1.1](https://github.com/google/fonts/tree/main/ofl/sofiasansextracondensed); complete notice in `composeResources/files/sofia-sans-extra-condensed-OFL.txt` |
+| Sofia Sans Semi Condensed | Static weights 400, 500 and 700, subset, obtained 2026-09-27 | `foundation/design/src/commonMain/composeResources/font/kk_body_regular.ttf`, `kk_body_medium.ttf`, `kk_body_bold.ttf` | [SIL Open Font License 1.1](https://github.com/google/fonts/tree/main/ofl/sofiasanssemicondensed); complete notice in `composeResources/files/sofia-sans-semi-condensed-OFL.txt` |
+| Martian Mono | Static weights 500 and 700, subset, obtained 2026-09-27 | `foundation/design/src/commonMain/composeResources/font/kk_mono_medium.ttf`, `kk_mono_bold.ttf` | [SIL Open Font License 1.1](https://github.com/google/fonts/tree/main/ofl/martianmono); complete notice in `composeResources/files/martian-mono-OFL.txt` |
 
 The wrapper scripts contain their own Apache-2.0 headers, and
 `gradle-wrapper.jar` contains the full license at `META-INF/LICENSE`. Those
 notices must remain intact.
 
 The bundled font files are static instances of the upstream Google Fonts variable
-fonts. Their complete OFL notices are packaged with the Compose resources on every
+fonts. The redesign fonts (Unbounded, Sofia Sans Extra Condensed, Sofia Sans Semi
+Condensed and Martian Mono) are modified: they were instanced to static weights and
+subset with fontTools to Latin, Latin Extended-A, Cyrillic and the punctuation and
+symbols the interface uses, keeping the OpenType layout features (including tabular
+figures). Their complete OFL notices are packaged with the Compose resources on every
 target. They are bundled locally; the interface does not fetch them from a font CDN.
 
 ## Downloaded build and runtime components
