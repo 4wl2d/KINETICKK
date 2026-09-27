@@ -151,4 +151,24 @@ class CosmicPresentationTest {
         assertEquals("0:00", WorldStrings.timer(-2f))
         assertTrue(WorldStrings.timer(30.5f) === WorldStrings.timer(30.1f))
     }
+
+    @Test
+    fun orbitTimerNeverEntersTheHudTopRowOrBottomClusters() {
+        // Desktop: a ring centered low enough keeps its label above it, clear of the timer row.
+        assertEquals(588f, orbitTimerBaseline(800f, 20f, 1_440f, 1_080f, 1f))
+        // Phone landscape: the ring reaches the top row, so the label moves below the ring.
+        val below = orbitTimerBaseline(195f, 20f, 844f, 390f, 1f)
+        assertTrue(below.isNaN() || below - 20f >= hudSafeTop(390f, 1f))
+        // A label that fits neither band is skipped instead of covering the HUD.
+        assertTrue(orbitTimerBaseline(200f, 20f, 844f, 390f, 1f).isNaN())
+        listOf(Triple(1_440f, 810f, 1f), Triple(844f, 390f, 1f), Triple(390f, 844f, 1f)).forEach { (w, h, d) ->
+            for (centerY in 0..h.toInt() step 10) {
+                val baseline = orbitTimerBaseline(centerY.toFloat(), 20f, w, h, d)
+                if (!baseline.isNaN()) {
+                    assertTrue(baseline - 20f >= hudSafeTop(h, d), "top row at $w x $h, y=$centerY")
+                    assertTrue(baseline <= hudSafeBottom(w, h, d), "bottom clusters at $w x $h, y=$centerY")
+                }
+            }
+        }
+    }
 }

@@ -161,8 +161,10 @@ private fun DrawScope.drawActivePoint(
                     Size(396f, 396f), style = WorldStrokes.arc6)
             }
             val layout = measureKkText(textMeasurer, WorldStrings.timer(point.remaining), textMeasurer.typography.condStyle(24f, tabular = true, color = Kk.Bone))
-            // Above the ring, but kept on screen when the ring fills a short phone screen.
-            drawKkText(layout, center.x, max(center.y - 212f, d(12f) + layout.firstBaseline), Kk.Bone, KkAlign.CENTER, KkVAlign.BASELINE)
+            // Above the ring; below it when the ring reaches the HUD's top row (timer, trial panel).
+            // The trial panel already shows the clock, so a label that fits neither band is skipped.
+            val baseline = orbitTimerBaseline(center.y, layout.firstBaseline, size.width, size.height, density)
+            if (!baseline.isNaN()) drawKkText(layout, center.x, baseline, Kk.Bone, KkAlign.CENTER, KkVAlign.BASELINE)
         }
     }
 }
@@ -262,8 +264,8 @@ internal fun edgeMarkerPosition(target: Offset, width: Float, height: Float, den
     val portrait = height > width
     val left = 24f * density
     val right = width - 24f * density
-    val top = max(80f * density, height * 0.16f)
-    val bottom = if (portrait) height * 0.66f else height - 110f * density
+    val top = hudSafeTop(height, density)
+    val bottom = hudSafeBottom(width, height, density)
     val centerX = width * 0.5f
     val centerY = height * 0.5f
     val dx = target.x - centerX
@@ -286,4 +288,21 @@ internal fun edgeMarkerPosition(target: Offset, width: Float, height: Float, den
     } else {
         Offset(x.coerceIn(max(left, width * 0.26f), min(right, width * 0.74f)), y.coerceIn(top, bottom))
     }
+}
+
+/** World labels stay below the HUD's top row (level badge, timer, chips, trial panel). */
+internal fun hudSafeTop(height: Float, density: Float): Float = max(80f * density, height * 0.16f)
+
+/** World labels stay above the HUD's bottom clusters (integrity, speed, loadout, controls). */
+internal fun hudSafeBottom(width: Float, height: Float, density: Float): Float =
+    if (height > width) height * 0.66f else height - 110f * density
+
+/**
+ * Baseline of the collapsing-orbit timer: above the 212 px ring when that clears the HUD's top
+ * row, otherwise below the ring; NaN when neither fits between the HUD bands.
+ */
+internal fun orbitTimerBaseline(centerY: Float, firstBaseline: Float, width: Float, height: Float, density: Float): Float {
+    val above = centerY - 212f
+    val baseline = if (above - firstBaseline >= hudSafeTop(height, density)) above else centerY + 212f + firstBaseline
+    return if (baseline <= hudSafeBottom(width, height, density)) baseline else Float.NaN
 }
