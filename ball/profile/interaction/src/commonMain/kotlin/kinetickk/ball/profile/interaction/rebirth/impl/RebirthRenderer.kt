@@ -37,12 +37,14 @@ import androidx.compose.ui.unit.IntOffset
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.profile.interaction.ProfileFrame
+import kinetickk.ball.profile.interaction.fitKkText
 import kinetickk.ball.profile.interaction.ProfilePanel
 import kinetickk.ball.profile.interaction.ProfileSlabButton
 import kinetickk.ball.profile.interaction.dp
 import kinetickk.ball.profile.interaction.localization.ProfileScreensRedesignText
 import kinetickk.ball.profile.interaction.localization.ProfileText
 import kinetickk.ball.profile.interaction.profileHeaderBackWidth
+import kinetickk.ball.profile.interaction.profileScrollCue
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthRenderModel
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
@@ -114,6 +116,7 @@ internal fun RebirthContent(
             Box(
                 Modifier.offset { IntOffset(viewport.left.roundToInt(), viewport.top.roundToInt()) }
                     .size(frame.dp(viewport.width), frame.dp(viewport.height))
+                    .profileScrollCue(scroll, theme.background, frame.d(28f))
                     .verticalScroll(scroll)
                     .testTag("profile-rebirth-scroll"),
             ) {
@@ -136,38 +139,21 @@ internal fun RebirthContent(
                                     model.maximumTier, model.current.tier)
                             },
                     )
-                    val action = layout.action
-                    val label = when (state) {
-                        RebirthActionState.READY -> language.text(ProfileScreensRedesignText.Advance)
-                        RebirthActionState.ARMED -> language.text(ProfileScreensRedesignText.Confirm)
-                        RebirthActionState.LOCKED -> language.text(ProfileScreensRedesignText.Locked)
-                        RebirthActionState.MAXIMUM -> language.text(ProfileScreensRedesignText.MaxTier)
-                    }
-                    ProfileSlabButton(
-                        label = label,
-                        onClick = { onAction(RebirthAction.AdvanceRequested) },
-                        frame = frame,
-                        tag = "profile-rebirth-advance",
-                        size = if (frame.regular) KkButtonSize.LG else KkButtonSize.MD,
-                        fontSize = type.action,
-                        enabled = state == RebirthActionState.READY || state == RebirthActionState.ARMED,
-                        locked = state == RebirthActionState.LOCKED,
-                        armed = state == RebirthActionState.ARMED,
-                        textScale = scale,
-                        contentDescription = if (state == RebirthActionState.READY || state == RebirthActionState.ARMED) {
-                            "$label ${language.text(ProfileScreensRedesignText.TierTag, model.next.tier)}"
-                        } else {
-                            label
-                        },
-                        modifier = Modifier.offset { IntOffset((action.left - viewport.left).roundToInt(), (action.top - viewport.top).roundToInt()) }
-                            .size(frame.dp(action.width), frame.dp(action.height)),
-                    )
-                    val info = layout.info
-                    Box(Modifier.offset { IntOffset((info.left - viewport.left).roundToInt(), (info.top - viewport.top).roundToInt()) }) {
-                        KkInfoButton(rebirthInfoText(model, state, language), Modifier.testTag("profile-rebirth-info"),
-                            placement = KkTooltipPlacement.ABOVE_END, textScale = scale)
+                    if (!layout.actionPinned) {
+                        RebirthActionRow(frame, type, layout, model, state, scale, language, Offset(viewport.left, viewport.top), onAction)
                     }
                 }
+            }
+            if (layout.actionPinned) {
+                // Pinned Advance: a band in the theme's ground under the scrolling content.
+                val band = layout.viewport.bottom
+                Box(Modifier.offset { IntOffset(0, band.roundToInt()) }
+                    .size(frame.dp(frame.width), frame.dp(frame.height - band))
+                    .drawBehind {
+                        drawRect(theme.background)
+                        drawLine(Kk.Line2, Offset.Zero, Offset(size.width, 0f), frame.density)
+                    })
+                RebirthActionRow(frame, type, layout, model, state, scale, language, Offset.Zero, onAction)
             }
         }
         if (advanceProgress > 0f && advanceProgress < 1f) {
@@ -176,6 +162,52 @@ internal fun RebirthContent(
             RebirthAdvanceOverlay(advanceProgress, theme, tier, direction)
         }
       }
+    }
+}
+
+/** Advance (or Confirm/Locked/Max) with its (!) info; [origin] is the parent's screen position. */
+@Composable
+private fun RebirthActionRow(
+    frame: ProfileFrame,
+    type: RebirthType,
+    layout: RebirthLayout,
+    model: RebirthRenderModel,
+    state: RebirthActionState,
+    scale: Float,
+    language: AppLanguage,
+    origin: Offset,
+    onAction: (RebirthAction) -> Unit,
+) {
+    val action = layout.action
+    val label = when (state) {
+        RebirthActionState.READY -> language.text(ProfileScreensRedesignText.Advance)
+        RebirthActionState.ARMED -> language.text(ProfileScreensRedesignText.Confirm)
+        RebirthActionState.LOCKED -> language.text(ProfileScreensRedesignText.Locked)
+        RebirthActionState.MAXIMUM -> language.text(ProfileScreensRedesignText.MaxTier)
+    }
+    ProfileSlabButton(
+        label = label,
+        onClick = { onAction(RebirthAction.AdvanceRequested) },
+        frame = frame,
+        tag = "profile-rebirth-advance",
+        size = if (frame.regular) KkButtonSize.LG else KkButtonSize.MD,
+        fontSize = type.action,
+        enabled = state == RebirthActionState.READY || state == RebirthActionState.ARMED,
+        locked = state == RebirthActionState.LOCKED,
+        armed = state == RebirthActionState.ARMED,
+        textScale = scale,
+        contentDescription = if (state == RebirthActionState.READY || state == RebirthActionState.ARMED) {
+            "$label ${language.text(ProfileScreensRedesignText.TierTag, model.next.tier)}"
+        } else {
+            label
+        },
+        modifier = Modifier.offset { IntOffset((action.left - origin.x).roundToInt(), (action.top - origin.y).roundToInt()) }
+            .size(frame.dp(action.width), frame.dp(action.height)),
+    )
+    val info = layout.info
+    Box(Modifier.offset { IntOffset((info.left - origin.x).roundToInt(), (info.top - origin.y).roundToInt()) }) {
+        KkInfoButton(rebirthInfoText(model, state, language), Modifier.testTag("profile-rebirth-info"),
+            placement = KkTooltipPlacement.ABOVE_END, textScale = scale)
     }
 }
 
@@ -193,6 +225,9 @@ internal fun RebirthAdvanceOverlay(progress: Float, theme: RebirthTheme, tier: S
         Box(Modifier.fillMaxSize().drawBehind { drawRebirthAdvance(measurer, frame, progress, theme, tier, direction, label) })
     }
 }
+
+/** Strike-through thickness for the "from" numeral: the board's 8 px on a 52 px (58 × 0.9) box. */
+internal fun rebirthStrikeThickness(numeralBoxHeight: Float): Float = numeralBoxHeight * (8f / 52.2f)
 
 /** The (!) text: what the game keeps, preceded by why Advance is unavailable. */
 internal fun rebirthInfoText(model: RebirthRenderModel, state: RebirthActionState, language: AppLanguage): String {
@@ -221,10 +256,13 @@ private fun DrawScope.drawRebirthSection(
             measurer.typography.wideStyle(type.fromNumeral * k, tabular = true))
         val from = layout.from
         drawKkText(fromLayout, from.left, from.top, Kk.Mute)
+        // The strike keeps the board's proportion (8 px on a 58 px numeral) so small numerals
+        // stay readable on phones.
         val barCenter = Offset(from.left + fromLayout.size.width * 0.5f, from.top + fromLayout.kkBoxHeight * 0.46f)
+        val barHeight = rebirthStrikeThickness(fromLayout.kkBoxHeight)
         rotate(-12f, barCenter) {
-            drawRect(accent, Offset(from.left - frame.d(8f), barCenter.y - frame.d(4f)),
-                Size(fromLayout.size.width + frame.d(16f), frame.d(8f)))
+            drawRect(accent, Offset(from.left - barHeight, barCenter.y - barHeight * 0.5f),
+                Size(fromLayout.size.width + barHeight * 2f, barHeight))
         }
         drawKkText(measurer, model.current.directive.displayName.localizedContent(language),
             measurer.typography.condStyle(type.fromName * k), from.left + fromLayout.size.width + frame.d(14f),
@@ -347,8 +385,9 @@ private fun DrawScope.drawRebirthRow(
 ) {
     val k = frame.k
     val cy = rect.center.y
-    drawKkText(measurer, row.label, measurer.typography.bodyStyle(type.body * k), rect.left, cy, Kk.Bone,
-        valign = KkVAlign.CENTER, maxWidth = rect.width - column * 2f - frame.d(8f))
+    val label = fitKkText(measurer, row.label, type.body * k, rect.width - column * 2f - frame.d(8f), uppercase = false,
+        minFactor = 0.55f) { measurer.typography.bodyStyle(it) }
+    drawKkText(label, rect.left, cy, Kk.Bone, valign = KkVAlign.CENTER)
     drawKkText(measurer, row.current, measurer.typography.monoStyle(type.mono * k), rect.right - column, cy, Kk.Mute,
         align = KkAlign.END, valign = KkVAlign.CENTER, uppercase = true)
     drawKkText(measurer, row.next, measurer.typography.monoStyle(type.mono * k, weight = FontWeight.Bold), rect.right, cy, nextColor,

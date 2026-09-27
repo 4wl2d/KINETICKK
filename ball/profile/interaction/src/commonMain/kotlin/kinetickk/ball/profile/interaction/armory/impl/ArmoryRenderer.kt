@@ -53,6 +53,7 @@ import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.profile.interaction.LocalProfilePanelFocus
+import kinetickk.ball.profile.interaction.PROFILE_WRAPPED_LINE_HEIGHT
 import kinetickk.ball.profile.interaction.ProfileFrame
 import kinetickk.ball.profile.interaction.ProfileLayoutMode
 import kinetickk.ball.profile.interaction.ProfilePanel
@@ -67,6 +68,7 @@ import kinetickk.ball.profile.interaction.localization.ProfileScreensRedesignTex
 import kinetickk.ball.profile.interaction.localization.ProfileText
 import kinetickk.ball.profile.interaction.profileButtonNaturalWidth
 import kinetickk.ball.profile.interaction.profileHeaderBackWidth
+import kinetickk.ball.profile.interaction.profileScrollCue
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.*
@@ -109,6 +111,8 @@ internal fun ArmoryContent(
         onBack = { onAction(ArmoryAction.Back) },
         background = { frame -> drawArmoryBackground(frame, holder.layout, outlineMeasurer, title) },
         headerExtra = { frame -> ArmoryPager(frame, gridScroll, holder, textScale, onAction) },
+        headerExtraWidth = { frame -> if (gridScroll.maxValue > 0) frame.d(30f) * 2f + frame.d(8f) * 2f + frame.d(16f) +
+            frame.d(34f) * textScale else frame.density * 2f },
     ) { frame ->
         val measurer = rememberKkCanvasMeasurer(textScale)
         val type = armoryType(frame.mode)
@@ -121,13 +125,15 @@ internal fun ArmoryContent(
             profileButtonNaturalWidth(measurer, frame, action.label, buttonSize, type.action, action.cost),
             frame.d(if (frame.regular) 240f else 180f),
         )
-        val layout = armoryLayout(frame, weapons.size, textScale, backWidth, actionWidth)
+        val layout = armoryLayout(frame, weapons.size, textScale, backWidth, actionWidth, needRoom = status == ArmoryWeaponStatus.SHORT,
+            masteryCount = masteries.size)
         SideEffect { holder.layout = layout }
         val grid = layout.gridViewport
         Box(
             Modifier.offset { IntOffset(grid.left.roundToInt(), grid.top.roundToInt()) }
                 .size(frame.dp(grid.width), frame.dp(grid.height))
                 .semantics { contentDescription = language.text(ProfileScreensRedesignText.WeaponsList) }
+                .profileScrollCue(gridScroll, if (frame.portrait) Kk.Ink else Kk.Ink.copy(alpha = 0.9f), frame.d(28f))
                 .verticalScroll(gridScroll)
                 .testTag("profile-armory-scroll"),
         ) {
@@ -138,11 +144,13 @@ internal fun ArmoryContent(
                 }
             }
         }
-        val detailScroll = rememberScrollState()
+        // Each weapon's details start at the top.
+        val detailScroll = remember(inspected.id) { ScrollState(0) }
         val detail = layout.detailViewport
         Box(
             Modifier.offset { IntOffset(detail.left.roundToInt(), detail.top.roundToInt()) }
                 .size(frame.dp(detail.width), frame.dp(detail.height))
+                .profileScrollCue(detailScroll, Kk.Ink1, frame.d(28f))
                 .verticalScroll(detailScroll)
                 .testTag("profile-armory-detail"),
         ) {
@@ -155,7 +163,7 @@ internal fun ArmoryContent(
                     .drawBehind {
                         translate(-detail.left, -detail.top) {
                             drawArmoryDetail(measurer, frame, type, layout, inspected, status,
-                                model.activeRunWeapon == inspected.id, model.totalMatter, masteries, language)
+                                model.activeRunWeapon == inspected.id, masteries, language)
                         }
                     },
             ) {
@@ -168,8 +176,22 @@ internal fun ArmoryContent(
                     KkInfoButton(language.text(ProfileScreensRedesignText.MasteryInfo), Modifier.testTag("profile-armory-mastery-info"),
                         placement = KkTooltipPlacement.BELOW, textScale = textScale)
                 }
-                val button = layout.action
-                ProfileSlabButton(
+            }
+        }
+        // The primary action stays on screen: it is placed outside the details' scroll and, when
+        // they overflow, pinned on a band under them.
+        val button = layout.action
+        Box(
+            Modifier.offset { IntOffset(0, 0) }.size(frame.dp(frame.width), frame.dp(frame.height)).drawBehind {
+                if (layout.actionPinned) {
+                    val top = layout.detailViewport.bottom
+                    drawRect(Kk.Ink1, Offset(layout.detailViewport.left, top),
+                        androidx.compose.ui.geometry.Size(layout.detailViewport.width, button.bottom + frame.d(8f) - top))
+                }
+                if (status == ArmoryWeaponStatus.SHORT) drawArmoryNeed(measurer, frame, type, layout.need, inspected, model.totalMatter, language)
+            },
+        )
+        ProfileSlabButton(
                     label = action.label,
                     onClick = { onAction(ArmoryAction.Apply(inspected.id)) },
                     frame = frame,
@@ -183,11 +205,9 @@ internal fun ArmoryContent(
                     cost = action.cost,
                     textScale = textScale,
                     contentDescription = listOfNotNull(action.label, action.costDescription).joinToString(" "),
-                    modifier = Modifier.offset { IntOffset((button.left - detail.left).roundToInt(), (button.top - detail.top).roundToInt()) }
+                    modifier = Modifier.offset { IntOffset(button.left.roundToInt(), button.top.roundToInt()) }
                         .size(frame.dp(button.width), frame.dp(button.height)),
                 )
-            }
-        }
     }
 }
 
@@ -311,48 +331,58 @@ private fun DrawScope.drawArmoryTile(
     val padTop = frame.d(if (compact) 10f else 14f)
     val padBottom = frame.d(if (compact) 10f else 14f)
     val innerWidth = size.width - padLeft - padRight
-    run {
-        val statusStyle = measurer.typography.monoStyle(type.status * k)
-        if (locked) {
-            val gem = frame.d(if (compact) 7f else 9f)
-            val costColor = when {
-                status == ArmoryWeaponStatus.AFFORDABLE -> roles.you
-                else -> Kk.Mute
-            }
-            val cost = measureKkText(measurer, costText, statusStyle, uppercase = true)
-            drawKkGem(Offset(padLeft + gem * 0.5f, padTop + cost.kkBoxHeight * 0.5f), costColor, gem / density)
-            drawKkText(cost, padLeft + gem + frame.d(5f), padTop, costColor)
-        } else {
-            val layout = measureKkText(measurer, statusText, statusStyle, uppercase = true, maxWidth = innerWidth)
-            drawKkText(layout, padLeft, padTop, if (active && !on) roles.you else fg, alpha = if (active) 1f else 0.7f)
+    val statusBottom: Float
+    if (locked) {
+        val gem = frame.d(if (compact) 7f else 9f)
+        val costColor = when {
+            status == ArmoryWeaponStatus.AFFORDABLE -> roles.you
+            else -> Kk.Mute
         }
-        val iconColor = when {
-            locked -> Kk.Mute
-            on -> Kk.Ink
-            else -> roles.you
+        val cost = fitKkText(measurer, costText, type.status * k, innerWidth - gem - frame.d(5f), minFactor = 0.5f) {
+            measurer.typography.monoStyle(it)
         }
-        val iconY = size.height * if (compact) 0.36f else 0.45f
-        if (icon != null) drawKkIcon(icon, Offset(size.width * 0.5f, iconY), frame.d(type.tileIcon), iconColor)
+        drawKkGem(Offset(padLeft + gem * 0.5f, padTop + cost.kkBoxHeight * 0.5f), costColor, gem / density)
+        drawKkText(cost, padLeft + gem + frame.d(5f), padTop, costColor)
+        statusBottom = padTop + cost.kkBoxHeight
+    } else {
+        val layout = fitKkText(measurer, statusText, type.status * k, innerWidth, minFactor = 0.5f) { measurer.typography.monoStyle(it) }
+        drawKkText(layout, padLeft, padTop, if (active && !on) roles.you else fg, alpha = if (active) 1f else 0.7f)
+        statusBottom = padTop + layout.kkBoxHeight
+    }
 
-        // Phones keep the tags in the detail panel; the regular tile lists them as words.
-        var tagsTop = size.height - padBottom
-        if (!compact) {
-            val tagStyle = measurer.typography.monoStyle(type.tileTags * k)
-            val tagHeight = measureKkText(measurer, tags.firstOrNull() ?: " ", tagStyle, uppercase = true).kkBoxHeight
-            tagsTop -= tagHeight
-            var x = padLeft
-            for (tag in tags) {
-                val layout = measureKkText(measurer, tag, tagStyle, uppercase = true)
-                if (x + layout.size.width > size.width + frame.d(8f)) break
-                drawKkText(layout, x, tagsTop, fg, alpha = 0.75f)
-                x += layout.size.width + frame.d(8f)
-            }
+    // Phones keep the tags in the detail panel; the regular tile lists them as words.
+    var tagsTop = size.height - padBottom
+    if (!compact) {
+        val tagStyle = measurer.typography.monoStyle(type.tileTags * k)
+        val tagHeight = measureKkText(measurer, tags.firstOrNull() ?: " ", tagStyle, uppercase = true).kkBoxHeight
+        tagsTop -= tagHeight
+        var x = padLeft
+        for (tag in tags) {
+            val layout = measureKkText(measurer, tag, tagStyle, uppercase = true)
+            if (x + layout.size.width > size.width + frame.d(8f)) break
+            drawKkText(layout, x, tagsTop, fg, alpha = 0.75f)
+            x += layout.size.width + frame.d(8f)
         }
-        val nameLayout = fitKkText(measurer, name, type.tileName * k, innerWidth, maxLines = 2, minFactor = 0.6f) {
-            measurer.typography.condStyle(it)
-        }
-        val nameTop = tagsTop - (if (compact) 0f else frame.d(3f)) - nameLayout.kkBoxHeight
-        drawKkText(nameLayout, padLeft, nameTop, fg)
+    }
+    // A full line height keeps Cyrillic diacritics (Ё, Й) clear of the line above.
+    val nameLayout = fitKkText(measurer, name, type.tileName * k, innerWidth, maxLines = 2, minFactor = 0.6f) {
+        measurer.typography.condStyle(it, lineHeightEm = PROFILE_WRAPPED_LINE_HEIGHT)
+    }
+    val nameTop = tagsTop - (if (compact) 0f else frame.d(5f)) - nameLayout.kkBoxHeight
+    drawKkText(nameLayout, padLeft, nameTop, fg)
+
+    // The icon sits centred in the band between the status line and the name, shrinking when
+    // large text leaves less room.
+    val iconColor = when {
+        locked -> Kk.Mute
+        on -> Kk.Ink
+        else -> roles.you
+    }
+    val bandTop = statusBottom + frame.d(4f)
+    val bandBottom = nameTop - frame.d(4f)
+    val iconSize = minOf(frame.d(type.tileIcon), bandBottom - bandTop)
+    if (icon != null && iconSize > frame.d(10f)) {
+        drawKkIcon(icon, Offset(size.width * 0.5f, (bandTop + bandBottom) * 0.5f), iconSize, iconColor)
     }
 }
 
@@ -364,7 +394,6 @@ private fun DrawScope.drawArmoryDetail(
     definition: WeaponDefinition,
     status: ArmoryWeaponStatus,
     active: Boolean,
-    matter: Long,
     masteries: List<WeaponMastery>,
     language: AppLanguage,
 ) {
@@ -373,10 +402,10 @@ private fun DrawScope.drawArmoryDetail(
     drawKkIconPlate(layout.plate, armoryWeaponIcon(definition.id), roles.you, cutDp = 12f * k,
         iconSizeDp = (if (frame.regular) 54f else 32f) * k)
     val name = fitKkText(measurer, definition.name.localizedContent(language), type.name * k, layout.name.width, maxLines = 2,
-        minFactor = 0.55f) { measurer.typography.wideStyle(it, lineHeightEm = 1f) }
+        minFactor = 0.55f) { measurer.typography.wideStyle(it, lineHeightEm = PROFILE_WRAPPED_LINE_HEIGHT) }
     drawKkText(name, layout.name.left, layout.name.center.y, Kk.Bone, valign = KkVAlign.CENTER)
     val descriptionStyle = measurer.typography.bodyStyle(type.body * k)
-    val descriptionLines = (layout.description.height / (frame.d(type.body) * 1.4f * measurer.scale)).toInt().coerceAtLeast(1)
+    val descriptionLines = (layout.description.height / (frame.d(type.body) * 1.4f * measurer.scale) + 0.01f).toInt().coerceAtLeast(1)
     val description = measureKkText(measurer, definition.description.localizedContent(language), descriptionStyle,
         maxWidth = layout.description.width, maxLines = descriptionLines)
     drawKkText(description, layout.description.left, layout.description.top, Kk.Bone)
@@ -400,13 +429,23 @@ private fun DrawScope.drawArmoryDetail(
         layout.mastery.left, layout.mastery.center.y, Kk.Mute, valign = KkVAlign.CENTER, uppercase = true)
     drawMasteryLadder(measurer, frame, type, layout.ladder, masteries, language)
 
-    if (status == ArmoryWeaponStatus.SHORT) {
-        val need = (definition.permanentUnlockCost - matter).coerceAtLeast(0L)
-        val text = language.text(ProfileScreensRedesignText.NeedMore, formatMatter(need, language))
-        val needLayout = measureKkText(measurer, text, measurer.typography.monoStyle(type.ladderMono * k, lineHeightEm = 1.6f),
-            uppercase = true, maxWidth = layout.need.width.coerceAtLeast(frame.d(60f)), maxLines = 3)
-        drawKkText(needLayout, layout.need.left, layout.need.center.y, roles.threat, valign = KkVAlign.CENTER)
-    }
+}
+
+/** "Need N more matter" beside a locked Unlock button, in the threat role. */
+private fun DrawScope.drawArmoryNeed(
+    measurer: CanvasTextMeasurer,
+    frame: ProfileFrame,
+    type: ArmoryType,
+    rect: Rect,
+    definition: WeaponDefinition,
+    matter: Long,
+    language: AppLanguage,
+) {
+    val need = (definition.permanentUnlockCost - matter).coerceAtLeast(0L)
+    val text = language.text(ProfileScreensRedesignText.NeedMore, formatMatter(need, language))
+    val needLayout = fitKkText(measurer, text, type.ladderMono * frame.k, rect.width.coerceAtLeast(frame.d(60f)), maxLines = 3,
+        minFactor = 0.6f) { measurer.typography.monoStyle(it, lineHeightEm = 1.6f) }
+    drawKkText(needLayout, rect.left, rect.center.y, measurer.roles.threat, valign = KkVAlign.CENTER)
 }
 
 /**
@@ -438,12 +477,33 @@ private fun DrawScope.drawMasteryLadder(
         index < 2 -> roles.you
         else -> Kk.Bone
     }
+    val stacked = armoryMasteryStacked(t)
     for (cell in 0 until cells) {
         val level = cell + 1
         val milestone = masteries.indexOfFirst { it.minimumLevel == level }
         val left = rect.left + cell * (cellWidth + gap)
         val color = if (milestone >= 0) milestoneColor(milestone) else Kk.Ink4
         drawPath(LadderPaths.sheared(cell % LADDER_SLOTS, left, cellTop, left + cellWidth, cellTop + cellHeight), color)
+    }
+    if (stacked) {
+        // One milestone per line: level, name, then the bonuses at the right edge.
+        val levelTexts = masteries.map { language.text(ProfileScreensRedesignText.MasteryLevel, kkIntString(it.minimumLevel)) }
+        val levelWidth = levelTexts.maxOf { measureKkText(measurer, it, monoStyle, uppercase = true).size.width.toFloat() } + frame.d(10f)
+        val line = frame.d(type.ladderName) * ARMORY_STACKED_LINE * t
+        masteries.forEachIndexed { index, mastery ->
+            val y = namesTop + index * line + line * 0.5f
+            val color = milestoneColor(index)
+            drawKkText(measureKkText(measurer, levelTexts[index], monoStyle, uppercase = true), rect.left, y, color, valign = KkVAlign.CENTER)
+            val bonus = masteryBonus(mastery, language)
+            val bonusLayout = measureKkText(measurer, bonus, monoStyle, uppercase = true)
+            drawKkText(bonusLayout, rect.right, y, Kk.Mute, align = KkAlign.END, valign = KkVAlign.CENTER)
+            val nameRoom = rect.width - levelWidth - bonusLayout.size.width - frame.d(10f)
+            val nameLayout = fitKkText(measurer, mastery.displayLabel.localizedContent(language), type.ladderName * k, nameRoom,
+                minFactor = 0.5f) { measurer.typography.labelStyle(it) }
+            drawKkText(nameLayout, rect.left + levelWidth, y, if (index == masteries.lastIndex) Kk.RLegend else Kk.Bone,
+                valign = KkVAlign.CENTER)
+        }
+        return
     }
     var previousRight = rect.left
     masteries.forEachIndexed { index, mastery ->
@@ -461,11 +521,7 @@ private fun DrawScope.drawMasteryLadder(
             max(room, frame.d(40f)), minFactor = 0.7f) { measurer.typography.labelStyle(it) }
         drawKkText(nameLayout, x, namesTop, if (last) Kk.RLegend else Kk.Bone, align = align)
         previousRight = cellLeft + nameLayout.size.width
-        val bonus = if (mastery.damageBonus <= 0f && mastery.activationSpeedBonus <= 0f) {
-            language.text(ProfileScreensRedesignText.MasteryBase)
-        } else {
-            "+${percent(mastery.damageBonus)}%  +${percent(mastery.activationSpeedBonus)}%"
-        }
+        val bonus = masteryBonus(mastery, language)
         val bonusLayout = measureKkText(measurer, bonus, monoStyle, uppercase = true, maxWidth = max(room, frame.d(40f)))
         drawKkText(bonusLayout, x, namesTop + nameLayout.kkBoxHeight + frame.d(4f), Kk.Mute, align = align)
         previousRight = max(previousRight, cellLeft + bonusLayout.size.width)
@@ -473,6 +529,14 @@ private fun DrawScope.drawMasteryLadder(
 }
 
 private fun percent(value: Float): Int = (value * 100f).roundToInt()
+
+/** "Base" for the first milestone, else the damage and activation-speed bonuses. */
+private fun masteryBonus(mastery: WeaponMastery, language: AppLanguage): String =
+    if (mastery.damageBonus <= 0f && mastery.activationSpeedBonus <= 0f) {
+        language.text(ProfileScreensRedesignText.MasteryBase)
+    } else {
+        "+${percent(mastery.damageBonus)}%  +${percent(mastery.activationSpeedBonus)}%"
+    }
 
 private const val LADDER_SLOTS = 40
 private val LadderPaths = KkPathCache(LADDER_SLOTS)
@@ -540,7 +604,7 @@ private fun RowScope.ArmoryPager(
             if (visible) {
                 Spacer(Modifier.width(frame.dp(frame.d(8f))))
                 BasicText(language.text(ProfileScreensRedesignText.CountOf, page, pages),
-                    style = typography.monoStyle(11f * frame.k * textScale, color = Kk.Mute, lineHeightEm = 1f))
+                    style = typography.monoStyle(11f * frame.k * textScale, color = Kk.Mute, lineHeightEm = 1f), maxLines = 1, softWrap = false)
                 Spacer(Modifier.width(frame.dp(frame.d(8f))))
             }
             ArmoryStepButton(frame, step, plus = true, enabled = nextEnabled, tag = "profile-armory-next",

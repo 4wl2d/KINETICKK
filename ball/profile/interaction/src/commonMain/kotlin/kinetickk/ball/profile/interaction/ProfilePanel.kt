@@ -10,6 +10,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -37,6 +38,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -175,6 +179,7 @@ internal fun ProfilePanel(
     contentKey: Any = Unit,
     background: DrawScope.(ProfileFrame) -> Unit,
     headerExtra: (@Composable RowScope.(ProfileFrame) -> Unit)? = null,
+    headerExtraWidth: (ProfileFrame) -> Float = { 0f },
     content: @Composable BoxScope.(ProfileFrame) -> Unit,
 ) {
     val panelFocus = remember { FocusRequester() }
@@ -204,7 +209,7 @@ internal fun ProfilePanel(
         CompositionLocalProvider(LocalProfilePanelFocus provides panelFocus) {
             Box(Modifier.fillMaxSize().drawBehind { background(frame) })
             content(frame)
-            ProfileHeader(frame, title, count, info, matter, scale, tag, onBack, headerExtra)
+            ProfileHeader(frame, title, count, info, matter, scale, tag, onBack, headerExtra, headerExtraWidth(frame))
         }
     }
 }
@@ -220,6 +225,7 @@ private fun ProfileHeader(
     tag: String,
     onBack: () -> Unit,
     headerExtra: (@Composable RowScope.(ProfileFrame) -> Unit)?,
+    headerExtraWidth: Float,
 ) {
     val language = LocalAppLanguage.current
     val typography = rememberInterfaceTypography()
@@ -264,6 +270,29 @@ private fun ProfileHeader(
     val titleRowLeft = if (frame.portrait) frame.left else back.right + gap
     val titleRowHeight = if (frame.portrait) frame.d(48f) else frame.headerHeight
     val titleRowRight = if (frame.portrait) frame.right else frame.right - chipWidth - gap
+    // The title shrinks to fit its row (never truncated): the rule, count, (!) and any extra
+    // controls sharing the row keep their natural widths.
+    val countWidth = if (count == null) 0f else gap + measureKkText(measurer, count, measurer.typography.wideStyle(countSize, tabular = true,
+        lineHeightEm = 1f)).size.width
+    val infoWidth = if (info == null) 0f else gap + px * 24f
+    val ruleWidth = if (frame.portrait) 0f else px + gap
+    // Phones put extra controls on the Back row when they fit there, else in the title row.
+    val backRowRoom = frame.right - chipWidth - gap - back.right - gap
+    val extraOnBackRow = frame.portrait && headerExtra != null && headerExtraWidth <= backRowRoom
+    val extraWidth = if (extraOnBackRow || headerExtra == null) 0f else headerExtraWidth
+    val titleRoom = titleRowRight - titleRowLeft - ruleWidth - countWidth - infoWidth - extraWidth - px * 2f
+    val titleFactor = fitKkFactor(measurer, title, titleSize, titleRoom, minFactor = 0.4f) {
+        measurer.typography.condStyle(it, lineHeightEm = 1f)
+    }
+    if (extraOnBackRow) {
+        // Phones keep the title row for the title when the Back row has room for the extras.
+        Row(
+            Modifier.offset { IntOffset(back.right.roundToInt(), 0) }
+                .size((frame.right - chipWidth - gap - back.right).coerceAtLeast(0f).toDp(), frame.d(56f).toDp()),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End,
+        ) { headerExtra(frame) }
+    }
     Row(
         Modifier.offset { IntOffset(titleRowLeft.roundToInt(), titleRowTop.roundToInt()) }
             .size((titleRowRight - titleRowLeft).coerceAtLeast(0f).toDp(), titleRowHeight.toDp()),
@@ -276,9 +305,9 @@ private fun ProfileHeader(
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
             BasicText(
                 title.uppercase(),
-                style = typography.condStyle(titleSize * scale, color = Kk.Bone, lineHeightEm = 1f),
+                style = typography.condStyle(titleSize * scale * titleFactor, color = Kk.Bone, lineHeightEm = 1f),
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                overflow = TextOverflow.Clip,
                 modifier = Modifier.weight(1f, fill = false),
             )
             if (count != null) {
@@ -290,7 +319,7 @@ private fun ProfileHeader(
                 KkInfoButton(info, Modifier.testTag("$tag-info"), placement = KkTooltipPlacement.BELOW, textScale = scale)
             }
         }
-        if (headerExtra != null) headerExtra(frame)
+        if (headerExtra != null && !extraOnBackRow) headerExtra(frame)
     }
 }
 
@@ -439,11 +468,16 @@ private fun DrawScope.drawProfileButtonContent(
     locked: Boolean,
     color: Color,
 ) {
-    val costLayout = cost?.let { measureKkText(measurer, it, profileButtonStyle(measurer, fontSize * costScale, tabular = true), uppercase = true) }
-    val costRoom = if (costLayout == null) 0f else d(12f) + d(fontSize * 0.36f) + d(6f) + costLayout.size.width
-    val labelRoom = (bounds.width - d(size.paddingDp) * 2f - costRoom - if (locked) d(size.iconDp + 12f) else 0f).coerceAtLeast(d(10f))
-    val labelLayout = fitKkText(measurer, label, fontSize, labelRoom, minFactor = 0.6f) { profileButtonStyle(measurer, it) }
-    val gemSize = fontSize * 0.36f * (costScale / 0.76f).coerceAtMost(1f)
+    // Label and cost shrink together until both fit the face (large text never truncates).
+    val room = (bounds.width - d(size.paddingDp) * 2f - if (locked) d(size.iconDp + 12f) else 0f).coerceAtLeast(d(10f))
+    val factor = profileButtonContentFactor(measurer, label, cost, fontSize, costScale, room, density)
+    val font = fontSize * factor
+    val costLayout = cost?.let { measureKkText(measurer, it, profileButtonStyle(measurer, font * costScale, tabular = true), uppercase = true) }
+    val costRoom = if (costLayout == null) 0f else d(12f) + d(font * 0.36f) + d(6f) + costLayout.size.width
+    val labelLayout = fitKkText(measurer, label, font, (room - costRoom).coerceAtLeast(d(10f)), minFactor = 0.8f) {
+        profileButtonStyle(measurer, it)
+    }
+    val gemSize = font * 0.36f * (costScale / 0.76f).coerceAtMost(1f)
     val costWidth = if (costLayout == null) 0f else d(gemSize) + d(6f) + costLayout.size.width
     val iconSize = if (locked) d(size.iconDp) else 0f
     val iconGap = if (locked) d(12f) else 0f
@@ -469,6 +503,28 @@ private fun DrawScope.drawProfileButtonContent(
         drawKkGem(Offset(x + d(gemSize) * 0.5f, cy), color, gemSize)
         drawKkText(costLayout, x + d(gemSize) + d(6f), cy, color, valign = KkVAlign.CENTER)
     }
+}
+
+/** The size factor (0.3..1) at which a button's label and gem cost fit [room] px side by side. */
+internal fun profileButtonContentFactor(
+    measurer: CanvasTextMeasurer,
+    label: String,
+    cost: String?,
+    fontSize: Float,
+    costScale: Float,
+    room: Float,
+    density: Float,
+): Float {
+    var factor = 1f
+    while (factor > 0.3f) {
+        val font = fontSize * factor
+        val labelWidth = measureKkText(measurer, label, profileButtonStyle(measurer, font), uppercase = true).size.width
+        val costWidth = if (cost == null) 0f else density * (12f + font * 0.36f + 6f) +
+            measureKkText(measurer, cost, profileButtonStyle(measurer, font * costScale, tabular = true), uppercase = true).size.width
+        if (labelWidth + costWidth <= room) return factor
+        factor -= 0.05f
+    }
+    return 0.3f
 }
 
 /** Seconds of a repeating loop (armed pulses, spinning rings). */
@@ -500,9 +556,43 @@ internal fun fitKkText(
     var factor = 1f
     while (true) {
         val layout = measureKkText(measurer, text, style(size * factor), uppercase, maxWidth.coerceAtLeast(1f), maxLines)
-        if ((!layout.hasVisualOverflow && !layout.breaksWord()) || factor <= minFactor) return layout
-        factor = max(minFactor, factor - 0.08f)
+        val broken = layout.breaksWord()
+        when {
+            !layout.hasVisualOverflow && !broken -> return layout
+            // A word never splits across lines: keep shrinking past [minFactor] for that.
+            broken && factor > PROFILE_WORD_FLOOR -> factor = max(PROFILE_WORD_FLOOR, factor - 0.06f)
+            layout.hasVisualOverflow && factor > minFactor -> factor = max(minFactor, factor - 0.08f)
+            else -> return layout
+        }
     }
+}
+
+/**
+ * Line height for text that may wrap: the boards' tight 0.86–0.9 line boxes let Cyrillic
+ * diacritics (Ё, Й) touch the line above, so wrapped names use a full line.
+ */
+internal const val PROFILE_WRAPPED_LINE_HEIGHT = 1.08f
+
+/** The smallest share of a style's size [fitKkText] uses to keep every word on one line. */
+internal const val PROFILE_WORD_FLOOR = 0.34f
+
+/** The size factor (at most 1) that fits [text] on one line in [maxWidth], down to [minFactor]. */
+internal fun fitKkFactor(
+    measurer: CanvasTextMeasurer,
+    text: String,
+    size: Float,
+    maxWidth: Float,
+    uppercase: Boolean = true,
+    minFactor: Float = 0.4f,
+    style: (Float) -> TextStyle,
+): Float {
+    var factor = 1f
+    while (factor > minFactor) {
+        val width = measureKkText(measurer, text, style(size * factor), uppercase).size.width
+        if (width <= maxWidth) return factor
+        factor = max(minFactor, factor - 0.05f)
+    }
+    return minFactor
 }
 
 /** True when a soft line break falls inside a word (the word is wider than the line). */
@@ -536,6 +626,20 @@ internal fun DrawScope.drawProfileSidePanel(bottomLeftX: Float, color: Color = K
 
 /** Draw-thread memo for the side panel slab (rebuilt only when the window size changes). */
 private val SidePanelPaths = KkPathCache(slots = 1)
+
+/**
+ * Scroll cue for a scroll viewport: a fade into [color] at the edge that has more content
+ * ([fade] px tall), drawn over the scrolling content and redrawn as it scrolls.
+ */
+internal fun Modifier.profileScrollCue(scroll: ScrollState, color: Color, fade: Float): Modifier = drawWithCache {
+    val bottom = Brush.verticalGradient(listOf(color.copy(alpha = 0f), color), startY = size.height - fade, endY = size.height)
+    val top = Brush.verticalGradient(listOf(color, color.copy(alpha = 0f)), startY = 0f, endY = fade)
+    onDrawWithContent {
+        drawContent()
+        if (scroll.value < scroll.maxValue) drawRect(bottom, Offset(0f, size.height - fade), Size(size.width, fade))
+        if (scroll.value > 0) drawRect(top, Offset.Zero, Size(size.width, fade))
+    }
+}
 
 /** Converts px to dp for Compose sizes. */
 internal fun ProfileFrame.dp(px: Float) = (px / density).dp

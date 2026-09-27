@@ -79,6 +79,18 @@ private fun backdropOrigin(frame: ProfileFrame, layout: RebirthLayout?): Pair<Of
     else -> Offset(frame.width * 0.5f, layout.numeral.center.y + frame.d(20f)) to frame.unit * 0.55f
 }
 
+/**
+ * The tier 5+ band of stripes. On the regular board it crosses the backdrop under the ladder
+ * (rotated −4°); phones stack content there, so it runs straight along the header's lower edge.
+ */
+internal fun rebirthBandRect(frame: ProfileFrame, center: Offset, u: Float, width: Float): Rect =
+    if (frame.mode == ProfileLayoutMode.REGULAR) {
+        val top = center.y + 260f * u
+        Rect(-100f * u, top, width + 100f * u, top + 16f * u)
+    } else {
+        Rect(0f, frame.headerHeight - frame.d(3f), width, frame.headerHeight + frame.d(4f))
+    }
+
 /** The full-bleed Rebirth backdrop for [theme] at [time] seconds. */
 internal fun DrawScope.drawRebirthBackdrop(
     frame: ProfileFrame,
@@ -118,10 +130,13 @@ internal fun DrawScope.drawRebirthBackdrop(
         drawRect(theme.soft, Offset(x, y), Size((120f + (index % 3) * 90f) * u, 2f * u), alpha = alpha.coerceIn(0f, 1f))
     }
     if (theme.band) {
-        val bandTop = center.y + 260f * u
-        rotate(-4f, Offset(size.width * 0.5f, bandTop)) {
-            drawKkStripes(Rect(-100f * u, bandTop, size.width + 100f * u, bandTop + 16f * u),
-                theme.accent.copy(alpha = 0.35f), Kk.Ink.copy(alpha = 0.35f), time)
+        val band = rebirthBandRect(frame, center, u, size.width)
+        if (frame.mode == ProfileLayoutMode.REGULAR) {
+            rotate(-4f, Offset(size.width * 0.5f, band.top)) {
+                drawKkStripes(band, theme.accent.copy(alpha = 0.35f), Kk.Ink.copy(alpha = 0.35f), time)
+            }
+        } else {
+            drawKkStripes(band, theme.accent.copy(alpha = 0.35f), Kk.Ink.copy(alpha = 0.35f), time)
         }
     }
     if (theme.eventHorizon) {

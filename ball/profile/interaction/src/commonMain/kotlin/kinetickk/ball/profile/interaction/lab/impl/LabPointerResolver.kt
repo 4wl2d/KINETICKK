@@ -28,6 +28,7 @@ internal class LabRowColumns(
     val pipGap: Float,
     val valueLeft: Float,
     val valueWidth: Float,
+    val costLeft: Float,
     val costRight: Float,
     val firstLineY: Float,
     val secondLineY: Float,
@@ -55,6 +56,8 @@ internal class LabLayout(
     val next: Rect,
     val rank: Rect,
     val buy: Rect,
+    /** True when the details overflow and [buy] is pinned under them. */
+    val buyPinned: Boolean = false,
 ) {
     val listScrollMax: Float get() = max(0f, listContentHeight - listViewport.height)
     val detailScrollMax: Float get() = max(0f, detailContentHeight - detailViewport.height)
@@ -165,7 +168,7 @@ internal fun labLayout(
         Rect(detailLeft, top, detailRight, top + nameHeight)
     }
     val descriptionTop = (if (frame.portrait) icon.bottom else name.bottom) + d(if (regular) 12f else 6f)
-    val descriptionLines = kotlin.math.ceil((if (regular) 3f else 2f) * max(1f, t)).toFloat()
+    val descriptionLines = kotlin.math.ceil((if (regular) 3f else 2f) * max(1f, t))
     val description = Rect(detailLeft, descriptionTop, detailRight, descriptionTop + d(type.body) * 1.4f * descriptionLines * t)
     val panelsTop = description.bottom + d(if (regular) 22f else 10f)
     val panelHeight = (d(if (regular) 12f else 8f) * 2f + d(type.mono) * 1.35f * t + d(if (regular) 8f else 5f) +
@@ -176,12 +179,40 @@ internal fun labLayout(
     val next = Rect(now.right + panelGap, panelsTop, detailRight, panelsTop + panelHeight)
     val rankTop = now.bottom + d(if (regular) 12f else 6f)
     val rank = Rect(detailLeft, rankTop, detailRight, rankTop + d(type.mono) * 1.35f * t)
-    val buyTop = rank.bottom + d(if (regular) 30f else 12f)
-    val buy = Rect(detailLeft, buyTop, detailRight, buyTop + d(if (regular) 72f else 52f))
-    val detailViewport = Rect(detailLeft - pad, detailTop - pad, detailRight + pad, max(detailTop, detailBottom))
-    val detailContentHeight = buy.bottom + pad - detailViewport.top
+    val buyHeight = d(if (regular) 72f else 52f)
+    val limit = max(detailTop + buyHeight, detailBottom)
+    val naturalTop = rank.bottom + d(if (regular) 30f else 12f)
+    // Details that run past the fold scroll above a pinned Buy rank button.
+    val buyPinned = naturalTop + buyHeight > limit
+    val buyTop = if (buyPinned) limit - buyHeight else naturalTop
+    val buy = Rect(detailLeft, buyTop, detailRight, buyTop + buyHeight)
+    val detailViewport = Rect(detailLeft - pad, detailTop - pad, detailRight + pad, if (buyPinned) buy.top - d(8f) else limit)
+    val detailContentHeight = rank.bottom + pad - detailViewport.top
     return LabLayout(frame, back, listViewport, rows, listContentHeight, columns, detailViewport, detailContentHeight,
-        icon, name, description, now, next, rank, buy)
+        icon, name, description, now, next, rank, buy, buyPinned)
+}
+
+/**
+ * The list scroll that brings the row [rowTop]..[rowBottom] (content px) fully into view, or
+ * null when no scroll is needed. With [whenHidden] only a row that is entirely off screen moves
+ * the list, so hover selection (which needs a visible row) never scrolls under the pointer;
+ * otherwise (the screen opening on a selection) a partly clipped row is revealed too.
+ */
+internal fun labRevealScroll(
+    value: Float,
+    rowTop: Float,
+    rowBottom: Float,
+    viewportHeight: Float,
+    maxValue: Float,
+    whenHidden: Boolean = true,
+): Float? {
+    val above = if (whenHidden) rowBottom <= value else rowTop < value
+    val below = if (whenHidden) rowTop >= value + viewportHeight else rowBottom > value + viewportHeight
+    return when {
+        above -> rowTop.coerceIn(0f, maxValue)
+        below -> (rowBottom - viewportHeight).coerceIn(0f, maxValue)
+        else -> null
+    }
 }
 
 private fun labRowColumns(
@@ -203,7 +234,8 @@ private fun labRowColumns(
             LabRowColumns(
                 iconCenterX = d(40f), iconSize = d(32f), nameLeft = d(72f), nameWidth = d(236f),
                 pipsLeft = pipsLeft, pipsWidth = pipsWidth, pipWidth = pipWidth, pipHeight = d(24f), pipGap = pipGap,
-                valueLeft = pipsLeft + pipsWidth + d(16f), valueWidth = d(128f), costRight = rowWidth - d(26f) - d(40f),
+                valueLeft = pipsLeft + pipsWidth + d(16f), valueWidth = d(128f),
+                costLeft = pipsLeft + pipsWidth + d(16f) + d(128f) + d(12f), costRight = rowWidth - d(26f) - d(40f),
                 firstLineY = rowHeight * 0.5f, secondLineY = rowHeight * 0.5f, twoLines = false,
             )
         }
@@ -220,7 +252,7 @@ private fun labRowColumns(
             LabRowColumns(
                 iconCenterX = d(20f), iconSize = d(20f), nameLeft = nameLeft, nameWidth = nameWidth,
                 pipsLeft = pipsLeft, pipsWidth = pipsWidth, pipWidth = pipWidth, pipHeight = d(15f), pipGap = pipGap,
-                valueLeft = pipsLeft + pipsWidth + d(8f), valueWidth = valueWidth, costRight = costRight,
+                valueLeft = pipsLeft + pipsWidth + d(8f), valueWidth = valueWidth, costLeft = costRight - costWidth, costRight = costRight,
                 firstLineY = rowHeight * 0.5f, secondLineY = rowHeight * 0.5f, twoLines = false,
             )
         }
@@ -234,7 +266,7 @@ private fun labRowColumns(
             LabRowColumns(
                 iconCenterX = d(24f), iconSize = d(22f), nameLeft = nameLeft, nameWidth = costRight - nameLeft - d(70f),
                 pipsLeft = nameLeft, pipsWidth = pipsWidth, pipWidth = pipWidth, pipHeight = d(14f), pipGap = pipGap,
-                valueLeft = costRight - valueWidth, valueWidth = valueWidth, costRight = costRight,
+                valueLeft = costRight - valueWidth, valueWidth = valueWidth, costLeft = costRight - d(62f), costRight = costRight,
                 firstLineY = rowHeight * 0.34f, secondLineY = rowHeight * 0.72f, twoLines = true,
             )
         }
@@ -250,7 +282,6 @@ internal fun resolveLabPress(
     model: LabRenderModel,
     selected: LabState,
     listScroll: Float,
-    detailScroll: Float,
     x: Float,
     y: Float,
 ): LabAction? {
@@ -266,13 +297,10 @@ internal fun resolveLabPress(
         }
         return null
     }
-    val detail = layout.detailViewport
-    if (x in detail.left..detail.right && y in detail.top..detail.bottom) {
-        val detailY = y + detailScroll.coerceIn(0f, layout.detailScrollMax)
-        val upgrade = selected.selectedUpgrade ?: return null
-        if (x in layout.buy.left..layout.buy.right && detailY in layout.buy.top..layout.buy.bottom) {
-            return LabAction.PurchaseRequested(upgrade.id)
-        }
+    // Buy rank never scrolls: it follows the details or is pinned under them.
+    val upgrade = selected.selectedUpgrade ?: return null
+    if (x in layout.buy.left..layout.buy.right && y in layout.buy.top..layout.buy.bottom) {
+        return LabAction.PurchaseRequested(upgrade.id)
     }
     return null
 }

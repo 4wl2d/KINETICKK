@@ -13,6 +13,7 @@ import kinetickk.ball.profile.interaction.profileFrame
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -45,14 +46,14 @@ class LabPointerResolverTest {
         val state = LabState(model)
 
         val (x0, y0) = rowCenter(0)
-        assertEquals(LabAction.Activate(MetaUpgradeId.CORE_INTEGRITY), resolveLabPress(layout, model, state, 0f, 0f, x0, y0))
+        assertEquals(LabAction.Activate(MetaUpgradeId.CORE_INTEGRITY), resolveLabPress(layout, model, state, 0f, x0, y0))
         val (x7, y7) = rowCenter(7)
-        assertEquals(LabAction.Activate(MetaUpgradeId.ARMORY_LICENSE), resolveLabPress(layout, model, state, 0f, 0f, x7, y7))
+        assertEquals(LabAction.Activate(MetaUpgradeId.ARMORY_LICENSE), resolveLabPress(layout, model, state, 0f, x7, y7))
 
         val reversed = LabProfileSnapshot(PlayerEconomy(), LabProgress()).toRenderModel(TestMetaUpgrades.reversed().toImmutableList())
-        assertEquals(LabAction.Activate(MetaUpgradeId.ARMORY_LICENSE), resolveLabPress(layout, reversed, LabState(reversed), 0f, 0f, x0, y0))
+        assertEquals(LabAction.Activate(MetaUpgradeId.ARMORY_LICENSE), resolveLabPress(layout, reversed, LabState(reversed), 0f, x0, y0))
         // The 8 px gap between rows is not a target.
-        assertNull(resolveLabPress(layout, model, state, 0f, 0f, x0, layout.rows[0].bottom + list.top + 4f))
+        assertNull(resolveLabPress(layout, model, state, 0f, x0, layout.rows[0].bottom + list.top + 4f))
     }
 
     @Test
@@ -60,11 +61,63 @@ class LabPointerResolverTest {
         val layout = layout(1440f, 810f)
         val selected = LabState(model, selected = MetaUpgradeId.CRYO_VENTS)
         val buy = layout.buy.center
-        assertEquals(LabAction.PurchaseRequested(MetaUpgradeId.CRYO_VENTS), resolveLabPress(layout, model, selected, 0f, 0f, buy.x, buy.y))
+        assertEquals(LabAction.PurchaseRequested(MetaUpgradeId.CRYO_VENTS), resolveLabPress(layout, model, selected, 0f, buy.x, buy.y))
         assertEquals(LabAction.PurchaseRequested(MetaUpgradeId.CORE_INTEGRITY),
-            resolveLabPress(layout, model, LabState(model), 0f, 0f, buy.x, buy.y))
-        assertEquals(LabAction.Back, resolveLabPress(layout, model, selected, 0f, 0f, layout.back.center.x, layout.back.center.y))
-        assertNull(resolveLabPress(layout, model, selected, 0f, 0f, layout.buy.center.x, layout.buy.bottom + 40f))
+            resolveLabPress(layout, model, LabState(model), 0f, buy.x, buy.y))
+        assertEquals(LabAction.Back, resolveLabPress(layout, model, selected, 0f, layout.back.center.x, layout.back.center.y))
+        assertNull(resolveLabPress(layout, model, selected, 0f, layout.buy.center.x, layout.buy.bottom + 40f))
+    }
+
+    @Test
+    fun buyRankStaysOnScreenAtEveryTextSize() {
+        for ((width, height) in listOf(1440f to 810f, 1000f to 700f, 844f to 390f, 720f to 360f, 390f to 844f)) {
+            for (textScale in listOf(1f, 1.75f)) {
+                val layout = layout(width, height, textScale)
+                assertTrue(layout.buy.bottom <= height && layout.buy.top >= layout.frame.headerHeight, "$width x $height @$textScale")
+                if (layout.buyPinned) {
+                    assertTrue(layout.detailViewport.bottom <= layout.buy.top, "$width x $height @$textScale")
+                } else {
+                    assertEquals(0f, layout.detailScrollMax, "$width x $height @$textScale")
+                    assertTrue(layout.rank.bottom <= layout.buy.top, "$width x $height @$textScale")
+                }
+                val buy = layout.buy.center
+                assertEquals(LabAction.PurchaseRequested(MetaUpgradeId.CORE_INTEGRITY),
+                    resolveLabPress(layout, model, LabState(model), 0f, buy.x, buy.y), "$width x $height @$textScale")
+            }
+        }
+        assertTrue(layout(390f, 844f, 1.75f).buyPinned)
+    }
+
+    @Test
+    fun onlyAnEntirelyHiddenSelectedRowScrollsIntoView() {
+        // Rows are 64 px tall in a 200 px viewport scrolled to 100.
+        assertNull(labRevealScroll(100f, 80f, 144f, 200f, 500f), "partly visible above")
+        assertNull(labRevealScroll(100f, 280f, 344f, 200f, 500f), "partly visible below")
+        assertEquals(10f, labRevealScroll(100f, 10f, 74f, 200f, 500f), "hidden above: its top")
+        assertEquals(224f, labRevealScroll(100f, 360f, 424f, 200f, 500f), "hidden below: its bottom")
+        assertEquals(500f, labRevealScroll(0f, 900f, 964f, 200f, 500f), "clamped to the end")
+        // Opening on a selection also reveals a partly clipped row.
+        assertEquals(144f, labRevealScroll(100f, 280f, 344f, 200f, 500f, whenHidden = false))
+        assertEquals(80f, labRevealScroll(100f, 80f, 144f, 200f, 500f, whenHidden = false))
+        assertNull(labRevealScroll(100f, 120f, 184f, 200f, 500f, whenHidden = false), "already whole")
+
+        // The last row of the phone list is hidden at rest and the reveal target shows it whole.
+        val layout = layout(390f, 844f)
+        val last = layout.rows.last()
+        val target = assertNotNull(labRevealScroll(0f, last.top, last.bottom, layout.listViewport.height, layout.listScrollMax))
+        assertTrue(last.top >= target && last.bottom <= target + layout.listViewport.height)
+    }
+
+    @Test
+    fun costColumnSitsBetweenTheValueAndTheRowEnd() {
+        for ((width, height) in listOf(1440f to 810f, 844f to 390f, 390f to 844f)) {
+            for (textScale in listOf(1f, 1.75f)) {
+                val columns = layout(width, height, textScale).columns
+                assertTrue(columns.costLeft < columns.costRight, "$width x $height")
+                if (!columns.twoLines) assertTrue(columns.valueLeft + columns.valueWidth <= columns.costLeft, "$width x $height @$textScale")
+                else assertTrue(columns.nameLeft + columns.nameWidth <= columns.costLeft, "$width x $height @$textScale")
+            }
+        }
     }
 
     @Test
@@ -80,7 +133,7 @@ class LabPointerResolverTest {
             val pitch = layout.rows[1].top - layout.rows[0].top
             val point = layout.rows[0].center
             assertEquals(LabAction.Activate(MetaUpgradeId.KINETIC_AMPLIFIER),
-                resolveLabPress(layout, model, LabState(model), pitch, 0f, point.x + list.left, point.y + list.top), "$size")
+                resolveLabPress(layout, model, LabState(model), pitch, point.x + list.left, point.y + list.top), "$size")
             // Columns stay inside the row.
             val columns = layout.columns
             assertTrue(columns.costRight <= layout.rows[0].width && columns.pipsLeft >= columns.nameLeft, "$size")

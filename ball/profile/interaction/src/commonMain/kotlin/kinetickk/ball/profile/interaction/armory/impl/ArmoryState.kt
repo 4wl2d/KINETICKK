@@ -146,6 +146,8 @@ internal class ArmoryLayout(
     val ladder: Rect,
     val action: Rect,
     val need: Rect,
+    /** True when the details overflow and [action] is pinned under the scrolling details. */
+    val actionPinned: Boolean = false,
 ) {
     val gridScrollMax: Float get() = max(0f, gridContentHeight - gridViewport.height)
     val detailScrollMax: Float get() = max(0f, detailContentHeight - detailViewport.height)
@@ -177,6 +179,8 @@ internal fun armoryLayout(
     textScale: Float,
     backWidth: Float,
     actionWidth: Float,
+    needRoom: Boolean = false,
+    masteryCount: Int = 4,
 ): ArmoryLayout {
     fun d(value: Float) = frame.d(value)
     val grow = 1f + (textScale.coerceIn(0.75f, 2f) - 1f) * 0.55f
@@ -261,7 +265,7 @@ internal fun armoryLayout(
     val name = Rect(nameLeft, plate.top, detailRight, plate.bottom)
     val descriptionTop = plate.bottom + d(if (regular) 18f else 10f)
     // Larger text wraps into more lines: the slot grows with the text size (whole lines).
-    val descriptionLines = kotlin.math.ceil((if (regular) 3f else 2f) * max(1f, t)).toFloat()
+    val descriptionLines = kotlin.math.ceil((if (regular) 3f else 2f) * max(1f, t))
     val description = Rect(detailLeft, descriptionTop, detailRight,
         descriptionTop + d(type.body) * 1.4f * descriptionLines * t)
     val tagsTop = description.bottom + d(if (regular) 12f else 8f)
@@ -269,17 +273,38 @@ internal fun armoryLayout(
     val masteryTop = tags.bottom + d(if (regular) 26f else 10f)
     val mastery = Rect(detailLeft, masteryTop, detailRight, masteryTop + max(frame.density * 24f, d(type.label) * t))
     val ladderTop = mastery.bottom + d(if (regular) 16f else 6f)
-    val ladder = Rect(detailLeft, ladderTop, detailRight, ladderTop + d(if (regular) 94f else 60f) * t)
-    val actionTop = ladder.bottom + d(if (regular) 26f else 10f)
+    // Large text stacks the milestones (one line each) instead of squeezing them side by side.
+    val ladderHeight = if (armoryMasteryStacked(t)) {
+        d(if (regular) 30f else 22f) * t + d(if (regular) 12f else 10f) + d(10f) +
+            masteryCount * d(type.ladderName) * ARMORY_STACKED_LINE * t
+    } else {
+        d(if (regular) 94f else 60f) * t
+    }
+    val ladder = Rect(detailLeft, ladderTop, detailRight, ladderTop + ladderHeight)
     val actionHeight = d(if (regular) 72f else 52f)
-    val clampedAction = min(actionWidth, detailRight - detailLeft)
+    // A locked weapon keeps room beside the button for "Need N more matter".
+    val actionRoom = (detailRight - detailLeft) * if (needRoom) 0.64f else 1f
+    val clampedAction = min(actionWidth, actionRoom)
+    val limit = max(detailTop + actionHeight, detailBottom)
+    val naturalTop = ladder.bottom + d(if (regular) 26f else 10f)
+    // When the details run past the fold (large text, phones) the primary action is pinned to
+    // the bottom of the panel and the details above it scroll.
+    val actionPinned = naturalTop + actionHeight > limit
+    val actionTop = if (actionPinned) limit - actionHeight else naturalTop
     val action = Rect(detailLeft, actionTop, detailLeft + clampedAction, actionTop + actionHeight)
     val need = Rect(action.right + d(16f), action.top, detailRight, action.bottom)
-    val detailViewport = Rect(detailLeft - pad, detailTop - pad, detailRight + pad, max(detailTop, detailBottom))
-    val detailContentHeight = action.bottom + pad - detailViewport.top
+    val detailViewport = Rect(detailLeft - pad, detailTop - pad, detailRight + pad,
+        if (actionPinned) action.top - d(8f) else limit)
+    val detailContentHeight = ladder.bottom + pad - detailViewport.top
     return ArmoryLayout(frame, back, gridViewport, tiles, gridContentHeight, tileH + gap, columns, detailViewport,
-        detailContentHeight, plate, name, description, tags, mastery, ladder, action, need)
+        detailContentHeight, plate, name, description, tags, mastery, ladder, action, need, actionPinned)
 }
+
+/** From this text size the mastery milestones stack one per line under the level cells. */
+internal fun armoryMasteryStacked(textScale: Float): Boolean = textScale >= 1.4f
+
+/** Line pitch of a stacked milestone, in multiples of its name size. */
+internal const val ARMORY_STACKED_LINE = 1.5f
 
 /**
  * The scroll value one page away: whole rows that fit the viewport (at least one row), clamped
@@ -303,14 +328,14 @@ internal fun armoryGridPages(value: Float, maxValue: Float, viewportHeight: Floa
 
 /**
  * Maps a press to the Armory action it hits: the header Back, a weapon tile (activation) or the
- * detail panel's primary action. [gridScroll]/[detailScroll] are the scroll offsets in px.
+ * detail panel's primary action. [gridScroll] is the grid scroll offset in px (the detail
+ * scroll moves only non-interactive details).
  */
 internal fun resolveArmoryPress(
     layout: ArmoryLayout,
     weapons: List<WeaponDefinition>,
     inspected: WeaponId,
     gridScroll: Float,
-    detailScroll: Float,
     x: Float,
     y: Float,
 ): ArmoryAction? {
@@ -326,12 +351,10 @@ internal fun resolveArmoryPress(
         }
         return null
     }
-    val detail = layout.detailViewport
-    if (x in detail.left..detail.right && y in detail.top..detail.bottom) {
-        val detailY = y + detailScroll.coerceIn(0f, layout.detailScrollMax)
-        if (x in layout.action.left..layout.action.right && detailY in layout.action.top..layout.action.bottom) {
-            return ArmoryAction.Apply(inspected)
-        }
+    // The primary action never scrolls: it follows the details when they fit and is pinned
+    // under them when they do not.
+    if (x in layout.action.left..layout.action.right && y in layout.action.top..layout.action.bottom) {
+        return ArmoryAction.Apply(inspected)
     }
     return null
 }
