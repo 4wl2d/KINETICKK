@@ -73,13 +73,13 @@ class RewardRedesignPresentationTest {
 
     @Test
     fun nucleusConditionLabelsBecomeANameAndAConditionInBothLanguages() {
-        val english = RewardStatChange("Damage · speed ≥500", 5f, 10f, "%").presentation(AppLanguage.English)
+        val english = RewardStatChange("Damage: speed ≥500", 5f, 10f, "%").presentation(AppLanguage.English)
         assertEquals("Damage", english.name)
         assertEquals("speed ≥500", english.condition)
-        val russian = RewardStatChange("Damage · speed ≥500", 5f, 10f, "%").presentation(AppLanguage.Russian)
+        val russian = RewardStatChange("Damage: speed ≥500", 5f, 10f, "%").presentation(AppLanguage.Russian)
         assertEquals("Урон", russian.name)
         assertEquals("скорость ≥500", russian.condition)
-        val single = RewardStatChange("Pull · hit", 0f, 24f, "u/s").presentation(AppLanguage.Russian)
+        val single = RewardStatChange("Pull: hit", 0f, 24f, "u/s").presentation(AppLanguage.Russian)
         assertEquals("Притяжение при попадании", single.name)
         assertNull(single.condition)
         assertNull(RewardStatChange("Dash heat", 36f, 33f, "").presentation(AppLanguage.English).condition)

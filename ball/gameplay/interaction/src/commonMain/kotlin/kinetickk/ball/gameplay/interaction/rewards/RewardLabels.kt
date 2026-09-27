@@ -9,15 +9,15 @@ import kinetickk.foundation.common.localization.AppLanguage
 /** A preview stat label split into its name and an optional condition ("Damage" + "speed ≥500"). */
 internal class RewardStatLabel(val name: String, val condition: String?)
 
-// Nucleus preview labels join a stat and its condition with a spaced middle dot. The overlays
-// show the two parts as separate elements, so the dot itself is never rendered.
-private const val NucleusConditionSeparator = " \u00B7 "
+// Nucleus preview labels join a stat and its condition as "Damage: speed ≥500". The overlays
+// show the two parts as separate elements, so the joining colon itself is never rendered.
+private const val NucleusConditionSeparator = ": "
 private const val ConditionDelimiter = '|'
 
 internal fun String.rewardStatLabel(language: AppLanguage): RewardStatLabel {
     val key = replace(NucleusConditionSeparator, ConditionDelimiter.toString())
     val localized = if (language == AppLanguage.Russian) {
-        RewardLabelsInRussian[key] ?: localizedContent(language).replace(NucleusConditionSeparator, ConditionDelimiter.toString())
+        RewardLabelsInRussian[key] ?: key.localizedContent(language)
     } else key
     val split = localized.indexOf(ConditionDelimiter)
     return if (split < 0) {
