@@ -200,10 +200,14 @@ private class PreviewScope(
             val chip = rect(chipLeft, 312f, chipLeft + width, 342f)
             draw.drawKkSheared(chip, color)
             if (index == 1) draw.drawKkThreatHatch(chip, palette, Kk.Ink)
-            draw.drawKkText(
-                text, language.text(name), measurers.typography.monoStyle(9f), x(chipLeft), y(348f), Kk.Mute,
-                uppercase = true, maxWidth = (width + 4f) * u,
-            )
+            // `.t-mono` 9 px; a longer translation falls back to the condensed label face.
+            val label = language.text(name)
+            val lane = (width + 4f) * u
+            val mono = measureKkText(text, label, measurers.typography.monoStyle(9f), uppercase = true)
+            val layout = if (mono.size.width <= lane) mono else {
+                measureKkText(text, label, measurers.typography.labelStyle(11f, trackingEm = 0.04f), uppercase = true, maxWidth = lane)
+            }
+            draw.drawKkText(layout, x(chipLeft), y(348f), Kk.Mute)
         }
     }
 
