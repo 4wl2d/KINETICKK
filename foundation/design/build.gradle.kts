@@ -29,6 +29,8 @@ kotlin {
             implementation(libs.compose.foundation)
         }
         desktopTest.dependencies {
+            implementation(libs.compose.ui.test.junit4)
+            implementation(libs.kotlinx.serialization.json)
             val os = when {
                 System.getProperty("os.name").startsWith("Mac") -> "macos"
                 System.getProperty("os.name").startsWith("Windows") -> "windows"
@@ -38,4 +40,11 @@ kotlin {
             runtimeOnly("org.jetbrains.skiko:skiko-awt-runtime-$os-$arch:${libs.versions.skiko.get()}")
         }
     }
+}
+
+// KkIconTableTest compares the generated Kotlin icon table with the design source of truth.
+tasks.matching { it.name == "desktopTest" }.configureEach {
+    inputs.file(rootDir.resolve("docs/design/redesign/icons.json"))
+        .withPropertyName("redesignIcons")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }
