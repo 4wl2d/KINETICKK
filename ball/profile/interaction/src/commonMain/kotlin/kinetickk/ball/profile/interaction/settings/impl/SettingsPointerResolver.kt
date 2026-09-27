@@ -3,79 +3,93 @@
 
 package kinetickk.ball.profile.interaction.settings.impl
 
-import kinetickk.foundation.common.localization.AppLanguage
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Offset
-import kotlin.math.floor
-import kotlin.math.max
-import kotlin.math.min
+import androidx.compose.ui.geometry.Rect
+import kinetickk.foundation.common.localization.AppLanguage
 
-internal fun resolveSettingsPress(
-    screenWidth: Float,
-    screenHeight: Float,
-    density: Float,
-    page: Int,
-    x: Float,
-    y: Float,
-    group: SettingsGroup = SettingsGroup.GAME,
-): SettingsAction? {
-    fun d(value: Float): Float = value * density
+/** Pointer targets of the Settings canvas; the accessible controls reuse the same rects. */
+internal sealed interface SettingsTarget {
+    data object Back : SettingsTarget
+    data class Tab(val group: SettingsGroup) : SettingsTarget
+    data class Page(val page: Int) : SettingsTarget
+    data class Info(val row: SettingsRow) : SettingsTarget
+    data class Option(val row: SettingsRow, val option: Int) : SettingsTarget
+    data class Toggle(val row: SettingsRow) : SettingsTarget
+    data class Step(val row: SettingsRow, val direction: Int) : SettingsTarget
+}
 
-    val layout = settingsLayout(screenWidth, screenHeight, density, group, page)
+internal val SettingsTarget.row: SettingsRow?
+    get() = when (this) {
+        is SettingsTarget.Info -> row
+        is SettingsTarget.Option -> row
+        is SettingsTarget.Toggle -> row
+        is SettingsTarget.Step -> row
+        SettingsTarget.Back, is SettingsTarget.Tab, is SettingsTarget.Page -> null
+    }
+
+internal fun SettingsTarget.toAction(): SettingsAction = when (this) {
+    SettingsTarget.Back -> SettingsAction.Back
+    is SettingsTarget.Tab -> SettingsAction.SelectGroup(group)
+    is SettingsTarget.Page -> SettingsAction.PageSelected(page)
+    is SettingsTarget.Info -> SettingsAction.ToggleInfo(row)
+    is SettingsTarget.Option -> if (row == SettingsRow.LANGUAGE) {
+        SettingsAction.SelectLanguage(AppLanguage.entries[option])
+    } else {
+        SettingsAction.Select(row, option)
+    }
+    is SettingsTarget.Toggle -> SettingsAction.Adjust(row, 1)
+    is SettingsTarget.Step -> SettingsAction.Adjust(row, direction)
+}
+
+/**
+ * The target under ([x], [y]). Segmented cells split the gap between neighbours and extend to
+ * the row's height; small controls extend to the 44 dp touch minimum. The master volume strip
+ * belongs to the Compose slider and numeric editor, so it resolves to nothing here.
+ */
+internal fun SettingsLayout.targetAt(x: Float, y: Float): SettingsTarget? {
     val position = Offset(x, y)
-    if (!layout.bounds.contains(position)) return null
-    layout.tabs.firstOrNull { it.bounds.contains(position) }?.let { return SettingsAction.SelectGroup(it.group) }
-    val left = layout.bounds.left
-    val right = layout.bounds.right
-    val bottom = layout.bounds.bottom
-    if (y > bottom - d(55f)) {
-        if (layout.maxPage == 0 || x < left + (right - left) * 0.45f) return SettingsAction.Back
-        return if (x < right - d(85f)) {
-            SettingsAction.PageSelected(max(0, layout.page - 1))
-        } else {
-            SettingsAction.PageSelected(min(layout.maxPage, layout.page + 1))
+    if (!bounds.contains(position)) return null
+    if (back.settingsTouch(density).contains(position)) return SettingsTarget.Back
+    tabs.firstOrNull { it.bounds.settingsTouch(density).contains(position) }?.let { return SettingsTarget.Tab(it.group) }
+    pages.forEachIndexed { index, pip -> if (pip.settingsTouch(density).contains(position)) return SettingsTarget.Page(index) }
+    val row = rows.firstOrNull { it.bounds.top <= y && y < it.bounds.bottom } ?: return null
+    if (row.info.settingsTouch(density).contains(position)) return SettingsTarget.Info(row.row)
+    val band = controlBand(row)
+    if (y < band.first || y > band.second) return null
+    when (row.row.control) {
+        SettingsControl.SEGMENTED -> {
+            val half = 1.5f * density
+            row.options.forEachIndexed { option, cell ->
+                if (x >= cell.left - half && x <= cell.right + half) return SettingsTarget.Option(row.row, option)
+            }
+        }
+        SettingsControl.TOGGLE -> {
+            val toggle = row.toggle ?: return null
+            if (Rect(toggle.left - 8f * density, band.first, toggle.right + 8f * density, band.second).contains(position)) {
+                return SettingsTarget.Toggle(row.row)
+            }
+        }
+        SettingsControl.SLIDER -> {
+            if (row.row == SettingsRow.MASTER_VOLUME) return null
+            val decrease = row.decrease ?: return null
+            val increase = row.increase ?: return null
+            if (x in decrease.settingsTouch(density).left..decrease.right + 4f * density) return SettingsTarget.Step(row.row, -1)
+            if (x in increase.left - 4f * density..increase.settingsTouch(density).right) return SettingsTarget.Step(row.row, 1)
         }
     }
-
-    val spacing = layout.spacing
-    if (spacing <= 0f) return null
-    val visibleIndex = floor((y - layout.startY) / spacing).toInt()
-    val row = layout.visibleRows.getOrNull(visibleIndex) ?: return null
-    // The Compose slider and text field own all volume input.
-    if (row == SettingsRow.MASTER_VOLUME) return null
-    if (x !in right - d(190f)..right - d(20f)) return null
-    val rowTop = layout.startY + spacing * visibleIndex
-    if (y > rowTop + spacing - d(4f)) return null
-    if (row == SettingsRow.LANGUAGE) {
-        return SettingsAction.SelectLanguage(
-            if (x < right - d(105f)) AppLanguage.Russian else AppLanguage.English,
-        )
-    }
-    val direction = if (x < right - d(105f)) -1 else 1
-    return SettingsAction.Adjust(row, direction)
+    return null
 }
 
-internal data class SettingsLanguageOption(val language: AppLanguage, val bounds: Rect)
-
-/** The two explicit choices share the canvas row's geometry and do not depend on translated text. */
-internal fun settingsLanguageOptions(
-    screenWidth: Float,
-    screenHeight: Float,
-    density: Float,
-    page: Int,
-    group: SettingsGroup = SettingsGroup.GAME,
-): List<SettingsLanguageOption> {
-    if (screenWidth <= 0f || screenHeight <= 0f) return emptyList()
-    fun d(value: Float): Float = value * density
-    val layout = settingsLayout(screenWidth, screenHeight, density, group, page)
-    val rowIndex = layout.visibleRows.indexOf(SettingsRow.LANGUAGE)
-    if (rowIndex < 0) return emptyList()
-    val right = layout.bounds.right
-    val startY = layout.startY + layout.spacing * rowIndex
-    val spacing = layout.spacing
-    if (spacing <= d(12f)) return emptyList()
-    return AppLanguage.entries.mapIndexed { index, language ->
-        val left = right - d(190f) + d(85f) * index
-        SettingsLanguageOption(language, Rect(left, startY + d(4f), left + d(85f), startY + spacing - d(8f)))
+/** Vertical band of a row's control: the whole row, or the control line of a stacked row. */
+private fun SettingsLayout.controlBand(row: SettingsRowLayout): Pair<Float, Float> {
+    val control = row.options.firstOrNull() ?: row.toggle ?: row.decrease ?: return row.bounds.top to row.bounds.bottom
+    return if (control.top >= row.info.bottom) {
+        // Stacked portrait row: the control line owns the lower part of the row.
+        (control.center.y - SETTINGS_TOUCH_DP * density * 0.5f).coerceAtLeast(row.info.bottom) to row.bounds.bottom
+    } else {
+        row.bounds.top to row.bounds.bottom
     }
 }
+
+internal fun resolveSettingsPress(layout: SettingsLayout, x: Float, y: Float): SettingsAction? =
+    layout.targetAt(x, y)?.toAction()
