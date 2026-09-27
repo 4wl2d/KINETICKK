@@ -24,7 +24,7 @@ internal fun DrawScope.drawGameplay(
     pauseLayout: PauseLayoutGeometry?,
     terminalElapsed: Float = 0f,
     hudMemory: HudPresentationMemory? = null,
-    trialInfoFocused: Boolean = false,
+    trialInfoOpen: Boolean = false,
 ) {
     drawRect(Kk.Ink)
     val shake = if (engine.settings.screenShake && engine.phase == GamePhase.RUNNING) {
@@ -40,8 +40,9 @@ internal fun DrawScope.drawGameplay(
     if (engine.phase == GamePhase.GAME_OVER) drawCoreDeath(engine, terminalElapsed, textMeasurer.roles)
     else drawScreenFx(engine, renderTime, textMeasurer.roles)
     if (shouldDrawRunningPresentation(engine.phase)) {
-        drawHud(engine, textMeasurer, renderTime, shakeX, shakeY, hudMemory, trialInfoFocused)
+        drawHud(engine, textMeasurer, renderTime, shakeX, shakeY, hudMemory, trialInfoOpen)
         drawHudFeed(engine, visualFx, textMeasurer, renderTime, hudMemory)
+        drawTrialTooltip(engine, textMeasurer, trialInfoOpen)
     }
 
     when (engine.phase) {

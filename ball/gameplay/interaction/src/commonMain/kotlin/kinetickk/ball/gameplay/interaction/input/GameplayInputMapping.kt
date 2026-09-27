@@ -5,6 +5,8 @@ package kinetickk.ball.gameplay.interaction.input
 
 import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
+import kinetickk.ball.gameplay.interaction.canvas.HudTrialPanelLayout
+import kinetickk.ball.gameplay.interaction.canvas.activeTrial
 import kinetickk.ball.gameplay.interaction.layout.PauseTarget
 import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
 import kinetickk.ball.gameplay.interaction.layout.containsInclusive
@@ -53,7 +55,18 @@ fun GameplayRenderModel.isHudControlPosition(x: Float, y: Float): Boolean =
         uiScale = uiScale,
         x = x,
         y = y,
-    )
+    ) || isTrialInfoPosition(x, y)
+
+/**
+ * Whether ([x], [y]) is on the active trial panel's (!) target. The pointer steers everywhere else;
+ * a press here toggles the rules and never steers (the host keeps the open state).
+ */
+internal fun GameplayRenderModel.isTrialInfoPosition(x: Float, y: Float): Boolean =
+    phase == GamePhase.RUNNING && activeTrial() != null &&
+        TrialInfoHitLayout.update(screenWidth, screenHeight, uiScale, settings.textScale).infoTargetContains(x, y, uiScale)
+
+/** Pointer-thread scratch layout for [isTrialInfoPosition] (never shared with drawing). */
+private val TrialInfoHitLayout = HudTrialPanelLayout()
 
 internal fun GameplayHitTestState.resolveGameplayPress(x: Float, y: Float): GameplayInput? =
     resolveGameplayPress(

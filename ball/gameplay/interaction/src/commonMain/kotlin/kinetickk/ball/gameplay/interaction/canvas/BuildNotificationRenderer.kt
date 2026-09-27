@@ -8,7 +8,10 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.translate
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
+import androidx.compose.ui.text.TextLayoutResult
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
+import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_BOSS_ROW_DP
+import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_PANEL_ROW_DP
 import kinetickk.ball.gameplay.interaction.layout.REGULAR_HUD_BOTTOM_DP
 import kinetickk.ball.gameplay.interaction.layout.REGULAR_LOADOUT_HEIGHT_DP
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
@@ -20,10 +23,11 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Feed of run messages (banner rows) and build notifications (toast rows), docked under the chain
- * counter on the right so it never covers the Core. Messages that only restate a state the HUD
- * already shows (overheat, polarity strain, overdrive, dash online) and trial rules (behind the
- * trial panel's (!)) are not repeated as text.
+ * Feed of run messages (banner plates) and build notifications (toast plates), docked under the
+ * chain counter on the right so it never covers the Core. Every line sits on its plate: a toast is
+ * its title row plus one line per detail, wrapping instead of cutting. Messages that only restate a
+ * state the HUD shows (overheat, polarity strain, overdrive, dash online), trial rules (behind the
+ * trial panel's (!)) and instruction tails ("choose a course") are not shown as text.
  */
 internal fun DrawScope.drawHudFeed(
     engine: GameplayRenderModel,
@@ -38,6 +42,7 @@ internal fun DrawScope.drawHudFeed(
     var top: Float
     val maxWidth: Float
     val maxNotices: Int
+    val maxDetails: Int
     val limit: Float
     when (frame.mode) {
         GameplayLayoutMode.REGULAR -> {
@@ -45,6 +50,7 @@ internal fun DrawScope.drawHudFeed(
             top = frame.chainTop + frame.u(90f)
             maxWidth = min(frame.u(380f), frame.width * 0.4f)
             maxNotices = 3
+            maxDetails = DETAILS_PER_NOTICE
             // Stop above the Dash/Brake row that sits over the loadout.
             limit = frame.height - frame.u(REGULAR_HUD_BOTTOM_DP + REGULAR_LOADOUT_HEIGHT_DP + 18f + 52f + 12f)
         }
@@ -53,79 +59,72 @@ internal fun DrawScope.drawHudFeed(
             top = frame.u(62f)
             maxWidth = min(frame.u(260f) * frame.factor, right - frame.width * 0.5f + frame.u(60f)).coerceAtLeast(frame.u(140f))
             maxNotices = 1
-            limit = frame.height * 0.5f
+            maxDetails = 2
+            limit = frame.height * 0.55f
         }
         GameplayLayoutMode.COMPACT_PORTRAIT -> {
             right = frame.width - frame.margin
-            val trial = engine.activeTrial()
-            top = if (trial != null) {
+            top = if (engine.activeTrial() != null) {
                 TrialFeedLayout.update(frame.width, frame.height, density, measurer.scale).bottom + frame.u(8f)
+            } else if (FeedBoss.select(engine).id >= 0) {
+                frame.top + frame.u(PORTRAIT_PANEL_ROW_DP)
             } else {
-                frame.top + frame.u(61f + 26f + 12f)
+                frame.top + frame.u(PORTRAIT_BOSS_ROW_DP)
             }
             maxWidth = frame.width - frame.margin * 2f
             maxNotices = 2
+            maxDetails = 2
             limit = frame.height - frame.u(238f + 12f)
         }
     }
-    val rowHeight = if (frame.regular) frame.u(44f) else frame.u(34f)
     val gap = frame.u(8f)
-    if (engine.showsMessage() && top + rowHeight <= limit) {
+    val feedTop = top
+    var feedLeft = right
+    if (engine.showsMessage()) {
         FeedScratch.message.update(engine.message, language)
         val age = if (memory != null) memory.messageAge(renderTime) else Float.POSITIVE_INFINITY
         val alpha = (engine.messageTime / 0.45f).coerceIn(0f, 1f) * entranceAlpha(age)
         val shift = entranceShift(age) * frame.u(80f)
-        translate(shift, 0f) {
-            drawFeedRow(measurer, frame, HudPath.MESSAGE, HudText.MESSAGE_TITLE, HudText.MESSAGE_DETAIL,
-                FeedScratch.message.title, FeedScratch.message.detail, right, top, rowHeight, maxWidth, alpha, banner = true)
+        val lines = FeedLines.clear()
+        lines.title(measurer, frame, HudText.MESSAGE_TITLE, FeedScratch.message.title, maxWidth, banner = true)
+        val detail = FeedScratch.message.detail
+        if (detail != null) lines.detail(measurer, frame, HudText.MESSAGE_DETAIL, detail, maxWidth, banner = true)
+        val height = lines.fit(frame, limit - top, banner = true)
+        if (height > 0f) {
+            translate(shift, 0f) { drawFeedPlate(measurer, frame, HudPath.MESSAGE, lines, right, top, height, alpha, banner = true) }
+            feedLeft = min(feedLeft, right - lines.plateWidth(frame, banner = true))
+            top += height + gap
         }
-        top += rowHeight + gap
     }
     val notices = fx.buildNotifications
     var shown = 0
     var index = notices.size - 1
-    while (index >= 0 && shown < maxNotices && top + rowHeight <= limit) {
+    while (index >= 0 && shown < maxNotices) {
         val notice = notices[index]
         val slot = shown
-        val title = FeedScratch.titles[slot].of(notice.title, language)
-        val detailCount = notice.details.size
-        val firstDetail = if (detailCount > 0) FeedScratch.details[slot * DETAILS_PER_NOTICE].of(notice.details[0], language)
-        else FeedScratch.fallback.of(language, 0L) { language.text(GameplayText.BuildUpdated) }
+        val lines = FeedLines.clear()
+        lines.title(measurer, frame, NoticeTitleSlots[slot], FeedScratch.titles[slot].of(notice.title, language), maxWidth, banner = false)
+        val detailCount = min(notice.details.size, maxDetails)
+        if (detailCount == 0) {
+            lines.detail(measurer, frame, DetailSlots[slot * DETAILS_PER_NOTICE],
+                FeedScratch.fallback.of(language, 0L) { language.text(GameplayText.BuildUpdated) }, maxWidth, banner = false)
+        }
+        for (line in 0 until detailCount) {
+            val text = FeedScratch.details[slot * DETAILS_PER_NOTICE + line].of(notice.details[line], language)
+            lines.detail(measurer, frame, DetailSlots[slot * DETAILS_PER_NOTICE + line], text, maxWidth, banner = false)
+        }
+        val height = lines.fit(frame, limit - top, banner = false)
+        if (height <= 0f) break
         val age = NOTICE_LIFE_SECONDS - notice.life
         val alpha = (notice.life / 0.6f).coerceIn(0f, 1f) * entranceAlpha(age)
         val shift = entranceShift(age) * frame.u(80f)
-        val path = when (slot) {
-            0 -> HudPath.NOTICE_0
-            1 -> HudPath.NOTICE_1
-            else -> HudPath.NOTICE_2
-        }
-        val titleSlot = when (slot) {
-            0 -> HudText.NOTICE_TITLE_0
-            1 -> HudText.NOTICE_TITLE_1
-            else -> HudText.NOTICE_TITLE_2
-        }
-        translate(shift, 0f) {
-            drawFeedRow(measurer, frame, path, titleSlot, DetailSlots[slot * DETAILS_PER_NOTICE], title, firstDetail, right, top,
-                rowHeight, maxWidth, alpha, banner = false)
-        }
-        top += rowHeight
-        if (frame.regular) {
-            // Further details stack under the toast, one per line.
-            val lines = min(detailCount, DETAILS_PER_NOTICE)
-            for (line in 1 until lines) {
-                if (top + frame.u(4f + 18f) > limit) break
-                val text = FeedScratch.details[slot * DETAILS_PER_NOTICE + line].of(notice.details[line], language)
-                val layout = HudDrawCache.layout(DetailSlots[slot * DETAILS_PER_NOTICE + line], measurer, text,
-                    measurer.typography.monoStyle(frame.t(11f)), uppercase = true, maxWidth = maxWidth - frame.u(18f))
-                top += frame.u(4f)
-                drawKkText(layout, right - frame.u(18f) + shift, top, Kk.Mute, KkAlign.END, alpha = alpha)
-                top += layout.kkBoxHeight
-            }
-        }
-        top += gap
+        translate(shift, 0f) { drawFeedPlate(measurer, frame, NoticePaths[slot], lines, right, top, height, alpha, banner = false) }
+        feedLeft = min(feedLeft, right - lines.plateWidth(frame, banner = false))
+        top += height + gap
         shown++
         index--
     }
+    if (top > feedTop) HudLayoutProbe.record(HudBlock.FEED, feedLeft, feedTop, right, top - gap)
 }
 
 private const val NOTICE_LIFE_SECONDS = 6f
@@ -137,6 +136,8 @@ private val DetailSlots = arrayOf(
     HudText.NOTICE_DETAIL_4, HudText.NOTICE_DETAIL_5, HudText.NOTICE_DETAIL_6, HudText.NOTICE_DETAIL_7,
     HudText.NOTICE_DETAIL_8, HudText.NOTICE_DETAIL_9, HudText.NOTICE_DETAIL_10, HudText.NOTICE_DETAIL_11,
 )
+private val NoticeTitleSlots = arrayOf(HudText.NOTICE_TITLE_0, HudText.NOTICE_TITLE_1, HudText.NOTICE_TITLE_2)
+private val NoticePaths = arrayOf(HudPath.NOTICE_0, HudPath.NOTICE_1, HudPath.NOTICE_2)
 
 /** Banner entrance (`kk-fx-banner`): slides in from the left with the Pull overshoot. */
 private fun entranceShift(age: Float): Float {
@@ -146,53 +147,99 @@ private fun entranceShift(age: Float): Float {
 
 private fun entranceAlpha(age: Float): Float = (age / (ENTRANCE_SECONDS * 0.4f)).coerceIn(0f, 1f)
 
-/** One feed row right-aligned at [right]: banner (ink-4, message) or toast (ink-2 + gem, build). */
-private fun DrawScope.drawFeedRow(
+/**
+ * The lines of one feed plate (title first, then details), measured once per change through the
+ * HUD layout cache. Draw-thread scratch: reused for every plate, no allocation per frame.
+ */
+private object FeedLines {
+    private val layouts = arrayOfNulls<TextLayoutResult>(1 + DETAILS_PER_NOTICE)
+    var count = 0
+        private set
+    var shown = 0
+        private set
+
+    fun clear(): FeedLines {
+        count = 0
+        shown = 0
+        return this
+    }
+
+    operator fun get(index: Int): TextLayoutResult = layouts[index]!!
+
+    fun title(measurer: TextMeasurer, frame: HudFrame, slot: HudText, text: String, maxWidth: Float, banner: Boolean) {
+        val size = if (frame.regular) frame.t(if (banner) 24f else 20f) else if (banner) 18f else 16f
+        val available = maxWidth - startPadding(frame, banner) - endPadding(frame) - leadSpace(frame, banner)
+        layouts[count++] = HudDrawCache.layout(slot, measurer, text, measurer.typography.condStyle(size, lineHeightEm = 1f),
+            uppercase = true, maxWidth = available.coerceAtLeast(1f))
+    }
+
+    fun detail(measurer: TextMeasurer, frame: HudFrame, slot: HudText, text: String, maxWidth: Float, banner: Boolean) {
+        if (count >= layouts.size) return
+        val available = maxWidth - startPadding(frame, banner) - endPadding(frame) - leadSpace(frame, banner)
+        // Details wrap to a second line on their plate rather than being cut.
+        layouts[count++] = HudDrawCache.layout(slot, measurer, text, measurer.typography.monoStyle(if (frame.regular) frame.t(11f) else 10f),
+            uppercase = true, maxWidth = available.coerceAtLeast(1f), maxLines = 2)
+    }
+
+    /** Plate height showing as many detail lines as fit in [room]; 0 when not even the title fits. */
+    fun fit(frame: HudFrame, room: Float, banner: Boolean): Float {
+        var height = verticalPadding(frame) * 2f + titleRowHeight(frame, banner)
+        if (count == 0 || height > room) return 0f
+        shown = 1
+        for (index in 1 until count) {
+            val next = height + detailGap(frame) + layouts[index]!!.kkBoxHeight
+            if (next > room) break
+            height = next
+            shown = index + 1
+        }
+        return height
+    }
+
+    fun plateWidth(frame: HudFrame, banner: Boolean): Float {
+        var content = leadSpace(frame, banner) + layouts[0]!!.size.width
+        for (index in 1 until shown) content = max(content, leadSpace(frame, banner) + layouts[index]!!.size.width)
+        return startPadding(frame, banner) + content + endPadding(frame)
+    }
+}
+
+private fun startPadding(frame: HudFrame, banner: Boolean) = frame.u(if (banner) 18f else 12f)
+private fun endPadding(frame: HudFrame) = frame.u(18f)
+private fun leadSize(frame: HudFrame) = frame.u(if (frame.regular) 14f else 11f)
+private fun leadSpace(frame: HudFrame, banner: Boolean) = if (banner) 0f else leadSize(frame) + frame.u(12f)
+private fun verticalPadding(frame: HudFrame) = frame.u(if (frame.regular) 9f else 6f)
+private fun detailGap(frame: HudFrame) = frame.u(3f)
+private fun titleRowHeight(frame: HudFrame, banner: Boolean) = frame.u(if (frame.regular) 26f else 22f) + if (banner) frame.u(2f) else 0f
+
+/** One feed plate right-aligned at [right]: banner (ink-4, message) or toast (ink-2 + gem, build). */
+private fun DrawScope.drawFeedPlate(
     measurer: TextMeasurer,
     frame: HudFrame,
     path: HudPath,
-    titleSlot: HudText,
-    detailSlot: HudText,
-    title: String,
-    detail: String?,
+    lines: FeedLines,
     right: Float,
     top: Float,
     height: Float,
-    maxWidth: Float,
     alpha: Float,
     banner: Boolean,
 ) {
-    if (alpha <= 0f) return
-    val roles = measurer.roles
-    val startPadding = frame.u(if (banner) 18f else 12f)
-    val endPadding = frame.u(18f)
-    val gap = frame.u(12f)
-    val lead = if (banner) 0f else frame.u(if (frame.regular) 14f else 11f)
-    val leadSpace = if (lead > 0f) lead + gap else 0f
-    val titleSize = if (frame.regular) frame.t(if (banner) 24f else 20f) else if (banner) 18f else 16f
-    val available = maxWidth - startPadding - endPadding - leadSpace
-    val titleLayout = HudDrawCache.layout(titleSlot, measurer, title, measurer.typography.condStyle(titleSize, lineHeightEm = 1f),
-        uppercase = true, maxWidth = available.coerceAtLeast(1f))
-    val detailAvailable = available - titleLayout.size.width - gap
-    val detailLayout = if (detail != null && detailAvailable > frame.u(40f)) {
-        HudDrawCache.layout(detailSlot, measurer, detail, measurer.typography.monoStyle(if (frame.regular) frame.t(11f) else 10f),
-            uppercase = true, maxWidth = detailAvailable)
-    } else {
-        null
-    }
-    val width = startPadding + leadSpace + titleLayout.size.width + (if (detailLayout != null) gap + detailLayout.size.width else 0f) + endPadding
+    if (alpha <= 0f || lines.shown == 0) return
+    val width = lines.plateWidth(frame, banner)
     val left = right - width
     drawPath(HudDrawCache.paths.slab(path.ordinal, left, top, right, top + height, frame.u(10f)),
         if (banner) Kk.Ink4 else Kk.Ink2, alpha)
-    val cy = top + height * 0.5f
-    var x = left + startPadding
-    if (lead > 0f) {
-        drawKkGem(Offset(x + lead * 0.5f, cy), roles.you.copy(alpha = alpha), lead / density)
-        x += leadSpace
+    val textLeft = left + startPadding(frame, banner) + leadSpace(frame, banner)
+    val rowTop = top + verticalPadding(frame)
+    val rowCenter = rowTop + titleRowHeight(frame, banner) * 0.5f
+    if (!banner) {
+        val lead = leadSize(frame)
+        drawKkGem(Offset(left + startPadding(frame, banner) + lead * 0.5f, rowCenter), measurer.roles.you.copy(alpha = alpha), lead / density)
     }
-    drawKkText(titleLayout, x, cy, Kk.Bone, valign = KkVAlign.CENTER, alpha = alpha)
-    if (detailLayout != null) {
-        drawKkText(detailLayout, x + titleLayout.size.width + gap, cy, Kk.Mute, valign = KkVAlign.CENTER, alpha = alpha)
+    drawKkText(lines[0], textLeft, rowCenter, Kk.Bone, valign = KkVAlign.CENTER, alpha = alpha)
+    var y = rowTop + titleRowHeight(frame, banner)
+    for (index in 1 until lines.shown) {
+        y += detailGap(frame)
+        drawKkText(lines[index], textLeft, y, Kk.Mute, alpha = alpha)
+        y += lines[index].kkBoxHeight
     }
 }
 
@@ -207,7 +254,27 @@ internal fun GameplayRenderModel.showsMessage(): Boolean {
     return true
 }
 
-/** A localized message split at its first " // " into a title and a detail element. */
+/**
+ * Message tails that only tell the player what to do; the feed shows the event, not the
+ * instruction (explanations live behind (!) buttons).
+ */
+private val InstructionTails = hashSetOf("CHOOSE A COURSE")
+
+/**
+ * A run message as feed text: the localized title (before the first " // ") and its detail, or
+ * no detail when the tail is an instruction. Allocates; called only when the message changes.
+ */
+internal fun feedMessageParts(message: String, language: AppLanguage): Pair<String, String?> {
+    val localized = message.localizedContent(language)
+    val split = localized.indexOf(" // ")
+    if (split < 0) return localized to null
+    val sourceSplit = message.indexOf(" // ")
+    val instruction = sourceSplit >= 0 && message.substring(sourceSplit + 4).trim() in InstructionTails
+    val title = localized.substring(0, split)
+    return title to if (instruction) null else localized.substring(split + 4).replace(" // ", "  ")
+}
+
+/** The current message's feed text, rebuilt only when the message or language changes. */
 private class SplitMessage {
     private var source: String? = null
     private var language: AppLanguage? = null
@@ -220,15 +287,9 @@ private class SplitMessage {
         if (message == source && language === this.language) return
         source = message
         this.language = language
-        val localized = message.localizedContent(language)
-        val split = localized.indexOf(" // ")
-        if (split < 0) {
-            title = localized
-            detail = null
-        } else {
-            title = localized.substring(0, split)
-            detail = localized.substring(split + 4).replace(" // ", "  ")
-        }
+        val parts = feedMessageParts(message, language)
+        title = parts.first
+        detail = parts.second
     }
 }
 
@@ -256,3 +317,4 @@ private object FeedScratch {
 }
 
 private val TrialFeedLayout = HudTrialPanelLayout()
+private val FeedBoss = BossTarget()

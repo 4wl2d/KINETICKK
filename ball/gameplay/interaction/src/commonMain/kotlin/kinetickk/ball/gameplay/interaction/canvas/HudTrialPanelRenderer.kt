@@ -12,6 +12,7 @@ import kinetickk.ball.content.api.PointOfInterestKind
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_HUD_TOP_DP
+import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_PANEL_ROW_DP
 import kinetickk.ball.gameplay.interaction.layout.RUNNING_CONTROL_MIN_DP
 import kinetickk.ball.gameplay.interaction.layout.compactHudFactor
 import kinetickk.ball.gameplay.interaction.layout.gameplayLayoutMode
@@ -108,7 +109,8 @@ internal class HudTrialPanelLayout {
         top = when (mode) {
             GameplayLayoutMode.REGULAR -> (91f + 27f * text) * unit
             GameplayLayoutMode.COMPACT_LANDSCAPE -> (31f + 17f * text) * unit
-            GameplayLayoutMode.COMPACT_PORTRAIT -> (PORTRAIT_HUD_TOP_DP + 61f + 26f + 12f + (text - 1f) * 10f) * unit
+            // Below the chip row and the reserved boss row, so an elite never covers the panel.
+            GameplayLayoutMode.COMPACT_PORTRAIT -> (PORTRAIT_HUD_TOP_DP + PORTRAIT_PANEL_ROW_DP + (text - 1f) * 10f) * unit
         }
         val labelRow = max(labelSize, monoSize * 1.35f) * text * scale
         val nameRow = nameSize * 0.86f * text * scale
@@ -134,6 +136,14 @@ internal class HudTrialPanelLayout {
         val cy = infoTop + infoSize * 0.5f
         return Rect(cx - size * 0.5f, cy - size * 0.5f, cx + size * 0.5f, cy + size * 0.5f)
     }
+
+    /** Whether ([x], [y]) hits the (!) touch target (the same square as [infoTarget]); allocation-free. */
+    fun infoTargetContains(x: Float, y: Float, density: Float): Boolean {
+        val half = max(infoSize, RUNNING_CONTROL_MIN_DP * density.coerceAtLeast(1f)) * 0.5f
+        val cx = infoLeft + infoSize * 0.5f
+        val cy = infoTop + infoSize * 0.5f
+        return x >= cx - half && x <= cx + half && y >= cy - half && y <= cy + half
+    }
 }
 
 private object TrialScratch {
@@ -144,6 +154,7 @@ private object TrialScratch {
     val progress = HudKeyedText()
     val reward = HudKeyedText()
     val rules = HudKeyedText()
+    val orbitTail = HudKeyedText()
 }
 
 /** Top-left trial panel: label, clock, name + (!), segmented progress, value and reward. */
@@ -151,7 +162,7 @@ internal fun DrawScope.drawTrialPanel(
     engine: GameplayRenderModel,
     measurer: TextMeasurer,
     renderTime: Float,
-    infoFocused: Boolean,
+    infoOpen: Boolean,
 ) {
     val point = engine.activeTrial() ?: return
     val roles = measurer.roles
@@ -191,30 +202,80 @@ internal fun DrawScope.drawTrialPanel(
     drawKkText(nameLayout, innerLeft, layout.rowNameCenter, Kk.Bone, valign = KkVAlign.CENTER)
     val info = HudDrawCache.rect(HudRect.TRIAL_INFO, layout.infoLeft, layout.infoTop, layout.infoLeft + layout.infoSize,
         layout.infoTop + layout.infoSize)
-    drawKkInfoButton(measurer, info, active = infoFocused)
+    drawKkInfoButton(measurer, info, active = infoOpen)
+    HudLayoutProbe.record(HudBlock.TRIAL_PANEL, panel.left, panel.top, panel.right, panel.bottom)
 
     // Row 3: segmented progress.
     val segments = trialSegments(engine, point)
     val meter = HudDrawCache.rect(HudRect.TRIAL_METER, innerLeft, layout.meterTop, innerRight, layout.meterTop + layout.meterHeight)
     drawKkMeter(meter, point.progress, roles.you, roles, segments = segments)
 
-    // Row 4: progress value, reward.
-    val progressText = trialProgressText(engine, point, language)
-    val progressLayout = HudDrawCache.layout(HudText.TRIAL_PROGRESS, measurer, progressText, measurer.typography.monoStyle(layout.monoSize),
-        uppercase = true)
-    drawKkText(progressLayout, innerLeft, layout.rowValueCenter, Kk.Bone, valign = KkVAlign.CENTER)
+    // Row 4: progress value, reward. The orbit's seconds change every frame while orbiting, so they
+    // are drawn from cached digit layouts; counted goals change rarely and use one cached line.
+    val progressWidth = if (point.kind == PointOfInterestKind.COLLAPSING_ORBIT) {
+        drawOrbitProgress(engine, point, measurer, innerLeft, layout.rowValueCenter, layout.monoSize)
+    } else {
+        val progressLayout = HudDrawCache.layout(HudText.TRIAL_PROGRESS, measurer, trialProgressText(engine, point, language),
+            measurer.typography.monoStyle(layout.monoSize), uppercase = true)
+        drawKkText(progressLayout, innerLeft, layout.rowValueCenter, Kk.Bone, valign = KkVAlign.CENTER)
+        progressLayout.size.width.toFloat()
+    }
     val rewardText = TrialScratch.reward.of(language, point.kind.ordinal.toLong()) {
         language.text(rewardText(engine.content.pointsOfInterest.definition(point.kind).reward))
     }
     val rewardLayout = HudDrawCache.layout(HudText.TRIAL_REWARD, measurer, rewardText, measurer.typography.monoStyle(layout.monoSize),
-        uppercase = true, maxWidth = (innerRight - innerLeft - progressLayout.size.width - 12f * unit).coerceAtLeast(1f))
+        uppercase = true, maxWidth = (innerRight - innerLeft - progressWidth - 12f * unit).coerceAtLeast(1f))
     drawKkText(rewardLayout, innerRight, layout.rowValueCenter, roles.you, KkAlign.END, KkVAlign.CENTER)
+}
 
-    if (infoFocused) {
-        val rules = TrialScratch.rules.of(language, point.kind.ordinal.toLong()) { engine.trialRules(point, language) }
-        drawKkTooltip(measurer, info, rules, KkTooltipPlacement.BELOW,
-            widthDp = min(270f, (size.width - 16f * density) / density))
+/**
+ * The open (!) of the trial panel: the rules on a bone slip below the whole panel, so the panel's
+ * name, progress and reward stay readable. Drawn after the feed so nothing covers it.
+ */
+internal fun DrawScope.drawTrialTooltip(engine: GameplayRenderModel, measurer: TextMeasurer, open: Boolean) {
+    if (!open) return
+    val point = engine.activeTrial() ?: return
+    val language = measurer.language
+    val layout = TrialScratch.layout.update(size.width, size.height, density, measurer.scale)
+    val panel = HudDrawCache.rect(HudRect.TRIAL_ANCHOR, layout.left, layout.top, layout.right, layout.bottom)
+    val rules = TrialScratch.rules.of(language, point.kind.ordinal.toLong()) { engine.trialRules(point, language) }
+    // The foundation tooltip's geometry (`.tipbox`), placed below the panel (above it when there is
+    // no room) with cached rects so an open tooltip costs nothing per frame.
+    val widthDp = min(270f, min(panel.width, size.width - 16f * density) / density)
+    val body = measureKkTooltip(measurer, rules, density, widthDp)
+    val width = widthDp * density
+    val height = body.kkBoxHeight + 22f * density
+    val gap = 12f * density
+    val margin = 8f * density
+    val left = (panel.center.x - width * 0.5f).coerceIn(margin, max(margin, size.width - margin - width))
+    val top = if (panel.bottom + gap + height <= size.height - margin) panel.bottom + gap else max(margin, panel.top - gap - height)
+    val slip = HudDrawCache.rect(HudRect.TRIAL_TOOLTIP, left, top, left + width, top + height)
+    drawKkSlip(slip, cutDp = 10f)
+    drawKkText(body, slip.left + 13f * density, slip.top + 11f * density, Kk.Ink)
+    HudLayoutProbe.record(HudBlock.TRIAL_TOOLTIP, slip.left, slip.top, slip.right, slip.bottom)
+}
+
+/** Draws "5.2 / 8.0 s" at ([x], [centerY]) from cached digits; returns its width. */
+private fun DrawScope.drawOrbitProgress(
+    engine: GameplayRenderModel,
+    point: PointOfInterestProjection,
+    measurer: TextMeasurer,
+    x: Float,
+    centerY: Float,
+    monoSize: Float,
+): Float {
+    val language = measurer.language
+    val required = engine.content.pointsOfInterest.orbitRequiredSeconds
+    val requiredTenths = (required * 10f).roundToInt()
+    val tenths = (point.progress.coerceIn(0f, 1f) * required * 10f).roundToInt().toLong()
+    val style = measurer.typography.monoStyle(monoSize)
+    val separator = if (language == AppLanguage.Russian) "," else "."
+    val tail = TrialScratch.orbitTail.of(language, requiredTenths.toLong()) {
+        language.text(HudRedesignText.TrialSeconds, "", tenthsText(requiredTenths, language)).uppercase()
     }
+    var width = drawKkTabularNumber(measurer, tenths / 10L, style, x, centerY, Kk.Bone, valign = KkVAlign.CENTER, suffix = separator)
+    width += drawKkTabularNumber(measurer, tenths % 10L, style, x + width, centerY, Kk.Bone, valign = KkVAlign.CENTER, suffix = tail)
+    return width
 }
 
 /** Progress cells: one per orbit second, per defender or per beacon of the circuit. */

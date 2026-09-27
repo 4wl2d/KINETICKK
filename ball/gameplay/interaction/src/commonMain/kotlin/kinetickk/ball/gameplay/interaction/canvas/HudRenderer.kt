@@ -18,6 +18,9 @@ import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
+import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_BOSS_ROW_DP
+import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_CHIP_ROW_DP
+import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_CHIP_ROW_HEIGHT_DP
 import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_HUD_TOP_DP
 import kinetickk.ball.gameplay.interaction.layout.REGULAR_HUD_BOTTOM_DP
 import kinetickk.ball.gameplay.interaction.layout.RUNNING_CONTROL_MIN_DP
@@ -54,9 +57,10 @@ internal fun DrawScope.drawHud(
     shakeX: Float = 0f,
     shakeY: Float = 0f,
     memory: HudPresentationMemory? = null,
-    trialInfoFocused: Boolean = false,
+    trialInfoOpen: Boolean = false,
 ) {
     val frame = HudScratch.frame.update(size.width, size.height, density)
+    HudLayoutProbe.begin()
     val boss = HudScratch.boss.select(engine)
     memory?.observe(engine, renderTime, boss)
     val critical = isIntegrityCritical(engine.hp, engine.maxHp)
@@ -72,7 +76,7 @@ internal fun DrawScope.drawHud(
     drawCoreStatus(engine, textMeasurer, frame, renderTime, memory, critical)
     drawKineticGauge(engine, textMeasurer, frame, renderTime, memory)
     drawLoadout(engine, textMeasurer, frame)
-    drawTrialPanel(engine, textMeasurer, renderTime, trialInfoFocused)
+    drawTrialPanel(engine, textMeasurer, renderTime, trialInfoOpen)
     drawControls(engine, textMeasurer)
 }
 
@@ -110,19 +114,18 @@ internal object HudScratch {
     val frame = HudFrame()
     val boss = BossTarget()
     val timer = HudNumberText { formatRunTime(it.toFloat()) }
-    val integrity = HudNumberText { it.toString() }
-    val speed = HudNumberText { it.toString() }
-    val chain = HudNumberText { "×$it" }
     val matter = HudKeyedText()
     val keys = HudNumberText { it.toString() }
     val weaponLevel = HudKeyedText()
-    val polarity = HudNumberText { "$it%" }
     val bossName = HudKeyedText()
     val label = HudKeyedText()
     val dashLabel = HudKeyedText()
     val brakeLabel = HudKeyedText()
     val overheat = HudKeyedText()
     var aspectContent: GameplayContentSnapshot? = null
+    var linkRelics: List<EquippedRelic>? = null
+    var linkContent: GameplayContentSnapshot? = null
+    var links: List<OverlaySynergyLink> = emptyList()
     val aspects = arrayOfNulls<RelicAspect>(RelicId.entries.size)
 }
 
@@ -244,25 +247,22 @@ private fun DrawScope.drawClockAndBoss(
     val layout = HudDrawCache.layout(HudText.TIMER, measurer, text, measurer.typography.wideStyle(size, tabular = true))
     val color = if (architect) roles.threat else Kk.Bone
     val x = frame.width * 0.5f
-    val clockBottom = if (frame.portrait) {
-        val center = portraitRowCenter(frame)
-        drawKkText(layout, x, center, color, KkAlign.CENTER, KkVAlign.CENTER)
-        center + layout.kkBoxHeight * 0.5f
-    } else {
-        val top = if (frame.regular) frame.u(18f) else frame.u(8f)
-        drawKkText(layout, x, top, color, KkAlign.CENTER)
-        top + layout.kkBoxHeight
-    }
+    val clockTop = if (frame.portrait) portraitRowCenter(frame) - layout.kkBoxHeight * 0.5f
+    else if (frame.regular) frame.u(18f) else frame.u(8f)
+    drawKkText(layout, x, clockTop, color, KkAlign.CENTER)
+    val clockBottom = clockTop + layout.kkBoxHeight
+    HudLayoutProbe.record(HudBlock.CLOCK, x - layout.size.width * 0.5f, clockTop, x + layout.size.width * 0.5f, clockBottom)
     if (boss.id < 0) return
     val ghost = if (memory != null) memory.bossGhost(renderTime) else 0f
     val top = when {
         frame.regular -> clockBottom + frame.u(20f)
-        frame.portrait -> frame.top + frame.u(61f)
+        // Portrait: its own row under the chips and chain (the chips share the row below the clock).
+        frame.portrait -> frame.top + frame.u(PORTRAIT_BOSS_ROW_DP)
         else -> clockBottom + frame.u(6f)
     }
     val barWidth = when {
         frame.regular -> min(frame.u(if (architect) 700f else 320f), frame.width - frame.margin * 2f - frame.u(660f))
-        frame.portrait -> frame.width * 0.44f
+        frame.portrait -> min(frame.width - frame.margin * 2f, frame.u(320f))
         else -> min(frame.u(260f) * frame.factor, frame.width * 0.3f)
     }.coerceAtLeast(frame.u(140f))
     drawBossBar(measurer, frame, boss, top, barWidth, ghost)
@@ -298,15 +298,17 @@ private fun DrawScope.drawBossBar(
     drawKkText(layout, rowLeft + iconSize + gap, rowCenter, Kk.Bone, valign = KkVAlign.CENTER)
     val barTop = top + layout.kkBoxHeight + frame.u(if (frame.regular) 9f else 5f)
     val left = center - width * 0.5f
+    val barHeight = frame.u(if (architect) (if (frame.regular) 14f else 8f) else (if (frame.regular) 8f else 6f))
+    HudLayoutProbe.record(HudBlock.BOSS, min(left, rowLeft), top, max(left + width, rowLeft + rowWidth), barTop + barHeight)
     if (!architect) {
-        val height = frame.u(if (frame.regular) 8f else 6f)
+        val height = barHeight
         val bar = HudDrawCache.rect(HudRect.BOSS_0, left, barTop, left + width, barTop + height)
         drawKkMeter(bar, boss.integrity, roles.threat, roles, background = roles.threat.copy(alpha = 0.18f),
             segments = 16, ghost = ghost, ghostColor = Kk.Bone, threat = true)
         return
     }
     // The Architect: three equal parts that empty from the left.
-    val height = frame.u(if (frame.regular) 14f else 8f)
+    val height = barHeight
     val partGap = frame.u(6f)
     val partWidth = (width - partGap * 2f) / 3f
     for (part in 0 until 3) {
@@ -359,8 +361,8 @@ private fun DrawScope.drawEconomy(engine: GameplayRenderModel, measurer: TextMea
             }
         }
         GameplayLayoutMode.COMPACT_PORTRAIT -> {
-            val top = frame.top + frame.u(61f)
-            val height = frame.u(26f)
+            val top = frame.top + frame.u(PORTRAIT_CHIP_ROW_DP)
+            val height = frame.u(PORTRAIT_CHIP_ROW_HEIGHT_DP)
             var left = frame.margin
             left = drawHudChipFromLeft(measurer, HudPath.MATTER_CHIP, HudText.MATTER, matter, left, top, height, 15f, null, roles) + frame.u(6f)
             if (keys != null) drawHudChipFromLeft(measurer, HudPath.KEY_CHIP, HudText.KEYS, keys, left, top, height, 15f, KkIcon.SYSTEM_KEY, roles)
@@ -427,6 +429,7 @@ private fun DrawScope.drawHudChipAt(
     roles: KkRolePalette,
 ) {
     val k = height / d(34f)
+    HudLayoutProbe.record(if (path == HudPath.KEY_CHIP) HudBlock.KEY_CHIP else HudBlock.MATTER_CHIP, left, top, left + width, top + height)
     drawPath(HudDrawCache.paths.slab(path.ordinal, left, top, left + width, top + height, d(8f) * k), Kk.Ink2.copy(alpha = 0.85f))
     val lead = (if (icon == null) d(14f) else d(16f)) * k
     val cy = top + height * 0.5f
@@ -439,39 +442,59 @@ private fun DrawScope.drawHudChipAt(
 /** `×N` chain counter with its draining window bar; hidden without a live combo. */
 private fun DrawScope.drawChain(engine: GameplayRenderModel, measurer: TextMeasurer, frame: HudFrame) {
     if (engine.combo < 2 || engine.comboTime <= 0f) return
-    val roles = measurer.roles
-    val color = if (engine.combo >= 20) roles.you else Kk.Bone
-    val text = HudScratch.chain.of(engine.combo.toLong())
+    val hot = engine.combo >= 20
+    val color = if (hot) measurer.roles.you else Kk.Bone
+    val tracking = CHAIN_TRACKING + colorTracking(if (hot) 1 else 0)
+    val value = engine.combo.toLong()
+    val window = engine.comboTime / engine.comboWindow.coerceAtLeast(0.001f)
     when (frame.mode) {
         GameplayLayoutMode.REGULAR -> {
-            val layout = HudDrawCache.layout(HudText.CHAIN, measurer, text,
-                measurer.typography.condStyle(frame.t(60f), tabular = true))
+            val style = measurer.typography.condStyle(frame.t(60f), tabular = true, trackingEm = tracking)
             val right = frame.width - frame.margin
             val top = frame.chainTop
-            drawKkText(layout, right, top, color, KkAlign.END)
-            val barTop = top + layout.kkBoxHeight + frame.u(6f)
+            val width = drawKkTabularNumber(measurer, value, style, right, top, color, KkAlign.END, prefix = CHAIN_PREFIX)
+            val barTop = top + digitBoxHeight(measurer, style) + frame.u(6f)
             val bar = HudDrawCache.rect(HudRect.CHAIN, right - frame.u(120f), barTop, right, barTop + frame.u(4f))
-            drawKkMeter(bar, engine.comboTime / engine.comboWindow.coerceAtLeast(0.001f), color, measurer.roles)
+            drawKkMeter(bar, window, color, measurer.roles)
+            HudLayoutProbe.record(HudBlock.CHAIN, min(right - width, bar.left), top, right, bar.bottom)
         }
         GameplayLayoutMode.COMPACT_LANDSCAPE -> {
-            val layout = HudDrawCache.layout(HudText.CHAIN, measurer, text, measurer.typography.condStyle(26f, tabular = true))
+            val style = measurer.typography.condStyle(26f, tabular = true, trackingEm = tracking)
             val right = frame.buildCenterX - frame.u(24f + 10f)
-            drawKkText(layout, right, frame.u(30f), color, KkAlign.END, KkVAlign.CENTER)
-            val barTop = frame.u(30f) + layout.kkBoxHeight * 0.5f + frame.u(3f)
-            val bar = HudDrawCache.rect(HudRect.CHAIN, right - layout.size.width, barTop, right, barTop + frame.u(2f))
-            drawKkMeter(bar, engine.comboTime / engine.comboWindow.coerceAtLeast(0.001f), color, measurer.roles)
+            val center = frame.u(30f)
+            val width = drawKkTabularNumber(measurer, value, style, right, center, color, KkAlign.END, KkVAlign.CENTER, prefix = CHAIN_PREFIX)
+            val barTop = center + digitBoxHeight(measurer, style) * 0.5f + frame.u(3f)
+            val bar = HudDrawCache.rect(HudRect.CHAIN, right - width, barTop, right, barTop + frame.u(2f))
+            drawKkMeter(bar, window, color, measurer.roles)
+            HudLayoutProbe.record(HudBlock.CHAIN, right - width, center - digitBoxHeight(measurer, style) * 0.5f, right, bar.bottom)
         }
         GameplayLayoutMode.COMPACT_PORTRAIT -> {
-            val layout = HudDrawCache.layout(HudText.CHAIN, measurer, text, measurer.typography.condStyle(30f, tabular = true))
+            val style = measurer.typography.condStyle(30f, tabular = true, trackingEm = tracking)
             val right = frame.width - frame.margin
-            val center = frame.top + frame.u(61f + 13f)
-            drawKkText(layout, right, center, color, KkAlign.END, KkVAlign.CENTER)
-            val barTop = center + layout.kkBoxHeight * 0.5f + frame.u(3f)
-            val bar = HudDrawCache.rect(HudRect.CHAIN, right - layout.size.width, barTop, right, barTop + frame.u(2f))
-            drawKkMeter(bar, engine.comboTime / engine.comboWindow.coerceAtLeast(0.001f), color, measurer.roles)
+            val center = frame.top + frame.u(PORTRAIT_CHIP_ROW_DP + PORTRAIT_CHIP_ROW_HEIGHT_DP * 0.5f)
+            val width = drawKkTabularNumber(measurer, value, style, right, center, color, KkAlign.END, KkVAlign.CENTER, prefix = CHAIN_PREFIX)
+            val barTop = center + digitBoxHeight(measurer, style) * 0.5f + frame.u(3f)
+            val bar = HudDrawCache.rect(HudRect.CHAIN, right - width, barTop, right, barTop + frame.u(2f))
+            drawKkMeter(bar, window, color, measurer.roles)
+            HudLayoutProbe.record(HudBlock.CHAIN, right - width, center - digitBoxHeight(measurer, style) * 0.5f, right, bar.bottom)
         }
     }
 }
+
+private const val CHAIN_PREFIX = "×"
+private const val CHAIN_TRACKING = 0.005f
+
+/**
+ * A negligible extra tracking per color [variant] for numbers drawn in more than one color. The
+ * text measurer shares one paragraph between styles that differ only in color, and painting a
+ * paragraph in another color than last time reshapes it (allocating every frame when a value
+ * flips between colors); a distinct style per color keeps each digit layout in one color.
+ */
+internal fun colorTracking(variant: Int): Float = variant * 0.0005f
+
+/** CSS line-box height of a digit in [style] (numbers drawn with [drawKkTabularNumber]). */
+private fun digitBoxHeight(measurer: TextMeasurer, style: androidx.compose.ui.text.TextStyle): Float =
+    measureKkText(measurer, "0", style).kkBoxHeight
 
 /** Bottom-left: integrity number, segmented integrity bar, shield cells, dash pips, heat, ability. */
 private fun DrawScope.drawCoreStatus(
@@ -558,25 +581,19 @@ private fun DrawScope.drawCoreStatus(
 
     // Number row: integrity number (split channels while a hit ghost drains), shield cells, ability.
     val numberBottom = barTop - frame.u(if (frame.regular) 8f else 5f)
-    val value = engine.hp.coerceAtLeast(0f).toInt()
-    val text = if (value in 0..1023) kkIntString(value) else HudScratch.integrity.of(value.toLong())
-    val layout = HudDrawCache.layout(HudText.INTEGRITY, measurer, text, measurer.typography.wideStyle(numberSize, tabular = true))
-    val numberTop = numberBottom - layout.kkBoxHeight
+    val value = engine.hp.coerceAtLeast(0f).toLong()
+    val style = measurer.typography.wideStyle(numberSize, tabular = true, trackingEm = colorTracking(if (critical) 3 else 0))
+    val numberTop = numberBottom - digitBoxHeight(measurer, style)
     val numberColor = if (critical) roles.threat else Kk.Bone
     if (ghost > 0f) {
-        // Split channels while the hit ghost drains. The copies need layouts of their own: the text
-        // measurer shares one paragraph between styles that differ only in color, and painting a
-        // shared paragraph in several colors per frame reshapes it every time. A negligible
-        // tracking difference keeps them apart.
+        // Split channels while the hit ghost drains, each copy with its own digit layouts.
         val split = d(2f) * (ghost * 4f).coerceAtMost(1f)
-        val threatStyle = measurer.typography.wideStyle(numberSize, tabular = true, trackingEm = 0.0005f)
-        val shieldStyle = measurer.typography.wideStyle(numberSize, tabular = true, trackingEm = 0.001f)
-        drawKkText(HudDrawCache.layout(HudText.INTEGRITY_SPLIT_THREAT, measurer, text, threatStyle), left - split, numberTop,
-            roles.threat, alpha = 0.7f)
-        drawKkText(HudDrawCache.layout(HudText.INTEGRITY_SPLIT_SHIELD, measurer, text, shieldStyle), left + split, numberTop,
-            roles.shield, alpha = 0.55f)
+        drawKkTabularNumber(measurer, value, measurer.typography.wideStyle(numberSize, tabular = true, trackingEm = colorTracking(1)),
+            left - split, numberTop, roles.threat, alpha = 0.7f)
+        drawKkTabularNumber(measurer, value, measurer.typography.wideStyle(numberSize, tabular = true, trackingEm = colorTracking(2)),
+            left + split, numberTop, roles.shield, alpha = 0.55f)
     }
-    drawKkText(layout, left, numberTop, numberColor)
+    drawKkTabularNumber(measurer, value, style, left, numberTop, numberColor)
 
     val right = left + width
     var anchorBottom = numberBottom - frame.u(if (frame.regular) 6f else 4f)
@@ -633,16 +650,21 @@ private fun DrawScope.drawKineticGauge(
     val lit = velocityLadderLit(engine.speed, ticks)
     val hotFrom = ticks * 2 / 3
     val maxFrom = if (tier >= 4) (lit - ticks / 10).coerceAtLeast(hotFrom) else ticks
-    val speedColor = when {
-        tier >= 4 -> roles.threat
-        lit >= hotFrom -> roles.you
+    val speedRole = when {
+        tier >= 4 -> 2
+        lit >= hotFrom -> 1
+        else -> 0
+    }
+    val speedColor = when (speedRole) {
+        2 -> roles.threat
+        1 -> roles.you
         else -> Kk.Bone
     }
     val overdriveActive = engine.overdriveTime > 0f
     val drain = if (overdriveActive && memory != null) memory.overdriveDrain(engine) else 0f
     val overdrive = if (drain > 0f) drain else engine.overdriveCharge / 100f
     val stripes = if (overdriveActive) KkMeterStripes.YOU else KkMeterStripes.NONE
-    val text = HudScratch.speed.of(engine.speed.toLong())
+    val value = engine.speed.toLong()
     val stretch = speedStretch(tier)
     when (frame.mode) {
         GameplayLayoutMode.REGULAR -> {
@@ -654,8 +676,8 @@ private fun DrawScope.drawKineticGauge(
             val ladderBottom = od.top - frame.u(8f)
             val ladder = HudDrawCache.rect(HudRect.LADDER, left, ladderBottom - frame.u(16f), left + width, ladderBottom)
             drawKkTickLadder(ladder, roles, ticks, lit, hotFrom, maxFrom)
-            val layout = HudDrawCache.layout(HudText.SPEED, measurer, text, measurer.typography.wideStyle(frame.t(56f), tabular = true))
-            drawSpeedNumber(layout, frame.width * 0.5f, ladder.top - frame.u(10f), KkAlign.CENTER, stretch, speedColor)
+            drawSpeedNumber(measurer, value, measurer.typography.wideStyle(frame.t(56f), tabular = true, trackingEm = colorTracking(speedRole)), frame.width * 0.5f,
+                ladder.top - frame.u(10f), KkAlign.CENTER, stretch, speedColor)
         }
         GameplayLayoutMode.COMPACT_LANDSCAPE -> {
             val width = frame.u(230f) * frame.factor
@@ -666,8 +688,8 @@ private fun DrawScope.drawKineticGauge(
             val ladderBottom = od.top - frame.u(6f)
             val ladder = HudDrawCache.rect(HudRect.LADDER, left, ladderBottom - frame.u(12f), left + width, ladderBottom)
             drawKkTickLadder(ladder, roles, ticks, lit, hotFrom, maxFrom)
-            val layout = HudDrawCache.layout(HudText.SPEED, measurer, text, measurer.typography.wideStyle(30f, tabular = true))
-            drawSpeedNumber(layout, left, ladder.top - frame.u(5f), KkAlign.START, stretch, speedColor)
+            drawSpeedNumber(measurer, value, measurer.typography.wideStyle(30f, tabular = true, trackingEm = colorTracking(speedRole)), left, ladder.top - frame.u(5f),
+                KkAlign.START, stretch, speedColor)
         }
         GameplayLayoutMode.COMPACT_PORTRAIT -> {
             val width = frame.u(160f) * frame.factor
@@ -675,27 +697,32 @@ private fun DrawScope.drawKineticGauge(
             val bottom = frame.height - frame.u(36f + 80f + 18f)
             val od = HudDrawCache.rect(HudRect.OVERDRIVE, right - width, bottom - frame.u(4f), right, bottom)
             drawKkMeter(od, overdrive, roles.you, roles, stripes = stripes, time = renderTime)
-            val layout = HudDrawCache.layout(HudText.SPEED, measurer, text, measurer.typography.wideStyle(30f, tabular = true))
-            drawSpeedNumber(layout, right, od.top - frame.u(7f), KkAlign.END, stretch, speedColor)
+            drawSpeedNumber(measurer, value, measurer.typography.wideStyle(30f, tabular = true, trackingEm = colorTracking(speedRole)), right, od.top - frame.u(7f),
+                KkAlign.END, stretch, speedColor)
         }
     }
 }
 
-/** Speed number anchored at its bottom edge, stretched horizontally and leaning −8°. */
+/**
+ * Speed number anchored at its bottom edge, stretched horizontally and leaning −8°. It changes
+ * every frame, so it is drawn from cached digit layouts.
+ */
 private fun DrawScope.drawSpeedNumber(
-    layout: androidx.compose.ui.text.TextLayoutResult,
+    measurer: TextMeasurer,
+    value: Long,
+    style: androidx.compose.ui.text.TextStyle,
     x: Float,
     bottom: Float,
     align: KkAlign,
     stretch: Float,
     color: Color,
 ) {
-    val top = bottom - layout.kkBoxHeight
+    val top = bottom - digitBoxHeight(measurer, style)
     withTransform({
         scale(stretch, 1f, Offset(x, bottom))
         kkShear(bottom, -8f)
     }) {
-        drawKkText(layout, x, top, color, align)
+        drawKkTabularNumber(measurer, value, style, x, top, color, align)
     }
 }
 
@@ -723,7 +750,7 @@ private fun DrawScope.drawLoadout(engine: GameplayRenderModel, measurer: TextMea
             drawKkWeaponSlot(measurer, slot, icon, maxLevel = maxLevel, levelLayout = levelLayout, iconSizeDp = 28f * frame.textFactor)
             drawMasteryPips(engine, frame, roles, slot.center.x, pipsTop)
             val relicSize = frame.u(36f)
-            drawRelicRow(engine, content, slots, right, slot.top - frame.u(12f) - relicSize * 0.5f, relicSize, frame)
+            drawRelicRow(engine, measurer, content, slots, right, slot.top - frame.u(12f) - relicSize * 0.5f, relicSize, frame)
         }
         GameplayLayoutMode.COMPACT_LANDSCAPE -> {
             val right = frame.width - frame.margin
@@ -734,7 +761,7 @@ private fun DrawScope.drawLoadout(engine: GameplayRenderModel, measurer: TextMea
             val levelLayout = HudDrawCache.layout(HudText.WEAPON_LEVEL, measurer, levelText,
                 measurer.typography.monoStyle(9f, weight = FontWeight.Bold, trackingEm = 0f, lineHeightEm = 1f))
             drawKkText(levelLayout, slot.center.x, slot.bottom + frame.u(4f), if (maxLevel) Kk.RLegend else Kk.Bone, KkAlign.CENTER)
-            drawRelicRow(engine, content, slots, slot.left - frame.u(8f), slot.center.y, frame.u(22f), frame)
+            drawRelicRow(engine, measurer, content, slots, slot.left - frame.u(8f), slot.center.y, frame.u(22f), frame)
         }
         GameplayLayoutMode.COMPACT_PORTRAIT -> {
             val top = frame.height - frame.u(238f)
@@ -744,7 +771,7 @@ private fun DrawScope.drawLoadout(engine: GameplayRenderModel, measurer: TextMea
             val levelLayout = HudDrawCache.layout(HudText.WEAPON_LEVEL, measurer, levelText,
                 measurer.typography.monoStyle(11f, weight = FontWeight.Bold, trackingEm = 0f, lineHeightEm = 1f))
             drawKkText(levelLayout, slot.right + frame.u(8f), slot.center.y, if (maxLevel) Kk.RLegend else Kk.Bone, valign = KkVAlign.CENTER)
-            drawRelicRow(engine, content, slots, frame.width - frame.margin, slot.center.y, frame.u(22f), frame)
+            drawRelicRow(engine, measurer, content, slots, frame.width - frame.margin, slot.center.y, frame.u(22f), frame)
         }
     }
 }
@@ -781,9 +808,15 @@ private fun DrawScope.drawMasteryPips(engine: GameplayRenderModel, frame: HudFra
     }
 }
 
-/** Relic diamonds right-aligned at [right], linked where adjacent relics form a synergy. */
+/**
+ * Relic diamonds right-aligned at [right] on an even pitch. Synergies come from
+ * [overlaySynergyLinks] (the same reading as pause and the relic matrix, mirroring the game's rule:
+ * any two different relics of an aspect, in any slots, or a named pair): neighbouring members are
+ * joined by a link bar, members further apart by a bracket above the row.
+ */
 private fun DrawScope.drawRelicRow(
     engine: GameplayRenderModel,
+    measurer: TextMeasurer,
     content: GameplayContentSnapshot,
     slots: Int,
     right: Float,
@@ -793,48 +826,53 @@ private fun DrawScope.drawRelicRow(
 ) {
     if (slots <= 0) return
     val relics = engine.equippedRelics
-    val link = frame.u(if (frame.regular) 10f else 6f)
-    val gap = frame.u(if (frame.regular) 8f else 6f)
-    var total = slots * size
-    for (index in 0 until slots - 1) total += if (relicsLinked(content, relics, index)) link else gap
-    var x = right - total
+    val gap = frame.u(if (frame.regular) 10f else 6f)
+    val pitch = size + gap
+    val firstCenter = right - slots * size - (slots - 1) * gap + size * 0.5f
+    val half = size * 0.5f
+    val links = hudRelicLinks(content, relics)
+    for (linkIndex in links.indices) {
+        val link = links[linkIndex]
+        val color = link.definition.overlayColor()
+        val members = link.slots
+        for (step in 0 until members.size - 1) {
+            val a = members[step]
+            val b = members[step + 1]
+            if (a >= slots || b >= slots) continue
+            val ax = firstCenter + a * pitch
+            val bx = firstCenter + b * pitch
+            if (b == a + 1) {
+                drawKkSynergyLink(Offset(ax + half, centerY), Offset(bx - half, centerY), color)
+            } else {
+                drawKkSynergyBracket(measurer, ax, bx, centerY - half - frame.u(4f), color)
+            }
+        }
+    }
     val sizeDp = size / density
     for (index in 0 until slots) {
         val relic = relics.getOrNull(index)
-        val center = Offset(x + size * 0.5f, centerY)
+        val center = Offset(firstCenter + index * pitch, centerY)
         if (relic == null) {
             drawKkRelicSlot(center, Color.Unspecified, sizeDp = sizeDp)
         } else {
             val aspect = relicAspect(content, relic.id)
             drawKkRelicSlot(center, Kk.aspect(aspect.ordinal), KkIcon.Aspects[aspect.ordinal], sizeDp = sizeDp)
         }
-        x += size
-        if (index < slots - 1) {
-            if (relicsLinked(content, relics, index)) {
-                val color = Kk.aspect(relicAspect(content, relics[index].id).ordinal)
-                drawKkSynergyLink(Offset(x, centerY), Offset(x + link, centerY), color)
-                x += link
-            } else {
-                x += gap
-            }
-        }
     }
 }
 
-/** Whether equipped relics [index] and [index] + 1 form a synergy (same aspect pair or a named pair). */
-internal fun relicsLinked(content: GameplayContentSnapshot, relics: List<EquippedRelic>, index: Int): Boolean {
-    if (index < 0 || index + 1 >= relics.size) return false
-    val first = relics[index].id
-    val second = relics[index + 1].id
-    if (first == second) return false
-    val aspect = relicAspect(content, first)
-    if (aspect != RelicAspect.SOVEREIGN && aspect == relicAspect(content, second)) return true
-    val synergies = content.synergies
-    for (synergyIndex in synergies.indices) {
-        val required = synergies[synergyIndex].requiredRelics
-        if (required.size == 2 && ((required[0] == first && required[1] == second) || (required[0] == second && required[1] == first))) return true
+/**
+ * Synergy links of the equipped [relics] (slot order), as [overlaySynergyLinks] reads them;
+ * recomputed only when the relic list or the content changes.
+ */
+internal fun hudRelicLinks(content: GameplayContentSnapshot, relics: List<EquippedRelic>): List<OverlaySynergyLink> {
+    val cache = HudScratch
+    if (cache.linkRelics !== relics || cache.linkContent !== content) {
+        cache.linkRelics = relics
+        cache.linkContent = content
+        cache.links = overlaySynergyLinks(relics.map { it.id }, content)
     }
-    return false
+    return cache.links
 }
 
 /** Aspect of a relic, indexed once per content snapshot (content lookups iterate the catalog). */

@@ -19,6 +19,7 @@ import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPolicy
+import kinetickk.ball.content.api.SynergyId
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
@@ -89,19 +90,34 @@ class HudPresentationTest {
     }
 
     @Test
-    fun adjacentRelicsLinkOnlyWhenTheyFormASynergy() {
+    fun relicLinksFollowTheSynergyRuleInAnySlotsAndMatchTheOverlay() {
         val content = fixtureContent()
-        fun linked(first: RelicId, second: RelicId) =
-            relicsLinked(content, listOf(EquippedRelic(first, 1), EquippedRelic(second, 1)), 0)
-        // Two different relics of one aspect form its aspect synergy.
-        assertTrue(linked(RelicId.KINETIC_FLYWHEEL, RelicId.GHOST_VECTOR))
-        // A named pair links across aspects; unrelated relics and the same relic do not.
-        assertTrue(linked(RelicId.BRAKEPOINT_MEMORY, RelicId.MASS_ECHO))
-        assertFalse(linked(RelicId.KINETIC_FLYWHEEL, RelicId.ORBITAL_NAIL))
-        assertFalse(linked(RelicId.KINETIC_FLYWHEEL, RelicId.KINETIC_FLYWHEEL))
+        fun links(vararg ids: RelicId) = hudRelicLinks(content, ids.map { EquippedRelic(it, 1) })
+            .map { it.definition.id to it.slots }
+        // Two different Vector relics link across a Gravitic relic between them (slots 0 and 2).
+        assertEquals(listOf(SynergyId.VECTOR_MANEUVER to listOf(0, 2)),
+            links(RelicId.KINETIC_FLYWHEEL, RelicId.ORBITAL_NAIL, RelicId.GHOST_VECTOR))
+        // A named pair links across aspects wherever it sits; its Gravitic member also pairs locally.
+        assertEquals(
+            setOf(SynergyId.GRAVITIC_GROUPING to listOf(1, 2), SynergyId.BRAKE_COMPRESSION to listOf(0, 2)),
+            links(RelicId.BRAKEPOINT_MEMORY, RelicId.ORBITAL_NAIL, RelicId.MASS_ECHO).toSet(),
+        )
+        // The same relic twice, a lone relic and unrelated aspects form nothing.
+        assertEquals(emptyList(), links(RelicId.KINETIC_FLYWHEEL, RelicId.KINETIC_FLYWHEEL))
+        assertEquals(emptyList(), links(RelicId.KINETIC_FLYWHEEL))
+        assertEquals(emptyList(), links(RelicId.KINETIC_FLYWHEEL, RelicId.ORBITAL_NAIL))
         val sovereign = RelicId.entries.filter { content.relic(it).aspect == RelicAspect.SOVEREIGN }
-        if (sovereign.size >= 2) assertFalse(linked(sovereign[0], sovereign[1]))
-        assertFalse(relicsLinked(content, listOf(EquippedRelic(RelicId.KINETIC_FLYWHEEL, 1)), 0))
+        if (sovereign.size >= 2) assertEquals(emptyList(), links(sovereign[0], sovereign[1]))
+
+        // The HUD reads exactly what the pause and relic overlays read, for any matrix.
+        val random = kotlin.random.Random(7)
+        repeat(300) {
+            val relics = List(random.nextInt(0, 5)) { EquippedRelic(RelicId.entries[random.nextInt(RelicId.entries.size)], 1) }
+            assertEquals(
+                overlaySynergyLinks(relics.map { it.id }, content).map { it.definition.id to it.slots },
+                hudRelicLinks(content, relics).map { it.definition.id to it.slots },
+            )
+        }
     }
 
     @Test

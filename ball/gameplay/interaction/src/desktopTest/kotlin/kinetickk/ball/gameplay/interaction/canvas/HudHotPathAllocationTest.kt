@@ -50,6 +50,19 @@ class HudHotPathAllocationTest {
             val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
                 AppLanguage.Russian)
             val memory = HudPresentationMemory()
+            // Values that change every frame: speed, draining polarity (its % label shows), falling
+            // integrity (hit ghost + split channels), chain and orbit progress. Models are built up
+            // front so the measured frames only draw.
+            val frames = List(FRAMES) { frame ->
+                model.with(
+                    "velocityX" to 300f + frame * 7.3f,
+                    "polarityStability" to 0.24f - frame * 0.0005f,
+                    "hp" to 36f - frame * 0.05f,
+                    "combo" to 14 + frame,
+                    "pointsOfInterest" to listOf(PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f,
+                        true, 12f, 0, frame / FRAMES.toFloat(), immutableListOf(), 0f, 0f)).toImmutableList(),
+                )
+            }
             val bitmap = ImageBitmap(width, height)
             val canvas = Canvas(bitmap)
             val scope = CanvasDrawScope()
@@ -57,10 +70,13 @@ class HudHotPathAllocationTest {
             fun empty() = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) { drawRect(Kk.Ink) }
             // Time stays inside one animation cycle so the frames only move shaders, pulses and alphas.
             fun hud(frame: Int) = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) {
-                drawHud(model, measurer, 10f + frame * 0.0001f, 0f, 0f, memory, trialInfoFocused = false)
-                drawHudFeed(model, fx, measurer, 10f + frame * 0.0001f, memory)
+                val current = frames[frame % FRAMES]
+                drawHud(current, measurer, 10f + frame * 0.0001f, 0f, 0f, memory, trialInfoOpen = true)
+                drawHudFeed(current, fx, measurer, 10f + frame * 0.0001f, memory)
+                drawTrialTooltip(current, measurer, open = true)
             }
-            repeat(200) { empty(); hud(it) }
+            // Warm every digit, label and path once, then measure frames whose values all differ.
+            repeat(FRAMES) { empty(); hud(it) }
             val emptyBytes = allocated { repeat(FRAMES) { empty() } }
             val hudBytes = allocated { repeat(FRAMES) { hud(it) } }
             val perFrame = (hudBytes - emptyBytes) / FRAMES
