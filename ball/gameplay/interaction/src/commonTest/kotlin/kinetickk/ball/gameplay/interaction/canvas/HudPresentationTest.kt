@@ -106,7 +106,7 @@ class HudPresentationTest {
 
     @Test
     fun weaponIconsCoverEveryWeaponAndMasteriesCountFromTheContent() {
-        WeaponId.entries.forEach { assertTrue(weaponIcon(it) != null, "missing icon for $it") }
+        WeaponId.entries.forEach { assertEquals("weapons." + it.name.lowercase(), weaponIcon(it).key, "icon for $it") }
         val content = fixtureContent()
         assertEquals(1, weaponMasteriesReached(content, 1))
         assertEquals(2, weaponMasteriesReached(content, 3))

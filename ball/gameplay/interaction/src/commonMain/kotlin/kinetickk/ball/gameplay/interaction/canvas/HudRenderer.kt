@@ -122,7 +122,6 @@ internal object HudScratch {
     val dashLabel = HudKeyedText()
     val brakeLabel = HudKeyedText()
     val overheat = HudKeyedText()
-    val weaponIcons = arrayOfNulls<KkIcon>(WeaponId.entries.size)
     var aspectContent: GameplayContentSnapshot? = null
     val aspects = arrayOfNulls<RelicAspect>(RelicId.entries.size)
 }
@@ -846,12 +845,6 @@ internal fun relicAspect(content: GameplayContentSnapshot, id: RelicId): RelicAs
         cache.aspects.fill(null)
     }
     return cache.aspects[id.ordinal] ?: content.relic(id).aspect.also { cache.aspects[id.ordinal] = it }
-}
-
-/** The `weapons.*` icon for a [WeaponId] (mapped by name, parsed once). */
-internal fun weaponIcon(id: WeaponId): KkIcon? {
-    val cache = HudScratch.weaponIcons
-    return cache[id.ordinal] ?: KkIcon.byKey("weapons." + id.name.lowercase())?.also { cache[id.ordinal] = it }
 }
 
 /** Running controls: Dash and Brake slabs, pause and performance icon buttons. */
