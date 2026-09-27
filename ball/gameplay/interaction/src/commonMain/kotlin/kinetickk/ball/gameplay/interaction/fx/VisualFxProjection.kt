@@ -37,6 +37,10 @@ data class ShockwaveProjection(
     val colorIndex: Int,
 )
 
+/**
+ * A damage number anchored where the hit landed. [driftX]/[driftY] is the unit direction away
+ * from the Core at the hit; the renderer eases the drift along it from the remaining [life].
+ */
 data class DamageNumberProjection(
     val x: Float,
     val y: Float,
@@ -46,6 +50,8 @@ data class DamageNumberProjection(
     val compactAmount: String = formatDamageNumber(amount, DamageNumberFormat.COMPACT),
     val fullAmount: String = formatDamageNumber(amount, DamageNumberFormat.FULL),
     val russianCompactAmount: String = compactAmount.russianDamageNumber(),
+    val driftX: Float = 0f,
+    val driftY: Float = -1f,
 ) {
     fun formattedAmount(format: DamageNumberFormat, language: AppLanguage = AppLanguage.English): String = when (format) {
         DamageNumberFormat.COMPACT -> when (language) {

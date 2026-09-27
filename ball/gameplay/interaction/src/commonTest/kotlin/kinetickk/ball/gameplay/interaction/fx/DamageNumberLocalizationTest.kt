@@ -26,7 +26,7 @@ class DamageNumberLocalizationTest {
             Triple(-1_200L, "-1.2K", "-1,2 тыс."),
         )
         cases.forEach { (amount, english, russian) ->
-            val number = DamageNumberProjection(0f, 0f, amount, false, 0.65f)
+            val number = DamageNumberProjection(0f, 0f, amount, false, 0.6f)
             assertEquals(english, number.formattedAmount(DamageNumberFormat.COMPACT))
             assertEquals(russian, number.formattedAmount(DamageNumberFormat.COMPACT, AppLanguage.Russian))
             AppLanguage.entries.forEach { language ->
@@ -43,9 +43,10 @@ class DamageNumberLocalizationTest {
         reducer.apply(listOf(VisualFxCue.EffectsAdvanced(0.1f), VisualFxCue.WorldRebased(40f, 50f)))
         val snapshot = reducer.snapshot()
         val advanced = snapshot.damageNumbers.single()
+        // The anchor only moves with the world; the renderer eases the drift from the life.
         assertEquals(60f, advanced.x)
-        assertEquals(146.6f, advanced.y, 0.001f)
-        assertEquals(0.55f, advanced.life, 0.001f)
+        assertEquals(150f, advanced.y, 0.001f)
+        assertEquals(InteractionFxLimits.DAMAGE_NUMBER_LIFE_SECONDS - 0.1f, advanced.life, 0.001f)
         assertSame(original.compactAmount, advanced.compactAmount)
         assertSame(original.russianCompactAmount, advanced.russianCompactAmount)
         assertSame(original.fullAmount, advanced.fullAmount)
