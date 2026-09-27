@@ -55,6 +55,15 @@ internal fun runningHudMargin(width: Float, height: Float, scale: Float): Float 
 /** Top inset of the phone portrait HUD (status bar area of the Mobile-Portrait board). */
 internal const val PORTRAIT_HUD_TOP_DP = 47f
 
+/** Portrait rows below [PORTRAIT_HUD_TOP_DP], in dp: chips + chain, then the boss (elite/Architect) row. */
+internal const val PORTRAIT_CHIP_ROW_DP = 61f
+internal const val PORTRAIT_CHIP_ROW_HEIGHT_DP = 26f
+internal const val PORTRAIT_BOSS_ROW_DP = PORTRAIT_CHIP_ROW_DP + PORTRAIT_CHIP_ROW_HEIGHT_DP + 10f
+internal const val PORTRAIT_BOSS_ROW_HEIGHT_DP = 34f
+
+/** First free portrait row below the boss row (trial panel, feed), in dp below the HUD top. */
+internal const val PORTRAIT_PANEL_ROW_DP = PORTRAIT_BOSS_ROW_DP + PORTRAIT_BOSS_ROW_HEIGHT_DP + 10f
+
 /**
  * Running controls in canvas px. REGULAR: pause top-right, Dash and Brake as one row right-aligned
  * above the bottom-right loadout. Phones follow the Mobile boards: Dash and Brake at the thumb side,

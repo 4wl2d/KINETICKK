@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
+import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
@@ -141,14 +142,75 @@ private fun DrawScope.drawCursorHalo(
             alpha = alpha, style = stroke)
     }
     if (draining && low) {
-        val percent = (stability * 100f).toInt()
-        val layout = HudDrawCache.layout(HudText.POLARITY, measurer, HudScratch.polarity.of(percent.toLong()),
-            measurer.typography.condStyle(26f, tabular = true))
-        val left = cursor.x - radius - d(14f)
-        val onLeft = left - layout.size.width > d(8f)
-        drawKkText(layout, if (onLeft) left else cursor.x + radius + d(14f), cursor.y, roles.threat,
-            if (onLeft) KkAlign.END else KkAlign.START, KkVAlign.CENTER, alpha = alpha)
+        // Changes every frame while draining: cached digit layouts, placed clear of the controls.
+        val percent = (stability * 100f).toLong()
+        val style = measurer.typography.condStyle(26f, tabular = true)
+        val labelWidth = kkTabularNumberWidth(measurer, percent, style, suffix = PERCENT)
+        val labelHeight = measureKkText(measurer, "0", style).kkBoxHeight
+        val box = PolarityLabelBox
+        placePolarityLabel(cursor.x, cursor.y, radius + d(14f), labelWidth, labelHeight, size.width, size.height, density, box)
+        // Solid text: animating a text's alpha repaints its paragraph every frame; the halo pulses.
+        drawKkTabularNumber(measurer, percent, style, box[0], box[1], roles.threat, suffix = PERCENT)
+        HudLayoutProbe.record(HudBlock.POLARITY_LABEL, box[0], box[1], box[2], box[3])
     }
+}
+
+private const val PERCENT = "%"
+private val PolarityLabelBox = FloatArray(4)
+
+/**
+ * Places the polarity value beside the cursor halo ([gap] from the cursor): left, right, above or
+ * below (then up to five label sizes further out), each slid along the screen edge to stay on
+ * screen, taking the first that stays clear of the running controls (Dash sits where the cursor
+ * strains on phones). Writes left, top, right,
+ * bottom into [out]; returns the choice 0..3.
+ */
+internal fun placePolarityLabel(
+    cursorX: Float,
+    cursorY: Float,
+    gap: Float,
+    labelWidth: Float,
+    labelHeight: Float,
+    width: Float,
+    height: Float,
+    density: Float,
+    out: FloatArray,
+): Int {
+    val margin = 8f * density
+    val maxLeft = (width - margin - labelWidth).coerceAtLeast(margin)
+    val maxTop = (height - margin - labelHeight).coerceAtLeast(margin)
+    for (attempt in 0 until 24) {
+        // Left, right, above, below; then the same directions up to five label sizes further out.
+        val choice = attempt % 4
+        val reach = gap + (attempt / 4) * (if (choice < 2) labelWidth else labelHeight)
+        val left = when (choice) {
+            0 -> cursorX - reach - labelWidth
+            1 -> cursorX + reach
+            else -> (cursorX - labelWidth * 0.5f).coerceIn(margin, maxLeft)
+        }
+        val top = when (choice) {
+            2 -> cursorY - reach - labelHeight
+            3 -> cursorY + reach
+            else -> (cursorY - labelHeight * 0.5f).coerceIn(margin, maxTop)
+        }
+        val right = left + labelWidth
+        val bottom = top + labelHeight
+        // Sideways placements may not slide over the cursor; vertical ones may slide along the edge.
+        if (left < margin || top < margin || right > width - margin || bottom > height - margin) continue
+        var blocked = false
+        forEachRunningControlBounds(width, height, density) { _, cl, ct, cr, cb ->
+            if (left < cr && right > cl && top < cb && bottom > ct) blocked = true
+        }
+        if (!blocked) {
+            out[0] = left; out[1] = top; out[2] = right; out[3] = bottom
+            return choice
+        }
+    }
+    // Nothing is clear (cannot happen with the current layouts): keep it left of the cursor, on screen.
+    val left = (cursorX - gap - labelWidth).coerceIn(margin, maxLeft)
+    val top = (cursorY - labelHeight * 0.5f).coerceIn(margin, maxTop)
+    out[0] = left; out[1] = top; out[2] = left + labelWidth; out[3] = top + labelHeight
+    return 0
 }
 
 /** Three fading rings behind the Core along its travel while a dash is in progress. */
@@ -199,7 +261,8 @@ private fun DrawScope.drawOverheatStamp(measurer: TextMeasurer, core: Offset, ha
     rotate(-6f, Offset(left + width * 0.5f, top + height * 0.5f)) {
         drawRect(Kk.Ink, Offset(left + d(3f) * k, top + d(3f) * k), Size(width, height), alpha)
         drawRect(roles.threat, Offset(left, top), Size(width, height), alpha)
-        drawKkText(layout, left + width * 0.5f, top + height * 0.5f + d(0.5f), Kk.Ink, KkAlign.CENTER, KkVAlign.CENTER, alpha)
+        // The plate pulses; the ink label stays solid (a text alpha change repaints its paragraph).
+        drawKkText(layout, left + width * 0.5f, top + height * 0.5f + d(0.5f), Kk.Ink, KkAlign.CENTER, KkVAlign.CENTER)
     }
 }
 

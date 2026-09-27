@@ -23,7 +23,11 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.click
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.PointOfInterestKind
@@ -47,6 +51,7 @@ import kinetickk.foundation.design.LocalAppLanguage
 import org.junit.Rule
 import org.junit.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalTestApi::class)
@@ -54,12 +59,101 @@ class GameplayHudSemanticsTest {
     @get:Rule
     val compose = createComposeRule()
 
+    private lateinit var trialModel: kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
+
+    /** Bone pixels in the band just below the trial panel, where its rules slip opens. */
+    private fun tooltipPixels(): Int {
+        val host = compose.onNodeWithTag(HOST_TAG).getUnclippedBoundsInRoot()
+        val panel = HudTrialPanelLayout().update(1_440f, 810f, 1f, trialModel.settings.textScale)
+        val pixels = compose.onRoot().captureToImage().toPixelMap()
+        val bone = Kk.Bone.toArgb()
+        var count = 0
+        val top = (host.top.value + panel.bottom).toInt() + 14
+        for (y in top until (top + 40).coerceAtMost(pixels.height)) {
+            for (x in (host.left.value + panel.left).toInt() until (host.left.value + panel.right).toInt().coerceAtMost(pixels.width)) {
+                if (pixels[x, y].toArgb() == bone) count++
+            }
+        }
+        return count
+    }
+
+    private fun startTrial(pulses: MutableList<GameplayInteractionPulse>) {
+        val snapshot = hudTestSnapshot()
+        val orbit = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
+            immutableListOf(), 0f, 0f)
+        trialModel = requireNotNull(snapshot.renderModel).with("pointsOfInterest" to listOf(orbit).toImmutableList())
+        val running = snapshot.withModel(trialModel)
+        val port = object : GameplayInteractionPort {
+            override val instanceId get() = running.instanceId
+            override fun renderSnapshot() = running
+            override fun visualFxSnapshot() = VisualFxProjection.EMPTY
+            override fun accept(pulse: GameplayInteractionPulse): GameplayAcceptance {
+                pulses += pulse
+                return GameplayAcceptance.Rejected(running.instanceId, running.revision, GameplayRejection.RunExited)
+            }
+        }
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides AppLanguage.English) {
+                Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
+            }
+        }
+        compose.mainClock.advanceTimeByFrame()
+    }
+
+    @Test
+    fun tappingTheTrialInfoOpensTheRulesWithoutSteeringAndTappingElsewhereClosesThemAndSteers() {
+        val pulses = mutableListOf<GameplayInteractionPulse>()
+        startTrial(pulses)
+        val info = HudTrialPanelLayout().update(1_440f, 810f, 1f, trialModel.settings.textScale).infoTarget(1f).center
+        val closed = tooltipPixels()
+        fun steered() = pulses.any { it is GameplayInteractionPulse.PointerMoved }
+
+        pulses.clear()
+        compose.onNodeWithTag(HOST_TAG).performTouchInput { click(info) }
+        compose.mainClock.advanceTimeByFrame()
+        assertFalse(steered(), "a tap on the (!) steered the singularity")
+        assertTrue(tooltipPixels() > closed + 2_000, "a tap on the (!) did not open the rules")
+
+        pulses.clear()
+        compose.onNodeWithTag(HOST_TAG).performTouchInput { click(Offset(700f, 500f)) }
+        compose.mainClock.advanceTimeByFrame()
+        assertTrue(steered(), "a tap elsewhere did not steer")
+        assertTrue(tooltipPixels() < closed + 500, "a tap elsewhere left the rules open")
+
+        // A second tap on the (!) toggles: open, then closed again.
+        compose.onNodeWithTag(HOST_TAG).performTouchInput { click(info) }
+        compose.mainClock.advanceTimeByFrame()
+        assertTrue(tooltipPixels() > closed + 2_000)
+        compose.onNodeWithTag(HOST_TAG).performTouchInput { click(info) }
+        compose.mainClock.advanceTimeByFrame()
+        assertTrue(tooltipPixels() < closed + 500, "a second tap did not close the rules")
+    }
+
+    @Test
+    fun aHoveringMouseShowsTheTrialRulesAndDoesNotSteerOverTheInfo() {
+        val pulses = mutableListOf<GameplayInteractionPulse>()
+        startTrial(pulses)
+        val info = HudTrialPanelLayout().update(1_440f, 810f, 1f, trialModel.settings.textScale).infoTarget(1f).center
+        val closed = tooltipPixels()
+        pulses.clear()
+        compose.onNodeWithTag(HOST_TAG).performMouseInput { moveTo(info) }
+        compose.mainClock.advanceTimeByFrame()
+        assertFalse(pulses.any { it is GameplayInteractionPulse.PointerMoved }, "hovering the (!) steered")
+        assertTrue(tooltipPixels() > closed + 2_000, "hovering the (!) did not show the rules")
+        compose.onNodeWithTag(HOST_TAG).performMouseInput { moveTo(Offset(700f, 500f)) }
+        compose.mainClock.advanceTimeByFrame()
+        assertTrue(pulses.any { it is GameplayInteractionPulse.PointerMoved })
+        assertTrue(tooltipPixels() < closed + 500, "the rules stayed open after the mouse left")
+    }
+
     @Test
     fun trialRulesSitBehindAFocusableInfoNodeAndDesktopPauseAndBuildAreHeaderButtons() {
         val snapshot = hudTestSnapshot()
         val orbit = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
             immutableListOf(), 0f, 0f)
         val model = requireNotNull(snapshot.renderModel).with("pointsOfInterest" to listOf(orbit).toImmutableList())
+        trialModel = model
         val running = snapshot.withModel(model)
         val pulses = mutableListOf<GameplayInteractionPulse>()
         val port = object : GameplayInteractionPort {
@@ -81,26 +175,13 @@ class GameplayHudSemanticsTest {
         val rules = model.content.pointsOfInterest.definition(PointOfInterestKind.COLLAPSING_ORBIT).instruction
         val info = compose.onNodeWithTag(GAMEPLAY_TRIAL_INFO_TAG)
         info.assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf(rules)))
-        val infoBounds = info.getUnclippedBoundsInRoot()
-        fun bonePixelsBelowInfo(): Int {
-            val pixels = compose.onRoot().captureToImage().toPixelMap()
-            val bone = Kk.Bone.toArgb()
-            var count = 0
-            val top = infoBounds.bottom.value.toInt()
-            for (y in top until (top + 60).coerceAtMost(pixels.height)) {
-                for (x in (infoBounds.left.value.toInt() - 120).coerceAtLeast(0) until (infoBounds.right.value.toInt() + 120).coerceAtMost(pixels.width)) {
-                    if (pixels[x, y].toArgb() == bone) count++
-                }
-            }
-            return count
-        }
         compose.mainClock.advanceTimeByFrame()
-        val before = bonePixelsBelowInfo()
+        val before = tooltipPixels()
         info.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         info.assertIsFocused()
         compose.mainClock.advanceTimeByFrame()
-        // Focus opens the bone tooltip slip with the rules below the (!).
-        assertTrue(bonePixelsBelowInfo() > before + 2_000, "the focused (!) shows no tooltip")
+        // Focus opens the bone tooltip slip with the rules below the panel.
+        assertTrue(tooltipPixels() > before + 2_000, "the focused (!) shows no tooltip")
 
         compose.onNodeWithTag("kinetickk.gameplay.pause").performSemanticsAction(SemanticsActions.OnClick) { it() }
         compose.mainClock.advanceTimeByFrame()

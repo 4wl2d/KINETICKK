@@ -50,6 +50,8 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -83,6 +85,7 @@ import kinetickk.ball.gameplay.interaction.input.GameplayInput
 import kinetickk.ball.gameplay.interaction.input.InteractionValidationResult
 import kinetickk.ball.gameplay.interaction.input.ValidationFailure
 import kinetickk.ball.gameplay.interaction.input.isHudControlPosition
+import kinetickk.ball.gameplay.interaction.input.isTrialInfoPosition
 import kinetickk.ball.gameplay.interaction.input.resolveGameplayPress
 import kinetickk.ball.gameplay.interaction.layout.PauseTarget
 import kinetickk.ball.gameplay.interaction.layout.PauseLayoutGeometry
@@ -137,7 +140,10 @@ fun GameplayContent(
     }
     val performanceEnabledState = rememberUpdatedState(performanceEnabledValue)
     val hudMemory = remember(component) { HudPresentationMemory() }
+    // The trial panel's (!) opens by keyboard focus, a tap/click (toggle) or a hovering mouse.
     var trialInfoFocusedValue by remember(component) { mutableStateOf(false) }
+    var trialInfoOpenValue by remember(component) { mutableStateOf(false) }
+    var trialInfoHoveredValue by remember(component) { mutableStateOf(false) }
 
     fun dispatch(
         pulse: GameplayInteractionPulse,
@@ -318,6 +324,14 @@ fun GameplayContent(
     } else {
         null
     }
+    val trialActive = renderModelValue.phase == GamePhase.RUNNING && renderModelValue.activeTrial() != null
+    LaunchedEffect(component, trialActive) {
+        if (!trialActive) {
+            trialInfoOpenValue = false
+            trialInfoHoveredValue = false
+        }
+    }
+    val trialInfoShown = trialActive && (trialInfoFocusedValue || trialInfoOpenValue || trialInfoHoveredValue)
     val terminal = renderModelValue.phase == GamePhase.GAME_OVER || renderModelValue.phase == GamePhase.VICTORY
     val terminalStartedAt = remember(component, renderModelValue.phase) { renderTimeSecondsValue }
     val terminalElapsed = if (terminal) (renderTimeSecondsValue - terminalStartedAt).coerceAtLeast(0f) else 0f
@@ -491,8 +505,17 @@ fun GameplayContent(
                                     validatedMove.x,
                                     validatedMove.y,
                                 )
+                            val onTrialInfo = validatedMove != null &&
+                                currentRenderModel.isTrialInfoPosition(validatedMove.x, validatedMove.y)
+                            if (!pressed) {
+                                // Only a mouse hovers; a lifted finger must not keep the rules open.
+                                trialInfoHoveredValue = onTrialInfo && event.type != PointerEventType.Exit &&
+                                    event.changes.firstOrNull()?.type == PointerType.Mouse
+                            }
                             if (pressed && !wasPressedValue && validatedMove != null) {
                                 hudGestureActiveValue = isHudControlPosition
+                                // A press on the (!) toggles the rules; a press anywhere else closes them.
+                                trialInfoOpenValue = onTrialInfo && !trialInfoOpenValue
                             }
                             if (
                                 validatedMove != null &&
@@ -534,7 +557,7 @@ fun GameplayContent(
                 pauseLayout = pauseLayout,
                 terminalElapsed = terminalElapsed,
                 hudMemory = hudMemory,
-                trialInfoFocused = trialInfoFocusedValue,
+                trialInfoOpen = trialInfoShown,
             )
             if (drawStartedAt != null) {
                 // State writes can invalidate the draw scope before recomposition publishes the
@@ -599,6 +622,7 @@ fun GameplayContent(
                 performanceEnabled = performanceEnabledValue,
                 pauseLayout = pauseLayout,
                 onTrialInfoFocusChanged = { trialInfoFocusedValue = it },
+                onTrialInfoToggle = { trialInfoOpenValue = !trialInfoOpenValue },
                 onInput = { input ->
                     dispatch(GameplayInteractionPulse.UserGestureObserved)
                     dispatchInput(input)
@@ -624,6 +648,7 @@ private fun GameplaySemanticControls(
     performanceEnabled: Boolean,
     pauseLayout: PauseLayoutGeometry?,
     onTrialInfoFocusChanged: (Boolean) -> Unit,
+    onTrialInfoToggle: () -> Unit,
     onInput: (GameplayInput) -> Unit,
     onBrakeChanged: (Boolean) -> Unit,
 ) {
@@ -636,6 +661,7 @@ private fun GameplaySemanticControls(
                 density = density,
                 description = engine.trialRules(trial, language),
                 onFocusChanged = onTrialInfoFocusChanged,
+                onToggle = onTrialInfoToggle,
             )
         }
     }
@@ -740,6 +766,7 @@ private fun TrialInfoSemanticNode(
     density: Density,
     description: String,
     onFocusChanged: (Boolean) -> Unit,
+    onToggle: () -> Unit,
 ) {
     val bounds = remember(engine.screenWidth, engine.screenHeight, engine.uiScale, engine.settings.textScale) {
         HudTrialPanelLayout()
@@ -755,8 +782,14 @@ private fun TrialInfoSemanticNode(
             .placeInGameplayBounds(bounds, density)
             .testTag(GAMEPLAY_TRIAL_INFO_TAG)
             .onFocusChanged { currentOnFocusChanged.value(it.isFocused) }
+            .onKeyEvent { event -> activateSemanticButtonFromKey(event.key, event.type, onToggle) }
             .semantics(mergeDescendants = true) {
+                role = Role.Button
                 contentDescription = description
+                onClick(label = description) {
+                    onToggle()
+                    true
+                }
             }
             .focusable(),
     )

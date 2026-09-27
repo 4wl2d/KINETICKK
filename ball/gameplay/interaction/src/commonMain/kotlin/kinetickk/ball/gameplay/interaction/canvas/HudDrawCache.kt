@@ -30,6 +30,7 @@ internal object HudDrawCache {
     private val layoutScales = FloatArray(HudText.entries.size)
     private val layoutWidths = FloatArray(HudText.entries.size)
     private val layoutUpper = BooleanArray(HudText.entries.size)
+    private val layoutLines = IntArray(HudText.entries.size)
     private val layouts = arrayOfNulls<TextLayoutResult>(HudText.entries.size)
 
     /** The layout of [text] for [slot]; measured again only when an input differs from the last call. */
@@ -40,23 +41,28 @@ internal object HudDrawCache {
         style: TextStyle,
         uppercase: Boolean = false,
         maxWidth: Float = Float.POSITIVE_INFINITY,
+        maxLines: Int = 1,
     ): TextLayoutResult {
         val index = slot.ordinal
         val cached = layouts[index]
         if (cached != null && layoutStyles[index] === style && layoutDelegates[index] === measurer.delegate &&
             layoutScales[index] == measurer.scale && layoutUpper[index] == uppercase &&
-            layoutWidths[index] == maxWidth && layoutTexts[index] == text
+            layoutWidths[index] == maxWidth && layoutLines[index] == maxLines && layoutTexts[index] == text
         ) return cached
-        val measured = measureKkText(measurer, text, style, uppercase, maxWidth)
+        val measured = measureKkText(measurer, text, style, uppercase, maxWidth, maxLines)
         layoutTexts[index] = text
         layoutStyles[index] = style
         layoutDelegates[index] = measurer.delegate
         layoutScales[index] = measurer.scale
         layoutWidths[index] = maxWidth
         layoutUpper[index] = uppercase
+        layoutLines[index] = maxLines
         layouts[index] = measured
         return measured
     }
+
+    /** The last layout measured for [slot] (tests). */
+    fun peekLayout(slot: HudText): TextLayoutResult? = layouts[slot.ordinal]
 
     private val rectKeys = FloatArray(HudRect.entries.size * 4) { Float.NaN }
     private val rects = arrayOfNulls<Rect>(HudRect.entries.size)
@@ -174,7 +180,7 @@ internal class HudKeyedText {
 }
 
 internal enum class HudText {
-    TIMER, LEVEL_LABEL, INTEGRITY, INTEGRITY_SPLIT_THREAT, INTEGRITY_SPLIT_SHIELD, SPEED, CHAIN, MATTER, KEYS, WEAPON_LEVEL, OVERHEAT, POLARITY,
+    TIMER, LEVEL_LABEL, MATTER, KEYS, WEAPON_LEVEL, OVERHEAT,
     BOSS_NAME, TRIAL_LABEL, TRIAL_NAME, TRIAL_NAME_FIT, TRIAL_CLOCK, TRIAL_PROGRESS, TRIAL_REWARD,
     MESSAGE_TITLE, MESSAGE_DETAIL,
     NOTICE_TITLE_0, NOTICE_TITLE_1, NOTICE_TITLE_2,
@@ -185,9 +191,38 @@ internal enum class HudText {
     PERF_TITLE, PERF_0, PERF_1, PERF_2, PERF_3, PERF_4,
 }
 
+/**
+ * Where the HUD placed its blocks in the last drawn frame (px), for layout tests: plain float
+ * slots rewritten every frame, no allocation. [begin] clears the frame's marks.
+ */
+internal object HudLayoutProbe {
+    private val values = FloatArray(HudBlock.entries.size * 4)
+    private val drawn = BooleanArray(HudBlock.entries.size)
+
+    fun begin() = drawn.fill(false)
+
+    fun record(block: HudBlock, left: Float, top: Float, right: Float, bottom: Float) {
+        val base = block.ordinal * 4
+        values[base] = left
+        values[base + 1] = top
+        values[base + 2] = right
+        values[base + 3] = bottom
+        drawn[block.ordinal] = true
+    }
+
+    /** The block's rect in the last frame, or null when it was not drawn (tests only). */
+    fun rect(block: HudBlock): androidx.compose.ui.geometry.Rect? {
+        if (!drawn[block.ordinal]) return null
+        val base = block.ordinal * 4
+        return androidx.compose.ui.geometry.Rect(values[base], values[base + 1], values[base + 2], values[base + 3])
+    }
+}
+
+internal enum class HudBlock { CLOCK, MATTER_CHIP, KEY_CHIP, CHAIN, BOSS, POLARITY_LABEL, TRIAL_PANEL, TRIAL_TOOLTIP, FEED }
+
 internal enum class HudRect {
     DATA_BAR, INTEGRITY, HEAT, ABILITY, LADDER, OVERDRIVE, CHAIN, BOSS_0, BOSS_1, BOSS_2,
-    WEAPON, TRIAL_METER, TRIAL_INFO, TRIAL_ANCHOR, PERF_PANEL,
+    WEAPON, TRIAL_METER, TRIAL_INFO, TRIAL_ANCHOR, TRIAL_TOOLTIP, PERF_PANEL,
 }
 
 internal enum class HudPath {
