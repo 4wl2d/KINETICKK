@@ -9,6 +9,7 @@ import kotlin.math.min
 internal enum class PauseTarget {
     RESUME,
     SETTINGS,
+    CODEX,
     PERFORMANCE,
     EXIT,
 }
@@ -34,8 +35,9 @@ internal fun pauseLayoutGeometry(width: Float, height: Float, scale: Float): Pau
             mode,
             titleY = height * 0.30f,
             actions = listOf(
-                PauseActionBounds(PauseTarget.RESUME, Rect(center - d(150f), height * 0.5f, center + d(150f), height * 0.5f + d(52f))),
-                PauseActionBounds(PauseTarget.SETTINGS, Rect(center - d(150f), height * 0.62f, center + d(150f), height * 0.62f + d(52f))),
+                PauseActionBounds(PauseTarget.RESUME, Rect(center - d(150f), height * 0.44f, center + d(150f), height * 0.44f + d(52f))),
+                PauseActionBounds(PauseTarget.SETTINGS, Rect(center - d(150f), height * 0.54f, center + d(150f), height * 0.54f + d(52f))),
+                PauseActionBounds(PauseTarget.CODEX, Rect(center - d(150f), height * 0.64f, center + d(150f), height * 0.64f + d(52f))),
                 PauseActionBounds(PauseTarget.EXIT, Rect(center - d(150f), height * 0.74f, center + d(150f), height * 0.74f + d(52f))),
             ),
         )
@@ -43,14 +45,14 @@ internal fun pauseLayoutGeometry(width: Float, height: Float, scale: Float): Pau
     val buttonWidth = min(d(320f), width - d(24f))
     val buttonHeight = d(48f)
     val gap = d(8f)
-    val totalHeight = buttonHeight * 4f + gap * 3f
+    val targets = listOf(PauseTarget.RESUME, PauseTarget.SETTINGS, PauseTarget.CODEX, PauseTarget.PERFORMANCE, PauseTarget.EXIT)
+    val totalHeight = buttonHeight * targets.size + gap * (targets.size - 1)
     val start = if (mode == GameplayLayoutMode.COMPACT_LANDSCAPE) {
         d(72f)
     } else {
         maxOf(d(180f), height * 0.34f)
     }
     val left = (width - buttonWidth) * 0.5f
-    val targets = listOf(PauseTarget.RESUME, PauseTarget.SETTINGS, PauseTarget.PERFORMANCE, PauseTarget.EXIT)
     return PauseLayoutGeometry(
         mode = mode,
         titleY = if (mode == GameplayLayoutMode.COMPACT_LANDSCAPE) d(24f) else height * 0.18f,

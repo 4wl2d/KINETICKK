@@ -216,6 +216,7 @@ fun GameplayContent(
             is GameplayInput.Action -> dispatch(input.action, collectPerformance)
             GameplayInput.OpenSettings -> onOutput(GameplayInteractionOutput.OpenSettings)
             GameplayInput.OpenRebirth -> onOutput(GameplayInteractionOutput.OpenRebirth)
+            GameplayInput.OpenCodex -> onOutput(GameplayInteractionOutput.OpenCodex)
             GameplayInput.ExitToHome -> onOutput(GameplayInteractionOutput.ExitToHome)
             GameplayInput.RestartRun -> onOutput(GameplayInteractionOutput.RestartRun)
             GameplayInput.TogglePerformance -> togglePerformanceTelemetry()
@@ -558,12 +559,13 @@ fun GameplayContent(
                     dispatch(GameplayInteractionPulse.UserGestureObserved)
                     dispatch(GameplayInteractionPulse.ChoicesRerolled)
                 },
+                onBuild = { onOutput(GameplayInteractionOutput.OpenCodex) },
             )
         }
-        if (inputEnabled && (renderModelValue.phase == GamePhase.RUNNING || renderModelValue.phase == GamePhase.PAUSED || renderModelValue.phase == GamePhase.CHOICE)) {
+        // Pause and reward overlays present Codex as their own menu item and button.
+        if (inputEnabled && renderModelValue.phase == GamePhase.RUNNING) {
             BuildButton(
                 modifier = Modifier.align(when {
-                    renderModelValue.phase != GamePhase.RUNNING -> Alignment.TopStart
                     kinetickk.ball.gameplay.interaction.layout.gameplayLayoutMode(renderModelValue.screenWidth, renderModelValue.screenHeight, density) == kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode.REGULAR -> Alignment.BottomStart
                     else -> Alignment.BottomCenter
                 }).padding(12.dp),
@@ -667,6 +669,13 @@ private fun GameplaySemanticControls(
                     tag = "kinetickk.gameplay.settings",
                     description = language.text(GameplayText.SettingsDescription),
                     onClick = { onInput(GameplayInput.OpenSettings) },
+                )
+                PauseTarget.CODEX -> GameplaySemanticAction(
+                    bounds = action.bounds,
+                    density = density,
+                    tag = "kinetickk.gameplay.codex",
+                    description = language.text(GameplayText.Build),
+                    onClick = { onInput(GameplayInput.OpenCodex) },
                 )
                 PauseTarget.PERFORMANCE -> PerformanceSemanticAction(
                     bounds = action.bounds,

@@ -109,6 +109,7 @@ internal fun RewardContent(
     enabled: Boolean,
     onSelect: (Int) -> Unit,
     onReroll: () -> Unit,
+    @Suppress("UNUSED_PARAMETER") onBuild: () -> Unit = {},
 ) {
     val language = LocalAppLanguage.current
     val presentation = remember(engine, language) { engine.rewardPresentation(language) }

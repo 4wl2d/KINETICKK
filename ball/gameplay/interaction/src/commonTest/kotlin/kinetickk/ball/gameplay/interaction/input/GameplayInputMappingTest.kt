@@ -65,9 +65,10 @@ class GameplayInputMappingTest {
     fun pausedButtonsReturnShellRequestsInsteadOfNavigationActions() {
         val paused = hitTestState(GamePhase.PAUSED)
 
-        val resume = assertIs<GameplayInput.Action>(paused.resolveGameplayPress(640f, 386f))
+        val resume = assertIs<GameplayInput.Action>(paused.resolveGameplayPress(640f, 342f))
         assertSame(GameplayInteractionPulse.PauseToggled, resume.action)
-        assertSame(GameplayInput.OpenSettings, paused.resolveGameplayPress(640f, 472f))
+        assertSame(GameplayInput.OpenSettings, paused.resolveGameplayPress(640f, 414f))
+        assertSame(GameplayInput.OpenCodex, paused.resolveGameplayPress(640f, 486f))
         assertSame(GameplayInput.ExitToHome, paused.resolveGameplayPress(640f, 558f))
     }
 

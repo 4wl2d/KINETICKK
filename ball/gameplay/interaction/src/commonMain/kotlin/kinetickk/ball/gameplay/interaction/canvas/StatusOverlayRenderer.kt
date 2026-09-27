@@ -32,6 +32,7 @@ internal fun DrawScope.drawPause(
         val label = when (action.target) {
             PauseTarget.RESUME -> GameplayText.Resume
             PauseTarget.SETTINGS -> GameplayText.Settings
+            PauseTarget.CODEX -> GameplayText.Build
             PauseTarget.PERFORMANCE -> GameplayText.PerformanceMetrics
             PauseTarget.EXIT -> GameplayText.ReturnHome
         }
