@@ -6,170 +6,59 @@ package kinetickk.ball.gameplay.interaction.canvas
 import kinetickk.foundation.design.*
 
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.translate
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
-import kinetickk.ball.gameplay.nucleus.model.clamp
-import kinetickk.ball.profile.api.ParticleDensity
-import kotlin.math.abs
-import kotlin.math.ceil
-import kotlin.math.floor
-import kotlin.math.max
-import kotlin.math.sin
-import kotlin.math.sqrt
 
+/** World grid pitch in world units (`bg-grid`; the world spec asks for 40 px). */
+internal const val WORLD_GRID_SPACING = 40f
+
+/** Diameter of the halftone disc that sits under the Core (`HUD.dc.html`: 700 px). */
+private const val CORE_HALFTONE_DIAMETER = 700f
+
+private val CoreHalftoneRect = Rect(
+    -CORE_HALFTONE_DIAMETER * 0.5f,
+    -CORE_HALFTONE_DIAMETER * 0.5f,
+    CORE_HALFTONE_DIAMETER * 0.5f,
+    CORE_HALFTONE_DIAMETER * 0.5f,
+)
+
+/**
+ * Ink ground with a world-anchored 40 px grid and a faint halftone disc around the Core. The
+ * run's rebirth tier tints the grid and halftone only. [roles] is the Color vision palette.
+ */
 internal fun DrawScope.drawBackdrop(
     engine: GameplayRenderModel,
     shakeX: Float,
     shakeY: Float,
-    renderTime: Float,
+    @Suppress("UNUSED_PARAMETER") renderTime: Float,
     @Suppress("UNUSED_PARAMETER") roles: KkRolePalette,
 ) {
-    val backdropCameraX = engine.cameraX
-    val backdropCameraY = engine.cameraY
-
-    drawDistantSpace(engine, shakeX, shakeY, renderTime)
-    drawGridLayer(backdropCameraX, backdropCameraY, 172f, 0.42f, GridBlue.copy(alpha = 0.12f), 1.35f, shakeX, shakeY)
-    drawGridLayer(backdropCameraX, backdropCameraY, 86f, 1f, GridBlue.copy(alpha = 0.09f), 0.8f, shakeX, shakeY)
-
-    val startCellX = floor((engine.cameraX - size.width * 0.5f) / 180f).toInt() - 1
-    val endCellX = ceil((engine.cameraX + size.width * 0.5f) / 180f).toInt() + 1
-    val startCellY = floor((engine.cameraY - size.height * 0.5f) / 180f).toInt() - 1
-    val endCellY = ceil((engine.cameraY + size.height * 0.5f) / 180f).toInt() + 1
-    for (cellX in startCellX..endCellX) {
-        for (cellY in startCellY..endCellY) {
-            val hash = abs(cellX * 7_919 + cellY * 104_729)
-            if (hash % 4 == 0) {
-                val worldX = cellX * 180f + (hash % 91)
-                val worldY = cellY * 180f + ((hash / 97) % 113)
-                val point = singularityLensPoint(world(engine, worldX, worldY, shakeX, shakeY), Offset(engine.pointerX, engine.pointerY))
-                val twinkle = 0.25f + (sin(renderTime * (0.8f + hash % 5 * 0.17f) + hash) + 1f) * 0.13f
-                drawCircle(if (hash % 3 == 0) Violet else Cyan, 0.9f + hash % 3 * 0.28f, point, alpha = twinkle)
-            }
+    val theme = arenaTheme(engine.rebirthLevel)
+    val origin = Offset(
+        worldGridOffset(engine.cameraX, size.width, shakeX),
+        worldGridOffset(engine.cameraY, size.height, shakeY),
+    )
+    var x = origin.x - WORLD_GRID_SPACING
+    while (x <= size.width) {
+        if (x >= 0f) drawLine(theme.grid, Offset(x, 0f), Offset(x, size.height), 1f)
+        x += WORLD_GRID_SPACING
+    }
+    var y = origin.y - WORLD_GRID_SPACING
+    while (y <= size.height) {
+        if (y >= 0f) drawLine(theme.grid, Offset(0f, y), Offset(size.width, y), 1f)
+        y += WORLD_GRID_SPACING
+    }
+    val core = world(engine, engine.coreX, engine.coreY, shakeX, shakeY)
+    // Dots are anchored to the Core, like the board's halftone element, and fade out radially.
+    translate(core.x, core.y) {
+        drawKkRadialFade(CoreHalftoneRect) {
+            drawKkHalftone(CoreHalftoneRect, theme.halftone)
         }
     }
-    drawSpeedField(engine, shakeX, shakeY)
-    drawRect(Color.Black.copy(alpha = 0.15f), style = Stroke(28f))
-    drawRect(Color.Black.copy(alpha = 0.08f), style = Stroke(76f))
 }
 
-internal fun DrawScope.drawGridLayer(
-    cameraX: Float,
-    cameraY: Float,
-    spacing: Float,
-    parallax: Float,
-    color: Color,
-    lineWidth: Float,
-    shakeX: Float,
-    shakeY: Float,
-) {
-    val offsetX = positiveModulo(-cameraX * parallax + size.width * 0.5f, spacing)
-    val offsetY = positiveModulo(-cameraY * parallax + size.height * 0.5f, spacing)
-    var x = offsetX - spacing
-    while (x < size.width + spacing) {
-        drawLine(color, Offset(x + shakeX, 0f), Offset(x + shakeX, size.height), lineWidth)
-        x += spacing
-    }
-    var y = offsetY - spacing
-    while (y < size.height + spacing) {
-        drawLine(color, Offset(0f, y + shakeY), Offset(size.width, y + shakeY), lineWidth)
-        y += spacing
-    }
-}
-
-internal fun DrawScope.drawSpeedField(engine: GameplayRenderModel, shakeX: Float, shakeY: Float) {
-    val rawSpeed = engine.speed
-    val speedRatio = speedVisualRatio(rawSpeed)
-    val dashBoost = clamp(engine.dashPhaseTime / 0.24f, 0f, 1f)
-    val intensity = clamp(sqrt(speedRatio) * 0.78f + dashBoost * 0.32f, 0f, 1f)
-    if (rawSpeed < 18f && dashBoost <= 0f) return
-
-    val speed = max(1f, rawSpeed)
-    val directionX = engine.velocityX / speed
-    val directionY = engine.velocityY / speed
-    val core = world(engine, engine.coreX, engine.coreY, shakeX, shakeY)
-    val count = when (engine.settings.particleDensity) {
-        ParticleDensity.LOW -> 12
-        ParticleDensity.NORMAL -> 22
-        ParticleDensity.HIGH -> 32
-    }
-    val margin = 150f
-    val fieldWidth = size.width + margin * 2f
-    val fieldHeight = size.height + margin * 2f
-    val clearRadiusSquared = 105f * 105f
-    val fullStrengthRadiusSquared = 340f * 340f
-
-    repeat(count) { index ->
-        val seedX = ((index * 73 + 19) % 101) / 101f
-        val seedY = ((index * 47 + 31) % 97) / 97f
-        val depth = ((index * 37 + 11) % 100) / 100f
-        val parallax = 0.14f + depth * 0.34f
-        val x = positiveModulo(seedX * fieldWidth - engine.cameraX * parallax, fieldWidth) - margin
-        val y = positiveModulo(seedY * fieldHeight - engine.cameraY * parallax, fieldHeight) - margin
-        val end = Offset(x + shakeX, y + shakeY)
-        val distanceX = end.x - core.x
-        val distanceY = end.y - core.y
-        val distanceSquared = distanceX * distanceX + distanceY * distanceY
-        val centerFade = 0.12f + 0.88f * clamp(
-            (distanceSquared - clearRadiusSquared) / (fullStrengthRadiusSquared - clearRadiusSquared),
-            0f,
-            1f,
-        )
-        val length = 5f + intensity * (28f + depth * 54f)
-        val start = Offset(end.x - directionX * length, end.y - directionY * length)
-        val variation = 0.82f + ((index * 29) % 19) / 100f
-        val alpha = (0.025f + intensity * (0.075f + depth * 0.045f)) * centerFade * variation
-        val width = 0.55f + depth * 0.55f + intensity * 0.35f
-        val color = if (index % 7 == 0) White else Cyan
-
-        drawLine(Cyan.copy(alpha = alpha * 0.24f), start, end, width * 3f, StrokeCap.Round)
-        drawLine(color.copy(alpha = alpha), start, end, width, StrokeCap.Round)
-    }
-}
-
-
-/** Cosmetic distortion never alters world positions or collision coordinates. */
-internal fun singularityLensPoint(point: Offset, singularity: Offset): Offset {
-    val delta = point - singularity
-    val radius = delta.getDistance()
-    if (radius <= 0.001f || radius >= 220f) return point
-    val displacement = 10f * sin(radius / 220f * kotlin.math.PI.toFloat())
-    return point + delta / radius * displacement
-}
-
-internal fun distantStarCount(density: ParticleDensity): Int = when (density) {
-    ParticleDensity.LOW -> 24
-    ParticleDensity.NORMAL -> 48
-    ParticleDensity.HIGH -> 72
-}
-
-private fun DrawScope.drawDistantSpace(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, renderTime: Float) {
-    val colors = arrayOf(Violet, Blue, Magenta)
-    val cloudRadius = max(size.width, size.height) * 0.48f
-    repeat(if (engine.settings.particleDensity == ParticleDensity.LOW) 1 else 3) { index ->
-        val center = Offset(
-            size.width * (0.17f + index * 0.34f) - sin(engine.cameraX * 0.0003f + index) * 55f,
-            size.height * (0.28f + index * 0.16f) - sin(engine.cameraY * 0.0002f + index) * 45f,
-        )
-        drawCircle(Brush.radialGradient(listOf(colors[index].copy(alpha = 0.055f), Color.Transparent), center, cloudRadius),
-            cloudRadius, center)
-    }
-    val count = distantStarCount(engine.settings.particleDensity)
-    repeat(count) { index ->
-        val depth = 0.04f + (index % 4) * 0.025f
-        val x = positiveModulo(index * 239f - engine.cameraX * depth, size.width)
-        val y = positiveModulo(index * 431f - engine.cameraY * depth, size.height)
-        val alpha = 0.1f + (sin(renderTime * 0.4f + index) + 1f) * 0.035f
-        drawCircle(White.copy(alpha = alpha), 0.5f + index % 3 * 0.2f, Offset(x + shakeX * depth, y + shakeY * depth))
-    }
-    val singularity = Offset(engine.pointerX + shakeX * 0.18f, engine.pointerY + shakeY * 0.18f)
-    repeat(3) { layer ->
-        val radius = 65f + layer * 42f
-        drawArc(Violet.copy(alpha = 0.06f - layer * 0.012f), renderTime * (12f - layer * 5f) + layer * 97f,
-            225f, false, singularity - Offset(radius, radius * 0.45f), Size(radius * 2f, radius * 0.9f), style = Stroke(1.2f))
-    }
-}
+/** Screen offset (0 until the spacing) of the first grid line for a camera coordinate. */
+internal fun worldGridOffset(camera: Float, viewport: Float, shake: Float): Float =
+    positiveModulo(viewport * 0.5f - camera + shake, WORLD_GRID_SPACING)

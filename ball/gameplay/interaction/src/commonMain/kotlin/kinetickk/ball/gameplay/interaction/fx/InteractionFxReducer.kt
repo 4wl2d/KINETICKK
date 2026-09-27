@@ -21,6 +21,15 @@ internal object InteractionFxLimits {
     const val MAX_SHOCKWAVES = 48
     const val MAX_DAMAGE_NUMBERS = 140
     const val MAX_WEAPON_ARCS = 128
+
+    /** Damage numbers pop, settle and drift away from the Core over 600 ms (`KkTime.Drift`). */
+    const val DAMAGE_NUMBER_LIFE_SECONDS = 0.6f
+
+    /** The first particles of every burst are large kill shards; the rest are small sparks. */
+    const val SHARDS_PER_BURST = 4
+
+    /** Particles at least this large are drawn as shards. */
+    const val SHARD_MIN_SIZE = 4.5f
 }
 
 /**
@@ -32,6 +41,9 @@ internal object InteractionFxLimits {
 class InteractionFxReducer(seed: Int) {
     private var random = CloneableXorWowRandom(seed xor FX_SEED_MASK)
     private var motionEchoClock = 0f
+    // Last sampled Core position; damage numbers drift away from it. Presentation only.
+    private var coreX = Float.NaN
+    private var coreY = Float.NaN
     private val particles = mutableListOf<Particle>()
     private val motionEchoes = mutableListOf<MotionEcho>()
     private val shockwaves = mutableListOf<Shockwave>()
@@ -99,6 +111,8 @@ class InteractionFxReducer(seed: Int) {
                     compactAmount = value.compactAmount,
                     fullAmount = value.fullAmount,
                     russianCompactAmount = value.russianCompactAmount,
+                    driftX = value.driftX,
+                    driftY = value.driftY,
                 )
             } else cachedProjection.damageNumbers,
             weaponArcs = if (weaponArcsDirty) weaponArcs.mapToImmutableList { value ->
@@ -143,7 +157,14 @@ class InteractionFxReducer(seed: Int) {
             }
             is VisualFxCue.DamageNumberAdded -> {
                 if (damageNumbers.size < InteractionFxLimits.MAX_DAMAGE_NUMBERS) {
-                    damageNumbers += DamageNumber(cue.x, cue.y, cue.amount, cue.critical)
+                    val dx = if (coreX.isNaN()) 0f else cue.x - coreX
+                    val dy = if (coreY.isNaN()) -1f else cue.y - coreY
+                    val length = kotlin.math.sqrt(dx * dx + dy * dy)
+                    damageNumbers += if (length > 0.001f) {
+                        DamageNumber(cue.x, cue.y, cue.amount, cue.critical, driftX = dx / length, driftY = dy / length)
+                    } else {
+                        DamageNumber(cue.x, cue.y, cue.amount, cue.critical)
+                    }
                     damageNumbersDirty = true
                     true
                 } else {
@@ -157,6 +178,8 @@ class InteractionFxReducer(seed: Int) {
                 true
             }
             is VisualFxCue.WorldRebased -> {
+                coreX -= cue.shiftX
+                coreY -= cue.shiftY
                 val changed = particles.isNotEmpty() || damageNumbers.isNotEmpty()
                 for (index in particles.indices) {
                     val value = particles[index]
@@ -188,6 +211,8 @@ class InteractionFxReducer(seed: Int) {
         damageNumbers.clear()
         weaponArcs.clear()
         motionEchoClock = 0f
+        coreX = Float.NaN
+        coreY = Float.NaN
         if (changed) {
             particlesDirty = true
             motionEchoesDirty = true
@@ -199,6 +224,8 @@ class InteractionFxReducer(seed: Int) {
     }
 
     private fun sampleMotionEcho(cue: VisualFxCue.MotionSample): Boolean {
+        coreX = cue.previousCoreX
+        coreY = cue.previousCoreY
         val intensity = clamp((cue.speed - 260f) / 1_500f, 0f, 1f)
         if (intensity <= 0f && cue.dashPhaseTime <= 0f) {
             motionEchoClock = 0f
@@ -247,11 +274,8 @@ class InteractionFxReducer(seed: Int) {
         removeExpired(motionEchoes) { value -> !(value.life <= 0f) }
         for (index in shockwaves.indices) shockwaves[index].life -= delta
         removeExpired(shockwaves) { value -> !(value.life <= 0f) }
-        for (index in damageNumbers.indices) {
-            val value = damageNumbers[index]
-            value.y -= 34f * delta
-            value.life -= delta
-        }
+        // Numbers keep their anchor; the renderer eases the drift from life (see DamageNumberProjection).
+        for (index in damageNumbers.indices) damageNumbers[index].life -= delta
         removeExpired(damageNumbers) { value -> !(value.life <= 0f) }
         if (particles.isNotEmpty() || cachedProjection.particles.isNotEmpty()) particlesDirty = true
         if (motionEchoes.isNotEmpty() || cachedProjection.motionEchoes.isNotEmpty()) motionEchoesDirty = true
@@ -270,7 +294,7 @@ class InteractionFxReducer(seed: Int) {
 
     private fun burst(cue: VisualFxCue.Burst): Boolean {
         val sizeBefore = particles.size
-        repeat(particleCount(cue.requestedCount, cue.density)) {
+        repeat(particleCount(cue.requestedCount, cue.density)) { index ->
             if (particles.size >= InteractionFxLimits.MAX_PARTICLES) return@repeat
             val angle = random.nextFloat() * TAU
             val speed = 35f + random.nextFloat() * 185f
@@ -283,7 +307,7 @@ class InteractionFxReducer(seed: Int) {
                 life,
                 life,
                 cue.colorIndex,
-                1.5f + random.nextFloat() * 3.5f,
+                particleSize(index, random.nextFloat()),
             )
         }
         return (particles.size != sizeBefore).also { changed ->
@@ -294,7 +318,7 @@ class InteractionFxReducer(seed: Int) {
     private fun directionalBurst(cue: VisualFxCue.DirectionalBurst): Boolean {
         val sizeBefore = particles.size
         val baseAngle = atan2(cue.directionY, cue.directionX)
-        repeat(particleCount(cue.requestedCount, cue.density)) {
+        repeat(particleCount(cue.requestedCount, cue.density)) { index ->
             if (particles.size >= InteractionFxLimits.MAX_PARTICLES) return@repeat
             val angle = baseAngle + (random.nextFloat() - 0.5f) * 1.15f
             val speed = 90f + random.nextFloat() * 310f
@@ -307,13 +331,17 @@ class InteractionFxReducer(seed: Int) {
                 life,
                 life,
                 cue.colorIndex,
-                1.8f + random.nextFloat() * 4.2f,
+                particleSize(index, random.nextFloat()),
             )
         }
         return (particles.size != sizeBefore).also { changed ->
             if (changed) particlesDirty = true
         }
     }
+
+    /** The first [InteractionFxLimits.SHARDS_PER_BURST] particles are shards, the rest small sparks. */
+    private fun particleSize(index: Int, roll: Float): Float =
+        if (index < InteractionFxLimits.SHARDS_PER_BURST) InteractionFxLimits.SHARD_MIN_SIZE + roll * 3.5f else 1.2f + roll * 1.8f
 
     private fun particleCount(requestedCount: Int, density: ParticleDensity): Int {
         val multiplier = when (density) {
@@ -381,10 +409,12 @@ class InteractionFxReducer(seed: Int) {
         var y: Float,
         val amount: Long,
         val critical: Boolean,
-        var life: Float = 0.65f,
+        var life: Float = InteractionFxLimits.DAMAGE_NUMBER_LIFE_SECONDS,
         val compactAmount: String = formatDamageNumber(amount, DamageNumberFormat.COMPACT),
         val fullAmount: String = formatDamageNumber(amount, DamageNumberFormat.FULL),
         val russianCompactAmount: String = compactAmount.russianDamageNumber(),
+        val driftX: Float = 0f,
+        val driftY: Float = -1f,
     )
 
     private data class WeaponArc(
