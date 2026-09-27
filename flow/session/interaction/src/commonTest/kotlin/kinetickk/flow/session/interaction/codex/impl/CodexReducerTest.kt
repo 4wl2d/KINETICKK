@@ -9,6 +9,9 @@ import kinetickk.ball.profile.api.*
 import kinetickk.flow.session.interaction.codex.api.*
 import kinetickk.flow.session.interaction.testItems
 import kinetickk.foundation.collections.*
+import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.text
+import kinetickk.flow.session.interaction.localization.SessionText
 import kotlin.test.*
 
 class CodexReducerTest {
@@ -35,7 +38,7 @@ class CodexReducerTest {
         val entry = codexShapeEntry(shape, model(), progress)
         assertEquals("Unknown core", entry.title)
         assertEquals("Defeat three elites", entry.description)
-        assertEquals("Progress · 2 / 3", entry.availability)
+        assertEquals(AppLanguage.English.text(SessionText.UNLOCK_PROGRESS, 2, 3), entry.availability)
         assertFalse(entry.discovered)
         assertTrue(codexCatalogEntries(3, shape.displayName, CodexItemFilter.ALL, model(), catalog, progress).isEmpty())
         val opened = codexShapeEntry(shape, model(), progress.copy(unlockedCoreShapes = immutableSetOf(CoreShape.ORB, CoreShape.PRISM)))

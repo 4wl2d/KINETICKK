@@ -8,12 +8,19 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.runtime.CompositionLocalProvider
+import kinetickk.foundation.design.Kk
+import kinetickk.foundation.design.KkShutter
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.LocalCrashDiagnostics
+import kinetickk.foundation.design.LocalKkRolePalette
+import kinetickk.foundation.design.drawKkShutter
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
 import kinetickk.ball.profile.api.ProfileReadPort
@@ -104,16 +111,45 @@ fun AppSessionContent(
     SideEffect(languageValue, onLanguageChanged) { onLanguageChanged(languageValue) }
 
     val normalInputEnabled = shellValue.normalInputEnabled
-    val entrance = remember { Animatable(1f) }
-    LaunchedEffect(shellValue.base, shellValue.overlay) {
-        entrance.snapTo(0.55f)
-        entrance.animateTo(1f, tween(220))
+    // Screen changes: the new destination composes and takes input at once; the previous frame
+    // (kept for menus) stays on top until the shutter's ink slab covers the screen.
+    val transition = remember(sessionPort) { SessionTransitionState() }
+    val snapshot = rememberGraphicsLayer()
+    SideEffect(shellValue.base, shellValue.overlay) {
+        transition.show(shellValue.base, shellValue.overlay)
+    }
+    LaunchedEffect(transition.id) {
+        if (transition.kind == SessionTransitionKind.NONE) return@LaunchedEffect
+        val start = withFrameNanos { it }
+        while (transition.elapsedMs < transition.kind.durationMs) {
+            withFrameNanos { frame -> transition.elapsedMs = (frame - start) / 1_000_000f }
+        }
+        transition.finish()
     }
     CompositionLocalProvider(LocalAppLanguage provides languageValue) {
+        val roles = LocalKkRolePalette.current
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer { alpha = entrance.value }
+                .drawWithContent {
+                    if (transition.recording) {
+                        snapshot.record { this@drawWithContent.drawContent() }
+                        drawLayer(snapshot)
+                        transition.recorded()
+                    } else {
+                        drawContent()
+                    }
+                    val elapsed = transition.elapsedMs
+                    when (transition.kind) {
+                        SessionTransitionKind.NONE -> Unit
+                        SessionTransitionKind.SHUTTER -> {
+                            if (elapsed < KkShutter.SWAP_MS) drawLayer(snapshot)
+                            drawKkShutter(elapsed, roles)
+                        }
+                        SessionTransitionKind.CROSSFADE ->
+                            drawRect(Kk.Ink, alpha = (1f - elapsed / SessionTransitionKind.CROSSFADE.durationMs).coerceIn(0f, 1f))
+                    }
+                }
                 .focusRequester(focusRequester)
                 .onPreviewKeyEvent { event ->
                     // Codex owns text entry, slot activation and its two-step Escape.
@@ -200,6 +236,78 @@ fun AppSessionContent(
                 profileUnavailableFeature.Content()
             }
         }
+    }
+}
+
+/** Screen-change styles (Motion board): the shutter, or a 150 ms fade from ink. */
+internal enum class SessionTransitionKind(val durationMs: Float) {
+    NONE(0f),
+    SHUTTER(KkShutter.TOTAL_MS.toFloat()),
+    CROSSFADE(150f),
+}
+
+/**
+ * The in-run screen is not recorded every frame (it is the hot path), so leaving it fades the
+ * next screen in; menus keep their last frame for the shutter to cover.
+ */
+internal fun sessionRecordsSnapshot(base: AppDestination, overlay: AppDestination?): Boolean =
+    base != AppDestination.Gameplay || overlay != null
+
+/** Chooses how the shell moves from the shown destinations to the next ones. */
+internal fun sessionTransitionKind(
+    previousBase: AppDestination?,
+    previousOverlay: AppDestination?,
+    nextBase: AppDestination,
+    nextOverlay: AppDestination?,
+    snapshotAvailable: Boolean,
+): SessionTransitionKind = when {
+    previousBase == null || (previousBase == nextBase && previousOverlay == nextOverlay) -> SessionTransitionKind.NONE
+    snapshotAvailable -> SessionTransitionKind.SHUTTER
+    else -> SessionTransitionKind.CROSSFADE
+}
+
+/**
+ * Draw-side transition state. [recording] and the snapshot flags are read and written on the
+ * draw/apply thread only; [kind], [elapsedMs] and [id] are snapshot state so the overlay redraws.
+ */
+internal class SessionTransitionState {
+    private var shownBase: AppDestination? = null
+    private var shownOverlay: AppDestination? = null
+    private var hasSnapshot = false
+    var kind by mutableStateOf(SessionTransitionKind.NONE)
+        private set
+    var elapsedMs by mutableFloatStateOf(0f)
+    var id by mutableIntStateOf(0)
+        private set
+
+    /** True while the shown screen's frames are recorded (menus, not during a shutter). */
+    val recording: Boolean
+        get() = kind != SessionTransitionKind.SHUTTER && shownBase?.let { sessionRecordsSnapshot(it, shownOverlay) } == true
+
+    fun show(base: AppDestination, overlay: AppDestination?) {
+        if (base == shownBase && overlay == shownOverlay) return
+        val previousBase = shownBase
+        // A change during a running shutter has no fresh frame of the shown screen: fade instead.
+        val snapshotAvailable = previousBase != null && sessionRecordsSnapshot(previousBase, shownOverlay) &&
+            hasSnapshot && kind != SessionTransitionKind.SHUTTER
+        val next = sessionTransitionKind(previousBase, shownOverlay, base, overlay, snapshotAvailable)
+        shownBase = base
+        shownOverlay = overlay
+        // The snapshot holds the previous screen until the shutter swaps it out.
+        hasSnapshot = next == SessionTransitionKind.SHUTTER
+        if (next != SessionTransitionKind.NONE) {
+            kind = next
+            elapsedMs = 0f
+            id++
+        }
+    }
+
+    fun recorded() {
+        hasSnapshot = true
+    }
+
+    fun finish() {
+        kind = SessionTransitionKind.NONE
     }
 }
 

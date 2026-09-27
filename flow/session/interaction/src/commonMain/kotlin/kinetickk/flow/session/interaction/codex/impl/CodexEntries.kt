@@ -21,7 +21,9 @@ import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.profile.api.HomeProgressProjection
 import kinetickk.flow.session.interaction.codex.api.CodexRenderModel
-import kinetickk.foundation.design.*
+import kinetickk.flow.session.interaction.home.impl.coreShapeUnlockProgress
+import kinetickk.foundation.design.Kk
+import kinetickk.foundation.design.KkIcon
 
 internal sealed interface CodexIcon {
     data class Item(val definition: ItemDefinition, val stack: Int) : CodexIcon
@@ -45,7 +47,20 @@ internal data class CodexEntry(
     val discovered: Boolean = true,
     val rarity: Int = 0,
     val isNew: Boolean = false,
-)
+    /** Explanation shown behind the (!) button, never as a caption. */
+    val help: String? = null,
+    /** True for the equipped form or an active synergy (shown with color, not a glyph). */
+    val active: Boolean = false,
+) {
+    /** Accessible summary: title, kind, amount and state as separate phrases. */
+    val summary: String
+        get() = listOf(title, kind, quantity, availability.replace('\n', ' '))
+            .filter { it.isNotBlank() && it != CODEX_NONE }
+            .joinToString(", ") + if (!discovered && help != null) ", $help" else ""
+}
+
+/** Placeholder for "no value" in entry fields; never rendered as a label. */
+internal const val CODEX_NONE = "—"
 
 internal fun codexItemEntry(item: ItemDefinition, model: CodexRenderModel, language: AppLanguage = AppLanguage.English): CodexEntry {
     if (!model.isDiscovered(item.id)) return unknownEntry("item/${item.id}", language)
@@ -74,9 +89,10 @@ internal fun codexWeaponEntry(weapon: WeaponDefinition, model: CodexRenderModel,
     val availability = if (weapon.id in progress.loadout.unlockedWeapons) {
         if (weapon.id == progress.loadout.selectedWeapon) language.text(SessionText.START_WEAPON_SELECTED) else language.text(SessionText.START_WEAPON_UNLOCKED)
     } else language.text(SessionText.START_WEAPON_LOCKED, weapon.permanentUnlockCost)
-    return CodexEntry("weapon/${weapon.id}", weapon.name.localizedContent(language), "${weapon.description.localizedContent(language)}\n\n${language.text(SessionText.WEAPON_HELP)}",
-        language.text(SessionText.WEAPON), if (equipped) language.text(SessionText.LEVEL_SHORT, build.weaponLevel) else "—", "$availability${if (equipped) "\n" + language.text(SessionText.EQUIPPED_MASTERY, build.mastery.localizedContent(language)) else ""}",
-        CodexIcon.Weapon(weapon.id), codexWeaponColor(weapon.id), weapon.id in progress.loadout.unlockedWeapons || equipped)
+    return CodexEntry("weapon/${weapon.id}", weapon.name.localizedContent(language), weapon.description.localizedContent(language),
+        language.text(SessionText.WEAPON), if (equipped) language.text(SessionText.LEVEL_SHORT, build.weaponLevel) else CODEX_NONE, "$availability${if (equipped) "\n" + language.text(SessionText.EQUIPPED_MASTERY, build.mastery.localizedContent(language)) else ""}",
+        CodexIcon.Weapon(weapon.id), Kk.Bone, weapon.id in progress.loadout.unlockedWeapons || equipped,
+        help = language.text(SessionText.WEAPON_HELP), active = equipped)
 }
 
 internal fun codexRelicEntry(relic: RelicDefinition, model: CodexRenderModel, catalog: UiCatalogSnapshot, language: AppLanguage = AppLanguage.English): CodexEntry {
@@ -84,27 +100,21 @@ internal fun codexRelicEntry(relic: RelicDefinition, model: CodexRenderModel, ca
     val rank = model.runStacks.build?.relics?.firstOrNull { it.id == relic.id }?.rank
     return CodexEntry("relic/${relic.id}", relic.name.localizedContent(language), "${relic.description.localizedContent(language)}\n\n${relic.rankEffect.localizedContent(language)}", relic.aspect.displayLabel.localizedContent(language),
         "${rank ?: 0}/${catalog.relicPolicy.maxRank}", if (rank != null) language.text(SessionText.EQUIPPED) else language.text(SessionText.RELIC_AVAILABLE),
-        CodexIcon.Relic(relic, rank), relicAspectColor(relic.aspect), isNew = relic.id in model.newRelicIds)
+        CodexIcon.Relic(relic, rank), relicAspectColor(relic.aspect), isNew = relic.id in model.newRelicIds, active = rank != null)
 }
 
 internal fun codexShapeEntry(shape: CoreShapeDefinition, model: CodexRenderModel, progress: HomeProgressProjection, language: AppLanguage = AppLanguage.English): CodexEntry {
     val unlocked = shape.id in progress.unlockedCoreShapes
-    val achievements = progress.characterAchievements
-    val current = when (shape.unlockRequirement) {
-        kinetickk.ball.content.api.CharacterUnlockRequirement.AVAILABLE -> 1L
-        kinetickk.ball.content.api.CharacterUnlockRequirement.ELITE_KILLS -> achievements.eliteKills
-        kinetickk.ball.content.api.CharacterUnlockRequirement.DASH_HITS -> achievements.dashHits
-        kinetickk.ball.content.api.CharacterUnlockRequirement.COMPLETED_ORBITS -> achievements.completedOrbits
-        kinetickk.ball.content.api.CharacterUnlockRequirement.ARCHITECT_VICTORIES -> achievements.architectVictories
-        kinetickk.ball.content.api.CharacterUnlockRequirement.DISTINCT_CHARACTER_VICTORIES -> achievements.victoriousCharacters.size.toLong()
-    }
+    val current = coreShapeUnlockProgress(shape, progress.characterAchievements)
     val requirement = shape.unlockDescription.localizedContent(language)
     val unlockProgress = if (unlocked) language.text(SessionText.UNLOCKED) else
-        language.text(SessionText.UNLOCK_PROGRESS, current.coerceAtMost(shape.unlockTarget.toLong()), shape.unlockTarget)
+        language.text(SessionText.UNLOCK_PROGRESS, current, shape.unlockTarget)
+    val equipped = shape.id == model.runStacks.build?.character
     return CodexEntry("shape/${shape.id}", if (unlocked) shape.displayName.localizedContent(language) else language.text(SessionText.UNKNOWN_CORE),
-        if (unlocked) "${shape.mechanicDescription.localizedContent(language)}\n\n$requirement\n\n${language.text(SessionText.CHARACTER_LAB_HELP)}" else requirement,
-        language.text(SessionText.CHARACTER), if (shape.id == model.runStacks.build?.character) "✓" else "—",
-        unlockProgress, CodexIcon.Shape(shape.id), if (unlocked) Cyan else Muted, unlocked)
+        if (unlocked) "${shape.mechanicDescription.localizedContent(language)}\n\n$requirement" else requirement,
+        language.text(SessionText.CHARACTER), if (equipped) language.text(SessionText.EQUIPPED) else CODEX_NONE,
+        unlockProgress, CodexIcon.Shape(shape.id), if (unlocked) Kk.Bone else Kk.Mute, unlocked,
+        help = if (unlocked) language.text(SessionText.CHARACTER_LAB_HELP) else null, active = equipped)
 }
 
 internal fun codexCatalogEntries(category: Int, search: String, filter: CodexItemFilter, model: CodexRenderModel, catalog: UiCatalogSnapshot, progress: HomeProgressProjection, language: AppLanguage = AppLanguage.English): List<CodexEntry> = when (category) {
@@ -115,8 +125,9 @@ internal fun codexCatalogEntries(category: Int, search: String, filter: CodexIte
 }
 
 internal fun unknownEntry(key: String, language: AppLanguage): CodexEntry = CodexEntry(
-    key, language.text(SessionText.UNKNOWN_DISCOVERY), language.text(SessionText.DISCOVERY_HELP),
-    "—", "—", language.text(SessionText.UNDISCOVERED), CodexIcon.Unknown, Muted, discovered = false,
+    key, language.text(SessionText.UNKNOWN_DISCOVERY), "",
+    CODEX_NONE, CODEX_NONE, language.text(SessionText.UNDISCOVERED), CodexIcon.Unknown, Kk.Mute, discovered = false,
+    help = language.text(SessionText.DISCOVERY_HELP),
 )
 
 internal fun codexSynergyDiscovered(definition: kinetickk.ball.content.api.SynergyDefinition,
@@ -124,24 +135,15 @@ internal fun codexSynergyDiscovered(definition: kinetickk.ball.content.api.Syner
     if (definition.requiredAspect != null) catalog.relics.count { it.aspect == definition.requiredAspect && model.isRelicDiscovered(it.id) } >= 2
     else definition.requiredRelics.all(model::isRelicDiscovered)
 
-internal fun codexRarityColor(rarity: ItemRarity): Color = when (rarity) {
-    ItemRarity.COMMON -> Muted
-    ItemRarity.UNCOMMON -> Cyan
-    ItemRarity.RARE -> Violet
-    ItemRarity.EPIC -> Magenta
-    ItemRarity.LEGENDARY -> Acid
+/** Rarity color (foundation rarity tokens, rank 1 common .. 5 legendary). */
+internal fun codexRarityColor(rarity: ItemRarity): Color = Kk.rarity(rarity.rank)
+
+/** Redesign weapon icon (`icons.json weapons.*`) for a weapon id. */
+internal fun codexWeaponIcon(id: WeaponId): KkIcon = requireNotNull(KkIcon.byKey("weapons." + id.name.lowercase())) {
+    "Missing weapon icon for $id"
 }
 
-internal fun codexWeaponColor(id: WeaponId): Color = when (id) {
-    WeaponId.FLUX_WAKE, WeaponId.ION_SWARM -> Cyan
-    WeaponId.MORNINGSTAR, WeaponId.ARC_COIL -> Violet
-    WeaponId.PHASE_LATTICE, WeaponId.RIFT_BLADES -> Magenta
-    WeaponId.NULL_LANCE -> Acid
-    WeaponId.GRAVITY_MINES, WeaponId.QUASAR_CANNON -> Orange
-    WeaponId.ENTROPY_FIELD -> Red
-    WeaponId.SINGULARITY_SPEAR -> White
-    WeaponId.PRISM_RELAY -> Blue
-}
+internal fun codexModifierValue(value: ItemModifier, language: AppLanguage): String = modifier(value, language)
 
 private fun modifier(value: ItemModifier, language: AppLanguage): String = when (value.effect.unit) {
     ModifierUnit.PERCENT -> "+${codexNumber(value.amount * 100f, language)}%"

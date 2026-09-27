@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.CoreShapeDefinition
 import kinetickk.ball.content.api.RebirthProfile
+import kinetickk.ball.profile.api.CharacterAchievementProgress
 import kinetickk.foundation.collections.ImmutableSet
 import kinetickk.foundation.collections.ImmutableList
 
@@ -23,6 +24,18 @@ data class HomeUiModel(
     val itemCount: Int,
     val weaponCount: Int,
     val unlockedCoreShapes: ImmutableSet<CoreShape>,
+    /** Cumulative achievements that unlock forms (progress behind a locked form's (!)). */
+    val characterAchievements: CharacterAchievementProgress = CharacterAchievementProgress(),
+    val discoveredRelicCount: Int = 0,
+    val relicCount: Int = 0,
+    /** Catalog name (English content key) of the selected starting weapon, if cataloged. */
+    val startingWeaponName: String? = null,
+    /** True when Matter covers the unlock cost of at least one locked weapon. */
+    val weaponUnlockAffordable: Boolean = false,
+    val labRanks: Int = 0,
+    val labMaxRanks: Int = 0,
+    val labMaxedUpgrades: Int = 0,
+    val labUpgradeCount: Int = 0,
 ) {
     fun coreShape(shape: CoreShape): CoreShapeDefinition =
         coreShapes.first { definition -> definition.id == shape }

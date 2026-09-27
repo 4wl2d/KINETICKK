@@ -18,15 +18,15 @@ class RelicIconMappingTest {
     }
 
     @Test
-    fun aspectPaletteMatchesTheExistingInventoryPalette() {
+    fun aspectPaletteMatchesTheRedesignAspectTokens() {
         val expected = mapOf(
-            RelicAspect.VECTOR to Color(0xFF42F5E9),
-            RelicAspect.GRAVITIC to Color(0xFFA96CFF),
-            RelicAspect.ION to Color(0xFF73A6FF),
-            RelicAspect.RIFT to Color(0xFFFF4DC4),
-            RelicAspect.PRISM to Color(0xFFB6FF5B),
-            RelicAspect.ENTROPY to Color(0xFFFF714B),
-            RelicAspect.SOVEREIGN to Color(0xFFFFD45B),
+            RelicAspect.VECTOR to Color(0xFFD8FF3E),
+            RelicAspect.GRAVITIC to Color(0xFF9B7BFF),
+            RelicAspect.ION to Color(0xFF45E0FF),
+            RelicAspect.RIFT to Color(0xFFFF4FA3),
+            RelicAspect.PRISM to Color(0xFFE4F1FF),
+            RelicAspect.ENTROPY to Color(0xFFFF6A2B),
+            RelicAspect.SOVEREIGN to Color(0xFFFFC93C),
         )
         RelicAspect.entries.forEach { aspect -> assertEquals(expected[aspect], relicAspectColor(aspect)) }
     }
