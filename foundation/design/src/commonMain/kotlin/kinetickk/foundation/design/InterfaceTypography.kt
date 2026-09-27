@@ -10,6 +10,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.intl.LocaleList
+import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.generated.resources.Res
 import kinetickk.foundation.design.generated.resources.kk_body_bold
 import kinetickk.foundation.design.generated.resources.kk_body_medium
@@ -43,6 +45,11 @@ data class InterfaceTypography(
     val cond: FontFamily = FontFamily.SansSerif,
     val label: FontFamily = cond,
     val mono: FontFamily = FontFamily.Monospace,
+    /**
+     * The app language's locale for every role style. Sofia Sans draws Bulgarian Cyrillic forms by
+     * default and switches to Russian forms through its `locl` feature, which needs this locale.
+     */
+    val localeList: LocaleList? = null,
 ) {
     /** Per-instance memo behind the role builders; not part of equality. */
     internal val styleMemo: KkStyleMemo = KkStyleMemo()
@@ -64,9 +71,10 @@ fun rememberInterfaceTypography(): InterfaceTypography {
     // Legacy headings request Bold/Normal upright: map them onto the new condensed heading faces.
     val displayBold = Font(Res.font.kk_cond_black_italic, FontWeight.Bold)
     val displayNormal = Font(Res.font.kk_cond_extrabold, FontWeight.Normal)
+    val language = LocalAppLanguage.current
     return remember(
         wideBlack, wideBold, condBlackItalic, condBlack, condExtraBold, bodyRegular, bodyMedium,
-        bodyBold, monoMedium, monoBold, displayBold, displayNormal,
+        bodyBold, monoMedium, monoBold, displayBold, displayNormal, language,
     ) {
         val cond = FontFamily(condBlackItalic, condBlack, condExtraBold)
         InterfaceTypography(
@@ -76,6 +84,13 @@ fun rememberInterfaceTypography(): InterfaceTypography {
             cond = cond,
             label = cond,
             mono = FontFamily(monoMedium, monoBold),
+            localeList = language.localeList(),
         )
     }
+}
+
+/** Text shaping locale of an app language (selects the fonts' Russian letterforms for Russian). */
+fun AppLanguage.localeList(): LocaleList = when (this) {
+    AppLanguage.English -> LocaleList("en")
+    AppLanguage.Russian -> LocaleList("ru")
 }

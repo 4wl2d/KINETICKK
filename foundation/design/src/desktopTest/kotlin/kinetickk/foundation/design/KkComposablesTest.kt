@@ -149,4 +149,23 @@ class KkComposablesTest {
         val image = onNodeWithTag("badge").captureToImage()
         assertTrue(image.countNear(KkRolePalette.Tritan.you) > 200)
     }
+
+    @Test
+    fun typographyCarriesTheAppLanguageLocale() = runSkikoComposeUiTest(Size(200f, 100f), Density(1f)) {
+        val measurers = mutableMapOf<kinetickk.foundation.common.localization.AppLanguage, CanvasTextMeasurer>()
+        setContent {
+            for (language in kinetickk.foundation.common.localization.AppLanguage.entries) {
+                CompositionLocalProvider(LocalAppLanguage provides language) {
+                    measurers[language] = rememberKkCanvasMeasurer()
+                }
+            }
+        }
+        waitForIdle()
+        for ((language, measurer) in measurers) {
+            val typography = measurer.typography
+            assertEquals(language.localeList(), typography.localeList)
+            listOf(typography.wideStyle(), typography.condStyle(), typography.labelStyle(), typography.bodyStyle(), typography.monoStyle())
+                .forEach { style -> assertEquals(language.localeList(), style.localeList) }
+        }
+    }
 }

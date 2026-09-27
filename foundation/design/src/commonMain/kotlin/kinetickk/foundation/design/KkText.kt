@@ -115,6 +115,7 @@ fun InterfaceTypography.wideStyle(
         lineHeight = lineHeightEm.em,
         lineHeightStyle = KkLineHeightStyle,
         fontFeatureSettings = tabularFeature(tabular),
+        localeList = localeList,
     ).also { styleMemo.put(0, size, tracking, lineHeightEm, weight.weight, flags, color, it) }
 }
 
@@ -139,6 +140,7 @@ fun InterfaceTypography.condStyle(
         lineHeight = lineHeightEm.em,
         lineHeightStyle = KkLineHeightStyle,
         fontFeatureSettings = tabularFeature(tabular),
+        localeList = localeList,
     ).also { styleMemo.put(1, size, trackingEm, lineHeightEm, weight.weight, flags, color, it) }
 }
 
@@ -161,6 +163,7 @@ fun InterfaceTypography.labelStyle(
         lineHeight = lineHeightEm.em,
         lineHeightStyle = KkLineHeightStyle,
         fontFeatureSettings = tabularFeature(tabular),
+        localeList = localeList,
     ).also { styleMemo.put(2, size, trackingEm, lineHeightEm, 800, flags, color, it) }
 }
 
@@ -181,6 +184,7 @@ fun InterfaceTypography.bodyStyle(
         lineHeight = lineHeightEm.em,
         lineHeightStyle = KkLineHeightStyle,
         fontFeatureSettings = tabularFeature(tabular),
+        localeList = localeList,
     ).also { styleMemo.put(3, size, 0f, lineHeightEm, weight.weight, flags, color, it) }
 }
 
@@ -200,6 +204,7 @@ fun InterfaceTypography.monoStyle(
     lineHeight = lineHeightEm.em,
     lineHeightStyle = KkLineHeightStyle,
     fontFeatureSettings = "tnum",
+    localeList = localeList,
 ).also { styleMemo.put(4, size, trackingEm, lineHeightEm, weight.weight, 2, color, it) }
 
 /** Role dispatcher with each role's defaults; [size] NaN keeps the role's default size. */
