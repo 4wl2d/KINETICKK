@@ -12,11 +12,17 @@ import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.PauseLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.PauseTarget
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
+import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.*
 import kotlin.math.min
 
-internal fun DrawScope.drawPause(textMeasurer: TextMeasurer, layout: PauseLayoutGeometry) {
+/** Pause owns its overlay; the committed frame supplies the frozen timer and build overview. */
+internal fun DrawScope.drawPause(
+    @Suppress("UNUSED_PARAMETER") engine: GameplayRenderModel,
+    textMeasurer: TextMeasurer,
+    layout: PauseLayoutGeometry,
+) {
     drawRect(pauseOverlayScrimColor(layout.mode))
     drawKineticOrbits(Offset(size.width * 0.78f, size.height * 0.36f), size.minDimension * 0.22f, 0f, KineticAccent.copy(alpha = 0.45f))
     val titleSize = min(54f, ((layout.actions.firstOrNull()?.bounds?.top ?: size.height) - layout.titleY - d(12f)) / density / (textMeasurer.scale * 1.3f))

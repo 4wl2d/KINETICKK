@@ -156,7 +156,7 @@ class GameplayLocalizedRenderingTest {
                                 drawGameplay(model, VisualFxProjection.EMPTY, textMeasurer, 0f, null)
                             } else if (current.scene == Scene.PAUSE) {
                                 drawRect(SpaceBlack)
-                                drawPause(textMeasurer, pauseLayoutGeometry(size.width, size.height, 1f))
+                                drawPause(model, textMeasurer, pauseLayoutGeometry(size.width, size.height, 1f))
 
                             }
                         }
