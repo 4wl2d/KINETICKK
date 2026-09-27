@@ -29,6 +29,12 @@ enum class DamageNumberSize(val scale: Float) {
 /** Persistent ordinal order; append-only changes require an explicit save-format decision. */
 enum class DamageNumberFormat { COMPACT, FULL }
 
+/**
+ * Role-color remapping for color vision (you, threat, heat, shield, polarity). Persisted by stable
+ * wire ids; DEFAULT is the absence of a stored value, so saves predating the setting stay canonical.
+ */
+enum class ColorVision { DEFAULT, PROTAN, DEUTAN, TRITAN, MONO }
+
 const val DEFAULT_DAMAGE_NUMBER_TIER_THRESHOLD: Int = 50
 
 val SIMULATION_SPEED_OPTIONS: ImmutableList<Float> = immutableListOf(0.75f, 1f, 1.15f, 1.35f, 1.6f, 2f)
@@ -72,6 +78,7 @@ data class PlayerPreferences(
     val damageNumberTierThreshold: Int = DEFAULT_DAMAGE_NUMBER_TIER_THRESHOLD,
     val language: AppLanguage = AppLanguage.Russian,
     val runStatisticsOnLeft: Boolean = false,
+    val colorVision: ColorVision = ColorVision.DEFAULT,
 ) {
     fun normalized(): PlayerPreferences = copy(
         masterVolume = masterVolume.coerceIn(0f, 1f),

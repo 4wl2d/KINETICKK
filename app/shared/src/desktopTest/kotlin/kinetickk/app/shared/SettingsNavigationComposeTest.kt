@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.ComposeRuntimeFlags
 import androidx.compose.runtime.ExperimentalComposeApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.testTag
@@ -22,6 +21,7 @@ import kinetickk.ball.content.impl.createContentCatalog
 import kinetickk.ball.gameplay.api.GameplayQuery
 import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.impl.DefaultGameplayFeature
+import kinetickk.ball.profile.api.ColorVision
 import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.impl.ProfilePersistenceCapability
 import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
@@ -36,8 +36,6 @@ import kinetickk.resource.audio.api.ToneRequest
 import org.jetbrains.skia.Image
 import kinetickk.foundation.dispatch.call
 import java.io.File
-import kotlin.math.floor
-import kotlin.math.min
 import kotlin.test.Test
 import kotlin.test.AfterTest
 import kotlin.test.assertEquals
@@ -105,51 +103,49 @@ class SettingsNavigationComposeTest {
                     onRoot().performKeyInput { pressKey(key) }
                     render(expected)
                 }
-                fun tap(x: Float, y: Float, expected: AppDestination = AppDestination.Settings) {
-                    onNodeWithTag(APP_TAG).performTouchInput {
-                        click(Offset(x * this.width / width, y * this.height / height))
-                    }
+                fun exists(tag: String) = onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
+                fun preferences() = profile.query(ProfileQuery.GetPreferences).preferences
+                fun click(tag: String, expected: AppDestination = AppDestination.Settings) {
+                    // A real pointer press at the control's center; the Settings canvas resolves it.
+                    onNodeWithTag(tag).performClick()
                     render(expected)
                 }
-                val panelWidth = min(900f, width - 30f)
-                val panelHeight = min(620f, height - 30f)
-                val right = (width + panelWidth) * 0.5f
-                val bottom = (height + panelHeight) * 0.5f
-                val rowStart = if (height < 480) 116f else if (width < 520) 196f else 146f
-                val startY = (height - panelHeight) * 0.5f + rowStart
-                val rowsPerPage = floor((panelHeight - rowStart - 64f) / 44f).toInt().coerceAtLeast(1)
+                fun changes(tag: String) {
+                    val before = preferences()
+                    click(tag)
+                    assertNotEquals(before, preferences(), "Settings control $tag did not change")
+                }
                 fun selectGroup(group: String) {
-                    val before = profile.query(ProfileQuery.GetPreferences).preferences
-                    onNodeWithTag("kinetickk.settings.group.$group").performClick()
-                    render(AppDestination.Settings)
+                    val before = preferences()
+                    click("kinetickk.settings.group.$group")
                     onNodeWithTag("kinetickk.settings.group.$group").assertIsSelected()
-                    assertEquals(before, profile.query(ProfileQuery.GetPreferences).preferences)
+                    assertEquals(before, preferences())
                     if (group != "game") onNodeWithTag("kinetickk.settings.language.en").assertDoesNotExist()
                 }
+                fun pageCount(): Int = generateSequence(0) { it + 1 }.takeWhile { exists("kinetickk.settings.page.$it") }.count()
+                fun showPageWith(tag: String) {
+                    if (exists(tag)) return
+                    for (page in 0 until pageCount()) {
+                        click("kinetickk.settings.page.$page")
+                        if (exists(tag)) return
+                    }
+                    error("$tag is on no Settings page")
+                }
                 fun captureSettings(group: String) {
-                    val preferences = profile.query(ProfileQuery.GetPreferences).preferences
+                    val preferences = preferences()
                     val output = File("build/reports/settings-screenshots/${width}x${height}-$group-${preferences.textScale}-${preferences.language.code}.png")
                     output.parentFile.mkdirs()
                     Image.makeFromBitmap(onNodeWithTag(APP_TAG).captureToImage().asSkiaBitmap()).use { image ->
                         image.encodeToData()!!.use { output.writeBytes(it.bytes) }
                     }
                 }
-                fun adjust(row: Int, increase: Boolean, rowCount: Int) {
-                    val before = profile.query(ProfileQuery.GetPreferences).preferences
-                    val pageStart = (row / rowsPerPage) * rowsPerPage
-                    val visibleCount = min(rowsPerPage, rowCount - pageStart)
-                    val isSound = onAllNodesWithTag("kinetickk.settings.sfx.increase").fetchSemanticsNodes().isNotEmpty()
-                    val spacing = min(if (isSound) 48f else 64f, (panelHeight - rowStart - 64f) / visibleCount)
-                    tap(right - if (increase) 41f else 169f, startY + spacing * (row % rowsPerPage + 0.5f))
-                    assertNotEquals(before, profile.query(ProfileQuery.GetPreferences).preferences, "Settings row $row did not change")
-                }
                 fun exerciseVolume() {
                     val input = onNodeWithTag("kinetickk.settings.volume.input")
                     val slider = onNodeWithTag("kinetickk.settings.volume.slider")
-                    val initial = profile.query(ProfileQuery.GetPreferences).preferences
+                    val initial = preferences()
                     fun assertVolume(percent: Int) {
                         render(AppDestination.Settings)
-                        assertEquals(initial.copy(masterVolume = percent / 100f), profile.query(ProfileQuery.GetPreferences).preferences)
+                        assertEquals(initial.copy(masterVolume = percent / 100f), preferences())
                         assertEquals(percent / 100f, audio.preferences?.masterVolume)
                         input.assertTextEquals(percent.toString())
                         slider.assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(percent.toFloat(), 0f..100f, 99))
@@ -180,6 +176,11 @@ class SettingsNavigationComposeTest {
                     key(Key.S, AppDestination.Settings)
                     selectGroup("sound")
                     assertVolume(42)
+                    // The -/+ steppers beside the slider move the volume by one percent.
+                    click("kinetickk.settings.master_volume.increase")
+                    assertVolume(43)
+                    click("kinetickk.settings.master_volume.decrease")
+                    assertVolume(42)
                     input.performTextClearance()
                     slider.performTouchInput { click(center) }
                     assertVolume(50)
@@ -203,10 +204,47 @@ class SettingsNavigationComposeTest {
                     assertEquals(0.61f, reloaded.query(ProfileQuery.GetPreferences).preferences.masterVolume)
                     captureSettings("sound-volume")
                 }
+                fun exerciseRow(row: SettingsRowTags) {
+                    val prefix = "kinetickk.settings.${row.id}"
+                    when {
+                        row.options.isNotEmpty() -> {
+                            val original = row.options.first { onNodeWithTag("$prefix.$it").fetchSemanticsNode().config.getOrElse(androidx.compose.ui.semantics.SemanticsProperties.Selected) { false } }
+                            for (option in row.options - original) {
+                                changes("$prefix.$option")
+                                onNodeWithTag("$prefix.$option").assertIsSelected()
+                                onNodeWithTag("$prefix.$original").assertIsNotSelected()
+                                if (row.id == "colorvision") {
+                                    // The choice is persisted through the strict codec: non-default ids only.
+                                    assertEquals(ColorVision.valueOf(option.uppercase()), preferences().colorVision)
+                                    assertTrue(persistence.payload!!.contains("\"colorVisionId\":\"${option.uppercase()}\""))
+                                }
+                                // Choosing the selected option again is inert.
+                                val same = preferences()
+                                click("$prefix.$option")
+                                assertEquals(same, preferences())
+                            }
+                            changes("$prefix.$original")
+                            if (row.id == "colorvision") assertTrue(!persistence.payload!!.contains("colorVisionId"))
+                        }
+                        row.toggle -> {
+                            changes("$prefix.toggle")
+                            changes("$prefix.toggle")
+                        }
+                        row.stepper -> {
+                            changes("$prefix.increase")
+                            changes("$prefix.decrease")
+                        }
+                    }
+                    // The (!) explanation opens and closes without touching the preference.
+                    val before = preferences()
+                    click("$prefix.info")
+                    click("$prefix.info")
+                    assertEquals(before, preferences())
+                }
                 fun sweepSettings() {
                     onNodeWithTag("kinetickk.settings.language.en").performClick()
                     render(AppDestination.Settings)
-                    assertEquals(AppLanguage.English, profile.query(ProfileQuery.GetPreferences).preferences.language)
+                    assertEquals(AppLanguage.English, preferences().language)
                     onNodeWithTag("kinetickk.settings.group.game").assertContentDescriptionEquals("Game")
                     onNodeWithTag("kinetickk.settings.group.sound").assertContentDescriptionEquals("Sound")
                     onNodeWithTag("kinetickk.settings.group.graphics").assertContentDescriptionEquals("Graphics")
@@ -214,23 +252,29 @@ class SettingsNavigationComposeTest {
                     captureSettings("game")
                     onNodeWithTag("kinetickk.settings.language.ru").performClick()
                     render(AppDestination.Settings)
-                    assertEquals(AppLanguage.Russian, profile.query(ProfileQuery.GetPreferences).preferences.language)
-                    for ((group, count) in listOf("game" to 2, "sound" to 3, "graphics" to 6, "interface" to 2)) {
+                    assertEquals(AppLanguage.Russian, preferences().language)
+                    for ((group, rows) in SETTINGS_GROUPS) {
                         selectGroup(group)
                         captureSettings(group)
-                        val maxPage = (count - 1) / rowsPerPage
-                        for (page in 0..maxPage) {
-                            for (row in maxOf(if (group == "game") 1 else 0, page * rowsPerPage)..minOf(count - 1, (page + 1) * rowsPerPage - 1)) {
-                                if (group == "sound" && row == 2) {
-                                    exerciseVolume()
-                                } else {
-                                    adjust(row, increase = true, rowCount = count)
-                                    adjust(row, increase = false, rowCount = count)
-                                }
+                        for (row in rows) {
+                            val probe = "kinetickk.settings.${row.id}.info"
+                            showPageWith(probe)
+                            when {
+                                row.id == "language" -> Unit
+                                row.id == "master_volume" -> exerciseVolume()
+                                else -> exerciseRow(row)
                             }
-                            if (page < maxPage) tap(right - 40f, bottom - 25f)
                         }
                     }
+                    selectGroup("graphics")
+                    // Keyboard: a focused choice is confirmed with Enter and the session stays in Settings.
+                    showPageWith("kinetickk.settings.colorvision.protan")
+                    val protan = onNodeWithTag("kinetickk.settings.colorvision.protan")
+                    protan.performSemanticsAction(SemanticsActions.RequestFocus) { assertTrue(it()) }
+                    key(Key.Enter, AppDestination.Settings)
+                    assertEquals(ColorVision.PROTAN, preferences().colorVision)
+                    protan.assertIsSelected()
+                    changes("kinetickk.settings.colorvision.default")
                     selectGroup("game")
                     onNodeWithTag("kinetickk.settings.language.en").assertExists()
                     val soundTab = onNodeWithTag("kinetickk.settings.group.sound")
@@ -243,22 +287,26 @@ class SettingsNavigationComposeTest {
                 render(AppDestination.Home)
                 key(Key.S, AppDestination.Settings)
                 sweepSettings()
-                tap(right - panelWidth + 40f, bottom - 25f, AppDestination.Home)
+                click("kinetickk.settings.back", AppDestination.Home)
                 key(Key.S, AppDestination.Settings)
                 selectGroup("interface")
                 // Exercise every accepted text size up to the UI's maximum through its control.
                 repeat(50) {
-                    if (profile.query(ProfileQuery.GetPreferences).preferences.textScale < 1.75f) {
-                        adjust(row = 0, increase = true, rowCount = 2)
+                    if (preferences().textScale < 1.75f) {
+                        showPageWith("kinetickk.settings.text_size.increase")
+                        changes("kinetickk.settings.text_size.increase")
                     }
                 }
-                assertEquals(1.75f, profile.query(ProfileQuery.GetPreferences).preferences.textScale)
+                assertEquals(1.75f, preferences().textScale)
                 for (group in listOf("game", "sound", "graphics", "interface")) {
                     selectGroup(group)
-                    if (group == "sound") exerciseVolume()
+                    if (group == "sound") {
+                        showPageWith("kinetickk.settings.volume.slider")
+                        exerciseVolume()
+                    }
                     captureSettings(group)
                 }
-                tap(right - panelWidth + 40f, bottom - 25f, AppDestination.Home)
+                click("kinetickk.settings.back", AppDestination.Home)
 
                 if (onlySettings) return@runComposeUiTest
                 fun scrollProfileToEnd(tag: String) {
@@ -361,11 +409,13 @@ class SettingsNavigationComposeTest {
                 render(AppDestination.Settings)
                 // A paused run must receive the newly accepted preferences when Settings closes.
                 selectGroup("interface")
-                adjust(row = 0, increase = false, rowCount = 2)
+                changes("kinetickk.settings.text_size.decrease")
                 selectGroup("graphics")
-                adjust(row = 2, increase = true, rowCount = 6)
-                adjust(row = 3, increase = true, rowCount = 6)
-                tap(right - panelWidth + 40f, bottom - 25f, AppDestination.Gameplay)
+                showPageWith("kinetickk.settings.particles.high")
+                changes("kinetickk.settings.particles.high")
+                showPageWith("kinetickk.settings.damage_numbers.toggle")
+                changes("kinetickk.settings.damage_numbers.toggle")
+                click("kinetickk.settings.back", AppDestination.Gameplay)
                 onNodeWithTag("kinetickk.gameplay.resume").performClick()
                 render(AppDestination.Gameplay)
                 assertEquals(GameplayRunPhase.RUNNING, gameplay.activeRun()?.query(GameplayQuery.GetRunStatus)?.phase)
@@ -378,6 +428,35 @@ class SettingsNavigationComposeTest {
 }
 
 private const val APP_TAG = "settings-navigation-app"
+
+/** Test tags of one Settings row: segmented option ids, a toggle, or -/+ steppers. */
+private class SettingsRowTags(val id: String, val options: List<String> = emptyList(), val toggle: Boolean = false, val stepper: Boolean = false)
+
+/** The game's Settings tabs and rows in order (Color vision leads Graphics). */
+private val SETTINGS_GROUPS: Map<String, List<SettingsRowTags>> = linkedMapOf(
+    "game" to listOf(
+        SettingsRowTags("language", listOf("ru", "en")),
+        SettingsRowTags("simulation_speed", listOf("75", "100", "115", "135", "160", "200")),
+    ),
+    "sound" to listOf(
+        SettingsRowTags("sfx", toggle = true),
+        SettingsRowTags("music", toggle = true),
+        SettingsRowTags("master_volume"),
+    ),
+    "graphics" to listOf(
+        SettingsRowTags("colorvision", listOf("default", "protan", "deutan", "tritan", "mono")),
+        SettingsRowTags("screen_shake", toggle = true),
+        SettingsRowTags("particles", listOf("low", "normal", "high")),
+        SettingsRowTags("damage_numbers", toggle = true),
+        SettingsRowTags("damage_number_size", listOf("small", "normal", "large", "huge")),
+        SettingsRowTags("damage_number_format", listOf("compact", "full")),
+        SettingsRowTags("damage_color_thresholds", stepper = true),
+    ),
+    "interface" to listOf(
+        SettingsRowTags("text_size", stepper = true),
+        SettingsRowTags("run_statistics_side", listOf("left", "right")),
+    ),
+)
 
 private class InMemorySettingsPersistence : ProfilePersistenceCapability {
     var payload: String? = null

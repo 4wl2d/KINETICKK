@@ -3,7 +3,12 @@
 
 package kinetickk.ball.profile.interaction.settings.impl
 
+import kinetickk.ball.profile.api.ColorVision
+import kinetickk.ball.profile.api.DamageNumberFormat
+import kinetickk.ball.profile.api.DamageNumberSize
+import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.profile.api.PreferenceAdjustmentDirection
+import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.ProfilePreferenceAdjustment
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
@@ -127,6 +132,85 @@ class SettingsReducerTest {
             ProfilePreferenceAdjustment.StepMasterVolume(PreferenceAdjustmentDirection.DECREASE),
             assertIs<SettingsEffect.AdjustPreference>(decrease.effects.first()).adjustment,
         )
+    }
+
+    @Test
+    fun segmentedChoicesRequestDirectProfileChoicesAndTheCurrentChoiceIsInert() {
+        val preferences = PlayerPreferences(colorVision = ColorVision.TRITAN, particleDensity = ParticleDensity.HIGH)
+        val initial = SettingsState(preferences.toRenderModel(), page = 0, group = SettingsGroup.GRAPHICS)
+        val expected: Map<SettingsRow, (Int) -> ProfilePreferenceAdjustment> = mapOf(
+            SettingsRow.SIMULATION_SPEED to { ProfilePreferenceAdjustment.SetSimulationSpeed(SIMULATION_SPEED_OPTIONS[it]) },
+            SettingsRow.PARTICLES to { ProfilePreferenceAdjustment.SetParticleDensity(ParticleDensity.entries[it]) },
+            SettingsRow.DAMAGE_NUMBER_SIZE to { ProfilePreferenceAdjustment.SetDamageNumberSize(DamageNumberSize.entries[it]) },
+            SettingsRow.DAMAGE_NUMBER_FORMAT to { ProfilePreferenceAdjustment.SetDamageNumberFormat(DamageNumberFormat.entries[it]) },
+            SettingsRow.COLOR_VISION to { ProfilePreferenceAdjustment.SetColorVision(ColorVision.entries[it]) },
+            SettingsRow.RUN_STATISTICS_SIDE to { ProfilePreferenceAdjustment.ToggleRunStatisticsSide },
+            SettingsRow.LANGUAGE to { ProfilePreferenceAdjustment.SetLanguage(AppLanguage.entries[it]) },
+        )
+        assertEquals(SettingsRow.entries.filter { it.control == SettingsControl.SEGMENTED }.toSet(), expected.keys)
+        for ((row, adjustment) in expected) {
+            val selected = row.selectedOption(preferences)
+            for (option in 0 until row.optionCount()) {
+                val reduction = SettingsReducer.reduce(initial, SettingsAction.Select(row, option))
+                assertEquals(initial, reduction.state, "$row $option")
+                if (option == selected) {
+                    assertTrue(reduction.effects.isEmpty(), "$row $option is already selected")
+                } else {
+                    assertEquals(
+                        listOf(SettingsEffect.AdjustPreference(adjustment(option)), SettingsEffect.PlayAudio(ProfileAudioCue.UI_CLICK)),
+                        reduction.effects, "$row $option",
+                    )
+                }
+            }
+            for (invalid in listOf(-1, row.optionCount(), Int.MAX_VALUE)) {
+                assertEquals(SettingsReduction(initial), SettingsReducer.reduce(initial, SettingsAction.Select(row, invalid)))
+            }
+        }
+        for (row in SettingsRow.entries.filter { it.control != SettingsControl.SEGMENTED }) {
+            assertEquals(SettingsReduction(initial), SettingsReducer.reduce(initial, SettingsAction.Select(row, 0)))
+        }
+        assertTrue(SettingsReducer.reduce(initial, SettingsAction.Adjust(SettingsRow.COLOR_VISION, 1)).effects.isEmpty())
+        assertEquals(ColorVision.TRITAN.ordinal, SettingsRow.COLOR_VISION.selectedOption(preferences))
+    }
+
+    @Test
+    fun infoExplanationTogglesAndClosesWhenTheTabOrPageChanges() {
+        val initial = SettingsState(PlayerPreferences().toRenderModel(), page = 0, group = SettingsGroup.GRAPHICS)
+        val opened = SettingsReducer.reduce(initial, SettingsAction.ToggleInfo(SettingsRow.COLOR_VISION))
+        assertEquals(SettingsRow.COLOR_VISION, opened.state.info)
+        assertTrue(opened.effects.isEmpty())
+        assertEquals(SettingsRow.PARTICLES, SettingsReducer.reduce(opened.state, SettingsAction.ToggleInfo(SettingsRow.PARTICLES)).state.info)
+        assertEquals(null, SettingsReducer.reduce(opened.state, SettingsAction.ToggleInfo(SettingsRow.COLOR_VISION)).state.info)
+        assertEquals(null, SettingsReducer.reduce(opened.state, SettingsAction.SelectGroup(SettingsGroup.SOUND)).state.info)
+        assertEquals(null, SettingsReducer.reduce(opened.state, SettingsAction.PageSelected(1)).state.info)
+        assertEquals(opened.state.model, SettingsReducer.reduce(opened.state, SettingsAction.ToggleInfo(SettingsRow.COLOR_VISION)).state.model)
+    }
+
+    @Test
+    fun rowsHaveStableTagsAndDistinctOptionIds() {
+        assertEquals("colorvision", SettingsRow.COLOR_VISION.tagId)
+        assertEquals(listOf("default", "protan", "deutan", "tritan", "mono"),
+            (0 until SettingsRow.COLOR_VISION.optionCount()).map { SettingsRow.COLOR_VISION.optionId(it) })
+        assertEquals(listOf("ru", "en"), (0 until SettingsRow.LANGUAGE.optionCount()).map { SettingsRow.LANGUAGE.optionId(it) })
+        assertEquals(listOf("75", "100", "115", "135", "160", "200"),
+            (0 until SettingsRow.SIMULATION_SPEED.optionCount()).map { SettingsRow.SIMULATION_SPEED.optionId(it) })
+        for (row in SettingsRow.entries.filter { it.control == SettingsControl.SEGMENTED }) {
+            val ids = (0 until row.optionCount()).map { row.optionId(it) }
+            assertEquals(ids.size, ids.toSet().size, "$row")
+            for (language in AppLanguage.entries) {
+                (0 until row.optionCount()).forEach { assertTrue(row.optionLabel(it, language).isNotBlank()) }
+            }
+        }
+        assertEquals(SettingsRow.entries.toSet(), SettingsGroup.entries.flatMap { it.rows }.toSet(), "every row is on a tab")
+        assertEquals(SettingsRow.entries.size, SettingsGroup.entries.sumOf { it.rows.size }, "no row is on two tabs")
+    }
+
+    @Test
+    fun colorVisionReadsInBothLanguages() {
+        assertEquals("Default", settingValue(PlayerPreferences(language = AppLanguage.English), SettingsRow.COLOR_VISION))
+        assertEquals("Моно", settingValue(PlayerPreferences(colorVision = ColorVision.MONO), SettingsRow.COLOR_VISION))
+        assertEquals("1.15×", SettingsRow.SIMULATION_SPEED.optionLabel(2, AppLanguage.English))
+        assertEquals("0,75×", SettingsRow.SIMULATION_SPEED.optionLabel(0, AppLanguage.Russian))
     }
 
     @Test

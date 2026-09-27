@@ -29,14 +29,24 @@ sealed interface ProfilePreferenceAdjustment {
         }
     }
     data class StepSimulationSpeed(val direction: PreferenceAdjustmentDirection) : ProfilePreferenceAdjustment
+    /** Direct choice of one listed speed (segmented control); unlisted speeds are not representable. */
+    data class SetSimulationSpeed(val speed: Float) : ProfilePreferenceAdjustment {
+        init {
+            require(speed in SIMULATION_SPEED_OPTIONS) { "Simulation speed must be one of the listed options" }
+        }
+    }
     data class StepTextScale(val direction: PreferenceAdjustmentDirection) : ProfilePreferenceAdjustment
     data object ToggleScreenShake : ProfilePreferenceAdjustment
     data object ToggleRunStatisticsSide : ProfilePreferenceAdjustment
     data class StepParticleDensity(val direction: PreferenceAdjustmentDirection) : ProfilePreferenceAdjustment
+    data class SetParticleDensity(val density: ParticleDensity) : ProfilePreferenceAdjustment
     data object ToggleDamageNumbers : ProfilePreferenceAdjustment
     data class StepDamageNumberSize(val direction: PreferenceAdjustmentDirection) : ProfilePreferenceAdjustment
+    data class SetDamageNumberSize(val size: DamageNumberSize) : ProfilePreferenceAdjustment
     data class StepDamageNumberFormat(val direction: PreferenceAdjustmentDirection) : ProfilePreferenceAdjustment
+    data class SetDamageNumberFormat(val format: DamageNumberFormat) : ProfilePreferenceAdjustment
     data class StepDamageNumberTierThreshold(val direction: PreferenceAdjustmentDirection) : ProfilePreferenceAdjustment
+    data class SetColorVision(val colorVision: ColorVision) : ProfilePreferenceAdjustment
 }
 
 data class GameplayProgressUpdate(

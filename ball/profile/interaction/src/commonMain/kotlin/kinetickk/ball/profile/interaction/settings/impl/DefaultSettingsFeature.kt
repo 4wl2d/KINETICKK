@@ -3,53 +3,63 @@
 
 package kinetickk.ball.profile.interaction.settings.impl
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.hoverable
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
-import androidx.compose.ui.draw.drawBehind
-import kinetickk.foundation.common.localization.text
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.focusable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.requiredSize
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
-import kotlin.math.roundToInt
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import kinetickk.foundation.design.LocalAppLanguage
-import kinetickk.foundation.common.localization.text
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.rememberTextMeasurer
-import kinetickk.foundation.design.CanvasTextMeasurer
+import androidx.compose.ui.unit.IntSize
 import kinetickk.ball.profile.api.ProfilePort
 import kinetickk.ball.profile.api.ProfilePulse
 import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.interaction.audio.ProfileAudioExecutor
+import kinetickk.ball.profile.interaction.localization.SettingsRedesignText
 import kinetickk.ball.profile.interaction.settings.api.SettingsFeature
 import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
+import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.text
+import kinetickk.foundation.design.LocalAppLanguage
+import kinetickk.foundation.design.LocalKkRolePalette
+import kinetickk.foundation.design.rememberInterfaceTypography
 import kinetickk.resource.audio.api.AudioService
+import kotlin.math.roundToInt
 
 class DefaultSettingsFeature(
     private val profilePort: ProfilePort,
@@ -68,28 +78,62 @@ class DefaultSettingsFeature(
             )
         }
         val focusRequester = remember { FocusRequester() }
-        val localDensity = LocalDensity.current
+        val density = LocalDensity.current.density
         var viewportValue by remember { mutableStateOf(IntSize.Zero) }
         var pageValue by rememberSaveable(routeToken) { mutableIntStateOf(0) }
         var groupIndexValue by rememberSaveable(routeToken) { mutableIntStateOf(SettingsGroup.GAME.ordinal) }
+        var infoValue by remember(routeToken) { mutableStateOf<SettingsRow?>(null) }
+        var hoverValue by remember { mutableStateOf<SettingsTarget?>(null) }
+        var focusValue by remember { mutableStateOf<SettingsTarget?>(null) }
+        var activeRowValue by remember(routeToken) { mutableStateOf<SettingsRow?>(null) }
+        var previewTimeValue by remember { mutableFloatStateOf(0f) }
+        var previewWakeValue by remember { mutableIntStateOf(0) }
         val group = SettingsGroup.entries[groupIndexValue]
         LaunchedEffect(pageValue) { focusRequester.requestFocus() }
+        // The preview animates while the player interacts and settles shortly after, so an idle
+        // Settings screen stops requesting frames.
+        LaunchedEffect(previewWakeValue) {
+            var last = withFrameNanos { it }
+            val end = last + PREVIEW_AWAKE_NANOS
+            while (last < end) {
+                val now = withFrameNanos { it }
+                previewTimeValue += ((now - last) / 1_000_000_000f).coerceIn(0f, 0.1f)
+                last = now
+            }
+        }
+
+        val language = LocalAppLanguage.current
+        val roles = LocalKkRolePalette.current
+        val typography = rememberInterfaceTypography()
         val composeTextMeasurer = rememberTextMeasurer(cacheSize = 64)
-        val textMeasurer = CanvasTextMeasurer(
-            delegate = composeTextMeasurer,
-            typography = kinetickk.foundation.design.rememberInterfaceTypography(),
-            language = LocalAppLanguage.current,
-            scale = renderModelValue.preferences.textScale,
-        )
+        val width = viewportValue.width.toFloat()
+        val height = viewportValue.height.toFloat()
+        val mode = settingsLayoutMode(width, height, density)
+        val textScale = renderModelValue.preferences.textScale
+        val measurers = remember(composeTextMeasurer, typography, language, roles, textScale, mode) {
+            settingsMeasurers(composeTextMeasurer, typography, language, roles, textScale, mode)
+        }
+        val layout = remember(measurers, width, height, density, group, pageValue) {
+            if (width <= 0f || height <= 0f) null
+            else settingsLayout(width, height, density, group, pageValue, language, measurers.metrics(mode))
+        }
+        val activeRow = activeRowValue?.takeIf { row -> layout?.row(row) != null } ?: layout?.rows?.firstOrNull()?.row
+        val canvasCache = remember { SettingsCanvasCache() }
+
+        fun wake() {
+            previewWakeValue++
+        }
 
         fun dispatch(action: SettingsAction) {
             val reduction = SettingsReducer.reduce(
-                state = SettingsState(renderModelValue, pageValue, group),
+                state = SettingsState(renderModelValue, pageValue, group, infoValue),
                 action = action,
             )
             renderModelValue = reduction.state.model
+            if (reduction.state.group != group || reduction.state.page != pageValue) activeRowValue = null
             pageValue = reduction.state.page
             groupIndexValue = reduction.state.group.ordinal
+            infoValue = reduction.state.info
             reduction.effects.forEach { effect ->
                 when (effect) {
                     is SettingsEffect.AdjustPreference -> {
@@ -105,131 +149,192 @@ class DefaultSettingsFeature(
                     is SettingsEffect.Emit -> onOutput(effect.output)
                 }
             }
+            wake()
         }
 
-        Box(Modifier.fillMaxSize().focusRequester(focusRequester).focusable().onSizeChanged { viewportValue = it }) {
+        fun focusChanged(target: SettingsTarget, focused: Boolean) {
+            if (focused) {
+                focusValue = target
+                target.row?.let { activeRowValue = it }
+                wake()
+            } else if (focusValue == target) {
+                focusValue = null
+            }
+        }
+
+        Box(
+            Modifier
+                .fillMaxSize()
+                .focusRequester(focusRequester)
+                .focusable()
+                .onSizeChanged { viewportValue = it }
+                .pointerInput(layout) {
+                    val current = layout ?: return@pointerInput
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            val position = event.changes.firstOrNull()?.position ?: continue
+                            when (event.type) {
+                                PointerEventType.Exit -> hoverValue = null
+                                PointerEventType.Move, PointerEventType.Enter -> {
+                                    val target = current.targetAt(position.x, position.y)
+                                    if (target != hoverValue) hoverValue = target
+                                    val row = current.rows.firstOrNull { position.y >= it.bounds.top && position.y < it.bounds.bottom &&
+                                        position.x >= it.bounds.left - 20f * density && position.x <= it.bounds.right }?.row
+                                    if (row != null && row != activeRowValue) {
+                                        activeRowValue = row
+                                        wake()
+                                    }
+                                }
+                                else -> Unit
+                            }
+                        }
+                    }
+                },
+        ) {
             Canvas(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(routeToken, renderModelValue, pageValue, group, onOutput) {
+                    .pointerInput(layout) {
+                        val current = layout ?: return@pointerInput
                         detectTapGestures { position ->
-                            resolveSettingsPress(
-                                screenWidth = size.width.toFloat(),
-                                screenHeight = size.height.toFloat(),
-                                density = density,
-                                page = pageValue,
-                                group = group,
-                                x = position.x,
-                                y = position.y,
-                            )?.let(::dispatch)
+                            resolveSettingsPress(current, position.x, position.y)?.let(::dispatch)
                         }
                     },
             ) {
+                val current = layout ?: return@Canvas
                 drawSettings(
-                    model = renderModelValue,
-                    page = pageValue,
-                    group = group,
-                    textMeasurer = textMeasurer,
+                    SettingsFrame(current, renderModelValue.preferences, activeRow, hoverValue, focusValue, infoValue, previewTimeValue),
+                    measurers,
+                    canvasCache,
                 )
             }
-            if (viewportValue.width > 0 && viewportValue.height > 0) {
-                val layout = settingsLayout(
-                    viewportValue.width.toFloat(), viewportValue.height.toFloat(),
-                    localDensity.density, group, pageValue,
+            if (layout != null) {
+                SettingsAccessibleControls(
+                    layout = layout,
+                    model = renderModelValue,
+                    language = language,
+                    onFocusChanged = ::focusChanged,
+                    onActivate = { target -> dispatch(target.toAction()) },
                 )
-                layout.visibleRows.forEachIndexed { index, row ->
-                    if (row != SettingsRow.LANGUAGE && row != SettingsRow.MASTER_VOLUME) {
-                        val top = layout.startY + layout.spacing * index
-                        listOf(-1, 1).forEach { direction ->
-                            val left = layout.bounds.right - (if (direction < 0) 190f else 62f) * localDensity.density
-                            SettingsSemanticButton(
-                                androidx.compose.ui.geometry.Rect(left, top, left + 42f * localDensity.density, top + layout.spacing - 4f * localDensity.density),
-                                localDensity, "kinetickk.settings.${row.name.lowercase()}.${if (direction < 0) "decrease" else "increase"}",
-                                (if (direction < 0) "− " else "+ ") + settingValue(renderModelValue.preferences, row, textMeasurer.language),
-                            ) { dispatch(SettingsAction.Adjust(row, direction)) }
-                        }
-                    }
-                }
-                val footerTop = layout.bounds.bottom - 55f * localDensity.density
-                val backRight = if (layout.maxPage > 0) layout.bounds.left + layout.bounds.width * 0.45f else layout.bounds.right
-                SettingsSemanticButton(androidx.compose.ui.geometry.Rect(layout.bounds.left, footerTop, backRight, layout.bounds.bottom),
-                    localDensity, "kinetickk.settings.back", textMeasurer.language.text(kinetickk.ball.profile.interaction.localization.ProfileText.Back)) { dispatch(SettingsAction.Back) }
-                if (layout.maxPage > 0) {
-                    val nextLeft = layout.bounds.right - 85f * localDensity.density
-                    SettingsSemanticButton(androidx.compose.ui.geometry.Rect(backRight, footerTop, nextLeft, layout.bounds.bottom),
-                        localDensity, "kinetickk.settings.previous", "←") { dispatch(SettingsAction.PageSelected((layout.page - 1).coerceAtLeast(0))) }
-                    SettingsSemanticButton(androidx.compose.ui.geometry.Rect(nextLeft, footerTop, layout.bounds.right, layout.bounds.bottom),
-                        localDensity, "kinetickk.settings.next", "→") { dispatch(SettingsAction.PageSelected((layout.page + 1).coerceAtMost(layout.maxPage))) }
-                }
-                layout.volumeBounds(localDensity.density)?.let { bounds ->
+                layout.row(SettingsRow.MASTER_VOLUME)?.let { row ->
                     SettingsVolumeControl(
                         percent = (renderModelValue.preferences.masterVolume * 100f).roundToInt(),
                         routeToken = routeToken,
-                        textScale = renderModelValue.preferences.textScale,
+                        row = row,
+                        measurers = measurers,
                         onPercentChange = { dispatch(SettingsAction.SetMasterVolume(it)) },
+                        onStep = { dispatch(SettingsAction.Adjust(SettingsRow.MASTER_VOLUME, it)) },
+                        onFocusChanged = ::focusChanged,
                         onEditingFinished = { focusRequester.requestFocus() },
-                        modifier = Modifier
-                            .offset { IntOffset(bounds.left.roundToInt(), bounds.top.roundToInt()) }
-                            .requiredSize(with(localDensity) { bounds.width.toDp() }, with(localDensity) { bounds.height.toDp() }),
                     )
                 }
-                Box(Modifier.fillMaxSize().selectableGroup()) {
-                    layout.tabs.forEach { tab ->
-                        Box(
-                            Modifier
-                                .offset { IntOffset(tab.bounds.left.roundToInt(), tab.bounds.top.roundToInt()) }
-                                .requiredSize(
-                                    with(localDensity) { tab.bounds.width.toDp() },
-                                    with(localDensity) { tab.bounds.height.toDp() },
-                                )
-                                .testTag("kinetickk.settings.group.${tab.group.name.lowercase()}")
-                                .semantics { contentDescription = textMeasurer.language.text(tab.group.label) }
-                                .selectable(
-                                    selected = group == tab.group,
-                                    role = Role.Tab,
-                                    onClick = { dispatch(SettingsAction.SelectGroup(tab.group)) },
-                                ),
-                        )
-                    }
-                }
-            }
-            settingsLanguageOptions(
-                viewportValue.width.toFloat(), viewportValue.height.toFloat(),
-                localDensity.density, pageValue, group,
-            ).forEach { option ->
-                Box(
-                    Modifier
-                        .offset { IntOffset(option.bounds.left.roundToInt(), option.bounds.top.roundToInt()) }
-                        .requiredSize(
-                            with(localDensity) { option.bounds.width.toDp() },
-                            with(localDensity) { option.bounds.height.toDp() },
-                        )
-                        .testTag("kinetickk.settings.language.${option.language.code}")
-                        .semantics { contentDescription = option.language.nativeName }
-                        .selectable(
-                            selected = renderModelValue.preferences.language == option.language,
-                            role = Role.RadioButton,
-                            onClick = { dispatch(SettingsAction.SelectLanguage(option.language)) },
-                        ),
-                )
             }
         }
     }
 }
 
+private const val PREVIEW_AWAKE_NANOS = 2_400_000_000L
+
+/**
+ * Focusable semantic nodes over the canvas targets, in reading order. Pointer input stays with the
+ * canvas and its resolver (these nodes add none); keyboard and accessibility actions reach the same
+ * targets through [onActivate].
+ */
 @Composable
-private fun SettingsSemanticButton(bounds: androidx.compose.ui.geometry.Rect, density: androidx.compose.ui.unit.Density,
-    tag: String, description: String, onClick: () -> Unit) {
-    val interactions = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-    val focused by interactions.collectIsFocusedAsState()
-    val hovered by interactions.collectIsHoveredAsState()
-    Box(Modifier.offset { IntOffset(bounds.left.roundToInt(), bounds.top.roundToInt()) }
-        .requiredSize(with(density) { bounds.width.toDp() }, with(density) { bounds.height.toDp() })
-        .testTag(tag).semantics { contentDescription = description }
-        .drawBehind {
-            if (hovered || focused) drawRect(kinetickk.foundation.design.White.copy(alpha = 0.10f))
-            if (focused) drawRect(kinetickk.foundation.design.KineticAccent, style = androidx.compose.ui.graphics.drawscope.Stroke(2f))
+private fun SettingsAccessibleControls(
+    layout: SettingsLayout,
+    model: kinetickk.ball.profile.interaction.settings.api.SettingsRenderModel,
+    language: AppLanguage,
+    onFocusChanged: (SettingsTarget, Boolean) -> Unit,
+    onActivate: (SettingsTarget) -> Unit,
+) {
+    val preferences = model.preferences
+    val density = layout.density
+    SettingsSemanticTarget(layout.back, "kinetickk.settings.back", language.text(SettingsRedesignText.Back), Role.Button,
+        SettingsTarget.Back, onFocusChanged, onActivate)
+    Box(Modifier.fillMaxSize().selectableGroup()) {
+        layout.tabs.forEach { tab ->
+            SettingsSemanticTarget(
+                tab.bounds, "kinetickk.settings.group.${tab.group.name.lowercase()}", language.text(tab.group.label), Role.Tab,
+                SettingsTarget.Tab(tab.group), onFocusChanged, onActivate, selected = layout.group == tab.group,
+            )
         }
-        .hoverable(interactions)
-        .clickable(interactionSource = interactions, indication = null, role = Role.Button, onClick = onClick))
+    }
+    layout.rows.forEach { row ->
+        val label = row.row.label(language)
+        when (row.row.control) {
+            SettingsControl.SEGMENTED -> Box(Modifier.fillMaxSize().selectableGroup()) {
+                val selected = row.row.selectedOption(preferences)
+                row.options.forEachIndexed { option, cell ->
+                    val optionLabel = row.row.optionLabel(option, language)
+                    SettingsSemanticTarget(
+                        cell, "kinetickk.settings.${row.row.tagId}.${row.row.optionId(option)}",
+                        optionLabel, Role.RadioButton, SettingsTarget.Option(row.row, option), onFocusChanged, onActivate,
+                        selected = option == selected,
+                    )
+                }
+            }
+            SettingsControl.TOGGLE -> row.toggle?.let { toggle ->
+                SettingsSemanticTarget(
+                    toggle, "kinetickk.settings.${row.row.tagId}.toggle", label, Role.Switch,
+                    SettingsTarget.Toggle(row.row), onFocusChanged, onActivate, toggled = row.row.isOn(preferences),
+                )
+            }
+            SettingsControl.SLIDER -> if (row.row != SettingsRow.MASTER_VOLUME) {
+                val value = settingValue(preferences, row.row, language)
+                row.decrease?.let {
+                    SettingsSemanticTarget(it, "kinetickk.settings.${row.row.tagId}.decrease", "$label −", Role.Button,
+                        SettingsTarget.Step(row.row, -1), onFocusChanged, onActivate, state = value)
+                }
+                row.increase?.let {
+                    SettingsSemanticTarget(it, "kinetickk.settings.${row.row.tagId}.increase", "$label +", Role.Button,
+                        SettingsTarget.Step(row.row, 1), onFocusChanged, onActivate, state = value)
+                }
+            }
+        }
+        SettingsSemanticTarget(
+            row.info.settingsTouch(density, 32f), "kinetickk.settings.${row.row.tagId}.info", row.row.about(language), Role.Button,
+            SettingsTarget.Info(row.row), onFocusChanged, onActivate,
+        )
+    }
+    layout.pages.forEachIndexed { index, pip ->
+        SettingsSemanticTarget(
+            pip.settingsTouch(density, 32f), "kinetickk.settings.page.$index",
+            language.text(SettingsRedesignText.Page, index + 1, layout.pages.size), Role.Tab,
+            SettingsTarget.Page(index), onFocusChanged, onActivate, selected = index == layout.page,
+        )
+    }
+}
+
+@Composable
+private fun SettingsSemanticTarget(
+    bounds: Rect,
+    tag: String,
+    description: String,
+    role: Role,
+    target: SettingsTarget,
+    onFocusChanged: (SettingsTarget, Boolean) -> Unit,
+    onActivate: (SettingsTarget) -> Unit,
+    selected: Boolean? = null,
+    toggled: Boolean? = null,
+    state: String? = null,
+) {
+    PlacedBox(bounds, Modifier
+        .testTag(tag)
+        .semantics {
+            contentDescription = description
+            this.role = role
+            if (selected != null) this.selected = selected
+            if (toggled != null) toggleableState = ToggleableState(toggled)
+            if (state != null) stateDescription = state
+            onClick { onActivate(target); true }
+        }
+        .onFocusChanged { onFocusChanged(target, it.isFocused) }
+        .onKeyEvent { event ->
+            val activates = event.key == Key.Enter || event.key == Key.NumPadEnter || event.key == Key.Spacebar
+            if (activates && event.type == KeyEventType.KeyDown) onActivate(target)
+            activates
+        }
+        .focusable())
 }
