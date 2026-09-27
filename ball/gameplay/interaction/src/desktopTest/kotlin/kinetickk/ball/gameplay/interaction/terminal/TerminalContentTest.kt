@@ -24,6 +24,7 @@ import kinetickk.ball.gameplay.interaction.input.GameplayInput
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.LocalAppLanguage
+import kinetickk.ball.gameplay.interaction.rewards.assertNoForbiddenGlyphs
 import org.junit.Rule
 import org.junit.Test
 import java.awt.image.BufferedImage
@@ -115,14 +116,51 @@ class TerminalContentTest {
         }
         for (size in listOf(390 to 720, 780 to 360)) {
             compose.runOnIdle { dimensions.value = size }
-            compose.onNodeWithTag("kinetickk.gameplay.restart").performScrollTo().assertIsDisplayed()
+            val portrait = size.first < size.second
+            // Portrait scrolls one column; short landscape pins the actions under the scrolling summary.
+            val restart = compose.onNodeWithTag("kinetickk.gameplay.restart")
+            if (portrait) restart.performScrollTo()
+            restart.assertIsDisplayed()
             capture("death-report-${size.first}x${size.second}-large-actions")
             compose.onNodeWithTag("kinetickk.gameplay.results").performTouchInput { swipeUp() }
             compose.runOnIdle { assertTrue(actions.isEmpty()) }
             compose.onNodeWithTag("kinetickk.gameplay.stat.LevelReached").performScrollTo().assertIsDisplayed()
             capture("death-report-${size.first}x${size.second}-large-stats")
-            compose.onNodeWithTag("kinetickk.gameplay.exit").performScrollTo().assertIsDisplayed()
+            val exit = compose.onNodeWithTag("kinetickk.gameplay.exit")
+            if (portrait) exit.performScrollTo()
+            exit.assertIsDisplayed()
+            val bounds = exit.fetchSemanticsNode().boundsInRoot
+            assertTrue(bounds.height >= 48f, "The small Menu action keeps a touch target on phones")
         }
+    }
+
+    @Test
+    fun titleStampAndInfoButtonsFollowTheOutcomeWithoutHintText() {
+        val victory = mutableStateOf(false)
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides AppLanguage.English) {
+                Box(Modifier.requiredSize(1000.dp, 720.dp).testTag("terminal-capture")) {
+                    TerminalContent(report().copy(victory = victory.value, bank = "1,284"), 1f, false, 3f, true) {}
+                }
+            }
+        }
+        compose.onNodeWithText("CORE", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("BROKEN", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("CORE FRACTURED", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithTag("kinetickk.gameplay.rebirth").assertDoesNotExist()
+        compose.onNodeWithContentDescription(AppLanguage.English.text(GameplayText.DamageAccountingHint)).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Matter banks on victory, on death and when you quit a run.").assertIsDisplayed()
+        // The damage explanation lives behind the (!) button, never as a visible line.
+        compose.onNodeWithText(AppLanguage.English.text(GameplayText.DamageAccountingHint), useUnmergedTree = true).assertDoesNotExist()
+        compose.assertNoForbiddenGlyphs()
+        capture("report-defeat-board")
+        compose.runOnIdle { victory.value = true }
+        compose.onNodeWithText("ARCHITECT", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("DISMANTLED", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText(AppLanguage.English.text(GameplayText.ArchitectFallen), useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithTag("kinetickk.gameplay.rebirth").assertIsDisplayed()
+        compose.assertNoForbiddenGlyphs()
+        capture("report-victory-board")
     }
 
     @Test
