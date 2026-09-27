@@ -39,4 +39,18 @@ class SettingsRedesignTextTest {
             SettingsRow.COLOR_VISION.about(AppLanguage.English),
         )
     }
+
+    @Test
+    fun theTextSizePreviewShowsGameWordsAndNumbersNotAnExplanation() {
+        for (language in AppLanguage.entries) {
+            val sample = settingsTextSizeSample(language)
+            assertTrue(sample.isNotEmpty())
+            val explanations = SettingsRow.entries.map { it.about(language) }
+            sample.forEach { (label, value) ->
+                assertTrue(label.isNotBlank() && value.all(Char::isDigit), "$language $label $value")
+                explanations.forEach { about -> assertTrue(label !in about && about !in label, "$language $label") }
+                banned.forEach { glyph -> assertTrue(glyph !in label, "$language $label $glyph") }
+            }
+        }
+    }
 }
