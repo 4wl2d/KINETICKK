@@ -4,49 +4,78 @@
 package kinetickk.ball.gameplay.interaction.terminal
 
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import kinetickk.ball.gameplay.interaction.canvas.drawCore
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.profile.api.ParticleDensity
-import kinetickk.foundation.design.Cyan
+import kinetickk.foundation.design.KkEase
 import kinetickk.foundation.design.KkRolePalette
-import kinetickk.foundation.design.White
-import kotlin.math.cos
-import kotlin.math.sin
+import kinetickk.foundation.design.kkLerp
+import kinetickk.foundation.design.kkStroke
 
-/** Bounded presentation only: the accepted run is already finished and cannot gain rewards. */
+/** Seconds after which the in-world death has fully faded (the report covers the world). */
+internal const val CoreDeathDuration = 1.1f
+
+private const val SwellSeconds = 0.12f
+
+/**
+ * Bounded presentation only: the accepted run is already finished and cannot gain rewards.
+ * The Core swells, then shatters into threat-colored wedges around a black singularity with a
+ * flash ring and debris; everything fades out by [CoreDeathDuration].
+ */
 internal fun DrawScope.drawCoreDeath(
     engine: GameplayRenderModel,
     elapsed: Float,
-    @Suppress("UNUSED_PARAMETER") roles: KkRolePalette,
+    roles: KkRolePalette,
 ) {
     val core = Offset(engine.coreX - engine.cameraX + size.width * 0.5f,
         engine.coreY - engine.cameraY + size.height * 0.5f)
-    if (elapsed < 0.12f) {
+    if (elapsed < SwellSeconds) {
         scale(1f + elapsed * 2.5f, pivot = core) { drawCore(engine, core) }
         return
     }
-    val progress = ((elapsed - 0.12f) / 0.85f).coerceIn(0f, 1f)
-    if (progress >= 1f) return
-    val expansion = 1f - (1f - progress) * (1f - progress)
-    val opacity = (1f - progress) * (1f - progress)
-    drawCircle(Cyan.copy(alpha = opacity * 0.55f), 22f + expansion * 170f, core, style = Stroke(2f))
-    drawCircle(White.copy(alpha = opacity * 0.22f), 18f + expansion * 70f, core, style = Stroke(5f * (1f - progress)))
-    val count = when (engine.settings.particleDensity) {
-        ParticleDensity.LOW -> 8
-        ParticleDensity.NORMAL -> 16
-        ParticleDensity.HIGH -> 24
+    if (elapsed >= CoreDeathDuration) return
+    val t = elapsed - SwellSeconds
+    val fade = ((CoreDeathDuration - elapsed) / 0.3f).coerceIn(0f, 1f)
+    val threat = roles.threat
+    // Flash ring leaving the Core.
+    val ring = (t / 0.6f).coerceIn(0f, 1f)
+    if (ring < 1f) {
+        val eased = KkEase.Out.transform(ring)
+        drawCircle(threat.copy(alpha = (1f - eased) * fade), kkLerp(18f, 150f, eased), core, style = kkStroke(3f))
     }
-    repeat(count) { index ->
-        val angle = index * 6.2831855f / count + 0.24f
-        val direction = Offset(cos(angle), sin(angle))
-        val radius = 18f + expansion * (85f + (index % 4) * 27f)
-        val start = core + direction * radius
-        val end = start + direction * ((7f + index % 3 * 4f) * (1f - progress))
-        drawLine(if (index % 3 == 0) White.copy(alpha = opacity) else Cyan.copy(alpha = opacity),
-            start, end, 2.5f, StrokeCap.Round)
+    // Shards fly out on the board's timeline, compressed.
+    val shape = CoreDeathShapes.shape
+    val shardTime = 0.32f + t * 1.4f
+    drawShatterShards(shape, CoreDeathShapes.paths, core, 0.26f, shardTime, threat, spread = 2.4f, alpha = fade, floating = false)
+    val debris = when (engine.settings.particleDensity) {
+        ParticleDensity.LOW -> 6
+        ParticleDensity.NORMAL -> 12
+        ParticleDensity.HIGH -> 18
     }
+    drawShatterDebris(shape, core, 0.36f, shardTime, threat, debris, alpha = fade)
+    // The black singularity that swallowed the Core pops in the middle.
+    val pop = (t / 0.25f).coerceIn(0f, 1f)
+    val popScale = if (pop < 0.6f) kkLerp(0f, 1.15f, KkEase.Pull.transform(pop / 0.6f)) else kkLerp(1.15f, 1f, (pop - 0.6f) / 0.4f)
+    val radius = 11f * popScale
+    if (radius > 0.5f) {
+        for (index in GlowWidths.indices) {
+            drawCircle(threat.copy(alpha = GlowAlphas[index] * fade), radius + GlowWidths[index], core)
+        }
+        drawCircle(Color.Black.copy(alpha = fade), radius, core)
+        drawCircle(threat.copy(alpha = fade), radius + 1f, core, style = kkStroke(1.5f))
+    }
+}
+
+// Glow (0 0 36px 8px threat @45 %) as stacked translucent discs, no blur.
+private val GlowWidths = floatArrayOf(3f, 6f, 10f, 15f)
+private val GlowAlphas = floatArrayOf(0.22f, 0.14f, 0.08f, 0.04f)
+
+/** Defeat shatter geometry, built once on first draw. */
+private object CoreDeathShapes {
+    val shape: ReportShatterShape by lazy { reportShatterShape(victory = false) }
+    val paths: List<Path> by lazy { shape.shards.map { it.path() } }
 }
