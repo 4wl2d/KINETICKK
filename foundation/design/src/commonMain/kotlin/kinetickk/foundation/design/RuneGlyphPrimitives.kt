@@ -109,7 +109,7 @@ private fun DrawScope.drawRune(style: CanvasRuneStyle, center: Offset, radius: F
         CanvasRuneStyle.PARALLEL_ARROW -> {
             drawLine(color, Offset(center.x - radius, center.y + radius * 0.33f), Offset(center.x + radius * 0.55f, center.y + radius * 0.33f), stroke, StrokeCap.Round)
             drawLine(RuneInk, Offset(center.x - radius * 0.62f, center.y - radius * 0.38f), Offset(center.x + radius * 0.88f, center.y - radius * 0.38f), stroke, StrokeCap.Round)
-            drawPolygon(Offset(center.x + radius * 0.72f, center.y - radius * 0.38f), radius * 0.25f, 3, 0f, RuneInk, Fill)
+            drawPolygon(Offset(center.x + radius * 0.72f, center.y - radius * 0.38f), radius * 0.22f, 4, PI.toFloat() / 4f, RuneInk, Fill)
         }
         CanvasRuneStyle.THREE_SPEED_LINES -> {
             repeat(3) { index ->
@@ -131,7 +131,7 @@ private fun DrawScope.drawRune(style: CanvasRuneStyle, center: Offset, radius: F
         CanvasRuneStyle.ELLIPSE_AND_NAIL -> {
             drawOval(color, Offset(center.x - radius, center.y - radius * 0.45f), Size(radius * 2f, radius * 0.9f), style = Stroke(thin))
             drawLine(RuneInk, Offset(center.x, center.y - radius * 0.82f), Offset(center.x, center.y + radius * 0.72f), stroke, StrokeCap.Round)
-            drawPolygon(Offset(center.x, center.y + radius * 0.72f), radius * 0.24f, 3, PI.toFloat() / 2f, RuneInk, Fill)
+            drawPolygon(Offset(center.x, center.y + radius * 0.72f), radius * 0.2f, 4, PI.toFloat() / 4f, RuneInk, Fill)
         }
         CanvasRuneStyle.RINGED_ANCHOR -> {
             drawLine(color, Offset(center.x, center.y - radius * 0.88f), Offset(center.x, center.y + radius * 0.56f), stroke, StrokeCap.Round)
@@ -140,14 +140,17 @@ private fun DrawScope.drawRune(style: CanvasRuneStyle, center: Offset, radius: F
         }
         CanvasRuneStyle.HOOK_AND_DOT -> {
             drawArc(color, -80f, 275f, false, Offset(center.x - radius * 0.72f, center.y - radius * 0.72f), Size(radius * 1.44f, radius * 1.44f), style = Stroke(stroke, cap = StrokeCap.Round))
-            drawPolygon(Offset(center.x - radius * 0.47f, center.y + radius * 0.55f), radius * 0.24f, 3, 2.5f, RuneInk, Fill)
+            drawCircle(RuneInk, radius * 0.17f, Offset(center.x - radius * 0.47f, center.y + radius * 0.55f))
             drawCircle(RuneInk, radius * 0.14f, center)
         }
         CanvasRuneStyle.INWARD_CHEVRONS -> {
+            // Legacy name: inward brackets (no chevrons).
             repeat(2) { direction ->
                 val sign = if (direction == 0) -1f else 1f
-                drawLine(color, Offset(center.x + sign * radius * 0.92f, center.y - radius * 0.62f), Offset(center.x + sign * radius * 0.22f, center.y), stroke, StrokeCap.Round)
-                drawLine(color, Offset(center.x + sign * radius * 0.92f, center.y + radius * 0.62f), Offset(center.x + sign * radius * 0.22f, center.y), stroke, StrokeCap.Round)
+                val x = center.x + sign * radius * 0.72f
+                drawLine(color, Offset(x, center.y - radius * 0.62f), Offset(x, center.y + radius * 0.62f), stroke, StrokeCap.Round)
+                drawLine(color, Offset(x, center.y - radius * 0.62f), Offset(x - sign * radius * 0.34f, center.y - radius * 0.62f), stroke, StrokeCap.Round)
+                drawLine(color, Offset(x, center.y + radius * 0.62f), Offset(x - sign * radius * 0.34f, center.y + radius * 0.62f), stroke, StrokeCap.Round)
             }
             drawCircle(RuneInk, radius * 0.18f, center)
         }
@@ -187,7 +190,7 @@ private fun DrawScope.drawRune(style: CanvasRuneStyle, center: Offset, radius: F
         }
         CanvasRuneStyle.RETURN_ARROW -> {
             drawArc(color, -40f, 285f, false, Offset(center.x - radius * 0.75f, center.y - radius * 0.75f), Size(radius * 1.5f, radius * 1.5f), style = Stroke(stroke, cap = StrokeCap.Round))
-            drawPolygon(Offset(center.x + radius * 0.58f, center.y - radius * 0.45f), radius * 0.23f, 3, -0.5f, RuneInk, Fill)
+            drawCircle(RuneInk, radius * 0.17f, Offset(center.x + radius * 0.58f, center.y - radius * 0.48f), style = Stroke(stroke * 0.8f))
             drawCircle(RuneInk, radius * 0.18f, center)
         }
         CanvasRuneStyle.FOUR_SWIRL_ARMS -> {
@@ -305,7 +308,7 @@ private fun DrawScope.drawRune(style: CanvasRuneStyle, center: Offset, radius: F
             drawArc(color, 190f, 160f, false, Offset(center.x - radius * 0.72f, center.y - radius * 0.66f), Size(radius * 1.44f, radius * 1.55f), style = Stroke(stroke, cap = StrokeCap.Round))
             repeat(3) { index ->
                 val x = center.x + (index - 1) * radius * 0.38f
-                drawPolygon(Offset(x, center.y + radius * 0.57f), radius * 0.18f, 3, PI.toFloat() / 2f, if (index == 1) RuneInk else color, Fill)
+                drawPolygon(Offset(x, center.y + radius * 0.57f), radius * 0.15f, 4, PI.toFloat() / 4f, if (index == 1) RuneInk else color, Fill)
             }
             drawCircle(RuneInk, radius * 0.14f, Offset(center.x, center.y - radius * 0.62f))
         }
@@ -363,9 +366,16 @@ private fun DrawScope.drawRune(style: CanvasRuneStyle, center: Offset, radius: F
     }
 }
 
+/** Sheared bar outline (formerly a chevron; arrow shapes are not allowed). */
 private fun DrawScope.drawRuneChevron(center: Offset, radius: Float, color: Color, stroke: Float) {
-    drawLine(color, Offset(center.x - radius * 0.48f, center.y - radius * 0.7f), Offset(center.x + radius * 0.28f, center.y), stroke, StrokeCap.Round)
-    drawLine(color, Offset(center.x + radius * 0.28f, center.y), Offset(center.x - radius * 0.48f, center.y + radius * 0.7f), stroke, StrokeCap.Round)
+    val bar = Path().apply {
+        moveTo(center.x + radius * 0.02f, center.y - radius * 0.7f)
+        lineTo(center.x + radius * 0.36f, center.y - radius * 0.7f)
+        lineTo(center.x - radius * 0.02f, center.y + radius * 0.7f)
+        lineTo(center.x - radius * 0.36f, center.y + radius * 0.7f)
+        close()
+    }
+    drawPath(bar, color, style = Stroke(stroke))
 }
 
 private fun DrawScope.drawBolt(center: Offset, radius: Float, color: Color) {

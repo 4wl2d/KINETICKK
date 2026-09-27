@@ -28,11 +28,17 @@ fun DrawScope.drawKineticRibbon(bounds: Rect, color: Color, cut: Float = d(14f))
     drawPath(path, color)
 }
 
+/**
+ * Legacy selection mark. Arrow shapes are not allowed in the redesign, so this draws a sheared bar
+ * of [length] (the −12° panel lean) instead of an arrow. Prefer the menu item / list row helpers.
+ */
 fun DrawScope.drawKineticArrow(center: Offset, length: Float, color: Color) {
     val half = length * 0.5f
-    drawLine(color, center - Offset(half, 0f), center + Offset(half, 0f), d(2f))
-    drawLine(color, center + Offset(half * 0.25f, -half * 0.65f), center + Offset(half, 0f), d(2f))
-    drawLine(color, center + Offset(half * 0.25f, half * 0.65f), center + Offset(half, 0f), d(2f))
+    val thickness = d(4f)
+    drawPath(
+        KkPathMemo.sheared(center.x - half, center.y - thickness, center.x + half, center.y + thickness),
+        color,
+    )
 }
 
 fun DrawScope.drawKineticOrbits(center: Offset, radius: Float, time: Float, accent: Color, tilt: Float = -28f) {
@@ -41,10 +47,10 @@ fun DrawScope.drawKineticOrbits(center: Offset, radius: Float, time: Float, acce
             val rx = radius * (1.15f + index * 0.24f)
             val ry = radius * (0.38f + index * 0.17f)
             val rect = Rect(center - Offset(rx, ry), Size(rx * 2f, ry * 2f))
-            drawOval(if (index % 2 == 0) accent.copy(alpha = 0.25f) else White.copy(alpha = 0.18f),
+            drawOval(if (index % 2 == 0) accent.copy(alpha = 0.25f) else Kk.Bone.copy(alpha = 0.18f),
                 rect.topLeft, rect.size, style = Stroke(d(if (index == 2) 1.5f else 0.65f)))
             val angle = time * (0.10f + index * 0.035f) + index * 1.62f
-            drawCircle(if (index % 2 == 0) accent else White, d(if (index == 2) 5f else 2.5f),
+            drawCircle(if (index % 2 == 0) accent else Kk.Bone, d(if (index == 2) 5f else 2.5f),
                 center + Offset(cos(angle) * rx, sin(angle) * ry))
         }
         val sweep = Rect(center - Offset(radius * 2.2f, radius * 0.63f), Size(radius * 4.4f, radius * 1.26f))
@@ -52,8 +58,8 @@ fun DrawScope.drawKineticOrbits(center: Offset, radius: Float, time: Float, acce
     }
 }
 
-fun DrawScope.drawSectionAtmosphere(accent: Color = KineticAccent) {
-    drawRect(SpaceBlack)
+fun DrawScope.drawSectionAtmosphere(accent: Color = Kk.Volt) {
+    drawRect(Kk.Ink)
     drawKineticOrbits(Offset(size.width * 0.94f, size.height * 0.12f), size.minDimension * 0.27f,
         0f, accent.copy(alpha = 0.18f))
     drawLine(accent.copy(alpha = 0.25f), Offset(0f, size.height * 0.93f),

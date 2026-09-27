@@ -45,7 +45,8 @@ fun DrawScope.drawInterfaceGlyph(glyph: InterfaceGlyph, center: Offset, radius: 
             path(-0.85f, 0.15f, 0f, 0.65f, 0.85f, 0.15f)
         }
         InterfaceGlyph.PAUSE -> { line(-0.3f, -0.6f, -0.3f, 0.6f); line(0.3f, -0.6f, 0.3f, 0.6f) }
-        InterfaceGlyph.PLAY -> path(-0.4f, -0.7f, 0.7f, 0f, -0.4f, 0.7f, close = true)
+        // Start slab: a sheared bar instead of a play triangle (arrow shapes are not allowed).
+        InterfaceGlyph.PLAY -> path(-0.35f, -0.6f, 0.75f, -0.6f, 0.35f, 0.6f, -0.75f, 0.6f, close = true)
         InterfaceGlyph.CHECK -> path(-0.65f, 0f, -0.15f, 0.5f, 0.7f, -0.5f)
         InterfaceGlyph.LOCK -> {
             drawRect(color, point(-0.6f, -0.05f), Size(radius * 1.2f, radius * 0.9f), style = stroke)
@@ -62,7 +63,7 @@ fun DrawScope.drawInterfaceGlyph(glyph: InterfaceGlyph, center: Offset, radius: 
         }
         InterfaceGlyph.CYCLE -> {
             drawArc(color, -60f, 300f, false, point(-0.7f, -0.7f), Size(radius * 1.4f, radius * 1.4f), style = stroke)
-            path(0.15f, -0.9f, 0.65f, -0.65f, 0.55f, -0.15f)
+            drawCircle(color, radius * 0.16f, point(0.35f, -0.61f))
         }
         InterfaceGlyph.BOOK -> {
             path(0f, -0.5f, -0.75f, -0.75f, -0.75f, 0.55f, 0f, 0.8f, 0.75f, 0.55f, 0.75f, -0.75f, close = true)

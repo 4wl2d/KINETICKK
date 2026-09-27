@@ -26,27 +26,27 @@ import kotlin.math.sin
 private const val TAU = 6.2831855f
 
 fun DrawScope.drawOverlayFrame(bounds: Rect, accent: Color) {
-    drawRect(OverlayPanel, bounds.topLeft, bounds.size)
+    drawRect(Kk.Ink2, bounds.topLeft, bounds.size)
     drawRect(accent, bounds.topLeft, Size(d(4f), bounds.height))
     drawRect(accent, Offset(bounds.left, bounds.top + d(22f)), Size(d(2f), d(18f)))
 }
 
 fun DrawScope.drawFooterBack(textMeasurer: TextMeasurer, bounds: Rect, accent: Color) {
     val top = bounds.bottom - d(55f)
-    drawLine(DarkLine, Offset(bounds.left + d(20f), top), Offset(bounds.right - d(20f), top), d(1f))
-    drawLabel(textMeasurer, textMeasurer.language.text(NavigationText.Back), bounds.center.x, top + d(10f), 14f, White, centered = true, display = true)
+    drawLine(Kk.Line, Offset(bounds.left + d(20f), top), Offset(bounds.right - d(20f), top), d(1f))
+    drawLabel(textMeasurer, textMeasurer.language.text(NavigationText.Back), bounds.center.x, top + d(10f), 14f, Kk.Bone, centered = true, display = true)
 }
 
 fun DrawScope.drawPagedFooter(textMeasurer: TextMeasurer, bounds: Rect, page: Int, maxPage: Int, accent: Color) {
     val top = bounds.bottom - d(55f)
     val closeRight = bounds.left + bounds.width * 0.45f
     val nextLeft = bounds.right - d(85f)
-    drawLine(DarkLine, Offset(bounds.left, top), Offset(bounds.right, top), d(1f))
-    drawLine(DarkLine, Offset(closeRight, top), Offset(closeRight, bounds.bottom), d(1f))
-    drawLine(DarkLine, Offset(nextLeft, top), Offset(nextLeft, bounds.bottom), d(1f))
+    drawLine(Kk.Line, Offset(bounds.left, top), Offset(bounds.right, top), d(1f))
+    drawLine(Kk.Line, Offset(closeRight, top), Offset(closeRight, bounds.bottom), d(1f))
+    drawLine(Kk.Line, Offset(nextLeft, top), Offset(nextLeft, bounds.bottom), d(1f))
     drawLabel(textMeasurer, textMeasurer.language.text(NavigationText.BackEscape), bounds.left + d(25f), top + d(16f), 12f, accent, weight = FontWeight.Bold)
-    drawLabel(textMeasurer, textMeasurer.language.text(NavigationText.Page, page + 1, maxPage + 1), (closeRight + nextLeft) * 0.5f, top + d(16f), 11f, if (page > 0) White else Muted, centered = true)
-    drawLabel(textMeasurer, textMeasurer.language.text(NavigationText.Next), bounds.right - d(42f), top + d(16f), 11f, if (page < maxPage) White else Muted, centered = true)
+    drawLabel(textMeasurer, textMeasurer.language.text(NavigationText.Page, page + 1, maxPage + 1), (closeRight + nextLeft) * 0.5f, top + d(16f), 11f, if (page > 0) Kk.Bone else Kk.Mute, centered = true)
+    drawLabel(textMeasurer, textMeasurer.language.text(NavigationText.Next), bounds.right - d(42f), top + d(16f), 11f, if (page < maxPage) Kk.Bone else Kk.Mute, centered = true)
 }
 
 enum class SystemGlyphStyle {
@@ -75,27 +75,31 @@ fun DrawScope.drawSystemGlyph(
     when (style) {
         SystemGlyphStyle.DIAGONAL_SLASH -> {
             drawLine(color.copy(alpha = 0.35f), Offset(center.x - radius, center.y + radius * 0.55f), Offset(center.x + radius, center.y - radius * 0.55f), radius * 0.35f, StrokeCap.Round)
-            drawLine(White, Offset(center.x - radius * 0.7f, center.y + radius * 0.4f), Offset(center.x + radius * 0.75f, center.y - radius * 0.4f), radius * 0.08f, StrokeCap.Round)
+            drawLine(Kk.Bone, Offset(center.x - radius * 0.7f, center.y + radius * 0.4f), Offset(center.x + radius * 0.75f, center.y - radius * 0.4f), radius * 0.08f, StrokeCap.Round)
         }
         SystemGlyphStyle.ORBITING_NODE -> {
             drawCircle(color.copy(alpha = 0.3f), radius, center, style = Stroke(radius * 0.08f, pathEffect = dashEffect))
             val ball = polar(center, radius, time * 2f)
             drawLine(color, center, ball, radius * 0.08f)
-            drawPolygon(ball, radius * 0.32f, 8, time, White, Fill)
+            drawPolygon(ball, radius * 0.32f, 8, time, Kk.Bone, Fill)
         }
         SystemGlyphStyle.CONCENTRIC_RING -> {
             drawCircle(color.copy(alpha = 0.22f), radius, center)
             drawCircle(color, radius * 0.78f, center, style = Stroke(radius * 0.09f))
-            drawCircle(White, radius * 0.35f, center, style = Stroke(radius * 0.05f, pathEffect = dashEffect))
+            drawCircle(Kk.Bone, radius * 0.35f, center, style = Stroke(radius * 0.05f, pathEffect = dashEffect))
         }
         SystemGlyphStyle.ARROW_LINE -> {
+            // Lance line ending in a sheared block (no arrowhead).
             drawLine(color.copy(alpha = 0.3f), Offset(center.x - radius, center.y), Offset(center.x + radius, center.y), radius * 0.28f, StrokeCap.Round)
-            drawPolygon(Offset(center.x + radius * 0.72f, center.y), radius * 0.34f, 3, 0f, White, Fill)
+            drawPath(
+                KkPathMemo.sheared(center.x + radius * 0.42f, center.y - radius * 0.3f, center.x + radius * 0.92f, center.y + radius * 0.3f),
+                Kk.Bone,
+            )
         }
         SystemGlyphStyle.HEX_ORBIT -> {
             drawCircle(color.copy(alpha = 0.2f), radius, center)
             drawCircle(color, radius * 0.75f, center, style = Stroke(radius * 0.07f, pathEffect = dashEffect))
-            drawPolygon(center, radius * 0.42f, 6, time, White, Stroke(radius * 0.07f))
+            drawPolygon(center, radius * 0.42f, 6, time, Kk.Bone, Stroke(radius * 0.07f))
         }
         SystemGlyphStyle.DIAMOND_TRIAD -> repeat(3) { index ->
             val point = polar(center, radius * 0.78f, time + index * TAU / 3f)
@@ -103,31 +107,32 @@ fun DrawScope.drawSystemGlyph(
         }
         SystemGlyphStyle.TWIN_DIAMONDS -> {
             drawPolygon(Offset(center.x - radius * 0.38f, center.y), radius * 0.55f, 4, time, color, Fill)
-            drawPolygon(Offset(center.x + radius * 0.38f, center.y), radius * 0.55f, 4, -time, White, Fill)
+            drawPolygon(Offset(center.x + radius * 0.38f, center.y), radius * 0.55f, 4, -time, Kk.Bone, Fill)
         }
         SystemGlyphStyle.ZIGZAG_RING -> {
             drawCircle(color, radius, center, style = Stroke(radius * 0.1f))
             var previous = Offset(center.x - radius, center.y)
             repeat(5) { index ->
                 val next = Offset(center.x - radius + radius * 0.4f * (index + 1), center.y + if (index % 2 == 0) -radius * 0.42f else radius * 0.42f)
-                drawLine(White, previous, next, radius * 0.07f)
+                drawLine(Kk.Bone, previous, next, radius * 0.07f)
                 previous = next
             }
         }
         SystemGlyphStyle.RINGED_BEAM -> {
             drawLine(color.copy(alpha = 0.35f), Offset(center.x - radius, center.y), Offset(center.x + radius, center.y), radius * 0.42f, StrokeCap.Round)
-            drawCircle(White, radius * 0.23f, Offset(center.x + radius * 0.72f, center.y))
+            drawCircle(Kk.Bone, radius * 0.23f, Offset(center.x + radius * 0.72f, center.y))
             drawCircle(color, radius * 0.82f, center, style = Stroke(radius * 0.07f))
         }
         SystemGlyphStyle.HEPTAGON_ORBIT -> {
             drawCircle(color.copy(alpha = 0.12f), radius, center)
             drawCircle(color, radius, center, style = Stroke(radius * 0.07f, pathEffect = dashEffect))
-            drawPolygon(center, radius * 0.48f, 7, time * 0.3f, White, Stroke(radius * 0.06f))
+            drawPolygon(center, radius * 0.48f, 7, time * 0.3f, Kk.Bone, Stroke(radius * 0.06f))
         }
         SystemGlyphStyle.SPEAR_LINE -> {
-            drawLine(color.copy(alpha = 0.28f), Offset(center.x - radius, center.y), Offset(center.x + radius, center.y), radius * 0.35f, StrokeCap.Round)
-            drawLine(White, Offset(center.x - radius, center.y), Offset(center.x + radius, center.y), radius * 0.09f, StrokeCap.Round)
-            drawPolygon(Offset(center.x + radius * 0.8f, center.y), radius * 0.37f, 3, 0f, color, Fill)
+            // Spear shaft ending in a ring node (icons.json singularity spear; no arrowhead).
+            drawLine(color.copy(alpha = 0.28f), Offset(center.x - radius, center.y), Offset(center.x + radius * 0.5f, center.y), radius * 0.35f, StrokeCap.Round)
+            drawLine(Kk.Bone, Offset(center.x - radius, center.y), Offset(center.x + radius * 0.5f, center.y), radius * 0.09f, StrokeCap.Round)
+            drawCircle(color, radius * 0.3f, Offset(center.x + radius * 0.72f, center.y), style = Stroke(radius * 0.12f))
         }
         SystemGlyphStyle.TRIANGLE_NETWORK -> {
             val first = polar(center, radius * 0.78f, time * 1.8f)
@@ -136,7 +141,7 @@ fun DrawScope.drawSystemGlyph(
             drawLine(color.copy(alpha = 0.65f), first, second, radius * 0.08f)
             drawLine(color.copy(alpha = 0.65f), second, third, radius * 0.08f)
             drawLine(color.copy(alpha = 0.65f), third, first, radius * 0.08f)
-            drawPolygon(center, radius * 0.42f, 4, time, White, Fill)
+            drawPolygon(center, radius * 0.42f, 4, time, Kk.Bone, Fill)
         }
     }
 }
@@ -249,7 +254,14 @@ fun formatOneDecimal(value: Float, language: AppLanguage = AppLanguage.English):
 
 fun formatMultiplier(value: Float, language: AppLanguage = AppLanguage.English): String {
     val hundredths = (value * 100f + 0.5f).toInt()
-    val fraction = (hundredths % 100).toString().padStart(2, '0').trimEnd('0')
+    val cents = hundredths % 100
+    val tens = cents / 10
+    val ones = cents % 10
+    val fraction = when {
+        ones != 0 -> "$tens$ones"
+        tens != 0 -> tens.toString()
+        else -> ""
+    }
     val separator = if (language == AppLanguage.Russian) ',' else '.'
     return if (fraction.isEmpty()) "${hundredths / 100}x" else "${hundredths / 100}$separator${fraction}x"
 }

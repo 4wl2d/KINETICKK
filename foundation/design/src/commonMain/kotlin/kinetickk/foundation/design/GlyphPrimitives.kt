@@ -69,12 +69,12 @@ fun DrawScope.drawCanvasGlyph(
         }
 
         CanvasGlyphStyle.TRIPLE_ARROW -> {
+            // Legacy name: three speed lines stopped by impact bars (no arrowheads).
             repeat(3) { index ->
                 val y = center.y + (index - 1) * radius * 0.42f
-                val tip = Offset(center.x + radius * (0.82f - index * 0.1f), y)
-                drawLine(color, Offset(center.x - radius * 0.78f, y), tip, thinStroke, StrokeCap.Round)
-                drawLine(color, tip, Offset(tip.x - radius * 0.28f, tip.y - radius * 0.22f), thinStroke, StrokeCap.Round)
-                drawLine(color, tip, Offset(tip.x - radius * 0.28f, tip.y + radius * 0.22f), thinStroke, StrokeCap.Round)
+                val end = center.x + radius * (0.82f - index * 0.1f)
+                drawLine(color, Offset(center.x - radius * 0.78f, y), Offset(end - radius * 0.2f, y), thinStroke, StrokeCap.Round)
+                drawLine(color, Offset(end, y - radius * 0.17f), Offset(end, y + radius * 0.17f), stroke, StrokeCap.Round)
             }
         }
 
@@ -152,10 +152,17 @@ fun DrawScope.drawCanvasGlyph(
         }
 
         CanvasGlyphStyle.DOUBLE_CHEVRON -> {
+            // Legacy name: two sheared slabs leaning into travel (no chevrons).
             repeat(2) { index ->
-                val shift = (index - 0.5f) * radius * 0.72f
-                drawLine(color, Offset(center.x - radius * 0.46f + shift, center.y - radius * 0.68f), Offset(center.x + radius * 0.18f + shift, center.y), stroke, StrokeCap.Round)
-                drawLine(color, Offset(center.x + radius * 0.18f + shift, center.y), Offset(center.x - radius * 0.46f + shift, center.y + radius * 0.68f), stroke, StrokeCap.Round)
+                val x = center.x + (index - 0.5f) * radius * 0.72f
+                val slab = Path().apply {
+                    moveTo(x - radius * 0.02f, center.y - radius * 0.68f)
+                    lineTo(x + radius * 0.3f, center.y - radius * 0.68f)
+                    lineTo(x + radius * 0.02f, center.y + radius * 0.68f)
+                    lineTo(x - radius * 0.3f, center.y + radius * 0.68f)
+                    close()
+                }
+                drawPath(slab, color.copy(alpha = color.alpha * (0.55f + index * 0.45f)), style = Fill)
             }
         }
 
@@ -178,8 +185,9 @@ fun DrawScope.drawCanvasGlyph(
                 Size(radius * 1.46f, radius * 1.46f),
                 style = Stroke(thinStroke, cap = StrokeCap.Round),
             )
-            drawGlyphPolygon(Offset(center.x + radius * 0.72f, center.y - radius * 0.2f), radius * 0.24f, 3, 0.25f, color, Fill)
-            drawGlyphPolygon(Offset(center.x - radius * 0.72f, center.y + radius * 0.2f), radius * 0.24f, 3, PI.toFloat() + 0.25f, color, Fill)
+            // Legacy name: orbit arcs ending in nodes (no arrowheads).
+            drawCircle(color, radius * 0.15f, glyphPolar(center, radius * 0.73f, (72f * PI / 180f).toFloat()))
+            drawCircle(color, radius * 0.15f, glyphPolar(center, radius * 0.73f, (252f * PI / 180f).toFloat()))
         }
 
         CanvasGlyphStyle.RETICLE -> {
@@ -314,7 +322,7 @@ fun DrawScope.drawCanvasGlyph(
             repeat(3) { index ->
                 val angle = -PI.toFloat() / 2f + index * GLYPH_TAU / 3f
                 val bladeCenter = glyphPolar(center, radius * 0.39f, angle)
-                drawGlyphPolygon(bladeCenter, radius * 0.31f, 3, angle, color, Fill)
+                drawGlyphPolygon(bladeCenter, radius * 0.27f, 4, angle, color, Fill)
                 drawLine(color, center, bladeCenter, thinStroke, StrokeCap.Round)
             }
             drawCircle(GlyphCutout, radius * 0.17f, center)
