@@ -41,6 +41,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -56,6 +57,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.isUnspecified
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.translate
@@ -71,6 +73,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.text
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.gameplay.interaction.canvas.choiceOverlayScrimColor
@@ -469,57 +472,84 @@ internal fun RewardCard(
                 .testTag("kinetickk.gameplay.choice.${index + 1}.${if (spec.compact) "compact" else "expanded"}")
                 .drawBehind { drawRewardIcon(presentation, accent, spec.compact, clock.value) },
         )
+        // Rising sparks and halftone (epic, legendary) stay behind the text: each text row sits on
+        // a patch of the card face.
+        val face = if (selection > 0.5f) Kk.Ink3 else Kk.Ink2
+        val plate = if (presentation.rank >= 4) face else Color.Unspecified
+        val tags = if (spec.compact) emptyList() else presentation.tags
+        val hasFooter = tags.isNotEmpty() || presentation.action != null
+        val footerHeight = if (hasFooter) spec.dp(if (spec.compact) 30f else 36f) else 0.dp
         val bodyTop = spec.dp(if (spec.compact) 112f else 200f)
-        val bodyBottom = spec.dp(if (spec.compact) 14f else 22f)
-        val bodyHeight = (maxHeight - bodyTop - bodyBottom).coerceAtLeast(24.dp)
+        val bodyBottom = spec.dp(if (spec.compact) 12f else 20f)
+        val bodyHeight = (maxHeight - bodyTop - bodyBottom - footerHeight).coerceAtLeast(24.dp)
+        val start = spec.dp(if (spec.compact) 24f else 34f)
+        // The body shrinks (to 72 %) until its content fits; only longer text scrolls.
+        var fit by remember(presentation, maxWidth, maxHeight, textScale) { mutableFloatStateOf(1f) }
+        val overflow = scrollState.maxValue
+        LaunchedEffect(overflow, fit) {
+            if (overflow > 0 && fit > RewardCardMinFit) fit = max(RewardCardMinFit, fit - 0.07f)
+        }
+        val font = spec.font * fit
+        // Phone cards show the numbers; the paragraph returns when a card has no stat changes.
+        val descriptions = if (spec.compact && presentation.changes.isNotEmpty()) emptyList() else presentation.descriptions
         Box(Modifier.offset(y = bodyTop).fillMaxWidth().height(bodyHeight)) {
             Column(
                 Modifier.fillMaxSize().testTag("kinetickk.gameplay.choice.${index + 1}.text")
                     .verticalScroll(scrollState, enabled = enabled)
-                    .padding(start = spec.dp(if (spec.compact) 24f else 34f), end = spec.dp(if (spec.compact) 22f else 32f)),
+                    .padding(start = start, end = spec.dp(if (spec.compact) 26f else 36f)),
+                verticalArrangement = Arrangement.spacedBy(spec.dp(if (spec.compact) 3f else 6f) * fit),
             ) {
-                Column(Modifier.fillMaxWidth().heightIn(min = bodyHeight), verticalArrangement = Arrangement.SpaceBetween) {
-                    Column(verticalArrangement = Arrangement.spacedBy(spec.dp(if (spec.compact) 3f else 6f))) {
-                        RewardCardName(presentation.title, presentation.rank, typography, spec.sp(if (spec.compact) 26f else 40f), clock)
-                        if (narrow) presentation.bandEnd?.let { end ->
-                            OverlayText(end, typography.monoStyle(spec.sp(10f), color = Kk.Mute), uppercase = true)
-                        }
-                        if (!spec.compact) presentation.family?.let { family ->
-                            OverlayText(family, typography.monoStyle(spec.sp(11f), color = Kk.Mute), uppercase = true)
-                        }
-                        Spacer(Modifier.height(spec.dp(if (spec.compact) 4f else 18f)))
-                        presentation.changes.forEachIndexed { line, change ->
-                            RewardStatLine(change, line == 0, accent, spec.compact, spec.font, typography, roles, stacked = narrow)
-                        }
-                        presentation.descriptions.forEach { description ->
-                            OverlayText(description, typography.bodyStyle(spec.sp(if (spec.compact) 13f else 14f), color = Kk.Mute))
-                        }
-                    }
-                    val tags = if (spec.compact) emptyList() else presentation.tags
-                    if (tags.isNotEmpty() || presentation.action != null) {
-                        Row(
-                            Modifier.padding(top = spec.dp(10f)),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            presentation.action?.let { action ->
-                                OverlayTag(
-                                    action.label,
-                                    variant = when (action.tone) {
-                                        RewardTone.THREAT -> KkTagVariant.THREAT
-                                        RewardTone.YOU -> KkTagVariant.YOU
-                                        else -> KkTagVariant.LINE
-                                    },
-                                    textScale = textScale,
-                                )
-                            }
-                            tags.forEach { tag -> OverlayTag(tag, variant = KkTagVariant.LINE, textScale = textScale) }
-                        }
-                    }
+                RewardCardName(presentation.title, presentation.rank, typography, (if (spec.compact) 26f else 40f) * font, clock)
+                if (narrow) presentation.bandEnd?.let { end ->
+                    OverlayText(end, typography.monoStyle(10f * font, color = Kk.Mute), uppercase = true)
+                }
+                if (!spec.compact) presentation.family?.let { family ->
+                    OverlayFitText(family, typography.monoStyle(11f * font, color = Kk.Mute), uppercase = true, maxLines = 2)
+                }
+                Spacer(Modifier.height(spec.dp(if (spec.compact) 4f else 16f) * fit))
+                presentation.changes.forEachIndexed { line, change ->
+                    RewardStatLine(change, line == 0, accent, spec.compact, font, typography, roles, plate)
+                }
+                descriptions.forEach { description ->
+                    OverlayText(description, typography.bodyStyle((if (spec.compact) 13f else 14f) * font, color = Kk.Mute),
+                        Modifier.facePlate(plate))
                 }
             }
             RewardScrollIndicator(scrollState, accent, Modifier.align(Alignment.CenterEnd)
-                .fillMaxHeight().width(3.dp).testTag("kinetickk.gameplay.choice.${index + 1}.scroll"))
+                .padding(end = spec.dp(if (spec.compact) 14f else 18f)).fillMaxHeight().width(3.dp)
+                .testTag("kinetickk.gameplay.choice.${index + 1}.scroll"))
+            if (scrollState.canScrollForward) {
+                // Longer text fades into the card instead of stopping mid-glyph at the edge.
+                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(spec.dp(18f)).drawBehind {
+                    drawRect(Brush.verticalGradient(0f to face.copy(alpha = 0f), 1f to face))
+                })
+            }
+        }
+        if (hasFooter) {
+            // The outcome tag stays pinned at the bottom of the card, outside the scrolling body.
+            Row(
+                Modifier.align(Alignment.BottomStart)
+                    .padding(start = start - spec.dp(4f), bottom = bodyBottom)
+                    .height(footerHeight)
+                    .testTag("kinetickk.gameplay.choice.${index + 1}.footer"),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                presentation.action?.let { action ->
+                    OverlayTag(
+                        action.label,
+                        variant = when (action.tone) {
+                            RewardTone.THREAT -> KkTagVariant.THREAT
+                            RewardTone.YOU -> KkTagVariant.YOU
+                            else -> KkTagVariant.LINE
+                        },
+                        heightDp = if (spec.compact) 20f else 22f,
+                        fontSize = if (spec.compact) 12f else 13f,
+                        textScale = textScale,
+                    )
+                }
+                tags.forEach { tag -> OverlayTag(tag, Modifier.facePlate(plate), variant = KkTagVariant.LINE, textScale = textScale) }
+            }
         }
         if (presentation.isNewDiscovery) {
             DiscoveryBadge(
@@ -545,8 +575,12 @@ private fun DrawScope.drawRewardIcon(presentation: RewardCardPresentation, accen
 /** Card name: cond 900 italic; epic adds a stacked glow, legendary the moving foil. */
 @Composable
 private fun RewardCardName(text: String, rank: Int, typography: InterfaceTypography, fontSize: Float, time: State<Float>) {
+    val measurer = rememberTextMeasurer(cacheSize = 8)
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val style = rememberWordFitStyle(text, typography.condStyle(fontSize, color = Kk.Bone), constraints.maxWidth.toFloat())
+        val shown = text.uppercase()
+        val base = typography.condStyle(fontSize, color = Kk.Bone)
+        val width = constraints.maxWidth.toFloat()
+        val style = remember(shown, base, width) { fitTextStyle(measurer, shown, base, width, 2, 0.75f) }
         RewardCardNameText(text, rank, style, time)
     }
 }
@@ -591,7 +625,10 @@ private fun RewardCardNameText(text: String, rank: Int, style: androidx.compose.
     }
 }
 
-/** A stat line: name (and condition) left; before value muted, after value in the accent. */
+/**
+ * A stat line: name (and condition) left; before value muted, after value in the accent. When
+ * the name does not fit beside the values it takes its own line and the values sit under it.
+ */
 @Composable
 private fun RewardStatLine(
     change: RewardStatPresentation,
@@ -601,7 +638,7 @@ private fun RewardStatLine(
     font: Float,
     typography: InterfaceTypography,
     roles: KkRolePalette,
-    stacked: Boolean = false,
+    plate: Color,
 ) {
     val nameSize = (if (compact) 14f else if (first) 16f else 15f) * font
     val valueSize = (if (compact) (if (first) 16f else 12f) else if (first) 22f else 16f) * font
@@ -610,34 +647,57 @@ private fun RewardStatLine(
         change.before.isNotEmpty() || first -> accent
         else -> Kk.Bone
     }
-    val label: @Composable (Modifier) -> Unit = { modifier ->
-        Column(modifier) {
-            change.source?.let { OverlayText(it, typography.monoStyle(9f * font, color = Kk.Mute2), uppercase = true) }
-            OverlayText(change.name, typography.bodyStyle(nameSize, color = if (first) Kk.Bone else Kk.Mute))
-            change.condition?.let { OverlayText(it, typography.monoStyle(9f * font, color = Kk.Mute), uppercase = true) }
+    val nameStyle = typography.bodyStyle(nameSize, color = if (first) Kk.Bone else Kk.Mute)
+    val beforeStyle = typography.wideStyle(valueSize * 0.62f, tabular = true, color = Kk.Mute2)
+    val afterStyle = typography.wideStyle(valueSize, tabular = true, color = afterColor)
+    val measurer = rememberTextMeasurer(cacheSize = 8)
+    val density = LocalDensity.current.density
+    BoxWithConstraints(Modifier.fillMaxWidth().facePlate(plate)) {
+        val gap = 8f * density
+        val stacked = remember(change, nameStyle, afterStyle, constraints.maxWidth) {
+            val values = measurer.measure(change.after, afterStyle).size.width +
+                (if (change.before.isNotEmpty()) measurer.measure(change.before, beforeStyle).size.width + gap else 0f)
+            val name = measurer.measure(change.name, nameStyle, softWrap = false).size.width
+            name + gap + values > constraints.maxWidth
         }
-    }
-    val values: @Composable () -> Unit = {
-        if (change.before.isNotEmpty()) {
-            OverlayText(change.before, typography.wideStyle(valueSize * 0.62f, tabular = true, color = Kk.Mute2),
-                Modifier.padding(bottom = 2.dp))
-            Spacer(Modifier.width(8.dp))
+        val label: @Composable (Modifier) -> Unit = { modifier ->
+            Column(modifier) {
+                change.source?.let { OverlayFitText(it, typography.monoStyle(9f * font, color = Kk.Mute2), uppercase = true, maxLines = 1) }
+                OverlayFitText(change.name, nameStyle, maxLines = if (stacked) 2 else 1)
+                change.condition?.let { OverlayFitText(it, typography.monoStyle(9f * font, color = Kk.Mute), uppercase = true, maxLines = 2) }
+            }
         }
-        OverlayText(change.after, typography.wideStyle(valueSize, tabular = true, color = afterColor))
-    }
-    if (stacked) {
-        Column(Modifier.fillMaxWidth()) {
-            label(Modifier.fillMaxWidth())
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.Bottom) { values() }
+        val values: @Composable () -> Unit = {
+            if (change.before.isNotEmpty()) {
+                OverlayText(change.before, beforeStyle, Modifier.padding(bottom = 2.dp))
+                Spacer(Modifier.width(8.dp))
+            }
+            OverlayText(change.after, afterStyle)
         }
-    } else {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-            label(Modifier.weight(1f))
-            Spacer(Modifier.width(8.dp))
-            values()
+        if (stacked) {
+            Column(Modifier.fillMaxWidth()) {
+                label(Modifier.fillMaxWidth())
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.Bottom) { values() }
+            }
+        } else {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                label(Modifier.weight(1f))
+                Spacer(Modifier.width(8.dp))
+                values()
+            }
         }
     }
 }
+
+/** A patch of the card face behind a text row (keeps card sparks and halftone behind the text). */
+private fun Modifier.facePlate(color: Color): Modifier =
+    if (color.isUnspecified) this else drawBehind {
+        val pad = 3.dp.toPx()
+        drawRect(color, Offset(-pad, -1.dp.toPx()), Size(size.width + pad * 2f, size.height + 2.dp.toPx()))
+    }
+
+/** The smallest share of its font size a card body shrinks to before its text scrolls. */
+internal const val RewardCardMinFit = 0.72f
 
 /** What the lifted card touches, grouped by reason (Improves, Synergy, …) as tag rows. */
 @Composable

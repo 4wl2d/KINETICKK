@@ -282,14 +282,7 @@ internal fun GameplayRenderModel.rewardCardPresentation(
             RewardStatPresentation(modifier.effect.displayLabel.localizedContent(language), "", "+" + rewardNumber(amount, unit, language), true)
         }
     } else emptyList()
-    val rankLine = if (choice.relicAction == RelicChoiceAction.ACQUIRE && ownedRank < policy.maxRank) {
-        listOf(RewardStatPresentation(
-            language.text(OverlayRedesignText.RankLabel),
-            if (ownedRank > 0) ownedRank.toString() else "",
-            (ownedRank + 1).toString(),
-            true,
-        ))
-    } else emptyList()
+    // The band already names the resulting rank; cards keep their lines for the relic's effects.
     val descriptions = buildList {
         // Flavor and generated catalog paragraphs belong in the Codex. Offers show effects only.
         when {
@@ -326,7 +319,7 @@ internal fun GameplayRenderModel.rewardCardPresentation(
         incomingRelic = incoming,
         relicRank = rank,
         relicPolicy = policy,
-        changes = rankLine + itemEffects + previewChanges,
+        changes = itemEffects + previewChanges,
         connections = rewardConnections(choice, language),
         isNewDiscovery = when {
             item != null -> !isItemDiscovered(item.id)

@@ -24,8 +24,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,6 +41,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -50,6 +49,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.gameplay.interaction.canvas.overlayColor
 import kinetickk.ball.gameplay.interaction.canvas.overlayIcon
@@ -78,6 +78,8 @@ import kinetickk.foundation.design.drawKkIcon
 import kinetickk.foundation.design.drawKkRadialFade
 import kinetickk.foundation.design.drawKkRelicSlot
 import kinetickk.foundation.design.drawKkSynergyBracket
+import kinetickk.foundation.design.drawKkTag
+import kinetickk.foundation.design.kkTagSize
 import kinetickk.foundation.design.drawKkSynergyLink
 import kinetickk.foundation.design.kkPulse
 import kinetickk.foundation.design.kkStroke
@@ -137,7 +139,15 @@ internal fun DrawScope.drawRelicBrackets(
         val color = bracket.link.definition.overlayColor().let { if (bracket.faded) it.copy(alpha = 0.2f) else it }
         val left = centers[slots.first()]
         val right = centers[slots.last()]
-        drawKkSynergyBracket(measurer, left, right, y, color, bracket.preview, bracket.name.ifEmpty { null })
+        drawKkSynergyBracket(measurer, left, right, y, color, bracket.preview, null)
+        if (bracket.name.isNotEmpty()) {
+            // Every synergy tag sits on a plate in its color (the preview one too: its bracket is
+            // dashed, its label stays a solid tag), kept inside the canvas.
+            val tag = kkTagSize(measurer, bracket.name, density, 20f, 12f)
+            val x = ((left + right) * 0.5f - tag.width * 0.5f).coerceIn(0f, (size.width - tag.width).coerceAtLeast(0f))
+            drawKkTag(measurer, bracket.name, Offset(x, y - 6f * density - tag.height), heightDp = 20f, fontSize = 12f,
+                background = color, foreground = Kk.Ink)
+        }
         val stroke = if (bracket.preview) dashed else kkStroke(2f * density)
         slots.forEach { slot ->
             val x = centers[slot]
@@ -265,8 +275,8 @@ private fun relicSpec(mode: GameplayLayoutMode): RelicSpec = when (mode) {
     GameplayLayoutMode.COMPACT_PORTRAIT -> RelicSpec(
         390f, 844f, 16f, 14f, 16f, 374f,
         Rect(16f, 60f, 374f, 290f), 96f, 20f, 14f, 3, true,
-        Rect(16f, 296f, 374f, 566f), 58f, 118f, 14f, 34f,
-        Rect(16f, 580f, 374f, 832f), 18f, 13f, 56f, 26f,
+        Rect(16f, 288f, 374f, 522f), 58f, 108f, 14f, 32f,
+        Rect(16f, 530f, 374f, 832f), 18f, 13f, 56f, 26f,
     )
 }
 
@@ -359,14 +369,15 @@ private fun RelicPanel(
     }
     val text: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(frame.dp(12f))) {
-            OverlayText(panel.name, typography.wideStyle(frame.sp(spec.nameSize, 16f), lineHeightEm = 1f, color = Kk.Bone), uppercase = true, maxLines = 3)
-            OverlayText(panel.description, typography.bodyStyle(frame.sp(spec.bodySize, 12f), color = Kk.Bone), maxLines = spec.bodyLines)
+            OverlayFitText(panel.name, typography.wideStyle(frame.sp(spec.nameSize, 16f), lineHeightEm = 1f, color = Kk.Bone), uppercase = true,
+                maxLines = 2, minScale = 0.6f)
+            OverlayFitText(panel.description, typography.bodyStyle(frame.sp(spec.bodySize, 12f), color = Kk.Bone), maxLines = spec.bodyLines)
         }
     }
     val effect: @Composable () -> Unit = {
         panel.effect?.let { effect ->
             Box(Modifier.fillMaxWidth().drawBehind { drawRect(Kk.Ink2) }.padding(horizontal = frame.dp(14f).coerceAtLeast(8.dp), vertical = frame.dp(12f).coerceAtLeast(6.dp))) {
-                OverlayText(effect, typography.monoStyle(frame.sp(11f, 9f), color = roles.you), uppercase = true, maxLines = spec.bodyLines)
+                OverlayFitText(effect, typography.monoStyle(frame.sp(11f, 9f), color = roles.you), uppercase = true, maxLines = spec.bodyLines)
             }
         }
     }
@@ -506,7 +517,7 @@ private fun RelicSlotButton(
             }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            OverlayText(name, typography.condStyle(frame.sp(spec.slotNameSize, 12f), color = Kk.Bone), uppercase = true,
+            OverlayFitText(name, typography.condStyle(frame.sp(spec.slotNameSize, 12f), color = Kk.Bone), uppercase = true,
                 maxLines = 2, align = TextAlign.Center)
             if (meta.isNotEmpty()) OverlayText(meta, typography.monoStyle(frame.sp(11f, 9f), color = Kk.Mute), uppercase = true)
         }
@@ -538,21 +549,17 @@ private fun RelicPreviewSide(
             },
         verticalArrangement = Arrangement.spacedBy(frame.dp(12f)),
     ) {
-        OverlayText(preview?.kicker ?: presentation.heading, typography.labelStyle(frame.sp(15f, 11f), color = Kk.Mute),
-            Modifier.testTag("kinetickk.gameplay.rewards.kicker"), uppercase = true, maxLines = 1)
-        Column(
-            Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(frame.dp(8f)),
-        ) {
-            preview?.rows?.forEach { row -> RelicPreviewRow(row, frame, spec, typography, roles) }
-            selectedCard?.changes?.take(4)?.let { changes ->
-                if (changes.isNotEmpty()) {
-                    Column(Modifier.padding(top = frame.dp(6f)), verticalArrangement = Arrangement.spacedBy(frame.dp(6f))) {
-                        changes.forEach { change -> RelicStatLine(change, frame, typography, roles) }
-                    }
-                }
-            }
-        }
+        OverlayFitText(preview?.kicker ?: presentation.heading, typography.labelStyle(frame.sp(15f, 11f), color = Kk.Mute),
+            Modifier.fillMaxWidth().testTag("kinetickk.gameplay.rewards.kicker"), uppercase = true, maxLines = 1)
+        RelicPreviewList(
+            rows = preview?.rows.orEmpty(),
+            changes = selectedCard?.changes.orEmpty().take(4),
+            frame = frame,
+            spec = spec,
+            typography = typography,
+            roles = roles,
+            modifier = Modifier.weight(1f, fill = false).fillMaxWidth(),
+        )
         Spacer(Modifier.height(frame.dp(12f)))
         val selected = state.selected
         OverlayButton(
@@ -569,8 +576,68 @@ private fun RelicPreviewSide(
     }
 }
 
+/** Which parts of the signed preview show: rows, how many keep their detail line, stat lines. */
+internal data class RelicPreviewPlan(val rows: Int, val detailRows: Int, val stats: Int)
+
+/**
+ * Plans from the fullest to the tersest. The preview drops stat lines first, then the detail
+ * lines from the last row up, then trailing rows, so it always fits its column whole.
+ */
+internal fun relicPreviewPlans(rowCount: Int, statCount: Int): List<RelicPreviewPlan> = buildList {
+    add(RelicPreviewPlan(rowCount, rowCount, statCount))
+    for (stats in statCount - 1 downTo 0) add(RelicPreviewPlan(rowCount, rowCount, stats))
+    for (details in rowCount - 1 downTo 0) add(RelicPreviewPlan(rowCount, details, 0))
+    for (rows in rowCount - 1 downTo 1) add(RelicPreviewPlan(rows, 0, 0))
+}
+
+/** The signed rows and stat lines, trimmed by [relicPreviewPlans] to the height it is given. */
 @Composable
-private fun RelicPreviewRow(row: RewardPreviewRow, frame: OverlayFrame, spec: RelicSpec, typography: InterfaceTypography, roles: KkRolePalette) {
+private fun RelicPreviewList(
+    rows: List<RewardPreviewRow>,
+    changes: List<RewardStatPresentation>,
+    frame: OverlayFrame,
+    spec: RelicSpec,
+    typography: InterfaceTypography,
+    roles: KkRolePalette,
+    modifier: Modifier,
+) {
+    val plans = remember(rows.size, changes.size) { relicPreviewPlans(rows.size, changes.size) }
+    SubcomposeLayout(modifier) { constraints ->
+        val loose = constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity)
+        var chosen: List<androidx.compose.ui.layout.Placeable> = emptyList()
+        var height = 0
+        for (index in plans.indices) {
+            val plan = plans[index]
+            val measured = subcompose(index) {
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(frame.dp(8f))) {
+                    for (row in 0 until plan.rows) RelicPreviewRow(rows[row], row < plan.detailRows, frame, spec, typography, roles)
+                    if (plan.stats > 0) {
+                        Column(Modifier.padding(top = frame.dp(6f)), verticalArrangement = Arrangement.spacedBy(frame.dp(6f))) {
+                            for (stat in 0 until plan.stats) RelicStatLine(changes[stat], frame, typography, roles)
+                        }
+                    }
+                }
+            }.map { it.measure(loose) }
+            height = measured.maxOfOrNull { it.height } ?: 0
+            chosen = measured
+            if (height <= constraints.maxHeight) break
+        }
+        layout(constraints.maxWidth.takeIf { it != Constraints.Infinity } ?: (chosen.maxOfOrNull { it.width } ?: 0),
+            height.coerceAtMost(constraints.maxHeight)) {
+            chosen.forEach { it.place(0, 0) }
+        }
+    }
+}
+
+@Composable
+private fun RelicPreviewRow(
+    row: RewardPreviewRow,
+    detail: Boolean,
+    frame: OverlayFrame,
+    spec: RelicSpec,
+    typography: InterfaceTypography,
+    roles: KkRolePalette,
+) {
     val color = row.tone.color(roles, row.color)
     val edge = if (row.sign == "=") Color.Transparent else color.copy(alpha = 0.6f)
     Row(
@@ -585,8 +652,8 @@ private fun RelicPreviewRow(row: RewardPreviewRow, frame: OverlayFrame, spec: Re
     ) {
         OverlayText(row.sign, typography.wideStyle(frame.sp(18f, 13f), color = color), Modifier.width(frame.dp(22f).coerceAtLeast(14.dp)))
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            OverlayText(row.title, typography.condStyle(frame.sp(spec.rowTitle, 15f), color = color), uppercase = true, maxLines = 2)
-            row.detail?.let { OverlayText(it, typography.bodyStyle(frame.sp(spec.rowBody, 11f), color = Kk.Mute), maxLines = 3) }
+            OverlayFitText(row.title, typography.condStyle(frame.sp(spec.rowTitle, 15f), color = color), uppercase = true, maxLines = 2)
+            if (detail) row.detail?.let { OverlayFitText(it, typography.bodyStyle(frame.sp(spec.rowBody, 11f), color = Kk.Mute), maxLines = 3) }
         }
     }
 }
@@ -595,8 +662,8 @@ private fun RelicPreviewRow(row: RewardPreviewRow, frame: OverlayFrame, spec: Re
 private fun RelicStatLine(change: RewardStatPresentation, frame: OverlayFrame, typography: InterfaceTypography, roles: KkRolePalette) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
         Column(Modifier.weight(1f)) {
-            OverlayText(change.name, typography.bodyStyle(frame.sp(14f, 11f), color = Kk.Bone))
-            change.condition?.let { OverlayText(it, typography.monoStyle(frame.sp(9f, 8f), color = Kk.Mute), uppercase = true) }
+            OverlayFitText(change.name, typography.bodyStyle(frame.sp(14f, 11f), color = Kk.Bone), maxLines = 2)
+            change.condition?.let { OverlayFitText(it, typography.monoStyle(frame.sp(9f, 8f), color = Kk.Mute), uppercase = true, maxLines = 2) }
         }
         if (change.before.isNotEmpty()) {
             OverlayText(change.before, typography.wideStyle(frame.sp(11f, 9f), tabular = true, color = Kk.Mute2), Modifier.padding(end = 8.dp, bottom = 1.dp))

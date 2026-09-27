@@ -141,7 +141,7 @@ internal fun RewardTotem(state: RewardOverlayState) {
             Modifier.offset(frame.x(spec.totem.left), frame.y(spec.totem.top))
                 .size(frame.dp(spec.totem.width), frame.dp(spec.totem.height - spec.titleSize * 1.6f)),
         )
-        OverlayText(
+        OverlayFitText(
             totemTitle, typography.wideStyle(frame.sp(spec.titleSize, 12f), color = Kk.Bone),
             Modifier.offset(frame.x(spec.totem.left), frame.y(spec.totem.bottom - spec.titleSize * 1.2f))
                 .width(frame.dp(spec.totem.width)),
@@ -278,7 +278,7 @@ private fun TotemRow(
                         },
                         textScale = frame.textScale,
                     )
-                    row.meta?.let { OverlayText(it, typography.monoStyle(frame.sp(11f, 9f), color = fg.copy(alpha = 0.7f)), uppercase = true, maxLines = 1) }
+                    row.meta?.let { OverlayFitText(it, typography.monoStyle(frame.sp(11f, 9f), color = fg.copy(alpha = 0.7f)), uppercase = true, maxLines = 1) }
                 }
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
                     val nameStyle = rememberWordFitStyle(row.name, typography.condStyle(frame.sp(spec.nameSize, 18f), color = fg),
@@ -286,7 +286,8 @@ private fun TotemRow(
                     OverlayText(row.name, nameStyle, uppercase = true, maxLines = 1)
                 }
                 if (heightBoard * frame.scale >= 104f || spec.stacked) {
-                    OverlayText(row.description, typography.bodyStyle(frame.sp(spec.descSize, 11f), color = fg.copy(alpha = 0.75f)), maxLines = spec.descLines)
+                    OverlayFitText(row.description, typography.bodyStyle(frame.sp(spec.descSize, 11f), color = fg.copy(alpha = 0.75f)), maxLines = spec.descLines,
+                        minScale = 0.8f)
                 }
                 if (spec.stacked) TotemLevel(row, selected, spec, frame, typography, roles, stacked = true)
             }
@@ -340,7 +341,7 @@ private fun TotemLevel(
         }
     }
     val mastery: @Composable () -> Unit = {
-        row.mastery?.let { OverlayText(it, typography.monoStyle(frame.sp(11f, 9f), color = fg.copy(alpha = 0.8f)), uppercase = true, maxLines = 1) }
+        row.mastery?.let { OverlayFitText(it, typography.monoStyle(frame.sp(11f, 9f), color = fg.copy(alpha = 0.8f)), uppercase = true, maxLines = 1) }
     }
     if (stacked) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
