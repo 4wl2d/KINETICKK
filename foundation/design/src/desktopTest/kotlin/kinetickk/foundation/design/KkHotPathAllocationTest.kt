@@ -74,4 +74,30 @@ class KkHotPathAllocationTest {
         // not add paths, strokes, brushes, styles, rects, strings or text layouts on top of it.
         assertTrue(hud - baseline < 64, "HUD helpers allocate ${hud - baseline} bytes per frame above the $baseline byte baseline")
     }
+
+    @Test
+    fun numbersThatChangeEveryFrameDoNotMeasureText() {
+        val measurer = kkTestMeasurer()
+        val style = measurer.typography.wideStyle(44f, tabular = true)
+        val bitmap = ImageBitmap(400, 80)
+        val scope = CanvasDrawScope()
+        val canvas = Canvas(bitmap)
+        val thread = Thread.currentThread().id
+        var value = 0L
+        fun frame(draw: Boolean) = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, Size(400f, 80f)) {
+            if (draw) {
+                drawKkTabularNumber(measurer, value, style, 200f, 10f, Kk.Bone, KkAlign.CENTER)
+                drawKkTabularNumber(measurer, value % 100L, style, 390f, 10f, Kk.Bone, KkAlign.END, suffix = "%")
+            }
+            value += 7L
+        }
+        repeat(300) { frame(true) } // measures every digit once and warms the JIT
+        val before = threads.getThreadAllocatedBytes(thread)
+        repeat(500) { frame(false) }
+        val baseline = (threads.getThreadAllocatedBytes(thread) - before) / 500
+        val start = threads.getThreadAllocatedBytes(thread)
+        repeat(500) { frame(true) }
+        val perFrame = (threads.getThreadAllocatedBytes(thread) - start) / 500
+        assertTrue(perFrame - baseline < 64, "changing numbers allocate ${perFrame - baseline} bytes per frame")
+    }
 }

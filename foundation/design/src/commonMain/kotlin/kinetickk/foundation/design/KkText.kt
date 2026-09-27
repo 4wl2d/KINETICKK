@@ -267,6 +267,83 @@ fun kkIntString(value: Int): String {
 
 private val KkIntStrings = arrayOfNulls<String>(1024)
 
+private val KkDigitStrings = Array(10) { it.toString() }
+
+private fun kkDigitCount(value: Long): Int {
+    var count = 1
+    var rest = value / 10L
+    while (rest > 0L) {
+        count++
+        rest /= 10L
+    }
+    return count
+}
+
+/**
+ * Width of [value] as [drawKkTabularNumber] draws it (with optional constant [prefix]/[suffix]).
+ * Allocation-free once each glyph has been measured.
+ */
+fun kkTabularNumberWidth(
+    measurer: CanvasTextMeasurer,
+    value: Long,
+    style: TextStyle,
+    prefix: String? = null,
+    suffix: String? = null,
+): Float {
+    val digits = kkDigitCount(value.coerceAtLeast(0L))
+    var width = measureKkText(measurer, KkDigitStrings[0], style).size.width.toFloat() * digits
+    if (prefix != null) width += measureKkText(measurer, prefix, style).size.width
+    if (suffix != null) width += measureKkText(measurer, suffix, style).size.width
+    return width
+}
+
+/**
+ * Draws a non-negative number that changes every frame (speed, drain percentages, distances)
+ * from cached per-digit layouts, so a new value never measures text: allocation-free once each
+ * digit, [prefix] and [suffix] have been measured. [style] should use tabular figures (every digit
+ * advances by the width of "0"). Returns the drawn width.
+ */
+fun DrawScope.drawKkTabularNumber(
+    measurer: CanvasTextMeasurer,
+    value: Long,
+    style: TextStyle,
+    x: Float,
+    y: Float,
+    color: Color,
+    align: KkAlign = KkAlign.START,
+    valign: KkVAlign = KkVAlign.TOP,
+    prefix: String? = null,
+    suffix: String? = null,
+    alpha: Float = 1f,
+): Float {
+    val shown = value.coerceAtLeast(0L)
+    val width = kkTabularNumberWidth(measurer, shown, style, prefix, suffix)
+    var left = when (align) {
+        KkAlign.START -> x
+        KkAlign.CENTER -> x - width * 0.5f
+        KkAlign.END -> x - width
+    }
+    if (prefix != null) {
+        val layout = measureKkText(measurer, prefix, style)
+        drawKkText(layout, left, y, color, KkAlign.START, valign, alpha)
+        left += layout.size.width
+    }
+    val digitWidth = measureKkText(measurer, KkDigitStrings[0], style).size.width
+    val digits = kkDigitCount(shown)
+    var divisor = 1L
+    repeat(digits - 1) { divisor *= 10L }
+    var rest = shown
+    repeat(digits) {
+        val digit = (rest / divisor).toInt()
+        rest %= divisor
+        divisor /= 10L
+        drawKkText(measureKkText(measurer, KkDigitStrings[digit], style), left, y, color, KkAlign.START, valign, alpha)
+        left += digitWidth
+    }
+    if (suffix != null) drawKkText(measureKkText(measurer, suffix, style), left, y, color, KkAlign.START, valign, alpha)
+    return width
+}
+
 /** Horizontal anchor of a text draw. */
 enum class KkAlign { START, CENTER, END }
 
