@@ -324,8 +324,14 @@ private fun DrawScope.drawRunPanels(
         val pad = 10f * k * density
         drawKkText(measurer, stat.label, typography.monoStyle(labelSize * k), x + pad, top + pad * 0.9f, Kk.Mute, uppercase = true,
             maxWidth = cell - pad * 2f)
-        drawKkText(measurer, stat.value, typography.wideStyle(valueSize * k, tabular = true), x + pad, top + height - pad * 0.9f,
-            runColor(stat.tone, roles), valign = KkVAlign.BASELINE, maxWidth = cell - pad * 2f)
+        // Long localized totals ("184,3 тыс.") shrink to the panel instead of being cut.
+        val room = cell - pad * 2f
+        var value = measureKkText(measurer, stat.value, typography.wideStyle(valueSize * k, tabular = true))
+        if (value.size.width > room && value.size.width > 0) {
+            val fitted = (valueSize * k * room / value.size.width * 0.98f * 10f).toInt() / 10f
+            value = measureKkText(measurer, stat.value, typography.wideStyle(fitted, tabular = true), maxWidth = room)
+        }
+        drawKkText(value, x + pad, top + height - pad * 0.9f, runColor(stat.tone, roles), valign = KkVAlign.BASELINE)
     }
 }
 
