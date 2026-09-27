@@ -11,26 +11,12 @@ import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPolicy
 import kinetickk.foundation.design.CanvasRuneStyle
+import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.drawRuneMedallion
 import kotlin.math.PI
 
-private val RelicCyan = Color(0xFF42F5E9)
-private val RelicViolet = Color(0xFFA96CFF)
-private val RelicBlue = Color(0xFF73A6FF)
-private val RelicMagenta = Color(0xFFFF4DC4)
-private val RelicAcid = Color(0xFFB6FF5B)
-private val RelicOrange = Color(0xFFFF714B)
-private val RelicGold = Color(0xFFFFD45B)
-
-internal fun relicAspectColor(aspect: RelicAspect): Color = when (aspect) {
-    RelicAspect.VECTOR -> RelicCyan
-    RelicAspect.GRAVITIC -> RelicViolet
-    RelicAspect.ION -> RelicBlue
-    RelicAspect.RIFT -> RelicMagenta
-    RelicAspect.PRISM -> RelicAcid
-    RelicAspect.ENTROPY -> RelicOrange
-    RelicAspect.SOVEREIGN -> RelicGold
-}
+/** Aspect color from the foundation aspect tokens (index = [RelicAspect.ordinal]). */
+internal fun relicAspectColor(aspect: RelicAspect): Color = Kk.aspect(aspect.ordinal)
 
 /** Interaction maps semantic identity, aspect and rank into a shared geometric mark. */
 internal fun DrawScope.drawRelicIcon(
@@ -41,12 +27,13 @@ internal fun DrawScope.drawRelicIcon(
     rank: Int? = null,
     time: Float = 0f,
     alpha: Float = 1f,
+    color: Color = relicAspectColor(definition.aspect),
 ) {
     drawRuneMedallion(
         style = definition.id.toCanvasRuneStyle(),
         center = center,
         radius = radius,
-        accent = relicAspectColor(definition.aspect).copy(alpha = alpha.coerceIn(0f, 1f)),
+        accent = color.copy(alpha = color.alpha * alpha.coerceIn(0f, 1f)),
         frameSides = when (definition.aspect) {
             RelicAspect.VECTOR -> 3
             RelicAspect.GRAVITIC -> 6
