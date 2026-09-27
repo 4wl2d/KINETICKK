@@ -11,6 +11,7 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
@@ -32,7 +33,9 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.text
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -131,7 +134,8 @@ internal fun OverlayText(
 
 /**
  * [style] shrunk so that the longest word of [text] (display-cased when [uppercase]) fits
- * [maxWidthPx]: long single words (Russian compounds) shrink instead of breaking mid-word.
+ * [maxWidthPx]: long single words (Russian compounds) shrink instead of breaking mid-word. With
+ * [wholeLine] the whole text must fit one line.
  */
 @Composable
 internal fun rememberWordFitStyle(
@@ -143,13 +147,68 @@ internal fun rememberWordFitStyle(
 ): TextStyle {
     val measurer = rememberTextMeasurer(cacheSize = 16)
     return remember(text, style, maxWidthPx, uppercase, wholeLine) {
-        if (maxWidthPx <= 0f || maxWidthPx.isInfinite()) return@remember style
-        val shown = if (uppercase) text.uppercase() else text
-        val parts = if (wholeLine) listOf(shown) else shown.split(' ').filter(String::isNotEmpty)
-        val widest = parts.maxOfOrNull { word ->
-            measurer.measure(word, style, softWrap = false, maxLines = 1).size.width.toFloat()
-        } ?: 0f
-        if (widest <= maxWidthPx) style else style.copy(fontSize = style.fontSize * (maxWidthPx / widest) * 0.97f)
+        fitTextStyle(measurer, if (uppercase) text.uppercase() else text, style, maxWidthPx, if (wholeLine) 1 else Int.MAX_VALUE, 0f)
+    }
+}
+
+/**
+ * The largest [style] (down to [minScale] of its size) at which [shown] fits [maxWidthPx] in at
+ * most [maxLines] lines without breaking inside a word. Below [minScale] the text keeps the
+ * minimum size and may take more lines, but a single word always shrinks to fit the width.
+ */
+internal fun fitTextStyle(
+    measurer: TextMeasurer,
+    shown: String,
+    style: TextStyle,
+    maxWidthPx: Float,
+    maxLines: Int,
+    minScale: Float,
+): TextStyle {
+    if (maxWidthPx <= 0f || maxWidthPx.isInfinite() || shown.isEmpty()) return style
+    val words = shown.split(' ', '\n').filter(String::isNotEmpty)
+    fun styleAt(scale: Float) = if (scale == 1f) style else style.copy(fontSize = style.fontSize * scale)
+    fun widest(candidate: TextStyle) = words.maxOfOrNull { word ->
+        measurer.measure(word, candidate, softWrap = false, maxLines = 1).size.width.toFloat()
+    } ?: 0f
+    fun fits(candidate: TextStyle): Boolean {
+        if (widest(candidate) > maxWidthPx) return false
+        if (maxLines == Int.MAX_VALUE) return true
+        val layout = measurer.measure(shown, candidate, softWrap = maxLines > 1, maxLines = maxLines + 1,
+            constraints = Constraints(maxWidth = maxWidthPx.toInt().coerceAtLeast(1)))
+        return layout.lineCount <= maxLines && layout.size.width <= maxWidthPx
+    }
+    var scale = 1f
+    while (scale >= minScale - 0.001f) {
+        val candidate = styleAt(scale)
+        if (fits(candidate)) return candidate
+        scale -= 0.05f
+    }
+    val minimum = styleAt(max(minScale, 0.05f))
+    val widest = widest(minimum)
+    return if (widest <= maxWidthPx) minimum else minimum.copy(fontSize = minimum.fontSize * (maxWidthPx / widest) * 0.97f)
+}
+
+/**
+ * Text that never breaks inside a word and never cuts off: the font shrinks (to [minScale] of
+ * its size) until the text fits the width in [maxLines]; below that it keeps the minimum size
+ * and wraps on word boundaries.
+ */
+@Composable
+internal fun OverlayFitText(
+    text: String,
+    style: TextStyle,
+    modifier: Modifier = Modifier,
+    uppercase: Boolean = false,
+    maxLines: Int = 2,
+    minScale: Float = 0.7f,
+    align: TextAlign? = null,
+) {
+    val measurer = rememberTextMeasurer(cacheSize = 16)
+    val shown = if (uppercase) text.uppercase() else text
+    BoxWithConstraints(modifier) {
+        val width = if (constraints.hasBoundedWidth) constraints.maxWidth.toFloat() else Float.POSITIVE_INFINITY
+        val fitted = remember(shown, style, width, maxLines, minScale) { fitTextStyle(measurer, shown, style, width, maxLines, minScale) }
+        BasicText(shown, style = if (align != null) fitted.merge(TextStyle(textAlign = align)) else fitted)
     }
 }
 
@@ -269,8 +328,18 @@ private fun DrawScope.drawOverlayButtonContent(
         variant == KkButtonVariant.GHOST -> Kk.Bone
         else -> Kk.Ink
     }
-    val style = measurer.typography.condStyle(fontSize, trackingEm = 0.02f, lineHeightEm = 1f)
-    val layout = measureKkText(measurer, label, style, uppercase = true, maxWidth = max(1f, bounds.width - size.paddingDp * density))
+    // Long localized labels shrink (to 70 %) before they would be cut.
+    val room = max(1f, bounds.width - size.paddingDp * density - (if (icon != null) size.iconDp * density + 10f * density else 0f) -
+        (count?.let { kkTagSize(measurer, it, density, 20f, 12f).width + 10f * density } ?: 0f))
+    var fittedSize = fontSize
+    var layout = measureKkText(measurer, label, measurer.typography.condStyle(fittedSize, trackingEm = 0.02f, lineHeightEm = 1f), uppercase = true)
+    while (layout.size.width > room && fittedSize > fontSize * 0.7f) {
+        fittedSize = (fittedSize - fontSize * 0.05f)
+        layout = measureKkText(measurer, label, measurer.typography.condStyle(fittedSize, trackingEm = 0.02f, lineHeightEm = 1f), uppercase = true)
+    }
+    if (layout.size.width > room) {
+        layout = measureKkText(measurer, label, measurer.typography.condStyle(fittedSize, trackingEm = 0.02f, lineHeightEm = 1f), uppercase = true, maxWidth = room)
+    }
     val iconSize = size.iconDp * density
     val gap = 10f * density
     val countSize = count?.let { kkTagSize(measurer, it, density, 20f, 12f) }

@@ -127,8 +127,9 @@ class RewardRedesignPresentationTest {
         assertEquals(listOf(SynergyId.GRAVITIC_GROUPING), preview.addedLinks.map { it.definition.id })
         assertEquals(listOf(2, 3), preview.addedLinks.single().slots)
         assertEquals(RewardAction("Bind", RewardTone.YOU), card.action)
-        assertEquals("Rank", card.changes.first().name)
-        assertEquals("1", card.changes.first().after)
+        // The band names the resulting rank; the card body keeps its lines for the relic's effects.
+        assertEquals("Rank 1", card.bandEnd)
+        assertTrue(card.changes.none { it.name == "Rank" })
         val matrix = requireNotNull(model.rewardPresentation().relicMatrix)
         assertEquals(3, matrix.equipped)
         assertEquals(listOf("Kinetic Flywheel", "Ghost Vector", "Orbital Nail", "Free slot"), matrix.names)
@@ -199,5 +200,33 @@ class RewardRedesignPresentationTest {
         }
         assertEquals("Lvl", OverlayRedesignText.LevelLabel.english)
         assertEquals("Ур.", OverlayRedesignText.LevelLabel.russian)
+    }
+
+    @Test
+    fun meldingUsesOneTermForTheHeadingAndItsAction() {
+        val english = rewardHeading(ChoiceType.RELIC_BIND, RelicChoiceAction.MELD_TARGET, AppLanguage.English)
+        val action = rewardRelicAction(RelicChoiceAction.MELD_TARGET, 0, 1, 3, RelicPolicy(4, 5), AppLanguage.English)
+        assertEquals(OverlayRedesignText.Meld.english, english)
+        assertEquals(english, action.label)
+        // Russian pairs the noun and the verb of the same word (Слияние / Слить).
+        val russian = rewardHeading(ChoiceType.RELIC_BIND, RelicChoiceAction.MELD_TARGET, AppLanguage.Russian)
+        assertEquals(russian.take(3), OverlayRedesignText.Meld.russian.take(3))
+    }
+
+    @Test
+    fun relicPreviewPlansShrinkFromTheFullPreviewToTheTersest() {
+        val plans = relicPreviewPlans(rowCount = 3, statCount = 2)
+        assertEquals(RelicPreviewPlan(3, 3, 2), plans.first(), "Everything first")
+        assertEquals(RelicPreviewPlan(1, 0, 0), plans.last(), "At least one titled row always shows")
+        // Stat lines go before any detail line, and details before whole rows.
+        val firstWithoutStats = plans.indexOfFirst { it.stats == 0 }
+        val firstWithoutDetail = plans.indexOfFirst { it.detailRows < it.rows }
+        val firstWithoutRow = plans.indexOfFirst { it.rows < 3 }
+        assertTrue(firstWithoutStats < firstWithoutDetail && firstWithoutDetail < firstWithoutRow)
+        plans.zipWithNext().forEach { (fuller, terser) ->
+            assertTrue(terser.rows <= fuller.rows && terser.detailRows <= fuller.detailRows && terser.stats <= fuller.stats)
+            assertTrue(terser != fuller)
+        }
+        assertEquals(listOf(RelicPreviewPlan(0, 0, 0)), relicPreviewPlans(0, 0))
     }
 }

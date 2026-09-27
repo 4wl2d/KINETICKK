@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -72,10 +73,17 @@ private fun DrawScope.drawPausePanel(layout: PauseLayoutGeometry) {
     val ratio = KkShape.ShearRatio
     val topRight = layout.panelRight + ratio * layout.panelBottom
     val bottomRight = layout.panelRight + ratio * (layout.panelBottom - bottom)
-    drawPath(PausePanelPath.of(topRight, bottomRight, bottom), if (layout.mode == GameplayLayoutMode.REGULAR) PanelInk else Kk.Ink1)
+    drawPath(PausePanelPath.of(topRight, bottomRight, bottom), pausePanelColor(layout.mode))
+    // The leaning edge reads as a cut through the dimmed world (Pause board).
+    drawLine(Kk.Line, Offset(topRight, 0f), Offset(bottomRight, bottom), density)
 }
 
-private val PanelInk = Kk.Ink.copy(alpha = 0.82f)
+/**
+ * The opaque panel face: lighter than the ink scrim over the frozen world, so the skewed panel
+ * reads on its own (Pause: ink-2 against the dimmed world; Mobile-Pause: ink-1 against ink).
+ */
+internal fun pausePanelColor(mode: GameplayLayoutMode): Color =
+    if (mode == GameplayLayoutMode.REGULAR) Kk.Ink2 else Kk.Ink1
 
 /** The panel quad, rebuilt only when the viewport geometry changes. */
 private object PausePanelPath {

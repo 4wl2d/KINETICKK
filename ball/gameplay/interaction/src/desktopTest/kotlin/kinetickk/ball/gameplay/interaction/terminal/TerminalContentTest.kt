@@ -24,6 +24,9 @@ import kinetickk.ball.gameplay.interaction.input.GameplayInput
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.LocalAppLanguage
+import kinetickk.foundation.design.KkIcon
+import kinetickk.ball.gameplay.interaction.rewards.assertTextFitsWithoutBreakingWords
+import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import kinetickk.ball.gameplay.interaction.rewards.assertNoForbiddenGlyphs
 import org.junit.Rule
 import org.junit.Test
@@ -131,6 +134,33 @@ class TerminalContentTest {
             exit.assertIsDisplayed()
             val bounds = exit.fetchSemanticsNode().boundsInRoot
             assertTrue(bounds.height >= 48f, "The small Menu action keeps a touch target on phones")
+        }
+    }
+
+    @Test
+    fun phoneLandscapeKeepsBankAndBuildClearOfThePinnedActions() {
+        for (language in AppLanguage.entries) for (victory in listOf(true, false)) {
+            runDesktopComposeUiTest(844, 390) {
+                setContent {
+                    CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides language) {
+                        Box(Modifier.requiredSize(844.dp, 390.dp)) {
+                            TerminalContent(report(language).copy(victory = victory, bank = "1 284", weaponIcon = KkIcon.WEAPONS_FLUX_WAKE,
+                                weaponLevel = "8"), 1f, false, 3f, true) {}
+                        }
+                    }
+                }
+                val actions = listOfNotNull("restart", "exit", "rebirth".takeIf { victory }).map { tag ->
+                    onNodeWithTag("kinetickk.gameplay.$tag").fetchSemanticsNode().boundsInRoot
+                }
+                listOf("kinetickk.gameplay.results.bank-info", "kinetickk.gameplay.results.build").forEach { tag ->
+                    val bounds = onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+                    assertTrue(bounds.top >= 0f && bounds.bottom <= 390f && bounds.right <= 844f, "$tag on screen ($language): $bounds")
+                    actions.forEach { action ->
+                        assertFalse(bounds.overlaps(action), "$tag clear of the actions ($language, victory $victory)")
+                    }
+                }
+                assertTextFitsWithoutBreakingWords("report ${language.name} victory $victory")
+            }
         }
     }
 

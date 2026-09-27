@@ -84,4 +84,17 @@ class GameplayPresentationPolicyTest {
         assertEquals("23,2", overlayDecimal(23.2f, AppLanguage.Russian))
         assertEquals("8%", overlayPercent(0.08f, AppLanguage.English))
     }
+
+    @Test
+    fun thePausePanelReadsAgainstTheDimmedWorldInEveryLayout() {
+        for (mode in GameplayLayoutMode.entries) {
+            val panel = pausePanelColor(mode)
+            assertEquals(1f, panel.alpha, "$mode panel is opaque")
+            // The scrim over the darkest frame (ink) is what surrounds the panel.
+            val scrim = pauseOverlayScrimColor(mode)
+            val around = kinetickk.foundation.design.kkMix(Kk.Ink, scrim.copy(alpha = 1f), scrim.alpha)
+            val lift = listOf(panel.red - around.red, panel.green - around.green, panel.blue - around.blue).minOrNull()!! * 255f
+            assertTrue(lift >= if (mode == GameplayLayoutMode.REGULAR) 8f else 4f, "$mode panel is lighter than the scrim by $lift levels")
+        }
+    }
 }
