@@ -59,7 +59,7 @@ internal fun englishGameplayText(key: GameplayText): String = when (key) {
     GameplayText.TotemResonance -> "Upgrade"
     GameplayText.WeaponSynchronization -> "Weapon"
     GameplayText.RelicIntercept -> "Relic"
-    GameplayText.RelicMeld -> "Merge"
+    GameplayText.RelicMeld -> "Meld"
     GameplayText.RelicRebind -> "Replace relic"
     GameplayText.SelectChoice -> "Select choice {0}: {1}"
     GameplayText.ScrollableRewards -> "Scrollable reward details"
