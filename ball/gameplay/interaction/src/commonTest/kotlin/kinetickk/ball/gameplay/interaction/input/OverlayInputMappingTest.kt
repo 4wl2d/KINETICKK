@@ -17,12 +17,17 @@ class OverlayInputMappingTest {
     @Test
     fun pausedButtonsReturnShellRequestsInsteadOfNavigationActions() {
         val paused = hitTestState(GamePhase.PAUSED)
+        val layout = pauseLayoutGeometry(paused.screenWidth, paused.screenHeight, paused.uiScale)
+        fun center(target: PauseTarget) = layout.actions.single { it.target == target }.bounds.center
 
-        val resume = assertIs<GameplayInput.Action>(paused.resolveGameplayPress(640f, 342f))
+        val resume = assertIs<GameplayInput.Action>(paused.resolveGameplayPress(center(PauseTarget.RESUME).x, center(PauseTarget.RESUME).y))
         assertSame(GameplayInteractionPulse.PauseToggled, resume.action)
-        assertSame(GameplayInput.OpenSettings, paused.resolveGameplayPress(640f, 414f))
-        assertSame(GameplayInput.OpenCodex, paused.resolveGameplayPress(640f, 486f))
-        assertSame(GameplayInput.ExitToHome, paused.resolveGameplayPress(640f, 558f))
+        assertSame(GameplayInput.OpenSettings, paused.resolveGameplayPress(center(PauseTarget.SETTINGS).x, center(PauseTarget.SETTINGS).y))
+        assertSame(GameplayInput.OpenCodex, paused.resolveGameplayPress(center(PauseTarget.CODEX).x, center(PauseTarget.CODEX).y))
+        assertSame(GameplayInput.ExitToHome, paused.resolveGameplayPress(center(PauseTarget.EXIT).x, center(PauseTarget.EXIT).y))
+        // The menu sits on the left panel; the build overview on the right is not a target.
+        assertNull(paused.resolveGameplayPress(layout.build.center.x, layout.build.center.y))
+        assertNull(paused.resolveGameplayPress(layout.titleX + 4f, layout.titleY + 4f))
     }
 
     @Test
