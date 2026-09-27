@@ -34,7 +34,7 @@ internal fun DrawScope.drawCoreDeath(
     val core = Offset(engine.coreX - engine.cameraX + size.width * 0.5f,
         engine.coreY - engine.cameraY + size.height * 0.5f)
     if (elapsed < SwellSeconds) {
-        scale(1f + elapsed * 2.5f, pivot = core) { drawCore(engine, core) }
+        scale(1f + elapsed * 2.5f, pivot = core) { drawCore(engine, core, roles) }
         return
     }
     if (elapsed >= CoreDeathDuration) return

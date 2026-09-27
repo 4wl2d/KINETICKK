@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.interaction
 
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
+import kinetickk.ball.gameplay.interaction.localization.OverlayRedesignText
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.LocalAppLanguage
@@ -705,7 +706,7 @@ private fun GameplaySemanticControls(
                     bounds = action.bounds,
                     density = density,
                     tag = "kinetickk.gameplay.codex",
-                    description = language.text(GameplayText.Build),
+                    description = language.text(OverlayRedesignText.Codex),
                     onClick = { onInput(GameplayInput.OpenCodex) },
                 )
                 PauseTarget.PERFORMANCE -> PerformanceSemanticAction(

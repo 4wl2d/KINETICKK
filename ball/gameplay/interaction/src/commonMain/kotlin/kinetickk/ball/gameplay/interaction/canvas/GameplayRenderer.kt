@@ -45,7 +45,7 @@ internal fun DrawScope.drawGameplay(
     }
 
     when (engine.phase) {
-        GamePhase.PAUSED -> drawPause(engine, textMeasurer, requireNotNull(pauseLayout))
+        GamePhase.PAUSED -> drawPause(engine, textMeasurer, requireNotNull(pauseLayout), renderTime)
         GamePhase.CHOICE -> Unit // Reward cards and reroll are visible Compose controls.
         GamePhase.GAME_OVER, GamePhase.VICTORY -> Unit // TerminalContent owns the animated report and actions.
         GamePhase.RUNNING -> Unit

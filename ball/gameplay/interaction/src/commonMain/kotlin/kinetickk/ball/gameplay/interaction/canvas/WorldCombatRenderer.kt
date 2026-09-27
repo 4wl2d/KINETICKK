@@ -443,9 +443,6 @@ internal fun DrawScope.drawWeaponArcs(
     }
 }
 
-/** The Core body keeps the palette of the Core-death renderer, which draws it without roles. */
-internal fun DrawScope.drawCore(engine: GameplayRenderModel, center: Offset) = drawCore(engine, center, KkRolePalette.Default)
-
 /**
  * The Core: a bone form silhouette per [CoreShape] with a hard ink rim and a soft glow; you-color
  * in overdrive and heat-tinted while overheated (`HUD.dc.html`). Integrity/heat/shield arcs are

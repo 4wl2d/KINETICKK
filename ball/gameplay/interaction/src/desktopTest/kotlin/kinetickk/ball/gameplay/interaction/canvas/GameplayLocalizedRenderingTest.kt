@@ -57,6 +57,7 @@ import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.assertContentDescriptionContains
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.performSemanticsAction
@@ -177,7 +178,8 @@ class GameplayLocalizedRenderingTest {
             compose.runOnIdle { scenario.value = current }
             compose.onNodeWithTag("localized-gameplay").assertIsDisplayed()
             if (current.scene == Scene.REWARDS) {
-                compose.onNodeWithText("Взять · 1", useUnmergedTree = true).assertIsDisplayed()
+                compose.onNodeWithTag("kinetickk.gameplay.take").assertIsDisplayed()
+                    .assertContentDescriptionContains("Взять", substring = true)
                 compose.onNodeWithTag("kinetickk.gameplay.reroll").assertIsDisplayed()
             }
             capture("gameplay-ru-${current.scene.name.lowercase()}-${current.width}x${current.height}-${current.textScale}")
