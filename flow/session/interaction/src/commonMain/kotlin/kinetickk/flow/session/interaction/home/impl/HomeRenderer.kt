@@ -864,9 +864,10 @@ private fun DrawScope.drawMenu(
                 selection = selection,
                 time = time,
                 fontSize = displaySize(tinted, scene.menuFontSize),
-                stamp = facts.stamp,
                 // The board keeps the stamp right after the label; the sub value joins when selected.
-                sub = if (selection > 0.01f) facts.sub else null,
+                // Two-column phone menus have no room for either.
+                stamp = if (scene.menuColumns == 1) facts.stamp else null,
+                sub = if (scene.menuColumns == 1 && selection > 0.01f) facts.sub else null,
                 edgeRight = if (scene.menuColumns == 1) size.width else bounds.right,
             )
         }
@@ -901,21 +902,33 @@ private fun DrawScope.drawFactsCard(
     val columnLeft = left + leftWidth + 26f * u
     val columnRight = infoLeft - 26f * u
     if (columnRight > columnLeft && facts.facts.isNotEmpty()) {
+        val column = columnRight - columnLeft
+        val gap = 12f * density
+        // One text size for all rows: shrink (to 75 %) until the widest key/value pair fits, then
+        // let the key keep up to 45 % and the value the rest.
+        val widest = facts.facts.maxOf { (key, value) ->
+            measureKkText(text, key, text.typography.monoStyle(11f), uppercase = true).size.width +
+                measureKkText(text, value, text.typography.condStyle(21f, tabular = true), uppercase = true).size.width + gap
+        }
+        val fit = (column / widest).coerceIn(0.75f, 1f)
+        val keyStyle = text.typography.monoStyle(11f * fit)
+        val valueStyle = text.typography.condStyle(21f * fit, tabular = true)
         val rows = facts.facts.map { (key, value) ->
-            val valueLayout = measureKkText(text, value, text.typography.condStyle(21f, tabular = true), uppercase = true,
-                maxWidth = (columnRight - columnLeft) * 0.6f)
-            val keyLayout = measureKkText(text, key, text.typography.monoStyle(11f), uppercase = true,
-                maxWidth = columnRight - columnLeft - valueLayout.size.width - 12f * density)
+            val keyWidth = measureKkText(text, key, keyStyle, uppercase = true).size.width.toFloat()
+            val valueWidth = measureKkText(text, value, valueStyle, uppercase = true).size.width.toFloat()
+            val keyMax = if (keyWidth + valueWidth + gap <= column) keyWidth else min(keyWidth, column * 0.45f)
+            val keyLayout = measureKkText(text, key, keyStyle, uppercase = true, maxWidth = keyMax + 1f)
+            val valueLayout = measureKkText(text, value, valueStyle, uppercase = true, maxWidth = column - keyLayout.size.width - gap)
             keyLayout to valueLayout
         }
         val rowHeight = rows.maxOf { (key, value) -> max(key.kkBoxHeight, value.kkBoxHeight) }
-        val gap = 6f * density
-        var rowY = rect.center.y - (rowHeight * rows.size + gap * (rows.size - 1)) * 0.5f
+        val rowGap = 6f * density
+        var rowY = rect.center.y - (rowHeight * rows.size + rowGap * (rows.size - 1)) * 0.5f
         rows.forEach { (key, value) ->
             val center = rowY + rowHeight * 0.5f
             drawKkText(key, columnLeft, center, Kk.Mute, valign = KkVAlign.CENTER)
             drawKkText(value, columnRight, center, Kk.Bone, align = KkAlign.END, valign = KkVAlign.CENTER)
-            rowY += rowHeight + gap
+            rowY += rowHeight + rowGap
         }
     }
     if (info != null) {
