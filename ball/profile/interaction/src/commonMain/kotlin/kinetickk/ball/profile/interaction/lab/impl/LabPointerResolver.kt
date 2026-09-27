@@ -3,40 +3,276 @@
 
 package kinetickk.ball.profile.interaction.lab.impl
 
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import kinetickk.ball.profile.interaction.ProfileFrame
+import kinetickk.ball.profile.interaction.ProfileLayoutMode
 import kinetickk.ball.profile.interaction.lab.api.LabRenderModel
-import kotlin.math.floor
+import kinetickk.ball.profile.interaction.profileHeaderBackRect
+import kotlin.math.max
 import kotlin.math.min
 
+/**
+ * Column slots inside one Lab row, in px relative to the row's left/top. Portrait rows use two
+ * lines: name and cost on top, rank pips and the current value underneath.
+ */
+internal class LabRowColumns(
+    val iconCenterX: Float,
+    val iconSize: Float,
+    val nameLeft: Float,
+    val nameWidth: Float,
+    val pipsLeft: Float,
+    val pipsWidth: Float,
+    val pipWidth: Float,
+    val pipHeight: Float,
+    val pipGap: Float,
+    val valueLeft: Float,
+    val valueWidth: Float,
+    val costRight: Float,
+    val firstLineY: Float,
+    val secondLineY: Float,
+    val twoLines: Boolean,
+)
+
+/**
+ * One geometry for the Lab: drawing, Compose placement and [resolveLabPress]. Rows are in list
+ * content coordinates (add [listViewport] top-left, subtract the list scroll); detail rects are in
+ * screen coordinates for a detail scroll of 0.
+ */
+internal class LabLayout(
+    val frame: ProfileFrame,
+    val back: Rect,
+    val listViewport: Rect,
+    val rows: List<Rect>,
+    val listContentHeight: Float,
+    val columns: LabRowColumns,
+    val detailViewport: Rect,
+    val detailContentHeight: Float,
+    val icon: Rect,
+    val name: Rect,
+    val description: Rect,
+    val now: Rect,
+    val next: Rect,
+    val rank: Rect,
+    val buy: Rect,
+) {
+    val listScrollMax: Float get() = max(0f, listContentHeight - listViewport.height)
+    val detailScrollMax: Float get() = max(0f, detailContentHeight - detailViewport.height)
+}
+
+/** Board type sizes per mode (design px before the frame scale and the text-size setting). */
+internal class LabType(
+    val rowName: Float,
+    val rowValue: Float,
+    val stamp: Float,
+    val name: Float,
+    val body: Float,
+    val mono: Float,
+    val panelValue: Float,
+    val buy: Float,
+)
+
+internal fun labType(mode: ProfileLayoutMode): LabType = when (mode) {
+    ProfileLayoutMode.REGULAR -> LabType(29f, 24f, 15f, 30f, 18f, 11f, 26f, 40f)
+    ProfileLayoutMode.COMPACT_LANDSCAPE -> LabType(18f, 16f, 11f, 18f, 13f, 9.5f, 17f, 22f)
+    ProfileLayoutMode.COMPACT_PORTRAIT -> LabType(20f, 17f, 11f, 18f, 14f, 10f, 17f, 22f)
+}
+
+internal fun labLayout(
+    frame: ProfileFrame,
+    rowCount: Int,
+    maxRanks: Int,
+    textScale: Float,
+    backWidth: Float,
+): LabLayout {
+    fun d(value: Float) = frame.d(value)
+    val t = textScale.coerceIn(0.75f, 2f)
+    val grow = 1f + (t - 1f) * 0.55f
+    val back = profileHeaderBackRect(frame, backWidth)
+    val pad = d(12f)
+    val type = labType(frame.mode)
+    val listLeft: Float
+    val listRight: Float
+    val listTop: Float
+    val listBottom: Float
+    val rowHeight: Float
+    val rowGap: Float
+    val detailLeft: Float
+    val detailRight: Float
+    val detailTop: Float
+    val detailBottom: Float
+    when (frame.mode) {
+        ProfileLayoutMode.REGULAR -> {
+            listLeft = frame.x(44f)
+            listRight = frame.x(994f)
+            listTop = d(106f)
+            listBottom = frame.height - d(12f)
+            rowHeight = d(72f) * grow
+            rowGap = d(8f)
+            detailLeft = frame.x(1060f)
+            detailRight = frame.right
+            detailTop = d(112f)
+            detailBottom = frame.height - d(16f)
+        }
+        ProfileLayoutMode.COMPACT_LANDSCAPE -> {
+            val detailWidth = (frame.width * 0.36f).coerceIn(d(240f), d(320f))
+            detailRight = frame.right
+            detailLeft = detailRight - detailWidth
+            listLeft = frame.left - d(6f)
+            listRight = detailLeft - d(24f)
+            listTop = frame.headerHeight + d(4f)
+            listBottom = frame.height - d(4f)
+            rowHeight = d(40f) * grow
+            rowGap = d(4f)
+            detailTop = frame.headerHeight + d(8f)
+            detailBottom = frame.height - d(8f)
+        }
+        ProfileLayoutMode.COMPACT_PORTRAIT -> {
+            val dock = d(262f) * (1f + (grow - 1f) * 0.6f)
+            listLeft = frame.left - d(4f)
+            listRight = frame.right + d(4f)
+            listTop = frame.headerHeight
+            listBottom = frame.height - dock
+            rowHeight = d(64f) * grow
+            rowGap = d(6f)
+            detailLeft = frame.left
+            detailRight = frame.right
+            detailTop = listBottom + d(14f)
+            detailBottom = frame.height - d(10f)
+        }
+    }
+    val rowWidth = listRight - listLeft
+    val rows = List(rowCount) { index ->
+        val top = pad + index * (rowHeight + rowGap)
+        Rect(pad, top, pad + rowWidth, top + rowHeight)
+    }
+    val listViewport = Rect(listLeft - pad, listTop - pad, listRight + pad, max(listTop, listBottom))
+    val listContentHeight = if (rowCount == 0) 0f else pad * 2f + rowCount * rowHeight + (rowCount - 1) * rowGap
+    val columns = labRowColumns(frame, rowWidth, rowHeight, max(1, maxRanks), type, t)
+
+    val regular = frame.regular
+    val iconSize = d(when (frame.mode) {
+        ProfileLayoutMode.REGULAR -> 64f
+        ProfileLayoutMode.COMPACT_LANDSCAPE -> 32f
+        ProfileLayoutMode.COMPACT_PORTRAIT -> 28f
+    })
+    val icon = Rect(detailLeft, detailTop, detailLeft + iconSize, detailTop + iconSize)
+    val nameHeight = d(type.name) * 1.1f * t
+    val name = if (frame.portrait) {
+        Rect(icon.right + d(12f), icon.center.y - nameHeight * 0.5f, detailRight, icon.center.y + nameHeight * 0.5f)
+    } else {
+        val top = icon.bottom + d(if (regular) 16f else 8f)
+        Rect(detailLeft, top, detailRight, top + nameHeight)
+    }
+    val descriptionTop = (if (frame.portrait) icon.bottom else name.bottom) + d(if (regular) 12f else 6f)
+    val descriptionLines = kotlin.math.ceil((if (regular) 3f else 2f) * max(1f, t)).toFloat()
+    val description = Rect(detailLeft, descriptionTop, detailRight, descriptionTop + d(type.body) * 1.4f * descriptionLines * t)
+    val panelsTop = description.bottom + d(if (regular) 22f else 10f)
+    val panelHeight = (d(if (regular) 12f else 8f) * 2f + d(type.mono) * 1.35f * t + d(if (regular) 8f else 5f) +
+        d(type.panelValue) * 0.9f * t)
+    val panelGap = d(10f)
+    val panelWidth = (detailRight - detailLeft - panelGap) / 2f
+    val now = Rect(detailLeft, panelsTop, detailLeft + panelWidth, panelsTop + panelHeight)
+    val next = Rect(now.right + panelGap, panelsTop, detailRight, panelsTop + panelHeight)
+    val rankTop = now.bottom + d(if (regular) 12f else 6f)
+    val rank = Rect(detailLeft, rankTop, detailRight, rankTop + d(type.mono) * 1.35f * t)
+    val buyTop = rank.bottom + d(if (regular) 30f else 12f)
+    val buy = Rect(detailLeft, buyTop, detailRight, buyTop + d(if (regular) 72f else 52f))
+    val detailViewport = Rect(detailLeft - pad, detailTop - pad, detailRight + pad, max(detailTop, detailBottom))
+    val detailContentHeight = buy.bottom + pad - detailViewport.top
+    return LabLayout(frame, back, listViewport, rows, listContentHeight, columns, detailViewport, detailContentHeight,
+        icon, name, description, now, next, rank, buy)
+}
+
+private fun labRowColumns(
+    frame: ProfileFrame,
+    rowWidth: Float,
+    rowHeight: Float,
+    maxRanks: Int,
+    type: LabType,
+    textScale: Float,
+): LabRowColumns {
+    fun d(value: Float) = frame.d(value)
+    return when (frame.mode) {
+        ProfileLayoutMode.REGULAR -> {
+            // Board slots: padding 24, icon 32, gap 16, name 236, pips 330, value 128, cost 70.
+            val pipsLeft = d(24f + 32f + 16f + 236f + 16f)
+            val pipsWidth = d(330f)
+            val pipGap = d(4f)
+            val pipWidth = min(d(22f), (pipsWidth - pipGap * (maxRanks - 1)) / maxRanks)
+            LabRowColumns(
+                iconCenterX = d(40f), iconSize = d(32f), nameLeft = d(72f), nameWidth = d(236f),
+                pipsLeft = pipsLeft, pipsWidth = pipsWidth, pipWidth = pipWidth, pipHeight = d(24f), pipGap = pipGap,
+                valueLeft = pipsLeft + pipsWidth + d(16f), valueWidth = d(128f), costRight = rowWidth - d(26f) - d(40f),
+                firstLineY = rowHeight * 0.5f, secondLineY = rowHeight * 0.5f, twoLines = false,
+            )
+        }
+        ProfileLayoutMode.COMPACT_LANDSCAPE -> {
+            val nameLeft = d(38f)
+            val nameWidth = rowWidth * 0.3f
+            val costWidth = d(58f) * textScale.coerceAtLeast(1f)
+            val valueWidth = d(54f) * textScale.coerceAtLeast(1f)
+            val pipsLeft = nameLeft + nameWidth + d(8f)
+            val costRight = rowWidth - d(12f)
+            val pipsWidth = (costRight - costWidth - valueWidth - d(16f) - pipsLeft).coerceAtLeast(d(40f))
+            val pipGap = d(3f)
+            val pipWidth = min(d(14f), (pipsWidth - pipGap * (maxRanks - 1)) / maxRanks)
+            LabRowColumns(
+                iconCenterX = d(20f), iconSize = d(20f), nameLeft = nameLeft, nameWidth = nameWidth,
+                pipsLeft = pipsLeft, pipsWidth = pipsWidth, pipWidth = pipWidth, pipHeight = d(15f), pipGap = pipGap,
+                valueLeft = pipsLeft + pipsWidth + d(8f), valueWidth = valueWidth, costRight = costRight,
+                firstLineY = rowHeight * 0.5f, secondLineY = rowHeight * 0.5f, twoLines = false,
+            )
+        }
+        ProfileLayoutMode.COMPACT_PORTRAIT -> {
+            val nameLeft = d(44f)
+            val costRight = rowWidth - d(14f)
+            val valueWidth = d(64f) * textScale.coerceAtLeast(1f)
+            val pipsWidth = (costRight - valueWidth - d(10f) - nameLeft).coerceAtLeast(d(60f))
+            val pipGap = d(3f)
+            val pipWidth = min(d(18f), (pipsWidth - pipGap * (maxRanks - 1)) / maxRanks)
+            LabRowColumns(
+                iconCenterX = d(24f), iconSize = d(22f), nameLeft = nameLeft, nameWidth = costRight - nameLeft - d(70f),
+                pipsLeft = nameLeft, pipsWidth = pipsWidth, pipWidth = pipWidth, pipHeight = d(14f), pipGap = pipGap,
+                valueLeft = costRight - valueWidth, valueWidth = valueWidth, costRight = costRight,
+                firstLineY = rowHeight * 0.34f, secondLineY = rowHeight * 0.72f, twoLines = true,
+            )
+        }
+    }
+}
+
+/**
+ * Maps a press to the Lab action it hits: header Back, a row (activation: selects, or buys the
+ * selected row's next rank) or the detail panel's Buy rank button for the selected upgrade.
+ */
 internal fun resolveLabPress(
+    layout: LabLayout,
     model: LabRenderModel,
-    screenWidth: Float,
-    screenHeight: Float,
-    density: Float,
+    selected: LabState,
+    listScroll: Float,
+    detailScroll: Float,
     x: Float,
     y: Float,
 ): LabAction? {
-    val scale = density.coerceAtLeast(1f)
-    fun d(value: Float): Float = value * scale
-
-    val width = min(d(900f), screenWidth - d(30f))
-    val height = min(d(650f), screenHeight - d(30f))
-    val left = (screenWidth - width) * 0.5f
-    val top = (screenHeight - height) * 0.5f
-    val right = left + width
-    val bottom = top + height
-    if (y > bottom - d(55f)) return LabAction.Back
-    val contentTop = top + d(88f)
-    val contentWidth = right - left - d(50f)
-    val columnWidth = contentWidth * 0.5f
-    val rowHeight = d(105f)
-    if (
-        x !in left + d(25f)..right - d(25f) ||
-        y !in contentTop..contentTop + rowHeight * ((model.upgrades.size + 1) / 2)
-    ) {
+    if (layout.back.contains(Offset(x, y))) return LabAction.Back
+    val list = layout.listViewport
+    if (x in list.left..list.right && y in list.top..list.bottom) {
+        val contentX = x - list.left
+        val contentY = y - list.top + listScroll.coerceIn(0f, layout.listScrollMax)
+        layout.rows.forEachIndexed { index, row ->
+            if (contentX in row.left..row.right && contentY in row.top..row.bottom) {
+                return model.upgrades.getOrNull(index)?.id?.let(LabAction::Activate)
+            }
+        }
         return null
     }
-    val column = if (x < left + d(25f) + columnWidth) 0 else 1
-    val row = floor((y - contentTop) / rowHeight).toInt()
-    val upgrade = model.upgrades.getOrNull(row * 2 + column) ?: return null
-    return LabAction.PurchaseRequested(upgrade.id)
+    val detail = layout.detailViewport
+    if (x in detail.left..detail.right && y in detail.top..detail.bottom) {
+        val detailY = y + detailScroll.coerceIn(0f, layout.detailScrollMax)
+        val upgrade = selected.selectedUpgrade ?: return null
+        if (x in layout.buy.left..layout.buy.right && detailY in layout.buy.top..layout.buy.bottom) {
+            return LabAction.PurchaseRequested(upgrade.id)
+        }
+    }
+    return null
 }

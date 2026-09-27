@@ -5,6 +5,7 @@ package kinetickk.ball.profile.interaction.lab.api
 
 import androidx.compose.runtime.Composable
 import kinetickk.foundation.collections.ImmutableList
+import kinetickk.ball.content.api.ItemModifier
 import kinetickk.ball.content.api.MetaUpgradeId
 
 data class LabUpgradeRenderModel(
@@ -16,6 +17,8 @@ data class LabUpgradeRenderModel(
     val nextCost: Long,
     val isMaxed: Boolean,
     val isAffordable: Boolean,
+    /** Content modifier granted per rank, for the current/next values; null when unknown. */
+    val modifierPerRank: ItemModifier? = null,
 )
 
 /** Small immutable payload rendered by the Lab feature. */
