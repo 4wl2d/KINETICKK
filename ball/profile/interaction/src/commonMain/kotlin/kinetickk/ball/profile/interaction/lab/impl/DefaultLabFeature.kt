@@ -3,6 +3,7 @@
 
 package kinetickk.ball.profile.interaction.lab.impl
 
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,29 +33,34 @@ class DefaultLabFeature(
         routeToken: Long,
         onOutput: (LabOutput) -> Unit,
     ) {
-        var renderModelValue by remember(profilePort, metaUpgrades, routeToken) {
+        var stateValue by remember(profilePort, metaUpgrades, routeToken) {
             mutableStateOf(
-                profilePort
-                    .query(ProfileQuery.GetLabProgress)
-                    .snapshot
-                    .toRenderModel(metaUpgrades),
+                LabState(
+                    profilePort
+                        .query(ProfileQuery.GetLabProgress)
+                        .snapshot
+                        .toRenderModel(metaUpgrades),
+                ),
             )
         }
         val textScale = remember(profilePort, routeToken) {
             profilePort.query(ProfileQuery.GetPreferences).preferences.textScale
         }
+        val listScroll = rememberScrollState()
         fun dispatch(action: LabAction) {
-            val reduction = LabReducer.reduce(LabState(renderModelValue), action)
-            renderModelValue = reduction.state.model
+            val reduction = LabReducer.reduce(stateValue, action)
+            stateValue = reduction.state
             reduction.effects.forEach { effect ->
                 when (effect) {
                     is LabEffect.Purchase -> {
                         val acceptance = profilePort.accept(ProfilePulse.PurchaseMetaUpgrade(effect.id))
-                        renderModelValue = profilePort
+                        val model = profilePort
                             .query(ProfileQuery.GetLabProgress)
                             .snapshot
                             .toRenderModel(metaUpgrades)
-                        if (acceptance is ProfileAcceptance.Accepted) {
+                        val accepted = acceptance is ProfileAcceptance.Accepted
+                        stateValue = LabReducer.purchased(stateValue, effect.id, model, accepted)
+                        if (accepted) {
                             audioExecutor.play(ProfileAudioCue.PURCHASE)
                         }
                     }
@@ -64,6 +70,6 @@ class DefaultLabFeature(
             }
         }
 
-        LabContent(renderModelValue, textScale, ::dispatch)
+        LabContent(stateValue, textScale, listScroll, ::dispatch)
     }
 }

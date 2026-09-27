@@ -46,6 +46,15 @@ class RebirthReducerTest {
         assertTrue(model.canAdvance)
         assertFalse(model.isMaximumTier)
 
+        val withMatter = rebirthProjection(
+            progress = RebirthProgress(level = 2, highestCleared = 2),
+            canAdvance = true,
+        ).toRenderModel(rebirthPolicy, eligible = true, matter = 1_924L)
+        assertEquals(1_924L, withMatter.matter)
+        assertEquals(rebirthPolicy.minimumLevel, withMatter.minimumTier)
+        assertEquals(rebirthPolicy.maximumLevel, withMatter.maximumTier)
+        assertEquals(3, withMatter.targetTier)
+
         val shellBlocked = rebirthProjection(
             progress = RebirthProgress(level = 2, highestCleared = 2),
             canAdvance = true,
