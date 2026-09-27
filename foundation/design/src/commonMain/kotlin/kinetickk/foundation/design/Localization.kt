@@ -15,7 +15,6 @@ internal enum class NavigationText(
     override val russian: String,
 ) : TextResource {
     Back("Back", "Назад"),
-    BackEscape("Back", "Назад"),
     Page("{0}/{1}", "{0}/{1}"),
     Next("Next", "Далее"),
 }

@@ -44,7 +44,7 @@ fun DrawScope.drawPagedFooter(textMeasurer: TextMeasurer, bounds: Rect, page: In
     drawLine(Kk.Line, Offset(bounds.left, top), Offset(bounds.right, top), d(1f))
     drawLine(Kk.Line, Offset(closeRight, top), Offset(closeRight, bounds.bottom), d(1f))
     drawLine(Kk.Line, Offset(nextLeft, top), Offset(nextLeft, bounds.bottom), d(1f))
-    drawLabel(textMeasurer, textMeasurer.language.text(NavigationText.BackEscape), bounds.left + d(25f), top + d(16f), 12f, accent, weight = FontWeight.Bold)
+    drawLabel(textMeasurer, textMeasurer.language.text(NavigationText.Back), bounds.left + d(25f), top + d(16f), 12f, accent, weight = FontWeight.Bold)
     drawLabel(textMeasurer, textMeasurer.language.text(NavigationText.Page, page + 1, maxPage + 1), (closeRight + nextLeft) * 0.5f, top + d(16f), 11f, if (page > 0) Kk.Bone else Kk.Mute, centered = true)
     drawLabel(textMeasurer, textMeasurer.language.text(NavigationText.Next), bounds.right - d(42f), top + d(16f), 11f, if (page < maxPage) Kk.Bone else Kk.Mute, centered = true)
 }
