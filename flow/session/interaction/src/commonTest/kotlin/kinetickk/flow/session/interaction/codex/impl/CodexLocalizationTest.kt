@@ -28,9 +28,9 @@ class CodexLocalizationTest {
         assertEquals(english.map { it.key }, russian.map { it.key })
         assertEquals("Круг", russian.single().title)
         assertEquals("Circle", english.single().title)
-        assertEquals("ОТКРЫТО", russian.single().availability)
+        assertEquals("Открыто", russian.single().status)
         assertTrue(russian.single().help.orEmpty().contains("Улучшения лаборатории"))
-        assertEquals("UNLOCKED", english.single().availability)
+        assertEquals("Unlocked", english.single().status)
     }
 
     @Test
@@ -44,6 +44,6 @@ class CodexLocalizationTest {
         assertEquals(listOf(item), codexFilteredItems(model, "cInDeR", CodexItemFilter.ALL, AppLanguage.English))
         assertEquals("Обычный", russianEntry.kind)
         assertTrue(russianEntry.description.contains("Восстановление прочности: +0,1/с"))
-        assertTrue(russianEntry.availability.contains("ОТКРЫТО"))
+        assertEquals(CodexFact("Выпадает с", "Ур. 1", russianEntry.facts.single().info), russianEntry.facts.single())
     }
 }
