@@ -251,6 +251,68 @@ class HudFeedTest {
         }
     }
 
+    /**
+     * On landscape phones the boss name grows with the text size and pushes the elite / Architect
+     * bar down: no feed plate may meet the boss block at any text size.
+     */
+    @Test
+    fun landscapeFeedPlatesStayUnderTheBossBlockAtEveryTextSize() {
+        val toasts = listOf(
+            notice("Neon Ram", "Impact damage +0.05", "Weapon power +0.04", "+ Vector maneuver"),
+            notice("Replace Ghost Vector", "Impact damage +0.05", *FOUR_SYNERGIES),
+        )
+        val bosses = listOf(ELITE, ELITE.copy(type = EnemyType.ARCHITECT))
+        for (language in AppLanguage.entries) listOf(844 to 390, 780 to 360, 667 to 375, 640 to 360).forEach { (w, h) ->
+            for (textScale in TEXT_SCALES) for (boss in bosses) for (message in listOf("ELITE SIGNAL", "TWO ANOMALIES DETECTED // CHOOSE A COURSE"))
+                for (toast in toasts) {
+                    val model = feedModel(w, h, message).with("enemies" to immutableListOf(boss))
+                    val fx = VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(toast))
+                    drawFeed(w, h, language, textScale) { measurer ->
+                        drawHud(model, measurer, 1f)
+                        drawHudFeed(model, fx, measurer, 1f, null)
+                    }
+                    val context = "$language $w x $h x$textScale ${boss.type} \"$message\" ${toast.title}"
+                    val bossBlock = assertNotNull(HudLayoutProbe.rect(HudBlock.BOSS), context)
+                    assertTrue(FeedProbe.plateCount >= 1, "$context: nothing drawn")
+                    for (plate in 0 until FeedProbe.plateCount) {
+                        val box = FeedProbe.plateBox(plate)
+                        assertFalse(box.overlaps(bossBlock), "$context: plate $plate $box meets the boss block $bossBlock")
+                    }
+                    assertFeedLinesFit(context, w, h)
+                    assertFeedClearsTheCore(context, w, h)
+                }
+        }
+    }
+
+    /**
+     * The detail lines of one toast share one size: when a long word shrinks its own line (a synergy
+     * name in the narrow column beside the Core), its sibling lines shrink with it.
+     */
+    @Test
+    fun detailLinesOfOneToastShareOneSize() {
+        val toasts = listOf(
+            notice("Replace Ghost Vector", "Impact damage +0.05", "Weapon power +0.04", "Dash power +12", "− Vector maneuver", "+ Gravitic grouping"),
+            notice("Replace Chroma Feedback", "Critical chance +2.5%", "Damage reduction +3%", *FOUR_SYNERGIES),
+            notice("Singularity Spear mastery advanced", "Critical chance +2.5%", "Damage reduction +3%", "+ Gravitic grouping", "− Vector maneuver"),
+        )
+        val screens = sizes + listOf(780 to 360, 640 to 360, 360 to 780, 360 to 640)
+        for (language in AppLanguage.entries) screens.forEach { (w, h) ->
+            for (textScale in TEXT_SCALES) for (message in listOf("", "GHOST VECTOR // SLOT 2 BOUND")) for (toast in toasts) {
+                val model = feedModel(w, h, message)
+                val fx = VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(toast))
+                drawFeed(w, h, language, textScale) { measurer -> drawHudFeed(model, fx, measurer, 1f, null) }
+                val context = "$language $w x $h x$textScale \"$message\" ${toast.title}"
+                for (plate in 0 until FeedProbe.plateCount) {
+                    if (FeedProbe.isBanner(plate)) continue
+                    val details = (0 until FeedProbe.lineCount).filter { FeedProbe.linePlate(it) == plate }.drop(1).map { FeedProbe.lineLayout(it) }
+                    val sizes = details.map { it.layoutInput.style.fontSize.value }.distinct()
+                    assertTrue(sizes.size <= 1, "$context: detail sizes $sizes in ${details.map { it.layoutInput.text.text }}")
+                }
+                assertFeedLinesFit(context, w, h)
+            }
+        }
+    }
+
     /** The lines of the first toast plate drawn in the last frame, in drawing order. */
     private fun drawnToastLines(context: String): List<String> {
         val plate = (0 until FeedProbe.plateCount).firstOrNull { !FeedProbe.isBanner(it) }

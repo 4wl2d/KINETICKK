@@ -20,6 +20,7 @@ import kinetickk.ball.gameplay.interaction.layout.REGULAR_LOADOUT_HEIGHT_DP
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
+import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
@@ -153,8 +154,17 @@ private object FeedArea {
             }
             GameplayLayoutMode.COMPACT_LANDSCAPE -> {
                 right = frame.width - frame.margin - compactLoadoutWidth(engine.content.relicPolicy.maxSlots.coerceIn(0, 8), frame.unit) - frame.u(12f)
-                top = frame.u(62f)
                 maxWidth = min(frame.u(260f) * frame.factor, right - frame.width * 0.5f + frame.u(60f)).coerceAtLeast(frame.u(140f))
+                top = frame.u(62f)
+                // Under the elite / Architect block whenever a plate may reach its span: the boss name
+                // grows with the text size and pushes its bar down.
+                val boss = FeedBoss.select(engine)
+                if (boss.id >= 0) {
+                    val architect = boss.type == EnemyType.ARCHITECT
+                    if (right - maxWidth < frame.width * 0.5f + HudTopGeometry.bossBarWidth(frame, architect) * 0.5f) {
+                        top = max(top, HudTopGeometry.bossBottom(frame, architect, measurer.scale) + frame.u(8f))
+                    }
+                }
                 maxNotices = 1
                 maxDetails = 2
                 // A plate that would reach the Core's band narrows to the column right of the Core, which
@@ -297,23 +307,24 @@ private fun placeToast(
 private const val REFERENCE_TEXT_SCALE = 1.25f
 
 /**
- * Half size of the zone around the screen center that phone plates keep clear: the Core's halo
- * (2.2 Core radii, 35 dp) with its stroke and a small gap.
+ * Half size of the zone around the screen center that phone plates (feed, trial rules) keep clear:
+ * the Core's halo (2.2 Core radii, 35 dp) with its stroke and a small gap.
  */
-private const val CORE_CLEARANCE_DP = 46f
+internal const val CORE_CLEARANCE_DP = 46f
 
 /**
- * Narrowest column beside the Core that a plate narrows to (landscape) or that a portrait toast
- * takes when neither band holds it. Lines that cannot show whole in it are not shown there.
+ * Narrowest column beside the Core that a plate narrows to (landscape) or that a portrait toast (or
+ * the trial rules) takes when neither band holds it. Lines that cannot show whole in it are not
+ * shown there.
  */
-private const val NARROW_COLUMN_MIN_DP = 110f
+internal const val NARROW_COLUMN_MIN_DP = 110f
 
 /**
- * A toast that does not fit its room steps its text size down by [SHRINK_STEP] of text scale at a
- * time, never below the size of the smallest text setting ([SMALLEST_TEXT_SCALE]).
+ * A toast (or the trial rules) that does not fit its room steps its text size down by [SHRINK_STEP]
+ * of text scale at a time, never below the size of the smallest text setting ([SMALLEST_TEXT_SCALE]).
  */
-private const val SMALLEST_TEXT_SCALE = 1f
-private const val SHRINK_STEP = 0.125f
+internal const val SMALLEST_TEXT_SCALE = 1f
+internal const val SHRINK_STEP = 0.125f
 private const val SHRINK_LEVELS = 7
 
 /** Text steps available at the text-size setting [scale]: from the setting down to the smallest one. */
@@ -408,7 +419,7 @@ private fun bannerLines(measurer: TextMeasurer, frame: HudFrame, maxWidth: Float
     val detail = FeedScratch.message.detail
     // Message details arrive display-cased ("Lvl 7" keeps its short level form).
     if (detail != null) lines.detail(measurer, frame, MESSAGE_TITLE_SLOT + 1, detail, maxWidth, banner = true, required = true, uppercase = false)
-    return lines
+    return lines.seal(measurer)
 }
 
 /** The lines of the toast in feed position [slot] for [notice] at text step [level] (measured once per change). */
@@ -436,7 +447,7 @@ private fun noticeLines(
         val text = FeedScratch.details[slot * DETAILS_PER_NOTICE + line].of(source, language)
         lines.detail(measurer, frame, titleSlot + 1 + line, text, maxWidth, banner = false, required = isSynergyLine(source), uppercase = true)
     }
-    return lines
+    return lines.seal(measurer)
 }
 
 /** Banner entrance (`kk-fx-banner`): slides in from the left with the Pull overshoot. */
@@ -449,8 +460,10 @@ private fun entranceAlpha(age: Float): Float = (age / (ENTRANCE_SECONDS * 0.4f))
 
 /**
  * The lines of one feed plate (title first, then details), measured once per change through
- * [FeedTexts] at one text step. [fit] decides which lines show: the title and required (synergy)
- * lines always, optional lines in order while they fit. Draw-thread scratch: reused for every plate.
+ * [FeedTexts] at one text step. The details share one size: [seal] lays them all out at the size
+ * the tightest of them needs on the plate. [fit] decides which lines show: the title and required
+ * (synergy) lines always, optional lines in order while they fit. Draw-thread scratch: reused for
+ * every plate; a builder adds the title and details, then calls [seal].
  */
 private object FeedLines {
     private val layouts = arrayOfNulls<TextLayoutResult>(1 + DETAILS_PER_NOTICE)
@@ -458,6 +471,14 @@ private object FeedLines {
     private val required = BooleanArray(1 + DETAILS_PER_NOTICE)
     private val whole = BooleanArray(1 + DETAILS_PER_NOTICE)
     private val visible = BooleanArray(1 + DETAILS_PER_NOTICE)
+
+    /** Details waiting for [seal]: text slot, text, casing and the size fraction each needs alone. */
+    private val detailSlots = IntArray(1 + DETAILS_PER_NOTICE)
+    private val detailTexts = arrayOfNulls<String>(1 + DETAILS_PER_NOTICE)
+    private val detailUpper = BooleanArray(1 + DETAILS_PER_NOTICE)
+    private val detailNeeds = FloatArray(1 + DETAILS_PER_NOTICE)
+    private var detailSize = 0f
+    private var detailWidth = 0f
     var count = 0
         private set
 
@@ -507,14 +528,33 @@ private object FeedLines {
         uppercase: Boolean,
     ) {
         if (count == 0 || count >= layouts.size) return
-        val size = (if (frame.regular) frame.t(11f) else 10f) / REFERENCE_TEXT_SCALE * shrink
-        val available = maxWidth - startPadding(frame, banner) - endPadding(frame) - leadSpace(frame, banner)
+        detailSize = (if (frame.regular) frame.t(11f) else 10f) / REFERENCE_TEXT_SCALE * shrink
+        detailWidth = (maxWidth - startPadding(frame, banner) - endPadding(frame) - leadSpace(frame, banner)).coerceAtLeast(1f)
         // Details take up to two lines, then shrink or wrap further on their plate rather than being cut.
-        layouts[count] = FeedTexts.fit(bank + slot, measurer, text, mono = true, size, available.coerceAtLeast(1f), lines = 2, uppercase = uppercase)
-        widths[count] = FeedTexts.contentWidth(bank + slot)
-        whole[count] = FeedTexts.isWhole(bank + slot)
+        detailSlots[count] = bank + slot
+        detailTexts[count] = text
+        detailUpper[count] = uppercase
+        detailNeeds[count] = FeedTexts.need(bank + slot, measurer, text, mono = true, detailSize, detailWidth, lines = 2, uppercase)
         this.required[count] = required
         count++
+    }
+
+    /**
+     * Lays the details out at one size: the smallest fraction any of them needs to show whole on the
+     * plate, so a long word that shrinks its own line shrinks its sibling lines with it. A detail
+     * that cannot show whole at any step keeps no say (it is not shown).
+     */
+    fun seal(measurer: TextMeasurer): FeedLines {
+        var cap = 1f
+        for (index in 1 until count) if (!detailNeeds[index].isNaN()) cap = min(cap, detailNeeds[index])
+        for (index in 1 until count) {
+            val slot = detailSlots[index]
+            layouts[index] = FeedTexts.fit(slot, measurer, detailTexts[index]!!, mono = true, detailSize, detailWidth, lines = 2,
+                uppercase = detailUpper[index], cap = cap)
+            widths[index] = FeedTexts.contentWidth(slot)
+            whole[index] = FeedTexts.isWhole(slot)
+        }
+        return this
     }
 
     /** Height of the plate with only its title and required lines (infinite when one of them is cut). */
@@ -652,41 +692,63 @@ private object FeedLayer {
 /**
  * Feed text layouts per slot, fitted once per change: the text wraps at word boundaries on its
  * plate and shrinks when a word would otherwise break or the lines would be cut, so it is never
- * ellipsized. Keyed by (text, typography, measurer, scale, size, width, flags); one bank of slots
- * per text step and column.
+ * ellipsized. Two memos per slot, keyed by (text, typography, measurer, scale, size, width, flags):
+ * the size fraction the text needs alone ([need]) and the drawn layout under a size cap ([fit]).
+ * One bank of slots per text step and column.
  */
 private object FeedTexts {
     private const val SLOTS = FEED_TEXT_SLOTS * 2 * SHRINK_LEVELS
-    private val texts = arrayOfNulls<String>(SLOTS)
-    private val typographies = arrayOfNulls<Any>(SLOTS)
-    private val delegates = arrayOfNulls<Any>(SLOTS)
-    private val scales = FloatArray(SLOTS)
-    private val sizes = FloatArray(SLOTS)
-    private val widths = FloatArray(SLOTS)
-    private val flags = IntArray(SLOTS)
+    private val needKeys = FeedTextKeys(SLOTS)
+    private val needSteps = IntArray(SLOTS)
+    private val fitKeys = FeedTextKeys(SLOTS)
     private val layouts = arrayOfNulls<TextLayoutResult>(SLOTS)
     private val contentWidths = FloatArray(SLOTS)
     private val wholes = BooleanArray(SLOTS)
 
-    fun fit(slot: Int, measurer: TextMeasurer, text: String, mono: Boolean, size: Float, width: Float, lines: Int, uppercase: Boolean): TextLayoutResult {
-        val flag = (if (mono) 1 else 0) or (if (uppercase) 2 else 0) or (lines shl 2)
+    /** The size fraction [text] needs to show whole in [width] (the first fit step), or NaN when none does. */
+    fun need(slot: Int, measurer: TextMeasurer, text: String, mono: Boolean, size: Float, width: Float, lines: Int, uppercase: Boolean): Float {
+        val step = needStep(slot, measurer, text, mono, size, width, lines, uppercase)
+        return if (step == NO_FIT) Float.NaN else FitFactors[step]
+    }
+
+    private fun needStep(slot: Int, measurer: TextMeasurer, text: String, mono: Boolean, size: Float, width: Float, lines: Int, uppercase: Boolean): Int {
+        val flag = flags(mono, uppercase, lines)
+        if (needKeys.matches(slot, measurer, text, size, width, flag, 1f)) return needSteps[slot]
+        val step = fitStep(measurer, text, mono, size, width, lines, uppercase, cap = 1f)
+        needKeys.store(slot, measurer, text, size, width, flag, 1f)
+        needSteps[slot] = step
+        return step
+    }
+
+    /**
+     * [text] laid out at the first fit step whose size fraction is at most [cap]. When none shows it
+     * whole, the smallest attempt is returned and [isWhole] is false ([FeedLines] does not show it).
+     */
+    fun fit(
+        slot: Int,
+        measurer: TextMeasurer,
+        text: String,
+        mono: Boolean,
+        size: Float,
+        width: Float,
+        lines: Int,
+        uppercase: Boolean,
+        cap: Float = 1f,
+    ): TextLayoutResult {
+        val flag = flags(mono, uppercase, lines)
         val cached = layouts[slot]
-        if (cached != null && typographies[slot] === measurer.typography && delegates[slot] === measurer.delegate &&
-            scales[slot] == measurer.scale && sizes[slot] == size && widths[slot] == width && flags[slot] == flag && texts[slot] == text
-        ) return cached
-        val layout = fitFeedText(measurer, text, mono, size, width, lines, uppercase)
-        texts[slot] = text
-        typographies[slot] = measurer.typography
-        delegates[slot] = measurer.delegate
-        scales[slot] = measurer.scale
-        sizes[slot] = size
-        widths[slot] = width
-        flags[slot] = flag
+        if (cached != null && fitKeys.matches(slot, measurer, text, size, width, flag, cap)) return cached
+        // The step the text needs alone is the first that fits under any cap at or above its size.
+        val need = needStep(slot, measurer, text, mono, size, width, lines, uppercase)
+        val step = if (need != NO_FIT && FitFactors[need] <= cap + CAP_EPSILON) need else fitStep(measurer, text, mono, size, width, lines, uppercase, cap)
+        val shown = if (step != NO_FIT) step else FitFactors.lastIndex
+        val layout = measureFeedText(measurer, text, mono, size * FitFactors[shown], width, lines + FitExtraLines[shown], uppercase)
+        fitKeys.store(slot, measurer, text, size, width, flag, cap)
         layouts[slot] = layout
         var content = 0f
         for (line in 0 until layout.lineCount) content = max(content, layout.getLineRight(line))
         contentWidths[slot] = min(content, layout.size.width.toFloat())
-        wholes[slot] = layout.fitsWithoutCuts()
+        wholes[slot] = step != NO_FIT && layout.fitsWithoutCuts()
         return layout
     }
 
@@ -695,29 +757,63 @@ private object FeedTexts {
 
     /** Whether the slot's last fitted layout shows its whole text (see [fitsWithoutCuts]). */
     fun isWhole(slot: Int): Boolean = wholes[slot]
+
+    private fun flags(mono: Boolean, uppercase: Boolean, lines: Int): Int = (if (mono) 1 else 0) or (if (uppercase) 2 else 0) or (lines shl 2)
+}
+
+/** Memo keys of one [FeedTexts] table (plain slots, no allocation per lookup). */
+private class FeedTextKeys(slots: Int) {
+    private val texts = arrayOfNulls<String>(slots)
+    private val typographies = arrayOfNulls<Any>(slots)
+    private val delegates = arrayOfNulls<Any>(slots)
+    private val scales = FloatArray(slots)
+    private val sizes = FloatArray(slots)
+    private val widths = FloatArray(slots)
+    private val caps = FloatArray(slots)
+    private val flags = IntArray(slots)
+
+    fun matches(slot: Int, measurer: TextMeasurer, text: String, size: Float, width: Float, flag: Int, cap: Float): Boolean =
+        texts[slot] != null && typographies[slot] === measurer.typography && delegates[slot] === measurer.delegate &&
+            scales[slot] == measurer.scale && sizes[slot] == size && widths[slot] == width && flags[slot] == flag && caps[slot] == cap &&
+            texts[slot] == text
+
+    fun store(slot: Int, measurer: TextMeasurer, text: String, size: Float, width: Float, flag: Int, cap: Float) {
+        texts[slot] = text
+        typographies[slot] = measurer.typography
+        delegates[slot] = measurer.delegate
+        scales[slot] = measurer.scale
+        sizes[slot] = size
+        widths[slot] = width
+        caps[slot] = cap
+        flags[slot] = flag
+    }
 }
 
 /**
- * Size steps (fractions of the size): long text first shrinks a little on the requested line
- * count, then wraps onto up to [EXTRA_LINES] more lines at the largest size that fits. When none
- * fits, the last attempt is returned and [FeedLines] does not show it.
+ * Fit steps in the order they are tried, as (size fraction, extra lines): long text first shrinks
+ * a little on the requested line count, then wraps onto up to [EXTRA_LINES] more lines at the
+ * largest size that fits.
  */
 private val SameLinesSteps = floatArrayOf(1f, 0.92f, 0.85f)
 private val MoreLinesSteps = floatArrayOf(1f, 0.92f, 0.85f, 0.78f, 0.72f, 0.66f, 0.6f)
 private const val EXTRA_LINES = 2
+private val FitFactors = FloatArray(SameLinesSteps.size + MoreLinesSteps.size * EXTRA_LINES) { index ->
+    if (index < SameLinesSteps.size) SameLinesSteps[index] else MoreLinesSteps[(index - SameLinesSteps.size) / EXTRA_LINES]
+}
+private val FitExtraLines = IntArray(FitFactors.size) { index ->
+    if (index < SameLinesSteps.size) 0 else 1 + (index - SameLinesSteps.size) % EXTRA_LINES
+}
+private const val NO_FIT = -1
+private const val CAP_EPSILON = 0.0001f
 
-private fun fitFeedText(measurer: TextMeasurer, text: String, mono: Boolean, size: Float, width: Float, lines: Int, uppercase: Boolean): TextLayoutResult {
-    var layout = measureFeedText(measurer, text, mono, size, width, lines, uppercase)
-    if (layout.fitsWithoutCuts()) return layout
-    for (step in 1 until SameLinesSteps.size) {
-        layout = measureFeedText(measurer, text, mono, size * SameLinesSteps[step], width, lines, uppercase)
-        if (layout.fitsWithoutCuts()) return layout
+/** The first fit step at or below [cap] that shows [text] whole, or [NO_FIT]. */
+private fun fitStep(measurer: TextMeasurer, text: String, mono: Boolean, size: Float, width: Float, lines: Int, uppercase: Boolean, cap: Float): Int {
+    for (step in FitFactors.indices) {
+        if (FitFactors[step] > cap + CAP_EPSILON) continue
+        val layout = measureFeedText(measurer, text, mono, size * FitFactors[step], width, lines + FitExtraLines[step], uppercase)
+        if (layout.fitsWithoutCuts()) return step
     }
-    for (step in MoreLinesSteps.indices) for (extra in 1..EXTRA_LINES) {
-        layout = measureFeedText(measurer, text, mono, size * MoreLinesSteps[step], width, lines + extra, uppercase)
-        if (layout.fitsWithoutCuts()) return layout
-    }
-    return layout
+    return NO_FIT
 }
 
 private fun measureFeedText(measurer: TextMeasurer, text: String, mono: Boolean, size: Float, width: Float, lines: Int, uppercase: Boolean) =

@@ -118,9 +118,7 @@ class HudLayoutFixesTest {
                 }
                 val top = listOf(HudBlock.CLOCK, HudBlock.BADGE, HudBlock.MATTER_CHIP, HudBlock.KEY_CHIP, HudBlock.CHAIN, HudBlock.BOSS,
                     HudBlock.TRIAL_PANEL, HudBlock.FEED)
-                // The feed's own placement (feed area) is checked against the chain, clock, badge, chips and
-                // trial panel here; where it docks relative to the boss block is the feed's layout.
-                top.forEachIndexed { index, a -> top.drop(index + 1).forEach { b -> if (setOf(a, b) != setOf(HudBlock.BOSS, HudBlock.FEED)) apart(a, b) } }
+                top.forEachIndexed { index, a -> top.drop(index + 1).forEach { b -> apart(a, b) } }
                 val bottom = listOf(HudBlock.INTEGRITY, HudBlock.SPEED, HudBlock.LOADOUT)
                 bottom.forEachIndexed { index, a -> bottom.drop(index + 1).forEach { b -> apart(a, b) } }
                 listOf(HudBlock.CLOCK, HudBlock.BOSS, HudBlock.TRIAL_PANEL, HudBlock.INTEGRITY, HudBlock.SPEED, HudBlock.LOADOUT, HudBlock.FEED)
@@ -310,6 +308,81 @@ class HudLayoutFixesTest {
         val model = hudTestModel().with("pointsOfInterest" to listOf(orbit).toImmutableList())
         draw(1_440, 810, AppLanguage.English) { measurer -> drawHud(model, measurer, 1f); drawTrialTooltip(model, measurer, open = false) }
         assertNull(HudLayoutProbe.rect(HudBlock.TRIAL_TOOLTIP))
+    }
+
+    /**
+     * On phones the open rules keep the Core's zone clear (the feed's [CORE_CLEARANCE_DP] around the
+     * screen center): on landscape phones the slip ends left of it, on portrait phones above, below
+     * or beside it. The rules stay whole and off the touch controls; on the reference screens they
+     * also stay above the bottom clusters and, at the default text size, render at the tooltip's
+     * board size.
+     */
+    @Test
+    fun trialRulesKeepTheCoreClearOnPhones() {
+        val phones = listOf(844 to 390, 780 to 360, 667 to 375, 640 to 360, 390 to 844, 360 to 780, 375 to 667, 360 to 640)
+        for (language in AppLanguage.entries) phones.forEach { (w, h) ->
+            for (textScale in textScales) for (kind in PointOfInterestKind.entries) {
+                val trial = PointOfInterestProjection(kind, kind.name, 0f, 0f, true, 12f, 0, 0.4f, immutableListOf(1, 2, 3), 0f, 0f)
+                val model = hudTestModel(w.toFloat(), h.toFloat()).with("pointsOfInterest" to listOf(trial).toImmutableList())
+                draw(w, h, language, textScale) { measurer ->
+                    drawHud(model, measurer, 1f, trialInfoOpen = true)
+                    drawTrialTooltip(model, measurer, open = true)
+                }
+                val where = "$language $w x $h x$textScale $kind"
+                val slip = assertNotNull(HudLayoutProbe.rect(HudBlock.TRIAL_TOOLTIP), where)
+                val clearance = CORE_CLEARANCE_DP
+                val core = Rect(w * 0.5f - clearance, h * 0.5f - clearance, w * 0.5f + clearance, h * 0.5f + clearance)
+                assertFalse(slip.overlaps(core), "$where: rules $slip cover the Core's zone $core")
+                if (w > h) assertTrue(slip.right <= w * 0.5f - clearance, "$where: rules $slip reach the Core's column")
+                val body = TrialRulesPlacement.body
+                assertFalse(body.multiParagraph.didExceedMaxLines || body.didOverflowWidth, "$where: rules cut")
+                val shown = body.layoutInput.text.text
+                for (row in 0 until body.lineCount - 1) {
+                    val end = body.getLineEnd(row)
+                    assertTrue(shown[end - 1].isWhitespace() || shown[end].isWhitespace() || shown[end - 1] == '-', "$where: \"$shown\" breaks inside a word")
+                }
+                assertFalse(slip.overlaps(assertNotNull(HudLayoutProbe.rect(HudBlock.TRIAL_PANEL))), "$where: rules cover the panel")
+                runningControlBounds(w.toFloat(), h.toFloat(), 1f).forEach { control ->
+                    assertFalse(slip.overlaps(control.bounds), "$where: rules $slip cover ${control.target}")
+                }
+                // Short phones can leave no room above the bottom clusters; the reference screens always do.
+                if ((w to h) in sizes) {
+                    assertTrue(slip.bottom <= HudFrame().update(w.toFloat(), h.toFloat(), 1f).bottomClustersTop, "$where: rules $slip reach the bottom clusters")
+                }
+                // The tooltip body's board size (14) at the default setting on the reference phones.
+                if (textScale == 1.25f && (w to h) in sizes) assertEquals(14f, body.layoutInput.style.fontSize.value, 0.01f, where)
+            }
+        }
+    }
+
+    /** The phone-landscape matter value is display-cased like the chips of the other layouts ("+1,2 МЛН"). */
+    @Test
+    fun matterValueIsDisplayCasedInEveryLayout() {
+        for (language in AppLanguage.entries) sizes.forEach { (w, h) ->
+            val model = hudTestModel(w.toFloat(), h.toFloat()).with("runMatter" to 1_234_567L, "keys" to 2)
+            HudDrawCache.forgetLayouts()
+            draw(w, h, language) { measurer -> drawHud(model, measurer, 1f) }
+            val shown = assertNotNull(HudDrawCache.peekLayout(HudText.MATTER), "$language $w x $h").layoutInput.text.text
+            assertEquals(shown.uppercase(), shown, "$language $w x $h")
+            assertTrue(shown.any { it.isLetter() }, "$language $w x $h: $shown has no unit")
+        }
+    }
+
+    /** The trial clock reads m:ss, the same string as the ring and point timers in the world ("0:15"). */
+    @Test
+    fun trialClockReadsLikeTheWorldTimers() {
+        for (language in AppLanguage.entries) sizes.forEach { (w, h) ->
+            for ((remaining, expected) in listOf(14.2f to "0:15", 75.3f to "1:16", 0.4f to "0:01")) {
+                val point = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, remaining, 0, 0.4f,
+                    immutableListOf(), 0f, 0f)
+                val model = hudTestModel(w.toFloat(), h.toFloat()).with("pointsOfInterest" to listOf(point).toImmutableList())
+                HudDrawCache.forgetLayouts()
+                draw(w, h, language, 1.25f) { measurer -> drawHud(model, measurer, 1f) }
+                val clock = assertNotNull(HudDrawCache.peekLayout(HudText.TRIAL_CLOCK)).layoutInput.text.text
+                assertEquals(expected, clock, "$language $w x $h")
+                assertEquals(WorldStrings.timer(remaining), clock, "$language $w x $h")
+            }
+        }
     }
 
     @Test

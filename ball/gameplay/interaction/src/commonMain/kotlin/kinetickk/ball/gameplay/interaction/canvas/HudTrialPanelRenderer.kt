@@ -7,6 +7,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.text.TextLayoutResult
 import kinetickk.ball.content.api.DirectedReward
 import kinetickk.ball.content.api.PointOfInterestKind
 import kinetickk.ball.content.api.localizedContent
@@ -15,11 +16,11 @@ import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_HUD_TOP_DP
 import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_PANEL_ROW_DP
 import kinetickk.ball.gameplay.interaction.layout.RUNNING_CONTROL_MIN_DP
 import kinetickk.ball.gameplay.interaction.layout.compactHudFactor
+import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.interaction.layout.gameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.regularHudUnit
 import kinetickk.ball.gameplay.interaction.layout.runningHudMargin
 import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
-import kinetickk.ball.gameplay.nucleus.model.formatRunTime
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
 import kinetickk.foundation.common.localization.AppLanguage
@@ -160,7 +161,6 @@ private object TrialScratch {
     val layout = HudTrialPanelLayout()
     val label = HudKeyedText()
     val name = HudKeyedText()
-    val clock = HudNumberText { formatRunTime(it.toFloat()) }
     val progress = HudKeyedText()
     val reward = HudKeyedText()
     val rules = HudKeyedText()
@@ -192,7 +192,8 @@ internal fun DrawScope.drawTrialPanel(
     val iconSize = (if (layout.compact) 13f else 16f) * unit
     drawKkIcon(KkIcon.SYSTEM_ANOMALY, Offset(innerLeft + iconSize * 0.5f, layout.rowLabelCenter), iconSize, roles.you)
     val labelText = TrialScratch.label.of(language, 0L) { language.text(HudRedesignText.AnomalyTrial) }
-    val clockLayout = HudDrawCache.layout(HudText.TRIAL_CLOCK, text, TrialScratch.clock.of(ceil(point.remaining).toLong()),
+    // The remaining time as m:ss, the same string as the ring and point timers in the world.
+    val clockLayout = HudDrawCache.layout(HudText.TRIAL_CLOCK, text, trialClockText(point),
         measurer.typography.monoStyle(layout.monoSize))
     drawKkText(clockLayout, innerRight, layout.rowLabelCenter, Kk.Bone, KkAlign.END, KkVAlign.CENTER)
     recordLine(HudBlock.TRIAL_CLOCK, innerRight - clockLayout.size.width, layout.rowLabelCenter, clockLayout)
@@ -243,6 +244,9 @@ internal fun DrawScope.drawTrialPanel(
     recordLine(HudBlock.TRIAL_REWARD, innerRight - rewardLayout.size.width, layout.rowRewardCenter, rewardLayout)
 }
 
+/** The trial's remaining time as `m:ss` ("0:15"), shared with the world's ring and point timers. */
+internal fun trialClockText(point: PointOfInterestProjection): String = WorldStrings.timer(point.remaining)
+
 /** Records a vertically centered one-line [layout] starting at [left] (layout tests). */
 private fun recordLine(block: HudBlock, left: Float, centerY: Float, layout: androidx.compose.ui.text.TextLayoutResult) {
     val half = layout.kkBoxHeight * 0.5f
@@ -251,7 +255,8 @@ private fun recordLine(block: HudBlock, left: Float, centerY: Float, layout: and
 
 /**
  * The open (!) of the trial panel: the rules on a bone slip below the whole panel, so the panel's
- * name, progress and reward stay readable. Drawn after the feed so nothing covers it.
+ * name, progress and reward stay readable. Drawn after the feed so nothing covers it. Placed by
+ * [TrialRulesPlacement]: above the bottom clusters and, on phones, clear of the Core.
  */
 internal fun DrawScope.drawTrialTooltip(engine: GameplayRenderModel, measurer: TextMeasurer, open: Boolean) {
     if (!open) return
@@ -260,29 +265,144 @@ internal fun DrawScope.drawTrialTooltip(engine: GameplayRenderModel, measurer: T
     val layout = TrialScratch.layout.update(size.width, size.height, density, measurer.scale)
     val panel = HudDrawCache.rect(HudRect.TRIAL_ANCHOR, layout.left, layout.top, layout.right, layout.bottom)
     val rules = TrialScratch.rules.of(language, point.kind.ordinal.toLong()) { engine.trialRules(point, language) }
-    // The rules are UI text: the tooltip body follows the text size relative to the board.
-    val text = HudMeasurers.ui(measurer)
-    // The foundation tooltip's geometry (`.tipbox`), placed below the panel and above the bottom
-    // clusters: wider (fewer lines) when large text would reach them, above the panel when even that
-    // does not fit. Cached rects, so an open tooltip costs nothing per frame.
-    val gap = 12f * density
-    val margin = 8f * density
-    val floor = HudScratch.frame.update(size.width, size.height, density).bottomClustersTop - gap
-    var widthDp = min(270f, min(panel.width, size.width - 16f * density) / density)
-    var body = measureKkTooltip(text, rules, density, widthDp)
-    if (panel.bottom + gap + body.kkBoxHeight + 22f * density > floor) {
-        widthDp = max(widthDp, min(TOOLTIP_WIDE_DP, (size.width - 16f * density) / density))
-        body = measureKkTooltip(text, rules, density, widthDp)
-    }
-    val width = widthDp * density
-    val height = body.kkBoxHeight + 22f * density
-    val left = (panel.center.x - width * 0.5f).coerceIn(margin, max(margin, size.width - margin - width))
-    val top = if (panel.bottom + gap + height <= floor || panel.top - gap - height < margin) panel.bottom + gap
-    else panel.top - gap - height
-    val slip = HudDrawCache.rect(HudRect.TRIAL_TOOLTIP, left, top, left + width, top + height)
+    val place = TrialRulesPlacement.update(measurer, rules, panel, size.width, size.height, density)
+    val slip = HudDrawCache.rect(HudRect.TRIAL_TOOLTIP, place.left, place.top, place.right, place.bottom)
     drawKkSlip(slip, cutDp = 10f)
-    drawKkText(body, slip.left + 13f * density, slip.top + 11f * density, Kk.Ink)
+    drawKkText(place.body, slip.left + 13f * density, slip.top + 11f * density, Kk.Ink)
     HudLayoutProbe.record(HudBlock.TRIAL_TOOLTIP, slip.left, slip.top, slip.right, slip.bottom)
+}
+
+/**
+ * Where the open trial rules go (px) and their body, the foundation tooltip's geometry (`.tipbox`).
+ * The slip must end above the bottom clusters and, on phones, keep the Core's zone clear like the
+ * feed's plates ([CORE_CLEARANCE_DP] around the screen center, where the camera holds the Core).
+ * It hangs under the panel at the panel's width. Large text that does not fit there takes a wider
+ * slip (up to [TOOLTIP_WIDE_DP]; the panel's full width on portrait phones) or steps down toward
+ * the smallest text setting; on portrait phones each step also tries the column left of the Core's
+ * zone (away from the feed's toasts on the right), and the band below the zone comes last. On
+ * landscape phones the slip stays in the panel's column (stepping its text down) and widens toward
+ * the Core's zone only when no step fits there. Where no place clears the bottom clusters (short
+ * phones at large text), the slip may cover them but still not the Core's zone or the touch
+ * controls. Memoized per input, so an open slip measures nothing per frame; draw-thread scratch.
+ */
+internal object TrialRulesPlacement {
+    var left = 0f
+        private set
+    var top = 0f
+        private set
+    var right = 0f
+        private set
+    var bottom = 0f
+        private set
+    lateinit var body: TextLayoutResult
+        private set
+
+    private var keyMeasurer: TextMeasurer? = null
+    private var keyText: String? = null
+    private val keys = FloatArray(7) { Float.NaN }
+
+    fun update(measurer: TextMeasurer, text: String, panel: Rect, width: Float, height: Float, density: Float): TrialRulesPlacement {
+        if (keyMeasurer === measurer && keyText == text && keys[0] == width && keys[1] == height && keys[2] == density &&
+            keys[3] == panel.left && keys[4] == panel.top && keys[5] == panel.right && keys[6] == panel.bottom
+        ) return this
+        place(measurer, text, panel, width, height, density)
+        keyMeasurer = measurer
+        keyText = text
+        keys[0] = width
+        keys[1] = height
+        keys[2] = density
+        keys[3] = panel.left
+        keys[4] = panel.top
+        keys[5] = panel.right
+        keys[6] = panel.bottom
+        return this
+    }
+
+    /** Runs only when an input changes (it may allocate). */
+    private fun place(measurer: TextMeasurer, text: String, panel: Rect, width: Float, height: Float, density: Float) {
+        val frame = HudScratch.frame.update(width, height, density)
+        val gap = 12f * density
+        val margin = 8f * density
+        val floor = frame.bottomClustersTop - gap
+        val phone = !frame.regular
+        val clearance = frame.u(CORE_CLEARANCE_DP)
+        val core = Rect(width * 0.5f - clearance, height * 0.5f - clearance, width * 0.5f + clearance, height * 0.5f + clearance)
+        val below = panel.bottom + gap
+        val belowCore = max(below, core.bottom + gap)
+        // The panel's width hangs centered under it; a wider slip (or the column) starts at its left edge.
+        val narrow = min(270f * density, min(panel.width, width - 16f * density))
+        val wideRight = when (frame.mode) {
+            GameplayLayoutMode.REGULAR -> width - margin
+            GameplayLayoutMode.COMPACT_LANDSCAPE -> min(width - margin, core.left)
+            GameplayLayoutMode.COMPACT_PORTRAIT -> panel.right
+        }
+        val wide = min(TOOLTIP_WIDE_DP * density, wideRight - panel.left)
+        val widens = wide > narrow + 0.5f
+        val centered = panel.center.x - narrow * 0.5f
+        val column = if (frame.portrait) core.left - panel.left else 0f
+        // Text steps from the setting down to the smallest one.
+        val steps = ArrayList<Float>()
+        var scale = measurer.scale
+        while (true) {
+            steps += scale
+            if (scale <= SMALLEST_TEXT_SCALE + 0.001f) break
+            scale = max(SMALLEST_TEXT_SCALE, scale - SHRINK_STEP)
+        }
+        fun attempt(step: Float, slipWidth: Float, slipLeft: Float, slipTop: Float, strict: Boolean, fallback: Boolean = false): Boolean {
+            // The rules are UI text: the body follows the text size relative to the board.
+            val stepMeasurer = if (step == measurer.scale) HudMeasurers.ui(measurer)
+            else CanvasTextMeasurer(measurer.delegate, hudUiScale(step), measurer.language, measurer.typography, measurer.roles)
+            val measured = measureKkTooltip(stepMeasurer, text, density, slipWidth / density)
+            val x = slipLeft.coerceIn(margin, max(margin, width - margin - slipWidth))
+            val slip = Rect(x, slipTop, x + slipWidth, slipTop + measured.kkBoxHeight + 22f * density)
+            val fits = measured.fitsWithoutCuts() && !(phone && slip.overlaps(core)) &&
+                if (strict) slip.bottom <= floor else slip.bottom <= height - margin && !meetsControl(slip, width, height, density)
+            if (fits || fallback) set(slip, measured)
+            return fits
+        }
+        fun search(strict: Boolean): Boolean {
+            if (frame.mode == GameplayLayoutMode.COMPACT_LANDSCAPE) {
+                // Beside the Core: in the panel's column first, then wider up to the Core's zone.
+                for (step in steps) if (attempt(step, narrow, centered, below, strict)) return true
+                if (widens) for (step in steps) if (attempt(step, wide, panel.left, below, strict)) return true
+                return false
+            }
+            // Under the panel (on portrait phones above the Core's zone, else in the column left of it).
+            val columns = column >= NARROW_COLUMN_MIN_DP * density
+            for (step in steps) {
+                if (attempt(step, narrow, centered, below, strict)) return true
+                if (widens && attempt(step, wide, panel.left, below, strict)) return true
+                if (columns && attempt(step, column, panel.left, below, strict)) return true
+            }
+            if (!frame.portrait) return false
+            // Portrait: the band below the Core's zone.
+            if (belowCore > below) for (step in steps) {
+                if (attempt(step, narrow, centered, belowCore, strict)) return true
+                if (widens && attempt(step, wide, panel.left, belowCore, strict)) return true
+            }
+            return false
+        }
+        // Short phones with large text: rather than cover the Core, the rules may cover the bottom
+        // clusters (never the touch controls). Should even that fail, the widest slip below the panel.
+        if (search(strict = true) || phone && search(strict = false)) return
+        attempt(steps.last(), if (widens) wide else narrow, if (widens) panel.left else centered, below, strict = true, fallback = true)
+    }
+
+    private fun meetsControl(slip: Rect, width: Float, height: Float, density: Float): Boolean {
+        var meets = false
+        forEachRunningControlBounds(width, height, density) { _, left, top, right, bottom ->
+            if (slip.left < right && left < slip.right && slip.top < bottom && top < slip.bottom) meets = true
+        }
+        return meets
+    }
+
+    private fun set(slip: Rect, measured: TextLayoutResult) {
+        left = slip.left
+        top = slip.top
+        right = slip.right
+        bottom = slip.bottom
+        body = measured
+    }
 }
 
 /** Widest trial-rules slip, for large text on short screens (dp). */
