@@ -365,7 +365,7 @@ class CodexComposeTest {
             character = CoreShape.ORB, weapon = WeaponId.FLUX_WAKE, weaponLevel = 7,
             relics = immutableListOf(kinetickk.ball.content.api.EquippedRelic(kinetickk.ball.content.api.RelicId.KINETIC_FLYWHEEL, 2)),
         )
-        // Item 0 was acquired this run and is new: NEW stamp on top, stack badge below.
+        // Item 0 was acquired this run and is new: NEW stamp and stack badge share the band above the glyph.
         val model = CodexRenderModel(immutableSetOf(), CodexRunStacks(stacks, build), catalog.items, newItemIds = immutableSetOf(0))
         val keys = listOf("item/0", "item/1", "relic/KINETIC_FLYWHEEL", "weapon/FLUX_WAKE")
         for (language in AppLanguage.entries) for ((width, height) in listOf(1440 to 810, 390 to 844, 844 to 390)) for (scale in listOf(1f, 1.25f, 1.75f)) androidx.compose.ui.test.v2.runDesktopComposeUiTest(width, height) {
@@ -375,43 +375,50 @@ class CodexComposeTest {
                 }
             }
             onNodeWithTag("codex-tab-0").assertIsSelected()
-            // The Build tab, then the collection grid (smaller cells) with the same in-run items.
+            // The Build tab, then the collection grid with the same in-run items.
             (keys.map { it to true } + listOf("item/0", "item/1").map { it to false }).forEach { (key, buildTab) ->
                 if (!buildTab) onNodeWithTag("codex-tab-1").performSemanticsAction(SemanticsActions.OnClick)
                 val where = "$key ${if (buildTab) "build" else "collection"} ${width}x$height ${language.code} @$scale"
                 onNodeWithTag("codex-grid").performScrollToKey(key)
                 val cell = onNodeWithTag("codex-slot-$key").fetchSemanticsNode().boundsInRoot
                 val badge = onNodeWithTag("codex-badge-$key", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+                val stamp = onAllNodesWithTag("codex-new-$key", useUnmergedTree = true).fetchSemanticsNodes().singleOrNull()?.boundsInRoot
+                assertEquals(key == "item/0", stamp != null, where)
+                // One glyph layout for the whole grid, from the grid's stamp size (the new item's stamp).
+                onNodeWithTag("codex-grid").performScrollToKey("item/0")
+                val gridStamp = onNodeWithTag("codex-new-item/0", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+                onNodeWithTag("codex-grid").performScrollToKey(key)
+                val ui = codexUiScale(scale)
+                val band = codexMarkBand(androidx.compose.ui.geometry.Size(gridStamp.width, gridStamp.height), 10f / ui, codexBadgeFont(ui), 1f)
+                val glyph = codexCellGlyph(cell.width, band, 1f)
+                val center = androidx.compose.ui.geometry.Offset(cell.left + glyph.centerX, cell.top + glyph.centerY)
+                val reach = glyph.radius * CODEX_GLYPH_REACH
                 if (key.startsWith("item/")) {
-                    // Drawn pixels: the 1 px strips just left of and just above the badge plate keep the
+                    // Drawn pixels: the 1 px strips just left of and just below the badge plate keep the
                     // cell's plain face, so no glyph ink runs under the badge.
                     val pixels = onRoot().captureToImage().toPixelMap()
-                    val face = pixels[(cell.right - 2f).toInt(), (cell.top + cell.height * 0.5f).toInt()]
+                    val face = pixels[(cell.left + 2f).toInt(), (cell.bottom - 2f).toInt()]
                     val strips = (badge.top.toInt() + 1 until badge.bottom.toInt() - 1).map { (badge.left - 1f).toInt() to it } +
-                        (badge.left.toInt() + 1 until badge.right.toInt() - 1).map { it to (badge.top - 1f).toInt() }
+                        (badge.left.toInt() + 1 until badge.right.toInt() - 1).map { it to (badge.bottom + 1f).toInt() }
                     strips.forEach { (x, y) ->
                         val pixel = pixels[x, y]
                         val delta = maxOf(kotlin.math.abs(pixel.red - face.red), kotlin.math.abs(pixel.green - face.green), kotlin.math.abs(pixel.blue - face.blue))
-                        assertTrue(delta < 0.05f, "glyph ink at $x,$y next to the badge ($where)")
+                        assertTrue(delta < 0.05f, "glyph or stamp ink at $x,$y next to the badge ($where)")
                     }
                 }
-                val stamp = onAllNodesWithTag("codex-new-$key", useUnmergedTree = true).fetchSemanticsNodes().singleOrNull()?.boundsInRoot
-                assertEquals(key == "item/0", stamp != null, where)
-                val top = codexNewBand(stamp?.let { androidx.compose.ui.geometry.Size(it.width, it.height) }, 1f)
-                val glyph = codexCellGlyph(cell.width, top, 1f, codexBadgeBand(codexBadgeFont(codexUiScale(scale)), 1f), badge.width)
-                val center = androidx.compose.ui.geometry.Offset(cell.left + glyph.centerX, cell.top + glyph.centerY)
-                val reach = glyph.radius * CODEX_GLYPH_REACH
                 // The glyph with its stack ring stays clear of the badge plate...
                 val nearest = androidx.compose.ui.geometry.Offset(center.x.coerceIn(badge.left, badge.right), center.y.coerceIn(badge.top, badge.bottom))
                 assertTrue((nearest - center).getDistance() >= reach - 0.5f, "glyph (reach $reach at $center) runs under the badge $badge ($where)")
-                // ...and below the rotated NEW stamp.
-                stamp?.let { assertTrue(it.bottom + it.width * 0.5f * 0.1045f <= center.y - reach + 0.5f, "stamp covers the glyph ($where)") }
+                // ...and below the rotated NEW stamp with its shadow; the stamp ends before the badge.
+                stamp?.let {
+                    assertTrue(it.bottom + it.width * 0.5f * 0.1045f <= center.y - reach + 0.5f, "stamp covers the glyph ($where)")
+                    assertTrue(it.right + it.height * 0.1045f + 3f * 10f / ui / 17f <= badge.left, "stamp $it runs into the badge $badge ($where)")
+                }
                 assertTrue(center.x - reach >= cell.left - 0.5f && center.x + reach <= cell.right + 0.5f && center.y + reach <= cell.bottom + 0.5f,
                     "glyph leaves the cell ($where)")
-                // Build-tab glyphs stay at least as large as a 64 dp catalog cell's NEW glyph; a 64 dp cell
-                // carrying both a NEW stamp and a badge keeps a readable glyph beside the badge.
-                assertTrue(glyph.radius >= if (buildTab) 16f else 12f, "glyph radius ${glyph.radius} at $where")
-                assertTrue(badge.bottom <= cell.bottom && badge.right <= cell.right, "badge leaves the cell ($where)")
+                // Every glyph, Build tab or collection, is at least as large as a 64 dp cell's centered glyph.
+                assertTrue(glyph.radius >= 64f * 0.36f, "glyph radius ${glyph.radius} at $where")
+                assertTrue(badge.bottom <= cell.bottom && badge.right <= cell.right && badge.top >= cell.top, "badge leaves the cell ($where)")
             }
         }
     }
@@ -429,7 +436,8 @@ class CodexComposeTest {
         val cell = onNodeWithTag("codex-slot-item/0").fetchSemanticsNode().boundsInRoot
         val stamp = onNodeWithTag("codex-new-item/0", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         assertTrue(stamp.left >= cell.left && stamp.right <= cell.right, "The stamp stays inside its cell: $stamp in $cell")
-        val band = codexNewBand(androidx.compose.ui.geometry.Size(stamp.width, stamp.height), 1f)
+        val ui = codexUiScale(1.75f)
+        val band = codexMarkBand(androidx.compose.ui.geometry.Size(stamp.width, stamp.height), 10f / ui, codexBadgeFont(ui), 1f)
         val (centerY, radius) = codexCellGlyph(cell.width, band, 1f)
         // Rotated −6°, the stamp's lowest corner sits sin(6°) × width / 2 below its box.
         val stampBottom = stamp.bottom + stamp.width * 0.5f * 0.1045f

@@ -102,15 +102,14 @@ private val SelectionSaver = listSaver<CodexSelection, Any>(
     restore = { CodexSelection(pinnedKey = (it[0] as String).ifEmpty { null }, sheetOpen = it[1] as Boolean) },
 )
 
-/** Grid cell size and gap (the board's matrix cells, sized up to carry each entry's glyph). */
-private val CodexCell = 64.dp
-private val CodexCellGap = 6.dp
-
 /**
- * Build-tab cells are larger: they carry a count badge in a band at the bottom (and often a NEW
- * stamp at the top), and the glyph between both bands must stay as large as a catalog glyph.
+ * Grid cell size and gap (the board's matrix cells, sized up to carry each entry's glyph), the
+ * same in the collection and the Build tab. A cell holds a band at its top for a NEW stamp (left)
+ * and a count badge (right) beside each other, and below it a glyph as large as a 64 dp cell's
+ * centered glyph, so neither mark ever covers the glyph or makes it smaller.
  */
-internal val CodexBuildCell = 80.dp
+internal val CodexCell = 82.dp
+private val CodexCellGap = 6.dp
 
 /**
  * Factor for Codex UI text at the player's text size [textScale]: the design's reference size at
@@ -256,10 +255,17 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
             Row(Modifier.padding(top = if (wide) 20.dp else 8.dp).weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 if (wide && tab == 1) {
                     // Left nav: section rows with counts, Search, the game's filters, rarity legend.
-                    Column(Modifier.width(navWidth).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    val navScroll = rememberScrollState()
+                    val navCounts = categoryTitles.indices.map { index -> categoryCounts(index).let { (found, total) -> "$found/$total" } }
+                    val density = LocalDensity.current.density
+                    // One title size for all section rows: the largest at which every title fits beside its count.
+                    val navTitleSize = remember(measurer, categoryTitles, navCounts, navWidth, density) {
+                        codexNavTitleSize(measurer, categoryTitles, navCounts, navWidth.value * density, density)
+                    }
+                    Box(Modifier.width(navWidth).fillMaxHeight()) {
+                    Column(Modifier.fillMaxSize().verticalScroll(navScroll).testTag("codex-nav"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         categoryTitles.forEachIndexed { index, title ->
-                            val (found, total) = categoryCounts(index)
-                            CodexNavRow(title, "$found/$total", category == index, "codex-category-$index", controlScale) { categoryValue = index }
+                            CodexNavRow(title, navCounts[index], navTitleSize, category == index, "codex-category-$index", controlScale) { categoryValue = index }
                         }
                         Spacer(Modifier.height(18.dp))
                         BasicText(language.text(SessionRedesignText.SEARCH).uppercase(), style = typography.labelStyle(13f * ui, color = Kk.Mute))
@@ -273,6 +279,9 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                             BasicText(language.text(SessionRedesignText.RARITY).uppercase(), style = typography.labelStyle(13f * ui, color = Kk.Mute))
                             CodexRarityLegend(catalog, model, ui)
                         }
+                    }
+                    // Where the nav is taller than the screen, its cut edge fades out beside a scroll bar.
+                    CodexScrollCue(navScroll, Kk.Ink, Kk.Bone, Modifier.matchParentSize().testTag("codex-nav-scroll-cue"))
                     }
                 }
                 Column(Modifier.weight(1f).fillMaxHeight()) {
@@ -295,9 +304,15 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                         Spacer(Modifier.height(if (compactHeader) 4.dp else 10.dp))
                     }
                     BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-                        // Cells grow with larger text, like the controls: their badges and stamps grow too.
-                        val cellSize = (if (tab == 0) CodexBuildCell else CodexCell) * max(1f, ui)
+                        // Cells grow with larger text, like the controls: their badges grow too.
+                        val cellSize = CodexCell * max(1f, ui)
                         val columns = max(1, ((maxWidth + CodexCellGap) / (cellSize + CodexCellGap)).toInt())
+                        // The Build tab's stat rows share one layout (value beside or under the name), like the stat panels.
+                        val statRows = build?.stats?.map { stat ->
+                            stat.name.localizedContent(language) to "${codexNumber(stat.value, language)}${stat.unit.localizedContent(language)}"
+                        }.orEmpty()
+                        val statsFit = rememberCodexPairFit(statRows, maxWidth - 12.dp - 28.dp, 12.dp, 16f * ui,
+                            typography.wideStyle(20f * ui, tabular = true)) { size -> typography.bodyStyle(size) }
                         scrollHolder.SaveableStateProvider(if (tab == 1) "$tab/$category" else "$tab") {
                             val grid = rememberLazyGridState()
                             var priorKeysValue by rememberSaveable { mutableStateOf<String?>(null) }
@@ -339,9 +354,9 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                                             CodexToggleButton(language.text(SessionRedesignText.STATS), statsExpandedValue, "codex-stats", controlScale) { statsExpandedValue = !statsExpandedValue }
                                         }
                                     }
-                                    if (statsExpandedValue) items(build.stats, key = { "stat/${it.name}" }, contentType = { CodexGridContentType.STAT }, span = { GridItemSpan(maxLineSpan) }) { stat ->
-                                        CodexStatRow(stat.name.localizedContent(language), "${codexNumber(stat.value, language)}${stat.unit.localizedContent(language)}",
-                                            statValue == stat.name, "codex-stat-${stat.name}", ui, { statValue = if (statValue == stat.name) null else stat.name }) {
+                                    if (statsExpandedValue) itemsIndexed(build.stats, key = { _, stat -> "stat/${stat.name}" }, contentType = { _, _ -> CodexGridContentType.STAT }, span = { _, _ -> GridItemSpan(maxLineSpan) }) { index, stat ->
+                                        val (name, value) = statRows[index]
+                                        CodexStatRow(name, value, statValue == stat.name, "codex-stat-${stat.name}", ui, statsFit, { statValue = if (statValue == stat.name) null else stat.name }) {
                                             stat.contributions.forEach { contribution ->
                                                 val name = when (contribution.source) {
                                                     BuildStatSource.CHARACTER -> language.text(SessionText.CHARACTER_SOURCE)
@@ -395,7 +410,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                                 variant = KkButtonVariant.GHOST, size = KkButtonSize.SM, textScale = ui)
                         }
                         detailsScrollHolder.SaveableStateProvider(selected.key) {
-                            CodexDetails(selected, catalog, ui, Modifier.fillMaxWidth().weight(1f), panel = Kk.Ink3)
+                            CodexDetails(selected, catalog, ui, Modifier.fillMaxWidth().weight(1f), panel = Kk.Ink3, face = Kk.Ink2)
                         }
                     }
                 }
@@ -429,17 +444,14 @@ private fun CodexSlot(
     val density = localDensity.density
     val newLabel = LocalAppLanguage.current.text(SessionText.NEW_DISCOVERY)
     val stampFont = codexNewStampFont(measurer)
-    val stamp = if (entry.isNew) remember(measurer, newLabel, density) { kkStampSize(measurer, newLabel, density, stampFont) } else null
+    // Every cell keeps the mark band, so all glyphs of the grid share one size and centre.
+    val stamp = remember(measurer, newLabel, density) { kkStampSize(measurer, newLabel, density, stampFont) }
     val badgeFont = codexBadgeFont(ui)
-    val badgeBand = if (badge != null) codexBadgeBand(with(localDensity) { badgeFont.sp.toPx() }, density) else 0f
-    // The badge plate's width (label plus 3 dp padding each side), for glyphs that sit beside it.
-    val badgeWidth = if (badge != null) remember(measurer, badge, density) {
-        measureKkText(measurer, badge, measurer.typography.monoStyle(CODEX_BADGE_FONT)).size.width + 6f * density
-    } else 0f
+    val markBand = codexMarkBand(stamp, stampFont, with(localDensity) { badgeFont.sp.toPx() }, density)
     Box(slotModifier(entry, selection, focus, interaction, onSelection).aspectRatio(1f).drawBehind {
         val gap = CodexCellGap.toPx()
         if (band) drawRect(roles.you.copy(alpha = 0.10f), Offset(-gap * 0.5f, -gap * 0.5f), Size(size.width + gap, size.height + gap))
-        drawCodexCell(entry, catalog, measurer, band, hoveredValue || focusedValue, codexNewBand(stamp, density), badgeBand, badgeWidth)
+        drawCodexCell(entry, catalog, measurer, band, hoveredValue || focusedValue, markBand)
         if (pinned) {
             // Selected: 3 dp ink gap and a 2 dp bone ring (box-shadow 0 0 0 3px ink, 0 0 0 5px bone).
             val inner = 1.5.dp.toPx()
@@ -451,12 +463,11 @@ private fun CodexSlot(
             drawRect(roles.you, Offset(-outer, -outer), Size(size.width + outer * 2f, size.height + outer * 2f), style = kkStroke(2.dp.toPx()))
         }
     }) {
-        // The discovery stamp sits in its own band at the top of the cell; the glyph moves below it.
-        if (stamp != null) Box(Modifier.align(Alignment.TopStart).offset(CodexNewInset, CodexNewInset)
+        // The discovery stamp and the count badge share the mark band above the glyph.
+        if (entry.isNew) Box(Modifier.align(Alignment.TopStart).offset(CodexMarkInset, CodexMarkInset)
             .size((stamp.width / density).dp, (stamp.height / density).dp).testTag("codex-new-${entry.key}")
             .drawBehind { drawKkStamp(measurer, newLabel, Offset.Zero, fontSize = stampFont) })
-        // The count badge keeps a band of its own at the bottom; the glyph sits above it.
-        if (badge != null) BasicText(badge, Modifier.align(Alignment.BottomEnd).padding(CodexBadgeInset).testTag("codex-badge-${entry.key}")
+        if (badge != null) BasicText(badge, Modifier.align(Alignment.TopEnd).padding(CodexMarkInset).testTag("codex-badge-${entry.key}")
             .background(Kk.Ink).padding(horizontal = 3.dp),
             style = measurer.typography.monoStyle(badgeFont, color = Kk.Bone), softWrap = false, maxLines = 1)
     }
@@ -470,32 +481,34 @@ private fun CodexEntry.cellBadge(): String? = when (val icon = icon) {
     else -> null
 }
 
-/** Inset of the NEW stamp from the cell's top-left corner. */
-private val CodexNewInset = 3.dp
+/** Inset of the NEW stamp (top-left) and of the count badge (top-right) from the cell's corners. */
+private val CodexMarkInset = 3.dp
 
-/** NEW stamp font: 10 px on screen whatever the text size (it must stay inside a 64 dp cell). */
+/** NEW stamp font: 10 px on screen whatever the text size (cells grow with the text instead). */
 internal fun codexNewStampFont(measurer: CanvasTextMeasurer): Float = 10f / measurer.scale.coerceAtLeast(0.1f)
-
-/** Height (px) of the band a NEW stamp of [stamp] size takes at the cell top (0 without a stamp). */
-internal fun codexNewBand(stamp: Size?, density: Float): Float =
-    if (stamp == null) 0f else CodexNewInset.value * density + stamp.height + 4f * density
-
-/** Inset of the count badge from the cell's bottom-right corner. */
-private val CodexBadgeInset = 3.dp
 
 /** Count badge font (sp) for the UI text factor [ui] (see [codexUiScale]): 9 at the default text size. */
 internal fun codexBadgeFont(ui: Float): Float = CODEX_BADGE_FONT * ui
 
 private const val CODEX_BADGE_FONT = 9f
 
-/**
- * Height (px) of the band a count badge with a [fontPx] mono label takes at the cell bottom: its
- * inset, its one-line box (mono line height 1.35 em) and a 2 dp gap above it.
- */
-internal fun codexBadgeBand(fontPx: Float, density: Float): Float =
-    CodexBadgeInset.value * density + fontPx * CODEX_BADGE_LINE_HEIGHT_EM + 2f * density
-
+/** Mono line height of the count badge's one-line box. */
 private const val CODEX_BADGE_LINE_HEIGHT_EM = 1.35f
+
+/** sin 6°: a stamp's rotation lowers one end of it by this much of its half width. */
+private const val CODEX_STAMP_TILT = 0.1045f
+
+/**
+ * Height (px) of the mark band at the top of every cell: a NEW stamp of [stamp] size (drawn at
+ * [stampFont], see [codexNewStampFont]) with its inset, its lowest rotated corner and its hard
+ * shadow, or a count badge with a [badgeFontPx] mono label, whichever reaches lower, and a 2 dp gap.
+ */
+internal fun codexMarkBand(stamp: Size, stampFont: Float, badgeFontPx: Float, density: Float): Float {
+    val inset = CodexMarkInset.value * density
+    val stampBottom = inset + stamp.height + stamp.width * 0.5f * CODEX_STAMP_TILT + 3f * density * stampFont / 17f
+    val badgeBottom = inset + badgeFontPx * CODEX_BADGE_LINE_HEIGHT_EM
+    return max(stampBottom, badgeBottom) + 2f * density
+}
 
 /** The glyph's stack ring, frame and faint halo reach this far out, as a multiple of its radius. */
 internal const val CODEX_GLYPH_REACH = 1.15f
@@ -504,32 +517,22 @@ internal const val CODEX_GLYPH_REACH = 1.15f
 internal data class CodexGlyph(val centerY: Float, val radius: Float, val centerX: Float)
 
 /**
- * Glyph circle of a cell of [cellPx]: centered, or fitted between a NEW band of [bandPx] at the
- * top and a count-badge band of [bottomBandPx] at the bottom, so neither the stamp (rotated corners
- * included) nor the badge covers the glyph or its stack ring. With both, the glyph may instead
- * take the column left of the badge (a plate [badgeWidthPx] wide) down to the cell's bottom
- * margin, when that leaves it larger.
+ * The glyph circle of every cell of a grid of [cellPx] cells: one size and centre for all of them,
+ * whether a cell carries a NEW stamp, a count badge, both or neither. It fills the cell below the
+ * [bandPx] mark band (see [codexMarkBand]) down to a 3 dp margin, centered across, and is never
+ * larger than a centered glyph (0.36 of the cell).
  */
-internal fun codexCellGlyph(cellPx: Float, bandPx: Float, density: Float, bottomBandPx: Float = 0f, badgeWidthPx: Float = 0f): CodexGlyph {
-    val radius = cellPx * 0.36f
-    if (bandPx <= 0f && bottomBandPx <= 0f) return CodexGlyph(cellPx * 0.5f, radius, cellPx * 0.5f)
+internal fun codexCellGlyph(cellPx: Float, bandPx: Float, density: Float): CodexGlyph {
     val margin = 3f * density
-    val top = max(bandPx, margin)
-    val bottom = cellPx - max(bottomBandPx, margin)
-    val centered = min(radius, (bottom - top) / (2f * CODEX_GLYPH_REACH))
-    if (bandPx > 0f && bottomBandPx > 0f && badgeWidthPx > 0f) {
-        val columnRight = cellPx - CodexBadgeInset.value * density - badgeWidthPx - 2f * density
-        val beside = min(radius, min(columnRight - margin, cellPx - margin - top) / (2f * CODEX_GLYPH_REACH))
-        if (beside > centered) return CodexGlyph((top + cellPx - margin) * 0.5f, beside, (margin + columnRight) * 0.5f)
-    }
-    return CodexGlyph((top + bottom) * 0.5f, centered, cellPx * 0.5f)
+    val reach = min(cellPx * 0.36f * CODEX_GLYPH_REACH, min(cellPx - margin - bandPx, cellPx - 2f * margin) * 0.5f).coerceAtLeast(0f)
+    return CodexGlyph((bandPx + cellPx - margin) * 0.5f, reach / CODEX_GLYPH_REACH, cellPx * 0.5f)
 }
 
 /** Cell face: rarity (items) or aspect (relics) color when discovered, hatch when not. */
 private fun DrawScope.drawCodexCell(entry: CodexEntry, catalog: UiCatalogSnapshot, measurer: CanvasTextMeasurer, band: Boolean, hovered: Boolean,
-    newBand: Float = 0f, badgeBand: Float = 0f, badgeWidth: Float = 0f) {
+    markBand: Float) {
     val rect = Rect(Offset.Zero, size)
-    val (centerY, radius, centerX) = codexCellGlyph(size.minDimension, newBand, density, badgeBand, badgeWidth)
+    val (centerY, radius, centerX) = codexCellGlyph(size.minDimension, markBand, density)
     val center = Offset(centerX, centerY)
     when (val icon = entry.icon) {
         is CodexIcon.Item -> {
@@ -689,14 +692,52 @@ internal fun codexFittingSize(text: String, maxPx: Int, maxSize: Float, minSize:
     return candidate.coerceAtLeast(minSize)
 }
 
+/** Height of the fade a scroll cue lays over the cut edge of a scrolling column. */
+private val CodexScrollFade = 32.dp
+
+/**
+ * Scroll cue over a scrolling column, present only while it can scroll: the content fades into
+ * [face] at each edge that has more, and a 3 dp bar ([accent] thumb on a 15 % track, like the
+ * reward cards' scrolling body) shows the visible part. [barEnd] is the bar's distance from the
+ * right edge (negative: outside it, in the gap beside the column).
+ */
 @Composable
-private fun CodexDetails(entry: CodexEntry?, catalog: UiCatalogSnapshot, ui: Float, modifier: Modifier, panel: Color = Kk.Ink2) {
+private fun CodexScrollCue(scroll: ScrollState, face: Color, accent: Color, modifier: Modifier, barEnd: Dp = (-10).dp) {
+    if (scroll.maxValue <= 0) return
+    Box(modifier.drawBehind {
+        // The range can shrink to zero (text size change) before recomposition removes the cue.
+        val max = scroll.maxValue
+        if (max <= 0) return@drawBehind
+        val fade = min(CodexScrollFade.toPx(), size.height * 0.25f)
+        if (scroll.canScrollForward) drawRect(Brush.verticalGradient(listOf(face.copy(alpha = 0f), face), startY = size.height - fade, endY = size.height),
+            Offset(0f, size.height - fade), Size(size.width, fade))
+        if (scroll.canScrollBackward) drawRect(Brush.verticalGradient(listOf(face, face.copy(alpha = 0f)), startY = 0f, endY = fade),
+            Offset.Zero, Size(size.width, fade))
+        val bar = 3.dp.toPx()
+        val left = size.width - barEnd.toPx() - bar
+        drawRect(accent.copy(alpha = 0.15f), Offset(left, 0f), Size(bar, size.height))
+        val thumb = (size.height * scroll.viewportSize / (scroll.viewportSize + max).toFloat()).coerceIn(min(12.dp.toPx(), size.height), size.height)
+        drawRect(accent, Offset(left, (size.height - thumb) * scroll.value.coerceIn(0, max) / max), Size(bar, thumb))
+    })
+}
+
+@Composable
+private fun CodexDetails(entry: CodexEntry?, catalog: UiCatalogSnapshot, ui: Float, modifier: Modifier, panel: Color = Kk.Ink2, face: Color = Kk.Ink1) {
+    val scroll = rememberScrollState()
+    Box(modifier) {
+        CodexDetailsBody(entry, catalog, ui, Modifier.fillMaxSize().testTag("codex-details-scroll").verticalScroll(scroll), panel)
+        // Content below the fold fades out over the panel beside a scroll bar, never cut bare.
+        CodexScrollCue(scroll, face, entry?.color ?: Kk.Bone, Modifier.matchParentSize().testTag("codex-details-scroll-cue"), barEnd = 6.dp)
+    }
+}
+
+@Composable
+private fun CodexDetailsBody(entry: CodexEntry?, catalog: UiCatalogSnapshot, ui: Float, modifier: Modifier, panel: Color) {
     val language = LocalAppLanguage.current
     val roles = LocalKkRolePalette.current
     val measurer = codexMeasurer()
     val typography = measurer.typography
-    val scroll = rememberScrollState()
-    Column(modifier.testTag("codex-details-scroll").verticalScroll(scroll).padding(horizontal = 16.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(modifier.padding(horizontal = 16.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (entry == null) {
             Box(Modifier.fillMaxWidth().height(120.dp).kkHatch())
         } else {
@@ -717,8 +758,17 @@ private fun CodexDetails(entry: CodexEntry?, catalog: UiCatalogSnapshot, ui: Flo
                     CodexTag(language.text(SessionRedesignText.MAX_STACKS, item.maxStacks), Color.Transparent, Kk.Bone, ui, line = true)
                     if (itemIcon.stack > 0) CodexTag(language.text(SessionText.STACK_QUANTITY, entry.quantity), roles.you, Kk.Ink, ui)
                 }
-                CodexStatPanel(item.primary.effect.displayLabel.localizedContent(language), codexModifierValue(item.primary, language), roles.you, ui, panel)
-                CodexStatPanel(item.secondary.effect.displayLabel.localizedContent(language), codexModifierValue(item.secondary, language), Kk.Bone, ui, panel)
+                val stats = listOf(item.primary to roles.you, item.secondary to Kk.Bone).map { (stat, color) ->
+                    Triple(stat.effect.displayLabel.localizedContent(language), codexModifierValue(stat, language), color)
+                }
+                // Both panels share one layout: the value beside the label, or under it where a word would not fit beside it.
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val fit = rememberCodexPairFit(stats.map { it.first to it.second }, maxWidth - 28.dp, 12.dp, 16f * ui,
+                        typography.wideStyle(22f * ui, tabular = true)) { size -> typography.bodyStyle(size) }
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        stats.forEach { (label, value, color) -> CodexStatPanel(label, value, color, ui, panel, fit) }
+                    }
+                }
             } else {
                 if (!entry.discovered && entry.description.isBlank()) {
                     Box(Modifier.fillMaxWidth().height(120.dp).background(panel).kkHatch(), contentAlignment = Alignment.Center) {
@@ -764,14 +814,63 @@ private fun CodexDetailTitle(title: String, color: Color, ui: Float) {
         Modifier.testTag("codex-detail-title"))
 }
 
-/** Stat panel (`.panel`): effect label left (body), value right (wide, tabular). */
+/**
+ * Stat panel (`.panel`): effect label left (body), value right (wide, tabular); with [fit] stacked,
+ * the value sits right-aligned under the label so no word of the label is broken.
+ */
 @Composable
-private fun CodexStatPanel(label: String, value: String, valueColor: Color, ui: Float, panel: Color) {
+private fun CodexStatPanel(label: String, value: String, valueColor: Color, ui: Float, panel: Color, fit: CodexPairFit) {
     val typography = codexMeasurer().typography
-    Row(Modifier.fillMaxWidth().background(panel).padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
+    val labelStyle = typography.bodyStyle(fit.labelSize, color = Kk.Bone)
+    val valueStyle = typography.wideStyle(22f * ui, tabular = true, color = valueColor)
+    if (fit.stacked) Column(Modifier.fillMaxWidth().background(panel).padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        BasicText(label, style = labelStyle)
+        BasicText(value, Modifier.align(Alignment.End), style = valueStyle)
+    } else Row(Modifier.fillMaxWidth().background(panel).padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        BasicText(label, Modifier.weight(1f), style = typography.bodyStyle(16f * ui, color = Kk.Bone))
-        BasicText(value, style = typography.wideStyle(22f * ui, tabular = true, color = valueColor))
+        BasicText(label, Modifier.weight(1f), style = labelStyle)
+        BasicText(value, style = valueStyle)
+    }
+}
+
+/** How the label/value rows of one list lay out: each value [stacked] under its label or beside it, labels at [labelSize]. */
+internal data class CodexPairFit(val stacked: Boolean, val labelSize: Float)
+
+/**
+ * The layout the label/value [rows] of one list share, in rows [widthPx] wide (content) with a
+ * [gapPx] gap before the value: the value stays beside its label while every label's longest word
+ * fits next to that label's value; otherwise every row puts its value under the label, and only a
+ * word still wider than the row shrinks the labels (together, from [labelSize] toward
+ * [minLabelSize]). Words are never broken, and all labels of the list keep one size.
+ */
+internal fun codexPairFit(
+    rows: List<Pair<String, String>>,
+    widthPx: Float,
+    gapPx: Float,
+    labelSize: Float,
+    minLabelSize: Float,
+    wordWidth: (String, Float) -> Float,
+    valueWidth: (String) -> Float,
+): CodexPairFit {
+    fun longestWord(label: String) = label.split(' ').filter { it.isNotEmpty() }.maxOfOrNull { wordWidth(it, labelSize) } ?: 0f
+    if (rows.all { (label, value) -> longestWord(label) + gapPx + valueWidth(value) <= widthPx }) return CodexPairFit(false, labelSize)
+    val size = codexFittingSize(rows.joinToString(" ") { it.first }, widthPx.toInt(), labelSize, minLabelSize) { word, candidate ->
+        kotlin.math.ceil(wordWidth(word, candidate)).toInt()
+    }
+    return CodexPairFit(true, size)
+}
+
+/** [codexPairFit] for [rows] [width] wide, measured with the real fonts: labels in [labelStyle] from [labelSize], values in [valueStyle]. */
+@Composable
+private fun rememberCodexPairFit(rows: List<Pair<String, String>>, width: Dp, gap: Dp, labelSize: Float, valueStyle: TextStyle,
+    labelStyle: (Float) -> TextStyle): CodexPairFit {
+    val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer(16)
+    val density = LocalDensity.current
+    return remember(rows, width, gap, labelSize, valueStyle, density, textMeasurer) {
+        codexPairFit(rows, with(density) { width.toPx() }, with(density) { gap.toPx() }, labelSize, labelSize * 0.6f,
+            { word, size -> textMeasurer.measure(word, labelStyle(size), softWrap = false).size.width.toFloat() },
+            { value -> textMeasurer.measure(value, valueStyle, softWrap = false).size.width.toFloat() })
     }
 }
 
@@ -920,9 +1019,37 @@ private fun codexFiltersWidth(labels: List<String>): Dp {
     }
 }
 
-/** Section row (`.lrow`) with a mono count, as a tab of the collection. */
+/** Title size (px at the design size, before the text-size factor) of the collection's section rows. */
+private const val CODEX_NAV_TITLE = 24f
+private const val CODEX_NAV_TITLE_MIN = 12f
+
+/**
+ * One title size for the collection's section rows: the largest (0.5 px steps from 24 down to 12)
+ * at which every title of [titles] fits its row beside its count of [counts], laid out as
+ * [drawKkListRow] does in a row [rowPx] wide (18 dp padding each side, a 14 dp gap before the count).
+ * The titles shrink together, so the rows keep one size and none is cut.
+ */
+internal fun codexNavTitleSize(measurer: CanvasTextMeasurer, titles: List<String>, counts: List<String>, rowPx: Float, density: Float): Float {
+    val available = titles.indices.map { index ->
+        rowPx - 36f * density - measureKkText(measurer, counts[index], measurer.typography.monoStyle(), uppercase = true).size.width - 14f * density
+    }
+    fun fits(size: Float) = titles.indices.all { index ->
+        measureKkText(measurer, titles[index], measurer.typography.condStyle(size), uppercase = true).size.width <= available[index]
+    }
+    var size = CODEX_NAV_TITLE
+    while (size > CODEX_NAV_TITLE_MIN && !fits(size)) size -= 0.5f
+    return size
+}
+
+/**
+ * Section row height (dp) for the [controlScale]: 46 dp at the design size, growing more slowly
+ * than the text so the whole nav (rows, search, filters, legend) fits a 810 dp tall window at 175 %.
+ */
+internal fun codexNavRowHeight(controlScale: Float): Float = 46f + 16f * (controlScale - 1f)
+
+/** Section row (`.lrow`) with a mono count, as a tab of the collection, its title at the shared [titleSize]. */
 @Composable
-private fun CodexNavRow(text: String, count: String, selected: Boolean, tag: String, controlScale: Float, onClick: () -> Unit) {
+private fun CodexNavRow(text: String, count: String, titleSize: Float, selected: Boolean, tag: String, controlScale: Float, onClick: () -> Unit) {
     val measurer = codexMeasurer()
     val inputEnabled = LocalCodexInputEnabled.current
     val interactions = remember { MutableInteractionSource() }
@@ -932,9 +1059,9 @@ private fun CodexNavRow(text: String, count: String, selected: Boolean, tag: Str
     Box(Modifier.testTag(tag).semantics { this.selected = selected; this.text = AnnotatedString(text) }
         .hoverable(interactions, enabled = inputEnabled)
         .clickable(enabled = inputEnabled, role = Role.Tab, interactionSource = interactions, indication = null, onClick = onClick)
-        .fillMaxWidth().height((46f * controlScale).dp)
+        .fillMaxWidth().height(codexNavRowHeight(controlScale).dp)
         .drawBehind {
-            drawKkListRow(measurer, Rect(Offset.Zero, size), text, count, selection, hovered || focused, titleSize = 24f)
+            drawKkListRow(measurer, Rect(Offset.Zero, size), text, count, selection, hovered || focused, titleSize = titleSize)
             if (focused) {
                 // Around the drawn slab, which a selected row shifts left.
                 val ring = codexNavFocusRing(size, selection, density)
@@ -1008,21 +1135,28 @@ private fun CodexToggleButton(text: String, selected: Boolean, tag: String, cont
         })
 }
 
+/** A Build-tab stat row: name left, value right, or the value under the name when [fit] is stacked. */
 @Composable
-private fun CodexStatRow(name: String, value: String, selected: Boolean, tag: String, ui: Float, onClick: () -> Unit, contributions: @Composable () -> Unit) {
+private fun CodexStatRow(name: String, value: String, selected: Boolean, tag: String, ui: Float, fit: CodexPairFit, onClick: () -> Unit, contributions: @Composable () -> Unit) {
     val typography = codexMeasurer().typography
     val inputEnabled = LocalCodexInputEnabled.current
     val interactions = remember { MutableInteractionSource() }
     val hovered by interactions.collectIsHoveredAsState()
     val focused by interactions.collectIsFocusedAsState()
     Column(Modifier.fillMaxWidth().background(if (selected) Kk.Ink3 else Kk.Ink2)) {
-        Row(Modifier.fillMaxWidth().testTag(tag).semantics { this.selected = selected }
+        val row = Modifier.fillMaxWidth().testTag(tag).semantics { this.selected = selected }
             .hoverable(interactions, enabled = inputEnabled)
             .clickable(enabled = inputEnabled, interactionSource = interactions, indication = null, role = Role.Button, onClick = onClick)
             .drawBehind { if (hovered || focused) drawRect(Kk.Bone.copy(alpha = 0.06f)) }
-            .padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            BasicText(name, Modifier.weight(1f), style = typography.bodyStyle(16f * ui, color = Kk.Bone))
-            BasicText(value, style = typography.wideStyle(20f * ui, tabular = true, color = Kk.Bone))
+            .padding(horizontal = 14.dp, vertical = 10.dp)
+        val nameStyle = typography.bodyStyle(fit.labelSize, color = Kk.Bone)
+        val valueStyle = typography.wideStyle(20f * ui, tabular = true, color = Kk.Bone)
+        if (fit.stacked) Column(row, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            BasicText(name, style = nameStyle)
+            BasicText(value, Modifier.align(Alignment.End), style = valueStyle)
+        } else Row(row, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            BasicText(name, Modifier.weight(1f), style = nameStyle)
+            BasicText(value, style = valueStyle)
         }
         if (selected) Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) { contributions() }
     }
