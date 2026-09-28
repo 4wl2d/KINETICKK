@@ -39,6 +39,7 @@ import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
 import kinetickk.resource.audio.api.ToneRequest
+import kotlin.time.Duration.Companion.minutes
 import org.jetbrains.skia.Image
 import kinetickk.foundation.dispatch.call
 import java.io.File
@@ -159,7 +160,8 @@ class SettingsNavigationComposeTest {
 
     private fun exerciseSettingsNavigation(width: Int, height: Int, onlySettings: Boolean = false) {
         enableKinetickkComposeRuntimeOptimizations()
-        runComposeUiTest {
+        // Walks every screen and page; slow CI runners need far longer than the 60 s default.
+        runComposeUiTest(testTimeout = 10.minutes) {
             // Home and Armory animate continuously; advance only the frames needed by each action.
             mainClock.autoAdvance = false
             val catalog = createContentCatalog()
