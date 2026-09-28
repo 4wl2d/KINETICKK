@@ -46,6 +46,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.ball.gameplay.api.BuildStatSource
@@ -105,12 +106,26 @@ private val SelectionSaver = listSaver<CodexSelection, Any>(
 private val CodexCell = 64.dp
 private val CodexCellGap = 6.dp
 
+/**
+ * Build-tab cells are larger: they carry a count badge in a band at the bottom (and often a NEW
+ * stamp at the top), and the glyph between both bands must stay as large as a catalog glyph.
+ */
+internal val CodexBuildCell = 80.dp
+
+/**
+ * Factor for Codex UI text at the player's text size [textScale]: the design's reference size at
+ * the default 125 % (0.8 at 100 %, 1.4 at 175 %). The Codex title is display type and ignores it.
+ */
+internal fun codexUiScale(textScale: Float): Float = textScale / 1.25f
+
 /** All navigation, search, expansion and selection here belong to this local Compose lifetime. */
 @Composable
 internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, progress: HomeProgressProjection, scale: Float, onEntryViewed: (CollectionEntry) -> Unit = {}, onClose: () -> Unit) {
     val language = LocalAppLanguage.current
     val roles = LocalKkRolePalette.current
-    val measurer = rememberKkCanvasMeasurer(scale)
+    // UI text follows the text size with the design size at the default 125 %.
+    val ui = codexUiScale(scale)
+    val measurer = rememberKkCanvasMeasurer(ui)
     val typography = measurer.typography
     var tabValue by rememberSaveable { mutableIntStateOf(if (model.runStacks.build == null) 1 else 0) }
     var categoryValue by rememberSaveable { mutableIntStateOf(0) }
@@ -135,32 +150,9 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
     val category = categoryValue
     val search = searchValue
     val entries = when (tab) {
-        0 -> if (build == null) emptyList() else buildList {
-            build.character?.let { add(codexShapeEntry(catalog.coreShape(it), model, progress, language)) }
-            build.weapon?.let { add(codexWeaponEntry(catalog.weapon(it), model, progress, language)) }
-            repeat(catalog.relicPolicy.maxSlots) { index ->
-                val relic = build.relics.getOrNull(index)
-                add(if (relic != null) codexRelicEntry(catalog.relic(relic.id), model, catalog, language) else CodexEntry(
-                    "empty-relic/$index", language.text(SessionText.EMPTY_RELIC_SLOT, index + 1), "", language.text(SessionText.RELIC_SLOT), CODEX_NONE,
-                    listOf(codexStatus(language, language.text(SessionText.EMPTY))), CodexIcon.Empty, Kk.Mute, help = language.text(SessionText.EMPTY_RELIC_HELP),
-                ))
-            }
-            addAll(model.items.filter { model.itemStack(it.id) > 0 }.map { codexItemEntry(it, model, language) })
-        }
+        0 -> codexBuildEntries(model, catalog, progress, language)
         1 -> codexCatalogEntries(category, search, filter, model, catalog, progress, language)
-        else -> catalog.synergies.filter { codexSynergyDiscovered(it, model, catalog) }.map { synergy ->
-            val owned = model.discoveredRelicIds + build?.relics?.map { it.id }.orEmpty()
-            val components = codexSynergyComponents(synergy, catalog, owned)
-            val summary = build?.synergies?.firstOrNull { it.id == synergy.id.name }
-            val active = summary?.active == true
-            val required = synergy.requiredAspect?.let { language.text(SessionText.SYNERGY_REQUIREMENT, it.displayLabel.localizedContent(language)) }
-                ?: synergy.requiredRelics.joinToString(" + ") { catalog.relic(it).name.localizedContent(language) }
-            CodexEntry("synergy/${synergy.id}", synergy.name.localizedContent(language), "${synergy.description.localizedContent(language)}\n\n${language.text(SessionText.REQUIRES, required)}" +
-                (summary?.missingComponents?.takeIf { it.isNotEmpty() }?.let { missing -> "\n" + language.text(SessionText.MISSING, missing.joinToString { it.localizedContent(language) }) } ?: ""),
-                synergy.requiredAspect?.displayLabel?.localizedContent(language) ?: language.text(SessionText.COMBINATION), CODEX_NONE,
-                listOf(codexStatus(language, language.text(if (active) SessionText.ACTIVE else if (build == null) SessionText.NO_RUN_INACTIVE else SessionText.INACTIVE))),
-                CodexIcon.Synergy(components), synergy.requiredAspect?.let(::relicAspectColor) ?: Kk.Bone, active = active)
-        }
+        else -> catalog.synergies.filter { codexSynergyDiscovered(it, model, catalog) }.map { codexSynergyEntry(it, model, catalog, language) }
     }
     LaunchedEffect(selectionValue.pinnedKey, selectionValue.sheetOpen) {
         val entry = entries.firstOrNull { it.key == selectionValue.pinnedKey }
@@ -217,7 +209,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
         val detailWidth = if (wide) min(332f, availableWidth.value * 0.3f).dp else 0.dp
         val navWidth = if (wide && tab == 1) min(250f, availableWidth.value * 0.22f).dp else 0.dp
         // Controls grow with the text size, less so where height is scarce.
-        val controlScale = max(1f, scale / 1.25f).let { if (compactHeader) min(it, 1.2f) else it }
+        val controlScale = max(1f, ui).let { if (compactHeader) min(it, 1.2f) else it }
         // Background: 48 dp grid and, on wide screens, the sheared ink-1 detail panel.
         Box(Modifier.fillMaxSize().drawBehind {
             drawKkGrid(Rect(Offset.Zero, size), Kk.Bone.copy(alpha = 0.045f), 48f)
@@ -241,20 +233,23 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
             // Header: Back, title, the game's three tabs, collection count chip.
             Row(Modifier.fillMaxWidth().heightIn(min = if (wide) 60.dp else 48.dp), verticalAlignment = Alignment.CenterVertically) {
                 KkButton(language.text(SessionRedesignText.BACK), onClick = onClose, modifier = Modifier.testTag("codex-close"),
-                    variant = KkButtonVariant.GHOST, size = KkButtonSize.SM, enabled = !sheetVisible, textScale = min(scale, 1.25f))
+                    variant = KkButtonVariant.GHOST, size = KkButtonSize.SM, enabled = !sheetVisible, textScale = ui)
                 Spacer(Modifier.width(14.dp))
                 if (!compactHeader) {
                     Box(Modifier.width(1.dp).height(28.dp).background(Kk.Line2))
                     Spacer(Modifier.width(14.dp))
-                    BasicText(language.text(SessionText.CODEX).uppercase(), if (wide) Modifier else Modifier.weight(1f),
-                        style = typography.condStyle(if (wide) 44f else if (availableWidth < 600.dp) 26f else 32f, color = Kk.Bone), softWrap = false, maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    val titleSize = if (wide) 44f else if (availableWidth < 600.dp) 26f else 32f
+                    if (wide) BasicText(language.text(SessionText.CODEX).uppercase(), style = typography.condStyle(titleSize, color = Kk.Bone), softWrap = false, maxLines = 1)
+                    // Phones: larger text grows the controls around the title, so it shrinks to fit whole.
+                    else Box(Modifier.weight(1f)) {
+                        CodexFitText(language.text(SessionText.CODEX), { size -> typography.condStyle(size, color = Kk.Bone) }, titleSize, 14f)
+                    }
                     Spacer(Modifier.width(if (wide) 22.dp else 8.dp))
                 }
                 if (compactHeader || wide) CodexNavigationTabs(tab, controlScale, Modifier.weight(1f)) { tabValue = it }
                 if (tab == 2) KkInfoButton(language.text(SessionText.SYNERGY_HELP), Modifier.padding(horizontal = 8.dp),
-                    placement = KkTooltipPlacement.BELOW, textScale = min(scale, 1.25f))
-                if (tab == 1) CodexChip("$collectionDiscovered/$collectionTotal", language.text(SessionText.COLLECTION_PROGRESS, collectionDiscovered, collectionTotal),
+                    placement = KkTooltipPlacement.BELOW, textScale = ui)
+                if (tab == 1) CodexChip("$collectionDiscovered/$collectionTotal", language.text(SessionText.COLLECTION_PROGRESS, collectionDiscovered, collectionTotal), ui,
                     Modifier.padding(start = 8.dp).testTag("codex-collection-progress"))
             }
             if (!compactHeader && !wide) CodexNavigationTabs(tab, controlScale, Modifier.fillMaxWidth().padding(top = 8.dp)) { tabValue = it }
@@ -267,16 +262,16 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                             CodexNavRow(title, "$found/$total", category == index, "codex-category-$index", controlScale) { categoryValue = index }
                         }
                         Spacer(Modifier.height(18.dp))
-                        BasicText(language.text(SessionRedesignText.SEARCH).uppercase(), style = typography.labelStyle(13f * min(scale, 1.4f), color = Kk.Mute))
+                        BasicText(language.text(SessionRedesignText.SEARCH).uppercase(), style = typography.labelStyle(13f * ui, color = Kk.Mute))
                         Spacer(Modifier.height(4.dp))
-                        CodexSearchField(search, !sheetVisible, scale, inlineLabel = false, searchFocus) { searchValue = codexSearchInput(it) }
+                        CodexSearchField(search, !sheetVisible, ui, inlineLabel = false, searchFocus) { searchValue = codexSearchInput(it) }
                         if (category == 0) {
                             Spacer(Modifier.height(10.dp))
                             CodexFilters(filterTitles, filter, build != null, controlScale)
                                 { filterValue = it }
                             Spacer(Modifier.height(18.dp))
-                            BasicText(language.text(SessionRedesignText.RARITY).uppercase(), style = typography.labelStyle(13f * min(scale, 1.4f), color = Kk.Mute))
-                            CodexRarityLegend(catalog, model, scale)
+                            BasicText(language.text(SessionRedesignText.RARITY).uppercase(), style = typography.labelStyle(13f * ui, color = Kk.Mute))
+                            CodexRarityLegend(catalog, model, ui)
                         }
                     }
                 }
@@ -292,7 +287,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                                 }
                             }) { categoryValue = it }
                         Spacer(Modifier.height(if (compactHeader) 4.dp else 8.dp))
-                        CodexSearchField(search, !sheetVisible, scale, inlineLabel = true, searchFocus, dense = compactHeader) { searchValue = codexSearchInput(it) }
+                        CodexSearchField(search, !sheetVisible, ui, inlineLabel = true, searchFocus, dense = compactHeader) { searchValue = codexSearchInput(it) }
                         if (category == 0 && !compactHeader) {
                             Spacer(Modifier.height(8.dp))
                             CodexFilters(filterTitles, filter, build != null, controlScale) { filterValue = it }
@@ -300,7 +295,9 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                         Spacer(Modifier.height(if (compactHeader) 4.dp else 10.dp))
                     }
                     BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-                        val columns = max(1, ((maxWidth + CodexCellGap) / (CodexCell + CodexCellGap)).toInt())
+                        // Cells grow with larger text, like the controls: their badges and stamps grow too.
+                        val cellSize = (if (tab == 0) CodexBuildCell else CodexCell) * max(1f, ui)
+                        val columns = max(1, ((maxWidth + CodexCellGap) / (cellSize + CodexCellGap)).toInt())
                         scrollHolder.SaveableStateProvider(if (tab == 1) "$tab/$category" else "$tab") {
                             val grid = rememberLazyGridState()
                             var priorKeysValue by rememberSaveable { mutableStateOf<String?>(null) }
@@ -314,20 +311,20 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                             LazyVerticalGrid(GridCells.Fixed(columns), Modifier.fillMaxSize().focusRequester(listFocus).focusable(enabled = !sheetVisible).testTag("codex-grid"),
                                 state = grid, horizontalArrangement = Arrangement.spacedBy(CodexCellGap), verticalArrangement = Arrangement.spacedBy(CodexCellGap), contentPadding = PaddingValues(top = 6.dp, bottom = 16.dp, start = 6.dp, end = 6.dp)) {
                                 if (emptyState != CodexEmptyState.NONE) item(key = "empty", contentType = CodexGridContentType.NOTICE, span = { GridItemSpan(maxLineSpan) }) {
-                                    EmptyNotice(emptyState, scale)
+                                    EmptyNotice(emptyState, ui)
                                 }
                                 if (tab == 0 && build != null) {
                                     fun section(key: String, title: String, sectionEntries: List<CodexEntry>, value: String? = null) {
                                         item(key = "heading/$key", contentType = CodexGridContentType.HEADING, span = { GridItemSpan(maxLineSpan) }) {
                                             // Label and value are separate texts (no separator glyph between them).
                                             Row(Modifier.padding(top = 12.dp, bottom = 2.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                                val headingStyle = typography.labelStyle(14f * min(scale, 1.4f), color = Kk.Mute)
+                                                val headingStyle = typography.labelStyle(14f * ui, color = Kk.Mute)
                                                 BasicText(title.uppercase(), style = headingStyle)
                                                 value?.let { BasicText(it.uppercase(), style = headingStyle) }
                                             }
                                         }
                                         items(sectionEntries, key = { it.key }, contentType = { CodexGridContentType.SLOT }) { entry ->
-                                            CodexSlot(entry, catalog, scale, selectionValue, slotFocus, band = false, { selectionValue = it(selectionValue) })
+                                            CodexSlot(entry, catalog, ui, selectionValue, slotFocus, band = false, { selectionValue = it(selectionValue) })
                                         }
                                     }
                                     section("character", language.text(SessionText.CHARACTER), entries.filter { it.icon is CodexIcon.Shape })
@@ -336,7 +333,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                                     section("relics", language.text(SessionText.RELICS_TITLE), entries.filter { it.icon is CodexIcon.Relic || it.icon == CodexIcon.Empty },
                                         "${build.relics.size}/${catalog.relicPolicy.maxSlots}")
                                     section("items", language.text(SessionText.ITEMS), entries.filter { it.icon is CodexIcon.Item })
-                                    if (entries.none { it.icon is CodexIcon.Item }) item(key = "empty-inventory", contentType = CodexGridContentType.NOTICE, span = { GridItemSpan(maxLineSpan) }) { EmptyNotice(CodexEmptyState.EMPTY_INVENTORY, scale) }
+                                    if (entries.none { it.icon is CodexIcon.Item }) item(key = "empty-inventory", contentType = CodexGridContentType.NOTICE, span = { GridItemSpan(maxLineSpan) }) { EmptyNotice(CodexEmptyState.EMPTY_INVENTORY, ui) }
                                     item(key = "stats-heading", contentType = CodexGridContentType.HEADING, span = { GridItemSpan(maxLineSpan) }) {
                                         Box(Modifier.padding(top = 12.dp)) {
                                             CodexToggleButton(language.text(SessionRedesignText.STATS), statsExpandedValue, "codex-stats", controlScale) { statsExpandedValue = !statsExpandedValue }
@@ -344,7 +341,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                                     }
                                     if (statsExpandedValue) items(build.stats, key = { "stat/${it.name}" }, contentType = { CodexGridContentType.STAT }, span = { GridItemSpan(maxLineSpan) }) { stat ->
                                         CodexStatRow(stat.name.localizedContent(language), "${codexNumber(stat.value, language)}${stat.unit.localizedContent(language)}",
-                                            statValue == stat.name, "codex-stat-${stat.name}", scale, { statValue = if (statValue == stat.name) null else stat.name }) {
+                                            statValue == stat.name, "codex-stat-${stat.name}", ui, { statValue = if (statValue == stat.name) null else stat.name }) {
                                             stat.contributions.forEach { contribution ->
                                                 val name = when (contribution.source) {
                                                     BuildStatSource.CHARACTER -> language.text(SessionText.CHARACTER_SOURCE)
@@ -356,17 +353,17 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                                                     BuildStatSource.TEMPORARY -> language.text(SessionText.TEMPORARY_SOURCE)
                                                 }
                                                 BasicText("$name  ${codexNumber(contribution.amount, language)}${stat.unit.localizedContent(language)}",
-                                                    style = typography.monoStyle(11f * scale, color = Kk.Bone2))
+                                                    style = typography.monoStyle(11f * ui, color = Kk.Bone2))
                                             }
                                         }
                                     }
                                 } else if (tab == 2) {
                                     items(entries, key = { it.key }, contentType = { CodexGridContentType.SYNERGY }, span = { GridItemSpan(maxLineSpan) }) { entry ->
-                                        SynergySlot(entry, catalog, model, scale, selectionValue, slotFocus) { selectionValue = it(selectionValue) }
+                                        SynergySlot(entry, catalog, model, ui, selectionValue, slotFocus) { selectionValue = it(selectionValue) }
                                     }
                                 } else itemsIndexed(entries, key = { _, entry -> entry.key }, contentType = { _, _ -> CodexGridContentType.SLOT }) { index, entry ->
                                     val band = previewIndex >= 0 && (index / columns == previewIndex / columns || index % columns == previewIndex % columns)
-                                    CodexSlot(entry, catalog, scale, selectionValue, slotFocus, band) { selectionValue = it(selectionValue) }
+                                    CodexSlot(entry, catalog, ui, selectionValue, slotFocus, band) { selectionValue = it(selectionValue) }
                                 }
                             }
                         }
@@ -374,7 +371,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                 }
                 if (wide) Box(Modifier.width(detailWidth).fillMaxHeight().testTag("codex-side-panel")) {
                     detailsScrollHolder.SaveableStateProvider(selectionValue.previewKey ?: "placeholder") {
-                        CodexDetails(entries.firstOrNull { it.key == selectionValue.previewKey }, catalog, scale, Modifier.fillMaxSize())
+                        CodexDetails(entries.firstOrNull { it.key == selectionValue.previewKey }, catalog, ui, Modifier.fillMaxSize())
                     }
                 }
             }
@@ -395,10 +392,10 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                         .pointerInput(Unit) { detectTapGestures { } }) {
                         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), horizontalArrangement = Arrangement.End) {
                             KkButton(language.text(SessionRedesignText.CLOSE), onClick = restoreFocus, modifier = Modifier.testTag("codex-sheet-close"),
-                                variant = KkButtonVariant.GHOST, size = KkButtonSize.SM, textScale = min(scale, 1.25f))
+                                variant = KkButtonVariant.GHOST, size = KkButtonSize.SM, textScale = ui)
                         }
                         detailsScrollHolder.SaveableStateProvider(selected.key) {
-                            CodexDetails(selected, catalog, scale, Modifier.fillMaxWidth().weight(1f), panel = Kk.Ink3)
+                            CodexDetails(selected, catalog, ui, Modifier.fillMaxWidth().weight(1f), panel = Kk.Ink3)
                         }
                     }
                 }
@@ -414,7 +411,7 @@ private fun codexMeasurer(): CanvasTextMeasurer = LocalCodexMeasurer.current ?: 
 private fun CodexSlot(
     entry: CodexEntry,
     catalog: UiCatalogSnapshot,
-    scale: Float,
+    ui: Float,
     selection: CodexSelection,
     focus: MutableMap<String, FocusRequester>,
     band: Boolean,
@@ -428,14 +425,21 @@ private fun CodexSlot(
     val pinned = selection.pinnedKey == entry.key
     val previewed = selection.previewKey == entry.key
     val badge = entry.cellBadge()
-    val density = LocalDensity.current.density
+    val localDensity = LocalDensity.current
+    val density = localDensity.density
     val newLabel = LocalAppLanguage.current.text(SessionText.NEW_DISCOVERY)
     val stampFont = codexNewStampFont(measurer)
     val stamp = if (entry.isNew) remember(measurer, newLabel, density) { kkStampSize(measurer, newLabel, density, stampFont) } else null
+    val badgeFont = codexBadgeFont(ui)
+    val badgeBand = if (badge != null) codexBadgeBand(with(localDensity) { badgeFont.sp.toPx() }, density) else 0f
+    // The badge plate's width (label plus 3 dp padding each side), for glyphs that sit beside it.
+    val badgeWidth = if (badge != null) remember(measurer, badge, density) {
+        measureKkText(measurer, badge, measurer.typography.monoStyle(CODEX_BADGE_FONT)).size.width + 6f * density
+    } else 0f
     Box(slotModifier(entry, selection, focus, interaction, onSelection).aspectRatio(1f).drawBehind {
         val gap = CodexCellGap.toPx()
         if (band) drawRect(roles.you.copy(alpha = 0.10f), Offset(-gap * 0.5f, -gap * 0.5f), Size(size.width + gap, size.height + gap))
-        drawCodexCell(entry, catalog, measurer, band, hoveredValue || focusedValue, codexNewBand(stamp, density))
+        drawCodexCell(entry, catalog, measurer, band, hoveredValue || focusedValue, codexNewBand(stamp, density), badgeBand, badgeWidth)
         if (pinned) {
             // Selected: 3 dp ink gap and a 2 dp bone ring (box-shadow 0 0 0 3px ink, 0 0 0 5px bone).
             val inner = 1.5.dp.toPx()
@@ -451,8 +455,10 @@ private fun CodexSlot(
         if (stamp != null) Box(Modifier.align(Alignment.TopStart).offset(CodexNewInset, CodexNewInset)
             .size((stamp.width / density).dp, (stamp.height / density).dp).testTag("codex-new-${entry.key}")
             .drawBehind { drawKkStamp(measurer, newLabel, Offset.Zero, fontSize = stampFont) })
-        if (badge != null) BasicText(badge, Modifier.align(Alignment.BottomEnd).padding(3.dp).background(Kk.Ink).padding(horizontal = 3.dp),
-            style = measurer.typography.monoStyle(9f * min(scale, 1.4f), color = Kk.Bone))
+        // The count badge keeps a band of its own at the bottom; the glyph sits above it.
+        if (badge != null) BasicText(badge, Modifier.align(Alignment.BottomEnd).padding(CodexBadgeInset).testTag("codex-badge-${entry.key}")
+            .background(Kk.Ink).padding(horizontal = 3.dp),
+            style = measurer.typography.monoStyle(badgeFont, color = Kk.Bone), softWrap = false, maxLines = 1)
     }
 }
 
@@ -474,24 +480,57 @@ internal fun codexNewStampFont(measurer: CanvasTextMeasurer): Float = 10f / meas
 internal fun codexNewBand(stamp: Size?, density: Float): Float =
     if (stamp == null) 0f else CodexNewInset.value * density + stamp.height + 4f * density
 
+/** Inset of the count badge from the cell's bottom-right corner. */
+private val CodexBadgeInset = 3.dp
+
+/** Count badge font (sp) for the UI text factor [ui] (see [codexUiScale]): 9 at the default text size. */
+internal fun codexBadgeFont(ui: Float): Float = CODEX_BADGE_FONT * ui
+
+private const val CODEX_BADGE_FONT = 9f
+
 /**
- * Glyph circle of a cell of [cellPx] (center y and radius, px): centered, or below a NEW band of
- * [bandPx] so the stamp never covers the glyph (rotated corners included).
+ * Height (px) of the band a count badge with a [fontPx] mono label takes at the cell bottom: its
+ * inset, its one-line box (mono line height 1.35 em) and a 2 dp gap above it.
  */
-internal fun codexCellGlyph(cellPx: Float, bandPx: Float, density: Float): Pair<Float, Float> {
+internal fun codexBadgeBand(fontPx: Float, density: Float): Float =
+    CodexBadgeInset.value * density + fontPx * CODEX_BADGE_LINE_HEIGHT_EM + 2f * density
+
+private const val CODEX_BADGE_LINE_HEIGHT_EM = 1.35f
+
+/** The glyph's stack ring, frame and faint halo reach this far out, as a multiple of its radius. */
+internal const val CODEX_GLYPH_REACH = 1.15f
+
+/** A cell glyph (px from the cell's top-left): its center and radius. */
+internal data class CodexGlyph(val centerY: Float, val radius: Float, val centerX: Float)
+
+/**
+ * Glyph circle of a cell of [cellPx]: centered, or fitted between a NEW band of [bandPx] at the
+ * top and a count-badge band of [bottomBandPx] at the bottom, so neither the stamp (rotated corners
+ * included) nor the badge covers the glyph or its stack ring. With both, the glyph may instead
+ * take the column left of the badge (a plate [badgeWidthPx] wide) down to the cell's bottom
+ * margin, when that leaves it larger.
+ */
+internal fun codexCellGlyph(cellPx: Float, bandPx: Float, density: Float, bottomBandPx: Float = 0f, badgeWidthPx: Float = 0f): CodexGlyph {
     val radius = cellPx * 0.36f
-    if (bandPx <= 0f) return cellPx * 0.5f to radius
-    val top = bandPx
-    val bottom = cellPx - 3f * density
-    val fitted = min(radius, (bottom - top) * 0.5f)
-    return (top + bottom) * 0.5f to fitted
+    if (bandPx <= 0f && bottomBandPx <= 0f) return CodexGlyph(cellPx * 0.5f, radius, cellPx * 0.5f)
+    val margin = 3f * density
+    val top = max(bandPx, margin)
+    val bottom = cellPx - max(bottomBandPx, margin)
+    val centered = min(radius, (bottom - top) / (2f * CODEX_GLYPH_REACH))
+    if (bandPx > 0f && bottomBandPx > 0f && badgeWidthPx > 0f) {
+        val columnRight = cellPx - CodexBadgeInset.value * density - badgeWidthPx - 2f * density
+        val beside = min(radius, min(columnRight - margin, cellPx - margin - top) / (2f * CODEX_GLYPH_REACH))
+        if (beside > centered) return CodexGlyph((top + cellPx - margin) * 0.5f, beside, (margin + columnRight) * 0.5f)
+    }
+    return CodexGlyph((top + bottom) * 0.5f, centered, cellPx * 0.5f)
 }
 
 /** Cell face: rarity (items) or aspect (relics) color when discovered, hatch when not. */
-private fun DrawScope.drawCodexCell(entry: CodexEntry, catalog: UiCatalogSnapshot, measurer: CanvasTextMeasurer, band: Boolean, hovered: Boolean, newBand: Float = 0f) {
+private fun DrawScope.drawCodexCell(entry: CodexEntry, catalog: UiCatalogSnapshot, measurer: CanvasTextMeasurer, band: Boolean, hovered: Boolean,
+    newBand: Float = 0f, badgeBand: Float = 0f, badgeWidth: Float = 0f) {
     val rect = Rect(Offset.Zero, size)
-    val (centerY, radius) = codexCellGlyph(size.minDimension, newBand, density)
-    val center = Offset(size.width * 0.5f, centerY)
+    val (centerY, radius, centerX) = codexCellGlyph(size.minDimension, newBand, density, badgeBand, badgeWidth)
+    val center = Offset(centerX, centerY)
     when (val icon = entry.icon) {
         is CodexIcon.Item -> {
             drawRect(entry.color, alpha = if (band || hovered) 1f else 0.84f)
@@ -560,7 +599,7 @@ private fun slotModifier(entry: CodexEntry, selection: CodexSelection, focus: Mu
 }
 
 @Composable
-private fun SynergySlot(entry: CodexEntry, catalog: UiCatalogSnapshot, model: CodexRenderModel, scale: Float, selection: CodexSelection, focus: MutableMap<String, FocusRequester>, onSelection: ((CodexSelection) -> CodexSelection) -> Unit) {
+private fun SynergySlot(entry: CodexEntry, catalog: UiCatalogSnapshot, model: CodexRenderModel, ui: Float, selection: CodexSelection, focus: MutableMap<String, FocusRequester>, onSelection: ((CodexSelection) -> CodexSelection) -> Unit) {
     val roles = LocalKkRolePalette.current
     val measurer = codexMeasurer()
     val interaction = remember(entry.key) { MutableInteractionSource() }
@@ -569,7 +608,7 @@ private fun SynergySlot(entry: CodexEntry, catalog: UiCatalogSnapshot, model: Co
     val highlighted = selection.previewKey == entry.key || selection.pinnedKey == entry.key
     val components = (entry.icon as CodexIcon.Synergy).components
     val fg = if (highlighted) Kk.Ink else Kk.Bone
-    val titleSize = 24f * min(scale, 1.4f)
+    val titleSize = 24f * ui
     BoxWithConstraints(slotModifier(entry, selection, focus, interaction, onSelection).fillMaxWidth()
         .drawBehind {
             drawKkListRowBackground(Rect(Offset.Zero, size), roles, if (highlighted) 1f else 0f, hoveredValue || focusedValue)
@@ -582,10 +621,10 @@ private fun SynergySlot(entry: CodexEntry, catalog: UiCatalogSnapshot, model: Co
         val diagramWidth = if (narrow) 96.dp else 150.dp
         val tags: @Composable () -> Unit = {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                CodexTag(entry.kind, if (highlighted) Kk.Ink else entry.color, if (highlighted) Kk.Bone else Kk.Ink, scale)
+                CodexTag(entry.kind, if (highlighted) Kk.Ink else entry.color, if (highlighted) Kk.Bone else Kk.Ink, ui)
                 entry.status?.let { status ->
                     CodexTag(status, if (entry.active) roles.you else Color.Transparent,
-                        if (entry.active) Kk.Ink else kkListRowSecondary(if (highlighted) 1f else 0f), scale)
+                        if (entry.active) Kk.Ink else kkListRowSecondary(if (highlighted) 1f else 0f), ui)
                 }
             }
         }
@@ -651,7 +690,7 @@ internal fun codexFittingSize(text: String, maxPx: Int, maxSize: Float, minSize:
 }
 
 @Composable
-private fun CodexDetails(entry: CodexEntry?, catalog: UiCatalogSnapshot, scale: Float, modifier: Modifier, panel: Color = Kk.Ink2) {
+private fun CodexDetails(entry: CodexEntry?, catalog: UiCatalogSnapshot, ui: Float, modifier: Modifier, panel: Color = Kk.Ink2) {
     val language = LocalAppLanguage.current
     val roles = LocalKkRolePalette.current
     val measurer = codexMeasurer()
@@ -666,20 +705,20 @@ private fun CodexDetails(entry: CodexEntry?, catalog: UiCatalogSnapshot, scale: 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 when {
                     entry.kind == CODEX_NONE -> Unit
-                    item != null || entry.icon is CodexIcon.Relic -> CodexTag(entry.kind, entry.color, Kk.Ink, scale, height = 26.dp)
-                    else -> CodexTag(entry.kind, Color.Transparent, Kk.Bone, scale, line = true, height = 26.dp)
+                    item != null || entry.icon is CodexIcon.Relic -> CodexTag(entry.kind, entry.color, Kk.Ink, ui, height = 26.dp)
+                    else -> CodexTag(entry.kind, Color.Transparent, Kk.Bone, ui, line = true, height = 26.dp)
                 }
-                entry.help?.let { KkInfoButton(it, placement = KkTooltipPlacement.BELOW, textScale = min(scale, 1.25f)) }
+                entry.help?.let { KkInfoButton(it, placement = KkTooltipPlacement.BELOW, textScale = ui) }
             }
-            CodexDetailTitle(entry.title, if (entry.discovered) Kk.Bone else Kk.Mute, scale)
+            CodexDetailTitle(entry.title, if (entry.discovered) Kk.Bone else Kk.Mute, ui)
             if (item != null) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    CodexTag(item.family.localizedContent(language), Color.Transparent, Kk.Bone, scale, line = true)
-                    CodexTag(language.text(SessionRedesignText.MAX_STACKS, item.maxStacks), Color.Transparent, Kk.Bone, scale, line = true)
-                    if (itemIcon.stack > 0) CodexTag(language.text(SessionText.STACK_QUANTITY, entry.quantity), roles.you, Kk.Ink, scale)
+                    CodexTag(item.family.localizedContent(language), Color.Transparent, Kk.Bone, ui, line = true)
+                    CodexTag(language.text(SessionRedesignText.MAX_STACKS, item.maxStacks), Color.Transparent, Kk.Bone, ui, line = true)
+                    if (itemIcon.stack > 0) CodexTag(language.text(SessionText.STACK_QUANTITY, entry.quantity), roles.you, Kk.Ink, ui)
                 }
-                CodexStatPanel(item.primary.effect.displayLabel.localizedContent(language), codexModifierValue(item.primary, language), roles.you, scale, panel)
-                CodexStatPanel(item.secondary.effect.displayLabel.localizedContent(language), codexModifierValue(item.secondary, language), Kk.Bone, scale, panel)
+                CodexStatPanel(item.primary.effect.displayLabel.localizedContent(language), codexModifierValue(item.primary, language), roles.you, ui, panel)
+                CodexStatPanel(item.secondary.effect.displayLabel.localizedContent(language), codexModifierValue(item.secondary, language), Kk.Bone, ui, panel)
             } else {
                 if (!entry.discovered && entry.description.isBlank()) {
                     Box(Modifier.fillMaxWidth().height(120.dp).background(panel).kkHatch(), contentAlignment = Alignment.Center) {
@@ -687,48 +726,52 @@ private fun CodexDetails(entry: CodexEntry?, catalog: UiCatalogSnapshot, scale: 
                     }
                 }
                 entry.description.split("\n\n").filter { it.isNotBlank() }.forEach { paragraph ->
-                    BasicText(paragraph, style = typography.bodyStyle(16f * scale, color = Kk.Bone2))
+                    BasicText(paragraph, style = typography.bodyStyle(16f * ui, color = Kk.Bone2))
                 }
             }
             // Facts: a label and its value (Lvl N, counts, status words); explanations sit behind (!).
             if (entry.facts.isNotEmpty()) Column(Modifier.fillMaxWidth().testTag("codex-facts"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                entry.facts.forEach { fact -> CodexFactRow(fact, scale) }
+                entry.facts.forEach { fact -> CodexFactRow(fact, ui) }
             }
             Spacer(Modifier.height(12.dp))
         }
     }
 }
 
-/** A fact row: mono label (mute) on the left, cond value on the right, then its (!) if any. */
+/**
+ * A fact row: mono label (mute) on the left, cond value right-aligned after it, then its (!) if
+ * any. A long value (two relic names) wraps between words instead of running out of the row.
+ */
 @Composable
-private fun CodexFactRow(fact: CodexFact, scale: Float) {
+private fun CodexFactRow(fact: CodexFact, ui: Float) {
     val typography = codexMeasurer().typography
-    Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { }, verticalAlignment = Alignment.CenterVertically,
+    Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { }.testTag("codex-fact"), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        BasicText(fact.label.uppercase(), Modifier.weight(1f), style = typography.monoStyle(11f * min(scale, 1.4f), color = Kk.Mute),
-            softWrap = false, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-        BasicText(fact.value.uppercase(), style = typography.condStyle(21f * min(scale, 1.4f), tabular = true, lineHeightEm = 1f, color = Kk.Bone),
+        BasicText(fact.label.uppercase(), Modifier.alignByBaseline(), style = typography.monoStyle(11f * ui, color = Kk.Mute),
             softWrap = false, maxLines = 1)
-        fact.info?.let { KkInfoButton(it, placement = KkTooltipPlacement.BELOW, textScale = min(scale, 1.25f)) }
+        BasicText(fact.value.uppercase(), Modifier.weight(1f).alignByBaseline(),
+            style = typography.condStyle(21f * ui, tabular = true, lineHeightEm = 1f, color = Kk.Bone)
+                .copy(textAlign = androidx.compose.ui.text.style.TextAlign.End))
+        fact.info?.let { KkInfoButton(it, placement = KkTooltipPlacement.BELOW, textScale = ui) }
     }
 }
 
 /** Wide detail title: shrinks (30 to 18 px) until its longest word fits, never breaking a word. */
 @Composable
-private fun CodexDetailTitle(title: String, color: Color, scale: Float) {
+private fun CodexDetailTitle(title: String, color: Color, ui: Float) {
     val typography = codexMeasurer().typography
-    CodexFitText(title, { size -> typography.wideStyle(size, lineHeightEm = 1.05f, color = color) }, 30f * min(scale, 1.25f), 18f,
+    CodexFitText(title, { size -> typography.wideStyle(size, lineHeightEm = 1.05f, color = color) }, 30f * ui, 18f,
         Modifier.testTag("codex-detail-title"))
 }
 
 /** Stat panel (`.panel`): effect label left (body), value right (wide, tabular). */
 @Composable
-private fun CodexStatPanel(label: String, value: String, valueColor: Color, scale: Float, panel: Color) {
+private fun CodexStatPanel(label: String, value: String, valueColor: Color, ui: Float, panel: Color) {
     val typography = codexMeasurer().typography
     Row(Modifier.fillMaxWidth().background(panel).padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        BasicText(label, Modifier.weight(1f), style = typography.bodyStyle(16f * scale, color = Kk.Bone))
-        BasicText(value, style = typography.wideStyle(22f * min(scale, 1.4f), tabular = true, color = valueColor))
+        BasicText(label, Modifier.weight(1f), style = typography.bodyStyle(16f * ui, color = Kk.Bone))
+        BasicText(value, style = typography.wideStyle(22f * ui, tabular = true, color = valueColor))
     }
 }
 
@@ -740,7 +783,7 @@ private fun KkLabel(text: String, style: TextStyle, modifier: Modifier = Modifie
 
 /** Tag plate (`.tag`): face [background] (transparent + [line] = outlined), cond 800 label. */
 @Composable
-private fun CodexTag(text: String, background: Color, foreground: Color, scale: Float, line: Boolean = false, height: Dp = 22.dp) {
+private fun CodexTag(text: String, background: Color, foreground: Color, ui: Float, line: Boolean = false, height: Dp = 22.dp) {
     if (text.isBlank() || text == CODEX_NONE) return
     val typography = codexMeasurer().typography
     val size = if (height > 22.dp) 15f else 13f
@@ -751,22 +794,22 @@ private fun CodexTag(text: String, background: Color, foreground: Color, scale: 
             if (background.alpha > 0f) drawKkSlab(Rect(Offset.Zero, this.size), background, cut)
             if (line) drawKkSlab(Rect(Offset(0.75f, 0.75f), Size(this.size.width - 1.5f, this.size.height - 1.5f)), Kk.Line2, cut, style = kkStroke(1.5.dp.toPx()))
         }.padding(horizontal = 10.dp, vertical = 4.dp),
-        style = typography.labelStyle(size * min(scale, 1.4f), trackingEm = 0.1f, color = foreground),
+        style = typography.labelStyle(size * ui, trackingEm = 0.1f, color = foreground),
         softWrap = false, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
     )
 }
 
 @Composable
-private fun CodexChip(value: String, description: String, modifier: Modifier) {
+private fun CodexChip(value: String, description: String, ui: Float, modifier: Modifier) {
     val typography = codexMeasurer().typography
     BasicText(value, modifier.clearAndSetSemantics { contentDescription = description }
         .drawBehind { drawKkSlab(Rect(Offset.Zero, size), Kk.Ink2, 8.dp.toPx()) }
         .padding(horizontal = 14.dp, vertical = 6.dp),
-        style = typography.condStyle(21f, tabular = true, lineHeightEm = 1f, color = Kk.Bone), softWrap = false, maxLines = 1)
+        style = typography.condStyle(21f * ui, tabular = true, lineHeightEm = 1f, color = Kk.Bone), softWrap = false, maxLines = 1)
 }
 
 @Composable
-private fun EmptyNotice(state: CodexEmptyState, scale: Float) {
+private fun EmptyNotice(state: CodexEmptyState, ui: Float) {
     val language = LocalAppLanguage.current
     val typography = codexMeasurer().typography
     val (title, description) = when (state) {
@@ -776,8 +819,8 @@ private fun EmptyNotice(state: CodexEmptyState, scale: Float) {
     }
     Row(Modifier.fillMaxWidth().background(Kk.Ink2).kkHatch().padding(20.dp).testTag("codex-empty-${state.name}"),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        BasicText(title.uppercase(), Modifier.weight(1f, fill = false), style = typography.condStyle(26f * min(scale, 1.4f), color = Kk.Bone))
-        KkInfoButton(description, placement = KkTooltipPlacement.BELOW, textScale = min(scale, 1.25f))
+        BasicText(title.uppercase(), Modifier.weight(1f, fill = false), style = typography.condStyle(26f * ui, color = Kk.Bone))
+        KkInfoButton(description, placement = KkTooltipPlacement.BELOW, textScale = ui)
     }
 }
 
@@ -788,15 +831,18 @@ private fun CodexNavigationTabs(tab: Int, controlScale: Float, modifier: Modifie
     CodexTabRow(titles, tab, "codex-tab-", controlScale, modifier, onSelect = onSelect)
 }
 
-/** Smallest scale tabs shrink to before their row scrolls instead. */
-internal const val CODEX_TAB_MIN_SCALE = 0.6f
+/**
+ * Smallest scale tabs shrink to before their row scrolls instead: Russian categories at 175 % still
+ * fit a 360 dp phone (their labels stay above 16 px).
+ */
+internal const val CODEX_TAB_MIN_SCALE = 0.55f
 
 /** Common scale for a row of tabs of [natural] widths (dp) so they fit [available] dp (1 when they fit). */
 internal fun codexTabScale(natural: List<Float>, available: Float): Float =
     if (natural.isEmpty()) 1f else (available / natural.sum()).coerceIn(CODEX_TAB_MIN_SCALE, 1f)
 
 /**
- * A row of tabs that fits its width: all tabs shrink together (to 60 %) so none is clipped at
+ * A row of tabs that fits its width: all tabs shrink together (to 55 %) so none is clipped at
  * rest. Only if that is still too wide does the row scroll, with a fade at the edge that has more.
  */
 @Composable
@@ -820,7 +866,7 @@ private fun CodexTabRow(
         val scrolls = natural.sum() * tabScale > available + 0.5f
         val scroll = rememberScrollState()
         Row(
-            Modifier.then(if (scrolls) Modifier.horizontalScroll(scroll) else Modifier)
+            Modifier.testTag("${tagPrefix}row").then(if (scrolls) Modifier.horizontalScroll(scroll) else Modifier)
                 .drawWithContent {
                     drawContent()
                     val fade = 28.dp.toPx()
@@ -888,7 +934,7 @@ private fun CodexNavRow(text: String, count: String, selected: Boolean, tag: Str
         .clickable(enabled = inputEnabled, role = Role.Tab, interactionSource = interactions, indication = null, onClick = onClick)
         .fillMaxWidth().height((46f * controlScale).dp)
         .drawBehind {
-            drawKkListRow(measurer, Rect(Offset.Zero, size), text, count, selection, hovered || focused, titleSize = 24f / controlScale.coerceAtLeast(1f))
+            drawKkListRow(measurer, Rect(Offset.Zero, size), text, count, selection, hovered || focused, titleSize = 24f)
             if (focused) {
                 // Around the drawn slab, which a selected row shifts left.
                 val ring = codexNavFocusRing(size, selection, density)
@@ -963,7 +1009,7 @@ private fun CodexToggleButton(text: String, selected: Boolean, tag: String, cont
 }
 
 @Composable
-private fun CodexStatRow(name: String, value: String, selected: Boolean, tag: String, scale: Float, onClick: () -> Unit, contributions: @Composable () -> Unit) {
+private fun CodexStatRow(name: String, value: String, selected: Boolean, tag: String, ui: Float, onClick: () -> Unit, contributions: @Composable () -> Unit) {
     val typography = codexMeasurer().typography
     val inputEnabled = LocalCodexInputEnabled.current
     val interactions = remember { MutableInteractionSource() }
@@ -975,21 +1021,21 @@ private fun CodexStatRow(name: String, value: String, selected: Boolean, tag: St
             .clickable(enabled = inputEnabled, interactionSource = interactions, indication = null, role = Role.Button, onClick = onClick)
             .drawBehind { if (hovered || focused) drawRect(Kk.Bone.copy(alpha = 0.06f)) }
             .padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            BasicText(name, Modifier.weight(1f), style = typography.bodyStyle(16f * scale, color = Kk.Bone))
-            BasicText(value, style = typography.wideStyle(20f * min(scale, 1.4f), tabular = true, color = Kk.Bone))
+            BasicText(name, Modifier.weight(1f), style = typography.bodyStyle(16f * ui, color = Kk.Bone))
+            BasicText(value, style = typography.wideStyle(20f * ui, tabular = true, color = Kk.Bone))
         }
         if (selected) Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) { contributions() }
     }
 }
 
 @Composable
-private fun CodexSearchField(value: String, enabled: Boolean, scale: Float, inlineLabel: Boolean, focusRequester: FocusRequester, dense: Boolean = false, onValueChange: (String) -> Unit) {
+private fun CodexSearchField(value: String, enabled: Boolean, ui: Float, inlineLabel: Boolean, focusRequester: FocusRequester, dense: Boolean = false, onValueChange: (String) -> Unit) {
     val language = LocalAppLanguage.current
     val roles = LocalKkRolePalette.current
     val typography = codexMeasurer().typography
     var focusedValue by remember { mutableStateOf(false) }
     BasicTextField(enabled = enabled, value = value, onValueChange = onValueChange, singleLine = true,
-        textStyle = typography.bodyStyle(15f * scale, FontWeight.Medium, color = Kk.Bone), cursorBrush = SolidColor(roles.you),
+        textStyle = typography.bodyStyle(15f * ui, FontWeight.Medium, color = Kk.Bone), cursorBrush = SolidColor(roles.you),
         modifier = Modifier.fillMaxWidth().focusRequester(focusRequester).onFocusChanged { focusedValue = it.isFocused }
             .testTag("codex-search").semantics { contentDescription = language.text(SessionText.SEARCH_DESCRIPTION) }
             .drawBehind {
@@ -1003,14 +1049,14 @@ private fun CodexSearchField(value: String, enabled: Boolean, scale: Float, inli
         decorationBox = { inner ->
             Box {
                 if (value.isEmpty() && inlineLabel) BasicText(language.text(SessionRedesignText.SEARCH).uppercase(),
-                    style = typography.labelStyle(14f * min(scale, 1.4f), color = Kk.Mute2))
+                    style = typography.labelStyle(14f * ui, color = Kk.Mute2))
                 inner()
             }
         })
 }
 
 @Composable
-private fun CodexRarityLegend(catalog: UiCatalogSnapshot, model: CodexRenderModel, scale: Float) {
+private fun CodexRarityLegend(catalog: UiCatalogSnapshot, model: CodexRenderModel, ui: Float) {
     val language = LocalAppLanguage.current
     val typography = codexMeasurer().typography
     val counts = remember(catalog, model) {
@@ -1020,14 +1066,14 @@ private fun CodexRarityLegend(catalog: UiCatalogSnapshot, model: CodexRenderMode
     }
     Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         ItemRarity.entries.forEach { rarity ->
-            LegendRow(rarity.displayLabel.localizedContent(language), counts[rarity.ordinal], Kk.rarity(rarity.rank), Kk.Bone, typography, scale)
+            LegendRow(rarity.displayLabel.localizedContent(language), counts[rarity.ordinal], Kk.rarity(rarity.rank), Kk.Bone, typography, ui)
         }
-        LegendRow(language.text(SessionText.UNDISCOVERED), catalog.items.size - counts.sum(), null, Kk.Mute, typography, scale)
+        LegendRow(language.text(SessionText.UNDISCOVERED), catalog.items.size - counts.sum(), null, Kk.Mute, typography, ui)
     }
 }
 
 @Composable
-private fun LegendRow(label: String, count: Int, swatch: Color?, color: Color, typography: InterfaceTypography, scale: Float) {
+private fun LegendRow(label: String, count: Int, swatch: Color?, color: Color, typography: InterfaceTypography, ui: Float) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(Modifier.size(14.dp).drawBehind {
             if (swatch != null) drawKkSheared(Rect(Offset.Zero, size), swatch)
@@ -1036,7 +1082,7 @@ private fun LegendRow(label: String, count: Int, swatch: Color?, color: Color, t
                 drawKkHatch(Rect(Offset.Zero, size))
             }
         })
-        BasicText(label, Modifier.weight(1f), style = typography.bodyStyle(15f * min(scale, 1.4f), color = color))
-        BasicText(count.toString(), style = typography.monoStyle(11f * min(scale, 1.4f), color = Kk.Mute))
+        BasicText(label, Modifier.weight(1f), style = typography.bodyStyle(15f * ui, color = color))
+        BasicText(count.toString(), style = typography.monoStyle(11f * ui, color = Kk.Mute))
     }
 }

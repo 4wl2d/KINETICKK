@@ -16,6 +16,7 @@ import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.ModifierUnit
 import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.SynergyDefinition
 import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
@@ -79,7 +80,19 @@ internal const val CODEX_NONE = "—"
 internal fun codexStatus(language: AppLanguage, value: String, info: String? = null): CodexFact =
     CodexFact(language.text(SessionText.STATUS), value, info, isStatus = true)
 
-internal fun codexItemEntry(item: ItemDefinition, model: CodexRenderModel, language: AppLanguage = AppLanguage.English): CodexEntry {
+/**
+ * Catalog level that the profile's lifetime Matter unlocks for ordinary item offers: one level per
+ * 40 Matter, up to 80. This is the gameplay rule of `buildItemChoices` and `eligibleItemIds`
+ * (an item is offered when its level is at most `max(runLevel, min(80, 1 + lifetimeMatter / 40))`).
+ */
+internal fun codexMatterOfferLevel(lifetimeMatter: Long): Int =
+    (1L + lifetimeMatter.coerceAtLeast(0L) / 40L).coerceAtMost(80L).toInt()
+
+/** Run level from which ordinary offers include [item]: 1 once lifetime Matter has unlocked its level. */
+internal fun codexOfferedFromLevel(item: ItemDefinition, lifetimeMatter: Long): Int =
+    if (item.unlockLevel <= codexMatterOfferLevel(lifetimeMatter)) 1 else item.unlockLevel
+
+internal fun codexItemEntry(item: ItemDefinition, model: CodexRenderModel, lifetimeMatter: Long, language: AppLanguage = AppLanguage.English): CodexEntry {
     if (!model.isDiscovered(item.id)) return unknownEntry("item/${item.id}", language)
     val stack = model.itemStack(item.id)
     val build = model.runStacks.build
@@ -90,7 +103,7 @@ internal fun codexItemEntry(item: ItemDefinition, model: CodexRenderModel, langu
             build != null && item.id in build.eligibleItemIds -> add(codexStatus(language, language.text(SessionText.NEXT_ACQUISITION)))
             build != null -> add(codexStatus(language, language.text(SessionText.OFFER_LIMIT), language.text(SessionText.OFFER_LIMIT_HELP)))
         }
-        add(CodexFact(language.text(SessionText.OFFERS_FROM_LEVEL), language.text(SessionText.LEVEL_SHORT, item.unlockLevel),
+        add(CodexFact(language.text(SessionText.OFFERS_FROM_LEVEL), language.text(SessionText.LEVEL_SHORT, codexOfferedFromLevel(item, lifetimeMatter)),
             language.text(SessionText.OFFERS_FROM_LEVEL_HELP)))
     }
     return CodexEntry(
@@ -161,10 +174,61 @@ internal fun codexShapeEntry(shape: CoreShapeDefinition, model: CodexRenderModel
 }
 
 internal fun codexCatalogEntries(category: Int, search: String, filter: CodexItemFilter, model: CodexRenderModel, catalog: UiCatalogSnapshot, progress: HomeProgressProjection, language: AppLanguage = AppLanguage.English): List<CodexEntry> = when (category) {
-    0 -> codexFilteredItems(model, search, filter, language).map { codexItemEntry(it, model, language) }
+    0 -> codexFilteredItems(model, search, filter, language).map { codexItemEntry(it, model, progress.economy.lifetimeMatter, language) }
     1 -> catalog.weapons.map { codexWeaponEntry(it, model, progress, language, allowCurrentRun = false) }.filter { search.isBlank() || it.discovered && it.title.contains(search, ignoreCase = true) }
     2 -> catalog.relics.filter { model.isRelicDiscovered(it.id) && it.name.localizedContent(language).contains(search, ignoreCase = true) }.map { codexRelicEntry(it, model, catalog, language) }
     else -> catalog.coreShapes.map { codexShapeEntry(it, model, progress, language) }.filter { search.isBlank() || it.discovered && it.title.contains(search, ignoreCase = true) }
+}
+
+/**
+ * The Build tab of a run: character, weapon, every relic slot (empty ones as placeholders, never
+ * numbered by position) and the items held.
+ */
+internal fun codexBuildEntries(model: CodexRenderModel, catalog: UiCatalogSnapshot, progress: HomeProgressProjection, language: AppLanguage = AppLanguage.English): List<CodexEntry> {
+    val build = model.runStacks.build ?: return emptyList()
+    return buildList {
+        build.character?.let { add(codexShapeEntry(catalog.coreShape(it), model, progress, language)) }
+        build.weapon?.let { add(codexWeaponEntry(catalog.weapon(it), model, progress, language)) }
+        repeat(catalog.relicPolicy.maxSlots) { index ->
+            val relic = build.relics.getOrNull(index)
+            add(if (relic != null) codexRelicEntry(catalog.relic(relic.id), model, catalog, language) else CodexEntry(
+                "empty-relic/$index", language.text(SessionText.EMPTY_RELIC_SLOT), "", language.text(SessionText.RELIC_SLOT), CODEX_NONE,
+                listOf(codexStatus(language, language.text(SessionText.EMPTY))), CodexIcon.Empty, Kk.Mute, help = language.text(SessionText.EMPTY_RELIC_HELP),
+            ))
+        }
+        addAll(model.items.filter { model.itemStack(it.id) > 0 }.map { codexItemEntry(it, model, progress.economy.lifetimeMatter, language) })
+    }
+}
+
+/**
+ * A synergy: its description is the only body text. The requirement is a labelled value
+ * ("2 × Vector" or the two relic names) whose rule explanation sits behind the value's (!).
+ */
+internal fun codexSynergyEntry(synergy: SynergyDefinition, model: CodexRenderModel, catalog: UiCatalogSnapshot, language: AppLanguage = AppLanguage.English): CodexEntry {
+    val build = model.runStacks.build
+    val owned = model.discoveredRelicIds + build?.relics?.map { it.id }.orEmpty()
+    val summary = build?.synergies?.firstOrNull { it.id == synergy.id.name }
+    val active = summary?.active == true
+    val aspect = synergy.requiredAspect
+    val facts = buildList {
+        add(codexStatus(language, language.text(if (active) SessionText.ACTIVE else if (build == null) SessionText.NO_RUN_INACTIVE else SessionText.INACTIVE)))
+        if (aspect != null) {
+            val name = aspect.displayLabel.localizedContent(language)
+            add(CodexFact(language.text(SessionText.REQUIRES), language.text(SessionText.SYNERGY_ASPECT_PAIR, name),
+                language.text(SessionText.SYNERGY_REQUIREMENT, name)))
+        } else {
+            add(CodexFact(language.text(SessionText.REQUIRES),
+                synergy.requiredRelics.joinToString(" + ") { catalog.relic(it).name.localizedContent(language) }))
+        }
+        summary?.missingComponents?.takeIf { it.isNotEmpty() }?.let { missing ->
+            add(CodexFact(language.text(SessionText.MISSING), missing.joinToString(", ") { it.localizedContent(language) }))
+        }
+    }
+    return CodexEntry(
+        "synergy/${synergy.id}", synergy.name.localizedContent(language), synergy.description.localizedContent(language),
+        aspect?.displayLabel?.localizedContent(language) ?: language.text(SessionText.COMBINATION), CODEX_NONE, facts,
+        CodexIcon.Synergy(codexSynergyComponents(synergy, catalog, owned)), aspect?.let(::relicAspectColor) ?: Kk.Bone, active = active,
+    )
 }
 
 internal fun unknownEntry(key: String, language: AppLanguage): CodexEntry = CodexEntry(
@@ -173,7 +237,7 @@ internal fun unknownEntry(key: String, language: AppLanguage): CodexEntry = Code
     discovered = false, help = language.text(SessionText.DISCOVERY_HELP),
 )
 
-internal fun codexSynergyDiscovered(definition: kinetickk.ball.content.api.SynergyDefinition,
+internal fun codexSynergyDiscovered(definition: SynergyDefinition,
     model: CodexRenderModel, catalog: UiCatalogSnapshot): Boolean =
     if (definition.requiredAspect != null) catalog.relics.count { it.aspect == definition.requiredAspect && model.isRelicDiscovered(it.id) } >= 2
     else definition.requiredRelics.all(model::isRelicDiscovered)
