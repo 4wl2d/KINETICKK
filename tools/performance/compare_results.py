@@ -475,6 +475,8 @@ def hierarchical_bootstrap_median_delta(
     candidate_forks: Sequence[Sequence[float]],
     resamples: int,
     seed_material: str,
+    *,
+    relative: bool = True,
 ) -> tuple[float, float] | None:
     baseline = [list(fork) for fork in baseline_forks if fork]
     candidate = [list(fork) for fork in candidate_forks if fork]
@@ -494,7 +496,10 @@ def hierarchical_bootstrap_median_delta(
     for _ in range(resamples):
         baseline_median = resample_group(baseline)
         candidate_median = resample_group(candidate)
-        value = percent_delta(candidate_median, baseline_median)
+        value = (
+            percent_delta(candidate_median, baseline_median)
+            if relative else candidate_median - baseline_median
+        )
         if value is not None:
             deltas.append(value)
     if not deltas:
@@ -576,10 +581,18 @@ def classify_with_zero_baseline(
     lower_is_better: bool,
     baseline_median: float | None,
     candidate_median: float | None,
+    absolute_interval: tuple[float, float] | None = None,
 ) -> str:
     if baseline_median == 0.0 and candidate_median is not None:
         if candidate_median == 0.0:
             return "stable"
+        # Sparse counters can have a zero median even when both sides collect GC.
+        # Percentage resampling drops zero denominators, so establish significance
+        # in the original units before reporting a new cost from zero.
+        if absolute_interval is None:
+            return "insufficient-data"
+        if absolute_interval[0] <= 0.0 <= absolute_interval[1]:
+            return "inconclusive"
         is_regression = candidate_median > 0.0 if lower_is_better else candidate_median < 0.0
         return "regression" if is_regression else "improvement"
     return classify(delta, interval, threshold, lower_is_better)
@@ -644,11 +657,24 @@ def build_comparison(
                 args.bootstrap_resamples,
                 f"{name}:{metric}",
             )
+            absolute_interval = (
+                hierarchical_bootstrap_median_delta(
+                    baseline["metricForks"][metric],
+                    candidate["metricForks"][metric],
+                    args.bootstrap_resamples,
+                    f"{name}:{metric}",
+                    relative=False,
+                )
+                if baseline_summary is not None and baseline_summary.median == 0.0
+                and candidate_summary is not None and candidate_summary.median != 0.0
+                else None
+            )
             metrics[metric] = {
                 "baseline": summary_dict(baseline_summary),
                 "candidate": summary_dict(candidate_summary),
                 "medianDeltaPercent": delta,
                 "bootstrap95Percent": list(interval) if interval else None,
+                "bootstrap95Absolute": list(absolute_interval) if absolute_interval else None,
                 "classification": (
                     classify_with_zero_baseline(
                         delta,
@@ -657,6 +683,7 @@ def build_comparison(
                         metric in LOWER_IS_BETTER,
                         baseline_summary.median if baseline_summary is not None else None,
                         candidate_summary.median if candidate_summary is not None else None,
+                        absolute_interval,
                     )
                     if compatibility_ok
                     else "incomparable"
@@ -791,9 +818,34 @@ def render_markdown(report: dict[str, Any]) -> str:
         "",
         "## Outcome",
         "",
-        ", ".join(f"{name}: **{count}**" for name, count in counts.items()) or "No shared scenarios.",
+        "Wall time: " + (", ".join(f"{name}: **{count}**" for name, count in counts.items()) or "No shared scenarios."),
         "",
     ]
+    regressions = [
+        (scenario["name"], metric_name, metric)
+        for scenario in scenarios
+        for metric_name, metric in scenario["metrics"].items()
+        if metric["classification"] == "regression"
+    ]
+    if regressions:
+        lines.extend([
+            "Blocking regressions (all metrics):",
+            "",
+            "| Scenario | Metric | Baseline median | Candidate median | 95% delta interval |",
+            "|---|---|---:|---:|---|",
+        ])
+        for name, metric_name, metric in regressions:
+            absolute = metric.get("bootstrap95Absolute")
+            interval = absolute if absolute is not None else metric["bootstrap95Percent"]
+            units = "absolute" if absolute is not None else "%"
+            interval_text = f"[{interval[0]:.6g}, {interval[1]:.6g}] {units}" if interval else "n/a"
+            lines.append(
+                f"| `{name}` | `{metric_name}` | {metric['baseline']['median']:.6g} | "
+                f"{metric['candidate']['median']:.6g} | {interval_text} |",
+            )
+        lines.append("")
+    else:
+        lines.extend(["No blocking regressions in any metric.", ""])
     if not report.get("comparisonContractCompatible", True):
         lines.extend(
             [
@@ -818,6 +870,8 @@ def render_markdown(report: dict[str, Any]) -> str:
         [
             "Lower wall time, CPU time, allocation and GC values are better. A verdict requires "
             "both the configured effect size and a bootstrap interval that excludes zero.",
+            "For a zero baseline median, significance uses an absolute delta interval; "
+            "a percentage change is undefined.",
             "",
             "## Wall time and allocation",
             "",

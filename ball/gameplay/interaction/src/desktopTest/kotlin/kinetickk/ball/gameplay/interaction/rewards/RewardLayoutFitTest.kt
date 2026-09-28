@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -249,7 +250,10 @@ class RewardLayoutFitTest {
         check: SemanticsNodeInteractionsProvider.(String, GameplayRenderModel) -> Unit,
     ) {
         for ((width, height) in frames) for (language in AppLanguage.entries) for (setting in settings) for (scene in scenes) {
-            runDesktopComposeUiTest(width, height) {
+            // These assertions inspect settled geometry, not the intermediate entrance frames.
+            runDesktopComposeUiTest(width, height, effectContext = object : MotionDurationScale {
+                override val scaleFactor = 0f
+            }) {
                 val model = scene(language, width.toFloat(), height.toFloat(), setting)
                 setContent {
                     CompositionLocalProvider(LocalAppLanguage provides language, LocalDensity provides Density(1f)) {
@@ -259,7 +263,6 @@ class RewardLayoutFitTest {
                         }
                     }
                 }
-                mainClock.advanceTimeBy(2_000)
                 waitForIdle()
                 val name = (scene as kotlin.reflect.KFunction<*>).name
                 check("$name ${width}x$height $language $setting", model)

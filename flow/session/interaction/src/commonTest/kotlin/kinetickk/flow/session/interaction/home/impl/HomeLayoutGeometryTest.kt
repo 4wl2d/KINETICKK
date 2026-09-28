@@ -186,8 +186,9 @@ class HomeMenuClearanceTest {
             val layout = homeLayoutGeometry(width, height, density)
             val scene = layout.scene
             assertEquals(HomeLayoutMode.COMPACT_LANDSCAPE, layout.mode, "${width}x$height")
-            // The notices may start anywhere right of legalLeft; their tallest glyphs rise 0.85 em.
-            val legalTop = scene.legalBaseline - HOME_LEGAL_ASCENT_EM * scene.legalSize
+            // Linux renders the 8 px legal text up to 8 px above its baseline. Keep this
+            // observed bound independent of the production allowance so it catches under-reservation.
+            val legalTop = scene.legalBaseline - scene.legalSize
             HomeMenuTargets.forEach { target ->
                 // Slab with echo, and speed lines, each dropped by the turn at their left end.
                 homeSelectedMenuFootprint(layout.bounds(target), scene.menuFontSize).forEach { part ->

@@ -21,7 +21,7 @@ tasks.withType<JavaCompile>().configureEach {
 // Desktop tests render real frames with the bundled fonts; spread their classes over up to four JVMs.
 tasks.withType<Test>().configureEach {
     if (name == "desktopTest") maxParallelForks = Runtime.getRuntime().availableProcessors().coerceIn(1, 4)
-    // CI keeps no test reports, so a failure prints its full assertion message in the log.
+    // Keep the full assertion in the log as well as the archived CI test reports.
     testLogging {
         events(TestLogEvent.FAILED)
         exceptionFormat = TestExceptionFormat.FULL

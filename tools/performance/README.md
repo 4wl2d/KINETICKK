@@ -80,3 +80,8 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=tools/performance python3 -m unittest disco
 and uploads results. Preserve raw samples and explain confirmed regressions
 or delivery-budget increases; incompatible or unpaired results establish no
 performance verdict.
+
+The JVM comparator reports blocking regressions for every metric, including GC.
+When a baseline median is zero, it bootstraps the absolute median difference
+instead of treating every positive candidate median as a regression. An interval
+that includes zero is inconclusive; a consistent new cost still fails the gate.

@@ -198,14 +198,15 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
             val lowestWidth = w - side - (menuLeft - (HomeMenuTargets.size - 1) * 9f)
             val lowestCenter = legalBaseline - HOME_LEGAL_ASCENT_EM * COMPACT_LEGAL_SIZE - 2f - HOME_MENU_TURN * lowestWidth * 0.5f
             val echoDrop = (49f + 40f * HOME_MENU_TURN) / 64f
+            val menuTop = 48f
             // 36 px from 660 px wide; narrower screens scale it so Russian labels with a stamp still fit.
             val widthFont = 36f * min(1f, w / 660f)
-            val rowHeight = ((lowestCenter - echoDrop * widthFont - 50f) / 5.5f).coerceIn(48f, 52f)
+            val rowHeight = ((lowestCenter - echoDrop * widthFont - menuTop) / 5.5f).coerceIn(48f, 52f)
             // Never below the two-column phone font: that floor binds only under 356 px tall, or past
             // about 1,400 px wide at 360 px tall (no target size).
-            val menuFont = min(widthFont, (lowestCenter - 50f - 5.5f * rowHeight) / echoDrop).coerceAtLeast(28f)
+            val menuFont = min(widthFont, (lowestCenter - menuTop - 5.5f * rowHeight) / echoDrop).coerceAtLeast(28f)
             val rows = HomeMenuTargets.indices.map { index ->
-                val top = 50f + index * rowHeight
+                val top = menuTop + index * rowHeight
                 Rect(menuLeft - index * 9f, top, w - side, top + rowHeight)
             }
             HomeMenuTargets.forEachIndexed { index, target ->
@@ -414,10 +415,10 @@ private const val HOME_MENU_TURN = 0.035f
 private const val COMPACT_LEGAL_SIZE = 8f
 
 /**
- * How far the legal line's glyphs rise above its baseline, in em of its size: the tallest are the
- * source link's lowercase ascenders and slash (checked with the bundled font in the Home text tests).
+ * Reserve a full em above the legal baseline: Linux rasterization reaches 8 px for the
+ * bundled 8 px mono text, while macOS ink can be shorter. Keep the menu clear on both.
  */
-internal const val HOME_LEGAL_ASCENT_EM = 0.85f
+internal const val HOME_LEGAL_ASCENT_EM = 1f
 
 internal fun HomeLayoutTarget.toHomeAction(): HomeAction = when (this) {
     HomeLayoutTarget.CORE_ORB -> HomeAction.SelectCoreShape(CoreShape.ORB)
