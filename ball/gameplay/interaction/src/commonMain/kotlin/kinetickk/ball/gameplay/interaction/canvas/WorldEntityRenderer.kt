@@ -304,7 +304,7 @@ internal fun shardTumble(heading: Float, index: Int, life: Float): Float =
 
 /**
  * The weapon totem: stacked sheared ink plates with you-color edge lines around a you-color key
- * block (`Totem.dc.html`) inside a slowly turning dashed ring. Off-screen, [drawTotemEdgeMarker]
+ * block (`Totem.dc.html`) inside a slowly turning dashed ring. Off-screen, [collectTotemEdgeMarker]
  * marks it at the screen edge with the distance.
  */
 internal fun DrawScope.drawTotem(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, textMeasurer: TextMeasurer) {
@@ -320,13 +320,14 @@ internal fun DrawScope.drawTotem(engine: GameplayRenderModel, shakeX: Float, sha
     drawTotemPlates(location, 1f, roles.you, keyBlock = true, keyIcon = true)
 }
 
-internal fun DrawScope.drawTotemEdgeMarker(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, textMeasurer: TextMeasurer) {
+/** Adds the off-screen totem to [batch]; [drawEdgeMarkers] draws it with the frame's other markers. */
+internal fun DrawScope.collectTotemEdgeMarker(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, batch: EdgeMarkerBatch) {
     val totem = engine.totem ?: return
     val location = world(engine, totem.x, totem.y, shakeX, shakeY)
     if (isOnScreen(location, 60f)) return
     val dx = totem.x - engine.coreX
     val dy = totem.y - engine.coreY
-    drawEdgeMarker(location, sqrt(dx * dx + dy * dy), EdgeMarkerIcon.TOTEM, textMeasurer)
+    batch.add(location.x, location.y, sqrt(dx * dx + dy * dy), EdgeMarkerIcon.TOTEM)
 }
 
 /**

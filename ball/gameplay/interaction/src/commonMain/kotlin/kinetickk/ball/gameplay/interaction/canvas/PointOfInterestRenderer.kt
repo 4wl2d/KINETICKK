@@ -67,10 +67,11 @@ private val EDGE_DISTANCE_SP = worldLabelSp(11f)
 /** Distance from the collapsing-orbit center to its timer label (just outside the progress arc). */
 internal const val ORBIT_LABEL_OFFSET = 212f
 
-/** HUD regions and the edge-marker table for the current frame (draw-thread confined). */
+/** HUD regions, the edge-marker table and the frame's off-screen targets (draw-thread confined). */
 internal object WorldOverlayScratch {
     val keepOut = WorldHudKeepOut()
     val planner = EdgeMarkerPlanner()
+    val markers = EdgeMarkerBatch()
 }
 
 /**
@@ -129,7 +130,7 @@ internal fun DrawScope.worldHudKeepOut(engine: GameplayRenderModel, textMeasurer
  * corner brackets, the collapsing orbit a bone ring with a you-color progress arc, the resonant
  * circuit stacked sheared plates with a you-color key block. Each carries only a short timer; the
  * trial's name and rules live in the HUD's trial panel. A mark that would be cut by the screen
- * edge or sit under the HUD is replaced by its edge marker ([drawPointOfInterestEdgeMarkers],
+ * edge or sit under the HUD is replaced by its edge marker ([collectPointOfInterestEdgeMarkers],
  * drawn over the world): both use [markShown], so exactly one of them draws.
  */
 internal fun DrawScope.drawPointsOfInterest(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, textMeasurer: TextMeasurer) {
@@ -145,8 +146,17 @@ internal fun DrawScope.drawPointsOfInterest(engine: GameplayRenderModel, shakeX:
     }
 }
 
-/** Edge markers for points of interest whose mark is not shown ([markShown]): a small mark and the distance. */
-internal fun DrawScope.drawPointOfInterestEdgeMarkers(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, textMeasurer: TextMeasurer) {
+/**
+ * Adds to [batch] the edge markers of points of interest whose mark is not shown ([markShown]);
+ * [drawEdgeMarkers] draws them with the frame's other markers.
+ */
+internal fun DrawScope.collectPointOfInterestEdgeMarkers(
+    engine: GameplayRenderModel,
+    shakeX: Float,
+    shakeY: Float,
+    textMeasurer: TextMeasurer,
+    batch: EdgeMarkerBatch,
+) {
     val keepOut = worldHudKeepOut(engine, textMeasurer)
     for (index in engine.pointsOfInterest.indices) {
         val point = engine.pointsOfInterest[index]
@@ -165,7 +175,7 @@ internal fun DrawScope.drawPointOfInterestEdgeMarkers(engine: GameplayRenderMode
         if (markShown(target, markHalf(point), keepOut)) continue
         val dx = targetX - engine.coreX
         val dy = targetY - engine.coreY
-        drawEdgeMarker(target, sqrt(dx * dx + dy * dy), point.kind.edgeIcon(), textMeasurer)
+        batch.add(target.x, target.y, sqrt(dx * dx + dy * dy), point.kind.edgeIcon())
     }
 }
 
@@ -451,23 +461,36 @@ internal enum class EdgeMarkerIcon { TOTEM, SEALED_ANOMALY, COLLAPSING_ORBIT, RE
 private const val EDGE_DISTANCE_LAYOUT_VALUE = 8_880L
 
 /**
- * An off-screen target at the screen edge along the direction from the screen center: a small
- * mark and the world distance from the Core (`HUD-Elite.png`), placed by [EdgeMarkerPlanner] so it
- * hugs the edge and stays clear of the HUD. The distance is drawn from cached digit layouts.
+ * The frame's off-screen targets ([batch]) at the screen edge along their directions from the
+ * screen center: each a small mark and the world distance from the Core (`HUD-Elite.png`), placed
+ * together by [EdgeMarkerPlanner.place] so each hugs the edge, stays clear of the HUD and keeps
+ * [EDGE_MARKER_SPACING_DP] from the others. The distances are drawn from cached digit layouts.
  */
-internal fun DrawScope.drawEdgeMarker(
-    target: Offset,
-    distance: Float,
-    icon: EdgeMarkerIcon,
-    textMeasurer: TextMeasurer,
-) {
+internal fun DrawScope.drawEdgeMarkers(batch: EdgeMarkerBatch, textMeasurer: TextMeasurer) {
+    if (batch.count == 0) return
+    val roles = textMeasurer.roles
+    val typography = textMeasurer.typography
+    val suffix = WorldStrings.distanceSuffix(textMeasurer.language)
+    // The marker styles differ only in color and a hair of line height, so one laid-out width
+    // (the widest distance) sizes every marker box.
+    var textWidth = 0f
+    for (index in 0 until batch.count) {
+        val style = edgeMarkerStyle(typography, batch.icon[index] ?: EdgeMarkerIcon.TOTEM, roles)
+        textWidth = max(textWidth, kkTabularNumberWidth(textMeasurer, EDGE_DISTANCE_LAYOUT_VALUE, style, suffix = suffix))
+    }
+    WorldOverlayScratch.planner.prepare(WorldOverlayScratch.keepOut, size.width, size.height, density, textWidth).place(batch)
+    for (index in 0 until batch.count) {
+        drawEdgeMarker(batch.markerX[index], batch.markerY[index], batch.distance[index], batch.icon[index] ?: EdgeMarkerIcon.TOTEM,
+            textMeasurer, suffix)
+    }
+}
+
+/** One edge marker centered at ([x], [y]): the kind's mark, and the distance toward the screen center. */
+private fun DrawScope.drawEdgeMarker(x: Float, y: Float, distance: Float, icon: EdgeMarkerIcon, textMeasurer: TextMeasurer, suffix: String) {
     val roles = textMeasurer.roles
     val color = edgeMarkerColor(icon, roles)
     val style = edgeMarkerStyle(textMeasurer.typography, icon, roles)
-    val suffix = WorldStrings.distanceSuffix(textMeasurer.language)
-    val textWidth = kkTabularNumberWidth(textMeasurer, EDGE_DISTANCE_LAYOUT_VALUE, style, suffix = suffix)
-    val keepOut = WorldOverlayScratch.keepOut
-    val marker = WorldOverlayScratch.planner.prepare(keepOut, size.width, size.height, density, textWidth).position(target)
+    val marker = Offset(x, y)
     val iconSize = d(EDGE_ICON_DP)
     when (icon) {
         EdgeMarkerIcon.TOTEM, EdgeMarkerIcon.RESONANT_CIRCUIT -> drawTotemIcon(marker, iconSize, color)
