@@ -228,8 +228,15 @@ private fun DrawScope.drawFocusOutline(bounds: Rect) {
  * grows a bone slab from the screen edge ([edgeRight]) to the item, slides the `you` echo in to
  * (−14, 10), shows three trailing speed lines, turns the text ink and moves the item −26 dp with a
  * −2° tilt. [dim] (secondary item) uses mute-2; [locked] adds a lock icon. Optional [stamp]
- * (e.g. an unlockable event) rides after the label; optional mono [sub] value shows only when
- * selected. No index numbers. Returns the unrotated item bounds for hit testing.
+ * (e.g. an unlockable event) rides right after the label; optional mono [sub] value follows it and
+ * shows only when selected, so the stamp keeps its place (`.mi`: label, stamp, sub). No index
+ * numbers. Returns the unrotated item bounds for hit testing.
+ *
+ * The slab, echo, speed lines and gaps follow the label as drawn ([fontSize] × the measurer's
+ * scale), so a caller that keeps the label at its design size under a larger text scale (display
+ * type: [fontSize] divided by that scale) keeps the design geometry too. The stamp and sub-value
+ * sizes derive from [fontSize] and then follow the measurer's scale like other UI text;
+ * [stampFontSize] (before the measurer's scale) replaces the stamp's size, e.g. one shrunk to fit.
  */
 fun DrawScope.drawKkMenuItem(
     measurer: CanvasTextMeasurer,
@@ -244,21 +251,23 @@ fun DrawScope.drawKkMenuItem(
     stamp: String? = null,
     sub: String? = null,
     edgeRight: Float = size.width,
+    stampFontSize: Float = Float.NaN,
 ): Rect {
     val roles = measurer.roles
-    val k = fontSize / 64f
+    val k = fontSize * measurer.scale / 64f
     fun u(value: Float) = value * k * density
+    val textK = fontSize / 64f
     val s = selection.coerceAtLeast(0f)
     val textLayout = measureKkText(measurer, label, measurer.typography.condStyle(fontSize, lineHeightEm = 1f), uppercase = true)
     val subLayout = sub?.let {
-        measureKkText(measurer, it, measurer.typography.monoStyle(11f * k.coerceAtLeast(0.8f), trackingEm = 0.06f), uppercase = true)
+        measureKkText(measurer, it, measurer.typography.monoStyle(11f * textK.coerceAtLeast(0.8f), trackingEm = 0.06f), uppercase = true)
     }
-    val stampSize = 14f * k.coerceAtLeast(0.8f)
+    val stampSize = if (stampFontSize.isNaN()) 14f * textK.coerceAtLeast(0.8f) else stampFontSize
     val stampWidth = if (stamp != null) kkStampSize(measurer, stamp, density, stampSize).width else 0f
     val lockSize = u(24f)
     var trailing = 0f
-    if (subLayout != null) trailing += u(18f) + subLayout.size.width
     if (stamp != null) trailing += u(18f) + stampWidth
+    if (subLayout != null) trailing += u(18f) + subLayout.size.width
     if (locked) trailing += u(18f) + lockSize
     val width = u(22f) + textLayout.size.width + trailing + u(44f)
     val top = centerY - u(33f)
@@ -291,6 +300,11 @@ fun DrawScope.drawKkMenuItem(
             var x = bounds.left + u(22f)
             drawKkText(textLayout, x, centerY, textColor, valign = KkVAlign.CENTER)
             x += textLayout.size.width
+            if (stamp != null) {
+                x += u(18f)
+                drawKkStamp(measurer, stamp, Offset(x + u(2f), centerY - u(4f) - kkStampSize(measurer, stamp, density, stampSize).height * 0.5f), fontSize = stampSize)
+                x += stampWidth
+            }
             if (subLayout != null) {
                 x += u(18f)
                 val subAlpha = s.coerceIn(0f, 1f)
@@ -298,11 +312,6 @@ fun DrawScope.drawKkMenuItem(
                     drawKkText(subLayout, x, centerY + u(12f), if (s > 0.5f) Kk.Ink else Kk.Mute, valign = KkVAlign.CENTER, alpha = subAlpha)
                 }
                 x += subLayout.size.width
-            }
-            if (stamp != null) {
-                x += u(18f)
-                drawKkStamp(measurer, stamp, Offset(x + u(2f), centerY - u(4f) - kkStampSize(measurer, stamp, density, stampSize).height * 0.5f), fontSize = stampSize)
-                x += stampWidth
             }
             if (locked) {
                 x += u(18f)

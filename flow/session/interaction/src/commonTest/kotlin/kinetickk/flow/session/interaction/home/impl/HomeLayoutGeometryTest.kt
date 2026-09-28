@@ -223,7 +223,7 @@ class HomeMenuClearanceTest {
 
     @Test
     fun theFormNameClearsEverySelectedMenuSlabAndSpeedLine() {
-        listOf(1_440f to 810f, 1_000f to 700f, 844f to 390f, 800f to 360f, 600f to 390f, 873f to 393f, 390f to 844f, 390f to 600f).forEach { (width, height) ->
+        listOf(1_440f to 810f, 1_920f to 1_080f, 1_280f to 720f, 1_000f to 700f, 844f to 390f, 800f to 360f, 600f to 390f, 873f to 393f, 390f to 844f, 390f to 600f).forEach { (width, height) ->
             val layout = homeLayoutGeometry(width, height, 1f)
             val scene = layout.scene
             val name = androidx.compose.ui.geometry.Rect(scene.formNameLeft, scene.formNameCenterY - scene.formNameSize * 0.65f,
