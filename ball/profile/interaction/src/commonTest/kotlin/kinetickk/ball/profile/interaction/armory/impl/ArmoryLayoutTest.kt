@@ -141,6 +141,50 @@ class ArmoryLayoutTest {
     }
 
     @Test
+    fun tileIconsKeepOneSizeBetweenTheTallestTextsAndTheTilesGrowRatherThanLoseThem() {
+        val frame = profileFrame(844f, 390f, 1f)
+        val insets = armoryTileInsets(frame)
+        val icon = frame.d(armoryType(frame.mode).tileIcon)
+        fun layout(status: Float, nameBlock: Float) = armoryLayout(frame, TestWeapons.size, 1f, 80f, 260f,
+            tileText = { ArmoryTileMetrics(status, nameBlock) })
+        val plain = layout(status = 0f, nameBlock = 0f)
+        // Room to spare: the board's icon, centred between the texts.
+        val roomy = layout(status = 14f, nameBlock = 18f)
+        assertEquals(plain.tiles, roomy.tiles)
+        assertEquals(icon, roomy.tileIcon, 0.01f)
+        val bandTop = insets.top + 14f + frame.d(ARMORY_TILE_ICON_GAP)
+        val bandBottom = roomy.tiles.first().height - insets.bottom - 18f - frame.d(ARMORY_TILE_ICON_GAP)
+        assertEquals((bandTop + bandBottom) * 0.5f, roomy.tileIconY, 0.01f)
+        // Two-line names (phone, default text): every tile's icon shrinks to what the tallest name
+        // leaves, the grid keeps its fitted rows.
+        val wrapped = layout(status = 14f, nameBlock = 37f)
+        assertEquals(plain.tiles, wrapped.tiles)
+        assertTrue(wrapped.tileIcon < icon && wrapped.tileIcon >= icon * ARMORY_TILE_ICON_MIN, "${wrapped.tileIcon}")
+        // Large text: the icon keeps its smallest size and the tiles grow (the grid scrolls).
+        val large = layout(status = 18f, nameBlock = 52f)
+        assertEquals(icon * ARMORY_TILE_ICON_MIN, large.tileIcon, 0.01f)
+        val tile = large.tiles.first()
+        assertTrue(tile.height > plain.tiles.first().height, "${tile.height}")
+        assertEquals(insets.top + 18f + frame.d(ARMORY_TILE_ICON_GAP) * 2f + large.tileIcon + 52f + insets.bottom, tile.height, 0.01f)
+        assertTrue(large.gridScrollMax > 0f)
+        assertEquals(large.tiles[large.columns].top - tile.top, large.rowPitch, 0.01f)
+    }
+
+    @Test
+    fun sideBySideMilestonesNeedTheirBonusGroupsClearlyApart() {
+        val frame = profileFrame(844f, 390f, 1f)
+        val levels = listOf(1, 3, 6, 10)
+        // A 320 px ladder: Lvl 3 starts at 64.8, Lvl 6 at 162, and the last group ends at the right edge.
+        val gap = 7f
+        assertTrue(armoryMasteryFitsSideBySide(frame, levels, listOf(28f, 58f, 60f, 60f), gap, 320f))
+        // The Lvl 6 group running within 3 gaps of the right-aligned last group does not fit.
+        assertFalse(armoryMasteryFitsSideBySide(frame, levels, listOf(28f, 58f, 90f, 60f), gap, 320f))
+        // Nor does a group wider than its slot before the next milestone.
+        assertFalse(armoryMasteryFitsSideBySide(frame, levels, listOf(28f, 120f, 60f, 60f), gap, 320f))
+        assertTrue(armoryMasteryFitsSideBySide(frame, emptyList(), emptyList(), gap, 320f))
+    }
+
+    @Test
     fun smallestTextSizeKeepsTheBoardTilesAndDock() {
         // At 100 % text the labels shrink; the tiles (the press targets), the grid and the
         // portrait detail dock keep their size at the board's text size (125 %).

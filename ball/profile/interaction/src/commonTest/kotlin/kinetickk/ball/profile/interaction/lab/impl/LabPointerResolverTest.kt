@@ -179,6 +179,66 @@ class LabPointerResolverTest {
     }
 
     @Test
+    fun rankPipsKeepTheBoardProportionsAtEveryTextSize() {
+        // The board's pips are 22 x 24 cells: at every frame and text size (with the game's 12-rank
+        // upgrade) a pip stays at least 0.6 of its height and 8 dp wide, and the pips stay inside
+        // their slot, clear of the value and cost on their line.
+        for ((width, height) in listOf(1440f to 810f, 1000f to 700f, 844f to 390f, 720f to 360f, 390f to 844f, 360f to 640f)) {
+            for (setting in listOf(1f, 1.25f, 1.5f, 1.75f)) {
+                for (ranks in listOf(10, 12)) {
+                    val frame = profileFrame(width, height, 1f)
+                    val layout = labLayout(frame, 8, ranks, profileTextScale(setting), backWidth = 80f)
+                    val columns = layout.columns
+                    val context = "$width x $height @$setting $ranks ranks"
+                    assertTrue(columns.pipWidth >= columns.pipHeight * 0.6f - 0.01f, "$context pip ${columns.pipWidth} x ${columns.pipHeight}")
+                    assertTrue(columns.pipWidth >= frame.d(8f) - 0.01f, "$context pip ${columns.pipWidth} < ${frame.d(8f)}")
+                    val pipsRight = columns.pipsLeft + ranks * columns.pipWidth + (ranks - 1) * columns.pipGap
+                    assertTrue(pipsRight <= columns.pipsLeft + columns.pipsWidth + 0.01f, context)
+                    assertTrue(pipsRight <= columns.valueLeft, "$context pips end $pipsRight past the value ${columns.valueLeft}")
+                    if (!columns.twoLines) assertTrue(pipsRight <= columns.costLeft, context)
+                    val row = layout.rows.first()
+                    // Both lines of a two-line row sit inside it.
+                    assertTrue(columns.firstLineY > 0f && columns.secondLineY + columns.pipHeight * 0.5f <= row.height, context)
+                }
+            }
+        }
+        // The landscape phone wraps its rows to two lines at large text only.
+        assertTrue(!layout(844f, 390f, profileTextScale(1.25f)).columns.twoLines)
+        assertTrue(labLayout(profileFrame(844f, 390f, 1f), 8, 12, profileTextScale(1.75f), 80f).columns.twoLines)
+    }
+
+    @Test
+    fun theScrollBarStaysClearOfAFocusedRowsRing() {
+        // At every frame scale and density the bar starts at least 1 px right of a focused row's
+        // ring, even when the row's placement rounds up to 1 px right, and it stays inside the
+        // list viewport, which stays on screen and clear of the details.
+        for (density in listOf(1f, 2f, 2.75f)) {
+            for ((width, height) in listOf(
+                1440f to 810f, 1000f to 700f, 900f to 560f, 2160f to 1215f, 864f to 600f, 844f to 390f, 720f to 360f, 640f to 300f, 1100f to 508f,
+                390f to 844f, 360f to 640f, 320f to 568f, 507f to 1097f,
+            )) {
+                val frame = profileFrame(width * density, height * density, density)
+                val layout = labLayout(frame, 8, 12, profileTextScale(1.25f), backWidth = 80f)
+                val context = "$width x $height @$density ${frame.mode} k ${frame.k}"
+                val rowsRight = layout.rows.maxOf { it.right }
+                val ring = rowsRight + labFocusRingOutset(frame)
+                val bar = labScrollBarX(layout)
+                assertTrue(bar >= ring + 2f - 0.01f, "$context bar $bar vs ring $ring")
+                assertTrue(bar + labScrollBarWidth(frame) <= layout.listViewport.width + 0.01f, "$context bar $bar in ${layout.listViewport}")
+                // The ring's other sides fit the viewport's padding too.
+                val first = layout.rows.first()
+                assertTrue(first.left - labFocusRingOutset(frame) >= 0f && first.top - labFocusRingOutset(frame) >= 0f, context)
+                assertTrue(layout.listViewport.right <= frame.width + 0.01f, "$context ${layout.listViewport}")
+                if (!frame.portrait) assertTrue(layout.listViewport.right <= layout.detailViewport.left + 0.01f, "$context ${layout.listViewport}")
+            }
+        }
+        // Where the board's padding already holds them the list keeps the board's geometry.
+        val board = layout(390f, 844f)
+        assertEquals(390f, board.listViewport.right, 0.01f)
+        assertEquals(390f - 12f, board.listViewport.left + board.rows.first().right, 0.01f)
+    }
+
+    @Test
     fun smallestTextSizeKeepsTheBoardRowsAndTouchTargets() {
         // Board row heights: 72 (1440x810), 40 (844x390), 64 (390x844). At 100 % text the labels
         // shrink; the rows (the press targets) and the portrait dock keep the board's size.

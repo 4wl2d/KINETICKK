@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -137,13 +138,16 @@ internal fun ArmoryContent(
         )
         val activeTag = if (model.activeRunWeapon == inspected.id) language.text(ProfileScreensRedesignText.ActiveRun) else null
         val tagTexts = remember(inspected, language) { inspected.tags.map { it.localizedContent(language) } }
+        val tileTexts = remember(weapons, model, language) { armoryTileTexts(weapons, model, language) }
         val layout = armoryLayout(frame, weapons.size, scale, backWidth, actionWidth, needRoom = status == ArmoryWeaponStatus.SHORT,
-            masteryCount = masteries.size) { nameWidth, width ->
+            masteryCount = masteries.size, tileText = { innerWidth -> armoryTileMetrics(measurer, frame, type, tileTexts, innerWidth) },
+        ) { nameWidth, width ->
             ArmoryDetailMetrics(
                 nameHeight = armoryDetailNameLayout(measurer, frame, type, inspected.name.localizedContent(language), nameWidth).kkBoxHeight,
                 descriptionHeight = armoryDescriptionLayout(measurer, frame, type, inspected.description.localizedContent(language), width)
                     .kkBoxHeight,
                 tagsHeight = armoryTagsHeight(measurer, frame, tagTexts, activeTag, width),
+                masterySideBySide = armoryMasterySideBySide(measurer, frame, type, masteries, language, width),
             )
         }
         SideEffect { holder.layout = layout }
@@ -159,7 +163,8 @@ internal fun ArmoryContent(
             Box(Modifier.fillMaxWidth().height(frame.dp(layout.gridContentHeight))) {
                 weapons.forEachIndexed { index, definition ->
                     val tile = layout.tiles[index]
-                    ArmoryTile(frame, type, tile, definition, model, definition.id == state.inspected, index, scale, language, onAction)
+                    ArmoryTile(frame, type, tile, layout.tileIcon, layout.tileIconY, definition, model, definition.id == state.inspected,
+                        scale, language, onAction)
                 }
             }
         }
@@ -247,15 +252,56 @@ internal fun armoryActionPresentation(status: ArmoryWeaponStatus, definition: We
     }
 }
 
+/** What a weapon tile writes: its name, status (or unlock cost) line and whether it has tags. */
+internal class ArmoryTileText(val name: String, val status: String, val hasTags: Boolean)
+
+internal fun armoryTileTexts(weapons: List<WeaponDefinition>, model: ArmoryRenderModel, language: AppLanguage): List<ArmoryTileText> =
+    weapons.map { definition ->
+        val status = model.status(definition)
+        val active = model.activeRunWeapon == definition.id && status != ArmoryWeaponStatus.STARTER
+        ArmoryTileText(
+            name = definition.name.localizedContent(language),
+            status = if (status.locked) formatMatter(definition.permanentUnlockCost.toLong(), language) else
+                armoryStatusText(status, active, definition, language),
+            hasTags = definition.tags.isNotEmpty(),
+        )
+    }
+
+/**
+ * The grid's tallest status line and name block at their full size (a tile may shrink its own),
+ * for tiles whose content is [innerWidth] px wide.
+ */
+internal fun armoryTileMetrics(
+    measurer: CanvasTextMeasurer,
+    frame: ProfileFrame,
+    type: ArmoryType,
+    tiles: List<ArmoryTileText>,
+    innerWidth: Float,
+): ArmoryTileMetrics {
+    val statusStyle = measurer.typography.monoStyle(type.status * frame.k)
+    val tagLine = measureKkText(measurer, "0", measurer.typography.monoStyle(type.tileTags * frame.k), uppercase = true).kkBoxHeight
+    var status = 0f
+    var nameBlock = 0f
+    for (tile in tiles) {
+        status = max(status, measureKkText(measurer, tile.status, statusStyle, uppercase = true).kkBoxHeight)
+        var block = armoryTileNameLayout(measurer, frame, type, tile.name, innerWidth).kkBoxHeight
+        // The regular tile puts its tag line under the name, 5 dp below it.
+        if (frame.regular) block += frame.d(5f) + if (tile.hasTags) tagLine else 0f
+        nameBlock = max(nameBlock, block)
+    }
+    return ArmoryTileMetrics(status, nameBlock)
+}
+
 @Composable
 private fun ArmoryTile(
     frame: ProfileFrame,
     type: ArmoryType,
     tile: Rect,
+    iconSize: Float,
+    iconY: Float,
     definition: WeaponDefinition,
     model: ArmoryRenderModel,
     inspected: Boolean,
-    index: Int,
     textScale: Float,
     language: AppLanguage,
     onAction: (ArmoryAction) -> Unit,
@@ -299,7 +345,7 @@ private fun ArmoryTile(
             }
             .drawBehind {
                 drawArmoryTile(measurer, frame, type, name, tags, statusText, costText, status, active,
-                    armoryWeaponIcon(definition.id), selection, hovered, focused)
+                    armoryWeaponIcon(definition.id), iconSize, iconY, selection, hovered, focused)
             },
     )
 }
@@ -322,6 +368,8 @@ private fun DrawScope.drawArmoryTile(
     status: ArmoryWeaponStatus,
     active: Boolean,
     icon: KkIcon?,
+    iconSize: Float,
+    iconY: Float,
     selection: Float,
     hovered: Boolean,
     focused: Boolean,
@@ -344,12 +392,12 @@ private fun DrawScope.drawArmoryTile(
         else -> Kk.Bone
     }
     val compact = !frame.regular
-    val padLeft = frame.d(if (compact) 14f else 24f)
-    val padRight = frame.d(if (compact) 12f else 22f)
-    val padTop = frame.d(if (compact) 10f else 14f)
-    val padBottom = frame.d(if (compact) 10f else 14f)
+    val insets = armoryTileInsets(frame)
+    val padLeft = insets.left
+    val padRight = insets.right
+    val padTop = insets.top
+    val padBottom = insets.bottom
     val innerWidth = size.width - padLeft - padRight
-    val statusBottom: Float
     if (locked) {
         val gem = frame.d(if (compact) 7f else 9f)
         val costColor = when {
@@ -361,12 +409,10 @@ private fun DrawScope.drawArmoryTile(
         }
         drawKkGem(Offset(padLeft + gem * 0.5f, padTop + cost.kkBoxHeight * 0.5f), costColor, gem / density)
         drawProfileText(cost, padLeft + gem + frame.d(5f), padTop, costColor, "armory.tile.status", name)
-        statusBottom = padTop + cost.kkBoxHeight
     } else {
         val layout = fitKkText(measurer, statusText, type.status * k, innerWidth, minFactor = 0.5f) { measurer.typography.monoStyle(it) }
         drawProfileText(layout, padLeft, padTop, if (active && !on) roles.you else fg, "armory.tile.status", name,
             alpha = if (active) 1f else 0.7f)
-        statusBottom = padTop + layout.kkBoxHeight
     }
 
     // Phones keep the tags in the detail panel; the regular tile lists them as words on one line,
@@ -397,18 +443,18 @@ private fun DrawScope.drawArmoryTile(
     val nameTop = tagsTop - (if (compact) 0f else frame.d(5f)) - nameLayout.kkBoxHeight
     drawProfileText(nameLayout, padLeft, nameTop, fg, "armory.tile.name", name)
 
-    // The icon sits centred in the band between the status line and the name, shrinking when
-    // large text leaves less room.
+    // The icon has the grid's one size and height (the layout keeps it between the tallest status
+    // line and the tallest name block), so a wrapped name never shrinks or hides it.
     val iconColor = when {
         locked -> Kk.Mute
         on -> Kk.Ink
         else -> roles.you
     }
-    val bandTop = statusBottom + frame.d(4f)
-    val bandBottom = nameTop - frame.d(4f)
-    val iconSize = minOf(frame.d(type.tileIcon), bandBottom - bandTop)
-    if (icon != null && iconSize > frame.d(10f)) {
-        drawKkIcon(icon, Offset(size.width * 0.5f, (bandTop + bandBottom) * 0.5f), iconSize, iconColor)
+    if (icon != null && iconSize > 0f) {
+        val center = Offset(size.width * 0.5f, iconY)
+        drawKkIcon(icon, center, iconSize, iconColor)
+        if (ProfileTextProbe.sink != null) ProfileTextProbe.record("armory.tile.icon", name, null,
+            Rect(center.x - iconSize * 0.5f, center.y - iconSize * 0.5f, center.x + iconSize * 0.5f, center.y + iconSize * 0.5f))
     }
 }
 
@@ -517,7 +563,7 @@ private fun DrawScope.drawArmoryDetail(
     val mastery = measureKkText(measurer, language.text(ProfileScreensRedesignText.Mastery), measurer.typography.labelStyle(type.label * k),
         uppercase = true)
     drawProfileText(mastery, layout.mastery.left, layout.mastery.center.y, Kk.Mute, "armory.detail.mastery", valign = KkVAlign.CENTER)
-    drawMasteryLadder(measurer, frame, type, layout.ladder, masteries, language)
+    drawMasteryLadder(measurer, frame, type, layout.ladder, layout.ladderStacked, masteries, language)
 }
 
 /** "Need N more matter" beside a locked Unlock button, in the threat role. */
@@ -537,16 +583,68 @@ private fun DrawScope.drawArmoryNeed(
     drawProfileText(needLayout, rect.left, rect.center.y, measurer.roles.threat, "armory.need", valign = KkVAlign.CENTER)
 }
 
+/** A milestone's bonus group: "Base" for the first milestone, else its damage and activation-speed values. */
+private fun masteryBonusParts(mastery: WeaponMastery, language: AppLanguage): List<String> =
+    if (mastery.damageBonus <= 0f && mastery.activationSpeedBonus <= 0f) {
+        listOf(language.text(ProfileScreensRedesignText.MasteryBase))
+    } else {
+        listOf("+${percent(mastery.damageBonus)}%", "+${percent(mastery.activationSpeedBonus)}%")
+    }
+
+/** Gap (px) between the two values of a bonus group: the board's 8 px beside its 11 px values, following the text size. */
+private fun armoryBonusGap(measurer: CanvasTextMeasurer, frame: ProfileFrame, type: ArmoryType): Float =
+    frame.d(8f * type.ladderMono / 11f) * measurer.scale
+
+/** A milestone's bonus values measured at the ladder's full size (side by side they never shrink). */
+private fun armoryBonusLayouts(
+    measurer: CanvasTextMeasurer,
+    frame: ProfileFrame,
+    type: ArmoryType,
+    mastery: WeaponMastery,
+    language: AppLanguage,
+): List<TextLayoutResult> {
+    val style = measurer.typography.monoStyle(type.ladderMono * frame.k)
+    return masteryBonusParts(mastery, language).map { measureKkText(measurer, it, style, uppercase = true) }
+}
+
+/** Width (px) of a bonus group whose values sit [gap] apart. */
+private fun List<TextLayoutResult>.groupWidth(gap: Float): Float =
+    sumOf { it.size.width.toDouble() }.toFloat() + gap * (size - 1).coerceAtLeast(0)
+
+/** Draws a bonus group's values [gap] apart from [left], each reported as a ladder bonus of milestone [index]. */
+private fun DrawScope.drawBonusGroup(parts: List<TextLayoutResult>, left: Float, y: Float, gap: Float, index: Int, valign: KkVAlign) {
+    var x = left
+    for (part in parts) {
+        drawProfileText(part, x, y, Kk.Mute, "armory.ladder.bonus", index, valign = valign)
+        x += part.size.width + gap
+    }
+}
+
+/** Whether the mastery milestones fit side by side on a ladder [width] px wide ([armoryMasteryFitsSideBySide]). */
+internal fun armoryMasterySideBySide(
+    measurer: CanvasTextMeasurer,
+    frame: ProfileFrame,
+    type: ArmoryType,
+    masteries: List<WeaponMastery>,
+    language: AppLanguage,
+    width: Float,
+): Boolean {
+    val gap = armoryBonusGap(measurer, frame, type)
+    return armoryMasteryFitsSideBySide(frame, masteries.map { it.minimumLevel },
+        masteries.map { armoryBonusLayouts(measurer, frame, type, it, language).groupWidth(gap) }, gap, width)
+}
+
 /**
  * Mastery ladder: one sheared cell per weapon level up to the last milestone, milestone cells lit
  * (you, you, bone, legendary for the last), "Lvl N" over each milestone and its name with the
- * damage and activation bonuses under it.
+ * damage and activation bonuses under it; [stacked] lists the milestones one per line instead.
  */
 private fun DrawScope.drawMasteryLadder(
     measurer: CanvasTextMeasurer,
     frame: ProfileFrame,
     type: ArmoryType,
     rect: Rect,
+    stacked: Boolean,
     masteries: List<WeaponMastery>,
     language: AppLanguage,
 ) {
@@ -557,16 +655,16 @@ private fun DrawScope.drawMasteryLadder(
     val cells = masteries.maxOf { it.minimumLevel }.coerceIn(1, 40)
     val gap = frame.d(4f)
     val cellWidth = (rect.width - gap * (cells - 1)) / cells
-    val cellTop = rect.top + armoryLadderCellsTop(frame, t)
+    val cellTop = rect.top + armoryLadderCellsTop(frame, stacked, t)
     val cellHeight = frame.d(if (frame.regular) 12f else 10f)
     val monoStyle = measurer.typography.monoStyle(type.ladderMono * k)
     val namesTop = cellTop + cellHeight + frame.d(if (frame.regular) 10f else 8f)
+    val bonusGap = armoryBonusGap(measurer, frame, type)
     fun milestoneColor(index: Int): Color = when {
         index == masteries.lastIndex -> Kk.RLegend
         index < 2 -> roles.you
         else -> Kk.Bone
     }
-    val stacked = armoryMasteryStacked(t)
     for (cell in 0 until cells) {
         val level = cell + 1
         val milestone = masteries.indexOfFirst { it.minimumLevel == level }
@@ -584,10 +682,10 @@ private fun DrawScope.drawMasteryLadder(
             val color = milestoneColor(index)
             drawProfileText(measureKkText(measurer, levelTexts[index], monoStyle, uppercase = true), rect.left, y, color,
                 "armory.ladder.level", index, valign = KkVAlign.CENTER)
-            val bonus = masteryBonus(mastery, language)
-            val bonusLayout = measureKkText(measurer, bonus, monoStyle, uppercase = true)
-            drawProfileText(bonusLayout, rect.right, y, Kk.Mute, "armory.ladder.bonus", index, align = KkAlign.END, valign = KkVAlign.CENTER)
-            val nameRoom = rect.width - levelWidth - bonusLayout.size.width - frame.d(10f)
+            val bonus = armoryBonusLayouts(measurer, frame, type, mastery, language)
+            val bonusWidth = bonus.groupWidth(bonusGap)
+            drawBonusGroup(bonus, rect.right - bonusWidth, y, bonusGap, index, KkVAlign.CENTER)
+            val nameRoom = rect.width - levelWidth - bonusWidth - frame.d(10f)
             val nameLayout = fitKkText(measurer, mastery.displayLabel.localizedContent(language), type.ladderName * k, nameRoom,
                 minFactor = 0.5f) { measurer.typography.labelStyle(it) }
             drawProfileText(nameLayout, rect.left + levelWidth, y, if (index == masteries.lastIndex) Kk.RLegend else Kk.Bone,
@@ -611,24 +709,17 @@ private fun DrawScope.drawMasteryLadder(
             max(room, frame.d(40f)), minFactor = 0.7f) { measurer.typography.labelStyle(it) }
         drawProfileText(nameLayout, x, namesTop, if (last) Kk.RLegend else Kk.Bone, "armory.ladder.name", index, align = align)
         previousRight = cellLeft + nameLayout.size.width
-        val bonus = masteryBonus(mastery, language)
-        val bonusLayout = fitKkText(measurer, bonus, type.ladderMono * k, max(room, frame.d(40f)), minFactor = 0.6f) {
-            measurer.typography.monoStyle(it)
-        }
-        drawProfileText(bonusLayout, x, namesTop + nameLayout.kkBoxHeight + frame.d(4f), Kk.Mute, "armory.ladder.bonus", index, align = align)
-        previousRight = max(previousRight, cellLeft + bonusLayout.size.width)
+        // The layout keeps these ladders to panels where every bonus group fits its slot at full
+        // size, clearly apart from its neighbours ([armoryMasteryFitsSideBySide]).
+        val bonus = armoryBonusLayouts(measurer, frame, type, mastery, language)
+        val bonusWidth = bonus.groupWidth(bonusGap)
+        drawBonusGroup(bonus, if (last) rect.right - bonusWidth else cellLeft, namesTop + nameLayout.kkBoxHeight + frame.d(4f),
+            bonusGap, index, KkVAlign.TOP)
+        previousRight = max(previousRight, cellLeft + bonusWidth)
     }
 }
 
 private fun percent(value: Float): Int = (value * 100f).roundToInt()
-
-/** "Base" for the first milestone, else the damage and activation-speed bonuses. */
-private fun masteryBonus(mastery: WeaponMastery, language: AppLanguage): String =
-    if (mastery.damageBonus <= 0f && mastery.activationSpeedBonus <= 0f) {
-        language.text(ProfileScreensRedesignText.MasteryBase)
-    } else {
-        "+${percent(mastery.damageBonus)}%  +${percent(mastery.activationSpeedBonus)}%"
-    }
 
 private const val LADDER_SLOTS = 40
 private val LadderPaths = KkPathCache(LADDER_SLOTS)
@@ -644,8 +735,10 @@ private fun DrawScope.drawArmoryBackground(
     when (frame.mode) {
         ProfileLayoutMode.REGULAR -> {
             drawProfileSidePanel(frame.x(900f))
-            val word = measureKkText(measurer, title, measurer.typography.wideStyle(230f * frame.k, lineHeightEm = 1f), uppercase = true)
-            drawText(word, Color(0xFF1F231F), Offset(frame.x(40f), frame.d(600f) - word.kkBoxTop), drawStyle = OutlineStroke.of(1.5f * density))
+            val word = armoryBackgroundWord(measurer, frame, title)
+            val topLeft = Offset(frame.x(40f), frame.d(600f) - word.kkBoxTop)
+            drawText(word, Color(0xFF1F231F), topLeft, drawStyle = OutlineStroke.of(1.5f * density))
+            if (ProfileTextProbe.sink != null) ProfileTextProbe.record("armory.background.word", title, word, Rect(topLeft, word.size.toSize()))
         }
         ProfileLayoutMode.COMPACT_LANDSCAPE -> if (layout != null) {
             drawProfileSidePanel(layout.detailViewport.left - size.height * KkShape.ShearRatio * 0.5f)
@@ -657,6 +750,24 @@ private fun DrawScope.drawArmoryBackground(
         }
     }
 }
+
+/**
+ * The outlined background title: the board's 230 px word from x 40, shrunk when a longer title
+ * (Russian) would pass [ARMORY_WORD_RIGHT], so it ends inside the frame like the board's word.
+ */
+internal fun armoryBackgroundWord(measurer: CanvasTextMeasurer, frame: ProfileFrame, title: String): TextLayoutResult {
+    val room = frame.d(ARMORY_WORD_RIGHT - 40f)
+    var size = 230f * frame.k
+    var word = measureKkText(measurer, title, measurer.typography.wideStyle(size, lineHeightEm = 1f), uppercase = true)
+    while (word.size.width > room && size > 40f * frame.k) {
+        size *= min(0.98f, room / word.size.width)
+        word = measureKkText(measurer, title, measurer.typography.wideStyle(size, lineHeightEm = 1f), uppercase = true)
+    }
+    return word
+}
+
+/** Board x the background word may reach: 20 px inside the 1440 frame, where the board's word ends. */
+internal const val ARMORY_WORD_RIGHT = 1420f
 
 /** Reused outline stroke for the big background word. */
 private object OutlineStroke {

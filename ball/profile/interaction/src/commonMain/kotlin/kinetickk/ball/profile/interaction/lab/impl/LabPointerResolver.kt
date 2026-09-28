@@ -14,8 +14,9 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Column slots inside one Lab row, in px relative to the row's left/top. Portrait rows use two
- * lines: name and cost on top, rank pips and the current value underneath.
+ * Column slots inside one Lab row, in px relative to the row's left/top. Portrait rows (and
+ * landscape rows whose large text leaves the rank pips too narrow) use two lines: name and cost
+ * on top, rank pips and the current value underneath.
  */
 internal class LabRowColumns(
     val iconCenterX: Float,
@@ -99,7 +100,9 @@ internal fun labLayout(
     val t = textScale.coerceIn(0.75f, 2f)
     val grow = profileLayoutGrow(t, 0.55f)
     val back = profileHeaderBackRect(frame, backWidth)
-    val pad = d(12f)
+    val pad = d(LAB_LIST_PAD)
+    // Right of the rows the viewport also holds the focus ring and, beyond it, the scroll bar.
+    val rightPad = labListRightPad(frame)
     val type = labType(frame.mode)
     val listLeft: Float
     val listRight: Float
@@ -107,6 +110,7 @@ internal fun labLayout(
     val listBottom: Float
     val rowHeight: Float
     val rowGap: Float
+    var twoLines = false
     val detailLeft: Float
     val detailRight: Float
     val detailTop: Float
@@ -129,10 +133,17 @@ internal fun labLayout(
             detailRight = frame.right
             detailLeft = detailRight - detailWidth
             listLeft = frame.left - d(6f)
-            listRight = detailLeft - d(24f)
+            // The list viewport ends where the details' begins: at a small frame scale the rows
+            // give up the width the focus ring and the scroll bar need.
+            listRight = min(detailLeft - d(24f), detailLeft - pad - rightPad)
             listTop = frame.headerHeight + d(4f)
             listBottom = frame.height - d(4f)
-            rowHeight = d(40f) * grow
+            // When the value and cost columns of large text squeeze the rank pips below their
+            // proportions, the rows wrap to two lines like the portrait list: name and cost over
+            // the pips and value.
+            twoLines = labLandscapeOneLinePipWidth(frame, listRight - listLeft, max(1, maxRanks), t) <
+                labPipMinWidth(frame, d(LAB_LANDSCAPE_PIP_HEIGHT))
+            rowHeight = if (twoLines) labLandscapeTwoLineHeight(frame, type, t) else d(40f) * grow
             rowGap = d(4f)
             detailTop = frame.headerHeight + d(8f)
             detailBottom = frame.height - d(8f)
@@ -140,7 +151,9 @@ internal fun labLayout(
         ProfileLayoutMode.COMPACT_PORTRAIT -> {
             val dock = d(262f) * (1f + (grow - 1f) * 0.6f)
             listLeft = frame.left - d(4f)
-            listRight = frame.right + d(4f)
+            // The viewport ends at the screen edge: at a small frame scale the rows give up the
+            // width the focus ring and the scroll bar need.
+            listRight = min(frame.right + d(4f), frame.width - rightPad)
             listTop = frame.headerHeight
             listBottom = frame.height - dock
             rowHeight = d(64f) * grow
@@ -156,9 +169,9 @@ internal fun labLayout(
         val top = pad + index * (rowHeight + rowGap)
         Rect(pad, top, pad + rowWidth, top + rowHeight)
     }
-    val listViewport = Rect(listLeft - pad, listTop - pad, listRight + pad, max(listTop, listBottom))
+    val listViewport = Rect(listLeft - pad, listTop - pad, listRight + rightPad, max(listTop, listBottom))
     val listContentHeight = if (rowCount == 0) 0f else pad * 2f + rowCount * rowHeight + (rowCount - 1) * rowGap
-    val columns = labRowColumns(frame, rowWidth, rowHeight, max(1, maxRanks), type, t)
+    val columns = labRowColumns(frame, rowWidth, rowHeight, max(1, maxRanks), type, t, twoLines)
 
     val regular = frame.regular
     val iconSize = d(when (frame.mode) {
@@ -204,6 +217,55 @@ internal fun labLayout(
 /** Height of the list's scroll cue fades (the list draws them over rows at a scrolled edge). */
 internal fun labListFade(frame: ProfileFrame): Float = frame.d(24f)
 
+/** Width (px) of the list's scroll bar. */
+internal fun labScrollBarWidth(frame: ProfileFrame): Float = frame.d(3f)
+
+/**
+ * Left (list viewport px) of the list's scroll bar: in the viewport's padding right of the rows,
+ * clear of a focused row's ring (drawn over by the bar otherwise) by a 2 dp gap.
+ */
+internal fun labScrollBarX(layout: LabLayout): Float =
+    layout.listViewport.width - labListRightPad(layout.frame) + labFocusRingOutset(layout.frame) + layout.frame.density * 2f
+
+/**
+ * The list viewport's padding right of the rows (px): [LAB_LIST_PAD], widened where the frame
+ * scale leaves it too narrow for the focus ring, the gap, the scroll bar and 1 dp beyond it.
+ */
+internal fun labListRightPad(frame: ProfileFrame): Float =
+    max(frame.d(LAB_LIST_PAD), labFocusRingOutset(frame) + frame.density * 3f + labScrollBarWidth(frame))
+
+/** How far (px) a focused row's ring reaches outside the row: its offset plus half its stroke. */
+internal fun labFocusRingOutset(frame: ProfileFrame): Float = (LAB_FOCUS_RING_OFFSET + LAB_FOCUS_RING_STROKE * 0.5f) * frame.density
+
+/** The list viewport's padding around the rows (dp at the board scale). */
+internal const val LAB_LIST_PAD = 12f
+
+/** A focused row's ring: a [LAB_FOCUS_RING_STROKE] dp bone stroke this far (dp) outside the row. */
+internal const val LAB_FOCUS_RING_OFFSET = 5f
+
+/** Stroke width (dp) of a focused row's ring. */
+internal const val LAB_FOCUS_RING_STROKE = 2f
+
+/** Rank pip height of a landscape row (dp at the board scale). */
+private const val LAB_LANDSCAPE_PIP_HEIGHT = 15f
+
+/**
+ * The narrowest rank pip (px) for a pip [height]: the board's cells are 22 × 24, so a pip keeps
+ * at least 0.6 of its height and 8 dp.
+ */
+internal fun labPipMinWidth(frame: ProfileFrame, height: Float): Float = max(frame.d(8f), height * 0.6f)
+
+/** Pip width (px) of a one-line landscape row [rowWidth] px wide: what the name, value and cost columns leave. */
+private fun labLandscapeOneLinePipWidth(frame: ProfileFrame, rowWidth: Float, maxRanks: Int, textScale: Float): Float =
+    labRowColumns(frame, rowWidth, frame.d(40f), maxRanks, labType(frame.mode), textScale, twoLines = false).let { columns ->
+        (columns.pipsWidth - columns.pipGap * (maxRanks - 1)) / maxRanks
+    }
+
+/** A two-line landscape row: padding, the name line, a gap, then the taller of the pips and the value. */
+private fun labLandscapeTwoLineHeight(frame: ProfileFrame, type: LabType, textScale: Float): Float =
+    frame.d(10f) * 2f + frame.d(type.rowName) * textScale + frame.d(8f) +
+        max(frame.d(LAB_LANDSCAPE_PIP_HEIGHT), frame.d(type.rowValue) * textScale)
+
 /**
  * The list scroll that brings the row [rowTop]..[rowBottom] (content px) fully into view, clear
  * of the [fade] bands the scroll cue draws at an edge with more content, or null when no scroll
@@ -242,6 +304,7 @@ private fun labRowColumns(
     maxRanks: Int,
     type: LabType,
     textScale: Float,
+    twoLines: Boolean,
 ): LabRowColumns {
     fun d(value: Float) = frame.d(value)
     return when (frame.mode) {
@@ -261,20 +324,35 @@ private fun labRowColumns(
         }
         ProfileLayoutMode.COMPACT_LANDSCAPE -> {
             val nameLeft = d(38f)
-            val nameWidth = rowWidth * 0.3f
             val costWidth = d(58f) * textScale.coerceAtLeast(1f)
             val valueWidth = d(54f) * textScale.coerceAtLeast(1f)
-            val pipsLeft = nameLeft + nameWidth + d(8f)
             val costRight = rowWidth - d(12f)
-            val pipsWidth = (costRight - costWidth - valueWidth - d(16f) - pipsLeft).coerceAtLeast(d(40f))
             val pipGap = d(3f)
-            val pipWidth = min(d(14f), (pipsWidth - pipGap * (maxRanks - 1)) / maxRanks)
-            LabRowColumns(
-                iconCenterX = d(20f), iconSize = d(20f), nameLeft = nameLeft, nameWidth = nameWidth,
-                pipsLeft = pipsLeft, pipsWidth = pipsWidth, pipWidth = pipWidth, pipHeight = d(15f), pipGap = pipGap,
-                valueLeft = pipsLeft + pipsWidth + d(8f), valueWidth = valueWidth, costLeft = costRight - costWidth, costRight = costRight,
-                firstLineY = rowHeight * 0.5f, secondLineY = rowHeight * 0.5f, twoLines = false,
-            )
+            val pipHeight = d(LAB_LANDSCAPE_PIP_HEIGHT)
+            if (twoLines) {
+                // Name and cost on the first line; the pips and the value (right) on the second.
+                val pipsWidth = (costRight - valueWidth - d(10f) - nameLeft).coerceAtLeast(d(60f))
+                val secondLine = max(pipHeight, d(type.rowValue) * textScale)
+                LabRowColumns(
+                    iconCenterX = d(20f), iconSize = d(20f), nameLeft = nameLeft, nameWidth = costRight - costWidth - d(8f) - nameLeft,
+                    pipsLeft = nameLeft, pipsWidth = pipsWidth, pipWidth = min(d(14f), (pipsWidth - pipGap * (maxRanks - 1)) / maxRanks),
+                    pipHeight = pipHeight, pipGap = pipGap,
+                    valueLeft = costRight - valueWidth, valueWidth = valueWidth, costLeft = costRight - costWidth, costRight = costRight,
+                    firstLineY = d(10f) + d(type.rowName) * textScale * 0.5f, secondLineY = rowHeight - d(10f) - secondLine * 0.5f,
+                    twoLines = true,
+                )
+            } else {
+                val nameWidth = rowWidth * 0.3f
+                val pipsLeft = nameLeft + nameWidth + d(8f)
+                val pipsWidth = (costRight - costWidth - valueWidth - d(16f) - pipsLeft).coerceAtLeast(d(40f))
+                LabRowColumns(
+                    iconCenterX = d(20f), iconSize = d(20f), nameLeft = nameLeft, nameWidth = nameWidth,
+                    pipsLeft = pipsLeft, pipsWidth = pipsWidth, pipWidth = min(d(14f), (pipsWidth - pipGap * (maxRanks - 1)) / maxRanks),
+                    pipHeight = pipHeight, pipGap = pipGap,
+                    valueLeft = pipsLeft + pipsWidth + d(8f), valueWidth = valueWidth, costLeft = costRight - costWidth, costRight = costRight,
+                    firstLineY = rowHeight * 0.5f, secondLineY = rowHeight * 0.5f, twoLines = false,
+                )
+            }
         }
         ProfileLayoutMode.COMPACT_PORTRAIT -> {
             val nameLeft = d(44f)
