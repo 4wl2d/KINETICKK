@@ -13,8 +13,11 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
+import kotlin.math.floor
 import kotlin.math.max
+import kotlin.math.min
 
 // Controls from kk.css (.btn, .ibtn, .stepper, .mi, .tile, .lrow, .tab, .segctl, .tgl, .sld).
 // Geometry parameters are in px (Rect/Offset) and the CSS numbers are dp (scaled by density).
@@ -123,7 +126,6 @@ fun DrawScope.drawKkButton(
             }
             val facePath = KkPathMemo.slab(bounds, cut)
             drawPath(facePath, face)
-            if (armed && interactive) drawPath(facePath, Color.White, alpha = 0.2f * kkPulse(time, 0.9f))
             if (locked) drawKkHatch(facePath)
             if ((variant == KkButtonVariant.HAZARD || armed) && interactive && roles.hatchThreats) {
                 // MONO: the hatch stays a rim so the label keeps a solid face.
@@ -131,6 +133,8 @@ fun DrawScope.drawKkButton(
                 val rim = d(4f)
                 drawPath(KkPathMemo.slab(bounds.left + rim, bounds.top + rim, bounds.right - rim, bounds.bottom - rim, cut), face)
             }
+            // After the MONO rim so the armed pulse lights the whole face in every palette.
+            if (armed && interactive) drawPath(facePath, Color.White, alpha = 0.2f * kkPulse(time, 0.9f))
             if (holdProgress > 0f && interactive) {
                 val holdLeft = bounds.left + d(10f)
                 val holdRight = holdLeft + (bounds.width - d(20f)) * holdProgress.coerceIn(0f, 1f)
@@ -522,7 +526,9 @@ fun DrawScope.drawKkSegment(
 /**
  * Toggle (`.tgl`, 62 × 28 dp): sheared ink-4 track with a sheared thumb; [on] 0..1 (animate with
  * Pull) slides the thumb 26 dp and turns it `you` on a `you`-ink track. Optional short state
- * labels ([onLabel]/[offLabel], mono 700 9 px) sit on the free side.
+ * labels ([onLabel]/[offLabel], mono 700 9 px) sit on the free side, at least 2 dp clear of the
+ * thumb: a word longer than the design's (e.g. Russian "Выкл") moves toward the track edge and,
+ * if it still does not fit, shrinks to the free lane.
  */
 fun DrawScope.drawKkToggle(
     measurer: CanvasTextMeasurer,
@@ -537,20 +543,54 @@ fun DrawScope.drawKkToggle(
     val isOn = t > 0.5f
     val track = if (isOn) kkMix(Kk.Ink, roles.you, 0.07f) else Kk.Ink4
     drawPath(KkPathMemo.slab(bounds, d(7f)), track)
-    val thumbLeft = bounds.left + d(6f) + d(26f) * t
+    val thumbLeft = bounds.left + d(TOGGLE_THUMB_INSET_DP) + d(TOGGLE_THUMB_TRAVEL_DP) * t
     val thumbTop = bounds.top + d(4f)
-    drawPath(KkPathMemo.slab(thumbLeft, thumbTop, thumbLeft + d(24f), thumbTop + d(20f), d(5f)), lerp(Kk.Mute, roles.you, t.coerceIn(0f, 1f)))
+    drawPath(KkPathMemo.slab(thumbLeft, thumbTop, thumbLeft + d(TOGGLE_THUMB_WIDTH_DP), thumbTop + d(20f), d(5f)),
+        lerp(Kk.Mute, roles.you, t.coerceIn(0f, 1f)))
     val text = if (isOn) onLabel else offLabel
     if (text != null) {
-        val style = measurer.typography.monoStyle(9f, weight = FontWeight.Bold, trackingEm = 0.06f)
+        // Free lane beside the resting thumb (its sheared slab reaches its full width at the top
+        // and its left edge at the bottom), inside the track's sheared ends.
+        val gap = d(TOGGLE_LABEL_GAP_DP)
+        val laneStart = if (isOn) bounds.left + d(7f) else bounds.left + d(TOGGLE_THUMB_INSET_DP + TOGGLE_THUMB_WIDTH_DP) + gap
+        val laneEnd = if (isOn) bounds.left + d(TOGGLE_THUMB_INSET_DP + TOGGLE_THUMB_TRAVEL_DP) - gap else bounds.right - d(7f)
+        val layout = kkToggleLabelLayout(measurer, text, laneEnd - laneStart)
+        val width = layout.size.width
         if (isOn) {
-            drawKkText(measurer, text, style, bounds.left + d(9f), bounds.center.y, roles.you, valign = KkVAlign.CENTER, uppercase = true)
+            val left = min(bounds.left + d(9f), laneEnd - width).coerceAtLeast(laneStart)
+            drawKkText(layout, left, bounds.center.y, roles.you, valign = KkVAlign.CENTER)
         } else {
-            drawKkText(measurer, text, style, bounds.right - d(9f), bounds.center.y, Kk.Mute2, align = KkAlign.END, valign = KkVAlign.CENTER, uppercase = true)
+            val right = max(bounds.right - d(9f), laneStart + width).coerceAtMost(laneEnd)
+            drawKkText(layout, right, bounds.center.y, Kk.Mute2, align = KkAlign.END, valign = KkVAlign.CENTER)
         }
     }
     if (focused) drawFocusOutline(bounds)
 }
+
+private const val TOGGLE_THUMB_INSET_DP = 6f
+private const val TOGGLE_THUMB_WIDTH_DP = 24f
+private const val TOGGLE_THUMB_TRAVEL_DP = 26f
+private const val TOGGLE_LABEL_GAP_DP = 2f
+
+/** The toggle state word in mono 700 9 px, shrunk (never ellipsized) to [lane] px when it is wider. */
+private fun kkToggleLabelLayout(measurer: CanvasTextMeasurer, text: String, lane: Float): TextLayoutResult {
+    val natural = measureKkText(measurer, text, toggleLabelStyle(measurer, TOGGLE_LABEL_SP), uppercase = true)
+    if (natural.size.width <= lane) return natural
+    // Width scales with the font size; step down in 0.1 sp so the shrunk style stays memoized.
+    var size = floor(TOGGLE_LABEL_SP * lane / natural.size.width * 10f) / 10f
+    var layout = measureKkText(measurer, text, toggleLabelStyle(measurer, size), uppercase = true)
+    while (layout.size.width > lane && size > TOGGLE_LABEL_MIN_SP) {
+        size -= 0.1f
+        layout = measureKkText(measurer, text, toggleLabelStyle(measurer, size), uppercase = true)
+    }
+    return layout
+}
+
+private const val TOGGLE_LABEL_SP = 9f
+private const val TOGGLE_LABEL_MIN_SP = 5f
+
+private fun toggleLabelStyle(measurer: CanvasTextMeasurer, size: Float) =
+    measurer.typography.monoStyle(size, weight = FontWeight.Bold, trackingEm = 0.06f)
 
 /**
  * Slider (`.sld`): sheared 8 dp ink-4 track across [bounds], `you` fill to [value] (0..1) and a

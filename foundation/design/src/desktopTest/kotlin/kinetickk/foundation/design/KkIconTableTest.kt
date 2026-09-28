@@ -45,11 +45,17 @@ class KkIconTableTest {
             val source = icons.getValue(icon.key).jsonObject
             assertEquals(source.getValue("label").jsonPrimitive.content, icon.label, icon.key)
             val layers = source.getValue("layers").jsonArray.map { it.jsonObject }
-            assertEquals(
-                layers.map { it.getValue("d").jsonPrimitive.content to it.getValue("style").jsonPrimitive.content },
-                icon.layers.map { it.d to it.style.jsonName },
-                icon.key,
-            )
+            val design = layers.map { it.getValue("d").jsonPrimitive.content to it.getValue("style").jsonPrimitive.content }
+            val drawn = icon.layers.map { it.d to it.style.jsonName }
+            val override = NoArrowheadOverrides[icon.key]
+            if (override != null) {
+                // The design path stays in icons.json; the code draws a non-pointed replacement.
+                val (reason, pointedHead) = override
+                assertTrue(design.any { (d, _) -> pointedHead in d }, "${icon.key}: the exemption still matches icons.json")
+                assertFalse(drawn.any { (d, _) -> pointedHead in d }, "${icon.key}: $reason")
+            } else {
+                assertEquals(design, drawn, icon.key)
+            }
             assertEquals(icon.key.replace('.', '_').uppercase(), icon.name, "enum name follows the key")
         }
         val styles = json.getValue("styles").jsonObject.keys
@@ -99,5 +105,14 @@ class KkIconTableTest {
 
     private companion object {
         val Black = Color.Black.toArgb()
+
+        /**
+         * Keys whose icons.json path draws an arrowhead: SPEC hard rule 3 wins over the icon set
+         * (owner decision), so KkIcons draws a documented replacement. Value: the reason and the
+         * design sub-path that is replaced.
+         */
+        val NoArrowheadOverrides = mapOf(
+            "weapons.null_lance" to ("hard rule 3: the pointed lance head reads as an arrowhead" to "M14 10l1-5 4 4-5 1Z"),
+        )
     }
 }

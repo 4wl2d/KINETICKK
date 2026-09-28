@@ -35,5 +35,9 @@ class KkComponentSheetTest {
         val protan = kkTestMeasurer(roles = KkRolePalette.Protan)
         kkRender(1440, 3060) { drawKkComponentsSheet(protan, time = 3f) }
             .writePng(File("build/redesign-shots/components-protan.png"))
+        // Mono: hazard/armed buttons, threat stamps and warning toasts keep a hatched rim only.
+        val mono = kkTestMeasurer(roles = KkRolePalette.Mono)
+        kkRender(1440, 3060) { drawKkComponentsSheet(mono, time = 3f) }
+            .writePng(File("build/redesign-shots/components-mono.png"))
     }
 }

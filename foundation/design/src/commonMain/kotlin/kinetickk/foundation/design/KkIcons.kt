@@ -36,7 +36,8 @@ data class KkIconLayer(val d: String, val style: KkIconStyle)
 
 /**
  * The redesign icon set, generated once from `docs/design/redesign/icons.json` (the source of
- * truth; `KkIconTableTest` asserts this table matches it exactly). [key] is the JSON key,
+ * truth; `KkIconTableTest` asserts this table matches it exactly, except the one documented
+ * no-arrowhead override of `weapons.null_lance`). [key] is the JSON key,
  * [label] the design reference name (not localized UI text). Screens map game identifiers
  * (weapon, core shape, relic aspect) to entries; no entry is an arrow shape.
  */
@@ -95,7 +96,10 @@ enum class KkIcon(val key: String, val label: String, vararg layerData: KkIconLa
     WEAPONS_NULL_LANCE(
         "weapons.null_lance",
         "Null Lance",
-        KkIconLayer("M3 21 14 10M14 10l1-5 4 4-5 1ZM7 13l4 4", KkIconStyle.STROKE),
+        // Deviation from icons.json (owner decision, SPEC hard rule 3): the design's pointed head
+        // ("M14 10l1-5 4 4-5 1Z") reads as an arrowhead at 24 px, so the shaft stops short of a
+        // detached square head. KkIconTableTest exempts exactly this key.
+        KkIconLayer("M3 21 13 11M7 13l4 4M17.5 3 21 6.5 17.5 10 14 6.5Z", KkIconStyle.STROKE),
     ),
     WEAPONS_GRAVITY_MINES(
         "weapons.gravity_mines",

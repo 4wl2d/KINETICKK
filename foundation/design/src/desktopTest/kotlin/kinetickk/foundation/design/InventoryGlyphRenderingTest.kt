@@ -8,6 +8,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.toArgb
@@ -22,6 +23,10 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.max
 
 class InventoryGlyphRenderingTest {
     @Test
@@ -38,6 +43,42 @@ class InventoryGlyphRenderingTest {
             }
             assertTrue(distinct.add(expected.toList()), "$style has a distinct silhouette")
         }
+    }
+
+    @Test
+    fun noRuneDrawsRaysThatMeetInATip() {
+        // SPEC hard rule 3: strokes that meet at one point and all open to one side (a fan, or a
+        // shaft with barbs) read as an arrowhead, as does a sharp two-stroke V.
+        CanvasRuneStyle.entries.forEach { style ->
+            val lines = mutableListOf<Pair<Offset, Offset>>()
+            val bitmap = ImageBitmap(128, 128)
+            val recorder = object : Canvas by Canvas(bitmap) {
+                override fun drawLine(p1: Offset, p2: Offset, paint: Paint) {
+                    lines += p1 to p2
+                }
+            }
+            CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, recorder, Size(128f, 128f)) {
+                drawRuneMedallion(style, Center, 42f, Accent, 6, markerCount = 3, filledMarkerCount = 2, time = 1.75f)
+            }
+            val ends = lines.flatMap { (a, b) -> listOf(a to atan2(b.y - a.y, b.x - a.x), b to atan2(a.y - b.y, a.x - b.x)) }
+            ends.forEach { (point, _) ->
+                val rays = ends.filter { (other, _) -> (other - point).getDistance() <= 0.75f }.map { it.second }
+                if (rays.size >= 3) {
+                    assertTrue(largestGap(rays) <= PI.toFloat() + 1e-3f, "$style: ${rays.size} strokes open to one side from $point")
+                } else if (rays.size == 2) {
+                    val between = abs(rays[0] - rays[1]).let { if (it > PI.toFloat()) 2f * PI.toFloat() - it else it }
+                    assertTrue(between >= 75f * PI.toFloat() / 180f, "$style: sharp V at $point")
+                }
+            }
+        }
+    }
+
+    /** Largest angular gap between the ray directions: above pi, every ray opens to one side. */
+    private fun largestGap(angles: List<Float>): Float {
+        val sorted = angles.map { (it + 2f * PI.toFloat()) % (2f * PI.toFloat()) }.sorted()
+        var gap = sorted.first() + 2f * PI.toFloat() - sorted.last()
+        for (index in 1 until sorted.size) gap = max(gap, sorted[index] - sorted[index - 1])
+        return gap
     }
 
     @Test

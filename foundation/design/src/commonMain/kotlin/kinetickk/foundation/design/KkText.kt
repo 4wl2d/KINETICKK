@@ -230,26 +230,146 @@ val TextLayoutResult.kkBoxTop: Float get() = KkBoxMetrics.top(this)
 /** Bottom of the CSS line box of the last line (cached per layout). */
 val TextLayoutResult.kkBoxBottom: Float get() = KkBoxMetrics.bottom(this)
 
-/** Identity-keyed cache of line-box metrics for recently drawn layouts (draw thread only). */
+/**
+ * Running totals of the text work behind [measureKkText] and the line-box metrics, for
+ * performance probes and tests (draw thread only). Read differences: a steady frame whose strings
+ * are all resident changes neither total.
+ */
+object KkTextStats {
+    /** Layouts measured because no memoized layout matched (each one shapes text and allocates). */
+    var layoutsMeasured: Long = 0L
+        internal set
+
+    /** Platform line-metric reads behind [kkBoxTop]/[kkBoxBottom] (each allocates on Skia). */
+    var lineMetricReads: Long = 0L
+        internal set
+}
+
+/**
+ * Entries of each text cache. Sized well above the busiest frame's working set: up to 140 live
+ * damage numbers (a face and a shadow layout each) plus the HUD, world labels, feed and an overlay.
+ */
+private const val KK_TEXT_CACHE_CAPACITY = 768
+
+/** Hash buckets of each text cache (a power of two above twice the entries). */
+private const val KK_TEXT_CACHE_BUCKETS = 2048
+
+/** Spreads the high bits of [hash] over the bucket bits. */
+private fun kkSpread(hash: Int): Int = hash xor (hash ushr 16)
+
+/**
+ * Slot bookkeeping of a bounded text cache: hash chains for lookup and an exact least-recently-used
+ * order for eviction, in plain int arrays (allocation-free, draw thread only). A slot read in the
+ * current frame is never evicted while the frame's working set stays below [capacity], so layouts
+ * drawn every frame (HUD digits, every live damage number) stay resident however many new strings
+ * pass through.
+ */
+private class KkLruSlots(private val capacity: Int) {
+    private val heads = IntArray(KK_TEXT_CACHE_BUCKETS) { -1 }
+    private val chain = IntArray(capacity) { -1 }
+    private val hashes = IntArray(capacity)
+    private val older = IntArray(capacity) { -1 }
+    private val newer = IntArray(capacity) { -1 }
+    private var newest = -1
+    private var oldest = -1
+    private var filled = 0
+
+    /** First slot of [hash]'s chain, or -1; continue with [next]. */
+    fun first(hash: Int): Int = heads[hash and (KK_TEXT_CACHE_BUCKETS - 1)]
+
+    fun next(slot: Int): Int = chain[slot]
+
+    fun hash(slot: Int): Int = hashes[slot]
+
+    /** Marks [slot] as the most recently used. */
+    fun touch(slot: Int) {
+        if (slot == newest) return
+        unlinkOrder(slot)
+        linkNewest(slot)
+    }
+
+    /** A slot for a new entry with [hash]: a free one, else the least recently used (to overwrite). */
+    fun claim(hash: Int): Int {
+        val slot = if (filled < capacity) {
+            filled++
+        } else {
+            val victim = oldest
+            unlinkOrder(victim)
+            unlinkChain(victim)
+            victim
+        }
+        hashes[slot] = hash
+        val bucket = hash and (KK_TEXT_CACHE_BUCKETS - 1)
+        chain[slot] = heads[bucket]
+        heads[bucket] = slot
+        linkNewest(slot)
+        return slot
+    }
+
+    private fun linkNewest(slot: Int) {
+        older[slot] = newest
+        newer[slot] = -1
+        if (newest >= 0) newer[newest] = slot
+        newest = slot
+        if (oldest < 0) oldest = slot
+    }
+
+    private fun unlinkOrder(slot: Int) {
+        val before = older[slot]
+        val after = newer[slot]
+        if (before >= 0) newer[before] = after else oldest = after
+        if (after >= 0) older[after] = before else newest = before
+    }
+
+    private fun unlinkChain(slot: Int) {
+        val bucket = hashes[slot] and (KK_TEXT_CACHE_BUCKETS - 1)
+        var current = heads[bucket]
+        if (current == slot) {
+            heads[bucket] = chain[slot]
+            return
+        }
+        while (current >= 0) {
+            val following = chain[current]
+            if (following == slot) {
+                chain[current] = chain[slot]
+                return
+            }
+            current = following
+        }
+    }
+}
+
+/**
+ * Identity-keyed line-box metrics of recently drawn layouts, hashed by the layout's text and size
+ * and evicted least recently used first, so layouts drawn every frame keep their metrics.
+ */
 private object KkBoxMetrics {
-    private const val CAPACITY = 128
-    private val layouts = arrayOfNulls<TextLayoutResult>(CAPACITY)
-    private val tops = FloatArray(CAPACITY)
-    private val bottoms = FloatArray(CAPACITY)
-    private var next = 0
+    private val slots = KkLruSlots(KK_TEXT_CACHE_CAPACITY)
+    private val layouts = arrayOfNulls<TextLayoutResult>(KK_TEXT_CACHE_CAPACITY)
+    private val tops = FloatArray(KK_TEXT_CACHE_CAPACITY)
+    private val bottoms = FloatArray(KK_TEXT_CACHE_CAPACITY)
 
-    fun top(layout: TextLayoutResult): Float = tops[index(layout)]
+    fun top(layout: TextLayoutResult): Float = tops[slot(layout)]
 
-    fun bottom(layout: TextLayoutResult): Float = bottoms[index(layout)]
+    fun bottom(layout: TextLayoutResult): Float = bottoms[slot(layout)]
 
-    private fun index(layout: TextLayoutResult): Int {
-        for (index in 0 until CAPACITY) if (layouts[index] === layout) return index
-        val index = next
-        next = (next + 1) % CAPACITY
-        layouts[index] = layout
-        tops[index] = layout.getLineTop(0)
-        bottoms[index] = layout.getLineBottom(layout.lineCount - 1)
-        return index
+    private fun slot(layout: TextLayoutResult): Int {
+        val size = layout.size
+        val hash = kkSpread(31 * (31 * layout.layoutInput.text.text.hashCode() + size.width) + size.height)
+        var slot = slots.first(hash)
+        while (slot >= 0) {
+            if (layouts[slot] === layout) {
+                slots.touch(slot)
+                return slot
+            }
+            slot = slots.next(slot)
+        }
+        KkTextStats.lineMetricReads++
+        slot = slots.claim(hash)
+        layouts[slot] = layout
+        tops[slot] = layout.getLineTop(0)
+        bottoms[slot] = layout.getLineBottom(layout.lineCount - 1)
+        return slot
     }
 }
 
@@ -303,10 +423,11 @@ fun kkTabularNumberWidth(
  * digit, [prefix] and [suffix] have been measured. [style] should use tabular figures (every digit
  * advances by the width of "0"). Returns the drawn width.
  *
- * Text caveats that also apply here: Compose shares one paragraph between layouts whose styles
- * differ only in color, so drawing such layouts in alternating colors (or with a changing alpha)
- * repaints the paragraph every frame. Give each color its own style (a negligible tracking or
- * line-height difference) and keep text alpha steady; animate plates and halos instead.
+ * The drawn layouts are kept per [color], so numbers that share a style but are drawn in different
+ * colors never repaint one paragraph in alternating colors. Pick [color] from a small fixed set
+ * (role or state colors): a color animated per frame would measure new layouts every frame. A
+ * changing [alpha] still repaints the paragraph every frame: keep text alpha steady and animate
+ * plates and halos instead.
  */
 fun DrawScope.drawKkTabularNumber(
     measurer: CanvasTextMeasurer,
@@ -329,7 +450,7 @@ fun DrawScope.drawKkTabularNumber(
         KkAlign.END -> x - width
     }
     if (prefix != null) {
-        val layout = measureKkText(measurer, prefix, style)
+        val layout = measureKkTextPainted(measurer, prefix, style, color)
         drawKkText(layout, left, y, color, KkAlign.START, valign, alpha)
         left += layout.size.width
     }
@@ -342,10 +463,10 @@ fun DrawScope.drawKkTabularNumber(
         val digit = (rest / divisor).toInt()
         rest %= divisor
         divisor /= 10L
-        drawKkText(measureKkText(measurer, KkDigitStrings[digit], style), left, y, color, KkAlign.START, valign, alpha)
+        drawKkText(measureKkTextPainted(measurer, KkDigitStrings[digit], style, color), left, y, color, KkAlign.START, valign, alpha)
         left += digitWidth
     }
-    if (suffix != null) drawKkText(measureKkText(measurer, suffix, style), left, y, color, KkAlign.START, valign, alpha)
+    if (suffix != null) drawKkText(measureKkTextPainted(measurer, suffix, style, color), left, y, color, KkAlign.START, valign, alpha)
     return width
 }
 
@@ -368,10 +489,32 @@ fun measureKkText(
     uppercase: Boolean = false,
     maxWidth: Float = Float.POSITIVE_INFINITY,
     maxLines: Int = 1,
+): TextLayoutResult = measureMemoized(measurer, text, style, uppercase, maxWidth, maxLines, KK_ANY_PAINT)
+
+/** Paint key of layouts that are not tied to one paint color ([measureKkText]). */
+private val KK_ANY_PAINT = Color.Unspecified.value.toLong()
+
+/**
+ * [measureKkText] for a layout that is always painted in [paint]: each paint color gets its own
+ * layout (and paragraph), so numbers that share a style but differ in color never repaint a shared
+ * paragraph in alternating colors.
+ */
+private fun measureKkTextPainted(measurer: CanvasTextMeasurer, text: String, style: TextStyle, paint: Color): TextLayoutResult =
+    measureMemoized(measurer, text, style, false, Float.POSITIVE_INFINITY, 1, paint.value.toLong())
+
+private fun measureMemoized(
+    measurer: CanvasTextMeasurer,
+    text: String,
+    style: TextStyle,
+    uppercase: Boolean,
+    maxWidth: Float,
+    maxLines: Int,
+    paint: Long,
 ): TextLayoutResult {
-    KkMeasureMemo.find(measurer, text, style, uppercase, maxWidth, maxLines)?.let { return it }
+    val hash = KkMeasureMemo.hash(text, measurer.scale, uppercase, maxWidth, maxLines, paint)
+    KkMeasureMemo.find(hash, measurer, text, style, uppercase, maxWidth, maxLines, paint)?.let { return it }
     return measureUncached(measurer, text, style, uppercase, maxWidth, maxLines)
-        .also { KkMeasureMemo.put(measurer, text, style, uppercase, maxWidth, maxLines, it) }
+        .also { KkMeasureMemo.put(hash, measurer, text, style, uppercase, maxWidth, maxLines, paint, it) }
 }
 
 private fun measureUncached(
@@ -382,8 +525,12 @@ private fun measureUncached(
     maxWidth: Float,
     maxLines: Int,
 ): TextLayoutResult {
+    KkTextStats.layoutsMeasured++
     val scaled = if (measurer.scale == 1f) style else style.copy(fontSize = style.fontSize * measurer.scale)
     val shown = if (uppercase) text.uppercase() else text
+    // The memo is the cache: Compose's own layout cache would hand back a paragraph shared with a
+    // layout whose style differs only in color, and painting one paragraph in two colors re-lays
+    // it out on every paint (Skia).
     return if (maxWidth.isFinite()) {
         measurer.delegate.measure(
             text = shown,
@@ -392,66 +539,91 @@ private fun measureUncached(
             softWrap = maxLines > 1,
             maxLines = maxLines,
             constraints = Constraints(maxWidth = max(1, maxWidth.toInt())),
+            skipCache = true,
         )
     } else {
-        measurer.delegate.measure(shown, scaled, softWrap = false, maxLines = maxLines)
+        measurer.delegate.measure(shown, scaled, softWrap = false, maxLines = maxLines, skipCache = true)
     }
 }
 
 /**
  * Recently measured layouts keyed by (text, style identity, measurer delegate, text scale,
- * uppercase, width limit, line limit). With memoized role styles and unchanged strings, repeated
- * frames reuse layouts without measuring or allocating. Draw-thread confined, bounded.
- */
-/**
- * Layout memo with second-chance (clock) eviction: an entry read since the clock last passed it
- * survives one more round, so layouts drawn every frame (HUD digits, labels) stay resident while
- * one-off strings (damage numbers) cycle through the remaining slots.
+ * uppercase, width limit, line limit, paint key), hashed by the text and scalar keys. With memoized
+ * role styles and unchanged strings, repeated frames reuse layouts without measuring or allocating.
+ *
+ * Evicts the least recently used layout. Every layout drawn in a frame is read in that frame (each
+ * live damage number reads its face and shadow on every frame of its life), so a frame stays
+ * resident while its working set is below [KK_TEXT_CACHE_CAPACITY]; new strings only displace
+ * layouts that were not drawn recently. Draw-thread confined, bounded.
  */
 private object KkMeasureMemo {
-    private const val CAPACITY = 128
-    private val used = BooleanArray(CAPACITY)
-    private val texts = arrayOfNulls<String>(CAPACITY)
-    private val styles = arrayOfNulls<TextStyle>(CAPACITY)
-    private val delegates = arrayOfNulls<Any>(CAPACITY)
-    private val scales = FloatArray(CAPACITY)
-    private val widths = FloatArray(CAPACITY)
-    private val lines = IntArray(CAPACITY)
-    private val upper = BooleanArray(CAPACITY)
-    private val results = arrayOfNulls<TextLayoutResult>(CAPACITY)
-    private var next = 0
+    private val slots = KkLruSlots(KK_TEXT_CACHE_CAPACITY)
+    private val texts = arrayOfNulls<String>(KK_TEXT_CACHE_CAPACITY)
+    private val styles = arrayOfNulls<TextStyle>(KK_TEXT_CACHE_CAPACITY)
+    private val delegates = arrayOfNulls<Any>(KK_TEXT_CACHE_CAPACITY)
+    private val scales = FloatArray(KK_TEXT_CACHE_CAPACITY)
+    private val widths = FloatArray(KK_TEXT_CACHE_CAPACITY)
+    private val lines = IntArray(KK_TEXT_CACHE_CAPACITY)
+    private val upper = BooleanArray(KK_TEXT_CACHE_CAPACITY)
+    private val paints = LongArray(KK_TEXT_CACHE_CAPACITY)
+    private val results = arrayOfNulls<TextLayoutResult>(KK_TEXT_CACHE_CAPACITY)
 
-    fun find(measurer: CanvasTextMeasurer, text: String, style: TextStyle, uppercase: Boolean, maxWidth: Float, maxLines: Int): TextLayoutResult? {
+    fun hash(text: String, scale: Float, uppercase: Boolean, maxWidth: Float, maxLines: Int, paint: Long): Int {
+        var hash = text.hashCode()
+        hash = 31 * hash + scale.toRawBits()
+        hash = 31 * hash + maxWidth.toRawBits()
+        hash = 31 * hash + maxLines
+        hash = 31 * hash + (paint xor (paint ushr 32)).toInt()
+        hash = 31 * hash + if (uppercase) 1 else 0
+        return kkSpread(hash)
+    }
+
+    fun find(
+        hash: Int,
+        measurer: CanvasTextMeasurer,
+        text: String,
+        style: TextStyle,
+        uppercase: Boolean,
+        maxWidth: Float,
+        maxLines: Int,
+        paint: Long,
+    ): TextLayoutResult? {
         val delegate = measurer.delegate
-        for (index in 0 until CAPACITY) {
-            if (styles[index] !== style || delegates[index] !== delegate) continue
-            if (scales[index] == measurer.scale && upper[index] == uppercase && lines[index] == maxLines &&
-                widths[index] == maxWidth && texts[index] == text
+        var slot = slots.first(hash)
+        while (slot >= 0) {
+            if (slots.hash(slot) == hash && styles[slot] === style && delegates[slot] === delegate &&
+                scales[slot] == measurer.scale && upper[slot] == uppercase && lines[slot] == maxLines &&
+                widths[slot] == maxWidth && paints[slot] == paint && texts[slot] == text
             ) {
-                used[index] = true
-                return results[index]
+                slots.touch(slot)
+                return results[slot]
             }
+            slot = slots.next(slot)
         }
         return null
     }
 
-    fun put(measurer: CanvasTextMeasurer, text: String, style: TextStyle, uppercase: Boolean, maxWidth: Float, maxLines: Int, result: TextLayoutResult) {
-        var index = next
-        // Bounded: after one full round every flag is cleared, so this ends within CAPACITY steps.
-        while (used[index]) {
-            used[index] = false
-            index = (index + 1) % CAPACITY
-        }
-        next = (index + 1) % CAPACITY
-        used[index] = false
-        texts[index] = text
-        styles[index] = style
-        delegates[index] = measurer.delegate
-        scales[index] = measurer.scale
-        widths[index] = maxWidth
-        lines[index] = maxLines
-        upper[index] = uppercase
-        results[index] = result
+    fun put(
+        hash: Int,
+        measurer: CanvasTextMeasurer,
+        text: String,
+        style: TextStyle,
+        uppercase: Boolean,
+        maxWidth: Float,
+        maxLines: Int,
+        paint: Long,
+        result: TextLayoutResult,
+    ) {
+        val slot = slots.claim(hash)
+        texts[slot] = text
+        styles[slot] = style
+        delegates[slot] = measurer.delegate
+        scales[slot] = measurer.scale
+        widths[slot] = maxWidth
+        lines[slot] = maxLines
+        upper[slot] = uppercase
+        paints[slot] = paint
+        results[slot] = result
     }
 }
 
