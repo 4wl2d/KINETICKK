@@ -108,16 +108,8 @@ class HudPresentationTest {
         assertEquals(emptyList(), links(RelicId.KINETIC_FLYWHEEL, RelicId.ORBITAL_NAIL))
         val sovereign = RelicId.entries.filter { content.relic(it).aspect == RelicAspect.SOVEREIGN }
         if (sovereign.size >= 2) assertEquals(emptyList(), links(sovereign[0], sovereign[1]))
-
-        // The HUD reads exactly what the pause and relic overlays read, for any matrix.
-        val random = kotlin.random.Random(7)
-        repeat(300) {
-            val relics = List(random.nextInt(0, 5)) { EquippedRelic(RelicId.entries[random.nextInt(RelicId.entries.size)], 1) }
-            assertEquals(
-                overlaySynergyLinks(relics.map { it.id }, content).map { it.definition.id to it.slots },
-                hudRelicLinks(content, relics).map { it.definition.id to it.slots },
-            )
-        }
+        // What the relic row draws for these links (bracket vs link bar, stacked levels) is checked
+        // on the drawn HUD in HudRelicRowTest.
     }
 
     @Test
