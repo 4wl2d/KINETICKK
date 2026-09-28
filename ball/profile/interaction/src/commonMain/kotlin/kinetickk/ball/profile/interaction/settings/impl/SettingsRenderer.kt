@@ -50,6 +50,7 @@ import kinetickk.foundation.design.kkShearOffset
 import kinetickk.foundation.design.kkStroke
 import kinetickk.foundation.design.labelStyle
 import kinetickk.foundation.design.measureKkText
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -325,9 +326,29 @@ private fun DrawScope.drawSettingsSwatches(chips: List<Rect>, palette: KkRolePal
         val layout = if (natural.size.width <= lane) natural else {
             measureKkText(measurers.at(measurer.scale * lane / natural.size.width), text, style, uppercase = true)
         }
-        val ink = if (color.luminance() > 0.3f) Kk.Ink else Kk.Bone
-        drawKkText(layout, chip.center.x, chip.center.y, ink, align = KkAlign.CENTER, valign = KkVAlign.CENTER)
+        drawKkText(layout, chip.center.x, chip.center.y, settingsChipLabelColor(color), align = KkAlign.CENTER, valign = KkVAlign.CENTER)
     }
+}
+
+/** Minimum contrast of the small chip labels against their chip (WCAG AA for small text). */
+internal const val SETTINGS_CHIP_LABEL_CONTRAST = 4.5f
+
+/**
+ * Label color on a role chip of [fill]: ink or bone, whichever contrasts more. A mid-tone fill
+ * where neither reaches [SETTINGS_CHIP_LABEL_CONTRAST] (Deutan's threat blue) takes pure black
+ * or white, which always reach at least √21 ≈ 4.58:1.
+ */
+internal fun settingsChipLabelColor(fill: Color): Color {
+    val token = if (contrastRatio(Kk.Ink, fill) >= contrastRatio(Kk.Bone, fill)) Kk.Ink else Kk.Bone
+    if (contrastRatio(token, fill) >= SETTINGS_CHIP_LABEL_CONTRAST) return token
+    return if (contrastRatio(Color.Black, fill) >= contrastRatio(Color.White, fill)) Color.Black else Color.White
+}
+
+/** WCAG contrast ratio of two opaque colors. */
+internal fun contrastRatio(a: Color, b: Color): Float {
+    val la = a.luminance()
+    val lb = b.luminance()
+    return (max(la, lb) + 0.05f) / (min(la, lb) + 0.05f)
 }
 
 /** Index of the threat chip in [settingsRoleSwatches]. */
