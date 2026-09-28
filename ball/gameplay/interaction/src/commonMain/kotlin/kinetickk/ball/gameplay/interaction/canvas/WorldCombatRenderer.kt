@@ -90,8 +90,8 @@ internal fun DrawScope.drawWorld(
     drawDamageNumbers(engine, visualFx, shakeX, shakeY, textMeasurer)
     // Off-screen targets are placed together, so their markers never overlap each other.
     val markers = WorldOverlayScratch.markers.clear()
-    collectPointOfInterestEdgeMarkers(engine, shakeX, shakeY, textMeasurer, markers)
-    collectTotemEdgeMarker(engine, shakeX, shakeY, markers)
+    collectPointOfInterestEdgeMarkers(engine, textMeasurer, markers)
+    collectTotemEdgeMarker(engine, markers)
     drawEdgeMarkers(markers, textMeasurer)
 }
 

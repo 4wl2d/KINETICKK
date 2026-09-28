@@ -140,7 +140,8 @@ internal fun DrawScope.worldHudKeepOut(engine: GameplayRenderModel, textMeasurer
  * (`Anomaly.png`); an active trial's name and rules live in the HUD's trial panel, so its mark
  * keeps a short timer (the orbit: its seconds in the ring). A mark that would be cut by the screen
  * edge or sit under the HUD is replaced by its edge marker ([collectPointOfInterestEdgeMarkers],
- * drawn over the world): both use [markShown], so exactly one of them draws.
+ * drawn over the world): both use [markShown] in the unshaken view ([steady]), so exactly one of
+ * them draws and screen shake never trades one for the other.
  */
 internal fun DrawScope.drawPointsOfInterest(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, textMeasurer: TextMeasurer) {
     val keepOut = worldHudKeepOut(engine, textMeasurer)
@@ -150,7 +151,7 @@ internal fun DrawScope.drawPointsOfInterest(engine: GameplayRenderModel, shakeX:
         if (point.active) {
             drawActivePoint(engine, point, center, shakeX, shakeY, textMeasurer, keepOut)
         } else if (isOnScreen(center, OFFER_RADIUS + 20f)) {
-            drawOfferedPoint(engine, point, center, textMeasurer, keepOut)
+            drawOfferedPoint(engine, point, center, shakeX, shakeY, textMeasurer, keepOut)
         }
     }
 }
@@ -158,12 +159,10 @@ internal fun DrawScope.drawPointsOfInterest(engine: GameplayRenderModel, shakeX:
 /**
  * Adds to [batch] the edge markers of points of interest whose mark is not shown ([markShown]);
  * [drawEdgeMarkers] draws them with the frame's other markers. The mark shakes with the world, but
- * its marker is aimed from the unshaken view.
+ * whether it shows, and where its marker points, is decided in the unshaken view.
  */
 internal fun DrawScope.collectPointOfInterestEdgeMarkers(
     engine: GameplayRenderModel,
-    shakeX: Float,
-    shakeY: Float,
     textMeasurer: TextMeasurer,
     batch: EdgeMarkerBatch,
 ) {
@@ -181,11 +180,11 @@ internal fun DrawScope.collectPointOfInterestEdgeMarkers(
             targetX = point.x
             targetY = point.y
         }
-        val target = world(engine, targetX, targetY, shakeX, shakeY)
+        val target = world(engine, targetX, targetY, 0f, 0f)
         if (markShown(target, markHalf(point), keepOut)) continue
         val dx = targetX - engine.coreX
         val dy = targetY - engine.coreY
-        batch.add(target.x - shakeX, target.y - shakeY, sqrt(dx * dx + dy * dy), point.kind.edgeIcon())
+        batch.add(target.x, target.y, sqrt(dx * dx + dy * dy), point.kind.edgeIcon())
     }
 }
 
@@ -209,6 +208,12 @@ internal fun DrawScope.markFullyVisible(center: Offset, half: Float): Boolean =
 internal fun DrawScope.markShown(center: Offset, half: Float, keepOut: WorldHudKeepOut): Boolean =
     markFullyVisible(center, half) && (half <= 0f || !keepOut.intersects(center.x, center.y, center.x, center.y))
 
+/**
+ * [center], drawn with the screen shaken by ([shakeX], [shakeY]), where it sits in the unshaken
+ * view: marks and edge markers are decided there, so shake cannot trade one for the other.
+ */
+internal fun steady(center: Offset, shakeX: Float, shakeY: Float): Offset = Offset(center.x - shakeX, center.y - shakeY)
+
 private fun PointOfInterestKind.edgeIcon(): EdgeMarkerIcon = when (this) {
     PointOfInterestKind.RESONANT_CIRCUIT -> EdgeMarkerIcon.RESONANT_CIRCUIT
     PointOfInterestKind.SEALED_ANOMALY -> EdgeMarkerIcon.SEALED_ANOMALY
@@ -224,6 +229,8 @@ private fun DrawScope.drawOfferedPoint(
     engine: GameplayRenderModel,
     point: PointOfInterestProjection,
     center: Offset,
+    shakeX: Float,
+    shakeY: Float,
     textMeasurer: TextMeasurer,
     keepOut: WorldHudKeepOut,
 ) {
@@ -232,7 +239,7 @@ private fun DrawScope.drawOfferedPoint(
     rotate(engine.elapsed * 15f, center) {
         drawCircle(Kk.Bone.copy(alpha = 0.22f + pulse * 0.1f), OFFER_RADIUS, center, style = WorldStrokes.dashedThin)
     }
-    if (!markShown(center, OFFER_MARK_HALF, keepOut)) return
+    if (!markShown(steady(center, shakeX, shakeY), OFFER_MARK_HALF, keepOut)) return
     recordMark(center, OFFER_MARK_HALF)
     when (point.kind) {
         PointOfInterestKind.SEALED_ANOMALY -> {
@@ -273,7 +280,7 @@ private fun DrawScope.drawActivePoint(
                 val beacon = Offset(center.x + beaconDx(index), center.y + beaconDy(index))
                 val target = index == targetIndex
                 // The target beacon shares its edge marker's predicate; the others may pass the edge.
-                if (if (target) !markShown(beacon, BEACON_MARK_HALF, keepOut) else !isOnScreen(beacon, 80f)) continue
+                if (if (target) !markShown(steady(beacon, shakeX, shakeY), BEACON_MARK_HALF, keepOut) else !isOnScreen(beacon, 80f)) continue
                 val visited = !target && visitOrder(index) < point.nextBeacon
                 if (target) {
                     rotate(engine.elapsed * 30f, beacon) {
@@ -292,7 +299,7 @@ private fun DrawScope.drawActivePoint(
                 drawCircle(Kk.AGravitic.copy(alpha = 0.025f), 290f, center)
                 drawCircle(Kk.AGravitic.copy(alpha = 0.3f), 290f, center, style = WorldStrokes.dashedHair)
             }
-            if (markShown(center, VAULT_MARK_HALF, keepOut)) {
+            if (markShown(steady(center, shakeX, shakeY), VAULT_MARK_HALF, keepOut)) {
                 val pulse = (sin(engine.elapsed * 3.1f) + 1f) * 0.5f
                 drawKkIcon(KkIcon.SYSTEM_ANOMALY, center, 52f, Kk.AGravitic, alpha = 0.7f + pulse * 0.3f, strokeWidth = 1.8f)
                 recordMark(center, VAULT_MARK_HALF)

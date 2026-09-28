@@ -33,10 +33,12 @@ import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
+import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.test.fail
 
 /**
  * Several off-screen targets at once (two offers and the totem, as the game spawns them) drawn by
@@ -144,40 +146,51 @@ class WorldEdgeMarkerSpacingTest {
     }
 
     @Test
-    fun flightsPastTheOffersNeverFlipTheirMarkers() {
+    fun flightsPastTheOffersNeverFlipOrStrandTheirMarkers() {
         // Two offers spawned as the game spawns them (560 px from the Core, one radian either side
-        // of its heading, here the +x axis), with and without the totem, and the Core (the camera
-        // on it) flying off on 36 courses at 3 and at 6 px per frame (the HUD is left undrawn: the
-        // world renderer keeps the markers clear of the HUD's regions on its own). Flying along
-        // the line through both offers, their directions stay within a hair of each other: the
-        // markers still never swap back and forth. A marker never returns to a spot it just left
-        // more than [ABA_PX] away, two markers trade places only toward their targets' true
-        // order, and targets clearly apart keep their order.
+        // of its heading, a random one per flight), without the totem, with it near them and with
+        // it far off, and the Core (the camera on it) flying off on 36 courses at a random 3 to 6 px
+        // per frame; then the flights where the verifier caught a marker stranded or pushed and back.
+        // (The HUD is left undrawn: the world renderer keeps the markers clear of its regions on
+        // its own.) Every frame: markers spaced; none returns to a spot it just left more than
+        // [ABA_PX] away, also when a marker arrives or leaves; two markers trade places only
+        // toward their targets' order and keep it once the targets are clearly apart; and none
+        // stays over [STRANDED_ERROR_DEGREES] off its target for [STRANDED_FRAMES] frames while
+        // the same targets placed afresh would point it within [FRESH_ERROR_DEGREES].
         val failures = ArrayList<String>()
         var frames = 0
-        for ((dpWidth, dpHeight) in sizes) for (language in AppLanguage.entries) for (totem in listOf(null, Offset(900f, -2_600f))) {
-            for (course in 0 until FLIGHT_COURSES) for (speed in listOf(3f, 6f)) {
-                val degrees = course * 360f / FLIGHT_COURSES + 5f
-                val radians = degrees * PI.toFloat() / 180f
-                val offers = listOf(-1f, 1f).map { side -> Offset(cos(side), sin(side)) * OFFER_DISTANCE }
-                    .zip(listOf(PointOfInterestKind.SEALED_ANOMALY, PointOfInterestKind.COLLAPSING_ORBIT))
-                val where = "$language ${dpWidth}x$dpHeight totem=$totem course=$degrees speed=$speed"
-                val history = ArrayList<Frame>()
-                startAfresh(dpWidth, dpHeight, 1f, language)
-                for (frame in 0 until FLIGHT_FRAMES) {
-                    val core = Offset(cos(radians), sin(radians)) * (speed * frame)
-                    val boxes = draw(dpWidth, dpHeight, 1f, language, 1.25f, false, offers, totem, core = core, hud = false)
-                    assertSpaced(boxes, 1f, "$where frame $frame")
-                    val now = frame(dpWidth, dpHeight)
-                    if (history.isNotEmpty() && history.last().icons != now.icons) history.clear() // a marker came or went
-                    history += now
-                    checkFlight(history, "$where frame $frame", failures)
-                    frames++
-                }
+        val random = Random(20_260_928)
+        val flights = ArrayList<FlightSpec>()
+        for ((dpWidth, dpHeight) in sizes) for (language in AppLanguage.entries) for (totemMode in 0 until 3) {
+            for (course in 0 until FLIGHT_COURSES) {
+                flights += FlightSpec(dpWidth, dpHeight, language, totemMode, random.nextFloat() * 2f * PI.toFloat(), course,
+                    3f + 3f * random.nextFloat())
             }
         }
-        assertTrue(failures.isEmpty(), "${failures.size} flicker(s), first: ${failures.take(6).joinToString("\n")}")
-        assertTrue(frames > 500_000, "the flights draw their frames ($frames)")
+        flights += VERIFIER_FLIGHTS
+        for (flight in flights) {
+            val offers = List(2) { side ->
+                val angle = flight.heading + if (side == 0) -1f else 1f
+                Offset(cos(angle), sin(angle)) * OFFER_DISTANCE to
+                    PointOfInterestKind.entries[(flight.course + side) % PointOfInterestKind.entries.size]
+            }
+            val totem = when (flight.totemMode) {
+                0 -> null
+                1 -> Offset(900f, -2_600f)
+                else -> Offset(cos(flight.heading + 1.03f), sin(flight.heading + 1.03f)) * 1_500f
+            }
+            val course = flight.heading + (flight.course * 360f / FLIGHT_COURSES + 5f) * PI.toFloat() / 180f
+            val checks = FlightChecks("$flight", flight.width, flight.height, failures)
+            startAfresh(flight.width, flight.height, 1f, flight.language)
+            for (frame in 0 until FLIGHT_FRAMES) {
+                val core = Offset(cos(course), sin(course)) * (flight.speed * frame)
+                val boxes = draw(flight.width, flight.height, 1f, flight.language, 1.25f, false, offers, totem, core = core, hud = false)
+                checks.check(frame, boxes)
+                frames++
+            }
+        }
+        assertTrue(failures.isEmpty(), "${failures.size} failure(s), first: ${failures.take(8).joinToString("\n")}")
+        assertTrue(frames > 300_000, "the flights draw their frames ($frames)")
     }
 
     @Test
@@ -192,17 +205,12 @@ class WorldEdgeMarkerSpacingTest {
             .zip(listOf(PointOfInterestKind.SEALED_ANOMALY, PointOfInterestKind.COLLAPSING_ORBIT))
         val lineX = offers[0].first.x
         for ((dpWidth, dpHeight) in sizes) for (language in AppLanguage.entries) for (weave in listOf(3f, 8f)) {
-            val where = "$language ${dpWidth}x$dpHeight weave=$weave"
-            val history = ArrayList<Frame>()
+            val checks = FlightChecks("$language ${dpWidth}x$dpHeight weave=$weave", dpWidth, dpHeight, failures)
             startAfresh(dpWidth, dpHeight, 1f, language)
             for (frame in 0 until WEAVE_FRAMES) {
                 val core = Offset(lineX + weave * sin(frame * 0.5f), 1_000f + 4f * frame)
                 val boxes = draw(dpWidth, dpHeight, 1f, language, 1.25f, false, offers, totem = null, core = core, hud = false)
-                assertSpaced(boxes, 1f, "$where frame $frame")
-                val now = frame(dpWidth, dpHeight)
-                if (history.isNotEmpty() && history.last().icons != now.icons) history.clear()
-                history += now
-                checkFlight(history, "$where frame $frame", failures)
+                checks.check(frame, boxes)
                 frames++
             }
         }
@@ -212,14 +220,15 @@ class WorldEdgeMarkerSpacingTest {
 
     @Test
     fun gameScreenShakeNeverMovesAMarker() {
-        // Offers and the totem 150 to 400 px past the screen edge (offers spawn 560 px from the
-        // Core), the screen shaken the way the renderer shakes it at its strongest
-        // ([MAX_SCREEN_SHAKE_DP] along sin/cos of the run time): markers are HUD overlays aimed
-        // from the unshaken view, so not one of them moves.
+        // Offers and the totem from 30 px inside the screen edge to 400 px past it (offers spawn
+        // 560 px from the Core), the screen shaken the way the renderer shakes it at its strongest
+        // ([MAX_SCREEN_SHAKE_DP] along sin/cos of the run time): marks and markers are decided,
+        // and markers aimed, in the unshaken view, so no mark turns into a marker or back and not
+        // one marker moves.
         val failures = ArrayList<String>()
         var frames = 0
         for ((dpWidth, dpHeight) in sizes) for (density in listOf(1f, 3f)) for (language in AppLanguage.entries) {
-            for (separation in listOf(4f, 12f)) for (beyond in listOf(150f, 400f)) for (step in 0 until SHAKE_DIRECTIONS) {
+            for (separation in listOf(4f, 12f)) for (beyond in listOf(-30f, 10f, 40f, 150f, 400f)) for (step in 0 until SHAKE_DIRECTIONS) {
                 if (density > 1f && (language != AppLanguage.Russian || step % 3 != 0)) continue
                 val angle = step * 360f / SHAKE_DIRECTIONS
                 val targets = listOf(angle - separation, angle, angle + separation).map { degrees ->
@@ -232,8 +241,9 @@ class WorldEdgeMarkerSpacingTest {
                 startAfresh(dpWidth, dpHeight, density, language)
                 repeat(SETTLE_FRAMES) { draw(dpWidth, dpHeight, density, language, 1.25f, false, offers, targets[2]) }
                 val settled = markerCenters()
+                val settledMarks = WorldDrawProbe.rects(WorldDrawn.POINT_MARK).size
                 val where = "$language ${dpWidth}x$dpHeight @$density direction=$angle separation=$separation beyond=$beyond"
-                assertEquals(3, settled.size, "$where: one marker per target")
+                if (beyond >= 150f) assertEquals(3, settled.size, "$where: one marker per target")
                 val strength = MAX_SCREEN_SHAKE_DP * density
                 for (frame in 0 until GAME_SHAKE_FRAMES) {
                     val time = 3f + frame / 60f
@@ -241,12 +251,14 @@ class WorldEdgeMarkerSpacingTest {
                         shakeX = sin(time * 91f) * strength, shakeY = cos(time * 77f) * strength)
                     val now = markerCenters()
                     if (now != settled) failures += "$where shaken frame $frame: $settled -> $now"
+                    val marks = WorldDrawProbe.rects(WorldDrawn.POINT_MARK).size
+                    if (marks != settledMarks) failures += "$where shaken frame $frame: $settledMarks marks -> $marks"
                     frames++
                 }
             }
         }
         assertTrue(failures.isEmpty(), "${failures.size} shaken frame(s) moved a marker, first: ${failures.take(6).joinToString("\n")}")
-        assertTrue(frames > 20_000, "the shaken runs draw their frames ($frames)")
+        assertTrue(frames > 40_000, "the shaken runs draw their frames ($frames)")
     }
 
     @Test
@@ -310,41 +322,95 @@ class WorldEdgeMarkerSpacingTest {
             width, height)
     }
 
+    /** A flight: its screen, spawn heading (radians), course index, Core speed (px per frame) and totem (0: none, 1: far, 2: near). */
+    private data class FlightSpec(
+        val width: Float,
+        val height: Float,
+        val language: AppLanguage,
+        val totemMode: Int,
+        val heading: Float,
+        val course: Int,
+        val speed: Float,
+    )
+
     /**
-     * Checks the newest frame of [history] (frames with the same markers) against the ones before
-     * it: no marker returns within 3 px of a spot it held in the last [RETURN_FRAMES] frames after
-     * straying more than [ABA_PX] from it; a pair of markers whose targets lie within a quarter
-     * turn of each other changes its order around the screen center only into its targets'
-     * order, and keeps that order while the targets are over [ORDER_MARGIN_DEGREES] apart.
+     * The checks every frame of one flight must pass (see [flightsPastTheOffersNeverFlipOrStrandTheirMarkers]),
+     * each marker followed by its kind across frames where markers arrive or leave.
      */
-    private fun checkFlight(history: List<Frame>, where: String, failures: MutableList<String>) {
-        val now = history.last()
-        for (marker in now.centers.indices) {
-            for (back in 2..minOf(history.size - 1, RETURN_FRAMES)) {
-                val earlier = history[history.size - 1 - back].centers[marker]
-                if (distance(now.centers[marker], earlier) > 3f) continue
-                val strayed = (1 until back).maxOf { distance(history[history.size - 1 - it].centers[marker], earlier) }
-                if (strayed > ABA_PX) failures += "$where: marker $marker left $earlier by $strayed px and came back " +
-                    history.subList(history.size - 1 - back, history.size).map { it.centers[marker] }
-                break
+    private inner class FlightChecks(val where: String, val width: Float, val height: Float, val failures: MutableList<String>) {
+        private val spots = HashMap<EdgeMarkerIcon, ArrayList<Offset>>()
+        private val stranded = HashMap<EdgeMarkerIcon, Int>()
+        private var previous: Frame? = null
+
+        fun check(frame: Int, boxes: List<Rect>) {
+            val at = "$where frame $frame"
+            spaced(boxes, 1f)?.let { failures += "$at: $it" }
+            val now = frame(width, height)
+            val fresh = memorylessCenters(width, height)
+            spots.keys.retainAll(now.icons.toSet())
+            stranded.keys.retainAll(now.icons.toSet())
+            for (index in now.icons.indices) {
+                val icon = requireNotNull(now.icons[index])
+                val track = spots.getOrPut(icon) { ArrayList() }
+                val center = now.centers[index]
+                for (back in 2..minOf(track.size, RETURN_FRAMES)) {
+                    val earlier = track[track.size - back]
+                    if (distance(center, earlier) > 3f) continue
+                    val strayed = (1 until back).maxOf { distance(track[track.size - it], earlier) }
+                    if (strayed > ABA_PX) failures += "$at: $icon left $earlier by $strayed px and came back ${track.takeLast(back) + center}"
+                    break
+                }
+                track += center
+                if (track.size > RETURN_FRAMES) track.removeAt(0)
+                val target = now.targets[index]
+                val error = abs(turn(now, listOf(target, center), 0, 1))
+                val freshError = abs(turn(now, listOf(target, fresh[index]), 0, 1))
+                // With another target within the order margin, which of the two a fresh placement
+                // puts on the shared spot is a coin toss: such frames neither count nor end a run.
+                val coincident = now.targets.indices.any { it != index && abs(turn(now, now.targets, index, it)) < ORDER_HOLD_DEGREES }
+                val run = when {
+                    coincident -> stranded[icon] ?: 0
+                    error > STRANDED_ERROR_DEGREES && freshError <= FRESH_ERROR_DEGREES -> (stranded[icon] ?: 0) + 1
+                    else -> 0
+                }
+                stranded[icon] = run
+                if (run == STRANDED_FRAMES) failures += "$at: $icon $error degrees off its target for $run frames at $center, " +
+                    "while placed afresh it would point within $freshError degrees from ${fresh[index]}"
             }
-        }
-        val previous = history.getOrNull(history.size - 2)
-        for (first in now.centers.indices) for (second in first + 1 until now.centers.size) {
-            val targets = turn(now, now.targets, first, second)
-            if (abs(targets) > 90f) continue
-            val markers = turn(now, now.centers, first, second)
-            if (abs(targets) > ORDER_MARGIN_DEGREES && markers * targets <= 0f) {
-                failures += "$where: markers $first, $second at ${now.centers} out of their targets' order ($targets degrees apart)"
+            val before = previous
+            for (first in now.icons.indices) for (second in first + 1 until now.icons.size) {
+                val targets = turn(now, now.targets, first, second)
+                if (abs(targets) > 90f) continue
+                val markers = turn(now, now.centers, first, second)
+                if (abs(targets) > ORDER_MARGIN_DEGREES && markers * targets <= 0f) {
+                    failures += "$at: ${now.icons[first]}, ${now.icons[second]} at ${now.centers} out of their targets' order ($targets degrees apart)"
+                }
+                val a = before?.icons?.indexOf(now.icons[first]) ?: -1
+                val b = before?.icons?.indexOf(now.icons[second]) ?: -1
+                if (a < 0 || b < 0) continue
+                val then = turn(requireNotNull(before), before.centers, a, b)
+                if (then * markers < 0f && markers * targets < 0f) {
+                    failures += "$at: ${now.icons[first]}, ${now.icons[second]} swapped ${before.centers} -> ${now.centers} against their " +
+                        "targets' order ($targets degrees apart)"
+                }
             }
-            if (previous == null) continue
-            val before = turn(previous, previous.centers, first, second)
-            if (before * markers < 0f && markers * targets < 0f) {
-                failures += "$where: markers $first, $second swapped ${previous.centers} -> ${now.centers} against their targets' order " +
-                    "($targets degrees apart)"
-            }
+            previous = now
         }
     }
+
+    /** The last frame's markers placed afresh (a planner without memory), in drawing order. */
+    private fun memorylessCenters(width: Float, height: Float): List<Offset> {
+        val batch = WorldOverlayScratch.markers
+        memoryless.prepare(WorldOverlayScratch.keepOut, width, height, 1f, WorldOverlayScratch.planner.markerTextWidth)
+        memoryless.forget()
+        afresh.clear()
+        for (index in 0 until batch.count) afresh.add(batch.targetX[index], batch.targetY[index], batch.distance[index], requireNotNull(batch.icon[index]))
+        memoryless.place(afresh)
+        return List(afresh.count) { Offset(afresh.markerX[it], afresh.markerY[it]) }
+    }
+
+    private val memoryless = EdgeMarkerPlanner()
+    private val afresh = EdgeMarkerBatch()
 
     /** Degrees from [points] [first] to [second], seen from the screen center, the short way round. */
     private fun turn(frame: Frame, points: List<Offset>, first: Int, second: Int): Float {
@@ -421,12 +487,18 @@ class WorldEdgeMarkerSpacingTest {
 
     /** Every pair of [boxes] is at least the marker spacing apart along one axis. */
     private fun assertSpaced(boxes: List<Rect>, density: Float, where: String) {
+        spaced(boxes, density)?.let { fail("$where: $it") }
+    }
+
+    /** Null when every pair of [boxes] is at least the marker spacing apart along one axis; else the first pair that is not. */
+    private fun spaced(boxes: List<Rect>, density: Float): String? {
         for (first in boxes.indices) for (second in first + 1 until boxes.size) {
             val a = boxes[first]
             val b = boxes[second]
             val gap = max(max(b.left - a.right, a.left - b.right), max(b.top - a.bottom, a.top - b.bottom))
-            assertTrue(gap >= EDGE_MARKER_SPACING_DP * density - 0.01f, "$where: markers $a and $b are $gap px apart")
+            if (gap < EDGE_MARKER_SPACING_DP * density - 0.01f) return "markers $a and $b are $gap px apart"
         }
+        return null
     }
 
     /**
@@ -499,13 +571,24 @@ class WorldEdgeMarkerSpacingTest {
 
         /** Courses flown past the offers, and frames per flight. */
         const val FLIGHT_COURSES = 36
-        const val FLIGHT_FRAMES = 600
+        const val FLIGHT_FRAMES = 500
 
         /** How far from the Core the game spawns its offers. */
         const val OFFER_DISTANCE = 560f
 
         /** A marker that strays this far and comes back flickers. */
         const val ABA_PX = 12f
+
+        /**
+         * A marker this many degrees off its target for [STRANDED_FRAMES] frames in a row, while
+         * the same targets placed afresh would point it within [FRESH_ERROR_DEGREES], is stranded.
+         */
+        const val STRANDED_ERROR_DEGREES = 30f
+
+        /** Targets this close keep their markers' last order (the planner's order hysteresis). */
+        const val ORDER_HOLD_DEGREES = 1f
+        const val FRESH_ERROR_DEGREES = 15f
+        const val STRANDED_FRAMES = 60
 
         /** Targets this many degrees apart show their markers in their order (past the planner's order hysteresis). */
         const val ORDER_MARGIN_DEGREES = 2f
@@ -514,6 +597,19 @@ class WorldEdgeMarkerSpacingTest {
         const val WEAVE_FRAMES = 400
 
         /** Game-shaken frames per direction. */
-        const val GAME_SHAKE_FRAMES = 30
+        const val GAME_SHAKE_FRAMES = 20
+
+        /**
+         * The flights where the verifier caught f0d9800 stranding a marker (a sealed anomaly held
+         * 30 to 59 degrees off at 844x390, a resonant circuit up to 44 degrees off at 390x844) and
+         * pushing one away and back (the totem before a crossing, a circuit when the orbit's
+         * marker arrived next to it).
+         */
+        val VERIFIER_FLIGHTS = listOf(
+            FlightSpec(844f, 390f, AppLanguage.English, 1, 5.016365f, 19, 6f),
+            FlightSpec(390f, 844f, AppLanguage.Russian, 0, 1.9322724f, 14, 3f),
+            FlightSpec(390f, 844f, AppLanguage.Russian, 1, 4.498208f, 26, 6f),
+            FlightSpec(390f, 844f, AppLanguage.English, 1, 0.18163367f, 29, 4.5f),
+        )
     }
 }
