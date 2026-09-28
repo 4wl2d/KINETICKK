@@ -280,13 +280,17 @@ internal class EdgeMarkerPlanner {
     /**
      * How far past the ring position at ([px], [py]) (inward normal [nx], [ny]) a marker must move to
      * clear the HUD band lying along that edge: the regions flatter along the edge than deep that
-     * overlap the marker's footprint and touch the edge, or touch such a region (the phone's top
-     * row and a boss bar below it, a bottom cluster). Zero when no band lies there.
+     * overlap the marker's footprint and start within a marker's extent of the edge or of such a
+     * region (the phone's top row, a boss row and a trial panel below it, a bottom cluster): a gap
+     * narrower than the marker cannot hold it. Zero when no band lies there.
      */
     private fun edgeBandDepth(bands: List<Rect>, px: Float, py: Float, nx: Float, ny: Float): Float {
         val left = markerLeft(px)
         val right = markerRight(px)
-        // Covered distance from the screen edge, grown while another region touches the band.
+        val horizontal = ny != 0f
+        // The marker's extent across the edge.
+        val across = if (horizontal) 2f * halfHeight else right - left
+        // Covered distance from the screen edge, grown while another region joins the band.
         var covered = 0f
         var grown = true
         var rounds = 0
@@ -294,7 +298,6 @@ internal class EdgeMarkerPlanner {
             grown = false
             for (index in bands.indices) {
                 val band = bands[index]
-                val horizontal = ny != 0f
                 val along = if (horizontal) band.width else band.height
                 val deep = if (horizontal) band.height else band.width
                 if (deep > along) continue
@@ -308,7 +311,7 @@ internal class EdgeMarkerPlanner {
                     nx > 0f -> { near = band.left; far = band.right }
                     else -> { near = width - band.right; far = width - band.left }
                 }
-                if (near <= covered + BAND_TOUCH && far > covered) {
+                if (near < covered + across && far > covered) {
                     covered = far
                     grown = true
                 }
@@ -415,9 +418,6 @@ internal class EdgeMarkerPlanner {
 
     private companion object {
         const val MAX_SAMPLES = 1_024
-
-        /** A region within this many px of a screen edge lies along it. */
-        const val BAND_TOUCH = 1f
 
         /**
          * Direction error, in degrees, that a marker pushed a full short side inward costs: markers
