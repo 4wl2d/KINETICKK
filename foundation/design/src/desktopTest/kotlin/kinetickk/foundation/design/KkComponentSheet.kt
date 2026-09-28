@@ -144,9 +144,11 @@ internal fun DrawScope.drawKkComponentsSheet(m: CanvasTextMeasurer, time: Float)
         drawKkSegment(m, Rect(x, 1344f, x + w, 1378f), label, selected = index == 2)
         x += w + 3f
     }
-    cap("Toggle: off, on", left, 1440f)
+    cap("Toggle: off, on (EN, RU)", left, 1440f)
     drawKkToggle(m, Rect(left, 1458f, left + 62f, 1486f), 0f, "On", "Off")
     drawKkToggle(m, Rect(left + 76f, 1458f, left + 138f, 1486f), 1f, "On", "Off")
+    drawKkToggle(m, Rect(left + 152f, 1458f, left + 214f, 1486f), 0f, "Вкл", "Выкл")
+    drawKkToggle(m, Rect(left + 228f, 1458f, left + 290f, 1486f), 1f, "Вкл", "Выкл")
     cap("Slider with steppers: 10% steps", col2, 1440f)
     drawKkStepButton(Rect(col2, 1455f, col2 + 34f, 1489f), plus = false)
     drawKkSlider(Rect(col2 + 46f, 1458f, col2 + third - 100f, 1486f), 0.7f, m.roles)
