@@ -34,6 +34,7 @@ import kinetickk.ball.profile.api.LabProgress
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.interaction.armory.api.ArmoryRenderModel
 import kinetickk.ball.profile.interaction.armory.impl.ArmoryContent
+import kinetickk.ball.profile.interaction.armory.impl.ArmoryLayout
 import kinetickk.ball.profile.interaction.armory.impl.ArmoryLayoutHolder
 import kinetickk.ball.profile.interaction.armory.impl.ArmoryViewState
 import kinetickk.ball.profile.interaction.armory.impl.armoryLadderCellsTop
@@ -51,6 +52,7 @@ import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.kkBoxHeight
+import kinetickk.foundation.design.kkBoxTop
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.max
@@ -186,6 +188,7 @@ class ProfileTextFitTest {
                         assertTrue(cells + layout.frame.d(10f) <= viewport.bottom, "$context ladder cells $cells below ${viewport.bottom}")
                     }
                 }
+                if (width == 1440) assertTileTagsInside(frame, layout, scene.language, context)
                 frame.of("armory.tile.name").forEach { tileNames[Triple(scene.language, scene.setting, it.owner)] = fontSize(it) }
                 // The default text size (125 %) draws UI text at the board's size (tile status: 11 px on the 1440 board).
                 if (width == 1440 && scene.setting == 1.25f && scene.language == AppLanguage.English) {
@@ -284,6 +287,33 @@ class ProfileTextFitTest {
                     assertTrue(goal.box.left >= chip.box.left && goal.box.right <= chip.box.right, "$context numeral ${goal.box} off the chip ${chip.box}")
                     assertTrue(contrast(goal.color, chip.color) >= 3f, "$context contrast ${contrast(goal.color, chip.color)}")
                 }
+            }
+        }
+    }
+
+    /**
+     * Every regular tile draws at least its first tag, and each tag lies inside the tile's padded
+     * content box (the board's `padding: 14px 22px 14px 24px`) and left of the slab's sheared
+     * right edge (cut 16) at the tag's bottom.
+     */
+    private fun assertTileTagsInside(frame: Frame, layout: ArmoryLayout, language: AppLanguage, context: String) {
+        val tags = frame.of("armory.tile.tag")
+        val f = layout.frame
+        CatalogWeapons.forEachIndexed { index, weapon ->
+            val name = weapon.name.localizedContent(language)
+            val own = tags.filter { it.owner == name }
+            assertTrue(own.isNotEmpty(), "$context tile '$name' shows no tag")
+            val tile = layout.tiles[index]
+            val inner = Rect(f.d(24f), f.d(14f), tile.width - f.d(22f), tile.height - f.d(14f))
+            for (tag in own) {
+                val text = assertNotNull(tag.layout)
+                val top = tag.box.top + text.kkBoxTop
+                val bottom = top + text.kkBoxHeight
+                val shown = text.layoutInput.text.text
+                assertTrue(tag.box.left >= inner.left - 0.5f && tag.box.right <= inner.right + 0.5f && top >= inner.top - 0.5f &&
+                    bottom <= inner.bottom + 0.5f, "$context tile '$name' tag '$shown' ${tag.box} outside $inner")
+                val slabRight = tile.width - f.d(16f) * bottom / tile.height
+                assertTrue(tag.box.right <= slabRight, "$context tile '$name' tag '$shown' ends at ${tag.box.right} past the slab $slabRight")
             }
         }
     }

@@ -33,6 +33,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -79,6 +80,7 @@ import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.*
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 /** Latest geometry for the background pass and page steps (written during composition). */
@@ -332,7 +334,7 @@ private fun DrawScope.drawArmoryTile(
     // so the foundation's 8 dp selection lift is cancelled here; the echo still slides out.
     translate(0f, d(8f) * selection.coerceIn(0f, 1.2f)) {
         drawKkTile(measurer, bounds, selected = selection, hovered = hovered, locked = locked,
-            cutDp = (if (frame.regular) 16f else 12f) * k, focused = focused)
+            cutDp = (if (frame.regular) ARMORY_TILE_CUT else 12f) * k, focused = focused)
     }
     val on = selection > 0.5f
     val fg = when {
@@ -372,7 +374,8 @@ private fun DrawScope.drawArmoryTile(
     var tagsTop = size.height - padBottom
     if (!compact && tags.isNotEmpty()) {
         val tagGap = frame.d(8f)
-        val room = size.width + tagGap - padLeft
+        val right = armoryTileTagRight(frame, size, padLeft, padRight, bottom = size.height - padBottom)
+        val room = right - padLeft
         fun lineWidth(font: Float) = tags.sumOf {
             measureKkText(measurer, it, measurer.typography.monoStyle(font), uppercase = true).size.width.toDouble()
         }.toFloat() + tagGap * (tags.size - 1)
@@ -384,7 +387,8 @@ private fun DrawScope.drawArmoryTile(
         var x = padLeft
         for (tag in tags) {
             val layout = measureKkText(measurer, tag, tagStyle, uppercase = true)
-            if (x + layout.size.width > size.width + tagGap) break
+            // A tag that would pass the line's right edge is left to the detail panel's tag rows.
+            if (x + layout.size.width > right) break
             drawProfileText(layout, x, tagsTop, fg, "armory.tile.tag", name, alpha = 0.75f)
             x += layout.size.width + tagGap
         }
@@ -407,6 +411,21 @@ private fun DrawScope.drawArmoryTile(
         drawKkIcon(icon, Offset(size.width * 0.5f, (bandTop + bandBottom) * 0.5f), iconSize, iconColor)
     }
 }
+
+/**
+ * The x (tile px) the regular tile's tag line may reach, for tags ending at [bottom]: the board's
+ * padded content edge (`padding-right`), and never closer to the slab's sheared right edge at
+ * that height (it leans in by the cut towards the tile's bottom) than the status line sits from
+ * the leaning left edge at the top (`padding-left` − cut).
+ */
+private fun armoryTileTagRight(frame: ProfileFrame, size: Size, padLeft: Float, padRight: Float, bottom: Float): Float {
+    val cut = frame.d(ARMORY_TILE_CUT)
+    val slabRight = size.width - cut * (bottom / size.height).coerceIn(0f, 1f)
+    return min(size.width - padRight, slabRight - (padLeft - cut))
+}
+
+/** The regular tile's slab cut (dp at the board scale). */
+private const val ARMORY_TILE_CUT = 16f
 
 /** A tile's weapon name: two lines at most, shrunk to fit (never below its size at the smallest text setting). */
 internal fun armoryTileNameLayout(measurer: CanvasTextMeasurer, frame: ProfileFrame, type: ArmoryType, name: String, width: Float) =
