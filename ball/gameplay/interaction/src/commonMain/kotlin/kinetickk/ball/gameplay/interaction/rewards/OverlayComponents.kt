@@ -19,12 +19,14 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -125,6 +127,28 @@ internal fun overlayFrame(
 internal fun Modifier.overlayOffset(x: Float, y: Float): Modifier =
     offset { IntOffset(x.roundToInt(), y.roundToInt()) }
 
+/**
+ * Set while a layout only measures its content (a size probe): overlay texts then take the size
+ * this measurer gives them, drawing nothing and adding no semantics.
+ */
+internal val LocalOverlayTextProbe = staticCompositionLocalOf<TextMeasurer?> { null }
+
+/** A text's measured size only (see [LocalOverlayTextProbe]); lays out exactly like [BasicText]. */
+@Composable
+internal fun OverlayProbeText(
+    measurer: TextMeasurer,
+    text: String,
+    style: TextStyle,
+    modifier: Modifier,
+    maxLines: Int = Int.MAX_VALUE,
+    overflow: TextOverflow = TextOverflow.Clip,
+) {
+    Layout(modifier) { _, constraints ->
+        val result = measurer.measure(text, style, overflow, softWrap = true, maxLines = maxLines, constraints = constraints)
+        layout(result.size.width, result.size.height) {}
+    }
+}
+
 /** Plain text in a Kk role style; [uppercase] applies display casing for the current locale. */
 @Composable
 internal fun OverlayText(
@@ -135,13 +159,14 @@ internal fun OverlayText(
     maxLines: Int = Int.MAX_VALUE,
     align: TextAlign? = null,
 ) {
-    BasicText(
-        if (uppercase) text.uppercase() else text,
-        modifier,
-        style = if (align != null) style.merge(TextStyle(textAlign = align)) else style,
-        maxLines = maxLines,
-        overflow = if (maxLines == Int.MAX_VALUE) TextOverflow.Clip else TextOverflow.Ellipsis,
-    )
+    val shown = if (uppercase) text.uppercase() else text
+    val aligned = if (align != null) style.merge(TextStyle(textAlign = align)) else style
+    val overflow = if (maxLines == Int.MAX_VALUE) TextOverflow.Clip else TextOverflow.Ellipsis
+    LocalOverlayTextProbe.current?.let { probe ->
+        OverlayProbeText(probe, shown, aligned, modifier, maxLines, overflow)
+        return
+    }
+    BasicText(shown, modifier, style = aligned, maxLines = maxLines, overflow = overflow)
 }
 
 /**
@@ -201,6 +226,40 @@ internal fun fitTextStyle(
     return if (widest <= maxWidthPx) minimum else minimum.copy(fontSize = minimum.fontSize * (maxWidthPx / widest) * 0.97f)
 }
 
+/** A text with the width and height (px) its place gives it. */
+internal data class OverlayTextBox(val text: String, val width: Float, val height: Float = Float.POSITIVE_INFINITY)
+
+/**
+ * One size for texts of one kind (a list's descriptions, a row's names): the largest [base] size
+ * (to [minScale] of it) at which every text fits its box in [maxLines] lines without breaking
+ * inside a word. Below [minScale] every word still stays whole on its line (a text may take more
+ * lines).
+ */
+internal fun sharedFitStyle(measurer: TextMeasurer, texts: List<OverlayTextBox>, base: TextStyle, maxLines: Int, minScale: Float): TextStyle {
+    val shown = texts.filter { it.text.isNotBlank() }
+    var scale = 1f
+    while (scale >= minScale - 0.001f) {
+        val candidate = if (scale == 1f) base else base.copy(fontSize = base.fontSize * scale)
+        if (shown.all { box -> fitsWhole(measurer, box.text, candidate, box.width, maxLines, box.height) }) return candidate
+        scale -= 0.05f
+    }
+    return shown.fold(base.copy(fontSize = base.fontSize * minScale)) { style, box ->
+        val fitted = fitTextStyle(measurer, box.text, style, box.width, Int.MAX_VALUE, 1f)
+        if (fitted.fontSize.value < style.fontSize.value) fitted else style
+    }
+}
+
+/** [text] fits [width] and [height] in [maxLines] lines and no single word is wider than a line. */
+private fun fitsWhole(measurer: TextMeasurer, text: String, style: TextStyle, width: Float, maxLines: Int, height: Float): Boolean {
+    val widest = text.split(' ', '\n').filter(String::isNotEmpty).maxOfOrNull { word ->
+        measurer.measure(word, style, softWrap = false, maxLines = 1).size.width
+    } ?: 0
+    if (widest > width) return false
+    val layout = measurer.measure(text, style, softWrap = true, maxLines = maxLines + 1,
+        constraints = Constraints(maxWidth = width.toInt().coerceAtLeast(1)))
+    return layout.lineCount <= maxLines && layout.size.height <= height + 0.5f
+}
+
 /**
  * Text that never breaks inside a word and never cuts off: the font shrinks (to [minScale] of
  * its size) until the text fits the width in [maxLines]; below that it keeps the minimum size
@@ -218,10 +277,12 @@ internal fun OverlayFitText(
 ) {
     val measurer = rememberTextMeasurer(cacheSize = 16)
     val shown = if (uppercase) text.uppercase() else text
+    val probe = LocalOverlayTextProbe.current
     BoxWithConstraints(modifier) {
         val width = if (constraints.hasBoundedWidth) constraints.maxWidth.toFloat() else Float.POSITIVE_INFINITY
         val fitted = remember(shown, style, width, maxLines, minScale) { fitTextStyle(measurer, shown, style, width, maxLines, minScale) }
-        BasicText(shown, style = if (align != null) fitted.merge(TextStyle(textAlign = align)) else fitted)
+        val aligned = if (align != null) fitted.merge(TextStyle(textAlign = align)) else fitted
+        if (probe != null) OverlayProbeText(probe, shown, aligned, Modifier) else BasicText(shown, style = aligned)
     }
 }
 
