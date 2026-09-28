@@ -3,10 +3,12 @@
 
 package kinetickk.ball.profile.interaction.armory.impl
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -50,13 +52,7 @@ class DefaultArmoryFeature(
         val textScale = profilePort.query(ProfileQuery.GetPreferences).preferences.textScale
         val gridScroll = rememberScrollState()
         val holder = remember { ArmoryLayoutHolder() }
-        // A page step records its target; the effect below animates the grid to it.
-        var gridScrollTargetValue by remember { mutableStateOf<Int?>(null) }
-        LaunchedEffect(gridScrollTargetValue) {
-            val target = gridScrollTargetValue ?: return@LaunchedEffect
-            gridScroll.animateScrollTo(target)
-            gridScrollTargetValue = null
-        }
+        val gridStepper = rememberArmoryGridStepper(gridScroll)
 
         fun dispatch(action: ArmoryAction) {
             val reduction = reducer.reduce(state, model, action)
@@ -78,7 +74,7 @@ class DefaultArmoryFeature(
                         val layout = holder.layout ?: return@forEach
                         val target = armoryGridScrollTarget(gridScroll.value.toFloat(), gridScroll.maxValue.toFloat(),
                             layout.gridViewport.height, layout.rowPitch, effect.forward)
-                        gridScrollTargetValue = target.toInt()
+                        gridStepper.step(target.toInt())
                     }
                 }
             }
@@ -86,4 +82,31 @@ class DefaultArmoryFeature(
 
         ArmoryContent(model, weapons, weaponMasteries, state, textScale, gridScroll, holder, ::dispatch)
     }
+}
+
+/**
+ * Page steps for the weapon grid. Each step starts its own animation to its target: the effect
+ * is keyed on the step count, so a step whose target equals an earlier one (whose animation a
+ * drag or wheel scroll cancelled) still moves the grid.
+ */
+internal class ArmoryGridStepper {
+    var steps by mutableIntStateOf(0)
+        private set
+    var target = 0
+        private set
+
+    fun step(target: Int) {
+        this.target = target
+        steps += 1
+    }
+}
+
+@Composable
+internal fun rememberArmoryGridStepper(gridScroll: ScrollState): ArmoryGridStepper {
+    val stepper = remember { ArmoryGridStepper() }
+    val steps = stepper.steps
+    LaunchedEffect(steps) {
+        if (steps > 0) gridScroll.animateScrollTo(stepper.target)
+    }
+    return stepper
 }
