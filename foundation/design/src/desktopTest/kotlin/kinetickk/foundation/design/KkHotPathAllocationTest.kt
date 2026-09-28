@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import java.lang.management.ManagementFactory
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
@@ -99,5 +100,36 @@ class KkHotPathAllocationTest {
         repeat(500) { frame(true) }
         val perFrame = (threads.getThreadAllocatedBytes(thread) - start) / 500
         assertTrue(perFrame - baseline < 64, "changing numbers allocate ${perFrame - baseline} bytes per frame")
+    }
+
+    @Test
+    fun numbersSharingAStyleInDifferentColorsDoNotRepaintSharedDigits() {
+        // A chain count and a draining percentage in one style but two colors, sharing digits on
+        // every frame: each color keeps its own digit layouts instead of repainting shared ones.
+        val measurer = kkTestMeasurer()
+        val style = measurer.typography.condStyle(26f, tabular = true)
+        val bitmap = ImageBitmap(400, 80)
+        val scope = CanvasDrawScope()
+        val canvas = Canvas(bitmap)
+        val thread = Thread.currentThread().id
+        var frameIndex = 0
+        fun frame(draw: Boolean) = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, Size(400f, 80f)) {
+            if (draw) {
+                val percent = 21L - frameIndex % 12L
+                drawKkTabularNumber(measurer, percent, style, 60f, 10f, measurer.roles.threat, suffix = "%")
+                drawKkTabularNumber(measurer, 12L, style, 390f, 10f, Kk.Bone, KkAlign.END, prefix = "×")
+            }
+            frameIndex++
+        }
+        repeat(300) { frame(true) }
+        val measured = KkTextStats.layoutsMeasured
+        val before = threads.getThreadAllocatedBytes(thread)
+        repeat(480) { frame(false) }
+        val baseline = (threads.getThreadAllocatedBytes(thread) - before) / 480
+        val start = threads.getThreadAllocatedBytes(thread)
+        repeat(480) { frame(true) }
+        val perFrame = (threads.getThreadAllocatedBytes(thread) - start) / 480
+        assertEquals(measured, KkTextStats.layoutsMeasured, "no digit is measured again")
+        assertTrue(perFrame - baseline < 64, "two colors on one style allocate ${perFrame - baseline} bytes per frame")
     }
 }
