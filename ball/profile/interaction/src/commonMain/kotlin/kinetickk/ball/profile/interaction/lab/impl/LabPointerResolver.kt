@@ -81,12 +81,18 @@ internal fun labType(mode: ProfileLayoutMode): LabType = when (mode) {
     ProfileLayoutMode.COMPACT_PORTRAIT -> LabType(20f, 17f, 11f, 18f, 14f, 10f, 17f, 22f)
 }
 
+/**
+ * [textScale] is the board-relative text multiplier ([kinetickk.ball.profile.interaction.profileTextScale]).
+ * [descriptionHeight] measures the selected upgrade's description at a width (the renderer's
+ * layout); without it the slot keeps the board's line count.
+ */
 internal fun labLayout(
     frame: ProfileFrame,
     rowCount: Int,
     maxRanks: Int,
     textScale: Float,
     backWidth: Float,
+    descriptionHeight: ((width: Float) -> Float)? = null,
 ): LabLayout {
     fun d(value: Float) = frame.d(value)
     val t = textScale.coerceIn(0.75f, 2f)
@@ -168,8 +174,10 @@ internal fun labLayout(
         Rect(detailLeft, top, detailRight, top + nameHeight)
     }
     val descriptionTop = (if (frame.portrait) icon.bottom else name.bottom) + d(if (regular) 12f else 6f)
-    val descriptionLines = kotlin.math.ceil((if (regular) 3f else 2f) * max(1f, t))
-    val description = Rect(detailLeft, descriptionTop, detailRight, descriptionTop + d(type.body) * 1.4f * descriptionLines * t)
+    // The description slot is as tall as the wrapped description, so the panels follow it.
+    val descriptionBottom = descriptionTop + (descriptionHeight?.invoke(detailRight - detailLeft)
+        ?: (d(type.body) * 1.4f * kotlin.math.ceil((if (regular) 3f else 2f) * max(1f, t)) * t))
+    val description = Rect(detailLeft, descriptionTop, detailRight, descriptionBottom)
     val panelsTop = description.bottom + d(if (regular) 22f else 10f)
     val panelHeight = (d(if (regular) 12f else 8f) * 2f + d(type.mono) * 1.35f * t + d(if (regular) 8f else 5f) +
         d(type.panelValue) * 0.9f * t)

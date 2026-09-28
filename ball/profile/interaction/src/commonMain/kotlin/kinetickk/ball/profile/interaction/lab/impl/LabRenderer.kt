@@ -68,7 +68,10 @@ import kinetickk.ball.profile.interaction.localization.ProfileScreensRedesignTex
 import kinetickk.ball.profile.interaction.localization.ProfileText
 import kinetickk.ball.profile.interaction.profileHeaderBackWidth
 import kinetickk.ball.profile.interaction.profileScrollCue
-import kinetickk.ball.profile.interaction.PROFILE_WRAPPED_LINE_HEIGHT
+import kinetickk.ball.profile.interaction.PROFILE_DESCRIPTION_MAX_LINES
+import kinetickk.ball.profile.interaction.ProfileTextProbe
+import kinetickk.ball.profile.interaction.drawProfileText
+import kinetickk.ball.profile.interaction.profileTextScale
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.*
@@ -79,16 +82,18 @@ internal class LabLayoutHolder {
     var layout: LabLayout? = null
 }
 
+/** The Lab screen; [textScale] is the player's text-size setting (1.25 = the boards' size). */
 @Composable
 internal fun LabContent(
     state: LabState,
-    scale: Float,
+    textScale: Float,
     listScroll: ScrollState,
+    holder: LabLayoutHolder = remember { LabLayoutHolder() },
     onAction: (LabAction) -> Unit,
 ) {
+    val scale = profileTextScale(textScale)
     val language = LocalAppLanguage.current
     val model = state.model
-    val holder = remember { LabLayoutHolder() }
     val (owned, total) = model.rankTotals()
     ProfilePanel(
         title = language.text(ProfileText.LabTitle),
@@ -103,9 +108,11 @@ internal fun LabContent(
         val measurer = rememberKkCanvasMeasurer(scale)
         val type = labType(frame.mode)
         val backWidth = profileHeaderBackWidth(measurer, frame, language.text(ProfileScreensRedesignText.Back))
-        val layout = labLayout(frame, model.upgrades.size, model.upgrades.maxOfOrNull { it.maxRanks } ?: 1, scale, backWidth)
-        SideEffect { holder.layout = layout }
         val selected = state.selectedUpgrade
+        val layout = labLayout(frame, model.upgrades.size, model.upgrades.maxOfOrNull { it.maxRanks } ?: 1, scale, backWidth) { width ->
+            if (selected == null) 0f else labDescriptionLayout(measurer, frame, type, selected, language, width).kkBoxHeight
+        }
+        SideEffect { holder.layout = layout }
         val list = layout.listViewport
         // A selected row that is entirely off screen (a phone list scrolled away, a restored
         // selection) scrolls into view; partly visible rows stay put.
@@ -304,10 +311,8 @@ private fun DrawScope.drawLabRow(
             val line1 = columns.firstLineY
             val line2 = columns.secondLineY
             drawLabIcon(upgrade.id, Offset(columns.iconCenterX, line1), columns.iconSize, fg)
-            val nameLayout = fitKkText(measurer, name, type.rowName * k, columns.nameWidth, minFactor = 0.4f) {
-                measurer.typography.condStyle(it, lineHeightEm = 1f)
-            }
-            drawKkText(nameLayout, columns.nameLeft, line1, fg, valign = KkVAlign.CENTER)
+            drawProfileText(labRowNameLayout(measurer, frame, type, columns, name), columns.nameLeft, line1, fg, "lab.row.name", upgrade.id,
+                valign = KkVAlign.CENTER)
             val pipColor = when {
                 inverted -> fg
                 on -> Kk.Ink
@@ -322,17 +327,18 @@ private fun DrawScope.drawLabRow(
                 measurer.typography.condStyle(it, tabular = true, lineHeightEm = 1f)
             }
             if (columns.twoLines) {
-                drawKkText(valueLayout, columns.costRight, line2, fg, align = KkAlign.END, valign = KkVAlign.CENTER)
+                drawProfileText(valueLayout, columns.costRight, line2, fg, "lab.row.value", upgrade.id, align = KkAlign.END, valign = KkVAlign.CENTER)
             } else {
-                drawKkText(valueLayout, columns.valueLeft, line1, fg, valign = KkVAlign.CENTER)
+                drawProfileText(valueLayout, columns.valueLeft, line1, fg, "lab.row.value", upgrade.id, valign = KkVAlign.CENTER)
             }
             val costRoom = columns.costRight - columns.costLeft
             if (upgrade.isMaxed) {
                 // The stamp shrinks into the cost column so it never covers the value.
                 val stampFont = labStampFont(measurer, stamp, type.stamp * k, costRoom, density)
                 val stampSize = kkStampSize(measurer, stamp, density, stampFont)
-                drawKkStamp(measurer, stamp, Offset(columns.costRight - stampSize.width, line1 - stampSize.height * 0.5f),
+                val stampRect = drawKkStamp(measurer, stamp, Offset(columns.costRight - stampSize.width, line1 - stampSize.height * 0.5f),
                     fontSize = stampFont)
+                ProfileTextProbe.record("lab.row.stamp", upgrade.id, null, stampRect)
             } else {
                 val gemSize = 11f * k
                 val costLayout = fitKkText(measurer, cost, type.rowValue * k, costRoom - frame.d(6f) - gemSize * density, minFactor = 0.5f) {
@@ -346,13 +352,30 @@ private fun DrawScope.drawLabRow(
                 }
                 val costLeft = columns.costRight - costLayout.size.width
                 drawKkGem(Offset(costLeft - frame.d(6f) - gemSize * density * 0.5f, line1), gemColor, gemSize)
-                drawKkText(costLayout, costLeft, line1, fg, valign = KkVAlign.CENTER)
+                drawProfileText(costLayout, costLeft, line1, fg, "lab.row.cost", upgrade.id, valign = KkVAlign.CENTER)
             }
         }
         if (focused) drawRect(Kk.Bone, Offset(-density * 5f, -density * 5f), Size(size.width + density * 10f, size.height + density * 10f),
             style = kkStroke(density * 2f))
     }
 }
+
+/** A row's upgrade name, shrunk to its column (never below its size at the smallest text setting). */
+internal fun labRowNameLayout(measurer: CanvasTextMeasurer, frame: ProfileFrame, type: LabType, columns: LabRowColumns, name: String) =
+    fitKkText(measurer, name, type.rowName * frame.k, columns.nameWidth, minFactor = 0.4f) {
+        measurer.typography.condStyle(it, lineHeightEm = 1f)
+    }
+
+/** The selected upgrade's description wrapped to [width] (every line; the details scroll). */
+internal fun labDescriptionLayout(
+    measurer: CanvasTextMeasurer,
+    frame: ProfileFrame,
+    type: LabType,
+    upgrade: LabUpgradeRenderModel,
+    language: AppLanguage,
+    width: Float,
+) = measureKkText(measurer, upgrade.description.localizedContent(language), measurer.typography.bodyStyle(type.body * frame.k),
+    maxWidth = width, maxLines = PROFILE_DESCRIPTION_MAX_LINES)
 
 private fun DrawScope.drawLabDetail(
     measurer: CanvasTextMeasurer,
@@ -368,19 +391,18 @@ private fun DrawScope.drawLabDetail(
     val name = fitKkText(measurer, upgrade.name.localizedContent(language), type.name * k, layout.name.width, minFactor = 0.4f) {
         measurer.typography.wideStyle(it, lineHeightEm = 1.05f)
     }
-    drawKkText(name, layout.name.left, layout.name.center.y, Kk.Bone, valign = KkVAlign.CENTER)
-    val descriptionLines = (layout.description.height / (frame.d(type.body) * 1.4f * measurer.scale) + 0.01f).toInt().coerceAtLeast(1)
-    val description = measureKkText(measurer, upgrade.description.localizedContent(language),
-        measurer.typography.bodyStyle(type.body * k), maxWidth = layout.description.width, maxLines = descriptionLines)
-    drawKkText(description, layout.description.left, layout.description.top, Kk.Bone)
+    drawProfileText(name, layout.name.left, layout.name.center.y, Kk.Bone, "lab.detail.name", valign = KkVAlign.CENTER)
+    drawProfileText(labDescriptionLayout(measurer, frame, type, upgrade, language, layout.description.width),
+        layout.description.left, layout.description.top, Kk.Bone, "lab.detail.description")
     val empty = language.text(ProfileScreensRedesignText.NoValue)
     val now = labRankValue(upgrade.modifierPerRank, upgrade.rank, language) ?: empty
     val next = if (upgrade.isMaxed) language.text(ProfileText.MaximumSynchrony) else
         labRankValue(upgrade.modifierPerRank, upgrade.rank + 1, language) ?: empty
     drawLabPanel(measurer, frame, type, layout.now, language.text(ProfileScreensRedesignText.Now), now, Kk.Mute, Kk.Bone, null)
     drawLabPanel(measurer, frame, type, layout.next, language.text(ProfileScreensRedesignText.NextRank), next, roles.you, roles.you, roles.you)
-    drawKkText(measurer, language.text(ProfileScreensRedesignText.RankOf, upgrade.rank, upgrade.maxRanks),
-        measurer.typography.monoStyle(type.mono * k), layout.rank.left, layout.rank.top, Kk.Mute, uppercase = true)
+    val rank = fitKkText(measurer, language.text(ProfileScreensRedesignText.RankOf, upgrade.rank, upgrade.maxRanks), type.mono * k,
+        layout.rank.width, minFactor = 0.5f) { measurer.typography.monoStyle(it) }
+    drawProfileText(rank, layout.rank.left, layout.rank.top, Kk.Mute, "lab.detail.rank")
 }
 
 private fun DrawScope.drawLabPanel(
@@ -400,12 +422,12 @@ private fun DrawScope.drawLabPanel(
     val padX = frame.d(if (frame.regular) 14f else 10f)
     val padY = frame.d(if (frame.regular) 12f else 8f)
     val labelLayout = fitKkText(measurer, label, type.mono * k, rect.width - padX * 2f, minFactor = 0.5f) { measurer.typography.monoStyle(it) }
-    drawKkText(labelLayout, rect.left + padX, rect.top + padY, labelColor)
+    drawProfileText(labelLayout, rect.left + padX, rect.top + padY, labelColor, "lab.panel.label")
     // Words such as "Максимум" shrink to fit the panel instead of truncating.
     val valueLayout = fitKkText(measurer, value, type.panelValue * k, rect.width - padX * 2f, minFactor = 0.34f) {
         measurer.typography.wideStyle(it, tabular = true)
     }
-    drawKkText(valueLayout, rect.left + padX, rect.bottom - padY - valueLayout.kkBoxHeight, valueColor)
+    drawProfileText(valueLayout, rect.left + padX, rect.bottom - padY - valueLayout.kkBoxHeight, valueColor, "lab.panel.value")
 }
 
 private fun DrawScope.drawLabBackground(frame: ProfileFrame, layout: LabLayout?) {

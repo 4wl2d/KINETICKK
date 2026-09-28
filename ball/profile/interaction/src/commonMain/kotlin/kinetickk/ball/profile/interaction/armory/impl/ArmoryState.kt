@@ -173,6 +173,15 @@ internal fun armoryType(mode: ProfileLayoutMode): ArmoryType = when (mode) {
     else -> ArmoryType(9.5f, 30f, 17f, 7.5f, 21f, 14f, 11f, 12f, 9.5f, 11f, 22f)
 }
 
+/** Measured heights (px) of the inspected weapon's name block, description and tag rows. */
+internal class ArmoryDetailMetrics(val nameHeight: Float, val descriptionHeight: Float, val tagsHeight: Float)
+
+/**
+ * [textScale] is the board-relative text multiplier ([kinetickk.ball.profile.interaction.profileTextScale]).
+ * [detail] measures the inspected weapon's texts for a name width and the panel width (the
+ * renderer's layouts), so the panel stacks what is actually drawn; without it the slots keep
+ * the board's line counts.
+ */
 internal fun armoryLayout(
     frame: ProfileFrame,
     weaponCount: Int,
@@ -181,6 +190,7 @@ internal fun armoryLayout(
     actionWidth: Float,
     needRoom: Boolean = false,
     masteryCount: Int = 4,
+    detail: ((nameWidth: Float, width: Float) -> ArmoryDetailMetrics)? = null,
 ): ArmoryLayout {
     fun d(value: Float) = frame.d(value)
     val grow = 1f + (textScale.coerceIn(0.75f, 2f) - 1f) * 0.55f
@@ -227,7 +237,8 @@ internal fun armoryLayout(
             tileHeight = { width, available -> available.coerceIn(d(84f) * grow, width * 0.95f * grow) }
         }
         ProfileLayoutMode.COMPACT_PORTRAIT -> {
-            val dock = d(300f) * (1f + (grow - 1f) * 0.6f)
+            // The detail dock grows with the text so the ladder starts above the pinned action.
+            val dock = d(300f) * grow
             gridLeft = frame.left
             gridRight = frame.right
             gridTop = frame.headerHeight
@@ -262,20 +273,31 @@ internal fun armoryLayout(
     val plateSize = d(if (regular) 92f else 44f)
     val plate = Rect(detailLeft, detailTop, detailLeft + plateSize, detailTop + plateSize)
     val nameLeft = plate.right + d(if (regular) 18f else 12f)
-    val name = Rect(nameLeft, plate.top, detailRight, plate.bottom)
-    val descriptionTop = plate.bottom + d(if (regular) 18f else 10f)
-    // Larger text wraps into more lines: the slot grows with the text size (whole lines).
-    val descriptionLines = kotlin.math.ceil((if (regular) 3f else 2f) * max(1f, t))
+    val metrics = detail?.invoke(detailRight - nameLeft, detailRight - detailLeft)
+    // A name that fits the plate is centred on it; a taller one (two lines of large text) starts
+    // at the plate's top and pushes the description down, so it never rises out of the panel.
+    val nameHeight = metrics?.nameHeight ?: plateSize
+    val name = if (nameHeight <= plateSize) {
+        Rect(nameLeft, plate.center.y - nameHeight * 0.5f, detailRight, plate.center.y + nameHeight * 0.5f)
+    } else {
+        Rect(nameLeft, plate.top, detailRight, plate.top + nameHeight)
+    }
+    val descriptionTop = max(plate.bottom, name.bottom) + d(if (regular) 18f else 10f)
+    // The description slot is as tall as the wrapped description (the details scroll), and at
+    // least the board's slot (3 lines, 2 on phones, at the board size) so short texts keep the
+    // board's spacing.
+    val boardDescription = d(type.body) * 1.4f * (if (regular) 3f else 2f)
     val description = Rect(detailLeft, descriptionTop, detailRight,
-        descriptionTop + d(type.body) * 1.4f * descriptionLines * t)
+        descriptionTop + max(boardDescription, metrics?.descriptionHeight ?: (boardDescription * ceil((if (regular) 3f else 2f) * max(1f, t)) *
+            t / (if (regular) 3f else 2f))))
     val tagsTop = description.bottom + d(if (regular) 12f else 8f)
-    val tags = Rect(detailLeft, tagsTop, detailRight, tagsTop + d(if (regular) 22f else 20f) * max(1f, t * 0.9f))
+    val tags = Rect(detailLeft, tagsTop, detailRight, tagsTop + (metrics?.tagsHeight ?: armoryTagHeight(frame, t)))
     val masteryTop = tags.bottom + d(if (regular) 26f else 10f)
     val mastery = Rect(detailLeft, masteryTop, detailRight, masteryTop + max(frame.density * 24f, d(type.label) * t))
     val ladderTop = mastery.bottom + d(if (regular) 16f else 6f)
     // Large text stacks the milestones (one line each) instead of squeezing them side by side.
     val ladderHeight = if (armoryMasteryStacked(t)) {
-        d(if (regular) 30f else 22f) * t + d(if (regular) 12f else 10f) + d(10f) +
+        armoryLadderCellsTop(frame, t) + d(if (regular) 12f else 10f) + d(10f) +
             masteryCount * d(type.ladderName) * ARMORY_STACKED_LINE * t
     } else {
         d(if (regular) 94f else 60f) * t
@@ -300,8 +322,21 @@ internal fun armoryLayout(
         detailContentHeight, plate, name, description, tags, mastery, ladder, action, need, actionPinned)
 }
 
-/** From this text size the mastery milestones stack one per line under the level cells. */
-internal fun armoryMasteryStacked(textScale: Float): Boolean = textScale >= 1.4f
+/** Height in px of one detail tag chip at the board-relative text multiplier [textScale]. */
+internal fun armoryTagHeight(frame: ProfileFrame, textScale: Float): Float =
+    frame.d(if (frame.regular) 22f else 20f) * max(1f, textScale.coerceIn(0.75f, 2f) * 0.9f)
+
+/**
+ * Offset of the mastery level cells below the ladder's top: room for the "Lvl N" labels above
+ * them, or a small gap when the milestones stack under the cells (their levels are in the list).
+ */
+internal fun armoryLadderCellsTop(frame: ProfileFrame, textScale: Float): Float = when {
+    armoryMasteryStacked(textScale) -> frame.d(4f)
+    else -> frame.d(if (frame.regular) 30f else 22f) * textScale.coerceIn(0.75f, 2f)
+}
+
+/** From this text size (board-relative) the mastery milestones stack one per line under the level cells. */
+internal fun armoryMasteryStacked(textScale: Float): Boolean = textScale >= 1.3f
 
 /** Line pitch of a stacked milestone, in multiples of its name size. */
 internal const val ARMORY_STACKED_LINE = 1.5f

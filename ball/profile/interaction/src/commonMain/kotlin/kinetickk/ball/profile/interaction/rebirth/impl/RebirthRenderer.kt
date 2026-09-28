@@ -45,6 +45,9 @@ import kinetickk.ball.profile.interaction.localization.ProfileScreensRedesignTex
 import kinetickk.ball.profile.interaction.localization.ProfileText
 import kinetickk.ball.profile.interaction.profileHeaderBackWidth
 import kinetickk.ball.profile.interaction.profileScrollCue
+import kinetickk.ball.profile.interaction.ProfileTextProbe
+import kinetickk.ball.profile.interaction.drawProfileText
+import kinetickk.ball.profile.interaction.profileTextScale
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthRenderModel
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
@@ -66,11 +69,14 @@ internal class RebirthLayoutHolder {
 internal fun RebirthContent(
     model: RebirthRenderModel,
     confirmationArmed: Boolean,
-    scale: Float,
+    textScale: Float,
     onAction: (RebirthAction) -> Unit,
     timeSeconds: Float? = null,
     advanceProgress: Float = 0f,
+    holder: RebirthLayoutHolder = remember { RebirthLayoutHolder() },
 ) {
+    // [textScale] is the player's text-size setting; 1.25 renders the boards' size.
+    val scale = profileTextScale(textScale)
     val language = LocalAppLanguage.current
     val baseRoles = LocalKkRolePalette.current
     val theme = remember(model.targetTier, baseRoles) { RebirthTheme(model.targetTier, baseRoles) }
@@ -88,7 +94,6 @@ internal fun RebirthContent(
             }
         }
     }
-    val holder = remember { RebirthLayoutHolder() }
     val state = model.actionState(confirmationArmed)
     CompositionLocalProvider(LocalKkRolePalette provides theme.roles) {
       Box(Modifier.fillMaxSize()) {
@@ -255,7 +260,7 @@ private fun DrawScope.drawRebirthSection(
         val fromLayout = measureKkText(measurer, kkIntString(model.current.tier),
             measurer.typography.wideStyle(type.fromNumeral * k, tabular = true))
         val from = layout.from
-        drawKkText(fromLayout, from.left, from.top, Kk.Mute)
+        drawProfileText(fromLayout, from.left, from.top, Kk.Mute, "rebirth.from.numeral")
         // The strike keeps the board's proportion (8 px on a 58 px numeral) so small numerals
         // stay readable on phones.
         val barCenter = Offset(from.left + fromLayout.size.width * 0.5f, from.top + fromLayout.kkBoxHeight * 0.46f)
@@ -264,9 +269,11 @@ private fun DrawScope.drawRebirthSection(
             drawRect(accent, Offset(from.left - barHeight, barCenter.y - barHeight * 0.5f),
                 Size(fromLayout.size.width + barHeight * 2f, barHeight))
         }
-        drawKkText(measurer, model.current.directive.displayName.localizedContent(language),
-            measurer.typography.condStyle(type.fromName * k), from.left + fromLayout.size.width + frame.d(14f),
-            from.top + fromLayout.kkBoxHeight * 0.5f, Kk.Mute, valign = KkVAlign.CENTER, uppercase = true)
+        val fromNameLeft = from.left + fromLayout.size.width + frame.d(14f)
+        val fromName = fitKkText(measurer, model.current.directive.displayName.localizedContent(language), type.fromName * k,
+            from.right - fromNameLeft, minFactor = 0.5f) { measurer.typography.condStyle(it) }
+        drawProfileText(fromName, fromNameLeft, from.top + fromLayout.kkBoxHeight * 0.5f, Kk.Mute, "rebirth.from.name",
+            valign = KkVAlign.CENTER)
     }
     // The numeral in two halves split along a slash, the lower half offset (12, 8).
     val numeral = layout.numeral
@@ -292,22 +299,21 @@ private fun DrawScope.drawRebirthSection(
     val target = if (model.isMaximumTier) model.current else model.next
     // The direction name clears the measured numeral (board: 250 px for one digit, 400 for two).
     val nameLeft = maxOf(layout.name.left, left + width + dx + frame.d(8f))
-    val nameLayout = measureKkText(measurer, target.directive.displayName.localizedContent(language),
-        measurer.typography.condStyle(type.name * k), uppercase = true,
-        maxWidth = (layout.name.right - nameLeft).coerceAtLeast(frame.d(40f)))
-    drawKkText(nameLayout, nameLeft, layout.name.top, Kk.Bone)
-    drawKkTag(measurer, language.text(ProfileScreensRedesignText.TierTag, model.targetTier),
+    val nameLayout = rebirthDirectiveLayout(measurer, frame, type, target.directive.displayName.localizedContent(language),
+        (layout.name.right - nameLeft).coerceAtLeast(frame.d(40f)))
+    drawProfileText(nameLayout, nameLeft, layout.name.top, Kk.Bone, "rebirth.directive")
+    val tierTag = drawKkTag(measurer, language.text(ProfileScreensRedesignText.TierTag, model.targetTier),
         Offset(nameLeft, layout.name.top + nameLayout.kkBoxHeight + frame.d(12f)), heightDp = 22f * k,
         fontSize = type.tag * k, background = accent, foreground = Kk.Ink)
+    ProfileTextProbe.record("rebirth.tier.tag", null, null, tierTag)
 
-    val numberStyle = measurer.typography.wideStyle(type.ladderNumber * k, tabular = true)
     layout.cells.forEachIndexed { index, cell ->
         val tier = model.minimumTier + index
         val tierColor = theme.tierColor(tier)
         // The board's ladder cells render upright (their entrance animation holds `transform: none`).
         val state = model.tierCell(tier)
         val striped = tier >= KkRebirthTiers.MaxTier
-        val fg: Color
+        var fg: Color
         when {
             striped -> {
                 drawKkStripes(cell, Color.White, Color.Black, kind = KkFillKind.BADGE_STRIPES)
@@ -324,15 +330,51 @@ private fun DrawScope.drawRebirthSection(
             state == RebirthTierCell.LATER && !striped -> tierColor.copy(alpha = 0.33f)
             else -> Color.Unspecified
         }
+        val ringWidth = if (ring == Color.Unspecified) 0f else frame.d(if (state == RebirthTierCell.LATER) 1.5f else 3f)
         if (ring != Color.Unspecified) {
-            val width = frame.d(if (state == RebirthTierCell.LATER) 1.5f else 3f)
-            val inner = cell.deflate(width * 0.5f)
-            drawRect(ring, inner.topLeft, inner.size, style = kkStroke(width))
+            val inner = cell.deflate(ringWidth * 0.5f)
+            drawRect(ring, inner.topLeft, inner.size, style = kkStroke(ringWidth))
         }
-        drawKkText(measureKkText(measurer, kkIntString(tier), numberStyle), cell.center.x, cell.center.y, fg,
-            align = KkAlign.CENTER, valign = KkVAlign.CENTER)
+        // The numeral fits inside the cell (and its ring) at every text size.
+        val chip = striped && rebirthLadderChip(frame, cell)
+        val inset = ringWidth + if (chip) 0f else frame.d(1f)
+        val pad = if (chip) frame.d(2f) else 0f
+        val number = rebirthLadderNumberLayout(measurer, frame, type, tier, (cell.width - (inset + pad) * 2f).coerceAtLeast(1f))
+        if (chip) {
+            // Narrow cells carry the striped goal tier's numeral on a solid bone band across the
+            // cell: the 8 dp stripes would otherwise dissolve a numeral of about their size.
+            val halfHeight = minOf(number.kkBoxHeight * 0.5f + pad, cell.height * 0.5f - inset)
+            val chipRect = Rect(cell.left + inset, cell.center.y - halfHeight, cell.right - inset, cell.center.y + halfHeight)
+            drawRect(Kk.Bone, chipRect.topLeft, chipRect.size)
+            ProfileTextProbe.record("rebirth.ladder.chip", tier, null, chipRect, Kk.Bone)
+            fg = Kk.Ink
+        }
+        drawProfileText(number, cell.center.x, cell.center.y, fg, "rebirth.ladder.number", tier, align = KkAlign.CENTER,
+            valign = KkVAlign.CENTER)
     }
 }
+
+/** The striped goal cell puts its numeral on a chip when the cell is narrower than 56 dp (phones, small windows). */
+internal fun rebirthLadderChip(frame: ProfileFrame, cell: Rect): Boolean = cell.width < frame.density * 56f
+
+/** A ladder cell's tier numeral, shrunk to fit [width]. */
+internal fun rebirthLadderNumberLayout(measurer: CanvasTextMeasurer, frame: ProfileFrame, type: RebirthType, tier: Int, width: Float) =
+    fitKkText(measurer, kkIntString(tier), type.ladderNumber * frame.k, width, uppercase = false, minFactor = 0.4f) {
+        measurer.typography.wideStyle(it, tabular = true)
+    }
+
+/** The target tier's directive name beside the big numeral, shrunk to fit [width] (never cut). */
+internal fun rebirthDirectiveLayout(measurer: CanvasTextMeasurer, frame: ProfileFrame, type: RebirthType, name: String, width: Float) =
+    fitKkText(measurer, name, type.name * frame.k, width, minFactor = 0.4f) { measurer.typography.condStyle(it) }
+
+/** A comparison table's section title, shrunk to fit [width] (never cut). */
+internal fun rebirthSectionLayout(measurer: CanvasTextMeasurer, frame: ProfileFrame, type: RebirthType, title: String, width: Float) =
+    fitKkText(measurer, title, type.tableLabel * frame.k, width, minFactor = 0.5f) { measurer.typography.labelStyle(it) }
+
+/** Width in px of a comparison table's value column. */
+internal fun rebirthValueColumn(frame: ProfileFrame, scale: Float): Float =
+    // Value columns (70 px on the board) widen with the text-size setting.
+    frame.d(70f) * (if (frame.regular) 1f else 0.8f) * scale.coerceAtLeast(1f)
 
 private fun DrawScope.drawRebirthTable(
     measurer: CanvasTextMeasurer,
@@ -345,17 +387,17 @@ private fun DrawScope.drawRebirthTable(
 ) {
     val k = frame.k
     val header = layout.tableHeader
-    // Value columns (70 px on the board) widen with the text-size setting.
-    val column = frame.d(70f) * (if (frame.regular) 1f else 0.8f) * measurer.scale.coerceAtLeast(1f)
+    val column = rebirthValueColumn(frame, measurer.scale)
     val headStyle = measurer.typography.wideStyle(type.tableHead * k, tabular = true)
-    val labelStyle = measurer.typography.labelStyle(type.tableLabel * k)
     val bottomPad = frame.d(8f)
-    drawKkText(measurer, language.text(ProfileText.HostileEscalation), labelStyle, header.left, header.bottom - bottomPad, Kk.Bone,
-        valign = KkVAlign.BASELINE, uppercase = true, maxWidth = header.width - column * 2f)
+    val hostileTitle = rebirthSectionLayout(measurer, frame, type, language.text(ProfileText.HostileEscalation), header.width - column * 2f)
+    drawProfileText(hostileTitle, header.left, header.bottom - bottomPad, Kk.Bone, "rebirth.section", valign = KkVAlign.BASELINE)
     val currentHead = measureKkText(measurer, kkIntString(model.current.tier), headStyle)
     val nextHead = measureKkText(measurer, kkIntString(model.targetTier), headStyle)
-    drawKkText(currentHead, header.right - column, header.bottom - bottomPad, Kk.Mute, align = KkAlign.END, valign = KkVAlign.BASELINE)
-    drawKkText(nextHead, header.right, header.bottom - bottomPad, theme.accent, align = KkAlign.END, valign = KkVAlign.BASELINE)
+    drawProfileText(currentHead, header.right - column, header.bottom - bottomPad, Kk.Mute, "rebirth.head", align = KkAlign.END,
+        valign = KkVAlign.BASELINE)
+    drawProfileText(nextHead, header.right, header.bottom - bottomPad, theme.accent, "rebirth.head", align = KkAlign.END,
+        valign = KkVAlign.BASELINE)
     drawLine(Kk.Line2, Offset(header.left, header.bottom), Offset(header.right, header.bottom), frame.density)
 
     val current = model.current
@@ -365,8 +407,8 @@ private fun DrawScope.drawRebirthTable(
         drawRebirthRow(measurer, frame, type, layout.hostileRows[index], column, row, if (row.change == RebirthChange.UP) theme.threat else Kk.Mute)
     }
     val label = layout.compensationLabel
-    drawKkText(measurer, language.text(ProfileText.CycleCompensation), labelStyle, label.left, label.bottom - bottomPad, Kk.Bone,
-        valign = KkVAlign.BASELINE, uppercase = true, maxWidth = label.width)
+    val compensationTitle = rebirthSectionLayout(measurer, frame, type, language.text(ProfileText.CycleCompensation), label.width)
+    drawProfileText(compensationTitle, label.left, label.bottom - bottomPad, Kk.Bone, "rebirth.section", valign = KkVAlign.BASELINE)
     drawLine(Kk.Line2, Offset(label.left, label.bottom), Offset(label.right, label.bottom), frame.density)
     rebirthCompensationRows(current, next, language).forEachIndexed { index, row ->
         drawRebirthRow(measurer, frame, type, layout.compensationRows[index], column, row,
@@ -387,11 +429,15 @@ private fun DrawScope.drawRebirthRow(
     val cy = rect.center.y
     val label = fitKkText(measurer, row.label, type.body * k, rect.width - column * 2f - frame.d(8f), uppercase = false,
         minFactor = 0.55f) { measurer.typography.bodyStyle(it) }
-    drawKkText(label, rect.left, cy, Kk.Bone, valign = KkVAlign.CENTER)
-    drawKkText(measurer, row.current, measurer.typography.monoStyle(type.mono * k), rect.right - column, cy, Kk.Mute,
-        align = KkAlign.END, valign = KkVAlign.CENTER, uppercase = true)
-    drawKkText(measurer, row.next, measurer.typography.monoStyle(type.mono * k, weight = FontWeight.Bold), rect.right, cy, nextColor,
-        align = KkAlign.END, valign = KkVAlign.CENTER, uppercase = true)
+    drawProfileText(label, rect.left, cy, Kk.Bone, "rebirth.row.label", valign = KkVAlign.CENTER)
+    val current = fitKkText(measurer, row.current, type.mono * k, column - frame.d(6f), minFactor = 0.6f) {
+        measurer.typography.monoStyle(it)
+    }
+    drawProfileText(current, rect.right - column, cy, Kk.Mute, "rebirth.row.value", align = KkAlign.END, valign = KkVAlign.CENTER)
+    val next = fitKkText(measurer, row.next, type.mono * k, column - frame.d(6f), minFactor = 0.6f) {
+        measurer.typography.monoStyle(it, weight = FontWeight.Bold)
+    }
+    drawProfileText(next, rect.right, cy, nextColor, "rebirth.row.value", align = KkAlign.END, valign = KkVAlign.CENTER)
     drawLine(Kk.Line, Offset(rect.left, rect.bottom), Offset(rect.right, rect.bottom), frame.density)
 }
 
