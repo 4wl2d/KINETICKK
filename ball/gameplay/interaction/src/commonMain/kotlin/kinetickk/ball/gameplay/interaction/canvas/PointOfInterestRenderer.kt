@@ -15,6 +15,7 @@ import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
 import kinetickk.foundation.design.*
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
@@ -30,7 +31,16 @@ private const val OFFER_MARK_HALF = 46f
 /** Half extent of the active vault mark (anomaly diamond). */
 private const val VAULT_MARK_HALF = 30f
 
-/** Half extent of a circuit beacon: its dashed target ring (55 + stroke) and the place pips below. */
+/** Top of a beacon's place pips, below its plates (from the beacon's center). */
+private const val BEACON_PIP_TOP = 57f
+
+/** Height of a beacon's place pips. */
+private const val BEACON_PIP_HEIGHT = 8f
+
+/**
+ * Half extent of a circuit beacon: its dashed target ring (55 + stroke) and the place pips below
+ * (to [BEACON_PIP_TOP] + [BEACON_PIP_HEIGHT] = 65).
+ */
 private const val BEACON_MARK_HALF = 66f
 
 /** Distance from a beacon's center to its timer label, just below the place pips. */
@@ -94,8 +104,11 @@ internal object WorldDrawProbe {
     }
 }
 
-/** What [WorldDrawProbe] records: a point's mark (offer, vault, target beacon), a point timer, an edge marker. */
-internal enum class WorldDrawn { POINT_MARK, POINT_TIMER, EDGE_MARKER }
+/**
+ * What [WorldDrawProbe] records: a point's mark (offer, vault, target beacon), a point timer, an
+ * edge marker, the target beacon's place pips as drawn.
+ */
+internal enum class WorldDrawn { POINT_MARK, POINT_TIMER, EDGE_MARKER, BEACON_PIPS }
 
 /** Updates the HUD keep-out for this frame: trial panel while a trial runs, boss bar while a boss lives. */
 internal fun DrawScope.worldHudKeepOut(engine: GameplayRenderModel, textMeasurer: TextMeasurer): WorldHudKeepOut {
@@ -355,8 +368,15 @@ private fun DrawScope.drawBeacon(center: Offset, index: Int, target: Boolean, vi
     val pipWidth = 13f
     val pipGap = 5f
     val total = pips * pipWidth + (pips - 1) * pipGap
-    drawKkPips(Offset(center.x - total * 0.5f, center.y + BEACON_MARK_HALF - 5f), pips, pips, accent,
-        sizeDp = 8f / density, widthDp = pipWidth / density, gapDp = pipGap / density)
+    val left = center.x - total * 0.5f
+    val top = center.y + BEACON_PIP_TOP
+    val drawn = drawKkPips(Offset(left, top), pips, pips, accent,
+        sizeDp = BEACON_PIP_HEIGHT / density, widthDp = pipWidth / density, gapDp = pipGap / density)
+    if (target) {
+        // The pips' sheared outline reaches past the row's box by the shear travel on each side.
+        val shear = abs(kkShearOffset(BEACON_PIP_HEIGHT))
+        WorldDrawProbe.record(WorldDrawn.BEACON_PIPS, left - shear, top, left + drawn + shear, top + BEACON_PIP_HEIGHT)
+    }
 }
 
 /** Pips under a beacon: its place in the circuit (1 at the center, 2 right, 3 left). */

@@ -29,7 +29,7 @@ import kotlin.test.assertTrue
 /**
  * Point-of-interest marks and timers drawn by the real world renderer (bundled fonts) while the
  * point sweeps the screen: timers never land on the HUD, and a mark and its edge marker never
- * draw together.
+ * draw together (the drawn target beacon, place pips included, is whole on screen).
  */
 class WorldPointLabelsTest {
     private val sizes = listOf(1_440 to 810, 844 to 390, 390 to 844)
@@ -93,6 +93,13 @@ class WorldPointLabelsTest {
                     assertTrue(box.onScreen(width, height), "whole beacon on screen: $where")
                     marks++
                 }
+                // The place pips as drawn: on screen and inside the mark box the hand-over uses.
+                val pips = WorldDrawProbe.rects(WorldDrawn.BEACON_PIPS)
+                assertEquals(mark.size, pips.size, "the drawn beacon's pips: $where")
+                pips.forEach { row ->
+                    assertTrue(row.onScreen(width, height), "beacon pips $row on screen: $where")
+                    assertTrue(mark.any { it.encloses(row) }, "beacon mark $mark covers its pips $row: $where")
+                }
                 markers += marker.size
             }
             assertTrue(marks > 0 && markers > 0, "the sweep crosses the hand-over at $width x $height ($marks marks, $markers markers)")
@@ -133,6 +140,8 @@ class WorldPointLabelsTest {
         PointOfInterestProjection(kind, kind.name, x, y, active, 14f, 1, 0.4f, immutableListOf(), 0f, 0f)
 
     private fun Rect.onScreen(width: Int, height: Int) = left >= 0f && top >= 0f && right <= width && bottom <= height
+
+    private fun Rect.encloses(other: Rect) = left <= other.left && top <= other.top && right >= other.right && bottom >= other.bottom
 
     private companion object {
         // PointOfInterestRenderer's beacon offsets: order 2 sits 230 right of and 200 below the center.
