@@ -127,18 +127,28 @@ class HomeMenuPixelComposeTest {
     @Test
     fun theTwoColumnSelectionKeepsItsSlabCutAndLeadBeforeTheLabel() {
         for (language in AppLanguage.entries) for (textScale in listOf(1.25f, 1.75f)) withMenu(language, textScale) { menu ->
-            for ((width, height) in listOf(390 to 600, 360 to 640, 412 to 650)) {
+            for ((width, height) in TwoColumnViewports) {
                 val layout = homeLayoutGeometry(width.toFloat(), height.toFloat(), 1f)
                 assertTrue(layout.scene.menuColumns == 2, "two columns at ${width}x$height")
                 val k = layout.scene.menuFontSize / 64f
+                fun item(index: Int, selection: Float) = rendered(width, height) {
+                    val target = HomeMenuTargets[index]
+                    drawHomeMenuItem(menu, layout, index, language.text(HomeMenuLabels[index]), homeFacts(StampModel, target, language, textScale),
+                        layout.bounds(target).left, false, Float.NaN, selection, HOME_TRAIL_REST_SECONDS)
+                }
                 HomeMenuTargets.forEachIndexed { index, target ->
                     val where = "$target ${language.code} ${width}x$height @$textScale"
                     val bounds = layout.bounds(target)
-                    val facts = homeFacts(StampModel, target, language, textScale)
-                    val image = rendered(width, height) {
-                        drawHomeMenuItem(menu, layout, index, language.text(HomeMenuLabels[index]), facts, bounds.left, false, Float.NaN, 1f,
-                            HOME_TRAIL_REST_SECONDS)
-                    }
+                    val band = (bounds.top.toInt() - 2)..(bounds.bottom.toInt() + 2)
+                    // At rest the label alone is drawn, whole inside its column (the clip would cut a longer one).
+                    val label = paintedColumns(item(index, 0f), band) ?: fail("no label: $where")
+                    assertTrue(label.last < bounds.right, "label runs to ${label.last} past its column's ${bounds.right}: $where")
+                    // Selected, the item keeps 4 px clear of the other column's label in its row, on either side.
+                    val image = item(index, 1f)
+                    val selected = paintedColumns(image, band) ?: fail("nothing selected: $where")
+                    val neighbour = paintedColumns(item(index xor 1, 0f), band) ?: fail("no neighbour label: $where")
+                    val clear = if (index % 2 == 1) selected.first - neighbour.last - 1 else neighbour.first - selected.last - 1
+                    assertTrue(clear >= 4, "selected ${selected.first}..${selected.last}, neighbour label ${neighbour.first}..${neighbour.last}: $where")
                     val rows = (bounds.top.toInt()..bounds.bottom.toInt()).filter { y -> (0 until width).any { isBone(image.pixel(it, y)) } }
                     if (rows.isEmpty()) fail("no slab: $where")
                     fun slabLeft(y: Int) = (0 until width).first { isBone(image.pixel(it, y)) }
@@ -203,6 +213,12 @@ class HomeMenuPixelComposeTest {
         return SlabProbe(heights.sorted()[heights.size / 2], top, bottom)
     }
 
+    /** First and last pixel columns painted (at least a quarter opaque) on [rows] of [image], or null when none is. */
+    private fun paintedColumns(image: Frame, rows: IntRange): IntRange? {
+        val columns = (0 until image.width).filter { x -> rows.any { y -> y in 0 until image.height && image.pixel(x, y) ushr 24 >= 64 } }
+        return if (columns.isEmpty()) null else columns.first()..columns.last()
+    }
+
     /** First and last pixel rows with any ink, or null when [image] is blank. */
     private fun inkRows(image: Frame): IntRange? {
         val rows = (0 until image.height).filter { y -> (0 until image.width).any { x -> image.pixel(x, y) ushr 24 != 0 } }
@@ -251,6 +267,9 @@ class HomeMenuPixelComposeTest {
     private companion object {
         /** One-column Home menus: the reference screens and the smaller phones. */
         val OneColumnViewports = listOf(1_440 to 810, 844 to 390, 390 to 844, 800 to 360, 600 to 390, 360 to 800)
+
+        /** Two-column Home menus (portrait under 660 px tall), down to the narrowest 320 px phones. */
+        val TwoColumnViewports = listOf(320 to 568, 328 to 568, 332 to 568, 340 to 600, 360 to 640, 390 to 600, 412 to 650)
 
         /** Stamps on Armory and Rebirth, counts on the others. */
         val StampModel: HomeUiModel by lazy {

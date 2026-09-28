@@ -276,7 +276,11 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
             // One column: rows step 6 px left going down, and the lowest row sits so far right that
             // its selected speed lines end at the side margin. The font (36 px from 418 px wide)
             // scales down on narrower phones so a Russian label with its stamp still fits the row.
-            val menuFont = if (columns == 1) 36f * min(1f, w / 418f) else 28f
+            // Two columns: 28 px from a 166 px column (the widest label, Russian ПЕРЕРОЖДЕНИЕ, takes
+            // 163 px of it with its lead) scales down on narrower phones, so every label stays whole
+            // in its column and a selected right-column item slides and casts its echo clear of the
+            // label left of it.
+            val menuFont = if (columns == 1) 36f * min(1f, w / 418f) else 28f * min(1f, columnWidth / 166f)
             val menuReach = HOME_MENU_REACH * menuFont / 64f
             HomeMenuTargets.forEachIndexed { index, target ->
                 if (columns == 1) {
