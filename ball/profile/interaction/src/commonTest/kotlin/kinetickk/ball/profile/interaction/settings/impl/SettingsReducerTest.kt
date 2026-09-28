@@ -16,6 +16,7 @@ import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
 import kinetickk.foundation.common.localization.AppLanguage
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -184,6 +185,32 @@ class SettingsReducerTest {
         assertEquals(null, SettingsReducer.reduce(opened.state, SettingsAction.SelectGroup(SettingsGroup.SOUND)).state.info)
         assertEquals(null, SettingsReducer.reduce(opened.state, SettingsAction.PageSelected(1)).state.info)
         assertEquals(opened.state.model, SettingsReducer.reduce(opened.state, SettingsAction.ToggleInfo(SettingsRow.COLOR_VISION)).state.model)
+    }
+
+    @Test
+    fun aPressOnTheOpenSlipClosesItWithoutTouchingAPreference() {
+        val initial = SettingsState(PlayerPreferences().toRenderModel(), page = 0, group = SettingsGroup.GRAPHICS)
+        val opened = SettingsReducer.reduce(initial, SettingsAction.ToggleInfo(SettingsRow.COLOR_VISION)).state
+        val closed = SettingsReducer.reduce(opened, SettingsAction.CloseInfo)
+        assertEquals(opened.copy(info = null), closed.state)
+        assertTrue(closed.effects.isEmpty(), "no preference change, sound or output")
+        // Already closed (the slip was shown by hover or focus): still inert.
+        assertEquals(SettingsReduction(initial), SettingsReducer.reduce(initial, SettingsAction.CloseInfo))
+    }
+
+    @Test
+    fun aPinnedOrFocusedSlipTakesPressesButAHoveredOneLetsThemThrough() {
+        val colorVision = SettingsTarget.Info(SettingsRow.COLOR_VISION)
+        val shake = SettingsTarget.Info(SettingsRow.SCREEN_SHAKE)
+        // Pinned by a tap (touch: nothing hovers).
+        assertTrue(settingsSlipTakesPresses(focus = null, hover = null, info = SettingsRow.COLOR_VISION))
+        assertTrue(settingsSlipTakesPresses(focus = null, hover = colorVision, info = SettingsRow.COLOR_VISION))
+        // Held by keyboard focus.
+        assertTrue(settingsSlipTakesPresses(focus = colorVision, hover = null, info = null))
+        // Shown only while the pointer rests on its (!), or another row's hover replaces the pinned one.
+        assertFalse(settingsSlipTakesPresses(focus = null, hover = colorVision, info = null))
+        assertFalse(settingsSlipTakesPresses(focus = null, hover = shake, info = SettingsRow.COLOR_VISION))
+        assertFalse(settingsSlipTakesPresses(focus = null, hover = SettingsTarget.Back, info = null))
     }
 
     @Test

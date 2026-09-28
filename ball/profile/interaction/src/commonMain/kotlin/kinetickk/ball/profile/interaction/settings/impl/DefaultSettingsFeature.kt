@@ -16,13 +16,16 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -229,12 +232,38 @@ class DefaultSettingsFeature(
                         onEditingFinished = { focusRequester.requestFocus() },
                     )
                 }
+                settingsOpenInfo(focusValue, hoverValue, infoValue)?.let { open ->
+                    val slip = remember(measurers, layout, open) { measurers.infoSlip(layout, open) }
+                    if (slip != null) {
+                        SettingsInfoSlipLayer(slip, settingsSlipTakesPresses(focusValue, hoverValue, infoValue)) {
+                            dispatch(SettingsAction.CloseInfo)
+                        }
+                    }
+                }
             }
         }
     }
 }
 
 private const val PREVIEW_AWAKE_NANOS = 2_400_000_000L
+
+/**
+ * The open (!) explanation, composed last so it sits above the canvas and the Compose volume
+ * strip. When it [takesPresses], every press inside the slip lands on it: a tap meant to dismiss
+ * it closes it and never reaches the control it covers.
+ */
+@Composable
+private fun SettingsInfoSlipLayer(slip: SettingsInfoSlip, takesPresses: Boolean, onPress: () -> Unit) {
+    val press by rememberUpdatedState(onPress)
+    // PlacedBox puts the layer at the rounded top-left; the slip is drawn relative to it.
+    val origin = Offset(slip.bounds.left.roundToInt().toFloat(), slip.bounds.top.roundToInt().toFloat())
+    // Without pointer input the layer is no hit target, so presses reach the controls below.
+    val presses = if (takesPresses) Modifier.pointerInput(slip) { detectTapGestures { press() } } else Modifier
+    PlacedBox(slip.bounds, Modifier
+        .testTag("kinetickk.settings.${slip.row.tagId}.slip")
+        .then(presses)
+        .drawBehind { drawSettingsInfoSlip(slip, origin) })
+}
 
 /**
  * Focusable semantic nodes over the canvas targets, in reading order. Pointer input stays with the

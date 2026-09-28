@@ -9,6 +9,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
@@ -49,6 +50,7 @@ import kinetickk.foundation.design.kkShearOffset
 import kinetickk.foundation.design.kkStroke
 import kinetickk.foundation.design.labelStyle
 import kinetickk.foundation.design.measureKkText
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -133,9 +135,43 @@ internal class SettingsFrame(
     val info: SettingsRow?,
     val time: Float,
 ) {
-    /** The (!) explanation on screen: keyboard focus first, then hover, then a pressed toggle. */
+    /** The (!) explanation on screen (see [settingsOpenInfo]). */
     val openInfo: SettingsRow?
-        get() = (focus as? SettingsTarget.Info)?.row ?: (hover as? SettingsTarget.Info)?.row ?: info
+        get() = settingsOpenInfo(focus, hover, info)
+}
+
+/** The (!) explanation on screen: keyboard focus first, then hover, then a pressed toggle. */
+internal fun settingsOpenInfo(focus: SettingsTarget?, hover: SettingsTarget?, info: SettingsRow?): SettingsRow? =
+    (focus as? SettingsTarget.Info)?.row ?: (hover as? SettingsTarget.Info)?.row ?: info
+
+/**
+ * Whether the open explanation takes the presses inside its slip: when a press pinned it or
+ * keyboard focus holds it. A slip shown only while the pointer hovers its (!) lets presses
+ * through: a press elsewhere means the pointer has left the (!), which closes that slip.
+ */
+internal fun settingsSlipTakesPresses(focus: SettingsTarget?, hover: SettingsTarget?, info: SettingsRow?): Boolean {
+    val open = settingsOpenInfo(focus, hover, info) ?: return false
+    return (focus as? SettingsTarget.Info)?.row == open || info == open
+}
+
+/**
+ * The open (!) explanation: its [row], the slip [bounds] placed by [SettingsLayout.tooltipRect]
+ * and the measured [body]. The feature draws it in its own layer above every control, and that
+ * layer owns the presses inside [bounds] (see [settingsSlipTakesPresses]).
+ */
+internal class SettingsInfoSlip(val row: SettingsRow, val bounds: Rect, val body: TextLayoutResult)
+
+internal fun SettingsMeasurers.infoSlip(layout: SettingsLayout, row: SettingsRow): SettingsInfoSlip? {
+    val text = measureKkTooltip(body, row.about(language), layout.density)
+    val bounds = layout.tooltipRect(row, text.kkBoxHeight) ?: return null
+    return SettingsInfoSlip(row, bounds, text)
+}
+
+/** `.tipbox`: bone slip with a 10 px top-right cut; [origin] is the top-left of the layer drawn into. */
+internal fun DrawScope.drawSettingsInfoSlip(slip: SettingsInfoSlip, origin: Offset) {
+    val rect = slip.bounds.translate(-origin)
+    drawKkSlip(rect, cutDp = 10f)
+    drawKkText(slip.body, rect.left + d(13f), rect.top + d(11f), Kk.Ink)
 }
 
 internal class SettingsCanvasCache {
@@ -190,15 +226,7 @@ internal fun DrawScope.drawSettings(frame: SettingsFrame, measurers: SettingsMea
     }
 
     layout.preview?.let { drawSettingsPreview(it, frame, measurers) }
-
-    frame.openInfo?.let { open ->
-        // `.tipbox`: bone slip with a 10 px top-right cut, placed clear of the navigation.
-        val body = measureKkTooltip(measurers.body, open.about(measurers.language), density)
-        layout.tooltipRect(open, body.kkBoxHeight)?.let { rect ->
-            drawKkSlip(rect, cutDp = 10f)
-            drawKkText(body, rect.left + d(13f), rect.top + d(11f), Kk.Ink)
-        }
-    }
+    // The open (!) explanation is not drawn here: see [SettingsInfoSlip].
 }
 
 private fun DrawScope.drawSettingsRow(
@@ -298,9 +326,29 @@ private fun DrawScope.drawSettingsSwatches(chips: List<Rect>, palette: KkRolePal
         val layout = if (natural.size.width <= lane) natural else {
             measureKkText(measurers.at(measurer.scale * lane / natural.size.width), text, style, uppercase = true)
         }
-        val ink = if (color.luminance() > 0.3f) Kk.Ink else Kk.Bone
-        drawKkText(layout, chip.center.x, chip.center.y, ink, align = KkAlign.CENTER, valign = KkVAlign.CENTER)
+        drawKkText(layout, chip.center.x, chip.center.y, settingsChipLabelColor(color), align = KkAlign.CENTER, valign = KkVAlign.CENTER)
     }
+}
+
+/** Minimum contrast of the small chip labels against their chip (WCAG AA for small text). */
+internal const val SETTINGS_CHIP_LABEL_CONTRAST = 4.5f
+
+/**
+ * Label color on a role chip of [fill]: ink or bone, whichever contrasts more. A mid-tone fill
+ * where neither reaches [SETTINGS_CHIP_LABEL_CONTRAST] (Deutan's threat blue) takes pure black
+ * or white, which always reach at least √21 ≈ 4.58:1.
+ */
+internal fun settingsChipLabelColor(fill: Color): Color {
+    val token = if (contrastRatio(Kk.Ink, fill) >= contrastRatio(Kk.Bone, fill)) Kk.Ink else Kk.Bone
+    if (contrastRatio(token, fill) >= SETTINGS_CHIP_LABEL_CONTRAST) return token
+    return if (contrastRatio(Color.Black, fill) >= contrastRatio(Color.White, fill)) Color.Black else Color.White
+}
+
+/** WCAG contrast ratio of two opaque colors. */
+internal fun contrastRatio(a: Color, b: Color): Float {
+    val la = a.luminance()
+    val lb = b.luminance()
+    return (max(la, lb) + 0.05f) / (min(la, lb) + 0.05f)
 }
 
 /** Index of the threat chip in [settingsRoleSwatches]. */

@@ -87,6 +87,8 @@ internal sealed interface SettingsAction {
     data class Adjust(val row: SettingsRow, val direction: Int) : SettingsAction
     /** Opens the row's (!) explanation, or closes it when it is already open. */
     data class ToggleInfo(val row: SettingsRow) : SettingsAction
+    /** A press on the open explanation's slip: closes it and changes no preference. */
+    data object CloseInfo : SettingsAction
     data class PageSelected(val page: Int) : SettingsAction
     data object Back : SettingsAction
 }
@@ -173,6 +175,7 @@ internal object SettingsReducer {
         is SettingsAction.ToggleInfo -> SettingsReduction(
             state.copy(info = if (state.info == action.row) null else action.row),
         )
+        SettingsAction.CloseInfo -> SettingsReduction(state.copy(info = null))
         is SettingsAction.PageSelected -> SettingsReduction(
             state = state.copy(page = action.page.coerceAtLeast(0), info = null),
             effects = listOf(SettingsEffect.PlayAudio(ProfileAudioCue.UI_CLICK)),
