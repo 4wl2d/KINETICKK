@@ -150,13 +150,15 @@ class WorldEdgeMarkerSpacingTest {
         // Two offers spawned as the game spawns them (560 px from the Core, one radian either side
         // of its heading, a random one per flight), without the totem, with it near them and with
         // it far off, and the Core (the camera on it) flying off on 36 courses at a random 3 to 6 px
-        // per frame; then the flights where the verifier caught a marker stranded or pushed and back.
-        // (The HUD is left undrawn: the world renderer keeps the markers clear of its regions on
-        // its own.) Every frame: markers spaced; none returns to a spot it just left more than
-        // [ABA_PX] away, also when a marker arrives or leaves; two markers trade places only
-        // toward their targets' order and keep it once the targets are clearly apart; and none
-        // stays over [STRANDED_ERROR_DEGREES] off its target for [STRANDED_FRAMES] frames while
-        // the same targets placed afresh would point it within [FRESH_ERROR_DEGREES].
+        // per frame; then the flights where the verifier caught a marker stranded, pushed and back,
+        // or flashing right after it stopped being stranded. (The HUD is left undrawn: the world
+        // renderer keeps the markers clear of its regions on its own.) Every frame: markers
+        // spaced; none goes back near a spot it left more than [ABA_PX] behind within
+        // [FLIGHT_RETURN_FRAMES] frames (the verifier's flights: [REPRO_RETURN_FRAMES]), also when a
+        // marker arrives or leaves; two markers trade places
+        // only toward their targets' order and keep it once the targets are clearly apart; and
+        // none stays over [STRANDED_ERROR_DEGREES] off its target for [STRANDED_FRAMES] frames
+        // while the same targets placed afresh would point it within [FRESH_ERROR_DEGREES].
         val failures = ArrayList<String>()
         var frames = 0
         val random = Random(20_260_928)
@@ -180,10 +182,20 @@ class WorldEdgeMarkerSpacingTest {
                 else -> Offset(cos(flight.heading + 1.03f), sin(flight.heading + 1.03f)) * 1_500f
             }
             val course = flight.heading + (flight.course * 360f / FLIGHT_COURSES + 5f) * PI.toFloat() / 180f
-            val checks = FlightChecks("$flight", flight.width, flight.height, failures)
+            // A curved flight circles a center to the side of the heading, from the origin.
+            val side = flight.heading + flight.turn * PI.toFloat() / 2f
+            val center = Offset(cos(side), sin(side)) * flight.radius
+            val startAngle = atan2(-center.y, -center.x)
+            val returnFrames = if (flight in VERIFIER_FLIGHTS) REPRO_RETURN_FRAMES else FLIGHT_RETURN_FRAMES
+            val checks = FlightChecks("$flight", flight.width, flight.height, failures, returnFrames)
             startAfresh(flight.width, flight.height, 1f, flight.language)
             for (frame in 0 until FLIGHT_FRAMES) {
-                val core = Offset(cos(course), sin(course)) * (flight.speed * frame)
+                val core = if (flight.radius > 0f) {
+                    val angle = startAngle + flight.turn * flight.speed * frame / flight.radius
+                    center + Offset(cos(angle), sin(angle)) * flight.radius
+                } else {
+                    Offset(cos(course), sin(course)) * (flight.speed * frame)
+                }
                 val boxes = draw(flight.width, flight.height, 1f, flight.language, 1.25f, false, offers, totem, core = core, hud = false)
                 checks.check(frame, boxes)
                 frames++
@@ -322,7 +334,11 @@ class WorldEdgeMarkerSpacingTest {
             width, height)
     }
 
-    /** A flight: its screen, spawn heading (radians), course index, Core speed (px per frame) and totem (0: none, 1: far, 2: near). */
+    /**
+     * A flight: its screen, spawn heading (radians), course index (also picking the offers'
+     * kinds), Core speed (px per frame), totem (0: none, 1: far, 2: near) and, for a curved
+     * flight, the [radius] of the circle it turns on and the [turn] direction (1: clockwise).
+     */
     private data class FlightSpec(
         val width: Float,
         val height: Float,
@@ -331,13 +347,21 @@ class WorldEdgeMarkerSpacingTest {
         val heading: Float,
         val course: Int,
         val speed: Float,
+        val radius: Float = 0f,
+        val turn: Float = 0f,
     )
 
     /**
      * The checks every frame of one flight must pass (see [flightsPastTheOffersNeverFlipOrStrandTheirMarkers]),
      * each marker followed by its kind across frames where markers arrive or leave.
      */
-    private inner class FlightChecks(val where: String, val width: Float, val height: Float, val failures: MutableList<String>) {
+    private inner class FlightChecks(
+        val where: String,
+        val width: Float,
+        val height: Float,
+        val failures: MutableList<String>,
+        val returnFrames: Int = FLIGHT_RETURN_FRAMES,
+    ) {
         private val spots = HashMap<EdgeMarkerIcon, ArrayList<Offset>>()
         private val stranded = HashMap<EdgeMarkerIcon, Int>()
         private var previous: Frame? = null
@@ -353,15 +377,21 @@ class WorldEdgeMarkerSpacingTest {
                 val icon = requireNotNull(now.icons[index])
                 val track = spots.getOrPut(icon) { ArrayList() }
                 val center = now.centers[index]
-                for (back in 2..minOf(track.size, RETURN_FRAMES)) {
+                // Back within a third of how far it strayed (at most [RETURN_PX]) of a spot it held
+                // 2 to [returnFrames] frames ago, after straying more than [ABA_PX]: a flicker.
+                for (back in 2..minOf(track.size, returnFrames)) {
                     val earlier = track[track.size - back]
-                    if (distance(center, earlier) > 3f) continue
+                    val gap = distance(center, earlier)
+                    if (gap > RETURN_PX) continue
                     val strayed = (1 until back).maxOf { distance(track[track.size - it], earlier) }
-                    if (strayed > ABA_PX) failures += "$at: $icon left $earlier by $strayed px and came back ${track.takeLast(back) + center}"
+                    if (strayed > ABA_PX && gap <= strayed / 3f) {
+                        failures += "$at: $icon left $earlier by $strayed px and came back within $gap px after $back frames " +
+                            "${track.takeLast(back) + center}"
+                    }
                     break
                 }
                 track += center
-                if (track.size > RETURN_FRAMES) track.removeAt(0)
+                if (track.size > returnFrames) track.removeAt(0)
                 val target = now.targets[index]
                 val error = abs(turn(now, listOf(target, center), 0, 1))
                 val freshError = abs(turn(now, listOf(target, fresh[index]), 0, 1))
@@ -565,6 +595,14 @@ class WorldEdgeMarkerSpacingTest {
         /** How many frames back a jumping marker must not return to. */
         const val RETURN_FRAMES = 8
 
+        /**
+         * How many frames back a flight's marker must not go back near a spot it left: the eight
+         * frames a return reads as a flicker in, and the four after them, where no burst of
+         * returns may wait; in the verifier's flights, sixteen (one swapped back after 14).
+         */
+        const val FLIGHT_RETURN_FRAMES = 12
+        const val REPRO_RETURN_FRAMES = 16
+
         const val SHAKE_DIRECTIONS = 72
         const val SETTLE_FRAMES = 6
         const val SHAKEN_FRAMES = 12
@@ -576,8 +614,9 @@ class WorldEdgeMarkerSpacingTest {
         /** How far from the Core the game spawns its offers. */
         const val OFFER_DISTANCE = 560f
 
-        /** A marker that strays this far and comes back flickers. */
+        /** A marker that strays this far and comes back (within a third of that, at most [RETURN_PX]) flickers. */
         const val ABA_PX = 12f
+        const val RETURN_PX = 24f
 
         /**
          * A marker this many degrees off its target for [STRANDED_FRAMES] frames in a row, while
@@ -603,13 +642,19 @@ class WorldEdgeMarkerSpacingTest {
          * The flights where the verifier caught f0d9800 stranding a marker (a sealed anomaly held
          * 30 to 59 degrees off at 844x390, a resonant circuit up to 44 degrees off at 390x844) and
          * pushing one away and back (the totem before a crossing, a circuit when the orbit's
-         * marker arrived next to it).
+         * marker arrived next to it), and 9d051c5 flashing a totem right after a stranding ended
+         * (a curved flight; 510 -> 582 -> 492 px; 366 -> 228 -> 366 px).
          */
         val VERIFIER_FLIGHTS = listOf(
             FlightSpec(844f, 390f, AppLanguage.English, 1, 5.016365f, 19, 6f),
             FlightSpec(390f, 844f, AppLanguage.Russian, 0, 1.9322724f, 14, 3f),
             FlightSpec(390f, 844f, AppLanguage.Russian, 1, 4.498208f, 26, 6f),
             FlightSpec(390f, 844f, AppLanguage.English, 1, 0.18163367f, 29, 4.5f),
+            // 9d051c5 stopping a stranding while two targets lay within the order margin, in their
+            // held order: the pair traded back within a frame or a few once the targets parted.
+            FlightSpec(844f, 390f, AppLanguage.Russian, 2, 7 * 45f * PI.toFloat() / 180f + 0.2f, 7, 4.5f, radius = 300f, turn = -1f),
+            FlightSpec(844f, 390f, AppLanguage.English, 1, 2.495924f, 1, 4.5f),
+            FlightSpec(390f, 844f, AppLanguage.Russian, 1, 5.6731505f, 11, 4.5f),
         )
     }
 }

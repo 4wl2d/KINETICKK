@@ -243,17 +243,25 @@ internal class EdgeMarkerPlanner {
     private val lastSample = IntArray(EdgeMarkerBatch.CAPACITY)
     private val lastRank = IntArray(EdgeMarkerBatch.CAPACITY)
 
-    // Each marker's centers over the last [RETURN_FRAMES] frames (oldest first), last frame's and
-    // this frame's; and the spots it strayed from in that time, which it does not go back to yet.
-    private val lastTrailX = FloatArray(EdgeMarkerBatch.CAPACITY * RETURN_FRAMES)
-    private val lastTrailY = FloatArray(EdgeMarkerBatch.CAPACITY * RETURN_FRAMES)
+    // Each marker's centers over the last [RETURN_FADE_FRAMES] frames (oldest first), last frame's
+    // and this frame's; and the spots it strayed from in that time, which it does not go back to
+    // yet: each with how close counts as going back, and how many frames ago it was held.
+    private val lastTrailX = FloatArray(EdgeMarkerBatch.CAPACITY * RETURN_FADE_FRAMES)
+    private val lastTrailY = FloatArray(EdgeMarkerBatch.CAPACITY * RETURN_FADE_FRAMES)
     private val lastTrailLength = IntArray(EdgeMarkerBatch.CAPACITY)
-    private val trailX = FloatArray(EdgeMarkerBatch.CAPACITY * RETURN_FRAMES)
-    private val trailY = FloatArray(EdgeMarkerBatch.CAPACITY * RETURN_FRAMES)
+    private val trailX = FloatArray(EdgeMarkerBatch.CAPACITY * RETURN_FADE_FRAMES)
+    private val trailY = FloatArray(EdgeMarkerBatch.CAPACITY * RETURN_FADE_FRAMES)
     private val trailLength = IntArray(EdgeMarkerBatch.CAPACITY)
-    private val leftX = FloatArray(EdgeMarkerBatch.CAPACITY * RETURN_FRAMES)
-    private val leftY = FloatArray(EdgeMarkerBatch.CAPACITY * RETURN_FRAMES)
+    private val leftX = FloatArray(EdgeMarkerBatch.CAPACITY * RETURN_FADE_FRAMES)
+    private val leftY = FloatArray(EdgeMarkerBatch.CAPACITY * RETURN_FADE_FRAMES)
+    private val leftRadius = FloatArray(EdgeMarkerBatch.CAPACITY * RETURN_FADE_FRAMES)
+    private val leftAge = IntArray(EdgeMarkerBatch.CAPACITY * RETURN_FADE_FRAMES)
     private val leftCount = IntArray(EdgeMarkerBatch.CAPACITY)
+
+    // Per marker, whether another target lies within [ORDER_HYSTERESIS_DEGREES] of its own: such
+    // markers are interchangeable, so they neither count toward nor get reordered by stranding.
+    private val coincident = BooleanArray(EdgeMarkerBatch.CAPACITY)
+    private var returnRadius = 0f
     private var keepOut: WorldHudKeepOut? = null
     private var keyRevision = -1
     private var keyWidth = Float.NaN
@@ -281,6 +289,7 @@ internal class EdgeMarkerPlanner {
         this.textWidth = textWidth
         halfHeight = EDGE_HALF_HEIGHT_DP * unit
         markerSpacing = EDGE_MARKER_SPACING_DP * unit
+        returnRadius = RETURN_RADIUS_DP * unit
         val inset = EDGE_INSET_DP * unit
         ringLeft = inset
         ringTop = inset
@@ -365,16 +374,20 @@ internal class EdgeMarkerPlanner {
      * markers back and forth (a new marker next to such a target may take either side of it);
      * a spot within [STICK_WINDOW_SAMPLES] of the marker's last one scores [STICK_NEAR_DEGREES]
      * better, and the last spot itself [STICK_EXACT_DEGREES] more; a spot pointing further from
-     * the target than the last one scores that much worse again (up to [RETREAT_DEGREES]); a spot
-     * the marker strayed from in the last [RETURN_FRAMES] frames scores [RETURN_DEGREES] worse;
-     * the last arrangement, as it was and followed a few samples either way, is tried first, and
-     * alone while two markers are about to trade places ([APPROACH_DEGREES]). So a moving target's
-     * marker follows it sample by sample, and a crowded run changes its arrangement only when
-     * another one is clearly better, instead of flipping back and forth between near-equal ones.
+     * the target than the last one scores that much worse again (up to [RETREAT_DEGREES]); going
+     * back near a spot the marker strayed from in the last [RETURN_FRAMES] frames scores
+     * [RETURN_DEGREES] worse (fading out by [RETURN_FADE_FRAMES]); the last arrangement, as it
+     * was and followed a few samples either way, is tried first, and alone while two markers are
+     * about to trade places ([APPROACH_DEGREES]). So a moving target's marker follows it sample
+     * by sample, and a crowded run changes its arrangement only when another one is clearly
+     * better, instead of flipping back and forth between near-equal ones.
      *
      * The same targets are also placed without memory; when the kept arrangement stays clearly
      * worse than that ([STRANDED_DEGREES], [STRANDED_POINTING_DEGREES], [STRANDED_FRAMES]), the
-     * memoryless one replaces it. Allocation-free.
+     * memoryless one replaces it, keeping the markers' order and the spots they just left. Markers
+     * whose targets coincide within the order margin do not count toward that (they are
+     * interchangeable), and it waits while two markers are about to trade places
+     * ([TRADE_SOON_FRAMES]), so it is not followed by a swap. Allocation-free.
      */
     fun place(batch: EdgeMarkerBatch) {
         val count = batch.count
@@ -427,24 +440,29 @@ internal class EdgeMarkerPlanner {
             // Stickiness is bounded: an arrangement kept for continuity that points clearly worse
             // than the memoryless one, overall or at one marker, for a while gives way to it. The
             // memoryless one is worked out only when the kept one could be that much worse, and
-            // then every [STRANDED_CHECK_FRAMES] frames.
+            // then every [STRANDED_CHECK_FRAMES] frames. Markers whose targets coincide with
+            // another's are left out (which of them is off is a coin toss), and nothing gives way
+            // while two markers are about to trade places.
+            markCoincident(count)
+            val keptOwn = keptError - coincidentError(count, chosenSample)
             var suspect = false
             for (index in 0 until count) {
-                if (chosenSample[index] >= 0 && pointingError(chosenSample[index], index) > STRANDED_POINTING_DEGREES) suspect = true
+                if (coincident[index] || chosenSample[index] < 0) continue
+                if (pointingError(chosenSample[index], index) > STRANDED_POINTING_DEGREES) suspect = true
             }
-            if (!suspect) suspect = keptError > errorAlone(count) + STRANDED_DEGREES
+            if (!suspect) suspect = keptOwn > errorAlone(count) + STRANDED_DEGREES
             if (!suspect) {
                 strandedFrames = 0
                 strandedCheckIn = 0
-            } else if (strandedCheckIn > 0) {
-                strandedCheckIn--
+            } else if (strandedCheckIn > 0 || tradingSoon(count)) {
+                if (strandedCheckIn > 0) strandedCheckIn--
             } else {
                 strandedCheckIn = STRANDED_CHECK_FRAMES - 1
                 forgetForNow(count)
                 val freshError = arrangeBest(batch, continuedPatterns = false, freshX, freshY, freshSample, freshRank)
-                var stranded = keptError > freshError + STRANDED_DEGREES
+                var stranded = keptOwn > freshError - coincidentError(count, freshSample) + STRANDED_DEGREES
                 for (index in 0 until count) {
-                    if (chosenSample[index] < 0 || freshSample[index] < 0) continue
+                    if (coincident[index] || chosenSample[index] < 0 || freshSample[index] < 0) continue
                     if (pointingError(chosenSample[index], index) > STRANDED_POINTING_DEGREES &&
                         pointingError(freshSample[index], index) <= STRANDED_FRESH_DEGREES
                     ) stranded = true
@@ -472,8 +490,8 @@ internal class EdgeMarkerPlanner {
             lastSample[index] = chosenSample[index]
             lastRank[index] = chosenRank[index]
             // The trail, with this frame's center added (the oldest dropped when it is full).
-            val base = index * RETURN_FRAMES
-            val keep = min(trailLength[index], RETURN_FRAMES - 1)
+            val base = index * RETURN_FADE_FRAMES
+            val keep = min(trailLength[index], RETURN_FADE_FRAMES - 1)
             val skip = trailLength[index] - keep
             for (step in 0 until keep) {
                 lastTrailX[base + step] = trailX[base + skip + step]
@@ -488,15 +506,16 @@ internal class EdgeMarkerPlanner {
 
     /**
      * Copies last frame's trail of marker [last] (-1: none) as [marker]'s, and collects the spots
-     * [marker] held two or more frames ago and strayed more than [RETURN_STRAY_PX] from since:
-     * going back to one of them this soon would flicker.
+     * [marker] held two or more frames ago, has strayed more than [RETURN_LEAVE_PX] from since and
+     * is not back at: going back to one of them soon (within a third of how far it strayed, at
+     * most [RETURN_RADIUS_DP]) would flicker.
      */
     private fun collectLeftSpots(marker: Int, last: Int) {
-        val base = marker * RETURN_FRAMES
+        val base = marker * RETURN_FADE_FRAMES
         val length = if (last >= 0) lastTrailLength[last] else 0
         for (step in 0 until length) {
-            trailX[base + step] = lastTrailX[last * RETURN_FRAMES + step]
-            trailY[base + step] = lastTrailY[last * RETURN_FRAMES + step]
+            trailX[base + step] = lastTrailX[last * RETURN_FADE_FRAMES + step]
+            trailY[base + step] = lastTrailY[last * RETURN_FADE_FRAMES + step]
         }
         trailLength[marker] = length
         leftCount[marker] = 0
@@ -506,14 +525,22 @@ internal class EdgeMarkerPlanner {
         for (step in 0 until length - 1) {
             val x = trailX[base + step]
             val y = trailY[base + step]
-            if (abs(nowX - x) <= RETURN_STRAY_PX && abs(nowY - y) <= RETURN_STRAY_PX) continue // it is back there already
             var strayed = 0f
             for (later in step + 1 until length) {
-                strayed = max(strayed, max(abs(trailX[base + later] - x), abs(trailY[base + later] - y)))
+                val dx = trailX[base + later] - x
+                val dy = trailY[base + later] - y
+                strayed = max(strayed, sqrt(dx * dx + dy * dy))
             }
-            if (strayed <= RETURN_STRAY_PX) continue
-            leftX[base + leftCount[marker]] = x
-            leftY[base + leftCount[marker]] = y
+            if (strayed <= RETURN_LEAVE_PX) continue
+            val radius = min(returnRadius, strayed / 3f)
+            val nowDx = nowX - x
+            val nowDy = nowY - y
+            if (nowDx * nowDx + nowDy * nowDy <= radius * radius) continue // it is back there already
+            val spot = base + leftCount[marker]
+            leftX[spot] = x
+            leftY[spot] = y
+            leftRadius[spot] = radius
+            leftAge[spot] = length - step
             leftCount[marker]++
         }
     }
@@ -624,6 +651,26 @@ internal class EdgeMarkerPlanner {
         return false
     }
 
+    /**
+     * Whether two neighbours in the kept order, both continuing last frame's markers, are moving
+     * so as to trade places (their targets passing each other by [ORDER_HYSTERESIS_DEGREES])
+     * within [TRADE_SOON_FRAMES] frames: a stranding switch now would be followed by their
+     * trading places, so it waits.
+     */
+    private fun tradingSoon(count: Int): Boolean {
+        for (position in 0 until count - 1) {
+            val first = orders[position]
+            val second = orders[position + 1]
+            val lastFirst = continues[first]
+            val lastSecond = continues[second]
+            if (lastFirst < 0 || lastSecond < 0) continue
+            val ahead = fromOriginDegrees(targetAngle[second]) - fromOriginDegrees(targetAngle[first])
+            val aheadBefore = fromOriginDegrees(lastTarget[lastSecond]) - fromOriginDegrees(lastTarget[lastFirst])
+            if (ahead + (ahead - aheadBefore) * TRADE_SOON_FRAMES < -ORDER_HYSTERESIS_DEGREES) return true
+        }
+        return false
+    }
+
     /** Adds [runOrder] to [orders] unless it is there already. */
     private fun addOrder(count: Int) {
         if (orderCount >= MAX_ORDERS) return
@@ -644,14 +691,35 @@ internal class EdgeMarkerPlanner {
         }
     }
 
+    /** Marks, in [coincident], the markers whose target lies within [ORDER_HYSTERESIS_DEGREES] of another marker's. */
+    private fun markCoincident(count: Int) {
+        for (index in 0 until count) {
+            coincident[index] = false
+            for (other in 0 until count) {
+                if (other == index) continue
+                if (apartDegrees(targetAngle[index], targetAngle[other]) < ORDER_HYSTERESIS_DEGREES) coincident[index] = true
+            }
+        }
+    }
+
+    /** Direction error and depth cost of the [coincident] markers on ring samples [samplesOf] (an arrangement's). */
+    private fun coincidentError(count: Int, samplesOf: IntArray): Float {
+        var total = 0f
+        for (index in 0 until count) {
+            if (coincident[index] && samplesOf[index] >= 0) total += errorAt(samplesOf[index], targetUx[index], targetUy[index])
+        }
+        return total
+    }
+
     /**
-     * The least the markers can point from their targets overall, each on its own best clear spot
-     * (direction error and depth cost, with the unspaced penalty for one that has none): no
-     * arrangement, memoryless or kept, points better.
+     * The least the markers other than the [coincident] ones can point from their targets
+     * overall, each on its own best clear spot (direction error and depth cost, with the unspaced
+     * penalty for one that has none): no arrangement, memoryless or kept, points better.
      */
     private fun errorAlone(count: Int): Float {
         var total = 0f
         for (index in 0 until count) {
+            if (coincident[index]) continue
             val best = bestIndex(NO_MARKER, targetUx[index], targetUy[index], avoidPlaced = false, low = -1f, high = FULL_TURN, from = 0,
                 span = samples)
             total += if (best >= 0) bestScore else UNSPACED_PENALTY
@@ -893,16 +961,25 @@ internal class EdgeMarkerPlanner {
         return error - continuity(marker, index) + retreat(marker, error) + revisit(marker, index)
     }
 
-    /** How much worse ring sample [index] scores for [marker] for being a spot it strayed from a few frames ago. */
+    /**
+     * How much worse ring sample [index] scores for [marker] for going back to a spot it strayed
+     * from a few frames ago: [RETURN_DEGREES] within [RETURN_FRAMES] frames, fading out by
+     * [RETURN_FADE_FRAMES] (with or without the rest of its memory, so neither the kept nor the
+     * memoryless arrangement sends it back).
+     */
     private fun revisit(marker: Int, index: Int): Float {
-        if (marker == NO_MARKER || memory[marker] < 0) return 0f
-        val base = marker * RETURN_FRAMES
-        for (spot in 0 until leftCount[marker]) {
-            if (abs(markerX[index] - leftX[base + spot]) <= RETURN_STRAY_PX && abs(markerY[index] - leftY[base + spot]) <= RETURN_STRAY_PX) {
-                return RETURN_DEGREES
-            }
+        if (marker == NO_MARKER) return 0f
+        val base = marker * RETURN_FADE_FRAMES
+        var cost = 0f
+        for (spot in base until base + leftCount[marker]) {
+            val dx = markerX[index] - leftX[spot]
+            val dy = markerY[index] - leftY[spot]
+            if (dx * dx + dy * dy > leftRadius[spot] * leftRadius[spot]) continue
+            val age = leftAge[spot]
+            val fade = if (age <= RETURN_FRAMES) 1f else (RETURN_FADE_FRAMES - age).toFloat() / (RETURN_FADE_FRAMES - RETURN_FRAMES)
+            cost = max(cost, RETURN_DEGREES * fade)
         }
-        return 0f
+        return cost
     }
 
     /** Degrees between ring sample [index]'s direction and marker [marker]'s target's. */
@@ -1136,7 +1213,8 @@ internal class EdgeMarkerPlanner {
          * [STRANDED_POINTING_DEGREES] off its target while the memoryless one points it within
          * [STRANDED_FRESH_DEGREES]: continuity never strands a marker far from its target while
          * its neighbours could make room. While it might be, that is checked every
-         * [STRANDED_CHECK_FRAMES] frames.
+         * [STRANDED_CHECK_FRAMES] frames. Markers whose targets lie within
+         * [ORDER_HYSTERESIS_DEGREES] of another's are left out of both measures.
          */
         const val STRANDED_DEGREES = 12f
         const val STRANDED_POINTING_DEGREES = 25f
@@ -1151,18 +1229,25 @@ internal class EdgeMarkerPlanner {
          */
         const val APPROACH_DEGREES = 5f
 
-        /** How many frames a marker's trail spans: it does not go back to a spot it strayed from within them. */
-        const val RETURN_FRAMES = 8
-
-        /** A marker this far (px, either axis) from a spot strayed from it, and this close to it is back there. */
-        const val RETURN_STRAY_PX = 12f
+        /** How many frames ahead a stranding switch looks for two markers about to trade places ([tradingSoon]). */
+        const val TRADE_SOON_FRAMES = 12
 
         /**
          * Cost, in degrees of direction error, of a spot a marker strayed from within the last
-         * [RETURN_FRAMES] frames: once pushed aside (or left by a neighbour), it does not snap back
-         * and forth.
+         * [RETURN_FRAMES] frames, fading out over the frames up to [RETURN_FADE_FRAMES]: once
+         * pushed aside (or left by a neighbour), it does not snap back and forth, and no burst of
+         * returns waits at the end of the window.
          */
         const val RETURN_DEGREES = 20f
+        const val RETURN_FRAMES = 8
+        const val RETURN_FADE_FRAMES = 16
+
+        /**
+         * A marker that moved more than [RETURN_LEAVE_PX] (px: a step that shows at any density)
+         * from a spot left it; within a third of that, at most [RETURN_RADIUS_DP], is back there.
+         */
+        const val RETURN_LEAVE_PX = 12f
+        const val RETURN_RADIUS_DP = 24f
 
         /**
          * Direction error, in degrees, that a marker pushed a full short side inward costs: markers
