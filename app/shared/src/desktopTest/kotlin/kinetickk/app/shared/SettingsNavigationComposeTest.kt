@@ -12,10 +12,16 @@ import androidx.compose.runtime.ExperimentalComposeApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runComposeUiTest
+import androidx.compose.ui.test.v2.runSkikoComposeUiTest
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.impl.createContentCatalog
 import kinetickk.ball.gameplay.api.GameplayQuery
@@ -61,6 +67,95 @@ class SettingsNavigationComposeTest {
 
     @Test
     fun portraitVolumeControlsRemainUsableAtBothTextScales() = exerciseSettingsNavigation(390, 720, onlySettings = true)
+
+    @Test
+    fun anOpenExplanationTakesPressesOverTheControlsItCoversOnPhones() {
+        // Portrait: the Color vision slip lies over its own cells; landscape: over Screen shake.
+        exerciseExplanationSlip(390, 844, coveredControl = "kinetickk.settings.colorvision.")
+        exerciseExplanationSlip(844, 390, coveredControl = "kinetickk.settings.screen_shake.toggle")
+    }
+
+    /**
+     * Opens the Color vision (!) with a tap and presses the open slip at its center and over every
+     * control it covers: each press closes the slip and changes no preference, while the same
+     * point reaches the control once the slip is closed.
+     */
+    private fun exerciseExplanationSlip(width: Int, height: Int, coveredControl: String) {
+        enableKinetickkComposeRuntimeOptimizations()
+        runSkikoComposeUiTest(size = Size(width.toFloat(), height.toFloat()), density = Density(1f)) {
+            mainClock.autoAdvance = false
+            val catalog = createContentCatalog()
+            val profile = createProfileComponent(InMemorySettingsPersistence(), catalog.profilePolicy())
+            val audio = SettingsSilentAudio()
+            val gameplay = DefaultGameplayFeature(catalog.gameplayContent(), profile, profile, audio)
+            val owner = AppCompositionOwner(
+                contentCatalog = catalog,
+                profileComponent = profile,
+                audioService = audio,
+                gameplayComponent = gameplay,
+            )
+            try {
+                setContent {
+                    Box(Modifier.requiredSize(width.dp, height.dp).testTag(APP_TAG)) {
+                        owner.Content()
+                    }
+                }
+                fun settle() {
+                    mainClock.advanceTimeBy(260)
+                    waitForIdle()
+                }
+                fun preferences() = profile.query(ProfileQuery.GetPreferences).preferences
+                // Touch taps, as on a phone: no mouse pointer rests on the (!) to hold its slip open.
+                fun click(tag: String) {
+                    onNodeWithTag(tag).performTouchInput { click() }
+                    settle()
+                }
+                fun press(point: Offset) {
+                    onRoot().performTouchInput { click(point) }
+                    settle()
+                }
+                val info = "kinetickk.settings.colorvision.info"
+                val slip = "kinetickk.settings.colorvision.slip"
+                fun openSlip() {
+                    if (onAllNodesWithTag(slip).fetchSemanticsNodes().isEmpty()) click(info)
+                    onNodeWithTag(slip).assertExists()
+                }
+                settle()
+                onRoot().performKeyInput { pressKey(Key.S) }
+                settle()
+                assertEquals(AppDestination.Settings, owner.sessionPort.query(AppSessionQuery.GetShell).active)
+                for (language in listOf("ru", "en")) {
+                    click("kinetickk.settings.group.game")
+                    click("kinetickk.settings.language.$language")
+                    click("kinetickk.settings.group.graphics")
+                    val where = "$width x $height $language"
+                    openSlip()
+                    val bounds = onNodeWithTag(slip).fetchSemanticsNode().boundsInRoot
+                    val coveredNodes = onAllNodes(SemanticsMatcher("a Settings control under the slip") { node ->
+                        val tag = node.config.getOrNull(SemanticsProperties.TestTag) ?: return@SemanticsMatcher false
+                        tag.startsWith("kinetickk.settings.") && tag != slip && node.boundsInRoot.overlaps(bounds)
+                    }).fetchSemanticsNodes()
+                    val covered = coveredNodes.map { it.config[SemanticsProperties.TestTag] to it.boundsInRoot.intersect(bounds) }
+                    assertTrue(covered.any { (tag, _) -> tag.startsWith(coveredControl) }, "$where slip covers ${covered.map { it.first }}")
+                    val initial = preferences()
+                    for (point in listOf(bounds.center) + covered.map { it.second.center }) {
+                        openSlip()
+                        press(point)
+                        assertEquals(initial, preferences(), "$where press at $point")
+                        onNodeWithTag(slip).assertDoesNotExist()
+                    }
+                    // Without the slip the same point reaches the covered control (a choice not yet made).
+                    val (probe, area) = covered.filterIndexed { index, (tag, _) ->
+                        tag.startsWith(coveredControl) && coveredNodes[index].config.getOrNull(SemanticsProperties.Selected) != true
+                    }.first()
+                    press(area.center)
+                    assertNotEquals(initial, preferences(), "$where $probe is live under the slip")
+                }
+            } finally {
+                owner.close()
+            }
+        }
+    }
 
     private fun exerciseSettingsNavigation(width: Int, height: Int, onlySettings: Boolean = false) {
         enableKinetickkComposeRuntimeOptimizations()
