@@ -450,10 +450,9 @@ class HudFeedTest {
 
     private inline fun allocated(block: () -> Unit): Long {
         val threads = ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
-        val id = Thread.currentThread().threadId()
-        val before = threads.getThreadAllocatedBytes(id)
+        val before = threads.currentThreadAllocatedBytes
         block()
-        return threads.getThreadAllocatedBytes(id) - before
+        return threads.currentThreadAllocatedBytes - before
     }
 
     private companion object {
