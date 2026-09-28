@@ -423,14 +423,17 @@ private fun DrawScope.drawEconomy(engine: GameplayRenderModel, hostMeasurer: Tex
                 HudScratch.label.current(), PHONE_BADGE_LABEL_SP * hudUiScale(hostMeasurer.scale), PHONE_BADGE_NUMBER_SP).width + frame.u(10f)
             drawKkGem(Offset(x + frame.u(5f), centerY), roles.you, 10f)
             x += frame.u(10f + 8f)
-            val layout = HudDrawCache.layout(HudText.MATTER, measurer, matter, measurer.typography.condStyle(17f, tabular = true, lineHeightEm = 1f))
+            // Display-cased like the chips of the other layouts ("+1,2 МЛН").
+            val layout = HudDrawCache.layout(HudText.MATTER, measurer, matter, measurer.typography.condStyle(17f, tabular = true, lineHeightEm = 1f),
+                uppercase = true)
             drawKkText(layout, x, centerY, Kk.Bone, valign = KkVAlign.CENTER)
             HudLayoutProbe.record(HudBlock.MATTER_CHIP, x - frame.u(18f), centerY - layout.kkBoxHeight * 0.5f, x + layout.size.width,
                 centerY + layout.kkBoxHeight * 0.5f)
             x += layout.size.width + frame.u(12f)
             if (keys != null) {
                 drawKkIcon(KkIcon.SYSTEM_KEY, Offset(x + frame.u(7f), centerY), frame.u(14f), Kk.Bone)
-                val keyLayout = HudDrawCache.layout(HudText.KEYS, measurer, keys, measurer.typography.condStyle(17f, tabular = true, lineHeightEm = 1f))
+                val keyLayout = HudDrawCache.layout(HudText.KEYS, measurer, keys, measurer.typography.condStyle(17f, tabular = true, lineHeightEm = 1f),
+                    uppercase = true)
                 drawKkText(keyLayout, x + frame.u(19f), centerY, Kk.Bone, valign = KkVAlign.CENTER)
                 HudLayoutProbe.record(HudBlock.KEY_CHIP, x, centerY - keyLayout.kkBoxHeight * 0.5f, x + frame.u(19f) + keyLayout.size.width,
                     centerY + keyLayout.kkBoxHeight * 0.5f)

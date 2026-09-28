@@ -312,6 +312,19 @@ class HudLayoutFixesTest {
         assertNull(HudLayoutProbe.rect(HudBlock.TRIAL_TOOLTIP))
     }
 
+    /** The phone-landscape matter value is display-cased like the chips of the other layouts ("+1,2 МЛН"). */
+    @Test
+    fun matterValueIsDisplayCasedInEveryLayout() {
+        for (language in AppLanguage.entries) sizes.forEach { (w, h) ->
+            val model = hudTestModel(w.toFloat(), h.toFloat()).with("runMatter" to 1_234_567L, "keys" to 2)
+            HudDrawCache.forgetLayouts()
+            draw(w, h, language) { measurer -> drawHud(model, measurer, 1f) }
+            val shown = assertNotNull(HudDrawCache.peekLayout(HudText.MATTER), "$language $w x $h").layoutInput.text.text
+            assertEquals(shown.uppercase(), shown, "$language $w x $h")
+            assertTrue(shown.any { it.isLetter() }, "$language $w x $h: $shown has no unit")
+        }
+    }
+
     @Test
     fun theCutCheckSeesAnEllipsisThatSkiaDoesNotReport() {
         draw(200, 100, AppLanguage.Russian) { measurer ->
