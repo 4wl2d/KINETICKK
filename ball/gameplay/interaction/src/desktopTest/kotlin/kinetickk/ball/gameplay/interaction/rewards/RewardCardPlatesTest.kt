@@ -159,5 +159,3 @@ class RewardCardPlatesTest {
         }
     }
 }
-
-private fun Rect.inflate(delta: Float) = Rect(left - delta, top - delta, right + delta, bottom + delta)

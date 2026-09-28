@@ -9,7 +9,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -275,5 +274,3 @@ internal fun SemanticsNodeInteractionsProvider.assertTextFitsWithoutBreakingWord
         }
     }
 }
-
-private fun Rect.inflate(delta: Float) = Rect(left - delta, top - delta, right + delta, bottom + delta)
