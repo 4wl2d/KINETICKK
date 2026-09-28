@@ -10,6 +10,7 @@ import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.interaction.ProfileLayoutMode
 import kinetickk.ball.profile.interaction.TestMetaUpgrades
 import kinetickk.ball.profile.interaction.profileFrame
+import kinetickk.ball.profile.interaction.profileTextScale
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -106,6 +107,41 @@ class LabPointerResolverTest {
         val last = layout.rows.last()
         val target = assertNotNull(labRevealScroll(0f, last.top, last.bottom, layout.listViewport.height, layout.listScrollMax))
         assertTrue(last.top >= target && last.bottom <= target + layout.listViewport.height)
+    }
+
+    @Test
+    fun revealedRowsClearTheScrollCueFades() {
+        var scrolling = 0
+        for ((width, height) in listOf(390f to 844f, 844f to 390f)) {
+            for (setting in listOf(1f, 1.25f, 1.75f)) {
+                val layout = layout(width, height, profileTextScale(setting))
+                val context = "$width x $height @$setting"
+                val fade = labListFade(layout.frame)
+                val viewport = layout.listViewport.height
+                val max = layout.listScrollMax
+                // (At 100 % text the landscape list fits without scrolling.)
+                if (max <= 0f) continue
+                scrolling++
+                // Revealing the last row scrolls the list to its end, where the cue draws no bottom
+                // fade; revealing the first scrolls back to the start.
+                val last = layout.rows.last()
+                assertEquals(max, labRevealScroll(0f, last.top, last.bottom, viewport, max, whenHidden = false, fade = fade), context)
+                if (last.top >= viewport) assertEquals(max, labRevealScroll(0f, last.top, last.bottom, viewport, max, fade = fade), context)
+                val first = layout.rows.first()
+                assertEquals(0f, labRevealScroll(max, first.top, first.bottom, viewport, max, whenHidden = false, fade = fade), context)
+                // Any row revealed from either end, or from mid-list, ends clear of the active fades.
+                for (row in layout.rows) {
+                    for (from in listOf(0f, max * 0.5f, max)) {
+                        val target = labRevealScroll(from, row.top, row.bottom, viewport, max, whenHidden = false, fade = fade) ?: from
+                        val topFade = if (target > 0f) fade else 0f
+                        val bottomFade = if (target < max) fade else 0f
+                        assertTrue(row.top >= target + topFade - 0.01f && row.bottom <= target + viewport - bottomFade + 0.01f,
+                            "$context row $row from $from -> $target")
+                    }
+                }
+            }
+        }
+        assertTrue(scrolling >= 5, "$scrolling scrolling lists")
     }
 
     @Test

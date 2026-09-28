@@ -200,11 +200,16 @@ internal fun labLayout(
         icon, name, description, now, next, rank, buy, buyPinned)
 }
 
+/** Height of the list's scroll cue fades (the list draws them over rows at a scrolled edge). */
+internal fun labListFade(frame: ProfileFrame): Float = frame.d(24f)
+
 /**
- * The list scroll that brings the row [rowTop]..[rowBottom] (content px) fully into view, or
- * null when no scroll is needed. With [whenHidden] only a row that is entirely off screen moves
- * the list, so hover selection (which needs a visible row) never scrolls under the pointer;
- * otherwise (the screen opening on a selection) a partly clipped row is revealed too.
+ * The list scroll that brings the row [rowTop]..[rowBottom] (content px) fully into view, clear
+ * of the [fade] bands the scroll cue draws at an edge with more content, or null when no scroll
+ * is needed. A row near an end scrolls the list all the way (no fade there). With [whenHidden]
+ * only a row that is entirely off screen moves the list, so hover selection (which needs a
+ * visible row) never scrolls under the pointer; otherwise (the screen opening on a selection) a
+ * partly clipped row is revealed too.
  */
 internal fun labRevealScroll(
     value: Float,
@@ -213,14 +218,20 @@ internal fun labRevealScroll(
     viewportHeight: Float,
     maxValue: Float,
     whenHidden: Boolean = true,
+    fade: Float = 0f,
 ): Float? {
-    val above = if (whenHidden) rowBottom <= value else rowTop < value
-    val below = if (whenHidden) rowTop >= value + viewportHeight else rowBottom > value + viewportHeight
-    return when {
-        above -> rowTop.coerceIn(0f, maxValue)
-        below -> (rowBottom - viewportHeight).coerceIn(0f, maxValue)
-        else -> null
+    // A partly clipped row counts the fade over it as clipped (no fade at an end of the list).
+    val topFade = if (value > 0f) fade else 0f
+    val bottomFade = if (value < maxValue) fade else 0f
+    val above = if (whenHidden) rowBottom <= value else rowTop < value + topFade
+    val below = if (whenHidden) rowTop >= value + viewportHeight else rowBottom > value + viewportHeight - bottomFade
+    // Within a fade of an end the list goes to that end, where the cue draws no fade.
+    val target = when {
+        above -> (rowTop - fade).let { if (it <= fade) 0f else it }
+        below -> (rowBottom - viewportHeight + fade).let { if (it >= maxValue - fade) maxValue else it }
+        else -> return null
     }
+    return target.coerceIn(0f, max(0f, maxValue))
 }
 
 private fun labRowColumns(

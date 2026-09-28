@@ -125,14 +125,16 @@ internal fun LabContent(
             val first = opening[0]
             opening[0] = false
             val target = labRevealScroll(listScroll.value.toFloat(), row.top, row.bottom, list.height, layout.listScrollMax,
-                whenHidden = !first) ?: return@LaunchedEffect
-            if (first) listScroll.scrollTo(target.roundToInt()) else listScroll.animateScrollTo(target.roundToInt())
+                whenHidden = !first, fade = labListFade(frame)) ?: return@LaunchedEffect
+            // The end of the list is the scroll state's own maximum (whole px), where no fade is drawn.
+            val px = if (target >= layout.listScrollMax) listScroll.maxValue else target.roundToInt().coerceAtMost(listScroll.maxValue)
+            if (first) listScroll.scrollTo(px) else listScroll.animateScrollTo(px)
         }
         Box(
             Modifier.offset { IntOffset(list.left.roundToInt(), list.top.roundToInt()) }
                 .size(frame.dp(list.width), frame.dp(list.height))
                 .semantics { contentDescription = language.text(ProfileScreensRedesignText.UpgradesList) }
-                .profileScrollCue(listScroll, Kk.Ink, frame.d(24f))
+                .profileScrollCue(listScroll, Kk.Ink, labListFade(frame))
                 .verticalScroll(listScroll)
                 .testTag("profile-lab-scroll"),
         ) {
