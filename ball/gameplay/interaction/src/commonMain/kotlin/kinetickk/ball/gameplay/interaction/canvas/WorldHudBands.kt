@@ -11,8 +11,11 @@ import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.interaction.layout.gameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.regularHudUnit
 import kinetickk.ball.gameplay.interaction.layout.runningHudMargin
+import kotlin.math.acos
+import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sqrt
 
 /**
  * Screen regions the running HUD occupies, in px, so world labels and edge markers stay clear of
@@ -119,12 +122,22 @@ internal class WorldHudKeepOut {
 
 /**
  * Places off-screen markers at the screen edge (`HUD-Elite.png`): on a ring inset from the edges,
- * pushed inward at most a tenth of the short side, and slid along the edge past HUD regions so a
- * marker never sits in the field or on the HUD. The table of clear ring positions is rebuilt only
- * when the keep-out, viewport or marker size changes.
+ * pushed inward just past a HUD band lying along that edge (the phone's top row, a boss bar, the
+ * bottom clusters) and then at most a tenth of the short side, so a marker never sits in the field
+ * or on the HUD. The position is the marker's only direction cue, so of the clear positions the
+ * one whose direction from the screen center is closest to the target's wins, with a small cost
+ * for sitting deeper inside the screen. The table of clear positions is rebuilt only when the
+ * keep-out, viewport or marker size changes.
  */
 internal class EdgeMarkerPlanner {
     private val depths = FloatArray(MAX_SAMPLES)
+
+    // Clear marker centers and their unit directions from the screen center, per ring sample.
+    private val markerX = FloatArray(MAX_SAMPLES)
+    private val markerY = FloatArray(MAX_SAMPLES)
+    private val directionX = FloatArray(MAX_SAMPLES)
+    private val directionY = FloatArray(MAX_SAMPLES)
+    private val depthCost = FloatArray(MAX_SAMPLES)
     private var samples = 0
     private var spacing = 1f
     private var ringLeft = 0f
@@ -174,15 +187,19 @@ internal class EdgeMarkerPlanner {
         samples = min(MAX_SAMPLES, (perimeter / spacing).toInt().coerceAtLeast(1))
         val maxDepth = maxEdgeDepth(width, height)
         val step = 3f * unit
+        val centerX = width * 0.5f
+        val centerY = height * 0.5f
+        val bands = keepOut.rects() // rebuilt only when the regions change
         for (index in 0 until samples) {
             val s = index * spacing
             val px = ringX(s)
             val py = ringY(s)
             val nx = normalX(s)
             val ny = normalY(s)
+            val limit = edgeBandDepth(bands, px, py, nx, ny) + maxDepth
             var depth = Float.NaN
             var k = 0f
-            while (k <= maxDepth) {
+            while (k <= limit) {
                 if (clearAt(px + nx * k, py + ny * k)) {
                     depth = k
                     break
@@ -190,25 +207,96 @@ internal class EdgeMarkerPlanner {
                 k += step
             }
             depths[index] = depth
+            if (depth.isNaN()) continue
+            val x = px + nx * depth
+            val y = py + ny * depth
+            markerX[index] = x
+            markerY[index] = y
+            val length = sqrt((x - centerX) * (x - centerX) + (y - centerY) * (y - centerY)).coerceAtLeast(1e-3f)
+            directionX[index] = (x - centerX) / length
+            directionY[index] = (y - centerY) / length
+            depthCost[index] = DEPTH_COST_DEGREES * depth / max(1f, min(width, height))
         }
         return this
     }
 
     /**
-     * Marker position for an off-screen [target]: where the ray from the screen center meets the
-     * edge ring, moved to the nearest clear ring position.
+     * Marker position for an off-screen [target]: of the clear positions, the one with the smallest
+     * angle between its direction and the target's direction from the screen center, plus its
+     * [DEPTH_COST_DEGREES] depth cost (so where the ray from the center meets the edge ring when
+     * that spot is clear). Allocation-free.
      */
     fun position(target: Offset): Offset {
-        val s0 = rayParameter(target.x, target.y)
-        if (samples <= 0) return Offset(ringX(s0), ringY(s0))
-        val start = ((s0 / spacing) + 0.5f).toInt() % samples
-        for (distance in 0..samples / 2) {
-            val forward = (start + distance) % samples
-            if (!depths[forward].isNaN()) return at(forward)
-            val backward = ((start - distance) % samples + samples) % samples
-            if (!depths[backward].isNaN()) return at(backward)
+        val dx = target.x - width * 0.5f
+        val dy = target.y - height * 0.5f
+        val length = sqrt(dx * dx + dy * dy)
+        var best = -1
+        if (length > 0f) {
+            val ux = dx / length
+            val uy = dy / length
+            var bestScore = Float.POSITIVE_INFINITY
+            // A position whose direction alone is already worse than the best score is skipped
+            // without evaluating its angle.
+            var cutoff = -1f
+            for (index in 0 until samples) {
+                if (depths[index].isNaN()) continue
+                val dot = directionX[index] * ux + directionY[index] * uy
+                if (dot <= cutoff) continue
+                val score = acos(dot.coerceIn(-1f, 1f)) * DEGREES + depthCost[index]
+                if (score < bestScore) {
+                    bestScore = score
+                    best = index
+                    cutoff = if (bestScore < 180f) cos(bestScore / DEGREES) else -1f
+                }
+            }
         }
+        if (best >= 0) return Offset(markerX[best], markerY[best])
+        val s0 = rayParameter(target.x, target.y)
         return Offset(ringX(s0), ringY(s0))
+    }
+
+    /**
+     * How far past the ring position at ([px], [py]) (inward normal [nx], [ny]) a marker must move to
+     * clear the HUD band lying along that edge: the regions flatter along the edge than deep that
+     * overlap the marker's footprint and touch the edge, or touch such a region (the phone's top
+     * row and a boss bar below it, a bottom cluster). Zero when no band lies there.
+     */
+    private fun edgeBandDepth(bands: List<Rect>, px: Float, py: Float, nx: Float, ny: Float): Float {
+        val left = markerLeft(px)
+        val right = markerRight(px)
+        // Covered distance from the screen edge, grown while another region touches the band.
+        var covered = 0f
+        var grown = true
+        var rounds = 0
+        while (grown && rounds++ < bands.size) {
+            grown = false
+            for (index in bands.indices) {
+                val band = bands[index]
+                val horizontal = ny != 0f
+                val along = if (horizontal) band.width else band.height
+                val deep = if (horizontal) band.height else band.width
+                if (deep > along) continue
+                val overlaps = if (horizontal) band.left < right && band.right > left else band.top < py + halfHeight && band.bottom > py - halfHeight
+                if (!overlaps) continue
+                val near: Float
+                val far: Float
+                when {
+                    ny > 0f -> { near = band.top; far = band.bottom }
+                    ny < 0f -> { near = height - band.bottom; far = height - band.top }
+                    nx > 0f -> { near = band.left; far = band.right }
+                    else -> { near = width - band.right; far = width - band.left }
+                }
+                if (near <= covered + BAND_TOUCH && far > covered) {
+                    covered = far
+                    grown = true
+                }
+            }
+        }
+        if (covered <= 0f) return 0f
+        // The marker's center clears the band by its half extent across the edge.
+        val half = if (ny != 0f) halfHeight else iconHalf
+        val inset = if (ny > 0f) ringTop else if (ny < 0f) height - ringBottom else if (nx > 0f) ringLeft else width - ringRight
+        return max(0f, covered + half - inset)
     }
 
     /** Whether the marker (icon + distance, text toward the screen center) fits at ([x], [y]). */
@@ -224,12 +312,6 @@ internal class EdgeMarkerPlanner {
     fun markerLeft(x: Float): Float = if (x > width * 0.5f) x - iconHalf - gap - textWidth else x - iconHalf
     fun markerRight(x: Float): Float = if (x > width * 0.5f) x + iconHalf else x + iconHalf + gap + textWidth
     fun markerHalfHeight(): Float = halfHeight
-
-    private fun at(index: Int): Offset {
-        val s = index * spacing
-        val depth = depths[index]
-        return Offset(ringX(s) + normalX(s) * depth, ringY(s) + normalY(s) * depth)
-    }
 
     private val ringWidth get() = max(0f, ringRight - ringLeft)
     private val ringHeight get() = max(0f, ringBottom - ringTop)
@@ -311,6 +393,18 @@ internal class EdgeMarkerPlanner {
 
     private companion object {
         const val MAX_SAMPLES = 1_024
+
+        /** A region within this many px of a screen edge lies along it. */
+        const val BAND_TOUCH = 1f
+
+        /**
+         * Direction error, in degrees, that a marker pushed a full short side inward costs: markers
+         * prefer the screen edge unless a deeper spot (below the phone's top row, above a bottom
+         * cluster) points clearly better.
+         */
+        const val DEPTH_COST_DEGREES = 30f
+
+        const val DEGREES = 57.29578f
     }
 }
 
@@ -321,5 +415,8 @@ internal const val EDGE_TEXT_GAP_DP = 8f
 internal const val EDGE_HALF_HEIGHT_DP = 11f
 private const val EDGE_SAMPLE_DP = 6f
 
-/** How far inward an edge marker may move to clear the HUD: a tenth of the short side. */
+/**
+ * How far inward an edge marker may move to clear the HUD, past any HUD band along that edge: a
+ * tenth of the short side.
+ */
 internal fun maxEdgeDepth(width: Float, height: Float): Float = 0.1f * min(width, height)
