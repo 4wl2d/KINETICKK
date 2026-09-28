@@ -61,6 +61,8 @@ import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkRolePalette
+import kinetickk.foundation.design.monoStyle
+import kotlin.test.assertFalse
 import java.lang.management.ManagementFactory
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -99,31 +101,104 @@ class WorldHotPathAllocationTest {
 
     private fun assertFrameIsAllocationFree(roles: KkRolePalette, weapon: WeaponId) {
         // The off-screen totem and sealed-anomaly offer move every frame, so their edge-marker
-        // distances change every frame (drawn from cached digit layouts, never re-measured).
-        val models = Array(37) { frame -> busyModel(weapon, drift = frame * 23f) }
-        var next = 0
+        // distances change every frame: they must be drawn from cached digit layouts, never
+        // measured as text. Warm-up frames draw distances from a range the measured frames never
+        // use, and every measured frame draws two distances no earlier frame drew (more distinct
+        // values than the layout memo holds), so measuring a distance string would allocate.
+        val warm = Array(37) { frame -> busyModel(weapon, drift = WARM_DRIFT + frame * 23f) }
+        val measured = Array(MEASURED_FRAMES) { frame -> busyModel(weapon, drift = frame * 20f) }
+        check(measured.map { roundedDistance(edgeDistance(it)) }.toSet().size == MEASURED_FRAMES)
+        check(measured.maxOf(::edgeDistance) < warm.minOf(::edgeDistance))
         val fx = busyFx()
         val measurer = measurer(roles)
         val bitmap = ImageBitmap(WIDTH, HEIGHT)
         val scope = CanvasDrawScope()
         val canvas = Canvas(bitmap)
         val thread = Thread.currentThread().id
-        fun bytesPerFrame(block: DrawScope.() -> Unit): Long {
-            fun frame() = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, Size(WIDTH.toFloat(), HEIGHT.toFloat()), block)
-            repeat(200) { frame() }
+        fun bytesPerFrame(block: DrawScope.(GameplayRenderModel) -> Unit): Long {
+            fun frame(model: GameplayRenderModel) =
+                scope.draw(Density(1f), LayoutDirection.Ltr, canvas, Size(WIDTH.toFloat(), HEIGHT.toFloat())) { block(model) }
+            repeat(200) { frame(warm[it % warm.size]) }
             val before = threads.getThreadAllocatedBytes(thread)
-            repeat(300) { frame() }
-            return (threads.getThreadAllocatedBytes(thread) - before) / 300
+            measured.forEach { frame(it) }
+            return (threads.getThreadAllocatedBytes(thread) - before) / MEASURED_FRAMES
         }
         val baseline = bytesPerFrame { }
-        val world = bytesPerFrame {
-            val model = models[next]
-            next = (next + 1) % models.size
+        val world = bytesPerFrame { model ->
             drawBackdrop(model, 1.5f, -1f, 2f, roles)
             drawWorld(model, fx, 1.5f, -1f, measurer)
             drawScreenFx(model, 2f, roles)
         }
         assertTrue(world - baseline < 96, "A busy world frame allocates ${world - baseline} bytes above the $baseline byte baseline")
+    }
+
+    /** The larger of the two edge-marker distances (totem, sealed-anomaly offer) in [model]. */
+    private fun edgeDistance(model: GameplayRenderModel): Float {
+        val totem = requireNotNull(model.totem)
+        val offer = model.pointsOfInterest.last()
+        return maxOf(
+            kotlin.math.hypot(totem.x - model.coreX, totem.y - model.coreY),
+            kotlin.math.hypot(offer.x - model.coreX, offer.y - model.coreY),
+        )
+    }
+
+    @Test
+    fun worldAndHudDigitsKeepSeparateParagraphs() {
+        // The game's measurer caches 64 layouts, and Compose shares one paragraph between layouts
+        // whose styles differ only in color. At 1440 x 810 the trial panel draws the collapsing
+        // orbit's clock in bone mono digits, and the off-screen totem's edge marker draws its
+        // distance in you-color mono digits. Both digit sets are first measured in the same frame;
+        // if they shared paragraphs, each would be repainted in the other color every frame.
+        val width = 1_440
+        val height = 810
+        val base = hudTestModel(width.toFloat(), height.toFloat())
+        val frames = List(HUD_FRAMES) { frame ->
+            base.with(
+                "totem" to TotemProjection(base.coreX - 1_300f - frame * 11f, base.coreY + 90f, 1f),
+                "pointsOfInterest" to immutableListOf(PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit",
+                    base.coreX + 60f, base.coreY + 40f, true, 12f, 0, frame / HUD_FRAMES.toFloat(), immutableListOf(), 0f, 0f)),
+            )
+        }
+        val measurer = CanvasTextMeasurer(
+            ComposeTextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr, cacheSize = 64),
+            1.25f, AppLanguage.English, HudTestFonts.typography,
+        )
+        val memory = HudPresentationMemory()
+        val canvas = Canvas(ImageBitmap(width, height))
+        val scope = CanvasDrawScope()
+        val size = Size(width.toFloat(), height.toFloat())
+        fun empty() = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) { drawRect(Kk.Ink) }
+        fun frame(index: Int) = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) {
+            drawGameplay(frames[index], VisualFxProjection.EMPTY, measurer, 10f + index * 0.0001f, pauseLayout = null, hudMemory = memory)
+        }
+        val thread = Thread.currentThread().id
+        repeat(HUD_FRAMES) { empty(); frame(it) }
+        var before = threads.getThreadAllocatedBytes(thread)
+        repeat(HUD_FRAMES) { empty() }
+        val emptyBytes = threads.getThreadAllocatedBytes(thread) - before
+        before = threads.getThreadAllocatedBytes(thread)
+        repeat(HUD_FRAMES) { frame(it) }
+        val frameBytes = threads.getThreadAllocatedBytes(thread) - before
+        val perFrame = (frameBytes - emptyBytes) / HUD_FRAMES
+        assertTrue(perFrame <= 96, "A world + HUD frame with an orbit trial and an off-screen totem allocates $perFrame bytes above an empty frame")
+    }
+
+    @Test
+    fun edgeMarkerDigitsDifferFromEachOtherAndTheHudMonoDigitsInLayout() {
+        // Color alone does not separate paragraphs: every edge-marker color and the HUD's plain
+        // mono digits (trial clock) differ in a layout-affecting attribute at the same size.
+        val typography = HudTestFonts.typography
+        val roles = KkRolePalette.Default
+        val styles = listOf(EdgeMarkerIcon.TOTEM, EdgeMarkerIcon.SEALED_ANOMALY, EdgeMarkerIcon.COLLAPSING_ORBIT)
+            .map { edgeMarkerStyle(typography, it, roles) }
+        assertTrue(edgeMarkerStyle(typography, EdgeMarkerIcon.RESONANT_CIRCUIT, roles) === styles[0], "the two you-color markers share digits")
+        styles.forEachIndexed { index, style ->
+            val size = style.fontSize.value
+            assertFalse(style.hasSameLayoutAffectingAttributes(typography.monoStyle(size)), "marker style $index vs the HUD's mono digits")
+            styles.forEachIndexed { other, otherStyle ->
+                if (other != index) assertFalse(style.hasSameLayoutAffectingAttributes(otherStyle), "marker styles $index and $other")
+            }
+        }
     }
 
     private fun render(model: GameplayRenderModel, fx: VisualFxProjection, roles: KkRolePalette): IntArray {
@@ -203,6 +278,11 @@ class WorldHotPathAllocationTest {
     }
 
     private companion object {
+        const val MEASURED_FRAMES = 300
+        const val HUD_FRAMES = 400
+
+        /** Warm-up drifts start here, so their distances lie past every measured frame's. */
+        const val WARM_DRIFT = 6_400f
         const val WIDTH = 960
         const val HEIGHT = 600
         const val CORE = 1_000f

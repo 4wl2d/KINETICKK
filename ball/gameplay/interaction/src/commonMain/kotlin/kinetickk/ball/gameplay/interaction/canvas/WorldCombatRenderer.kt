@@ -39,8 +39,14 @@ private const val DAMAGE_NUMBER_DRIFT = 52f
 /** A layout-affecting difference that gives the ink shadow its own paragraph (see drawDamageNumbers). */
 private const val SHADOW_LINE_HEIGHT = 1.001f
 
-/** Standard damage number size before the tier scale, the size setting and the text size. */
+/**
+ * Standard damage number size before the tier scale, the size setting and the text size: at the
+ * default text size the four tiers render at about the board's 24/30/36/44 px.
+ */
 private const val DAMAGE_NUMBER_BASE_SP = 18f
+
+/** The crit stamp next to a damage number: 12 px on the Feedback board at the default text size. */
+private val CRIT_STAMP_SP = worldLabelSp(12f)
 
 /**
  * Seconds a ram impact stays in `lastImpactTime` after contact (CollisionSystem). The world is
@@ -59,6 +65,7 @@ internal fun DrawScope.drawWorld(
     val core = world(engine, engine.coreX, engine.coreY, shakeX, shakeY)
     val pointer = Offset(engine.pointerX + shakeX * 0.18f, engine.pointerY + shakeY * 0.18f)
 
+    WorldDrawProbe.begin()
     worldHudKeepOut(engine, textMeasurer)
     drawPointsOfInterest(engine, shakeX, shakeY, textMeasurer)
     drawCharacterField(engine, shakeX, shakeY, roles)
@@ -127,7 +134,7 @@ private fun DrawScope.drawDamageNumbers(
         var right = half
         var up = halfHeight
         if (number.critical) {
-            val stamp = kkStampSize(textMeasurer, WorldStrings.crit(textMeasurer.language), density, 11f)
+            val stamp = kkStampSize(textMeasurer, WorldStrings.crit(textMeasurer.language), density, CRIT_STAMP_SP)
             right = half + (stamp.width + 3f) * pop
             up = max(halfHeight, (face.kkBoxHeight * 0.5f + 6f + stamp.height) * pop)
         }
@@ -150,7 +157,7 @@ private fun DrawScope.drawDamageNumbers(
                     WorldStrings.crit(textMeasurer.language),
                     Offset(face.size.width * 0.5f + 3f, -face.kkBoxHeight * 0.5f - 6f),
                     KkStampVariant.THREAT,
-                    fontSize = 11f,
+                    fontSize = CRIT_STAMP_SP,
                 )
             }
         }
