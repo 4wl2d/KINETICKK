@@ -246,16 +246,28 @@ class HudLayoutFixesTest {
             BuildNotificationProjection("Ghost Vector", immutableListOf("Dash power +12"), 3f),
         ))
         for (language in AppLanguage.entries) sizes.forEach { (w, h) ->
-            val model = hudTestModel(w.toFloat(), h.toFloat()).with("message" to "ELITE SIGNAL", "messageTime" to 1.5f)
-            draw(w, h, language) { measurer -> drawHudFeed(model, fx, measurer, 1f, null) }
-            listOf(HudText.NOTICE_TITLE_0, HudText.NOTICE_DETAIL_0, HudText.NOTICE_TITLE_1, HudText.NOTICE_DETAIL_4, HudText.MESSAGE_TITLE)
-                .forEach { slot ->
-                    val layout = HudDrawCache.peekLayout(slot) ?: return@forEach
-                    assertFalse(layout.isLineEllipsized(layout.lineCount - 1), "$language $w x $h: $slot is cut")
+            for (textScale in listOf(1f, 1.25f, 1.75f)) {
+                val model = hudTestModel(w.toFloat(), h.toFloat()).with("message" to "ELITE SIGNAL", "messageTime" to 1.5f)
+                draw(w, h, language, textScale) { measurer ->
+                    HudLayoutProbe.begin()
+                    drawHudFeed(model, fx, measurer, 1f, null)
                 }
-            val feed = assertNotNull(HudLayoutProbe.rect(HudBlock.FEED))
-            runningControlBounds(w.toFloat(), h.toFloat(), 1f).forEach { control ->
-                assertFalse(feed.overlaps(control.bounds), "$language $w x $h: feed $feed covers ${control.target}")
+                val context = "$language $w x $h x$textScale"
+                // Only what this frame drew: the banner, then one toast per notice the layout holds
+                // (newest first) with its title and details; phones keep two details per toast, the
+                // synergy line among them.
+                val notices = if (w == 844) 1 else 2
+                assertEquals(1 + notices, FeedProbe.plateCount, "$context: plates")
+                assertTrue(FeedProbe.isBanner(0), context)
+                val lines = (0 until FeedProbe.lineCount).groupBy { FeedProbe.linePlate(it) }
+                assertEquals(1, lines[0]?.size, "$context: banner lines")
+                assertEquals(2, lines[1]?.size, "$context: Ghost Vector lines")
+                if (notices == 2) assertEquals(if (w == 1_440) 4 else 3, lines[2]?.size, "$context: Neon Ram lines")
+                assertFeedLinesFit(context, w, h)
+                val feed = assertNotNull(HudLayoutProbe.rect(HudBlock.FEED))
+                runningControlBounds(w.toFloat(), h.toFloat(), 1f).forEach { control ->
+                    assertFalse(feed.overlaps(control.bounds), "$context: feed $feed covers ${control.target}")
+                }
             }
         }
     }
