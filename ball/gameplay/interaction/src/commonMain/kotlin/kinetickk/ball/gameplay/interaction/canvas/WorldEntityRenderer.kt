@@ -42,7 +42,7 @@ internal fun DrawScope.drawSingularity(center: Offset, time: Float, danger: Bool
     rotate(time * spin(3.2f), center) {
         drawCircle(threat.copy(alpha = 0.7f), 27.25f, center, style = WorldStrokes.dashedThin)
     }
-    drawCircle(Kk.Ink, 13.5f, center)
+    // `.sing .r1` is a border with no background: whatever the cursor sits on stays visible inside it.
     drawCircle(threat, 13.5f, center, style = kkStroke(3f))
     drawCircle(Kk.Bone, 4f, center)
     drawRect(threat, Offset(center.x - 1f, center.y - 40f), Size(2f, 8f))
