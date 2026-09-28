@@ -24,18 +24,22 @@ import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.*
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 
 /**
  * Feed of run messages (banner plates) and build notifications (toast plates), docked under the
  * chain counter on the right so it never covers the Core: on phones a plate that would reach the
- * Core narrows to the column beside it (landscape) or continues below it (portrait). Every line
- * sits on its plate: a toast is its title row plus one line per detail, wrapping (then shrinking)
- * instead of cutting. Synergy changes ("+ " / "− " details) always stay on their toast; stat deltas
- * fill the remaining detail budget. Messages that only restate a state the HUD shows (overheat,
- * polarity strain, overdrive, dash online), trial rules (behind the trial panel's (!)) and
- * instruction tails ("choose a course") are not shown as text.
+ * Core narrows to the column beside it (landscape) or continues below it (portrait; on short screens
+ * it may take the column beside the Core instead). Every line sits on its plate: a toast is its
+ * title row plus one line per detail, wrapping (then shrinking) instead of cutting, and a line that
+ * cannot show whole is not shown. Synergy changes ("+ " / "− " details) always stay on their toast;
+ * stat deltas fill the remaining detail budget. A toast whose title and synergy lines do not fit its
+ * room at the current text size steps its text down toward the smallest text setting until they do.
+ * Messages that only restate a state the HUD shows (overheat, polarity strain, overdrive, dash
+ * online), trial rules (behind the trial panel's (!)) and instruction tails ("choose a course") are
+ * not shown as text.
  *
  * Text follows the text-size setting around the design size: the feed's styles are the board sizes
  * over [REFERENCE_TEXT_SCALE], so the default setting renders them at the board size.
@@ -65,6 +69,7 @@ internal fun DrawScope.drawHudFeed(
     var narrowLimit = 0f
     var lowerTop = Float.NaN
     var lowerLimit = 0f
+    var sideWidth = Float.NaN
     when (frame.mode) {
         GameplayLayoutMode.REGULAR -> {
             right = frame.width - frame.margin
@@ -81,10 +86,11 @@ internal fun DrawScope.drawHudFeed(
             maxWidth = min(frame.u(260f) * frame.factor, right - frame.width * 0.5f + frame.u(60f)).coerceAtLeast(frame.u(140f))
             maxNotices = 1
             maxDetails = 2
-            limit = frame.height * 0.55f
             // A plate that would reach the Core's band narrows to the column right of the Core, which
-            // stays free down to the controls under it and the bottom cluster.
-            narrowWidth = (right - coreRight).let { if (it >= frame.u(120f)) it else Float.NaN }
+            // stays free down to the controls under it and the bottom cluster. Without that column
+            // (short, narrow screens) plates stop above the Core's band.
+            narrowWidth = (right - coreRight).let { if (it >= frame.u(NARROW_COLUMN_MIN_DP)) it else Float.NaN }
+            limit = if (narrowWidth.isNaN()) min(frame.height * 0.55f, coreTop - frame.u(8f)) else frame.height * 0.55f
             narrowLimit = frame.height - frame.u(96f)
             forEachRunningControlBounds(frame.width, frame.height, density) { _, controlLeft, controlTop, controlRight, _ ->
                 if (controlTop > frame.height * 0.5f && controlRight > coreRight && controlLeft < right) {
@@ -109,6 +115,9 @@ internal fun DrawScope.drawHudFeed(
             limit = min(frame.height - frame.u(238f + 12f), coreTop - frame.u(8f))
             lowerTop = max(top, coreBottom + frame.u(8f))
             lowerLimit = frame.height - frame.u(238f + 12f)
+            // Short screens under a trial panel can leave neither band room for a toast: it then takes
+            // the column right of the Core, from the band's top down to the bottom cluster.
+            sideWidth = (right - coreRight).let { if (it >= frame.u(NARROW_COLUMN_MIN_DP)) it else Float.NaN }
         }
     }
     val gap = frame.u(8f)
@@ -122,12 +131,27 @@ internal fun DrawScope.drawHudFeed(
     // when the toast fits below the Core.
     val narrowable = !narrowWidth.isNaN()
     val lastLimit = if (narrowable) max(limit, narrowLimit) else limit
+    val levels = shrinkLevels(measurer.scale)
     var reserve = 0f
     if (notices.isNotEmpty() && maxNotices > 0) {
-        val required = noticeLines(notices[notices.size - 1], 0, measurer, frame, if (narrowable) narrowWidth else maxWidth, maxDetails, narrowable)
-            .requiredHeight(frame, banner = false)
-        val belowCore = !lowerTop.isNaN() && required <= lowerLimit - lowerTop
-        if (!belowCore && required <= lastLimit - top) reserve = required + gap
+        // At the largest size at which the toast fits: below the Core it needs no reserve. Where no
+        // size holds all its synergy lines, the title with the lines that fit.
+        var level = 0
+        while (level < levels) {
+            val required = noticeLines(notices[notices.size - 1], 0, measurer, frame, if (narrowable) narrowWidth else maxWidth, maxDetails,
+                narrowable, level).requiredHeight(frame, banner = false)
+            if (!lowerTop.isNaN() && required <= lowerLimit - lowerTop) break
+            if (required <= lastLimit - top) {
+                reserve = required + gap
+                break
+            }
+            level++
+        }
+        if (level == levels) {
+            val relaxed = noticeLines(notices[notices.size - 1], 0, measurer, frame, if (narrowable) narrowWidth else maxWidth, maxDetails,
+                narrowable, levels - 1).fit(frame, lastLimit - top, banner = false, relaxed = true)
+            if (relaxed > 0f) reserve = relaxed + gap
+        }
     }
     if (engine.showsMessage()) {
         FeedScratch.message.update(engine.message, language)
@@ -149,14 +173,43 @@ internal fun DrawScope.drawHudFeed(
     while (index >= 0 && shown < maxNotices) {
         val notice = notices[index]
         val slot = shown
-        var height = placeFeedPlate(frame, top, right, banner = false, maxWidth, bandLimit - top, narrowWidth, narrowLimit - top,
-            coreTop, coreBottom, coreRight) { width, narrow -> noticeLines(notice, slot, measurer, frame, width, maxDetails, narrow) }
-        if (height <= 0f && !lowerTop.isNaN() && bandLimit != lowerLimit) {
-            // Continue below the Core.
-            top = max(top, lowerTop)
-            bandLimit = lowerLimit
-            height = placeFeedPlate(frame, top, right, banner = false, maxWidth, bandLimit - top, narrowWidth, narrowLimit - top,
-                coreTop, coreBottom, coreRight) { width, narrow -> noticeLines(notice, slot, measurer, frame, width, maxDetails, narrow) }
+        var height = 0f
+        var side = false
+        // Each text step tries the current band, then the band below the Core; then (portrait) each
+        // step tries the column beside the Core. Should even the smallest step hold no toast with all
+        // its synergy lines, the newest toast's title shows with the lines that fit.
+        val columns = if (sideWidth.isNaN()) 1 else 2
+        val passes = levels * columns + if (shown == 0) 1 else 0
+        for (pass in 0 until passes) {
+            val relaxed = pass == levels * columns
+            val level = if (relaxed) levels - 1 else pass % levels
+            val sidePass = !relaxed && pass >= levels
+            if (!sidePass) {
+                height = placeFeedPlate(frame, top, right, banner = false, maxWidth, bandLimit - top, narrowWidth, narrowLimit - top,
+                    coreTop, coreBottom, coreRight, relaxed,
+                ) { width, narrow -> noticeLines(notice, slot, measurer, frame, width, maxDetails, narrow, level) }
+                if (height > 0f) break
+                if (!lowerTop.isNaN() && bandLimit != lowerLimit) {
+                    val lower = max(top, lowerTop)
+                    height = placeFeedPlate(frame, lower, right, banner = false, maxWidth, lowerLimit - lower, narrowWidth, narrowLimit - lower,
+                        coreTop, coreBottom, coreRight, relaxed,
+                    ) { width, narrow -> noticeLines(notice, slot, measurer, frame, width, maxDetails, narrow, level) }
+                    if (height > 0f) {
+                        // Continue below the Core.
+                        top = lower
+                        bandLimit = lowerLimit
+                        break
+                    }
+                }
+            }
+            if (!sideWidth.isNaN() && (sidePass || relaxed)) {
+                height = placeFeedPlate(frame, top, right, banner = false, sideWidth, lowerLimit - top, Float.NaN, 0f,
+                    coreTop, coreBottom, coreRight, relaxed) { width, _ -> noticeLines(notice, slot, measurer, frame, width, maxDetails, true, level) }
+                if (height > 0f) {
+                    side = true
+                    break
+                }
+            }
         }
         if (height <= 0f) break
         val lines = FeedLines
@@ -169,6 +222,8 @@ internal fun DrawScope.drawHudFeed(
         top += height + gap
         shown++
         index--
+        // Nothing follows a toast beside the Core: the next one would start level with the Core.
+        if (side) break
     }
     if (!feedTop.isNaN()) HudLayoutProbe.record(HudBlock.FEED, feedLeft, feedTop, right, top - gap)
 }
@@ -184,6 +239,28 @@ private const val REFERENCE_TEXT_SCALE = 1.25f
  * (2.2 Core radii, 35 dp) with its stroke and a small gap.
  */
 private const val CORE_CLEARANCE_DP = 46f
+
+/**
+ * Narrowest column beside the Core that a plate narrows to (landscape) or that a portrait toast
+ * takes when neither band holds it. Lines that cannot show whole in it are not shown there.
+ */
+private const val NARROW_COLUMN_MIN_DP = 110f
+
+/**
+ * A toast that does not fit its room steps its text size down by [SHRINK_STEP] of text scale at a
+ * time, never below the size of the smallest text setting ([SMALLEST_TEXT_SCALE]).
+ */
+private const val SMALLEST_TEXT_SCALE = 1f
+private const val SHRINK_STEP = 0.125f
+private const val SHRINK_LEVELS = 7
+
+/** Text steps available at the text-size setting [scale]: from the setting down to the smallest one. */
+private fun shrinkLevels(scale: Float): Int =
+    min(SHRINK_LEVELS, 1 + ceil((scale - SMALLEST_TEXT_SCALE) / SHRINK_STEP - 0.001f).toInt().coerceAtLeast(0))
+
+/** The feed's text sizes at step [level] relative to the setting [scale]. */
+private fun shrinkFactor(level: Int, scale: Float): Float =
+    if (level == 0) 1f else max(scale - level * SHRINK_STEP, SMALLEST_TEXT_SCALE) / scale
 
 private const val NOTICE_LIFE_SECONDS = 6f
 private const val MAX_NOTICES = 3
@@ -237,7 +314,8 @@ private object FeedPick {
 /**
  * Lays out one plate at [top] into [FeedLines] and returns its height (0 = not shown): full width
  * within [room] while it stays clear of the Core's band, otherwise (or when it does not fit) in the
- * narrow column beside the Core within [narrowRoom], where the layout has one.
+ * narrow column beside the Core within [narrowRoom], where the layout has one. A plate never meets
+ * the Core. [relaxed] shows the title with the required lines that fit instead of nothing.
  */
 private inline fun placeFeedPlate(
     frame: HudFrame,
@@ -251,18 +329,19 @@ private inline fun placeFeedPlate(
     coreTop: Float,
     coreBottom: Float,
     coreRight: Float,
+    relaxed: Boolean = false,
     build: (width: Float, narrow: Boolean) -> FeedLines,
 ): Float {
-    var height = build(maxWidth, false).fit(frame, room, banner)
-    if (narrowWidth.isNaN()) return height
+    var height = build(maxWidth, false).fit(frame, room, banner, relaxed)
     val meetsCore = height > 0f && top + height > coreTop && top < coreBottom && right - FeedLines.plateWidth(frame, banner) < coreRight
-    if (height <= 0f || meetsCore) height = build(narrowWidth, true).fit(frame, narrowRoom, banner)
+    if (narrowWidth.isNaN()) return if (meetsCore) 0f else height
+    if (height <= 0f || meetsCore) height = build(narrowWidth, true).fit(frame, narrowRoom, banner, relaxed)
     return height
 }
 
 /** The lines of the current message's banner, [narrow] in the column beside the Core. */
 private fun bannerLines(measurer: TextMeasurer, frame: HudFrame, maxWidth: Float, narrow: Boolean): FeedLines {
-    val lines = FeedLines.clear(narrow)
+    val lines = FeedLines.clear(narrow, measurer.scale, level = 0)
     lines.title(measurer, frame, MESSAGE_TITLE_SLOT, FeedScratch.message.title, maxWidth, banner = true)
     val detail = FeedScratch.message.detail
     // Message details arrive display-cased ("Lvl 7" keeps its short level form).
@@ -270,7 +349,7 @@ private fun bannerLines(measurer: TextMeasurer, frame: HudFrame, maxWidth: Float
     return lines
 }
 
-/** The lines of the toast in feed position [slot] for [notice] (measured once per change). */
+/** The lines of the toast in feed position [slot] for [notice] at text step [level] (measured once per change). */
 private fun noticeLines(
     notice: BuildNotificationProjection,
     slot: Int,
@@ -279,10 +358,11 @@ private fun noticeLines(
     maxWidth: Float,
     maxDetails: Int,
     narrow: Boolean,
+    level: Int,
 ): FeedLines {
     val language = measurer.language
     val titleSlot = noticeTitleSlot(slot)
-    val lines = FeedLines.clear(narrow)
+    val lines = FeedLines.clear(narrow, measurer.scale, level)
     lines.title(measurer, frame, titleSlot, FeedScratch.titles[slot].of(notice.title, language), maxWidth, banner = false)
     val picked = FeedPick.pick(notice.details, maxDetails)
     if (picked == 0) {
@@ -307,23 +387,29 @@ private fun entranceAlpha(age: Float): Float = (age / (ENTRANCE_SECONDS * 0.4f))
 
 /**
  * The lines of one feed plate (title first, then details), measured once per change through
- * [FeedTexts]. [fit] decides which lines show: the title and required (synergy) lines always,
- * optional lines in order while they fit. Draw-thread scratch: reused for every plate.
+ * [FeedTexts] at one text step. [fit] decides which lines show: the title and required (synergy)
+ * lines always, optional lines in order while they fit. Draw-thread scratch: reused for every plate.
  */
 private object FeedLines {
     private val layouts = arrayOfNulls<TextLayoutResult>(1 + DETAILS_PER_NOTICE)
     private val widths = FloatArray(1 + DETAILS_PER_NOTICE)
     private val required = BooleanArray(1 + DETAILS_PER_NOTICE)
+    private val whole = BooleanArray(1 + DETAILS_PER_NOTICE)
     private val visible = BooleanArray(1 + DETAILS_PER_NOTICE)
     var count = 0
         private set
 
-    /** Text slots of the narrow column (beside the Core) are kept apart from the full-width ones. */
+    /**
+     * Text slots of each text step, and of the narrow column (beside the Core), are kept apart from
+     * the others, so a plate that settles on a step or column re-measures nothing per frame.
+     */
     private var bank = 0
+    private var shrink = 1f
 
-    fun clear(narrow: Boolean): FeedLines {
+    fun clear(narrow: Boolean, scale: Float, level: Int): FeedLines {
         count = 0
-        bank = if (narrow) FEED_TEXT_SLOTS else 0
+        bank = (level * 2 + if (narrow) 1 else 0) * FEED_TEXT_SLOTS
+        shrink = shrinkFactor(level, scale)
         return this
     }
 
@@ -332,10 +418,11 @@ private object FeedLines {
     fun isVisible(index: Int): Boolean = visible[index]
 
     fun title(measurer: TextMeasurer, frame: HudFrame, slot: Int, text: String, maxWidth: Float, banner: Boolean) {
-        val size = (if (frame.regular) frame.t(if (banner) 24f else 20f) else if (banner) 18f else 16f) / REFERENCE_TEXT_SCALE
+        val size = (if (frame.regular) frame.t(if (banner) 24f else 20f) else if (banner) 18f else 16f) / REFERENCE_TEXT_SCALE * shrink
         val available = maxWidth - startPadding(frame, banner) - endPadding(frame) - leadSpace(frame, banner)
         layouts[0] = FeedTexts.fit(bank + slot, measurer, text, mono = false, size, available.coerceAtLeast(1f), lines = 1, uppercase = true)
         widths[0] = FeedTexts.contentWidth(bank + slot)
+        whole[0] = FeedTexts.isWhole(bank + slot)
         required[0] = true
         count = 1
     }
@@ -351,18 +438,20 @@ private object FeedLines {
         uppercase: Boolean,
     ) {
         if (count == 0 || count >= layouts.size) return
-        val size = (if (frame.regular) frame.t(11f) else 10f) / REFERENCE_TEXT_SCALE
+        val size = (if (frame.regular) frame.t(11f) else 10f) / REFERENCE_TEXT_SCALE * shrink
         val available = maxWidth - startPadding(frame, banner) - endPadding(frame) - leadSpace(frame, banner)
         // Details take up to two lines, then shrink or wrap further on their plate rather than being cut.
         layouts[count] = FeedTexts.fit(bank + slot, measurer, text, mono = true, size, available.coerceAtLeast(1f), lines = 2, uppercase = uppercase)
         widths[count] = FeedTexts.contentWidth(bank + slot)
+        whole[count] = FeedTexts.isWhole(bank + slot)
         this.required[count] = required
         count++
     }
 
-    /** Height of the plate with only its title and required lines. */
+    /** Height of the plate with only its title and required lines (infinite when one of them is cut). */
     fun requiredHeight(frame: HudFrame, banner: Boolean): Float {
         if (count == 0) return 0f
+        for (index in 0 until count) if (required[index] && !whole[index]) return Float.POSITIVE_INFINITY
         var height = verticalPadding(frame) * 2f + titleRow(frame, banner)
         for (index in 1 until count) if (required[index]) height += detailGap(frame) + layouts[index]!!.kkBoxHeight
         return height
@@ -373,21 +462,30 @@ private object FeedLines {
 
     /**
      * Plate height for the lines that fit in [room]: 0 when the title and the required lines do not
-     * fit; optional lines follow in order until the first that does not fit.
+     * fit; optional lines follow in order until the first that does not fit. [relaxed] only needs the
+     * title to fit: required lines then follow in order while they fit, before any optional line. A
+     * line that cannot show whole in the plate's width (it would be cut) never fits.
      */
-    fun fit(frame: HudFrame, room: Float, banner: Boolean): Float {
-        if (count == 0) return 0f
-        var height = requiredHeight(frame, banner)
+    fun fit(frame: HudFrame, room: Float, banner: Boolean, relaxed: Boolean = false): Float {
+        if (count == 0 || !whole[0]) return 0f
+        var height = if (relaxed) verticalPadding(frame) * 2f + titleRow(frame, banner) else requiredHeight(frame, banner)
         if (height > room) return 0f
         visible[0] = true
         var open = true
         for (index in 1 until count) {
-            if (required[index]) {
+            if (!required[index]) continue
+            if (!relaxed) {
                 visible[index] = true
                 continue
             }
             val next = height + detailGap(frame) + layouts[index]!!.kkBoxHeight
-            visible[index] = open && next <= room
+            visible[index] = open && whole[index] && next <= room
+            if (visible[index]) height = next else open = false
+        }
+        for (index in 1 until count) {
+            if (required[index]) continue
+            val next = height + detailGap(frame) + layouts[index]!!.kkBoxHeight
+            visible[index] = open && whole[index] && next <= room
             if (visible[index]) height = next else open = false
         }
         return height
@@ -485,18 +583,21 @@ private object FeedLayer {
 /**
  * Feed text layouts per slot, fitted once per change: the text wraps at word boundaries on its
  * plate and shrinks when a word would otherwise break or the lines would be cut, so it is never
- * ellipsized. Keyed by (text, typography, measurer, scale, size, width, flags).
+ * ellipsized. Keyed by (text, typography, measurer, scale, size, width, flags); one bank of slots
+ * per text step and column.
  */
 private object FeedTexts {
-    private val texts = arrayOfNulls<String>(FEED_TEXT_SLOTS * 2)
-    private val typographies = arrayOfNulls<Any>(FEED_TEXT_SLOTS * 2)
-    private val delegates = arrayOfNulls<Any>(FEED_TEXT_SLOTS * 2)
-    private val scales = FloatArray(FEED_TEXT_SLOTS * 2)
-    private val sizes = FloatArray(FEED_TEXT_SLOTS * 2)
-    private val widths = FloatArray(FEED_TEXT_SLOTS * 2)
-    private val flags = IntArray(FEED_TEXT_SLOTS * 2)
-    private val layouts = arrayOfNulls<TextLayoutResult>(FEED_TEXT_SLOTS * 2)
-    private val contentWidths = FloatArray(FEED_TEXT_SLOTS * 2)
+    private const val SLOTS = FEED_TEXT_SLOTS * 2 * SHRINK_LEVELS
+    private val texts = arrayOfNulls<String>(SLOTS)
+    private val typographies = arrayOfNulls<Any>(SLOTS)
+    private val delegates = arrayOfNulls<Any>(SLOTS)
+    private val scales = FloatArray(SLOTS)
+    private val sizes = FloatArray(SLOTS)
+    private val widths = FloatArray(SLOTS)
+    private val flags = IntArray(SLOTS)
+    private val layouts = arrayOfNulls<TextLayoutResult>(SLOTS)
+    private val contentWidths = FloatArray(SLOTS)
+    private val wholes = BooleanArray(SLOTS)
 
     fun fit(slot: Int, measurer: TextMeasurer, text: String, mono: Boolean, size: Float, width: Float, lines: Int, uppercase: Boolean): TextLayoutResult {
         val flag = (if (mono) 1 else 0) or (if (uppercase) 2 else 0) or (lines shl 2)
@@ -516,16 +617,21 @@ private object FeedTexts {
         var content = 0f
         for (line in 0 until layout.lineCount) content = max(content, layout.getLineRight(line))
         contentWidths[slot] = min(content, layout.size.width.toFloat())
+        wholes[slot] = layout.fitsWithoutCuts()
         return layout
     }
 
     /** Width of the widest line of the slot's last fitted layout. */
     fun contentWidth(slot: Int): Float = contentWidths[slot]
+
+    /** Whether the slot's last fitted layout shows its whole text (see [fitsWithoutCuts]). */
+    fun isWhole(slot: Int): Boolean = wholes[slot]
 }
 
 /**
  * Size steps (fractions of the size): long text first shrinks a little on the requested line
- * count, then wraps onto up to [EXTRA_LINES] more lines at the largest size that fits.
+ * count, then wraps onto up to [EXTRA_LINES] more lines at the largest size that fits. When none
+ * fits, the last attempt is returned and [FeedLines] does not show it.
  */
 private val SameLinesSteps = floatArrayOf(1f, 0.92f, 0.85f)
 private val MoreLinesSteps = floatArrayOf(1f, 0.92f, 0.85f, 0.78f, 0.72f, 0.66f, 0.6f)

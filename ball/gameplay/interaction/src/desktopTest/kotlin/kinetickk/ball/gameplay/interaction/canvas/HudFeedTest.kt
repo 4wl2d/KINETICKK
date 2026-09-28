@@ -120,6 +120,82 @@ class HudFeedTest {
     }
 
     @Test
+    fun toastsWithFourSynergyLinesStayOnPhonesAtEveryTextScale() {
+        // A relic replace can end two synergies and start two (aspect pair and named pair each).
+        val toasts = listOf(
+            notice("Replace Ghost Vector", *FOUR_SYNERGIES),
+            notice("Replace Ghost Vector", "Impact damage +0.05", *FOUR_SYNERGIES),
+            notice("Replace Chroma Feedback", "Critical chance +2.5%", "Damage reduction +3%", *FOUR_SYNERGIES),
+        )
+        drawPhoneToasts(listOf(844 to 390, 390 to 844), toasts) { context, language, toast, drawn ->
+            toast.details.filter { it.startsWith("+ ") || it.startsWith("\u2212 ") }.forEach { synergy ->
+                val expected = synergy.localizedContent(language).uppercase()
+                assertTrue(expected in drawn, "$context: $expected missing from $drawn")
+            }
+        }
+    }
+
+    @Test
+    fun smallPhonesStillShowTheNewestToastClearOfTheCore() {
+        // Short screens (and a trial panel in portrait) leave little room: the toast still shows, at
+        // least its title, whole and clear of the Core, the controls and the other HUD blocks.
+        val toasts = listOf(
+            notice("Neon Ram", "Impact damage +0.05", "Weapon power +0.04", "+ Vector maneuver"),
+            notice("Replace Ghost Vector", "Impact damage +0.05", *FOUR_SYNERGIES),
+            notice("Replace Chroma Feedback", "Critical chance +2.5%", "Damage reduction +3%", *FOUR_SYNERGIES),
+        )
+        drawPhoneToasts(listOf(667 to 375, 640 to 360, 780 to 360, 375 to 667, 360 to 640, 360 to 780), toasts) { _, _, _, _ -> }
+    }
+
+    /**
+     * Draws each toast (alone, with and without a banner and a trial panel) at every text scale and
+     * checks that it shows its title first, fits, and keeps clear of the Core, the controls and the
+     * other HUD blocks; [check] adds per-case assertions on the toast's drawn lines.
+     */
+    private fun drawPhoneToasts(
+        sizes: List<Pair<Int, Int>>,
+        toasts: List<BuildNotificationProjection>,
+        check: (context: String, language: AppLanguage, toast: BuildNotificationProjection, drawn: List<String>) -> Unit,
+    ) {
+        val trial = PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, 0, 1f / 3f,
+            immutableListOf(1, 2, 3), 0f, 0f)
+        val messages = listOf("", "ELITE SIGNAL", "TWO ANOMALIES DETECTED // CHOOSE A COURSE")
+        for (language in AppLanguage.entries) sizes.forEach { (w, h) ->
+            var chainAtDisplaySize: androidx.compose.ui.geometry.Rect? = null
+            for (textScale in TEXT_SCALES) for (message in messages) for (toast in toasts) for (trials in 0..1) {
+                val model = feedModel(w, h, message).with("pointsOfInterest" to List(trials) { trial }.toImmutableList())
+                val fx = VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(toast))
+                drawFeed(w, h, language, textScale) { measurer ->
+                    drawHud(model, measurer, 1f)
+                    drawHudFeed(model, fx, measurer, 1f, null)
+                }
+                val context = "$language $w x $h x$textScale \"$message\" ${toast.title} ${toast.details.size} details trial=$trials"
+                val plate = (0 until FeedProbe.plateCount).firstOrNull { !FeedProbe.isBanner(it) }
+                assertNotNull(plate, "$context: toast not drawn")
+                val drawn = (0 until FeedProbe.lineCount).filter { FeedProbe.linePlate(it) == plate }
+                    .map { FeedProbe.lineLayout(it).layoutInput.text.text.replace('\u00A0', ' ') }
+                assertEquals(toast.title.localizedContent(language).uppercase(), drawn.first(), context)
+                check(context, language, toast, drawn)
+                assertFeedLinesFit(context, w, h)
+                assertFeedClearsTheCore(context, w, h)
+                val feed = assertNotNull(HudLayoutProbe.rect(HudBlock.FEED), context)
+                runningControlBounds(w.toFloat(), h.toFloat(), 1f).forEach { control ->
+                    assertFalse(feed.overlaps(control.bounds), "$context: feed $feed covers ${control.target}")
+                }
+                val chain = assertNotNull(HudLayoutProbe.rect(HudBlock.CHAIN), context)
+                if (textScale == 1f) chainAtDisplaySize = chain
+                val displayChain = assertNotNull(chainAtDisplaySize)
+                val shownChain = if (chain.height > displayChain.height + 0.5f) displayChain else chain
+                assertFalse(feed.overlaps(shownChain), "$context: feed $feed meets CHAIN $shownChain")
+                listOf(HudBlock.CLOCK, HudBlock.MATTER_CHIP, HudBlock.KEY_CHIP, HudBlock.BOSS, HudBlock.TRIAL_PANEL).forEach { block ->
+                    val other = HudLayoutProbe.rect(block) ?: return@forEach
+                    assertFalse(feed.overlaps(other), "$context: feed $feed meets $block $other")
+                }
+            }
+        }
+    }
+
+    @Test
     fun weaponLevelTailsReadAsTheShortLevelFormat() {
         assertEquals("FLUX WAKE" to "Lvl 7", feedMessageParts("FLUX WAKE // LEVEL 7", AppLanguage.English))
         assertEquals("Ур. 7", feedMessageParts("FLUX WAKE // LEVEL 7", AppLanguage.Russian).second)
@@ -180,6 +256,42 @@ class HudFeedTest {
         }
     }
 
+    @Test
+    fun toastsOnASmallerTextStepAllocateNothingPerFrame() {
+        // At the largest text size these toasts only fit a few steps down (and, in portrait, below
+        // the Core): every frame searches the steps again through the per-step layout banks.
+        val trial = PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, 0, 1f / 3f,
+            immutableListOf(1, 2, 3), 0f, 0f)
+        listOf(
+            Triple(390 to 844, AppLanguage.Russian, notice("Replace Ghost Vector", "Impact damage +0.05", *FOUR_SYNERGIES)),
+            Triple(844 to 390, AppLanguage.English, notice("Replace Chroma Feedback", "Critical chance +2.5%", "Damage reduction +3%", *FOUR_SYNERGIES)),
+        ).forEach { (screen, language, toast) ->
+            val (width, height) = screen
+            val model = feedModel(width, height, "ELITE SIGNAL").with("pointsOfInterest" to immutableListOf(trial))
+            val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1.75f,
+                language, HudTestFonts.typography.copy(localeList = language.localeList()))
+            val frames = List(FRAMES) { frame ->
+                VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(toast.copy(life = 5f - frame * 0.01f)))
+            }
+            val canvas = Canvas(ImageBitmap(width, height))
+            val scope = CanvasDrawScope()
+            val size = Size(width.toFloat(), height.toFloat())
+            fun empty() = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) { drawRect(Kk.Ink) }
+            fun feed(frame: Int) = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) {
+                drawHudFeed(model, frames[frame], measurer, 1f, null)
+            }
+            repeat(FRAMES) { empty(); feed(it) }
+            val context = "$language $width x $height ${toast.title}"
+            val plate = (0 until FeedProbe.plateCount).firstOrNull { !FeedProbe.isBanner(it) }
+            assertNotNull(plate, "$context: toast not drawn")
+            assertEquals(1 + FOUR_SYNERGIES.size, (0 until FeedProbe.lineCount).count { FeedProbe.linePlate(it) == plate }, context)
+            val emptyBytes = allocated { repeat(FRAMES) { empty() } }
+            val feedBytes = allocated { repeat(FRAMES) { feed(it) } }
+            val perFrame = (feedBytes - emptyBytes) / FRAMES
+            assertTrue(perFrame <= 64, "$context allocates $perFrame bytes above an empty frame")
+        }
+    }
+
     private fun notice(title: String, vararg details: String) =
         BuildNotificationProjection(title, details.toList().toImmutableList(), 5f)
 
@@ -199,6 +311,7 @@ class HudFeedTest {
     private companion object {
         const val FRAMES = 240
         val TEXT_SCALES = listOf(1f, 1.25f, 1.75f)
+        val FOUR_SYNERGIES = arrayOf("+ Gravitic grouping", "+ Brake compression", "\u2212 Vector maneuver", "\u2212 Ghost mirror")
         const val SHOWN_AT = 20f
     }
 }
