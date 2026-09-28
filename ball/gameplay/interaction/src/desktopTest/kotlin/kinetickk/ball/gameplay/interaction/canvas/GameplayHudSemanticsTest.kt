@@ -23,7 +23,10 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.click
@@ -148,6 +151,55 @@ class GameplayHudSemanticsTest {
     }
 
     @Test
+    fun keyboardFocusReturnsToTheGameWhenTheTrialEndsWhileItsInfoIsFocused() {
+        val snapshot = hudTestSnapshot()
+        val orbit = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
+            immutableListOf(), 0f, 0f)
+        val base = requireNotNull(snapshot.renderModel)
+        val withTrial = snapshot.withModel(base.with("pointsOfInterest" to listOf(orbit).toImmutableList()))
+        val afterTrial = snapshot.withModel(base.with("pointsOfInterest" to immutableListOf<PointOfInterestProjection>()))
+        var current = withTrial
+        var trialEnds = false
+        val pulses = mutableListOf<GameplayInteractionPulse>()
+        val port = object : GameplayInteractionPort {
+            override val instanceId get() = current.instanceId
+            override fun renderSnapshot() = current
+            override fun visualFxSnapshot() = VisualFxProjection.EMPTY
+            override fun accept(pulse: GameplayInteractionPulse): GameplayAcceptance {
+                pulses += pulse
+                // The next frame completes the trial: the render model no longer has an active trial.
+                if (trialEnds && pulse is GameplayInteractionPulse.FrameElapsed) {
+                    current = afterTrial
+                    return GameplayAcceptance.Accepted(current.instanceId, current.revision)
+                }
+                return GameplayAcceptance.Rejected(current.instanceId, current.revision, GameplayRejection.RunExited)
+            }
+        }
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides AppLanguage.English) {
+                Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
+            }
+        }
+        compose.mainClock.advanceTimeByFrame()
+        val info = compose.onNodeWithTag(GAMEPLAY_TRIAL_INFO_TAG)
+        info.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        info.assertIsFocused()
+
+        trialEnds = true
+        repeat(3) { compose.mainClock.advanceTimeByFrame() }
+        compose.onNodeWithTag(GAMEPLAY_TRIAL_INFO_TAG).assertDoesNotExist()
+        pulses.clear()
+        compose.onNodeWithTag(GAMEPLAY_ROOT_TAG).performKeyInput { pressKey(Key.P) }
+        compose.mainClock.advanceTimeByFrame()
+        assertTrue(GameplayInteractionPulse.PauseToggled in pulses, "P did nothing after the trial ended: $pulses")
+        pulses.clear()
+        compose.onNodeWithTag(GAMEPLAY_ROOT_TAG).performKeyInput { pressKey(Key.Spacebar) }
+        compose.mainClock.advanceTimeByFrame()
+        assertTrue(GameplayInteractionPulse.DashRequested in pulses, "Space did nothing after the trial ended: $pulses")
+    }
+
+    @Test
     fun trialRulesSitBehindAFocusableInfoNodeAndDesktopPauseAndBuildAreHeaderButtons() {
         val snapshot = hudTestSnapshot()
         val orbit = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
@@ -205,6 +257,7 @@ class GameplayHudSemanticsTest {
 }
 
 private const val HOST_TAG = "hud-host"
+private const val GAMEPLAY_ROOT_TAG = "kinetickk.gameplay"
 
 private fun assertRect(expected: Rect, actual: Rect) {
     assertEquals(expected.left, actual.left, 0.5f, "left of $actual")

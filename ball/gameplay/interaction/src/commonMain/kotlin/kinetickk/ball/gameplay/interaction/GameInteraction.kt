@@ -325,10 +325,14 @@ fun GameplayContent(
         null
     }
     val trialActive = renderModelValue.phase == GamePhase.RUNNING && renderModelValue.activeTrial() != null
+    // Read in the composition that ends the trial, before its (!) node leaves: removing a focused
+    // node clears focus from the whole hierarchy, so keyboard focus goes back to the gameplay root.
+    val trialInfoHadFocus = trialInfoFocusedValue
     LaunchedEffect(component, trialActive) {
         if (!trialActive) {
             trialInfoOpenValue = false
             trialInfoHoveredValue = false
+            if (trialInfoHadFocus && inputEnabled) focusRequester.requestFocus()
         }
     }
     val trialInfoShown = trialActive && (trialInfoFocusedValue || trialInfoOpenValue || trialInfoHoveredValue)
