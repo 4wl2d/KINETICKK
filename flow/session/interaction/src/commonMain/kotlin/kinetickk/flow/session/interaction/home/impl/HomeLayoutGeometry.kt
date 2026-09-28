@@ -138,15 +138,23 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
             fun by(y: Float) = h - (810f - y) * s
             val centerOffset = (h - 810f * s) * 0.5f
             fun cy(y: Float) = y * s + centerOffset
+            var menuBottom = 0f
             HomeMenuTargets.forEachIndexed { index, target ->
                 val top = cy(124f + index * 74f)
-                actions += HomeActionBounds(target, rect(rx(880f - index * 12f), top, w - 16f, top + 74f * s))
+                val row = Rect(rx(880f - index * 12f), top, w - 16f, top + 74f * s)
+                actions += HomeActionBounds(target, rect(row.left, row.top, row.right, row.bottom))
+                homeSelectedMenuFootprint(row, 64f * s).forEach { menuBottom = max(menuBottom, it.bottom) }
             }
+            // The form name (and its (!)) rises from the Deploy board's line by up to 12 px, as far as the
+            // lowest selected menu item leaves the name's line box (0.65 em each way) clear, so a
+            // description wrapped to two lines still clears the name's descenders (homeFormDescriptionSpan).
+            val formNameSize = 30f * s
+            val formNameY = (menuBottom + formNameSize * 0.65f + 0.5f).coerceIn(by(608f), by(620f))
             HomeCoreTargets.forEachIndexed { index, target ->
                 val left = rx(826f + index * 96f)
                 actions += HomeActionBounds(target, rect(left, by(680f), left + 86f * s, by(756f)))
             }
-            infos += info(HomeInfoTarget.FORM, rx(1368f), by(620f))
+            infos += info(HomeInfoTarget.FORM, rx(1368f), formNameY)
             // The facts card keeps at least 480 px (board 560) on smaller desktops, short of the form panel.
             val factsRight = max(lx(616f), min(lx(56f) + 480f, rx(826f) - 24f))
             infos += info(HomeInfoTarget.FACTS, factsRight - 44f * s, by(686f))
@@ -169,8 +177,8 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
                 menuColumns = 1,
                 facts = rect(lx(56f), by(640f), factsRight, by(732f)),
                 formNameLeft = px(rx(826f)),
-                formNameCenterY = px(by(620f)),
-                formNameSize = px(30f * s),
+                formNameCenterY = px(formNameY),
+                formNameSize = px(formNameSize),
                 formDescription = rect(rx(826f), by(642f), rx(1392f), by(666f)),
                 legalRight = px(rx(1392f)),
                 legalBaseline = px(by(788f)),
@@ -349,10 +357,16 @@ internal fun homeFormNameRight(layout: HomeLayoutGeometry, density: Float): Floa
 /**
  * How far (board px at a 64 px menu font) a selected menu item reaches left of its row: it moves
  * 26 px left, and its longest speed line (120 px at 99 % when the lines come to rest, never longer
- * while they draw in) starts 20 px left of it. Drawn with the design geometry (menu measurer scale
- * at least 1, see [homeMenuMeasurerScale]); larger text only shrinks it.
+ * while they draw in) starts 20 px left of it. The item sizes it from its label as drawn, which keeps
+ * the layout's menu font at every text size (see [homeMenuMeasurerScale]).
  */
 internal const val HOME_MENU_REACH = 165f
+
+/** How far (board px at a 64 px menu font) a selected menu item moves left. */
+internal const val HOME_MENU_SLIDE = 26f
+
+/** How far (board px at a 64 px menu font) a selected menu item's echo reaches left of its slab. */
+internal const val HOME_MENU_ECHO_LEFT = 14f
 
 /**
  * Area a selected menu item covers (px) for a menu font of [fontSizePx]: its slab, echo and speed
@@ -381,6 +395,13 @@ internal fun homeSelectedMenuFootprint(bounds: Rect, fontSizePx: Float): List<Re
             center + 14f * k + HOME_MENU_TURN * (bounds.width * 0.5f + HOME_MENU_REACH * k)),
     )
 }
+
+/**
+ * How far the form name's lowest ink reaches below its center line, in em of its size: the wide
+ * face's Cyrillic descenders (Д, Ц, Щ), with their antialiased edge (checked with the bundled font in
+ * the Home pixel tests).
+ */
+internal const val HOME_FORM_NAME_INK_EM = 0.6f
 
 /** sin 2°, rounded up: how far a point of the turned menu item moves per px from its middle. */
 private const val HOME_MENU_TURN = 0.035f

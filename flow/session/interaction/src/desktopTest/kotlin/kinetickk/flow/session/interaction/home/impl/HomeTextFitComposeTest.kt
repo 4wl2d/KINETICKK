@@ -117,17 +117,22 @@ class HomeTextFitComposeTest {
                     val layout = homeLayoutGeometry(width, height, 1f)
                     if (layout.scene.menuColumns != 1) continue
                     val fontSize = layout.scene.menuFontSize / menu.scale
-                    val u = fontSize / 64f
+                    // The item's gaps, slab and speed lines follow its label as drawn (the layout's menu font).
+                    val u = layout.scene.menuFontSize / 64f
+                    val stampSize = homeMenuStampSize(menu, layout, 1f)
+                    // Stamps grow with the text size or keep the size they have at the default one.
+                    assertTrue(stampSize * menu.scale >= 14f * u.coerceAtLeast(0.8f) - 0.01f,
+                        "stamp ${stampSize * menu.scale} px ${language.code} ${width}x$height @$textScale")
                     HomeMenuTargets.forEachIndexed { index, target ->
                         val where = "$target ${language.code} ${width}x$height @$textScale"
                         val bounds = layout.bounds(target)
                         val label = language.text(HomeMenuLabels[index])
                         val facts = homeFacts(model, target, language, textScale)
-                        val placement = homeMenuPlacement(menu, bounds, label, facts.sub, facts.stamp, layout.scene.menuFontSize, 1f)
+                        val placement = homeMenuPlacement(menu, bounds, label, facts.sub, facts.stamp, layout.scene.menuFontSize, stampSize, 1f)
                         // The foundation item's own layout, selected (moved 26 px left, sub shown) and at rest.
                         val selected = drawnMenuItem(menu, width, height, placement.left, bounds.center.y, label, fontSize, 1f,
-                            facts.stamp, facts.sub.takeIf { placement.showSub })
-                        val resting = drawnMenuItem(menu, width, height, placement.left, bounds.center.y, label, fontSize, 0f, facts.stamp, null)
+                            facts.stamp, facts.sub.takeIf { placement.showSub }, stampSize)
+                        val resting = drawnMenuItem(menu, width, height, placement.left, bounds.center.y, label, fontSize, 0f, facts.stamp, null, stampSize)
                         assertTrue(selected.right - 44f * u - 26f * u <= bounds.right + 0.5f, "selected $where ends at ${selected.right - 70f * u}")
                         assertTrue(resting.right - 44f * u <= bounds.right + 0.5f, "$where ends at ${resting.right - 44f * u}")
                         // Its speed lines never reach past the extent the layout keeps clear.
@@ -219,17 +224,18 @@ class HomeTextFitComposeTest {
                         assertTrue(ink.top >= kotlin.math.floor(scene.legalBaseline - HOME_LEGAL_ASCENT_EM * scene.legalSize),
                             "legal glyphs rise to row ${ink.top}, baseline ${scene.legalBaseline} $where")
                     }
+                    val stampSize = homeMenuStampSize(menu, layout, density)
                     HomeMenuTargets.forEachIndexed { index, target ->
                         val bounds = layout.bounds(target)
                         val label = language.text(HomeMenuLabels[index])
                         val facts = homeFacts(model, target, language, textScale)
                         val placement = if (scene.menuColumns == 1) {
-                            homeMenuPlacement(menu, bounds, label, facts.sub, facts.stamp, scene.menuFontSize, density)
+                            homeMenuPlacement(menu, bounds, label, facts.sub, facts.stamp, scene.menuFontSize, stampSize, density)
                         } else {
                             HomeMenuPlacement(bounds.left, false)
                         }
                         val item = rendered(width, height, density) {
-                            drawHomeMenuItem(menu, layout, index, label, facts, placement.left, placement.showSub, 1f, HOME_TRAIL_REST_SECONDS)
+                            drawHomeMenuItem(menu, layout, index, label, facts, placement.left, placement.showSub, stampSize, 1f, HOME_TRAIL_REST_SECONDS)
                         }
                         val over = inkBounds(item, ink.top, ink.bottom, ink.left, ink.right)
                         assertEquals(null, over, "Selected $target (slab, echo or speed line) covers the legal glyphs $ink at $over $where")
@@ -271,13 +277,13 @@ class HomeTextFitComposeTest {
     }
 
     private fun drawnMenuItem(menu: CanvasTextMeasurer, width: Float, height: Float, left: Float, centerY: Float, label: String,
-        fontSize: Float, selection: Float, stamp: String?, sub: String?): androidx.compose.ui.geometry.Rect {
+        fontSize: Float, selection: Float, stamp: String?, sub: String?, stampSize: Float): androidx.compose.ui.geometry.Rect {
         var drawn = androidx.compose.ui.geometry.Rect.Zero
         val image = androidx.compose.ui.graphics.ImageBitmap(width.toInt(), height.toInt())
         androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(Density(1f), androidx.compose.ui.unit.LayoutDirection.Ltr,
             androidx.compose.ui.graphics.Canvas(image), androidx.compose.ui.geometry.Size(width, height)) {
             drawn = drawKkMenuItem(menu, left, centerY, label, selection = selection, time = HOME_TRAIL_REST_SECONDS,
-                fontSize = fontSize, stamp = stamp, sub = sub)
+                fontSize = fontSize, stamp = stamp, sub = sub, stampFontSize = stampSize)
         }
         return drawn
     }
