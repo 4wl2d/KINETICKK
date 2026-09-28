@@ -118,9 +118,7 @@ class HudLayoutFixesTest {
                 }
                 val top = listOf(HudBlock.CLOCK, HudBlock.BADGE, HudBlock.MATTER_CHIP, HudBlock.KEY_CHIP, HudBlock.CHAIN, HudBlock.BOSS,
                     HudBlock.TRIAL_PANEL, HudBlock.FEED)
-                // The feed's own placement (feed area) is checked against the chain, clock, badge, chips and
-                // trial panel here; where it docks relative to the boss block is the feed's layout.
-                top.forEachIndexed { index, a -> top.drop(index + 1).forEach { b -> if (setOf(a, b) != setOf(HudBlock.BOSS, HudBlock.FEED)) apart(a, b) } }
+                top.forEachIndexed { index, a -> top.drop(index + 1).forEach { b -> apart(a, b) } }
                 val bottom = listOf(HudBlock.INTEGRITY, HudBlock.SPEED, HudBlock.LOADOUT)
                 bottom.forEachIndexed { index, a -> bottom.drop(index + 1).forEach { b -> apart(a, b) } }
                 listOf(HudBlock.CLOCK, HudBlock.BOSS, HudBlock.TRIAL_PANEL, HudBlock.INTEGRITY, HudBlock.SPEED, HudBlock.LOADOUT, HudBlock.FEED)

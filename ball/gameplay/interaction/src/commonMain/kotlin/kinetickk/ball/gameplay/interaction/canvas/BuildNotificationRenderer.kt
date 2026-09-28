@@ -20,6 +20,7 @@ import kinetickk.ball.gameplay.interaction.layout.REGULAR_LOADOUT_HEIGHT_DP
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
+import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
@@ -153,8 +154,17 @@ private object FeedArea {
             }
             GameplayLayoutMode.COMPACT_LANDSCAPE -> {
                 right = frame.width - frame.margin - compactLoadoutWidth(engine.content.relicPolicy.maxSlots.coerceIn(0, 8), frame.unit) - frame.u(12f)
-                top = frame.u(62f)
                 maxWidth = min(frame.u(260f) * frame.factor, right - frame.width * 0.5f + frame.u(60f)).coerceAtLeast(frame.u(140f))
+                top = frame.u(62f)
+                // Under the elite / Architect block whenever a plate may reach its span: the boss name
+                // grows with the text size and pushes its bar down.
+                val boss = FeedBoss.select(engine)
+                if (boss.id >= 0) {
+                    val architect = boss.type == EnemyType.ARCHITECT
+                    if (right - maxWidth < frame.width * 0.5f + HudTopGeometry.bossBarWidth(frame, architect) * 0.5f) {
+                        top = max(top, HudTopGeometry.bossBottom(frame, architect, measurer.scale) + frame.u(8f))
+                    }
+                }
                 maxNotices = 1
                 maxDetails = 2
                 // A plate that would reach the Core's band narrows to the column right of the Core, which
