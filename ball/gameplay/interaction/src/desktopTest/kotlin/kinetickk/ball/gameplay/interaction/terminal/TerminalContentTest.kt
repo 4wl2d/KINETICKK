@@ -13,9 +13,12 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.localizedContent
@@ -28,6 +31,9 @@ import kinetickk.foundation.design.KkIcon
 import kinetickk.ball.gameplay.interaction.rewards.assertTextFitsWithoutBreakingWords
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import kinetickk.ball.gameplay.interaction.rewards.assertNoForbiddenGlyphs
+import kinetickk.ball.gameplay.interaction.rewards.OverlayButtonProbe
+import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureModel
+import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import org.junit.Rule
 import org.junit.Test
 import java.awt.image.BufferedImage
@@ -139,28 +145,125 @@ class TerminalContentTest {
 
     @Test
     fun phoneLandscapeKeepsBankAndBuildClearOfThePinnedActions() {
-        for (language in AppLanguage.entries) for (victory in listOf(true, false)) {
+        for (language in AppLanguage.entries) for (victory in listOf(true, false)) for (textScale in listOf(1f, 1.25f, 1.75f)) {
             runDesktopComposeUiTest(844, 390) {
                 setContent {
                     CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides language) {
                         Box(Modifier.requiredSize(844.dp, 390.dp)) {
                             TerminalContent(report(language).copy(victory = victory, bank = "1 284", weaponIcon = KkIcon.WEAPONS_FLUX_WAKE,
-                                weaponLevel = "8"), 1f, false, 3f, true) {}
+                                weaponLevel = "8"), textScale, false, 3f, true) {}
                         }
                     }
                 }
+                val scene = "$language victory $victory ${textScale}x"
                 val actions = listOfNotNull("restart", "exit", "rebirth".takeIf { victory }).map { tag ->
                     onNodeWithTag("kinetickk.gameplay.$tag").fetchSemanticsNode().boundsInRoot
                 }
+                // The summary's own viewport, at rest: Bank and Build must be inside it without scrolling.
+                val summary = onNodeWithTag("kinetickk.gameplay.results.summary")
+                val viewport = summary.fetchSemanticsNode().boundsInRoot
+                assertEquals(0f, summary.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value(), "$scene at rest")
                 listOf("kinetickk.gameplay.results.bank-info", "kinetickk.gameplay.results.build").forEach { tag ->
-                    val bounds = onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
-                    assertTrue(bounds.top >= 0f && bounds.bottom <= 390f && bounds.right <= 844f, "$tag on screen ($language): $bounds")
-                    actions.forEach { action ->
-                        assertFalse(bounds.overlaps(action), "$tag clear of the actions ($language, victory $victory)")
+                    // Unclipped: a row scrolled out of the viewport keeps its real position.
+                    val bounds = onNodeWithTag(tag, useUnmergedTree = true).getUnclippedBoundsInRoot()
+                        .let { Rect(it.left.value, it.top.value, it.right.value, it.bottom.value) }
+                    assertTrue(bounds.height > 0f && bounds.top >= viewport.top - 0.5f && bounds.bottom <= viewport.bottom + 0.5f &&
+                        bounds.left >= viewport.left - 0.5f && bounds.right <= viewport.right + 0.5f,
+                        "$tag inside the summary viewport without scrolling ($scene): $bounds in $viewport")
+                    actions.forEach { action -> assertFalse(bounds.overlaps(action), "$tag clear of the actions ($scene)") }
+                }
+                assertTextFitsWithoutBreakingWords("report $scene")
+            }
+        }
+    }
+
+    @Test
+    fun phoneLandscapeStatisticsBelowTheActionsShowAScrollCue() {
+        var scrolling = 0
+        for (language in AppLanguage.entries) for (victory in listOf(true, false)) for (textScale in listOf(1.25f, 1.75f)) {
+            runDesktopComposeUiTest(844, 390) {
+                setContent {
+                    CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides language) {
+                        Box(Modifier.requiredSize(844.dp, 390.dp)) {
+                            TerminalContent(report(language).copy(victory = victory), textScale, false, 3f, true) {}
+                        }
                     }
                 }
-                assertTextFitsWithoutBreakingWords("report ${language.name} victory $victory")
+                val scene = "$language victory $victory ${textScale}x"
+                val statistics = onNodeWithTag("kinetickk.gameplay.results.statistics").fetchSemanticsNode()
+                val viewport = statistics.boundsInRoot
+                val range = statistics.config[SemanticsProperties.VerticalScrollAxisRange]
+                val actionsTop = onNodeWithTag("kinetickk.gameplay.restart").fetchSemanticsNode().boundsInRoot.top
+                assertTrue(viewport.bottom <= actionsTop, "$scene: the statistics end above the pinned actions")
+                val last = onNodeWithTag("kinetickk.gameplay.stat.LevelReached", useUnmergedTree = true).getUnclippedBoundsInRoot()
+                if (range.maxValue() > 0f) {
+                    scrolling++
+                    assertTrue(last.bottom.value > viewport.bottom, "$scene: a statistic sits below the fold")
+                    val bar = onNodeWithTag("kinetickk.gameplay.results.statistics.scroll", useUnmergedTree = true).assertIsDisplayed()
+                        .fetchSemanticsNode().boundsInRoot
+                    val fade = onNodeWithTag("kinetickk.gameplay.results.statistics.fade", useUnmergedTree = true).assertIsDisplayed()
+                        .fetchSemanticsNode().boundsInRoot
+                    assertTrue(bar.height >= viewport.height * 0.9f && bar.right <= viewport.right + 12f && bar.left >= viewport.left,
+                        "$scene: the scroll bar runs along the statistics: $bar in $viewport")
+                    assertEquals(viewport.bottom, fade.bottom, 1f, "$scene: the fade sits at the cut edge")
+                    assertTrue(fade.height >= 24f, "$scene: the fade is visible")
+                } else {
+                    assertTrue(last.bottom.value <= viewport.bottom + 0.5f, "$scene: every statistic is above the actions")
+                }
             }
+        }
+        assertTrue(scrolling > 0, "Thirteen statistics outgrow a phone in landscape")
+    }
+
+    @Test
+    fun levelReachedReadsAsTheSharedLevelFormatAndFitsEveryLayout() {
+        for (language in AppLanguage.entries) {
+            val model = rewardFixtureModel(phase = GamePhase.GAME_OVER, level = 16, language = language)
+            val value = model.terminalPresentation(language).collection.single { it.label == GameplayText.LevelReached }.value
+            assertEquals(if (language == AppLanguage.Russian) "Ур. 16" else "Lvl 16", value)
+            for ((width, height) in listOf(1440 to 810, 844 to 390, 390 to 844)) runDesktopComposeUiTest(width, height) {
+                setContent {
+                    CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides language) {
+                        Box(Modifier.requiredSize(width.dp, height.dp)) {
+                            TerminalContent(model.terminalPresentation(language), 1.75f, false, 3f, true) {}
+                        }
+                    }
+                }
+                onNodeWithText(value, useUnmergedTree = true).performScrollTo().assertIsDisplayed()
+                assertTextFitsWithoutBreakingWords("report $language ${width}x$height")
+            }
+        }
+    }
+
+    @Test
+    fun actionLabelsShrinkToTheirButtonsInsteadOfBeingCut() {
+        val labels = mutableListOf<Pair<TextLayoutResult, Float>>()
+        OverlayButtonProbe.records = labels
+        try {
+            for ((width, height) in listOf(1440 to 810, 844 to 390, 390 to 844)) for (language in AppLanguage.entries)
+                for (victory in listOf(true, false)) for (textScale in listOf(1f, 1.25f, 1.75f)) {
+                    labels.clear()
+                    runDesktopComposeUiTest(width, height) {
+                        setContent {
+                            CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides language) {
+                                Box(Modifier.requiredSize(width.dp, height.dp)) {
+                                    TerminalContent(report(language).copy(victory = victory), textScale, false, 3f, true) {}
+                                }
+                            }
+                        }
+                        waitForIdle()
+                    }
+                    val scene = "report ${width}x$height $language victory $victory ${textScale}x"
+                    assertTrue(labels.size >= (if (victory) 3 else 2), "$scene draws its actions")
+                    labels.forEach { (layout, room) ->
+                        val text = layout.layoutInput.text.text
+                        // A single cut line reports its clamped width: its overflow flag says it was cut.
+                        assertTrue(!layout.isLineEllipsized(0) && !layout.hasVisualOverflow && layout.size.width <= room + 0.5f,
+                            "$scene: \"$text\" ${layout.size.width} fits $room")
+                    }
+                }
+        } finally {
+            OverlayButtonProbe.records = null
         }
     }
 
@@ -246,6 +349,6 @@ private fun report(language: AppLanguage = AppLanguage.English) = TerminalPresen
         TerminalStatistic(GameplayText.PickupsCollected, "934"),
         TerminalStatistic(GameplayText.KeysCollected, "12"),
         TerminalStatistic(GameplayText.ArtifactsAcquired, "23"),
-        TerminalStatistic(GameplayText.LevelReached, "18"),
+        TerminalStatistic(GameplayText.LevelReached, if (language == AppLanguage.Russian) "Ур. 18" else "Lvl 18"),
     ),
 )
