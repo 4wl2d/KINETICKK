@@ -307,23 +307,24 @@ private fun placeToast(
 private const val REFERENCE_TEXT_SCALE = 1.25f
 
 /**
- * Half size of the zone around the screen center that phone plates keep clear: the Core's halo
- * (2.2 Core radii, 35 dp) with its stroke and a small gap.
+ * Half size of the zone around the screen center that phone plates (feed, trial rules) keep clear:
+ * the Core's halo (2.2 Core radii, 35 dp) with its stroke and a small gap.
  */
-private const val CORE_CLEARANCE_DP = 46f
+internal const val CORE_CLEARANCE_DP = 46f
 
 /**
- * Narrowest column beside the Core that a plate narrows to (landscape) or that a portrait toast
- * takes when neither band holds it. Lines that cannot show whole in it are not shown there.
+ * Narrowest column beside the Core that a plate narrows to (landscape) or that a portrait toast (or
+ * the trial rules) takes when neither band holds it. Lines that cannot show whole in it are not
+ * shown there.
  */
-private const val NARROW_COLUMN_MIN_DP = 110f
+internal const val NARROW_COLUMN_MIN_DP = 110f
 
 /**
- * A toast that does not fit its room steps its text size down by [SHRINK_STEP] of text scale at a
- * time, never below the size of the smallest text setting ([SMALLEST_TEXT_SCALE]).
+ * A toast (or the trial rules) that does not fit its room steps its text size down by [SHRINK_STEP]
+ * of text scale at a time, never below the size of the smallest text setting ([SMALLEST_TEXT_SCALE]).
  */
-private const val SMALLEST_TEXT_SCALE = 1f
-private const val SHRINK_STEP = 0.125f
+internal const val SMALLEST_TEXT_SCALE = 1f
+internal const val SHRINK_STEP = 0.125f
 private const val SHRINK_LEVELS = 7
 
 /** Text steps available at the text-size setting [scale]: from the setting down to the smallest one. */

@@ -310,6 +310,51 @@ class HudLayoutFixesTest {
         assertNull(HudLayoutProbe.rect(HudBlock.TRIAL_TOOLTIP))
     }
 
+    /**
+     * On phones the open rules keep the Core's zone clear (the feed's [CORE_CLEARANCE_DP] around the
+     * screen center): on landscape phones the slip ends left of it, on portrait phones above, below
+     * or beside it. The rules stay whole and off the touch controls; on the reference screens they
+     * also stay above the bottom clusters and, at the default text size, render at the tooltip's
+     * board size.
+     */
+    @Test
+    fun trialRulesKeepTheCoreClearOnPhones() {
+        val phones = listOf(844 to 390, 780 to 360, 667 to 375, 640 to 360, 390 to 844, 360 to 780, 375 to 667, 360 to 640)
+        for (language in AppLanguage.entries) phones.forEach { (w, h) ->
+            for (textScale in textScales) for (kind in PointOfInterestKind.entries) {
+                val trial = PointOfInterestProjection(kind, kind.name, 0f, 0f, true, 12f, 0, 0.4f, immutableListOf(1, 2, 3), 0f, 0f)
+                val model = hudTestModel(w.toFloat(), h.toFloat()).with("pointsOfInterest" to listOf(trial).toImmutableList())
+                draw(w, h, language, textScale) { measurer ->
+                    drawHud(model, measurer, 1f, trialInfoOpen = true)
+                    drawTrialTooltip(model, measurer, open = true)
+                }
+                val where = "$language $w x $h x$textScale $kind"
+                val slip = assertNotNull(HudLayoutProbe.rect(HudBlock.TRIAL_TOOLTIP), where)
+                val clearance = CORE_CLEARANCE_DP
+                val core = Rect(w * 0.5f - clearance, h * 0.5f - clearance, w * 0.5f + clearance, h * 0.5f + clearance)
+                assertFalse(slip.overlaps(core), "$where: rules $slip cover the Core's zone $core")
+                if (w > h) assertTrue(slip.right <= w * 0.5f - clearance, "$where: rules $slip reach the Core's column")
+                val body = TrialRulesPlacement.body
+                assertFalse(body.multiParagraph.didExceedMaxLines || body.didOverflowWidth, "$where: rules cut")
+                val shown = body.layoutInput.text.text
+                for (row in 0 until body.lineCount - 1) {
+                    val end = body.getLineEnd(row)
+                    assertTrue(shown[end - 1].isWhitespace() || shown[end].isWhitespace() || shown[end - 1] == '-', "$where: \"$shown\" breaks inside a word")
+                }
+                assertFalse(slip.overlaps(assertNotNull(HudLayoutProbe.rect(HudBlock.TRIAL_PANEL))), "$where: rules cover the panel")
+                runningControlBounds(w.toFloat(), h.toFloat(), 1f).forEach { control ->
+                    assertFalse(slip.overlaps(control.bounds), "$where: rules $slip cover ${control.target}")
+                }
+                // Short phones can leave no room above the bottom clusters; the reference screens always do.
+                if ((w to h) in sizes) {
+                    assertTrue(slip.bottom <= HudFrame().update(w.toFloat(), h.toFloat(), 1f).bottomClustersTop, "$where: rules $slip reach the bottom clusters")
+                }
+                // The tooltip body's board size (14) at the default setting on the reference phones.
+                if (textScale == 1.25f && (w to h) in sizes) assertEquals(14f, body.layoutInput.style.fontSize.value, 0.01f, where)
+            }
+        }
+    }
+
     /** The phone-landscape matter value is display-cased like the chips of the other layouts ("+1,2 МЛН"). */
     @Test
     fun matterValueIsDisplayCasedInEveryLayout() {
