@@ -12,4 +12,7 @@ internal enum class WorldRedesignText(override val english: String, override val
 
     /** Stamp on critical damage numbers. */
     CriticalHit("Crit", "Крит"),
+
+    /** Seconds already spent inside the collapsing orbit's ring, in tenths ("5.2s"). */
+    OrbitSeconds("{0}s", "{0} с"),
 }

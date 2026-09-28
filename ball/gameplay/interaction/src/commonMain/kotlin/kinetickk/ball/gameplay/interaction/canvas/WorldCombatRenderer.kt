@@ -88,8 +88,11 @@ internal fun DrawScope.drawWorld(
     if (engine.phase != GamePhase.GAME_OVER) drawCore(engine, core, roles)
     drawSingularity(pointer, engine.elapsed, engine.tetherDistance < 75f, roles)
     drawDamageNumbers(engine, visualFx, shakeX, shakeY, textMeasurer)
-    drawPointOfInterestEdgeMarkers(engine, shakeX, shakeY, textMeasurer)
-    drawTotemEdgeMarker(engine, shakeX, shakeY, textMeasurer)
+    // Off-screen targets are placed together, so their markers never overlap each other.
+    val markers = WorldOverlayScratch.markers.clear()
+    collectPointOfInterestEdgeMarkers(engine, shakeX, shakeY, textMeasurer, markers)
+    collectTotemEdgeMarker(engine, shakeX, shakeY, markers)
+    drawEdgeMarkers(markers, textMeasurer)
 }
 
 /**

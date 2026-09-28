@@ -21,15 +21,25 @@ import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.CanvasTextMeasurer
+import kinetickk.foundation.design.Kk
+import kinetickk.foundation.design.KkRolePalette
+import kinetickk.foundation.design.labelStyle
+import kinetickk.foundation.design.localeList
+import kinetickk.foundation.design.measureKkText
+import kinetickk.ball.content.api.localizedContent
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.toPixelMap
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Point-of-interest marks and timers drawn by the real world renderer (bundled fonts) while the
- * point sweeps the screen: timers never land on the HUD, and a mark and its edge marker never
- * draw together (the drawn target beacon, place pips included, is whole on screen).
+ * Point-of-interest marks, names and timers drawn by the real world renderer (bundled fonts) while
+ * the point sweeps the screen: timers never land on the HUD, and a mark and its edge marker never
+ * draw together (the drawn target beacon, place pips included, is whole on screen). Offers carry
+ * their name above the timer; the collapsing orbit's label shows the seconds in the ring.
  */
 class WorldPointLabelsTest {
     private val sizes = listOf(1_440 to 810, 844 to 390, 390 to 844)
@@ -105,6 +115,105 @@ class WorldPointLabelsTest {
             assertTrue(marks > 0 && markers > 0, "the sweep crosses the hand-over at $width x $height ($marks marks, $markers markers)")
         }
     }
+
+    @Test
+    fun offersShowTheirNameAboveTheirTimer() {
+        // Anomaly.png: the offer's name (`.t-label`, the kind's color) stacked above its timer
+        // under the mark; the pair follows the timer's rules and fits in full at every text size.
+        for ((width, height) in sizes) for (language in AppLanguage.entries) for (textScale in textScales) {
+            val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr, cacheSize = 64),
+                textScale, language, HudTestFonts.typography.copy(localeList = language.localeList()))
+            for (kind in PointOfInterestKind.entries) {
+                val base = model(width, height, emptyList())
+                val name = base.content.pointsOfInterest.definition(kind).name
+                val model = base.with("pointsOfInterest" to immutableListOf(
+                    PointOfInterestProjection(kind, name, 0f, 0f, false, 31f, 0, 0f, immutableListOf(), 0f, 0f)))
+                val full = measureKkText(measurer, name.localizedContent(language), measurer.typography.labelStyle(worldLabelSp(15f)),
+                    uppercase = true)
+                assertFalse(full.isCut(), "$language $kind name at text=$textScale")
+                var pairs = 0
+                for (y in -20..(height + 20) step 29) for (x in -20..(width + 20) step 29) {
+                    scope.draw(Density(1f), LayoutDirection.Ltr, canvas, Size(width.toFloat(), height.toFloat())) {
+                        drawWorld(model, VisualFxProjection.EMPTY, x - width * 0.5f, y - height * 0.5f, measurer)
+                    }
+                    val where = "$language $kind at $width x $height text=$textScale, offer at ($x, $y)"
+                    val keepOut = WorldOverlayScratch.keepOut
+                    val names = WorldDrawProbe.rects(WorldDrawn.POINT_NAME)
+                    val timers = WorldDrawProbe.rects(WorldDrawn.POINT_TIMER)
+                    val marks = WorldDrawProbe.rects(WorldDrawn.POINT_MARK)
+                    assertEquals(timers.size, names.size, "a name with every offer timer: $where")
+                    if (names.isNotEmpty()) assertEquals(1, marks.size, "the name belongs to a drawn mark: $where")
+                    names.zip(timers).forEach { (label, timer) ->
+                        assertTrue(timer.top >= label.bottom && timer.top - label.bottom <= 6f, "name $label just above its timer $timer: $where")
+                        assertEquals(label.center.x, timer.center.x, 0.5f, "name and timer share a center: $where")
+                        assertTrue(label.onScreen(width, height) && timer.onScreen(width, height), "name $label on screen: $where")
+                        assertFalse(keepOut.intersects(label.left, label.top, label.right, label.bottom), "name $label clear of the HUD: $where")
+                        assertEquals(full.size.width.toFloat(), label.width, 0.5f, "the name in full at the board size: $where")
+                        val mark = marks.single()
+                        assertTrue(label.top >= mark.bottom || timer.bottom <= mark.top, "name and timer below or above the mark: $where")
+                        pairs++
+                    }
+                }
+                assertTrue(pairs > 50, "$language $kind at $width x $height text=$textScale draws its name in the open field ($pairs)")
+            }
+        }
+        // The name is drawn in the kind's color: gravitic for the sealed anomaly, you for the circuit.
+        listOf(PointOfInterestKind.SEALED_ANOMALY to Kk.AGravitic, PointOfInterestKind.RESONANT_CIRCUIT to KkRolePalette.Default.you)
+            .forEach { (kind, color) ->
+                val base = model(1_440, 810, emptyList())
+                val model = base.with("pointsOfInterest" to immutableListOf(PointOfInterestProjection(kind,
+                    base.content.pointsOfInterest.definition(kind).name, 0f, 0f, false, 31f, 0, 0f, immutableListOf(), 0f, 0f)))
+                val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr, cacheSize = 64),
+                    1.25f, AppLanguage.Russian, HudTestFonts.typography.copy(localeList = AppLanguage.Russian.localeList()))
+                val bitmap = ImageBitmap(1_440, 810)
+                CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(1_440f, 810f)) {
+                    drawRect(Kk.Ink)
+                    drawWorld(model, VisualFxProjection.EMPTY, 0f, 0f, measurer)
+                }
+                val box = WorldDrawProbe.rects(WorldDrawn.POINT_NAME).single()
+                val pixels = bitmap.toPixelMap(box.left.toInt(), box.top.toInt(), box.width.toInt(), box.height.toInt())
+                var painted = 0
+                for (py in 0 until pixels.height) for (px in 0 until pixels.width) if (pixels[px, py] == color) painted++
+                assertTrue(painted > 20, "$kind name painted in its color ($painted px)")
+            }
+    }
+
+    @Test
+    fun orbitLabelShowsTheSecondsInTheRing() {
+        // Anomaly.png: "5.2s" over the ring, the panel's "5.2 / 8.0 s" value, not the trial clock.
+        val base = model(1_440, 810, emptyList())
+        val required = base.content.pointsOfInterest.orbitRequiredSeconds
+        listOf(0f, 0.3f, 0.65f, 0.99f, 1f, 1.3f).forEach { progress ->
+            val tenths = orbitRingTenths(progress, required)
+            val point = orbit(progress, remaining = 14.2f)
+            assertTrue(trialProgressText(base, point, AppLanguage.English).startsWith("${tenths / 10}.${tenths % 10} / "), "EN at $progress")
+            assertTrue(trialProgressText(base, point, AppLanguage.Russian).startsWith("${tenths / 10},${tenths % 10} / "), "RU at $progress")
+        }
+        assertEquals("S", WorldStrings.secondsSuffix(AppLanguage.English))
+        assertEquals(" С", WorldStrings.secondsSuffix(AppLanguage.Russian))
+        // Rendered: the label follows the time in the ring and ignores the trial clock.
+        fun label(progress: Float, remaining: Float, box: Rect? = null): Pair<Rect, IntArray> {
+            val model = base.with("pointsOfInterest" to immutableListOf(orbit(progress, remaining)))
+            val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr, cacheSize = 64),
+                1.25f, AppLanguage.English, HudTestFonts.typography)
+            val bitmap = ImageBitmap(1_440, 810)
+            CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(1_440f, 810f)) {
+                drawRect(Kk.Ink)
+                drawWorld(model, VisualFxProjection.EMPTY, 0f, 0f, measurer)
+            }
+            val drawn = box ?: WorldDrawProbe.rects(WorldDrawn.ORBIT_LABEL).single()
+            val pixels = IntArray(drawn.width.toInt() * drawn.height.toInt())
+            bitmap.readPixels(pixels, drawn.left.toInt(), drawn.top.toInt(), drawn.width.toInt(), drawn.height.toInt())
+            return drawn to pixels
+        }
+        val (box, early) = label(0.65f, remaining = 14.2f)
+        assertTrue(early.any { it != Kk.Ink.toArgb() }, "the label is drawn")
+        assertContentEquals(early, label(0.65f, remaining = 3f, box).second, "the trial clock does not change the label")
+        assertFalse(early.contentEquals(label(0.3f, remaining = 14.2f, box).second), "the label shows the time in the ring")
+    }
+
+    private fun orbit(progress: Float, remaining: Float) = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT,
+        "Collapsing orbit", 0f, 0f, true, remaining, 0, progress, immutableListOf(), 0f, 0f)
 
     private fun sweep(width: Int, height: Int, textScale: Float, model: GameplayRenderModel, step: Int, check: (Float, Float) -> Unit) {
         for (y in -20..(height + 20) step step) for (x in -20..(width + 20) step step) {

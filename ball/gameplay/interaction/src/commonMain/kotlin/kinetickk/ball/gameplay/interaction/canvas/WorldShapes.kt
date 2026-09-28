@@ -9,6 +9,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.localization.WorldRedesignText
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
@@ -184,6 +186,9 @@ internal object WorldStrings {
     private val timers = arrayOfNulls<String>(600)
     private val distanceSuffixes = arrayOfNulls<String>(AppLanguage.entries.size)
     private val crit = arrayOfNulls<String>(AppLanguage.entries.size)
+    private val secondsSuffixes = arrayOfNulls<String>(AppLanguage.entries.size)
+    private val pointNameSources = arrayOfNulls<String>(PointOfInterestKind.entries.size * AppLanguage.entries.size)
+    private val pointNames = arrayOfNulls<String>(PointOfInterestKind.entries.size * AppLanguage.entries.size)
 
     /** Remaining time as `m:ss` (mono readout, no unit). */
     fun timer(seconds: Float): String {
@@ -199,6 +204,25 @@ internal object WorldStrings {
 
     fun crit(language: AppLanguage): String =
         crit[language.ordinal] ?: language.text(WorldRedesignText.CriticalHit).also { crit[language.ordinal] = it }
+
+    /** The constant unit after the orbit's seconds in the ring, display-cased once per language. */
+    fun secondsSuffix(language: AppLanguage): String =
+        secondsSuffixes[language.ordinal] ?: language.text(WorldRedesignText.OrbitSeconds, "").uppercase()
+            .also { secondsSuffixes[language.ordinal] = it }
+
+    /** The decimal separator before tenths. */
+    fun decimalSeparator(language: AppLanguage): String = if (language == AppLanguage.Russian) "," else "."
+
+    /** A point's content [name] in [language], resolved once per kind, language and name. */
+    fun pointName(kind: PointOfInterestKind, name: String, language: AppLanguage): String {
+        val slot = kind.ordinal * AppLanguage.entries.size + language.ordinal
+        val cached = pointNames[slot]
+        if (cached != null && pointNameSources[slot] == name) return cached
+        return name.localizedContent(language).also {
+            pointNameSources[slot] = name
+            pointNames[slot] = it
+        }
+    }
 
     private fun format(seconds: Int): String {
         val remainder = seconds % 60

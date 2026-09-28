@@ -42,7 +42,7 @@ internal fun DrawScope.drawSingularity(center: Offset, time: Float, danger: Bool
     rotate(time * spin(3.2f), center) {
         drawCircle(threat.copy(alpha = 0.7f), 27.25f, center, style = WorldStrokes.dashedThin)
     }
-    drawCircle(Kk.Ink, 13.5f, center)
+    // `.sing .r1` is a border with no background: whatever the cursor sits on stays visible inside it.
     drawCircle(threat, 13.5f, center, style = kkStroke(3f))
     drawCircle(Kk.Bone, 4f, center)
     drawRect(threat, Offset(center.x - 1f, center.y - 40f), Size(2f, 8f))
@@ -98,22 +98,6 @@ internal fun DrawScope.drawEnemy(
         EnemyType.ELITE -> drawKkIcon(KkIcon.SYSTEM_ELITE, center, enemy.radius * 1.05f, threat)
         else -> Unit
     }
-}
-
-/** Slow turns (the elite spins once per 20 s, as on the boards); ids offset the phase. */
-private fun enemyRotation(type: EnemyType, elapsed: Float, id: Int): Float {
-    val degreesPerSecond = when (type) {
-        EnemyType.DRIFTER -> 11f
-        EnemyType.SHOOTER -> -8f
-        EnemyType.CHARGER -> 6f
-        EnemyType.INTERCEPTOR -> -10f
-        EnemyType.WEAVER -> 12f
-        EnemyType.WARDEN -> -5f
-        EnemyType.SPLITTER -> 7f
-        EnemyType.ELITE -> spin(20f)
-        EnemyType.ARCHITECT -> 0f
-    }
-    return elapsed * degreesPerSecond + (id * 37 % 360)
 }
 
 /** Gameplay telegraphs keep their timing; only their look changed (threat lines and rings). */
@@ -320,7 +304,7 @@ internal fun shardTumble(heading: Float, index: Int, life: Float): Float =
 
 /**
  * The weapon totem: stacked sheared ink plates with you-color edge lines around a you-color key
- * block (`Totem.dc.html`) inside a slowly turning dashed ring. Off-screen, [drawTotemEdgeMarker]
+ * block (`Totem.dc.html`) inside a slowly turning dashed ring. Off-screen, [collectTotemEdgeMarker]
  * marks it at the screen edge with the distance.
  */
 internal fun DrawScope.drawTotem(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, textMeasurer: TextMeasurer) {
@@ -336,13 +320,17 @@ internal fun DrawScope.drawTotem(engine: GameplayRenderModel, shakeX: Float, sha
     drawTotemPlates(location, 1f, roles.you, keyBlock = true, keyIcon = true)
 }
 
-internal fun DrawScope.drawTotemEdgeMarker(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, textMeasurer: TextMeasurer) {
+/**
+ * Adds the off-screen totem to [batch], aimed from the unshaken view; [drawEdgeMarkers] draws it
+ * with the frame's other markers.
+ */
+internal fun DrawScope.collectTotemEdgeMarker(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, batch: EdgeMarkerBatch) {
     val totem = engine.totem ?: return
     val location = world(engine, totem.x, totem.y, shakeX, shakeY)
     if (isOnScreen(location, 60f)) return
     val dx = totem.x - engine.coreX
     val dy = totem.y - engine.coreY
-    drawEdgeMarker(location, sqrt(dx * dx + dy * dy), EdgeMarkerIcon.TOTEM, textMeasurer)
+    batch.add(location.x - shakeX, location.y - shakeY, sqrt(dx * dx + dy * dy), EdgeMarkerIcon.TOTEM)
 }
 
 /**

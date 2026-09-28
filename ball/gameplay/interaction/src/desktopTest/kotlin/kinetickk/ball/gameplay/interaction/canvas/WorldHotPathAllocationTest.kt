@@ -269,8 +269,12 @@ class WorldHotPathAllocationTest {
             weaponOrbitals = immutableListOf(), choices = immutableListOf(), choiceType = ChoiceType.ITEM, pendingRelicChoiceCount = 0,
             itemStacks = immutableListOf(), discoveredItemIds = immutableSetOf(), relicRanks = immutableListOf(),
             pointsOfInterest = immutableListOf(
-                PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Orbit", CORE + 60f, CORE + 40f, true, 14f, 1, 0.4f,
-                    immutableListOf(), 0.5f, 0.3f),
+                // The orbit's seconds in the ring change every frame (drawn from cached digits).
+                PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Orbit", CORE + 60f, CORE + 40f, true, 14f, 1,
+                    (drift % 80f) / 80f, immutableListOf(), 0.5f, 0.3f),
+                // An offer on screen: its name and timer under the mark.
+                PointOfInterestProjection(PointOfInterestKind.RESONANT_CIRCUIT, "Resonant circuit", CORE - 280f, CORE + 40f, false, 20f, 1, 0f,
+                    immutableListOf(), 0f, 0f),
                 PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed", CORE + 900f + drift, CORE - 300f, false, 20f, 1, 0f,
                     immutableListOf(), 0f, 0f),
             ),

@@ -12,6 +12,7 @@ import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkIcon
 import kinetickk.foundation.design.KkRebirthTiers
 import kinetickk.foundation.design.KkRolePalette
+import kotlin.math.sin
 
 /**
  * Presentation meaning of a nucleus visual color index: 0 dash/Core, 1 kill or pickup, 2 weapon
@@ -91,6 +92,47 @@ internal fun enemySilhouette(type: EnemyType): EnemySilhouette = when (type) {
 
 /** Only shooters carry the threat core dot (`HUD.dc.html`: squares with a centered dot). */
 internal fun enemyHasCoreDot(type: EnemyType): Boolean = type == EnemyType.SHOOTER
+
+/**
+ * Silhouettes that are one shape turned by 45 degrees (the shooter's square, the interceptor's
+ * diamond): they keep the board orientation and only wobble, or a turning diamond would read as a
+ * square half of the time.
+ */
+internal fun holdsBoardOrientation(silhouette: EnemySilhouette): Boolean =
+    silhouette == EnemySilhouette.SQUARE || silhouette == EnemySilhouette.DIAMOND
+
+/** Per-id lean of a [holdsBoardOrientation] silhouette, either way (the board's squares sit at 12 and -8 degrees). */
+private const val ENEMY_LEAN_DEGREES = 9
+
+/** Slow wobble of a [holdsBoardOrientation] silhouette around its lean, either way. */
+private const val ENEMY_WOBBLE_DEGREES = 3f
+
+/** Largest tilt of a [holdsBoardOrientation] silhouette: its lean plus its wobble, in degrees. */
+internal const val ENEMY_WOBBLE_MAX_DEGREES = ENEMY_LEAN_DEGREES + ENEMY_WOBBLE_DEGREES
+
+/**
+ * Enemy rotation in degrees at [elapsed] seconds (`HUD.dc.html` enemy table): the elite spins once
+ * per 20 s (SPEC 7.2); the square and the diamond keep the board orientation with a per-id lean and
+ * a slow wobble, at most [ENEMY_WOBBLE_MAX_DEGREES] either way; the other shapes read the same at
+ * any angle and turn slowly, their phase offset by the id. The Architect draws its own frames.
+ */
+internal fun enemyRotation(type: EnemyType, elapsed: Float, id: Int): Float {
+    if (holdsBoardOrientation(enemySilhouette(type))) {
+        val span = 2 * ENEMY_LEAN_DEGREES + 1
+        val lean = ((id * 37) % span + span) % span - ENEMY_LEAN_DEGREES
+        return lean + ENEMY_WOBBLE_DEGREES * sin(elapsed * 0.9f + id)
+    }
+    val degreesPerSecond = when (type) {
+        EnemyType.DRIFTER -> 11f
+        EnemyType.CHARGER -> 6f
+        EnemyType.WEAVER -> 12f
+        EnemyType.WARDEN -> -5f
+        EnemyType.SPLITTER -> 7f
+        EnemyType.ELITE -> 360f / 20f
+        EnemyType.SHOOTER, EnemyType.INTERCEPTOR, EnemyType.ARCHITECT -> 0f // held above; the Architect turns its own frames
+    }
+    return elapsed * degreesPerSecond + (id * 37 % 360)
+}
 
 /**
  * Light arena theme per rebirth tier (`tokens.json rebirthTiers`): grid tint and halftone color

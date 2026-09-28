@@ -79,6 +79,36 @@ class CosmicPresentationTest {
     }
 
     @Test
+    fun squareAndDiamondEnemiesKeepTheirBoardOrientation() {
+        // HUD.dc.html: squares at 12 and -8 degrees, the diamond at 0. A square turned 45 degrees
+        // is the diamond, so neither may spin: the shooter reads as a square and the interceptor
+        // as a diamond at any time, whatever their ids.
+        assertTrue(holdsBoardOrientation(enemySilhouette(EnemyType.SHOOTER)))
+        assertTrue(holdsBoardOrientation(enemySilhouette(EnemyType.INTERCEPTOR)))
+        for (id in 0..60) {
+            var elapsed = 0f
+            while (elapsed < 240f) {
+                val square = signedDegrees(enemyRotation(EnemyType.SHOOTER, elapsed, id))
+                val diamond = signedDegrees(enemyRotation(EnemyType.INTERCEPTOR, elapsed, id + 7))
+                assertTrue(kotlin.math.abs(square) <= ENEMY_WOBBLE_MAX_DEGREES && ENEMY_WOBBLE_MAX_DEGREES < 15f,
+                    "shooter $id at $elapsed s is turned $square degrees")
+                assertTrue(kotlin.math.abs(diamond) <= ENEMY_WOBBLE_MAX_DEGREES, "interceptor $id at $elapsed s is turned $diamond degrees")
+                // Their outlines (both squares, the diamond turned 45 degrees) stay clearly apart.
+                val apart = positiveModulo(square - (diamond + 45f), 90f).let { minOf(it, 90f - it) }
+                assertTrue(apart >= 20f, "shooter and interceptor outlines only $apart degrees apart at $elapsed s")
+                elapsed += 0.37f
+            }
+        }
+        // Only the elite keeps the slow spin (SPEC 7.2): a full turn every 20 s.
+        assertEquals(360f, enemyRotation(EnemyType.ELITE, 27f, 3) - enemyRotation(EnemyType.ELITE, 7f, 3), 0.01f)
+        // Shapes that read the same at any angle may still turn.
+        assertNotEquals(enemyRotation(EnemyType.DRIFTER, 0f, 1), enemyRotation(EnemyType.DRIFTER, 5f, 1))
+    }
+
+    /** [degrees] folded into -180..180. */
+    private fun signedDegrees(degrees: Float): Float = positiveModulo(degrees + 180f, 360f) - 180f
+
+    @Test
     fun effectColorsReadThroughTheRolePalette() {
         assertEquals(remapped.you, fxColor(0, remapped), "Dash rings are the player's")
         assertEquals(remapped.you, fxColor(3, remapped), "Ram rings are the player's")
