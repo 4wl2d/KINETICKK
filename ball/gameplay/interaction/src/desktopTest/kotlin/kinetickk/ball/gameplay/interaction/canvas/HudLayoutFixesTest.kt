@@ -325,6 +325,23 @@ class HudLayoutFixesTest {
         }
     }
 
+    /** The trial clock reads m:ss, the same string as the ring and point timers in the world ("0:15"). */
+    @Test
+    fun trialClockReadsLikeTheWorldTimers() {
+        for (language in AppLanguage.entries) sizes.forEach { (w, h) ->
+            for ((remaining, expected) in listOf(14.2f to "0:15", 75.3f to "1:16", 0.4f to "0:01")) {
+                val point = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, remaining, 0, 0.4f,
+                    immutableListOf(), 0f, 0f)
+                val model = hudTestModel(w.toFloat(), h.toFloat()).with("pointsOfInterest" to listOf(point).toImmutableList())
+                HudDrawCache.forgetLayouts()
+                draw(w, h, language, 1.25f) { measurer -> drawHud(model, measurer, 1f) }
+                val clock = assertNotNull(HudDrawCache.peekLayout(HudText.TRIAL_CLOCK)).layoutInput.text.text
+                assertEquals(expected, clock, "$language $w x $h")
+                assertEquals(WorldStrings.timer(remaining), clock, "$language $w x $h")
+            }
+        }
+    }
+
     @Test
     fun theCutCheckSeesAnEllipsisThatSkiaDoesNotReport() {
         draw(200, 100, AppLanguage.Russian) { measurer ->

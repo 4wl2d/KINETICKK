@@ -19,7 +19,6 @@ import kinetickk.ball.gameplay.interaction.layout.gameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.regularHudUnit
 import kinetickk.ball.gameplay.interaction.layout.runningHudMargin
 import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
-import kinetickk.ball.gameplay.nucleus.model.formatRunTime
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
 import kinetickk.foundation.common.localization.AppLanguage
@@ -160,7 +159,6 @@ private object TrialScratch {
     val layout = HudTrialPanelLayout()
     val label = HudKeyedText()
     val name = HudKeyedText()
-    val clock = HudNumberText { formatRunTime(it.toFloat()) }
     val progress = HudKeyedText()
     val reward = HudKeyedText()
     val rules = HudKeyedText()
@@ -192,7 +190,8 @@ internal fun DrawScope.drawTrialPanel(
     val iconSize = (if (layout.compact) 13f else 16f) * unit
     drawKkIcon(KkIcon.SYSTEM_ANOMALY, Offset(innerLeft + iconSize * 0.5f, layout.rowLabelCenter), iconSize, roles.you)
     val labelText = TrialScratch.label.of(language, 0L) { language.text(HudRedesignText.AnomalyTrial) }
-    val clockLayout = HudDrawCache.layout(HudText.TRIAL_CLOCK, text, TrialScratch.clock.of(ceil(point.remaining).toLong()),
+    // The remaining time as m:ss, the same string as the ring and point timers in the world.
+    val clockLayout = HudDrawCache.layout(HudText.TRIAL_CLOCK, text, trialClockText(point),
         measurer.typography.monoStyle(layout.monoSize))
     drawKkText(clockLayout, innerRight, layout.rowLabelCenter, Kk.Bone, KkAlign.END, KkVAlign.CENTER)
     recordLine(HudBlock.TRIAL_CLOCK, innerRight - clockLayout.size.width, layout.rowLabelCenter, clockLayout)
@@ -242,6 +241,9 @@ internal fun DrawScope.drawTrialPanel(
     drawKkText(rewardLayout, innerRight, layout.rowRewardCenter, roles.you, KkAlign.END, KkVAlign.CENTER)
     recordLine(HudBlock.TRIAL_REWARD, innerRight - rewardLayout.size.width, layout.rowRewardCenter, rewardLayout)
 }
+
+/** The trial's remaining time as `m:ss` ("0:15"), shared with the world's ring and point timers. */
+internal fun trialClockText(point: PointOfInterestProjection): String = WorldStrings.timer(point.remaining)
 
 /** Records a vertically centered one-line [layout] starting at [left] (layout tests). */
 private fun recordLine(block: HudBlock, left: Float, centerY: Float, layout: androidx.compose.ui.text.TextLayoutResult) {
