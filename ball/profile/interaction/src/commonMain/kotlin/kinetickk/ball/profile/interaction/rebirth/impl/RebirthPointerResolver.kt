@@ -8,6 +8,7 @@ import androidx.compose.ui.geometry.Rect
 import kinetickk.ball.profile.interaction.ProfileFrame
 import kinetickk.ball.profile.interaction.ProfileLayoutMode
 import kinetickk.ball.profile.interaction.profileHeaderBackRect
+import kinetickk.ball.profile.interaction.profileLayoutGrow
 import kotlin.math.max
 
 /** Board type sizes per mode (design px before the frame scale and the text-size setting). */
@@ -72,7 +73,7 @@ internal fun rebirthLayout(
 ): RebirthLayout {
     fun d(value: Float) = frame.d(value)
     val t = textScale.coerceIn(0.75f, 2f)
-    val grow = 1f + (t - 1f) * 0.6f
+    val grow = profileLayoutGrow(t, 0.6f)
     val back = profileHeaderBackRect(frame, backWidth)
     val twoDigits = targetTier >= 10
     val sectionLeft: Float

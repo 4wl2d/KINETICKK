@@ -13,6 +13,7 @@ import kinetickk.ball.profile.interaction.armory.api.ArmoryOutput
 import kinetickk.ball.profile.interaction.armory.api.ArmoryRenderModel
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.profileHeaderBackRect
+import kinetickk.ball.profile.interaction.profileLayoutGrow
 import kinetickk.foundation.collections.ImmutableList
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -193,7 +194,7 @@ internal fun armoryLayout(
     detail: ((nameWidth: Float, width: Float) -> ArmoryDetailMetrics)? = null,
 ): ArmoryLayout {
     fun d(value: Float) = frame.d(value)
-    val grow = 1f + (textScale.coerceIn(0.75f, 2f) - 1f) * 0.55f
+    val grow = profileLayoutGrow(textScale, 0.55f)
     val back = profileHeaderBackRect(frame, backWidth)
     // Room for the selected lift (−8) and echo (+7) inside the scroll viewport.
     val pad = d(12f)

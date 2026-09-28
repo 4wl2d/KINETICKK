@@ -9,6 +9,7 @@ import kinetickk.ball.profile.interaction.ProfileFrame
 import kinetickk.ball.profile.interaction.ProfileLayoutMode
 import kinetickk.ball.profile.interaction.lab.api.LabRenderModel
 import kinetickk.ball.profile.interaction.profileHeaderBackRect
+import kinetickk.ball.profile.interaction.profileLayoutGrow
 import kotlin.math.max
 import kotlin.math.min
 
@@ -96,7 +97,7 @@ internal fun labLayout(
 ): LabLayout {
     fun d(value: Float) = frame.d(value)
     val t = textScale.coerceIn(0.75f, 2f)
-    val grow = 1f + (t - 1f) * 0.55f
+    val grow = profileLayoutGrow(t, 0.55f)
     val back = profileHeaderBackRect(frame, backWidth)
     val pad = d(12f)
     val type = labType(frame.mode)

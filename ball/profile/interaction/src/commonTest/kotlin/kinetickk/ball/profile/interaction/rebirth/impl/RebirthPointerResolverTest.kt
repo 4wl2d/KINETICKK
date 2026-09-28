@@ -5,6 +5,7 @@ package kinetickk.ball.profile.interaction.rebirth.impl
 
 import kinetickk.ball.profile.interaction.ProfileLayoutMode
 import kinetickk.ball.profile.interaction.profileFrame
+import kinetickk.ball.profile.interaction.profileTextScale
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -75,6 +76,18 @@ class RebirthPointerResolverTest {
             }
             if (layout.actionPinned) assertTrue(layout.viewport.bottom <= layout.action.top, "$size")
             assertTrue(layout.cells.last().right <= layout.frame.width, "$size")
+        }
+    }
+
+    @Test
+    fun smallestTextSizeKeepsTheBoardTableRows() {
+        for ((width, height) in listOf(1440f to 810f, 844f to 390f, 390f to 844f)) {
+            val small = layout(width, height, textScale = profileTextScale(1f))
+            val default = layout(width, height, textScale = profileTextScale(1.25f))
+            val context = "$width x $height"
+            assertEquals(default.tableHeader, small.tableHeader, context)
+            assertEquals(default.hostileRows, small.hostileRows, context)
+            assertEquals(default.compensationRows, small.compensationRows, context)
         }
     }
 }

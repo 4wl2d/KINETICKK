@@ -558,6 +558,13 @@ internal const val PROFILE_SMALLEST_TEXT_SCALE = 1f / PROFILE_TEXT_BASELINE
 internal fun profileTextScale(setting: Float): Float = setting / PROFILE_TEXT_BASELINE
 
 /**
+ * Growth of text-holding geometry (rows, tiles, docks) for the board-relative text multiplier
+ * [textScale]: [rate] of the text's growth above the board size. It never goes below 1, so the
+ * smaller text of the 100 % setting keeps the board's rows and touch targets.
+ */
+internal fun profileLayoutGrow(textScale: Float, rate: Float): Float = 1f + (textScale.coerceIn(1f, 2f) - 1f) * rate
+
+/**
  * Measures [text] at [size] (sp, before the text-size setting) and shrinks it (down to
  * [minFactor]) until it fits [maxWidth] in [maxLines]; the last resort ellipsizes.
  *

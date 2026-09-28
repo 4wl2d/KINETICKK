@@ -177,4 +177,17 @@ class LabPointerResolverTest {
             assertTrue(columns.pipsLeft + widest * columns.pipWidth + (widest - 1) * columns.pipGap <= columns.pipsLeft + columns.pipsWidth + 0.01f, "$size")
         }
     }
+
+    @Test
+    fun smallestTextSizeKeepsTheBoardRowsAndTouchTargets() {
+        // Board row heights: 72 (1440x810), 40 (844x390), 64 (390x844). At 100 % text the labels
+        // shrink; the rows (the press targets) and the portrait dock keep the board's size.
+        for ((size, board) in listOf((1440f to 810f) to 72f, (844f to 390f) to 40f, (390f to 844f) to 64f)) {
+            val small = layout(size.first, size.second, profileTextScale(1f))
+            val default = layout(size.first, size.second, profileTextScale(1.25f))
+            small.rows.forEach { assertTrue(it.height >= small.frame.d(board) - 0.01f, "$size row ${it.height} < ${small.frame.d(board)}") }
+            assertEquals(default.rows, small.rows, "$size")
+            assertEquals(default.listViewport, small.listViewport, "$size")
+        }
+    }
 }
