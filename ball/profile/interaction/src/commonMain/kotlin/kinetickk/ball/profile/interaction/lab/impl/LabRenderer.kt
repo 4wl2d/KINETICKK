@@ -362,8 +362,12 @@ private fun DrawScope.drawLabRow(
                 drawProfileText(costLayout, costLeft, line1, fg, "lab.row.cost", upgrade.id, valign = KkVAlign.CENTER)
             }
         }
-        if (focused) drawRect(Kk.Bone, Offset(-density * 5f, -density * 5f), Size(size.width + density * 10f, size.height + density * 10f),
-            style = kkStroke(density * 2f))
+        if (focused) {
+            // The list's scroll bar sits right of this ring (labScrollBarX), so it never covers it.
+            val offset = density * LAB_FOCUS_RING_OFFSET
+            drawRect(Kk.Bone, Offset(-offset, -offset), Size(size.width + offset * 2f, size.height + offset * 2f),
+                style = kkStroke(density * LAB_FOCUS_RING_STROKE))
+        }
     }
 }
 

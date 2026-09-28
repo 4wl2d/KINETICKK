@@ -101,6 +101,8 @@ internal fun labLayout(
     val grow = profileLayoutGrow(t, 0.55f)
     val back = profileHeaderBackRect(frame, backWidth)
     val pad = d(LAB_LIST_PAD)
+    // Right of the rows the viewport also holds the focus ring and, beyond it, the scroll bar.
+    val rightPad = labListRightPad(frame)
     val type = labType(frame.mode)
     val listLeft: Float
     val listRight: Float
@@ -131,7 +133,9 @@ internal fun labLayout(
             detailRight = frame.right
             detailLeft = detailRight - detailWidth
             listLeft = frame.left - d(6f)
-            listRight = detailLeft - d(24f)
+            // The list viewport ends where the details' begins: at a small frame scale the rows
+            // give up the width the focus ring and the scroll bar need.
+            listRight = min(detailLeft - d(24f), detailLeft - pad - rightPad)
             listTop = frame.headerHeight + d(4f)
             listBottom = frame.height - d(4f)
             // When the value and cost columns of large text squeeze the rank pips below their
@@ -147,7 +151,9 @@ internal fun labLayout(
         ProfileLayoutMode.COMPACT_PORTRAIT -> {
             val dock = d(262f) * (1f + (grow - 1f) * 0.6f)
             listLeft = frame.left - d(4f)
-            listRight = frame.right + d(4f)
+            // The viewport ends at the screen edge: at a small frame scale the rows give up the
+            // width the focus ring and the scroll bar need.
+            listRight = min(frame.right + d(4f), frame.width - rightPad)
             listTop = frame.headerHeight
             listBottom = frame.height - dock
             rowHeight = d(64f) * grow
@@ -163,7 +169,7 @@ internal fun labLayout(
         val top = pad + index * (rowHeight + rowGap)
         Rect(pad, top, pad + rowWidth, top + rowHeight)
     }
-    val listViewport = Rect(listLeft - pad, listTop - pad, listRight + pad, max(listTop, listBottom))
+    val listViewport = Rect(listLeft - pad, listTop - pad, listRight + rightPad, max(listTop, listBottom))
     val listContentHeight = if (rowCount == 0) 0f else pad * 2f + rowCount * rowHeight + (rowCount - 1) * rowGap
     val columns = labRowColumns(frame, rowWidth, rowHeight, max(1, maxRanks), type, t, twoLines)
 
@@ -214,12 +220,31 @@ internal fun labListFade(frame: ProfileFrame): Float = frame.d(24f)
 /** Width (px) of the list's scroll bar. */
 internal fun labScrollBarWidth(frame: ProfileFrame): Float = frame.d(3f)
 
-/** Left (list viewport px) of the list's scroll bar: centred in the viewport's padding right of the rows. */
+/**
+ * Left (list viewport px) of the list's scroll bar: in the viewport's padding right of the rows,
+ * clear of a focused row's ring (drawn over by the bar otherwise) by a 2 dp gap.
+ */
 internal fun labScrollBarX(layout: LabLayout): Float =
-    layout.listViewport.width - LAB_LIST_PAD * layout.frame.unit * 0.5f - labScrollBarWidth(layout.frame) * 0.5f
+    layout.listViewport.width - labListRightPad(layout.frame) + labFocusRingOutset(layout.frame) + layout.frame.density * 2f
+
+/**
+ * The list viewport's padding right of the rows (px): [LAB_LIST_PAD], widened where the frame
+ * scale leaves it too narrow for the focus ring, the gap, the scroll bar and 1 dp beyond it.
+ */
+internal fun labListRightPad(frame: ProfileFrame): Float =
+    max(frame.d(LAB_LIST_PAD), labFocusRingOutset(frame) + frame.density * 3f + labScrollBarWidth(frame))
+
+/** How far (px) a focused row's ring reaches outside the row: its offset plus half its stroke. */
+internal fun labFocusRingOutset(frame: ProfileFrame): Float = (LAB_FOCUS_RING_OFFSET + LAB_FOCUS_RING_STROKE * 0.5f) * frame.density
 
 /** The list viewport's padding around the rows (dp at the board scale). */
 internal const val LAB_LIST_PAD = 12f
+
+/** A focused row's ring: a [LAB_FOCUS_RING_STROKE] dp bone stroke this far (dp) outside the row. */
+internal const val LAB_FOCUS_RING_OFFSET = 5f
+
+/** Stroke width (dp) of a focused row's ring. */
+internal const val LAB_FOCUS_RING_STROKE = 2f
 
 /** Rank pip height of a landscape row (dp at the board scale). */
 private const val LAB_LANDSCAPE_PIP_HEIGHT = 15f
