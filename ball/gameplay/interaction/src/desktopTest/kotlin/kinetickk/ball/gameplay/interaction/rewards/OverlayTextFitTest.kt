@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.gameplay.interaction.canvas.isCut
 import kinetickk.ball.gameplay.interaction.layout.choiceLayoutGeometry
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
@@ -115,7 +116,7 @@ class OverlayTextFitTest {
             assertEquals(3, fitted.size)
             fitted.forEach { (width, layout) ->
                 assertTrue(layout.size.width <= width + 0.5f, "${layout.layoutInput.text} fits $width")
-                for (line in 0 until layout.lineCount) assertTrue(!layout.isLineEllipsized(line), "${layout.layoutInput.text} is not cut")
+                assertTrue(!layout.isCut(), "${layout.layoutInput.text} is not cut")
             }
             assertTrue(fitted.last().second.lineCount <= 2)
         }
@@ -265,7 +266,7 @@ internal fun SemanticsNodeInteractionsProvider.assertTextFitsWithoutBreakingWord
         val layout = results.firstOrNull() ?: return@forEach
         val text = layout.layoutInput.text.text
         for (line in 0 until layout.lineCount) {
-            assertTrue(!layout.isLineEllipsized(line), "$scene: \"$text\" is cut off")
+            assertTrue(!layout.isLineEllipsized(line) && !layout.isCut(), "$scene: \"$text\" is cut off")
             if (line == layout.lineCount - 1) continue
             val end = layout.getLineEnd(line)
             if (end <= 0 || end >= text.length) continue

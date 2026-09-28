@@ -23,6 +23,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.v2.runSkikoComposeUiTest
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.MetaUpgradeId
@@ -128,7 +129,7 @@ class ProfileTextFitTest {
             val shown = layout.layoutInput.text.text
             assertFalse(layout.hasVisualOverflow, "$context ${text.role} '$shown' overflows its box: ${layout.size} in " +
                 "${layout.layoutInput.constraints} w=${layout.multiParagraph.width} h=${layout.multiParagraph.height}")
-            assertTrue((0 until layout.lineCount).none { layout.isLineEllipsized(it) }, "$context ${text.role} '$shown' is ellipsized")
+            assertFalse(layout.isCut(), "$context ${text.role} '$shown' is ellipsized")
             assertFalse(layout.breaksWord(), "$context ${text.role} '$shown' splits a word across lines")
         }
     }
@@ -352,3 +353,7 @@ class ProfileTextFitTest {
         return (max(la, lb) + 0.05f) / (minOf(la, lb) + 0.05f)
     }
 }
+
+/** Cut text: lines past its limit, or one line narrower than its natural width (Skia never reports the ellipsis itself). */
+private fun TextLayoutResult.isCut(): Boolean =
+    multiParagraph.didExceedMaxLines || (lineCount == 1 && multiParagraph.intrinsics.maxIntrinsicWidth > size.width + 0.5f)

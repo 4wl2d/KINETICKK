@@ -22,6 +22,7 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.localizedContent
+import kinetickk.ball.gameplay.interaction.canvas.isCut
 import kinetickk.foundation.common.localization.text
 import kinetickk.ball.gameplay.interaction.input.GameplayInput
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
@@ -257,8 +258,8 @@ class TerminalContentTest {
                     assertTrue(labels.size >= (if (victory) 3 else 2), "$scene draws its actions")
                     labels.forEach { (layout, room) ->
                         val text = layout.layoutInput.text.text
-                        // A single cut line reports its clamped width: its overflow flag says it was cut.
-                        assertTrue(!layout.isLineEllipsized(0) && !layout.hasVisualOverflow && layout.size.width <= room + 0.5f,
+                        // A single cut line reports its clamped width, and Skia never reports the ellipsis: compare its natural width.
+                        assertTrue(!layout.isCut() && !layout.hasVisualOverflow && layout.size.width <= room + 0.5f,
                             "$scene: \"$text\" ${layout.size.width} fits $room")
                     }
                 }

@@ -177,7 +177,7 @@ class HomeTextFitComposeTest {
                     assertTrue(width < 1_440f || scale > 1.25f, "description dropped at the reference size: $where")
                     assertTrue(layout.info(HomeInfoTarget.FORM) != null)
                 } else {
-                    assertFalse(laid.isLineEllipsized(laid.lineCount - 1) || laid.didOverflowHeight, "cut: $where")
+                    assertFalse(laid.isCut() || laid.didOverflowHeight, "cut: $where")
                     assertTrue(laid.size.width <= rect.width + 0.5f && laid.kkBoxHeight <= bottom - top + 0.01f, "too large: $where")
                 }
             }
@@ -283,7 +283,7 @@ class HomeTextFitComposeTest {
     }
 
     private fun assertWhole(layout: TextLayoutResult, what: String) {
-        assertFalse(layout.lineCount > 1 || layout.isLineEllipsized(layout.lineCount - 1) || layout.hasVisualOverflow, "truncated: $what")
+        assertFalse(layout.lineCount > 1 || layout.isCut() || layout.hasVisualOverflow, "truncated: $what")
     }
 
     private fun forMeasurers(check: (CanvasTextMeasurer, AppLanguage, Float) -> Unit) {
@@ -324,3 +324,7 @@ class HomeTextFitComposeTest {
         )
     }
 }
+
+/** Cut text: lines past its limit, or one line narrower than its natural width (Skia never reports the ellipsis itself). */
+private fun TextLayoutResult.isCut(): Boolean =
+    multiParagraph.didExceedMaxLines || (lineCount == 1 && multiParagraph.intrinsics.maxIntrinsicWidth > size.width + 0.5f)

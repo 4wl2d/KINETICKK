@@ -127,7 +127,7 @@ class PauseTextFitTest {
 private fun assertWhole(layout: TextLayoutResult, scene: String) {
     val text = layout.layoutInput.text.text
     for (line in 0 until layout.lineCount) {
-        assertTrue(!layout.isLineEllipsized(line), "$scene: \"$text\" is cut off")
+        assertTrue(!layout.isLineEllipsized(line) && !layout.isCut(), "$scene: \"$text\" is cut off")
         if (line == layout.lineCount - 1) continue
         val end = layout.getLineEnd(line)
         if (end <= 0 || end >= text.length) continue
