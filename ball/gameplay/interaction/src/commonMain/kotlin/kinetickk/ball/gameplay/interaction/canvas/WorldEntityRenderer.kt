@@ -100,22 +100,6 @@ internal fun DrawScope.drawEnemy(
     }
 }
 
-/** Slow turns (the elite spins once per 20 s, as on the boards); ids offset the phase. */
-private fun enemyRotation(type: EnemyType, elapsed: Float, id: Int): Float {
-    val degreesPerSecond = when (type) {
-        EnemyType.DRIFTER -> 11f
-        EnemyType.SHOOTER -> -8f
-        EnemyType.CHARGER -> 6f
-        EnemyType.INTERCEPTOR -> -10f
-        EnemyType.WEAVER -> 12f
-        EnemyType.WARDEN -> -5f
-        EnemyType.SPLITTER -> 7f
-        EnemyType.ELITE -> spin(20f)
-        EnemyType.ARCHITECT -> 0f
-    }
-    return elapsed * degreesPerSecond + (id * 37 % 360)
-}
-
 /** Gameplay telegraphs keep their timing; only their look changed (threat lines and rings). */
 private fun DrawScope.drawEnemyTelegraph(
     engine: GameplayRenderModel,
