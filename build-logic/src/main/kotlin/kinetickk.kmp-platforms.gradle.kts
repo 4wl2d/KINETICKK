@@ -16,6 +16,11 @@ tasks.withType<JavaCompile>().configureEach {
     targetCompatibility = "17"
 }
 
+// Desktop tests render real frames with the bundled fonts; spread their classes over up to four JVMs.
+tasks.withType<Test>().configureEach {
+    if (name == "desktopTest") maxParallelForks = Runtime.getRuntime().availableProcessors().coerceIn(1, 4)
+}
+
 kotlin {
     jvm("desktop") {
         compilerOptions {
