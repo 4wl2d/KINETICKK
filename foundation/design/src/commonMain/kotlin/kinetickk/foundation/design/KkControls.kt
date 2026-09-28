@@ -448,7 +448,10 @@ fun kkListRowSecondary(selected: Float): Color = if (selected > 0.5f) Color(0xFF
 
 /**
  * Full list row: background plus a cond 900 italic [title] (22 px) at the left and an optional
- * mono [trailing] value at the right, 18 dp padding.
+ * mono [trailing] value at the right, 18 dp padding. The title area is the row width less 36 dp
+ * of padding and, with a trailing value, that value's width plus a 14 dp gap; a title wider than
+ * that shrinks until it fits (it is never ellipsized). Rows of one list should share one fitted
+ * [titleSize] so their titles stay the same size.
  */
 fun DrawScope.drawKkListRow(
     measurer: CanvasTextMeasurer,
@@ -464,9 +467,16 @@ fun DrawScope.drawKkListRow(
     val fg = drawKkListRowBackground(bounds, measurer.roles, selected, hovered, locked, echo)
     val shift = d(KK_LIST_ROW_SELECTED_SHIFT_DP) * selected.coerceIn(0f, 1.2f)
     val trailingLayout = trailing?.let { measureKkText(measurer, it, measurer.typography.monoStyle(), uppercase = true) }
-    val titleMax = bounds.width - d(36f) - (if (trailingLayout != null) trailingLayout.size.width + d(14f) else 0f)
-    drawKkText(measurer, title, measurer.typography.condStyle(titleSize), bounds.left + d(18f) + shift, bounds.center.y, fg,
-        valign = KkVAlign.CENTER, uppercase = true, maxWidth = titleMax)
+    val titleMax = (bounds.width - d(36f) - (if (trailingLayout != null) trailingLayout.size.width + d(14f) else 0f)).coerceAtLeast(1f)
+    var size = titleSize
+    var titleLayout = measureKkText(measurer, title, measurer.typography.condStyle(size), uppercase = true)
+    // Shrink in 0.5 px steps from the proportional estimate (bounded: at most a few measurements).
+    if (titleLayout.size.width > titleMax) size = floor(titleSize * titleMax / titleLayout.size.width * 2f) / 2f
+    while (titleLayout.size.width > titleMax && size >= 1f) {
+        titleLayout = measureKkText(measurer, title, measurer.typography.condStyle(size), uppercase = true)
+        size -= 0.5f
+    }
+    drawKkText(titleLayout, bounds.left + d(18f) + shift, bounds.center.y, fg, valign = KkVAlign.CENTER)
     if (trailingLayout != null) {
         drawKkText(trailingLayout, bounds.right - d(18f) + shift, bounds.center.y, kkListRowSecondary(selected), align = KkAlign.END, valign = KkVAlign.CENTER)
     }
