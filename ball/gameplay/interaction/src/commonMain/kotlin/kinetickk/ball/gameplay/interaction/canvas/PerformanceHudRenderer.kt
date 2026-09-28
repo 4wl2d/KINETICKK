@@ -99,7 +99,7 @@ private fun DrawScope.drawCompactPerformanceHud(
     val roles = textMeasurer.roles
     val width = min(frame.u(360f), frame.width - frame.margin * 2f)
     val fontSize = 10f
-    val lineStep = fontSize * 1.35f * textMeasurer.scale * density + frame.u(2f)
+    val lineStep = fontSize * 1.35f * hudUiScale(textMeasurer.scale) * density + frame.u(2f)
     val padding = frame.u(10f)
     val height = padding * 2f + lineStep * (1 + projection.compactLines.size)
     drawPerformancePanel(frame, left, top, width, height, roles)
@@ -124,7 +124,7 @@ private fun DrawScope.drawRegularPerformanceHud(
     val roles = textMeasurer.roles
     val width = min(frame.u(640f), frame.width - frame.margin * 2f).coerceAtLeast(frame.u(180f))
     val fontSize = 11f * frame.textFactor
-    val lineStep = fontSize * 1.35f * textMeasurer.scale * density + frame.u(3f)
+    val lineStep = fontSize * 1.35f * hudUiScale(textMeasurer.scale) * density + frame.u(3f)
     val padding = frame.u(12f)
     val height = padding * 2f + lineStep * 6f
     drawPerformancePanel(frame, left, top, width, height, roles)
@@ -163,8 +163,11 @@ private fun DrawScope.drawPerformanceLine(
     maxWidth: Float,
     label: Boolean = false,
 ) {
-    val style = if (label) textMeasurer.typography.labelStyle(fontSize + 1f) else textMeasurer.typography.monoStyle(fontSize)
-    val layout = HudDrawCache.layout(slot, textMeasurer, text, style, uppercase = label, maxWidth = maxWidth)
+    // UI text: follows the text size relative to the board and shrinks to fit the panel, never cut.
+    val size = if (label) fontSize + 1f else fontSize
+    val layout = HudDrawCache.fitted(slot, HudMeasurers.ui(textMeasurer), text, size, maxWidth, uppercase = label) { fitted ->
+        if (label) textMeasurer.typography.labelStyle(fitted) else textMeasurer.typography.monoStyle(fitted)
+    }
     drawKkText(layout, x, y, color)
 }
 

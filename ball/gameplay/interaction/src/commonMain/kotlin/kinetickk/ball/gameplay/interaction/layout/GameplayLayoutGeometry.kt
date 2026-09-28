@@ -21,11 +21,17 @@ internal data class RunningControlBounds(
 /** Minimum touch/click target of every running control, in dp. */
 internal const val RUNNING_CONTROL_MIN_DP = 48f
 
+/** Width of the REGULAR Dash and Brake slabs, in reference dp. */
+internal const val REGULAR_TOUCH_BUTTON_DP = 124f
+
 /** Bottom inset of the REGULAR bottom clusters (core status, loadout), in reference dp. */
 internal const val REGULAR_HUD_BOTTOM_DP = 30f
 
-/** Height of the REGULAR bottom-right loadout block: relic row, gap, weapon slot, gap, mastery pips. */
-internal const val REGULAR_LOADOUT_HEIGHT_DP = 36f + 12f + 54f + 5f + 4f
+/**
+ * Height of the REGULAR bottom-right loadout block: synergy bracket headroom (three stacked
+ * levels), relic row, gap, weapon slot, gap, mastery pips.
+ */
+internal const val REGULAR_LOADOUT_HEIGHT_DP = 4f + 36f + 12f + 54f + 5f + 4f
 
 /**
  * REGULAR HUD unit in px per reference dp: the 1440×810 board layout at full size on ordinary
@@ -90,10 +96,11 @@ internal inline fun forEachRunningControlBounds(
             val unit = regularHudUnit(width, safeScale)
             val bottom = height - (REGULAR_HUD_BOTTOM_DP + REGULAR_LOADOUT_HEIGHT_DP + 18f) * unit
             val top = bottom - max(52f * unit, minimum)
-            val dashLeft = width - margin - max(124f * unit, minimum)
+            // Equal slabs: each fits its icon and its label at the board size in either language.
+            val dashLeft = width - margin - max(REGULAR_TOUCH_BUTTON_DP * unit, minimum)
             action(RunningControlTarget.DASH, dashLeft, top, width - margin, bottom)
             val brakeRight = dashLeft - 8f * unit
-            action(RunningControlTarget.BRAKE, brakeRight - max(108f * unit, minimum), top, brakeRight, bottom)
+            action(RunningControlTarget.BRAKE, brakeRight - max(REGULAR_TOUCH_BUTTON_DP * unit, minimum), top, brakeRight, bottom)
             val pauseX = width - margin - 20f * unit
             val pauseY = 24f * unit + 18f * unit
             action(RunningControlTarget.PAUSE, pauseX - half, pauseY - half, pauseX + half, pauseY + half)

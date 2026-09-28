@@ -143,17 +143,31 @@ private fun DrawScope.drawCursorHalo(
     }
     if (draining && low) {
         // Changes every frame while draining: cached digit layouts, placed clear of the controls.
+        // UI text (it follows the text size), in a style of its own: see [polarityLabelStyle].
+        val text = HudMeasurers.ui(measurer)
         val percent = (stability * 100f).toLong()
-        val style = measurer.typography.condStyle(26f, tabular = true)
-        val labelWidth = kkTabularNumberWidth(measurer, percent, style, suffix = PERCENT)
-        val labelHeight = measureKkText(measurer, "0", style).kkBoxHeight
+        val style = polarityLabelStyle(text)
+        val labelWidth = kkTabularNumberWidth(text, percent, style, suffix = PERCENT)
+        val labelHeight = measureKkText(text, "0", style).kkBoxHeight
         val box = PolarityLabelBox
         placePolarityLabel(cursor.x, cursor.y, radius + d(14f), labelWidth, labelHeight, size.width, size.height, density, box)
         // Solid text: animating a text's alpha repaints its paragraph every frame; the halo pulses.
-        drawKkTabularNumber(measurer, percent, style, box[0], box[1], roles.threat, suffix = PERCENT)
+        drawKkTabularNumber(text, percent, style, box[0], box[1], roles.threat, suffix = PERCENT)
         HudLayoutProbe.record(HudBlock.POLARITY_LABEL, box[0], box[1], box[2], box[3])
     }
 }
+
+/**
+ * The polarity % (threat) shares the screen with the chain count (bone / you), both drawn digit by
+ * digit. Layouts whose styles have equal layout attributes share one paragraph (the style memo and
+ * the platform's layout cache both match them), and painting a shared digit in two colors reshapes
+ * it every frame, so the % keeps its own line height, a layout attribute no chain style uses.
+ */
+internal fun polarityLabelStyle(measurer: TextMeasurer) =
+    measurer.typography.condStyle(26f, tabular = true, lineHeightEm = POLARITY_LINE_HEIGHT_EM)
+
+/** Line height of the polarity % (the chain uses [COND_LINE_HEIGHT_EM]). */
+internal const val POLARITY_LINE_HEIGHT_EM = 0.87f
 
 private const val PERCENT = "%"
 private val PolarityLabelBox = FloatArray(4)
@@ -249,7 +263,8 @@ private fun DrawScope.drawCriticalRing(roles: KkRolePalette, core: Offset, rende
 private fun DrawScope.drawOverheatStamp(measurer: TextMeasurer, core: Offset, haloRadius: Float, renderTime: Float) {
     val language = measurer.language
     val text = HudScratch.overheat.of(language, 0L) { language.text(HudRedesignText.Overheat) }
-    val layout = HudDrawCache.layout(HudText.OVERHEAT, measurer, text,
+    // UI text: follows the text size (the plate grows with it).
+    val layout = HudDrawCache.layout(HudText.OVERHEAT, HudMeasurers.ui(measurer), text,
         measurer.typography.condStyle(14f, trackingEm = 0.06f, lineHeightEm = 1f), uppercase = true)
     val alpha = 0.35f + 0.65f * (1f - kkPulse(renderTime, 1.1f, KkEase.Out))
     val k = 14f / 17f

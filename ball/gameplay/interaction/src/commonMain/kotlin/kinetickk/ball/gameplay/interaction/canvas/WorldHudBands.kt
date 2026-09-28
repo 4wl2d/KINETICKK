@@ -16,9 +16,11 @@ import kotlin.math.min
 
 /**
  * Screen regions the running HUD occupies, in px, so world labels and edge markers stay clear of
- * it. Follows the HUD layout per mode (HudRenderer, the trial panel layout and the running
- * controls) with a small padding. Recomputed only when the viewport, text size, trial or boss
- * state changes; draw-thread confined.
+ * it. The top-center column (clock, elite / Architect block), the chain, the trial panel and the
+ * running controls come from the HUD's own geometry ([HudTopGeometry], [HudFrame],
+ * [HudTrialPanelLayout], [forEachRunningControlBounds]) at the current text size, so the regions
+ * follow the HUD; the remaining clusters use their board reserves. Recomputed only when the
+ * viewport, text size, trial or boss state changes; draw-thread confined.
  */
 internal class WorldHudKeepOut {
     var count = 0
@@ -29,6 +31,7 @@ internal class WorldHudKeepOut {
         private set
     private val rects = FloatArray(MAX_RECTS * 4)
     private val trialPanel = HudTrialPanelLayout()
+    private val frame = HudFrame()
     private var keyWidth = Float.NaN
     private var keyHeight = Float.NaN
     private var keyDensity = Float.NaN
@@ -49,44 +52,63 @@ internal class WorldHudKeepOut {
         revision++
         count = 0
         val scale = density.coerceAtLeast(1f)
-        val mode = gameplayLayoutMode(width, height, scale)
-        val margin = runningHudMargin(width, height, scale)
-        val unit = if (mode == GameplayLayoutMode.REGULAR) regularHudUnit(width, scale) else scale
+        val frame = frame.update(width, height, scale)
+        val mode = frame.mode
+        val margin = frame.margin
+        val unit = frame.unit
+        val pad = 8f * unit
         val centerX = width * 0.5f
-        when (mode) {
-            GameplayLayoutMode.REGULAR -> {
-                add(0f, 0f, width, 92f * unit) // level badge and data bar, timer, chips, pause
-                if (bossPresent) add(centerX - 380f * unit, 0f, centerX + 380f * unit, 134f * unit)
-                val chainTop = max(76f * unit, min(160f * unit, height * 0.2f))
-                add(width - margin - 200f * unit, chainTop - 8f * unit, width, chainTop + 84f * unit)
-                add(0f, height - 136f * unit, margin + 360f * unit, height) // integrity, shield, dash, heat
-                add(centerX - 220f * unit, height - 136f * unit, centerX + 220f * unit, height) // speed
-            }
-            GameplayLayoutMode.COMPACT_LANDSCAPE -> {
-                add(0f, 0f, width, 58f * unit) // badge, matter, timer, chain, buttons
-                if (bossPresent) add(centerX - 170f * unit, 0f, centerX + 170f * unit, 80f * unit)
-                add(width - margin - 180f * unit, 0f, width, 124f * unit) // relics and weapon
-                add(0f, height - 84f * unit, margin + 230f * unit, height) // integrity cluster
-                add(centerX - 150f * unit, height - 84f * unit, centerX + 140f * unit, height) // speed
-            }
-            GameplayLayoutMode.COMPACT_PORTRAIT -> {
-                add(0f, 0f, width, 146f * unit) // status inset, badge, timer, chips, chain
-                add(0f, height - 252f * unit, width, height) // loadout, integrity, speed, touch buttons
-            }
-        }
-        if (trialActive) {
-            val panel = trialPanel.update(width, height, scale, textScale)
-            add(panel.left - 8f * unit, panel.top - 8f * unit, panel.right + 8f * unit, panel.bottom + 8f * unit)
-        }
         var controlsLeft = Float.POSITIVE_INFINITY
         var controlsTop = Float.POSITIVE_INFINITY
-        forEachRunningControlBounds(width, height, scale) { target, left, top, _, _ ->
+        var headerBottom = 0f
+        forEachRunningControlBounds(width, height, scale) { target, left, top, _, bottom ->
             if (target == RunningControlTarget.DASH || target == RunningControlTarget.BRAKE) {
                 controlsLeft = min(controlsLeft, left)
                 controlsTop = min(controlsTop, top)
+            } else {
+                headerBottom = max(headerBottom, bottom) // pause and performance in the top row
             }
         }
-        if (controlsLeft.isFinite()) add(controlsLeft - 8f * unit, controlsTop - 8f * unit, width, height)
+        val clockBottom = HudTopGeometry.clockTop(frame) + HudTopGeometry.clockHeight(frame)
+        when (mode) {
+            GameplayLayoutMode.REGULAR -> {
+                // Level badge (a display numeral, 38 board px) and its Data bar; chips; clock; pause.
+                val badgeBottom = 26f * unit + 38f * unit + 14f * unit
+                add(0f, 0f, width, max(max(badgeBottom, clockBottom), max(60f * unit, headerBottom)) + pad)
+                val chainTop = frame.chainTop
+                val chainBottom = chainTop + 60f * frame.textFactor * COND_LINE_HEIGHT_EM * scale + 10f * unit
+                add(width - margin - 200f * unit, chainTop - pad, width, chainBottom + pad)
+                add(0f, frame.bottomClustersTop, margin + 360f * unit, height) // integrity, shield, dash, heat
+                add(centerX - 220f * unit, frame.bottomClustersTop, centerX + 220f * unit, height) // speed
+            }
+            GameplayLayoutMode.COMPACT_LANDSCAPE -> {
+                // Badge, matter, clock, chain (a display numeral with its bar), performance and pause.
+                val chainBottom = 30f * unit + 26f * COND_LINE_HEIGHT_EM * scale * 0.5f + 5f * unit
+                add(0f, 0f, width, max(max(clockBottom, chainBottom), headerBottom) + 4f * unit)
+                // Relics (with stacked synergy brackets) and the weapon slot with its level under it.
+                val loadoutBottom = 62f * unit + 34f * unit + 4f * unit + 9f * scale * hudUiScale(textScale)
+                add(width - margin - 180f * unit, 0f, width, loadoutBottom + pad)
+                add(0f, frame.bottomClustersTop, margin + 230f * unit, height) // integrity cluster
+                add(centerX - 150f * unit, frame.bottomClustersTop, centerX + 140f * unit, height) // speed
+            }
+            GameplayLayoutMode.COMPACT_PORTRAIT -> {
+                // Status inset, badge, clock, chips and chain: the rows above the reserved boss row.
+                add(0f, 0f, width, HudTopGeometry.bossTop(frame))
+                add(0f, frame.bottomClustersTop, width, height) // loadout, integrity, speed, touch buttons
+            }
+        }
+        if (bossPresent) {
+            // The elite / Architect block under the clock (its own row on portrait phones), with the
+            // name at the current text size; whichever boss it is, both shapes are covered.
+            val half = max(HudTopGeometry.bossBarWidth(frame, architect = true), HudTopGeometry.bossBarWidth(frame, architect = false)) * 0.5f
+            val bottom = max(HudTopGeometry.bossBottom(frame, true, textScale), HudTopGeometry.bossBottom(frame, false, textScale))
+            add(max(0f, centerX - half - pad), 0f, min(width, centerX + half + pad), bottom + pad)
+        }
+        if (trialActive) {
+            val panel = trialPanel.update(width, height, scale, textScale)
+            add(panel.left - pad, panel.top - pad, panel.right + pad, panel.bottom + pad)
+        }
+        if (controlsLeft.isFinite()) add(controlsLeft - pad, controlsTop - pad, width, height)
         return this
     }
 
