@@ -32,6 +32,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.text
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -94,7 +95,18 @@ internal class OverlayFrame(
     fun y(value: Float): Dp = (top + value * scale).dp
     /** Font size for a board size, never below [min] before the text-size setting. */
     fun sp(value: Float, min: Float = 11f): Float = max(value * scale, min) * textScale
+    /** Font size of large display type (level numerals, hero figures): the text-size setting does not apply. */
+    fun display(value: Float, min: Float = 11f): Float = max(value * scale, min)
 }
+
+/**
+ * The text-size setting at which overlay text renders at the boards' reference size: the game's
+ * default (125 %). UI text follows the setting relative to it; large display type ignores it.
+ */
+internal const val OverlayReferenceTextScale = 1.25f
+
+/** Factor for UI text at the text-size [setting]: 0.8 at 100 %, 1 at the default, 1.4 at 175 %. */
+internal fun overlayUiTextScale(setting: Float): Float = setting / OverlayReferenceTextScale
 
 internal fun overlayFrame(
     widthDp: Float,
@@ -175,7 +187,8 @@ internal fun fitTextStyle(
         if (maxLines == Int.MAX_VALUE) return true
         val layout = measurer.measure(shown, candidate, softWrap = maxLines > 1, maxLines = maxLines + 1,
             constraints = Constraints(maxWidth = maxWidthPx.toInt().coerceAtLeast(1)))
-        return layout.lineCount <= maxLines && layout.size.width <= maxWidthPx
+        // A single unwrapped line reports the constrained width; its overflow flag says whether it fits.
+        return layout.lineCount <= maxLines && !layout.didOverflowWidth && layout.size.width <= maxWidthPx
     }
     var scale = 1f
     while (scale >= minScale - 0.001f) {
@@ -328,18 +341,8 @@ private fun DrawScope.drawOverlayButtonContent(
         variant == KkButtonVariant.GHOST -> Kk.Bone
         else -> Kk.Ink
     }
-    // Long localized labels shrink (to 70 %) before they would be cut.
-    val room = max(1f, bounds.width - size.paddingDp * density - (if (icon != null) size.iconDp * density + 10f * density else 0f) -
-        (count?.let { kkTagSize(measurer, it, density, 20f, 12f).width + 10f * density } ?: 0f))
-    var fittedSize = fontSize
-    var layout = measureKkText(measurer, label, measurer.typography.condStyle(fittedSize, trackingEm = 0.02f, lineHeightEm = 1f), uppercase = true)
-    while (layout.size.width > room && fittedSize > fontSize * 0.7f) {
-        fittedSize = (fittedSize - fontSize * 0.05f)
-        layout = measureKkText(measurer, label, measurer.typography.condStyle(fittedSize, trackingEm = 0.02f, lineHeightEm = 1f), uppercase = true)
-    }
-    if (layout.size.width > room) {
-        layout = measureKkText(measurer, label, measurer.typography.condStyle(fittedSize, trackingEm = 0.02f, lineHeightEm = 1f), uppercase = true, maxWidth = room)
-    }
+    val layout = overlayButtonLabel(measurer, bounds.width, label, size, fontSize, icon, count, density)
+    OverlayButtonProbe.records?.add(layout to overlayButtonLabelRoom(measurer, bounds.width, size, icon, count, density))
     val iconSize = size.iconDp * density
     val gap = 10f * density
     val countSize = count?.let { kkTagSize(measurer, it, density, 20f, 12f) }
@@ -361,6 +364,44 @@ private fun DrawScope.drawOverlayButtonContent(
             background = if (enabled) Kk.Bone else Kk.Mute2)
     }
 }
+
+/**
+ * The laid-out label of an [OverlayButton] [width] px wide: long localized labels shrink (in 5 %
+ * steps to 70 %, then exactly to the room) and are never cut.
+ */
+internal fun overlayButtonLabel(
+    measurer: CanvasTextMeasurer,
+    width: Float,
+    label: String,
+    size: KkButtonSize,
+    fontSize: Float,
+    icon: KkIcon?,
+    count: String?,
+    density: Float,
+): TextLayoutResult {
+    val room = overlayButtonLabelRoom(measurer, width, size, icon, count, density)
+    var fittedSize = fontSize
+    var layout = measureKkText(measurer, label, measurer.typography.condStyle(fittedSize, trackingEm = 0.02f, lineHeightEm = 1f), uppercase = true)
+    while (layout.size.width > room && fittedSize > fontSize * 0.7f) {
+        fittedSize = (fittedSize - fontSize * 0.05f)
+        layout = measureKkText(measurer, label, measurer.typography.condStyle(fittedSize, trackingEm = 0.02f, lineHeightEm = 1f), uppercase = true)
+    }
+    if (layout.size.width > room) {
+        fittedSize = (fittedSize * room / layout.size.width * 0.98f * 10f).toInt() / 10f
+        layout = measureKkText(measurer, label, measurer.typography.condStyle(fittedSize, trackingEm = 0.02f, lineHeightEm = 1f), uppercase = true)
+    }
+    return layout
+}
+
+/** Test probe: while [records] is set, every drawn button label is recorded with its room (px). */
+internal object OverlayButtonProbe {
+    var records: MutableList<Pair<TextLayoutResult, Float>>? = null
+}
+
+/** Width in px an [OverlayButton] label may take beside its padding, icon and count tag. */
+internal fun overlayButtonLabelRoom(measurer: CanvasTextMeasurer, width: Float, size: KkButtonSize, icon: KkIcon?, count: String?, density: Float): Float =
+    max(1f, width - size.paddingDp * density - (if (icon != null) size.iconDp * density + 10f * density else 0f) -
+        (count?.let { kkTagSize(measurer, it, density, 20f, 12f).width + 10f * density } ?: 0f))
 
 /** Natural width in px of an [OverlayButton] with [label] (for layouts that size to content). */
 internal fun overlayButtonWidth(measurer: CanvasTextMeasurer, label: String, size: KkButtonSize, density: Float, icon: KkIcon?): Float =

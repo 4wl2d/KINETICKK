@@ -9,7 +9,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -17,6 +16,7 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteractionsProvider
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performMouseInput
@@ -121,6 +121,51 @@ class OverlayTextFitTest {
         }
     }
 
+    @Test
+    fun totemDescriptionsShareOneSizeWithinTheirLineBudget() {
+        var checked = 0
+        for ((width, height) in frames) for (language in AppLanguage.entries) for (textScale in listOf(1f, 1.25f, 1.75f)) {
+            runDesktopComposeUiTest(width, height) {
+                val model = totem(language, width.toFloat(), height.toFloat(), textScale)
+                setContent {
+                    CompositionLocalProvider(LocalAppLanguage provides language, LocalDensity provides Density(1f)) {
+                        Box(Modifier.requiredSize(width.dp, height.dp)) {
+                            RewardContent(model, choiceLayoutGeometry(width.toFloat(), height.toFloat(), 1f, model.choices.size, model.choicesCanReroll),
+                                0f, true, {}, {})
+                        }
+                    }
+                }
+                mainClock.advanceTimeBy(2_000)
+                waitForIdle()
+                val scene = "totem ${width}x$height $language ${textScale}x"
+                val layouts = model.choices.indices.mapNotNull { index ->
+                    val tag = hasTestTag("kinetickk.gameplay.choice.${index + 1}.description")
+                    val nodes = onAllNodes((tag or hasAnyAncestor(tag)) and SemanticsMatcher.keyIsDefined(SemanticsActions.GetTextLayoutResult),
+                        useUnmergedTree = true).fetchSemanticsNodes()
+                    nodes.singleOrNull()?.let { node ->
+                        val results = mutableListOf<TextLayoutResult>()
+                        node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(results)
+                        results.single()
+                    }
+                }
+                if (layouts.isEmpty()) return@runDesktopComposeUiTest
+                checked++
+                assertEquals(model.choices.size, layouts.size, "$scene: every row shows its description")
+                assertEquals(1, layouts.map { it.layoutInput.style.fontSize }.distinct().size, "$scene: one description size for the list")
+                layouts.forEachIndexed { index, layout ->
+                    assertTrue(layout.lineCount <= 2, "$scene: \"${layout.layoutInput.text}\" takes ${layout.lineCount} lines")
+                    assertTrue(!layout.didOverflowHeight, "$scene: \"${layout.layoutInput.text}\" runs past the height its row leaves it")
+                    val row = onNodeWithTag("kinetickk.gameplay.choice.${index + 1}").fetchSemanticsNode().boundsInRoot
+                    val text = onAllNodes((hasTestTag("kinetickk.gameplay.choice.${index + 1}.description")), useUnmergedTree = true)
+                        .fetchSemanticsNodes().single().boundsInRoot
+                    assertTrue(text.bottom <= row.bottom + 0.5f && text.top >= row.top, "$scene: description ${index + 1} inside its row: $text in $row")
+                }
+                assertTextFitsWithoutBreakingWords(scene)
+            }
+        }
+        assertTrue(checked >= 12, "Desktop and portrait totems show descriptions ($checked scenes)")
+    }
+
     private fun forEachFrame(
         vararg scenes: (AppLanguage, Float, Float) -> GameplayRenderModel,
         check: SemanticsNodeInteractionsProvider.(Int, Int, GameplayRenderModel) -> Unit,
@@ -200,8 +245,8 @@ class OverlayTextFitTest {
             RewardStatChange("Damage: speed ≥1600", 20f, 30f, "%", sourceRelic = RelicId.KINETIC_FLYWHEEL)))),
     )
 
-    private fun totem(language: AppLanguage, width: Float, height: Float) = rewardFixtureModel(
-        choiceType = ChoiceType.TOTEM, weaponLevel = 5, directedChoice = true, language = language, width = width, height = height,
+    private fun totem(language: AppLanguage, width: Float, height: Float, textScale: Float = 1f) = rewardFixtureModel(
+        choiceType = ChoiceType.TOTEM, weaponLevel = 5, directedChoice = true, language = language, width = width, height = height, textScale = textScale,
         choices = listOf(ChoiceOption(ChoiceType.TOTEM, "Amplify Flux Wake", "", "", weaponId = WeaponId.FLUX_WAKE,
             totemAction = TotemAction.AMPLIFY_CURRENT)) + listOf(WeaponId.ARC_COIL, WeaponId.GRAVITY_MINES).map { id ->
             val weapon = rewardFixtureContent.weapon(id)
@@ -229,5 +274,3 @@ internal fun SemanticsNodeInteractionsProvider.assertTextFitsWithoutBreakingWord
         }
     }
 }
-
-private fun Rect.inflate(delta: Float) = Rect(left - delta, top - delta, right + delta, bottom + delta)

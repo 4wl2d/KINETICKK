@@ -284,15 +284,17 @@ internal fun GameplayRenderModel.rewardCardPresentation(
     } else emptyList()
     // The band already names the resulting rank; cards keep their lines for the relic's effects.
     val descriptions = buildList {
-        // Flavor and generated catalog paragraphs belong in the Codex. Offers show effects only.
+        // Flavor and generated catalog paragraphs belong in the Codex. Offers show effects only;
+        // the game's step-by-step choice descriptions ("Choose…, then…") are never shown.
         when {
-            focus != null -> add(choice.description.localizedContent(language))
+            focus != null -> add(language.text(rewardFocusEffect(choice.type)))
             item != null -> if (preview != null && preview.changes.isEmpty()) add(language.text(GameplayText.NoStatChange))
             relic != null && choice.relicAction == RelicChoiceAction.ACQUIRE && ownedRank == 0 -> add(relic.description.localizedContent(language))
             relic != null -> add(relic.rankEffect.localizedContent(language))
             choice.totemAction == TotemAction.AMPLIFY_CURRENT -> add(currentWeaponDefinition.description.localizedContent(language))
             weapon != null -> add(weapon.description.localizedContent(language))
-            else -> add(choice.description.localizedContent(language))
+            choice.totemAction == TotemAction.CHANGE_WEAPON -> add(language.text(OverlayRedesignText.ChangeWeaponEffect))
+            choice.relicAction == RelicChoiceAction.MELD -> add(language.text(OverlayRedesignText.MeldEffect))
         }
     }.filter(String::isNotBlank).distinct()
     val relicAspect = relic?.aspect
@@ -361,11 +363,18 @@ internal fun GameplayRenderModel.rewardCardPresentation(
         },
         action = action,
         relicPreview = if (choice.relicAction != null) rewardRelicPreview(choice, preview, language) else null,
-        totemRow = if (choiceType == ChoiceType.TOTEM) rewardTotemRow(choice, weapon, language) else null,
+        totemRow = if (choiceType == ChoiceType.TOTEM) rewardTotemRow(choice, weapon, descriptions.firstOrNull().orEmpty(), language) else null,
     )
 }
 
 private fun RewardFocus.relicAspect(): RelicAspect? = RelicAspect.entries.firstOrNull { it.name == name }
+
+/** What picking a focus leads to, by the directed reward's choice type (artifacts, relics, weapons). */
+private fun rewardFocusEffect(type: ChoiceType): OverlayRedesignText = when (type) {
+    ChoiceType.ITEM -> OverlayRedesignText.FocusArtifacts
+    ChoiceType.RELIC, ChoiceType.RELIC_BIND -> OverlayRedesignText.FocusRelics
+    ChoiceType.TOTEM, ChoiceType.WEAPON -> OverlayRedesignText.FocusWeapons
+}
 
 private fun RewardFocus.overlayIcon(): KkIcon = relicAspect()?.overlayIcon() ?: when (this) {
     RewardFocus.MOTION -> KkIcon.SYSTEM_DASH
@@ -447,7 +456,7 @@ private fun GameplayRenderModel.rewardRelicPreview(
                 add(RewardPreviewRow("+", language.text(OverlayRedesignText.Rank, slotRelic.rank + 1),
                     target.rankEffect.localizedContent(language), RewardTone.YOU))
             } else {
-                add(RewardPreviewRow("+", relicAction.label, choice.description.localizedContent(language), RewardTone.MUTE))
+                add(RewardPreviewRow("+", relicAction.label, language.text(OverlayRedesignText.SalvageEffect), RewardTone.MUTE))
             }
         }
         removed.forEach { link ->
@@ -499,9 +508,11 @@ private fun GameplayRenderModel.rewardRelicPreview(
     )
 }
 
+/** A totem offering row; [description] is the card's effect line (never the game's step text). */
 private fun GameplayRenderModel.rewardTotemRow(
     choice: ChoiceOption,
     weapon: WeaponDefinition?,
+    description: String,
     language: AppLanguage,
 ): RewardTotemRow {
     val mastery = { level: Int -> content.weaponMasteryForLevel(level).displayLabel.localizedContent(language) }
@@ -509,28 +520,28 @@ private fun GameplayRenderModel.rewardTotemRow(
     return when {
         focus != null -> RewardTotemRow(
             icon = focus.overlayIcon(), kind = choice.tag.localizedContent(language), kindTone = RewardTone.MUTE,
-            meta = null, name = choice.title.localizedContent(language), description = choice.description.localizedContent(language),
+            meta = null, name = choice.title.localizedContent(language), description = description,
             level = null, fromLevel = 0, toLevel = 0, mastery = null,
         )
         choice.totemAction == TotemAction.AMPLIFY_CURRENT -> RewardTotemRow(
             icon = this.weapon.overlayIcon(), kind = language.text(OverlayRedesignText.UpgradeKind), kindTone = RewardTone.MUTE,
             meta = language.text(OverlayRedesignText.Equipped), name = currentWeaponDefinition.name.localizedContent(language),
-            description = currentWeaponDefinition.description.localizedContent(language),
+            description = description,
             level = weaponLevel + 1, fromLevel = weaponLevel, toLevel = weaponLevel + 1, mastery = mastery(weaponLevel + 1),
         )
         choice.totemAction == TotemAction.CHANGE_WEAPON -> RewardTotemRow(
             icon = KkIcon.SYSTEM_REROLL, kind = language.text(OverlayRedesignText.ChangeKind), kindTone = RewardTone.YOU,
-            meta = null, name = choice.title.localizedContent(language), description = choice.description.localizedContent(language),
+            meta = null, name = choice.title.localizedContent(language), description = description,
             level = weaponLevel, fromLevel = weaponLevel, toLevel = weaponLevel, mastery = mastery(weaponLevel),
         )
         weapon != null -> RewardTotemRow(
             icon = weapon.id.overlayIcon(), kind = language.text(OverlayRedesignText.NewKind), kindTone = RewardTone.YOU,
-            meta = null, name = weapon.name.localizedContent(language), description = weapon.description.localizedContent(language),
+            meta = null, name = weapon.name.localizedContent(language), description = description,
             level = weaponLevel, fromLevel = weaponLevel, toLevel = weaponLevel, mastery = mastery(weaponLevel),
         )
         else -> RewardTotemRow(
             icon = KkIcon.SYSTEM_DATA, kind = choice.tag.localizedContent(language), kindTone = RewardTone.MUTE, meta = null,
-            name = choice.title.localizedContent(language), description = choice.description.localizedContent(language),
+            name = choice.title.localizedContent(language), description = description,
             level = null, fromLevel = 0, toLevel = 0, mastery = null,
         )
     }

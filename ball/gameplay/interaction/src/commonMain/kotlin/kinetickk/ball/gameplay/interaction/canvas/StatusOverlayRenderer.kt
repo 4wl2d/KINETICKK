@@ -33,13 +33,23 @@ internal fun DrawScope.drawPause(
     drawRect(pauseOverlayScrimColor(layout.mode))
     drawPausePanel(layout)
     val scale = layout.unit / density
-    val typography = textMeasurer.typography
-    val language = textMeasurer.language
-    val title = drawKkText(textMeasurer, language.text(GameplayText.SystemPaused), typography.wideStyle(layout.titleSize * scale, lineHeightEm = 0.85f),
-        layout.titleX, layout.titleY, Kk.Bone, uppercase = true)
-    val timer = PauseTimerMemo.text(engine.elapsed)
-    drawKkText(textMeasurer, timer, typography.wideStyle(layout.timerSize * scale, tabular = true), layout.titleX + 2f * layout.unit,
-        layout.titleY + title.kkBoxHeight + (if (layout.mode == GameplayLayoutMode.REGULAR) 14f else 6f) * layout.unit, Kk.Mute)
+    // "Paused", the frozen clock and the menu items are display type: the text-size setting does
+    // not apply to them (the build overview's UI text follows it).
+    val display = PauseMeasurers.display(textMeasurer, engine.settings.textScale)
+    val typography = display.typography
+    val language = display.language
+    val titleBox = layout.panelRight - layout.titleX
+    val titleText = language.text(GameplayText.SystemPaused)
+    var title = measureKkText(display, titleText, typography.wideStyle(layout.titleSize * scale, lineHeightEm = 0.85f), uppercase = true)
+    if (title.size.width > titleBox && title.size.width > 0) {
+        // A long localized word shrinks to the panel instead of running past its edge.
+        val fitted = (layout.titleSize * scale * titleBox / title.size.width * 0.98f * 10f).toInt() / 10f
+        title = measureKkText(display, titleText, typography.wideStyle(fitted, lineHeightEm = 0.85f), uppercase = true)
+    }
+    drawPauseText(PauseTextKind.TITLE, title, layout.titleX, layout.titleY, Kk.Bone, titleBox)
+    val timer = measureKkText(display, PauseTimerMemo.text(engine.elapsed), typography.wideStyle(layout.timerSize * scale, tabular = true))
+    drawPauseText(PauseTextKind.TIMER, timer, layout.titleX + 2f * layout.unit,
+        layout.titleY + title.kkBoxHeight + (if (layout.mode == GameplayLayoutMode.REGULAR) 14f else 6f) * layout.unit, Kk.Mute, titleBox)
     clipRect(layout.navClip.left, layout.navClip.top, layout.navClip.right, layout.navClip.bottom) {
         for (index in layout.actions.indices) {
             val action = layout.actions[index]
@@ -51,7 +61,7 @@ internal fun DrawScope.drawPause(
                 PauseTarget.EXIT -> language.text(GameplayText.ReturnHome)
             }
             drawKkMenuItem(
-                textMeasurer,
+                display,
                 left = action.bounds.left,
                 centerY = action.bounds.center.y,
                 label = label,

@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,7 +47,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
@@ -79,6 +85,7 @@ import kinetickk.foundation.design.monoStyle
 import kinetickk.foundation.design.rememberInterfaceTypography
 import kinetickk.foundation.design.wideStyle
 import kinetickk.foundation.design.withKkShear
+import kotlin.math.max
 import kotlin.math.min
 
 /** Board placement of the totem layout for one layout mode (board px, scaled by the frame). */
@@ -105,7 +112,76 @@ private class TotemSpec(
     val footerTop: Float,
     val footerHeight: Float,
     val takeWidth: Float,
-)
+) {
+    // Row interior (board px): side padding, gap between tile, text and level column.
+    val rowPadStart: Float get() = if (stacked) 14f else 30f
+    val rowPadEnd: Float get() = if (stacked) 14f else 34f
+    val rowGapX: Float get() = if (stacked) 14f else 26f
+    val levelWidth: Float get() = if (boardWidth < 1000f) 150f else 250f
+
+    /** Board width of a row's text column; landscape rows with a level keep the level column. */
+    fun textWidth(hasLevel: Boolean): Float =
+        rows.width - rowPadStart - rowPadEnd - tileWidth - rowGapX - if (!stacked && hasLevel) levelWidth + rowGapX else 0f
+}
+
+/**
+ * The description style every row of one totem screen shares: the largest size (down to half)
+ * at which each row's description fits its text column in [TotemSpec.descLines] lines without
+ * breaking inside a word.
+ */
+@Composable
+private fun rememberTotemDescriptionStyle(
+    rows: List<RewardTotemRow>,
+    spec: TotemSpec,
+    frame: OverlayFrame,
+    typography: InterfaceTypography,
+    heights: Map<Int, Float>,
+): TextStyle {
+    val measurer = rememberTextMeasurer(cacheSize = 16)
+    val density = LocalDensity.current.density
+    val base = typography.bodyStyle(frame.sp(spec.descSize, 11f))
+    // One px under the laid-out column width absorbs dp to px rounding of the row's paddings.
+    val texts = rows.mapIndexed { index, row ->
+        TotemDescriptionBox(row.description, frame.dp(spec.textWidth(row.level != null)).value * density - 1f, heights[index] ?: Float.POSITIVE_INFINITY)
+    }
+    return remember(texts, base, spec.descLines) { totemDescriptionStyle(measurer, texts, base, spec.descLines) }
+}
+
+/** A totem row's description with the width and height (px) its row gives it. */
+internal data class TotemDescriptionBox(val text: String, val width: Float, val height: Float = Float.POSITIVE_INFINITY)
+
+/**
+ * The largest [base] size (to [TotemDescriptionMinScale]) at which every text fits its box in
+ * [maxLines] lines without breaking inside a word.
+ */
+internal fun totemDescriptionStyle(measurer: TextMeasurer, texts: List<TotemDescriptionBox>, base: TextStyle, maxLines: Int): TextStyle {
+    val shown = texts.filter { it.text.isNotBlank() }
+    var scale = 1f
+    while (scale >= TotemDescriptionMinScale - 0.001f) {
+        val candidate = if (scale == 1f) base else base.copy(fontSize = base.fontSize * scale)
+        if (shown.all { box -> fitsWhole(measurer, box.text, candidate, box.width, maxLines, box.height) }) return candidate
+        scale -= 0.05f
+    }
+    // Below the floor every word still stays whole on its line (the text may take more lines).
+    return shown.fold(base.copy(fontSize = base.fontSize * TotemDescriptionMinScale)) { style, box ->
+        val fitted = fitTextStyle(measurer, box.text, style, box.width, Int.MAX_VALUE, 1f)
+        if (fitted.fontSize.value < style.fontSize.value) fitted else style
+    }
+}
+
+/** [text] fits [width] and [height] in [maxLines] lines and no single word is wider than a line. */
+private fun fitsWhole(measurer: TextMeasurer, text: String, style: TextStyle, width: Float, maxLines: Int, height: Float): Boolean {
+    val widest = text.split(' ', '\n').filter(String::isNotEmpty).maxOfOrNull { word ->
+        measurer.measure(word, style, softWrap = false, maxLines = 1).size.width
+    } ?: 0
+    if (widest > width) return false
+    val layout = measurer.measure(text, style, softWrap = true, maxLines = maxLines + 1,
+        constraints = Constraints(maxWidth = width.toInt().coerceAtLeast(1)))
+    return layout.lineCount <= maxLines && layout.size.height <= height + 0.5f
+}
+
+/** The smallest share of its size a totem description shrinks to. */
+internal const val TotemDescriptionMinScale = 0.5f
 
 private fun totemSpec(mode: GameplayLayoutMode): TotemSpec = when (mode) {
     // Totem board at 1440 x 810.
@@ -145,7 +221,7 @@ internal fun RewardTotem(state: RewardOverlayState) {
             totemTitle, typography.wideStyle(frame.sp(spec.titleSize, 12f), color = Kk.Bone),
             Modifier.offset(frame.x(spec.totem.left), frame.y(spec.totem.bottom - spec.titleSize * 1.2f))
                 .width(frame.dp(spec.totem.width)),
-            uppercase = true, align = TextAlign.Center, maxLines = 2,
+            uppercase = true, align = TextAlign.Center, maxLines = 1, minScale = 0.5f,
         )
         Row(
             Modifier.offset(frame.x(spec.headingX), frame.y(spec.headingY)),
@@ -159,7 +235,12 @@ internal fun RewardTotem(state: RewardOverlayState) {
             }
         }
         val count = presentation.cards.size.coerceAtLeast(1)
-        val rowHeight = min(spec.rowMax, (spec.rows.height - spec.rowGap * (count - 1)) / count)
+        // Rows grow with larger text while the offerings area has room for them.
+        val rowHeight = min(spec.rowMax * max(1f, state.textScale), (spec.rows.height - spec.rowGap * (count - 1)) / count)
+        // One description size for the whole list: the largest at which every row's text fits its
+        // own width in the line budget and the height its row leaves it.
+        val descriptionRoom = remember(presentation, spec.descLines) { mutableStateMapOf<Int, Float>() }
+        val descriptionStyle = rememberTotemDescriptionStyle(presentation.cards.mapNotNull { it.totemRow }, spec, frame, typography, descriptionRoom)
         Column(
             Modifier.offset(frame.x(spec.rows.left), frame.y(spec.rows.top)).width(frame.dp(spec.rows.width)),
             verticalArrangement = Arrangement.spacedBy(frame.dp(spec.rowGap)),
@@ -168,7 +249,8 @@ internal fun RewardTotem(state: RewardOverlayState) {
                 val row = card.totemRow
                 if (row != null) key(index, card.choice) {
                     TotemRow(
-                        row, index, state.selected == index, state.enabled, spec, frame, rowHeight, typography, roles,
+                        row, index, state.selected == index, state.enabled, spec, frame, rowHeight, typography, roles, descriptionStyle,
+                        onDescriptionRoom = { height -> descriptionRoom[index] = height },
                         Modifier.graphicsLayer {
                             val p = ((state.entrance() - 100f - index * 70f) / 500f).coerceIn(0f, 1f)
                             val e = KkEase.Pull.transform(p)
@@ -218,6 +300,8 @@ private fun TotemRow(
     heightBoard: Float,
     typography: InterfaceTypography,
     roles: KkRolePalette,
+    descriptionStyle: TextStyle,
+    onDescriptionRoom: (Float) -> Unit,
     modifier: Modifier,
     onPreview: () -> Unit,
     onSelect: () -> Unit,
@@ -253,9 +337,9 @@ private fun TotemRow(
     ) {
         val pad = if (spec.stacked) 12f else if (frame.scale < 0.8f) 12f else 18f
         Row(
-            Modifier.fillMaxSize().padding(start = frame.dp(if (spec.stacked) 14f else 30f), end = frame.dp(if (spec.stacked) 14f else 34f),
+            Modifier.fillMaxSize().padding(start = frame.dp(spec.rowPadStart), end = frame.dp(spec.rowPadEnd),
                 top = frame.dp(pad), bottom = frame.dp(pad)),
-            horizontalArrangement = Arrangement.spacedBy(frame.dp(if (spec.stacked) 14f else 26f)),
+            horizontalArrangement = Arrangement.spacedBy(frame.dp(spec.rowGapX)),
         ) {
             Box(
                 Modifier.width(frame.dp(spec.tileWidth)).fillMaxHeight().drawBehind {
@@ -281,18 +365,28 @@ private fun TotemRow(
                     row.meta?.let { OverlayFitText(it, typography.monoStyle(frame.sp(11f, 9f), color = fg.copy(alpha = 0.7f)), uppercase = true, maxLines = 1) }
                 }
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
-                    val nameStyle = rememberWordFitStyle(row.name, typography.condStyle(frame.sp(spec.nameSize, 18f), color = fg),
+                    // The offering name is large display type (44 px on the board): the text-size
+                    // setting does not apply, which leaves the row's height to its description.
+                    val nameStyle = rememberWordFitStyle(row.name, typography.condStyle(frame.display(spec.nameSize, 18f), color = fg),
                         constraints.maxWidth.toFloat(), wholeLine = true)
                     OverlayText(row.name, nameStyle, uppercase = true, maxLines = 1)
                 }
                 if (heightBoard * frame.scale >= 104f || spec.stacked) {
-                    OverlayFitText(row.description, typography.bodyStyle(frame.sp(spec.descSize, 11f), color = fg.copy(alpha = 0.75f)), maxLines = spec.descLines,
-                        minScale = 0.8f)
+                    // The description takes the height the row leaves it (reported for the shared size).
+                    BoxWithConstraints(
+                        Modifier.weight(1f).fillMaxWidth(),
+                        contentAlignment = if (spec.stacked) Alignment.CenterStart else Alignment.BottomStart,
+                    ) {
+                        val room = constraints.maxHeight.toFloat()
+                        LaunchedEffect(room) { onDescriptionRoom(room) }
+                        OverlayText(row.description, descriptionStyle.copy(color = fg.copy(alpha = 0.75f)),
+                            Modifier.testTag("kinetickk.gameplay.choice.${index + 1}.description"))
+                    }
                 }
                 if (spec.stacked) TotemLevel(row, selected, spec, frame, typography, roles, stacked = true)
             }
             if (!spec.stacked && row.level != null) {
-                Box(Modifier.width(frame.dp(if (spec.boardWidth < 1000f) 150f else 250f)).fillMaxHeight()) {
+                Box(Modifier.width(frame.dp(spec.levelWidth)).fillMaxHeight()) {
                     TotemLevel(row, selected, spec, frame, typography, roles, stacked = false)
                 }
             }
@@ -318,7 +412,8 @@ private fun TotemLevel(
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Bottom) {
             OverlayText(language.text(OverlayRedesignText.LevelLabel), typography.labelStyle(frame.sp(14f, 10f), color = fg.copy(alpha = 0.7f)),
                 Modifier.padding(bottom = 3.dp), uppercase = true)
-            OverlayText(level.toString(), typography.wideStyle(frame.sp(spec.levelSize, 16f), tabular = true, color = fg))
+            // The level numeral is display type: the text-size setting does not apply.
+            OverlayText(level.toString(), typography.wideStyle(frame.display(spec.levelSize, 16f), tabular = true, color = fg))
         }
     }
     val ticks: @Composable () -> Unit = {

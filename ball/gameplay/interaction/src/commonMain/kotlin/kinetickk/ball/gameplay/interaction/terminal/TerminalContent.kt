@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -28,8 +30,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -62,6 +66,8 @@ import kinetickk.ball.gameplay.interaction.rewards.OverlayStamp
 import kinetickk.ball.gameplay.interaction.rewards.OverlayTag
 import kinetickk.ball.gameplay.interaction.rewards.OverlayFitText
 import kinetickk.ball.gameplay.interaction.rewards.OverlayText
+import kinetickk.ball.gameplay.interaction.rewards.RewardScrollIndicator
+import kinetickk.ball.gameplay.interaction.rewards.overlayUiTextScale
 import kinetickk.ball.gameplay.interaction.rewards.overlayFrame
 import kinetickk.ball.gameplay.nucleus.model.formatRunTime
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
@@ -161,7 +167,7 @@ internal fun GameplayRenderModel.terminalPresentation(language: AppLanguage): Te
             stat(GameplayText.PickupsCollected, overlayGrouped(stats.pickupsCollected, language)),
             stat(GameplayText.KeysCollected, overlayGrouped(stats.keysCollected, language)),
             stat(GameplayText.ArtifactsAcquired, overlayGrouped(acquiredItemCount.toLong(), language)),
-            stat(GameplayText.LevelReached, level.toString()),
+            stat(GameplayText.LevelReached, overlayLevel(level, language)),
         ),
         rebirth = language.text(OverlayRedesignText.RebirthTag, rebirthLevel),
         form = content.coreShape(coreShape).displayName.localizedContent(language),
@@ -191,7 +197,9 @@ internal fun TerminalContent(
 /**
  * Run report (Report / Report-Defeat boards): two-line title, cause stamp, matter banked, bank
  * total, build row, the shatter illustration, Combat and Collection statistics on the skewed
- * panel (mirrored when statistics sit on the left) and the game's next actions.
+ * panel (mirrored when statistics sit on the left) and the game's next actions. [textScale] is
+ * the text-size setting: UI text renders at the board size at the default ([overlayUiTextScale]);
+ * the title and the matter figure are display type and ignore it.
  */
 @Composable
 internal fun TerminalContent(
@@ -216,7 +224,7 @@ internal fun TerminalContent(
     ) {
         val width = maxWidth.value
         val height = maxHeight.value
-        val scene = ReportScene(presentation, textScale, t, reveal, accent, roles, actionsEnabled, onInput, shatter)
+        val scene = ReportScene(presentation, overlayUiTextScale(textScale), t, reveal, accent, roles, actionsEnabled, onInput, shatter)
         when {
             width >= 820f && height >= 480f -> RegularReport(scene, statisticsOnLeft, width, height)
             width > height -> CompactReport(scene, statisticsOnLeft)
@@ -228,6 +236,7 @@ internal fun TerminalContent(
 /** What every report layout draws from: data, clock, accent and the host callback. */
 private class ReportScene(
     val presentation: TerminalPresentation,
+    /** UI text factor ([overlayUiTextScale] of the setting): 1 renders board sizes. */
     val textScale: Float,
     val t: Float,
     val reveal: Float,
@@ -255,17 +264,15 @@ private fun RegularReport(scene: ReportScene, mirrored: Boolean, widthDp: Float,
     ReportBackdrop(scene, frame, mirrored, Offset(290f, 330f), 450f, 1440f,
         frame.x(if (mirrored) 580f else 860f).value * density + (if (mirrored) -1f else 1f) * KkShape.ShearRatio * (frame.y(810f).value * density - heightDp * density))
     ReportShatterCanvas(scene, frame, Offset(shatterX, 472f), 0.8f)
-    Column(
-        Modifier.offset(frame.x(summaryLeft), frame.y(44f)).width(frame.dp(780f)).heightIn(max = frame.dp(746f))
-            .testTag("kinetickk.gameplay.results.summary")
-            .verticalScroll(rememberScrollState()),
+    ReportScrollColumn(
+        Modifier.offset(frame.x(summaryLeft), frame.y(44f)).width(frame.dp(780f)).heightIn(max = frame.dp(746f)),
+        "kinetickk.gameplay.results.summary", Kk.Ink,
     ) {
         ReportSummary(scene, frame, titleSize = 94f, matterSize = 76f, gemSize = 34f, stampSize = 20f, slotSize = 50f, relicSize = 36f)
     }
-    Column(
-        Modifier.offset(frame.x(bx(930f, 462f)), frame.y(44f)).width(frame.dp(462f)).heightIn(max = frame.dp(626f))
-            .testTag("kinetickk.gameplay.results.statistics")
-            .verticalScroll(rememberScrollState()),
+    ReportScrollColumn(
+        Modifier.offset(frame.x(bx(930f, 462f)), frame.y(44f)).width(frame.dp(462f)).heightIn(max = frame.dp(626f)),
+        "kinetickk.gameplay.results.statistics", Kk.Ink1,
     ) {
         ReportStatistics(scene, frame, rowHeight = 30f, labelSize = 15f, valueSize = 22f)
     }
@@ -290,11 +297,10 @@ private fun CompactReport(scene: ReportScene, mirrored: Boolean) {
         ReportShatterCanvas(scene, frame, Offset(if (mirrored) 740f else 360f, 250f), 0.34f)
         // The summary (title, matter, bank, build) keeps the whole left column; the next actions
         // are pinned under the statistics, as on the desktop board, so they never cover it.
-        Column(
-            Modifier.offset(x = summaryOffset).width(split).fillMaxHeight()
-                .testTag("kinetickk.gameplay.results.summary")
-                .verticalScroll(rememberScrollState())
-                .padding(start = 18.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
+        ReportScrollColumn(
+            Modifier.offset(x = summaryOffset).width(split).fillMaxHeight(),
+            "kinetickk.gameplay.results.summary", Kk.Ink,
+            PaddingValues(start = 18.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
         ) {
             ReportSummary(scene, frame, titleSize = 38f, matterSize = 34f, gemSize = 20f, stampSize = 15f, slotSize = 46f, relicSize = 28f,
                 compact = true, gapScale = 0.6f)
@@ -303,10 +309,11 @@ private fun CompactReport(scene: ReportScene, mirrored: Boolean) {
             Modifier.offset(x = if (mirrored) 0.dp else split).width(statsWidth).fillMaxHeight()
                 .padding(start = if (mirrored) 16.dp else 40.dp, end = if (mirrored) 40.dp else 16.dp, top = 14.dp, bottom = 10.dp),
         ) {
-            Column(
-                Modifier.weight(1f).fillMaxWidth()
-                    .testTag("kinetickk.gameplay.results.statistics")
-                    .verticalScroll(rememberScrollState()),
+            // Rows below the pinned actions are announced by a scroll bar and a fade (13 rows
+            // outgrow a phone's height).
+            ReportScrollColumn(
+                Modifier.weight(1f).fillMaxWidth(),
+                "kinetickk.gameplay.results.statistics", Kk.Ink1,
             ) {
                 ReportStatistics(scene, frame, rowHeight = 26f, labelSize = 13f, valueSize = 17f)
             }
@@ -324,11 +331,9 @@ private fun PortraitReport(scene: ReportScene) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val frame = overlayFrame(maxWidth.value, maxHeight.value, 390f, 844f, scene.textScale, 0.7f, 1.4f)
         ReportBackdrop(scene, frame, false, Offset(120f, 200f), 260f, 390f, null)
-        Column(
-            Modifier.fillMaxSize()
-                .testTag("kinetickk.gameplay.results.summary")
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 18.dp, vertical = 16.dp),
+        ReportScrollColumn(
+            Modifier.fillMaxSize(), "kinetickk.gameplay.results.summary", Kk.Ink,
+            PaddingValues(horizontal = 18.dp, vertical = 16.dp),
         ) {
             ReportSummary(scene, frame, titleSize = 44f, matterSize = 40f, gemSize = 22f, stampSize = 15f, slotSize = 44f, relicSize = 30f,
                 compact = true, inlineShatter = true)
@@ -342,6 +347,52 @@ private fun PortraitReport(scene: ReportScene) {
             }
         }
     }
+}
+
+/**
+ * A vertically scrolling report column ([tag] names its viewport). Whenever its content runs past
+ * the viewport, a scroll bar at the end edge and a fade into [background] at the cut edge show
+ * that more follows.
+ */
+@Composable
+private fun ReportScrollColumn(
+    modifier: Modifier,
+    tag: String,
+    background: Color,
+    padding: PaddingValues = PaddingValues(0.dp),
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val scroll = rememberScrollState()
+    Box(modifier) {
+        Column(
+            Modifier.fillMaxWidth().testTag(tag).verticalScroll(scroll).padding(padding).padding(end = ReportScrollGutter),
+            content = content,
+        )
+        if (scroll.maxValue > 0) {
+            val language = LocalAppLanguage.current
+            if (scroll.canScrollBackward) ReportFade(background, top = true, Modifier.align(Alignment.TopCenter))
+            if (scroll.canScrollForward) ReportFade(background, top = false, Modifier.align(Alignment.BottomCenter).testTag("$tag.fade"))
+            RewardScrollIndicator(
+                scroll, Kk.Bone,
+                Modifier.matchParentSize().wrapContentWidth(Alignment.End).width(3.dp).testTag("$tag.scroll"),
+                language.text(OverlayRedesignText.ScrollableReport),
+            )
+        }
+    }
+}
+
+/** Room at the end of a scrolling report column for its scroll bar. */
+private val ReportScrollGutter = 10.dp
+
+@Composable
+private fun ReportFade(background: Color, top: Boolean, modifier: Modifier) {
+    Box(
+        modifier.fillMaxWidth().height(if (top) 18.dp else 36.dp).drawWithCache {
+            val clear = background.copy(alpha = 0f)
+            val brush = if (top) Brush.verticalGradient(0f to background, 1f to clear) else Brush.verticalGradient(0f to clear, 1f to background)
+            onDrawBehind { drawRect(brush) }
+        },
+    )
 }
 
 /**
@@ -460,6 +511,8 @@ private fun ColumnScope.ReportSummary(
     val text = scene.textScale
     val k = if (compact) 1f else frame.scale
     fun sp(value: Float, min: Float = 11f) = max(value * k, min) * text
+    // The title and the matter figure are display type: the text-size setting does not apply.
+    fun display(value: Float, min: Float) = max(value * k, min)
     fun gap(value: Float): Dp = (value * k * gapScale).dp
     fun box(value: Float): Dp = (value * k).dp
     Row(
@@ -485,8 +538,8 @@ private fun ColumnScope.ReportSummary(
             transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
         },
     ) {
-        FitText(titleTop, typography.wideStyle(sp(titleSize, 24f), lineHeightEm = 0.92f, color = scene.accent))
-        FitText(titleBottom, typography.wideStyle(sp(titleSize, 24f), lineHeightEm = 0.92f, color = Kk.Bone))
+        FitText(titleTop, typography.wideStyle(display(titleSize, 24f), lineHeightEm = 0.92f, color = scene.accent))
+        FitText(titleBottom, typography.wideStyle(display(titleSize, 24f), lineHeightEm = 0.92f, color = Kk.Bone))
     }
     Spacer(Modifier.height(gap(22f)))
     val stamp = if (presentation.victory) language.text(GameplayText.ArchitectFallen) else presentation.reason
@@ -504,7 +557,7 @@ private fun ColumnScope.ReportSummary(
         OverlayText(language.text(OverlayRedesignText.MatterBanked), typography.labelStyle(sp(15f), color = Kk.Mute), uppercase = true)
         Row(Modifier.padding(top = gap(8f)), horizontalArrangement = Arrangement.spacedBy(gap(14f)), verticalAlignment = Alignment.CenterVertically) {
             Canvas(Modifier.size(box(gemSize))) { drawKkGem(center, roles.you, size.minDimension / density) }
-            OverlayText("+" + presentation.matter, typography.wideStyle(sp(matterSize, 22f), tabular = true, lineHeightEm = 0.9f, color = roles.you),
+            OverlayText("+" + presentation.matter, typography.wideStyle(display(matterSize, 22f), tabular = true, lineHeightEm = 0.9f, color = roles.you),
                 Modifier.testTag("kinetickk.gameplay.results.matter"))
         }
     }

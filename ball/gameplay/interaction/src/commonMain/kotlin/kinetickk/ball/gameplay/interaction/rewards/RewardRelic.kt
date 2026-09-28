@@ -7,6 +7,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,6 +30,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -89,6 +94,7 @@ import kinetickk.foundation.design.rememberInterfaceTypography
 import kinetickk.foundation.design.rememberKkCanvasMeasurer
 import kinetickk.foundation.design.wideStyle
 import kinetickk.ball.gameplay.interaction.canvas.OverlaySynergyLink
+import kotlin.math.max
 
 /** One synergy bracket above the relic row: stacked [level], dashed when it is a [preview]. */
 internal class RelicBracket(
@@ -232,6 +238,9 @@ internal fun RewardRelicStrip(matrix: RewardRelicMatrix, preview: RewardRelicPre
     }
 }
 
+/** The smallest share of its size the incoming relic panel's copy shrinks to. */
+private const val RelicPanelMinFit = 0.6f
+
 /** Board placement of the relic bind layout for one layout mode (board px). */
 private class RelicSpec(
     val boardWidth: Float,
@@ -346,6 +355,13 @@ private fun RelicPanel(
     val dashed = rememberDashedStroke()
     val paths = remember { KkPathCache(2) }
     val color = panel.aspect?.overlayColor() ?: roles.you
+    // The panel keeps to its board rect: at large text sizes its copy shrinks (to 60 %) until the
+    // panel fits above the relic row.
+    val scroll = rememberScrollState()
+    var fit by remember(panel, frame.scale, state.textScale) { mutableFloatStateOf(1f) }
+    LaunchedEffect(scroll.maxValue, fit) {
+        if (scroll.maxValue > 0 && fit > RelicPanelMinFit) fit = max(RelicPanelMinFit, fit - 0.05f)
+    }
     val diamond: @Composable () -> Unit = {
         Canvas(Modifier.size(frame.dp(spec.diamond)).semantics { contentDescription = panel.aspectLabel.orEmpty() }) {
             val c = center
@@ -361,7 +377,7 @@ private fun RelicPanel(
         }
     }
     val tags: @Composable () -> Unit = {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             panel.aspectLabel?.let { OverlayTag(it, background = color, foreground = Kk.Ink, textScale = state.textScale) }
             panel.rank?.let { OverlayTag(it, variant = KkTagVariant.LINE, textScale = state.textScale) }
             if (panel.isNew) OverlayTag(language.text(OverlayRedesignText.NewKind), variant = KkTagVariant.LINE, textScale = state.textScale)
@@ -369,24 +385,24 @@ private fun RelicPanel(
     }
     val text: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(frame.dp(12f))) {
-            OverlayFitText(panel.name, typography.wideStyle(frame.sp(spec.nameSize, 16f), lineHeightEm = 1f, color = Kk.Bone), uppercase = true,
+            OverlayFitText(panel.name, typography.wideStyle(frame.sp(spec.nameSize, 16f) * fit, lineHeightEm = 1f, color = Kk.Bone), uppercase = true,
                 maxLines = 2, minScale = 0.6f)
-            OverlayFitText(panel.description, typography.bodyStyle(frame.sp(spec.bodySize, 12f), color = Kk.Bone), maxLines = spec.bodyLines)
+            OverlayFitText(panel.description, typography.bodyStyle(frame.sp(spec.bodySize, 12f) * fit, color = Kk.Bone), maxLines = spec.bodyLines)
         }
     }
     val effect: @Composable () -> Unit = {
         panel.effect?.let { effect ->
             Box(Modifier.fillMaxWidth().drawBehind { drawRect(Kk.Ink2) }.padding(horizontal = frame.dp(14f).coerceAtLeast(8.dp), vertical = frame.dp(12f).coerceAtLeast(6.dp))) {
-                OverlayFitText(effect, typography.monoStyle(frame.sp(11f, 9f), color = roles.you), uppercase = true, maxLines = spec.bodyLines)
+                OverlayFitText(effect, typography.monoStyle(frame.sp(11f, 9f) * fit, color = roles.you), uppercase = true, maxLines = spec.bodyLines)
             }
         }
     }
     Column(
-        modifier.graphicsLayer {
+        modifier.heightIn(max = frame.dp(spec.panel.height)).graphicsLayer {
             val p = ((state.entrance() - 50f) / 520f).coerceIn(0f, 1f)
             alpha = (p / 0.6f).coerceIn(0f, 1f)
             translationX = -(1f - KkEase.Pull.transform(p)) * 90f * density
-        }.testTag("kinetickk.gameplay.rewards.incoming"),
+        }.testTag("kinetickk.gameplay.rewards.incoming").verticalScroll(scroll),
         verticalArrangement = Arrangement.spacedBy(frame.dp(if (spec.panelInline) 12f else 14f)),
     ) {
         if (spec.panelInline) {
