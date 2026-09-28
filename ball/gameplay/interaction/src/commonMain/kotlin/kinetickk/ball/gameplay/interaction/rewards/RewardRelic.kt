@@ -53,6 +53,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
@@ -336,9 +339,84 @@ internal fun RewardRelicBind(state: RewardOverlayState) {
             RelicPanel(panel, spec, frame, typography, state,
                 Modifier.offset(frame.x(spec.panel.left), frame.y(spec.panel.top)).width(frame.dp(spec.panel.width)))
         }
-        RelicMatrixRow(matrix, preview, replace, spec, frame, state, typography, roles)
-        RelicPreviewSide(preview, selectedCard, replace, spec, frame, state, typography, roles)
+        val slotText = rememberRelicSlotText(matrix, spec, frame, typography)
+        val placement = relicRowPlacement(spec, frame, slotText, LocalDensity.current.density)
+        RelicMatrixRow(matrix, preview, replace, spec, placement, frame, state, roles, slotText)
+        RelicPreviewSide(preview, selectedCard, replace, spec, placement, frame, state, typography, roles)
     }
+}
+
+/**
+ * The relic row's slot labels, shared by every slot: the [name] style and the height (px) of the
+ * box every name sits in, so each [rank] label below sits on one baseline; [nameWidth] (dp)
+ * leaves [RelicSlotNameGapDp] between neighbouring names.
+ */
+internal class RelicSlotText(val name: TextStyle, val nameHeight: Float, val nameWidth: Float, val rank: TextStyle, val rankHeight: Float)
+
+/**
+ * Names share the largest size (to [RelicSlotNameMinScale]) at which each fits [widthPx] in two
+ * lines without breaking a word; their box is as tall as the tallest name. Rank labels share
+ * one size that fits the same width on one line.
+ */
+internal fun relicSlotText(
+    measurer: TextMeasurer,
+    names: List<String>,
+    ranks: List<String>,
+    name: TextStyle,
+    rank: TextStyle,
+    widthPx: Float,
+    widthDp: Float,
+): RelicSlotText {
+    val shown = names.filter(String::isNotBlank).map(String::uppercase)
+    val nameStyle = sharedFitStyle(measurer, shown.map { OverlayTextBox(it, widthPx) }, name, 2, RelicSlotNameMinScale)
+    val constraints = Constraints(maxWidth = widthPx.toInt().coerceAtLeast(1))
+    val nameHeight = shown.maxOfOrNull { measurer.measure(it, nameStyle, constraints = constraints).size.height }?.toFloat() ?: 0f
+    val rankShown = ranks.filter(String::isNotBlank).map(String::uppercase)
+    val rankStyle = sharedFitStyle(measurer, rankShown.map { OverlayTextBox(it, widthPx) }, rank, 1, 0.7f)
+    val rankHeight = rankShown.maxOfOrNull { measurer.measure(it, rankStyle, softWrap = false, maxLines = 1).size.height }?.toFloat() ?: 0f
+    return RelicSlotText(nameStyle, nameHeight, widthDp, rankStyle, rankHeight)
+}
+
+@Composable
+private fun rememberRelicSlotText(matrix: RewardRelicMatrix, spec: RelicSpec, frame: OverlayFrame, typography: InterfaceTypography): RelicSlotText {
+    val measurer = rememberTextMeasurer(cacheSize = 16)
+    val density = LocalDensity.current.density
+    val column = spec.matrix.width / matrix.slots.size.coerceAtLeast(1)
+    val widthDp = column * frame.scale - RelicSlotNameGapDp
+    val name = typography.condStyle(frame.sp(spec.slotNameSize, 12f))
+    val rank = typography.monoStyle(frame.sp(11f, 9f))
+    return remember(matrix.names, matrix.ranks, name, rank, widthDp, density) {
+        // One px under the laid-out width absorbs dp to px rounding.
+        relicSlotText(measurer, matrix.names, matrix.ranks, name, rank, widthDp * density - 1f, widthDp)
+    }
+}
+
+/** Clear space (dp) every slot name keeps to its neighbours. */
+internal const val RelicSlotNameGapDp = 8f
+
+/** The smallest share of its size a slot name shrinks to before it takes a third line. */
+private const val RelicSlotNameMinScale = 0.5f
+
+/** Board px between a slot's diamond and its name (and the slot button's vertical padding). */
+private const val RelicSlotGap = 14f
+
+/** Board px the rank labels keep above the matrix bottom (the side column keeps its own gap below it). */
+private const val RelicRankClearance = 8f
+
+/**
+ * Where the relic row ends and the preview column starts (board px): the matrix grows to hold
+ * the slot row with its labels at larger text, and a preview column below it (portrait) moves
+ * down with it so the rank labels never run into its heading.
+ */
+private class RelicRowPlacement(val matrixHeight: Float, val sideTop: Float)
+
+private fun relicRowPlacement(spec: RelicSpec, frame: OverlayFrame, text: RelicSlotText, density: Float): RelicRowPlacement {
+    val labels = (text.nameHeight + 4f * density + text.rankHeight) / (frame.scale * density)
+    val rowBottom = spec.slotRowTop + spec.slotSize + RelicSlotGap + labels
+    val matrixHeight = max(spec.matrix.height, rowBottom + RelicRankClearance)
+    val sideBelow = spec.side.top >= spec.matrix.bottom
+    val sideTop = if (sideBelow) max(spec.side.top, spec.matrix.top + matrixHeight + spec.side.top - spec.matrix.bottom) else spec.side.top
+    return RelicRowPlacement(matrixHeight, sideTop)
 }
 
 @Composable
@@ -425,10 +503,11 @@ private fun RelicMatrixRow(
     preview: RewardRelicPreview?,
     replace: Boolean,
     spec: RelicSpec,
+    placement: RelicRowPlacement,
     frame: OverlayFrame,
     state: RewardOverlayState,
-    typography: InterfaceTypography,
     roles: KkRolePalette,
+    slotText: RelicSlotText,
 ) {
     val measurer = rememberKkCanvasMeasurer(state.textScale)
     val dashed = rememberDashedStroke()
@@ -438,7 +517,7 @@ private fun RelicMatrixRow(
     val brackets = remember(matrix, preview) { relicBrackets(matrix, preview) }
     Box(
         Modifier.offset(frame.x(spec.matrix.left), frame.y(spec.matrix.top))
-            .size(frame.dp(spec.matrix.width), frame.dp(spec.matrix.height))
+            .size(frame.dp(spec.matrix.width), frame.dp(placement.matrixHeight))
             .testTag("kinetickk.gameplay.rewards.matrix"),
     ) {
         Canvas(Modifier.fillMaxSize()) {
@@ -461,9 +540,9 @@ private fun RelicMatrixRow(
                     spec = spec,
                     frame = frame,
                     state = state,
-                    typography = typography,
                     roles = roles,
-                    modifier = Modifier.offset(frame.dp(column * slot), frame.dp(spec.slotRowTop - 14f))
+                    slotText = slotText,
+                    modifier = Modifier.offset(frame.dp(column * slot), frame.dp(spec.slotRowTop - RelicSlotGap))
                         .width(frame.dp(column)),
                 )
             }
@@ -483,8 +562,8 @@ private fun RelicSlotButton(
     spec: RelicSpec,
     frame: OverlayFrame,
     state: RewardOverlayState,
-    typography: InterfaceTypography,
     roles: KkRolePalette,
+    slotText: RelicSlotText,
     modifier: Modifier,
 ) {
     val language = LocalAppLanguage.current
@@ -510,8 +589,8 @@ private fun RelicSlotButton(
                 onClick = { state.onSelect(cardIndex) },
             )
     } else base.semantics { contentDescription = name }
-    Column(clickable.padding(vertical = frame.dp(14f)), horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(frame.dp(14f))) {
+    Column(clickable.padding(vertical = frame.dp(RelicSlotGap)), horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(frame.dp(RelicSlotGap))) {
         Canvas(Modifier.size(frame.dp(spec.slotSize))) {
             val c = center
             val half = size.minDimension * 0.5f * grow
@@ -533,9 +612,16 @@ private fun RelicSlotButton(
             }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            OverlayFitText(name, typography.condStyle(frame.sp(spec.slotNameSize, 12f), color = Kk.Bone), uppercase = true,
-                maxLines = 2, align = TextAlign.Center)
-            if (meta.isNotEmpty()) OverlayText(meta, typography.monoStyle(frame.sp(11f, 9f), color = Kk.Mute), uppercase = true)
+            // Every name takes the same box (one size, the tallest name's height), so the rank
+            // labels of the row sit on one baseline and names keep clear of their neighbours.
+            val density = LocalDensity.current.density
+            Box(Modifier.width(slotText.nameWidth.dp).height((slotText.nameHeight / density).dp), contentAlignment = Alignment.TopCenter) {
+                OverlayFitText(name, slotText.name.copy(color = Kk.Bone), Modifier.testTag("kinetickk.gameplay.rewards.slot-name"),
+                    uppercase = true, maxLines = 2, align = TextAlign.Center)
+            }
+            if (meta.isNotEmpty()) {
+                OverlayText(meta, slotText.rank.copy(color = Kk.Mute), Modifier.testTag("kinetickk.gameplay.rewards.slot-rank"), uppercase = true)
+            }
         }
     }
 }
@@ -546,6 +632,7 @@ private fun RelicPreviewSide(
     selectedCard: RewardCardPresentation?,
     replace: Boolean,
     spec: RelicSpec,
+    placement: RelicRowPlacement,
     frame: OverlayFrame,
     state: RewardOverlayState,
     typography: InterfaceTypography,
@@ -556,8 +643,8 @@ private fun RelicPreviewSide(
     val primaryLabel = preview?.primaryLabel ?: fallback?.primaryLabel.orEmpty()
     val threat = replace && (selectedCard?.action?.tone ?: RewardTone.THREAT) == RewardTone.THREAT
     Column(
-        Modifier.offset(frame.x(spec.side.left), frame.y(spec.side.top)).width(frame.dp(spec.side.width))
-            .heightIn(max = frame.dp(spec.side.height))
+        Modifier.offset(frame.x(spec.side.left), frame.y(placement.sideTop)).width(frame.dp(spec.side.width))
+            .heightIn(max = frame.dp(spec.side.bottom - placement.sideTop))
             .graphicsLayer {
                 val p = ((state.entrance() - 100f) / 520f).coerceIn(0f, 1f)
                 alpha = (p / 0.6f).coerceIn(0f, 1f)

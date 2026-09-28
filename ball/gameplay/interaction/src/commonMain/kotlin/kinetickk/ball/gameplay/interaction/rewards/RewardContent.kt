@@ -37,12 +37,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -51,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -70,6 +72,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
@@ -80,7 +83,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.text
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.gameplay.interaction.canvas.choiceOverlayScrimColor
@@ -268,6 +273,9 @@ private fun RewardCardDeal(state: RewardOverlayState) {
         RewardRelicStrip(matrix, preview, state, Modifier.overlayBounds(relicStripBounds(layout, state.screenWidth, density)))
     }
     val count = presentation.cards.size
+    // One body size for the deal: the smallest size step any card needs to show its text whole.
+    val bodyFits = remember(presentation.cards, layout.cards) { mutableStateMapOf<Int, Float>() }
+    val bodyFit = bodyFits.values.minOrNull() ?: 1f
     presentation.cards.forEachIndexed { index, card ->
         val bounds = layout.cards.getOrNull(index)
         if (bounds != null) key(index, card.choice) {
@@ -294,6 +302,8 @@ private fun RewardCardDeal(state: RewardOverlayState) {
                 selected = selected,
                 time = state.time,
                 burst = { (state.entrance() - 120f - index * KkDeal.STAGGER_MS - 450f) / 1_000f },
+                bodyFit = bodyFit,
+                onBodyFit = { fit -> if (bodyFits[index] != fit) bodyFits[index] = fit },
                 onPreview = { active -> if (active) state.onSelected(index) },
                 onSelect = { state.onSelect(index) },
             )
@@ -432,6 +442,8 @@ internal fun RewardCard(
     selected: Boolean = false,
     time: State<Float>? = null,
     burst: () -> Float = { -1f },
+    bodyFit: Float = 1f,
+    onBodyFit: (Float) -> Unit = {},
     onSelect: () -> Unit,
 ) {
     val language = LocalAppLanguage.current
@@ -473,7 +485,6 @@ internal fun RewardCard(
         // lays a soft-edged patch of the card face under each text row, so effects fade out under
         // the text instead of being cut at a hard edge (a cut spark would read as an arrowhead).
         val plates = if (presentation.rank >= 4) remember { RewardFacePlates() } else null
-        val face = if (selection > 0.5f) Kk.Ink3 else Kk.Ink2
         val paths = remember { KkPathCache(1) }
         // The rarity band is card chrome of a fixed height: its labels follow the text size up to
         // the default and no further, so the two labels never collide or get cut.
@@ -482,6 +493,8 @@ internal fun RewardCard(
             drawRewardCardFace(bandMeasurer, presentation, accent, clock.value, selection, burst())
             if (plates != null) {
                 scrollState.value
+                // The face color follows the selection in the draw phase: hovering never recomposes the body.
+                val face = if (selection > 0.5f) Kk.Ink3 else Kk.Ink2
                 drawRewardFacePlates(plates, paths.slab(0, Rect(Offset.Zero, size), RewardCardCutDp.dp.toPx(), KkSlabKind.SLAB), face)
             }
         }
@@ -500,53 +513,52 @@ internal fun RewardCard(
         val bodyBottom = spec.dp(if (spec.compact) 12f else 20f)
         val bodyHeight = (maxHeight - bodyTop - bodyBottom - footerHeight).coerceAtLeast(24.dp)
         val start = spec.dp(if (spec.compact) 24f else 34f)
-        // The body shrinks (to 72 %) until its content fits; only longer text scrolls.
-        var fit by remember(presentation, maxWidth, maxHeight, textScale) { mutableFloatStateOf(1f) }
-        val overflow = scrollState.maxValue
-        LaunchedEffect(overflow, fit) {
-            if (overflow > 0 && fit > RewardCardMinFit) fit = max(RewardCardMinFit, fit - 0.07f)
-        }
-        val font = spec.font * fit
+        // The body takes the largest size step at which its content fits, measured before it is
+        // shown; only text longer than the last step scrolls. Cards dealt together share the
+        // smallest step any of them needs ([bodyFit]).
+        val end = spec.dp(if (spec.compact) 26f else 36f)
+        val gap = spec.dp(if (spec.compact) 3f else 6f)
         // Phone cards show the numbers; the paragraph returns when a card has no stat changes.
         val descriptions = if (spec.compact && presentation.changes.isNotEmpty()) emptyList() else presentation.descriptions
-        Box(Modifier.offset(y = bodyTop).fillMaxWidth().height(bodyHeight).onPlaced { plates?.viewport = it }) {
-            Column(
-                Modifier.fillMaxSize().testTag("kinetickk.gameplay.choice.${index + 1}.text")
-                    .verticalScroll(scrollState, enabled = enabled)
-                    .padding(start = start, end = spec.dp(if (spec.compact) 26f else 36f)),
-                verticalArrangement = Arrangement.spacedBy(spec.dp(if (spec.compact) 3f else 6f) * fit),
-            ) {
+        val body: @Composable (Float, Modifier, RewardFacePlates?) -> Unit = { fit, bodyModifier, rowPlates ->
+            val font = spec.font * fit
+            Column(bodyModifier.padding(start = start, end = end), verticalArrangement = Arrangement.spacedBy(gap * fit)) {
                 RewardCardName(presentation.title, presentation.rank, typography, (if (spec.compact) 26f else 40f) * font, clock)
-                if (narrow) presentation.bandEnd?.let { end ->
-                    OverlayText(end, typography.monoStyle(10f * font, color = Kk.Mute), uppercase = true)
+                if (narrow) presentation.bandEnd?.let { bandEnd ->
+                    OverlayText(bandEnd, typography.monoStyle(10f * font, color = Kk.Mute), uppercase = true)
                 }
                 if (!spec.compact) presentation.family?.let { family ->
                     OverlayFitText(family, typography.monoStyle(11f * font, color = Kk.Mute), uppercase = true, maxLines = 2)
                 }
                 Spacer(Modifier.height(spec.dp(if (spec.compact) 4f else 16f) * fit))
                 presentation.changes.forEachIndexed { line, change ->
-                    RewardStatLine(change, line == 0, accent, spec.compact, font, typography, roles, Modifier.facePlate(plates, "stat$line"))
+                    RewardStatLine(change, line == 0, accent, spec.compact, font, typography, roles, Modifier.facePlate(rowPlates, "stat$line"))
                 }
                 descriptions.forEachIndexed { line, description ->
                     OverlayText(description, typography.bodyStyle((if (spec.compact) 13f else 14f) * font, color = Kk.Mute),
-                        Modifier.fillMaxWidth().facePlate(plates, "description$line"))
+                        Modifier.fillMaxWidth().facePlate(rowPlates, "description$line"))
                 }
+            }
+        }
+        val probe = rememberTextMeasurer(cacheSize = 16)
+        // Int.MAX_VALUE until the body is first measured.
+        val overflows = scrollState.maxValue in 1 until Int.MAX_VALUE
+        Box(Modifier.offset(y = bodyTop).fillMaxWidth().height(bodyHeight).onPlaced { plates?.viewport = it }) {
+            val steps = remember(textScale) { rewardCardFitSteps(textScale) }
+            RewardCardFitLayout(steps, bodyFit, probe, onBodyFit, Modifier.fillMaxSize(), probeContent = { fit -> body(fit, Modifier, null) }) { fit ->
+                body(
+                    fit,
+                    Modifier.fillMaxSize().testTag("kinetickk.gameplay.choice.${index + 1}.text")
+                        // Longer text fades out at the bottom of the text column itself: nothing is
+                        // painted over the card, so its rarity glow, border and effects stay whole.
+                        .then(if (overflows) Modifier.rewardScrollFade(scrollState, spec.dp(18f)) else Modifier)
+                        .verticalScroll(scrollState, enabled = enabled),
+                    plates,
+                )
             }
             RewardScrollIndicator(scrollState, accent, Modifier.align(Alignment.CenterEnd)
                 .padding(end = spec.dp(if (spec.compact) 14f else 18f)).fillMaxHeight().width(3.dp)
                 .testTag("kinetickk.gameplay.choice.${index + 1}.scroll"))
-            if (scrollState.canScrollForward) {
-                // Longer text fades into the card instead of stopping mid-glyph at the edge; the
-                // band also fades out below the edge, so the card effects meet it softly.
-                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(spec.dp(18f)).drawBehind {
-                    val below = RewardPlateFadeDp.dp.toPx()
-                    drawRect(Brush.verticalGradient(0f to face.copy(alpha = 0f), 1f to face), size = size)
-                    drawRect(
-                        Brush.verticalGradient(*softEdgeStops(face), startY = size.height, endY = size.height + below),
-                        Offset(0f, size.height), Size(size.width, below),
-                    )
-                })
-            }
         }
         if (hasFooter) {
             // The outcome tag stays pinned at the bottom of the card, outside the scrolling body.
@@ -611,6 +623,10 @@ private fun RewardCardName(text: String, rank: Int, typography: InterfaceTypogra
 
 @Composable
 private fun RewardCardNameText(text: String, rank: Int, style: androidx.compose.ui.text.TextStyle, time: State<Float>) {
+    LocalOverlayTextProbe.current?.let { probe ->
+        OverlayProbeText(probe, text.uppercase(), style, Modifier)
+        return
+    }
     when (rank.coerceIn(1, 5)) {
         5 -> BasicText(
             text.uppercase(),
@@ -815,8 +831,74 @@ internal fun DrawScope.drawSoftRect(core: Rect, color: Color, fade: Float) {
     drawRect(Brush.radialGradient(*stops, center = core.bottomRight, radius = fade), core.bottomRight, Size(fade, fade))
 }
 
-/** The smallest share of its font size a card body shrinks to before its text scrolls. */
+/** The smallest share of its font size a card body shrinks to at the default text size before its text scrolls. */
 internal const val RewardCardMinFit = 0.72f
+
+/**
+ * The size steps a card body tries, largest first: down to [RewardCardMinFit], and at a larger
+ * text setting ([textScale] above the default) further down to the size the smallest setting
+ * (100 %) gives it, so a long text still shows whole on a desktop card.
+ */
+internal fun rewardCardFitSteps(textScale: Float): FloatArray {
+    val floor = min(RewardCardMinFit, RewardCardSmallestTextScale / textScale)
+    return FloatArray(((1f - floor) / RewardCardFitStep + 0.001f).toInt() + 1) { 1f - it * RewardCardFitStep }
+}
+
+private const val RewardCardFitStep = 0.07f
+
+/** The UI text factor of the smallest text setting (100 % against the 125 % default). */
+private const val RewardCardSmallestTextScale = 0.8f
+
+private object RewardCardBodySlot
+
+/**
+ * Lays out a card body at the largest of [steps] whose [probeContent] (the same body, measured
+ * only) fits the height, capped by [cap] (the deal's shared step). Reports the step this card
+ * needs through [onFit].
+ */
+@Composable
+private fun RewardCardFitLayout(
+    steps: FloatArray,
+    cap: Float,
+    probe: TextMeasurer,
+    onFit: (Float) -> Unit,
+    modifier: Modifier,
+    probeContent: @Composable (Float) -> Unit,
+    content: @Composable (Float) -> Unit,
+) {
+    SubcomposeLayout(modifier) { constraints ->
+        var need = steps.last()
+        val width = Constraints.fixedWidth(constraints.maxWidth)
+        for (step in steps) {
+            val height = subcompose(step) { CompositionLocalProvider(LocalOverlayTextProbe provides probe) { probeContent(step) } }
+                .maxOfOrNull { it.measure(width).height } ?: 0
+            if (height <= constraints.maxHeight) {
+                need = step
+                break
+            }
+        }
+        onFit(need)
+        val fit = min(need, cap)
+        val placeables = subcompose(RewardCardBodySlot) { content(fit) }.map { it.measure(constraints) }
+        layout(constraints.maxWidth, constraints.maxHeight) { placeables.forEach { it.place(0, 0) } }
+    }
+}
+
+/**
+ * Fades the bottom [height] of a scrolling text column out while more text follows below. It
+ * masks the text layer only, so nothing is painted over the card under it.
+ */
+private fun Modifier.rewardScrollFade(scrollState: ScrollState, height: Dp): Modifier =
+    graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen).drawWithContent {
+        drawContent()
+        if (scrollState.canScrollForward) {
+            val fade = height.toPx()
+            drawRect(
+                Brush.verticalGradient(0f to Color.Black, 1f to Color.Transparent, startY = size.height - fade, endY = size.height),
+                blendMode = BlendMode.DstIn,
+            )
+        }
+    }
 
 /** What the lifted card touches, grouped by reason (Improves, Synergy, …) as tag rows. */
 @Composable
