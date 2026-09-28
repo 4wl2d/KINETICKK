@@ -19,16 +19,21 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.localizedContent
+import kinetickk.ball.gameplay.interaction.canvas.overlayIcon
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.localization.OverlayRedesignText
 import kinetickk.ball.gameplay.interaction.rewards.OverlayButtonProbe
+import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureContent
 import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureModel
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.foundation.common.localization.AppLanguage
@@ -168,6 +173,53 @@ class ReportLayoutFixesTest {
                 assertTrue(firstEnd - first >= 7, "$scene: a glyph at least 7 px wide leads the tag (${firstEnd - first} px)")
                 assertTrue(next - firstEnd >= 4, "$scene: the glyph stands apart from the name, as the icon does (${next - firstEnd} px gap)")
             }
+        }
+    }
+
+    @Test
+    fun headerTagsKeepTheirWholePlatesInsideTheColumn() {
+        for ((width, height) in frames) for (language in AppLanguage.entries) for (longest in listOf(false, true)) {
+            // The fixture's Circle at rebirth 3, and the longest form name at a two-digit rebirth.
+            val base = rewardFixtureModel(phase = GamePhase.GAME_OVER, relics = relics, language = language, rebirthLevel = if (longest) 12 else 3)
+                .terminalPresentation(language)
+            val shape = if (longest) CoreShape.entries.maxBy { rewardFixtureContent.coreShape(it).displayName.localizedContent(language).length } else null
+            val presentation = if (shape == null) base
+                else base.copy(form = rewardFixtureContent.coreShape(shape).displayName.localizedContent(language), formIcon = shape.overlayIcon())
+            val rebirthText = requireNotNull(presentation.rebirth)
+            val rebirthWidths = listOf(1f, 1.25f, 1.75f).map { textScale ->
+                val scene = "report ${width}x$height $language ${textScale}x \"$rebirthText\" \"${presentation.form}\""
+                var rebirthWidth = 0f
+                runDesktopComposeUiTest(width, height) {
+                    setContent {
+                        CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides language) {
+                            Box(Modifier.requiredSize(width.dp, height.dp)) { TerminalContent(presentation, textScale, false, 3f, true) {} }
+                        }
+                    }
+                    val column = onNodeWithTag("kinetickk.gameplay.results.summary", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+                    val rebirth = onNodeWithText(rebirthText, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+                    val form = onNodeWithTag("kinetickk.gameplay.results.form", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+                    rebirthWidth = rebirth.width
+                    assertTrue(rebirth.right <= form.left, "$scene: the rebirth tag ($rebirth) comes before the form tag ($form)")
+                    assertTrue(form.right <= column.right, "$scene: the form tag ($form) stays inside the column ($column)")
+                    // Every bone pixel after the rebirth tag (the form icon and name) lies inside the
+                    // form tag's sheared outline (6 px shear); the column's scroll bar is left out.
+                    val pixels = onRoot().captureToImage().toPixelMap()
+                    var ink = 0
+                    for (y in form.top.toInt() until form.bottom.toInt()) for (x in rebirth.right.toInt() + 1 until column.right.toInt() - 4) {
+                        if (!isBone(pixels[x, y])) continue
+                        ink++
+                        val down = (y + 0.5f - form.top) / form.height
+                        val left = form.left + 6f * (1f - down)
+                        val right = form.right - 6f * down
+                        assertTrue(x + 0.5f >= left - 1f && x + 0.5f <= right + 1f,
+                            "$scene: the form tag's ink at ($x, $y) lies outside its outline ${left}..$right (tag $form)")
+                    }
+                    assertTrue(ink > 20, "$scene: the form tag's icon and name are drawn ($ink px)")
+                }
+                rebirthWidth
+            }
+            assertTrue(rebirthWidths[0] <= rebirthWidths[1] && rebirthWidths[1] <= rebirthWidths[2],
+                "report ${width}x$height $language \"$rebirthText\": the header tags grow with the text size ($rebirthWidths)")
         }
     }
 

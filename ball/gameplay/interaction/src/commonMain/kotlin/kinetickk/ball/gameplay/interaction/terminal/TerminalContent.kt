@@ -33,6 +33,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -522,15 +523,7 @@ private fun ColumnScope.ReportSummary(
     fun box(value: Float): Dp = (value * k).dp
     // The header, title and stamp sit above the inline shatter, whose halo and debris reach past
     // its own box (portrait).
-    Row(
-        Modifier.zIndex(1f).enter(scene, 0f, left = true),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        OverlayText(language.text(GameplayText.RunRecord), typography.labelStyle(sp(15f), color = Kk.Mute), uppercase = true)
-        presentation.rebirth?.let { OverlayTag(it, variant = KkTagVariant.LINE, textScale = text) }
-        presentation.form?.let { ReportFormTag(it, presentation.formIcon, text) }
-    }
+    ReportHeader(scene, sp(15f), Modifier.zIndex(1f).enter(scene, 0f, left = true))
     Spacer(Modifier.height(gap(18f)))
     val titleTop = language.text(if (presentation.victory) OverlayRedesignText.VictoryTitleTop else OverlayRedesignText.DefeatTitleTop)
     val titleBottom = language.text(if (presentation.victory) OverlayRedesignText.VictoryTitleBottom else OverlayRedesignText.DefeatTitleBottom)
@@ -614,6 +607,73 @@ private fun ColumnScope.ReportSummary(
 }
 
 /**
+ * The header row: the "Run report" label, then the rebirth and form tags on one line, as on the
+ * board. When the three outgrow the column (Russian at a large text size on a phone) they shrink
+ * together by one factor, so the last tag keeps its whole plate instead of being clamped to the
+ * width left over, with its name running past the outline.
+ */
+@Composable
+private fun ReportHeader(scene: ReportScene, labelSize: Float, modifier: Modifier) {
+    val presentation = scene.presentation
+    val label = LocalAppLanguage.current.text(GameplayText.RunRecord)
+    val typography = rememberInterfaceTypography()
+    val measurer = rememberKkCanvasMeasurer(scene.textScale)
+    val labels = rememberTextMeasurer(cacheSize = 4)
+    val density = LocalDensity.current.density
+    BoxWithConstraints(modifier) {
+        val available = constraints.maxWidth.toFloat()
+        val rebirth = presentation.rebirth
+        val form = presentation.form
+        val formIcon = presentation.formIcon
+        val fit = remember(label, labelSize, rebirth, form, formIcon, typography, measurer, density, available) {
+            val gaps = ReportHeaderGapDp * density * listOfNotNull(rebirth, form).size
+            reportSharedFit(available) { factor ->
+                val scaled = CanvasTextMeasurer(measurer.delegate, measurer.scale * factor, measurer.language, measurer.typography, measurer.roles)
+                val shown = labels.measure(label.uppercase(), typography.labelStyle(labelSize * factor), softWrap = false, maxLines = 1)
+                // One px per plate guards against rounding it to whole pixels.
+                gaps + shown.size.width +
+                    (rebirth?.let { kkTagSize(scaled, it, density).width + 1f } ?: 0f) +
+                    (form?.let { reportFormTagSize(scaled, it, formIcon, density).width + 1f } ?: 0f)
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(ReportHeaderGapDp.dp), verticalAlignment = Alignment.CenterVertically) {
+            OverlayText(label, typography.labelStyle(labelSize * fit, color = Kk.Mute), uppercase = true)
+            rebirth?.let { OverlayTag(it, variant = KkTagVariant.LINE, textScale = scene.textScale * fit) }
+            form?.let { ReportFormTag(it, formIcon, scene.textScale * fit) }
+        }
+    }
+}
+
+private const val ReportHeaderGapDp = 10f
+
+/**
+ * The largest factor, at most 1, at which a row that must share one line fits [available]:
+ * [width] gives the row's width at a factor. Found by bisection, down to 0.4.
+ */
+private fun reportSharedFit(available: Float, width: (Float) -> Float): Float {
+    if (width(1f) <= available) return 1f
+    var fits = 0.4f
+    var over = 1f
+    repeat(8) {
+        val middle = (fits + over) * 0.5f
+        if (width(middle) <= available) fits = middle else over = middle
+    }
+    return fits
+}
+
+/** Size in px of [ReportFormTag]: the line tag's plate, widened by the form icon and its gap. */
+private fun reportFormTagSize(measurer: CanvasTextMeasurer, text: String, icon: KkIcon?, density: Float): Size {
+    val plate = kkTagSize(measurer, text, density)
+    return if (icon == null) plate else Size(plate.width + formTagLead(measurer.scale, density), plate.height)
+}
+
+/** Icon size in px of the form tag at [textScale]: it follows the label's size. */
+private fun formTagIconPx(textScale: Float, density: Float): Float = FormTagFontSp * FormTagIconEm * textScale * density
+
+/** Width in px the form icon and its gap add before the tag's text plate. */
+private fun formTagLead(textScale: Float, density: Float): Float = formTagIconPx(textScale, density) + FormTagIconGapDp * density
+
+/**
  * The Core form's line tag with the form icon before its name (Report board "■ Ram"; the pause
  * chip draws the same icon). The icon follows the label's size, 6 dp before the text as on the
  * board; the plate is the line tag's, widened by the icon.
@@ -626,11 +686,11 @@ private fun ReportFormTag(text: String, icon: KkIcon?, textScale: Float) {
     }
     val measurer = rememberKkCanvasMeasurer(textScale)
     val density = LocalDensity.current.density
-    val plate = remember(measurer, text, density) { kkTagSize(measurer, text, density) }
-    val iconPx = FormTagFontSp * FormTagIconEm * textScale * density
-    val lead = iconPx + FormTagIconGapDp * density
+    val tag = remember(measurer, text, icon, density) { reportFormTagSize(measurer, text, icon, density) }
+    val iconPx = formTagIconPx(textScale, density)
+    val lead = formTagLead(textScale, density)
     Box(
-        Modifier.size(((plate.width + lead) / density).dp, (plate.height / density).dp).testTag("kinetickk.gameplay.results.form")
+        Modifier.size((tag.width / density).dp, (tag.height / density).dp).testTag("kinetickk.gameplay.results.form")
             .semantics { this.text = AnnotatedString(text) }
             .drawWithCache {
                 val inset = 0.75f * density
