@@ -69,6 +69,13 @@ class PauseTextFitTest {
             val labels = records.filter { it.kind == PauseTextKind.STAT_LABEL }
             // One list, one type size.
             assertEquals(1, labels.map { it.layout.layoutInput.style.fontSize }.distinct().size, "$scene: stat labels share one size")
+            // One row of run panels, one label size and one value size (a long total such as
+            // "184,3 тыс." gets its panel the room it needs instead of shrinking alone).
+            for (kind in listOf(PauseTextKind.RUN_LABEL, PauseTextKind.RUN_VALUE)) {
+                val sizes = records.filter { it.kind == kind }.map { it.layout.layoutInput.style.fontSize.value }
+                assertTrue(sizes.size >= 4, "$scene draws the run panels")
+                assertEquals(1, sizes.distinct().size, "$scene: run panel ${kind.name} share one size: $sizes")
+            }
             val columns = labels.map { it.rect.left }.distinct().size
             when (layout.mode) {
                 GameplayLayoutMode.COMPACT_PORTRAIT -> {
@@ -79,6 +86,18 @@ class PauseTextFitTest {
                 GameplayLayoutMode.COMPACT_LANDSCAPE -> assertEquals(2, columns, "$scene: phone landscape keeps two stat columns")
                 GameplayLayoutMode.REGULAR -> assertEquals(1, columns, "$scene: the desktop stats column")
             }
+        }
+    }
+
+    @Test
+    fun statLabelsNeverShrinkWhenTheTextSizeGrows() {
+        fun labelSize(records: List<PauseTextRecord>) =
+            records.first { it.kind == PauseTextKind.STAT_LABEL }.layout.layoutInput.style.fontSize.value
+        for ((width, height) in frames) for (language in AppLanguage.entries) {
+            val sizes = listOf(1f, 1.25f, 1.75f).map { labelSize(drawPause(width, height, language, it)) }
+            val scene = "pause ${width}x$height $language"
+            assertTrue(sizes[1] >= sizes[0] - 0.01f, "$scene: stat labels at 125 % (${sizes[1]}) are not smaller than at 100 % (${sizes[0]})")
+            assertTrue(sizes[2] >= sizes[1] - 0.01f, "$scene: stat labels at 175 % (${sizes[2]}) are not smaller than at 125 % (${sizes[1]})")
         }
     }
 

@@ -282,7 +282,7 @@ private fun DrawScope.drawRegularBuild(
     // Stats column.
     val statsLeft = column + 20f
     drawPauseLabel(overview.statsLabel, ui, 15f * k, x(statsLeft), y(58f), column * unit)
-    drawStatRows(overview.stats, ui, area, unit, statsLeft, 83f, 29f, 1, column, 10f, 20f * k, 15f * k)
+    drawStatRows(overview.stats, ui, display, area, unit, statsLeft, 83f, 29f, 1, column, 10f, 20f * k, 15f * k)
     // Run statistics.
     val runTop = 83f + overview.stats.size * 29f + 20f
     drawPauseLabel(overview.runLabel, ui, 15f * k, x(0f), y(runTop), width * unit)
@@ -345,7 +345,7 @@ private fun DrawScope.drawCompactBuild(
     val runHeight = 44f * maxOf(1f, ui.scale)
     val room = area.height / unit - statsTop - 12f - runHeight
     val rowHeight = minOf(maxOf(26f, 26f * ui.scale), room / rows).coerceAtLeast(26f)
-    drawStatRows(shown, ui, area, unit, 0f, statsTop, rowHeight, columns, column, 8f, 18f * k, 14f * k)
+    drawStatRows(shown, ui, display, area, unit, 0f, statsTop, rowHeight, columns, column, 8f, 18f * k, 14f * k)
     val runTop = statsTop + rows * rowHeight + 12f
     drawRunPanels(overview.compactRun, ui, x(0f), y(runTop), width * unit, 5f * unit, runHeight * unit, 4, k, 8f, 15f)
 }
@@ -397,10 +397,14 @@ private fun DrawScope.buildTagsWidth(
         kkTagSize(ui, overview.form, density, tagHeight, fontSize).width + tagHeight * density * 0.8f
 }
 
-/** One list of build stats: labels share one fitted size; values right-aligned in their column. */
+/**
+ * One list of build stats: labels share one fitted size; values right-aligned in their column
+ * ([PauseStatFit]). [base] measures at the default text size.
+ */
 private fun DrawScope.drawStatRows(
     stats: List<OverlayStat>,
     ui: CanvasTextMeasurer,
+    base: CanvasTextMeasurer,
     area: Rect,
     unit: Float,
     firstLeft: Float,
@@ -415,23 +419,108 @@ private fun DrawScope.drawStatRows(
     fun x(v: Float) = area.left + v * unit
     fun y(v: Float) = area.top + v * unit
     val roles = ui.roles
-    var shared = 1f
-    for (index in stats.indices) {
-        val value = fitOverlayText(ui, stats[index].value, KkTextRole.COND, valueSize, column * unit * 0.45f, tabular = true)
-        val fitted = fitOverlayText(ui, stats[index].label, KkTextRole.BODY, labelSize, column * unit - value.size.width - valueGap * unit)
-        shared = minOf(shared, fitted.layoutInput.style.fontSize.value / (labelSize * ui.scale))
-    }
+    val fit = PauseStatFit.of(stats, ui, base, column * unit, valueGap * unit, valueSize, labelSize)
     for (index in stats.indices) {
         val stat = stats[index]
         val left = firstLeft + if (index % columns == 0) 0f else column + 20f
         val bottom = y(top + (index / columns + 1) * rowHeight)
-        val value = fitOverlayText(ui, stat.value, KkTextRole.COND, valueSize, column * unit * 0.45f, tabular = true)
+        val value = fit.value(index)
         drawPauseText(PauseTextKind.STAT_VALUE, value, x(left + column), bottom - 6f * unit, if (stat.highlight) roles.you else Kk.Bone,
-            column * unit * 0.45f, KkAlign.END, KkVAlign.BASELINE)
-        val labelRoom = column * unit - value.size.width - valueGap * unit
-        drawPauseText(PauseTextKind.STAT_LABEL, fitOverlayText(ui, stat.label, KkTextRole.BODY, labelSize * shared, labelRoom),
-            x(left), bottom - 6f * unit, Kk.Bone, labelRoom, valign = KkVAlign.BASELINE)
+            fit.valueBox(index), KkAlign.END, KkVAlign.BASELINE)
+        drawPauseText(PauseTextKind.STAT_LABEL, fit.label(index), x(left), bottom - 6f * unit, Kk.Bone,
+            column * unit - value.size.width - valueGap * unit, valign = KkVAlign.BASELINE)
         drawRect(Kk.Line, Offset(x(left), bottom - unit), Size(column * unit, unit))
+    }
+}
+
+/**
+ * The fitted rows of the last drawn stat list (a paused frame redraws the same list every frame,
+ * so they are fitted once). At the default text size and below, values fit 45 % of the column
+ * and the labels shrink together to the rest. Above the default, labels and values grow together
+ * from the default fit only as far as every row allows, so a larger setting never leaves a label
+ * smaller than the default did (long Russian labels in a phone's two columns).
+ */
+private object PauseStatFit {
+    private var stats: List<OverlayStat>? = null
+    private var ui: CanvasTextMeasurer? = null
+    private var base: CanvasTextMeasurer? = null
+    private val key = FloatArray(4) { Float.NaN }
+    private var labels = arrayOfNulls<TextLayoutResult>(0)
+    private var values = arrayOfNulls<TextLayoutResult>(0)
+    private var valueBoxes = FloatArray(0)
+
+    fun label(index: Int): TextLayoutResult = requireNotNull(labels[index])
+    fun value(index: Int): TextLayoutResult = requireNotNull(values[index])
+    fun valueBox(index: Int): Float = valueBoxes[index]
+
+    fun of(
+        stats: List<OverlayStat>,
+        ui: CanvasTextMeasurer,
+        base: CanvasTextMeasurer,
+        column: Float,
+        gap: Float,
+        valueSize: Float,
+        labelSize: Float,
+    ): PauseStatFit {
+        if (this.stats === stats && this.ui === ui && this.base === base && key[0] == column && key[1] == gap &&
+            key[2] == valueSize && key[3] == labelSize
+        ) return this
+        this.stats = stats
+        this.ui = ui
+        this.base = base
+        key[0] = column
+        key[1] = gap
+        key[2] = valueSize
+        key[3] = labelSize
+        fit(stats, if (ui.scale <= 1f) ui else base, column, gap, valueSize, labelSize)
+        if (ui.scale > 1f) grow(stats, base, ui.scale, column, gap)
+        return this
+    }
+
+    private fun fit(stats: List<OverlayStat>, measurer: CanvasTextMeasurer, column: Float, gap: Float, valueSize: Float, labelSize: Float) {
+        labels = arrayOfNulls(stats.size)
+        values = arrayOfNulls(stats.size)
+        valueBoxes = FloatArray(stats.size) { column * 0.45f }
+        var shared = 1f
+        for (index in stats.indices) {
+            val value = fitOverlayText(measurer, stats[index].value, KkTextRole.COND, valueSize, column * 0.45f, tabular = true)
+            values[index] = value
+            val fitted = fitOverlayText(measurer, stats[index].label, KkTextRole.BODY, labelSize, column - value.size.width - gap)
+            shared = minOf(shared, fitted.layoutInput.style.fontSize.value / (labelSize * measurer.scale))
+        }
+        for (index in stats.indices) {
+            labels[index] = fitOverlayText(measurer, stats[index].label, KkTextRole.BODY, labelSize * shared,
+                column - value(index).size.width - gap)
+        }
+    }
+
+    /** Grows the default fit (measured by [base], scale 1) by up to [limit], in 5 % steps. */
+    private fun grow(stats: List<OverlayStat>, base: CanvasTextMeasurer, limit: Float, column: Float, gap: Float) {
+        val labelFont = label(0).layoutInput.style.fontSize.value
+        val valueFonts = FloatArray(stats.size) { value(it).layoutInput.style.fontSize.value }
+        val grownLabels = arrayOfNulls<TextLayoutResult>(stats.size)
+        val grownValues = arrayOfNulls<TextLayoutResult>(stats.size)
+        var growth = limit
+        while (growth > 1.001f) {
+            var fits = true
+            for (index in stats.indices) {
+                val label = measureKkText(base, stats[index].label, base.typography.kkStyle(KkTextRole.BODY, labelFont * growth))
+                val value = measureKkText(base, stats[index].value, base.typography.kkStyle(KkTextRole.COND, valueFonts[index] * growth, tabular = true))
+                if (label.size.width + gap + value.size.width > column) {
+                    fits = false
+                    break
+                }
+                grownLabels[index] = label
+                grownValues[index] = value
+            }
+            if (fits) {
+                labels = grownLabels
+                values = grownValues
+                for (index in stats.indices) valueBoxes[index] = column - gap - label(index).size.width
+                return
+            }
+            growth = maxOf(1f, growth - 0.05f)
+        }
     }
 }
 
@@ -497,6 +586,10 @@ private fun DrawScope.drawPauseRelics(overview: PauseBuildOverview, firstCenterX
     return firstCenterX + (overview.relics.size - 1) * pitch + half
 }
 
+/**
+ * Run statistic panels in one row ([PauseRunFit]): labels share one fitted size, as do values;
+ * panels are equal unless a value or label needs more room.
+ */
 private fun DrawScope.drawRunPanels(
     run: List<PauseRunStat>,
     measurer: CanvasTextMeasurer,
@@ -511,18 +604,116 @@ private fun DrawScope.drawRunPanels(
     valueSize: Float,
 ) {
     val roles = measurer.roles
-    val cell = (width - gap * (columns - 1)) / columns
-    for (index in 0 until minOf(columns, run.size)) {
+    val pad = 10f * k * density
+    val fit = PauseRunFit.of(run, measurer, width, gap, pad, minOf(columns, run.size), labelSize * k, valueSize * k)
+    var x = left
+    for (index in 0 until fit.count) {
         val stat = run[index]
-        val x = left + index * (cell + gap)
+        val cell = fit.width(index)
         drawRect(Kk.Ink2, Offset(x, top), Size(cell, height))
-        val pad = 10f * k * density
         val room = cell - pad * 2f
-        drawPauseText(PauseTextKind.RUN_LABEL, fitOverlayText(measurer, stat.label, KkTextRole.MONO, labelSize * k, room, uppercase = true, minScale = 0.65f),
-            x + pad, top + pad * 0.9f, Kk.Mute, room)
-        // Long localized totals ("184,3 тыс.") shrink to the panel instead of being cut.
-        drawPauseText(PauseTextKind.RUN_VALUE, fitOverlayText(measurer, stat.value, KkTextRole.WIDE, valueSize * k, room, tabular = true, minScale = 0.3f),
-            x + pad, top + height - pad * 0.9f, runColor(stat.tone, roles), room, valign = KkVAlign.BASELINE)
+        drawPauseText(PauseTextKind.RUN_LABEL, fit.label(index), x + pad, top + pad * 0.9f, Kk.Mute, room)
+        drawPauseText(PauseTextKind.RUN_VALUE, fit.value(index), x + pad, top + height - pad * 0.9f, runColor(stat.tone, roles), room,
+            valign = KkVAlign.BASELINE)
+        x += cell + gap
+    }
+}
+
+/**
+ * The fitted run panels of the last drawn row. Panels share the row equally while every label and
+ * value fits its panel; a panel whose text needs more (a long Russian total such as "184,3 тыс.",
+ * "Лучшая серия" at a large text size) widens and the others give way evenly
+ * ([overlayRowWidths]). Labels then share one fitted size and values another, so no panel's text
+ * is smaller than its neighbours'.
+ */
+private object PauseRunFit {
+    private var run: List<PauseRunStat>? = null
+    private var measurer: CanvasTextMeasurer? = null
+    private val key = FloatArray(5) { Float.NaN }
+    var count = 0
+        private set
+    private var widths = FloatArray(0)
+    private var labels = arrayOfNulls<TextLayoutResult>(0)
+    private var values = arrayOfNulls<TextLayoutResult>(0)
+
+    fun width(index: Int): Float = widths[index]
+    fun label(index: Int): TextLayoutResult = requireNotNull(labels[index])
+    fun value(index: Int): TextLayoutResult = requireNotNull(values[index])
+
+    fun of(run: List<PauseRunStat>, measurer: CanvasTextMeasurer, width: Float, gap: Float, pad: Float, count: Int, labelSize: Float, valueSize: Float): PauseRunFit {
+        if (this.run === run && this.measurer === measurer && this.count == count && key[0] == width && key[1] == gap && key[2] == pad &&
+            key[3] == labelSize && key[4] == valueSize
+        ) return this
+        this.run = run
+        this.measurer = measurer
+        this.count = count
+        key[0] = width
+        key[1] = gap
+        key[2] = pad
+        key[3] = labelSize
+        key[4] = valueSize
+        val typography = measurer.typography
+        val content = FloatArray(count) { index ->
+            maxOf(
+                measureKkText(measurer, run[index].label, typography.kkStyle(KkTextRole.MONO, labelSize), uppercase = true).size.width,
+                measureKkText(measurer, run[index].value, typography.kkStyle(KkTextRole.WIDE, valueSize, tabular = true)).size.width,
+            ).toFloat()
+        }
+        widths = overlayRowWidths(content, FloatArray(count) { pad * 2f }, FloatArray(count) { 1f }, width - gap * (count - 1)).first
+        var labelScale = 1f
+        var valueScale = 1f
+        for (index in 0 until count) {
+            val room = widths[index] - pad * 2f
+            val label = fitOverlayText(measurer, run[index].label, KkTextRole.MONO, labelSize, room, uppercase = true, minScale = 0.65f)
+            labelScale = minOf(labelScale, label.layoutInput.style.fontSize.value / (labelSize * measurer.scale))
+            val value = fitOverlayText(measurer, run[index].value, KkTextRole.WIDE, valueSize, room, tabular = true, minScale = 0.3f)
+            valueScale = minOf(valueScale, value.layoutInput.style.fontSize.value / (valueSize * measurer.scale))
+        }
+        labels = arrayOfNulls(count)
+        values = arrayOfNulls(count)
+        for (index in 0 until count) {
+            val room = widths[index] - pad * 2f
+            labels[index] = fitOverlayText(measurer, run[index].label, KkTextRole.MONO, labelSize * labelScale, room, uppercase = true, minScale = 0.65f)
+            values[index] = fitOverlayText(measurer, run[index].value, KkTextRole.WIDE, valueSize * valueScale, room, tabular = true, minScale = 0.3f)
+        }
+        return this
+    }
+}
+
+/**
+ * Widths (px) of a row of boxes sharing [available] px, and one factor for all their text. A box
+ * needs its content ([contents], px at full size) plus [pads]. With room to spare, the boxes with
+ * a weight share the rest by [weights] and never get less than they need (weight 0 keeps the
+ * need). Without room, every content shrinks by the same factor.
+ */
+internal fun overlayRowWidths(contents: FloatArray, pads: FloatArray, weights: FloatArray, available: Float): Pair<FloatArray, Float> {
+    val count = contents.size
+    val widths = FloatArray(count)
+    val need = FloatArray(count) { contents[it] + pads[it] }
+    if (need.sum() > available) {
+        val factor = ((available - pads.sum()) / contents.sum()).coerceIn(0f, 1f)
+        for (index in 0 until count) widths[index] = contents[index] * factor + pads[index]
+        return widths to factor
+    }
+    val fixed = BooleanArray(count) { weights[it] <= 0f }
+    while (true) {
+        var rest = available
+        var weight = 0f
+        for (index in 0 until count) if (fixed[index]) rest -= need[index] else weight += weights[index]
+        if (weight <= 0f) {
+            for (index in 0 until count) widths[index] = need[index]
+            return widths to 1f
+        }
+        val share = rest / weight
+        var changed = false
+        for (index in 0 until count) if (!fixed[index] && weights[index] * share < need[index]) {
+            fixed[index] = true
+            changed = true
+        }
+        if (!changed) {
+            for (index in 0 until count) widths[index] = if (fixed[index]) need[index] else weights[index] * share
+            return widths to 1f
+        }
     }
 }
 
