@@ -179,6 +179,35 @@ class LabPointerResolverTest {
     }
 
     @Test
+    fun rankPipsKeepTheBoardProportionsAtEveryTextSize() {
+        // The board's pips are 22 x 24 cells: at every frame and text size (with the game's 12-rank
+        // upgrade) a pip stays at least 0.6 of its height and 8 dp wide, and the pips stay inside
+        // their slot, clear of the value and cost on their line.
+        for ((width, height) in listOf(1440f to 810f, 1000f to 700f, 844f to 390f, 720f to 360f, 390f to 844f, 360f to 640f)) {
+            for (setting in listOf(1f, 1.25f, 1.5f, 1.75f)) {
+                for (ranks in listOf(10, 12)) {
+                    val frame = profileFrame(width, height, 1f)
+                    val layout = labLayout(frame, 8, ranks, profileTextScale(setting), backWidth = 80f)
+                    val columns = layout.columns
+                    val context = "$width x $height @$setting $ranks ranks"
+                    assertTrue(columns.pipWidth >= columns.pipHeight * 0.6f - 0.01f, "$context pip ${columns.pipWidth} x ${columns.pipHeight}")
+                    assertTrue(columns.pipWidth >= frame.d(8f) - 0.01f, "$context pip ${columns.pipWidth} < ${frame.d(8f)}")
+                    val pipsRight = columns.pipsLeft + ranks * columns.pipWidth + (ranks - 1) * columns.pipGap
+                    assertTrue(pipsRight <= columns.pipsLeft + columns.pipsWidth + 0.01f, context)
+                    assertTrue(pipsRight <= columns.valueLeft, "$context pips end $pipsRight past the value ${columns.valueLeft}")
+                    if (!columns.twoLines) assertTrue(pipsRight <= columns.costLeft, context)
+                    val row = layout.rows.first()
+                    // Both lines of a two-line row sit inside it.
+                    assertTrue(columns.firstLineY > 0f && columns.secondLineY + columns.pipHeight * 0.5f <= row.height, context)
+                }
+            }
+        }
+        // The landscape phone wraps its rows to two lines at large text only.
+        assertTrue(!layout(844f, 390f, profileTextScale(1.25f)).columns.twoLines)
+        assertTrue(labLayout(profileFrame(844f, 390f, 1f), 8, 12, profileTextScale(1.75f), 80f).columns.twoLines)
+    }
+
+    @Test
     fun smallestTextSizeKeepsTheBoardRowsAndTouchTargets() {
         // Board row heights: 72 (1440x810), 40 (844x390), 64 (390x844). At 100 % text the labels
         // shrink; the rows (the press targets) and the portrait dock keep the board's size.

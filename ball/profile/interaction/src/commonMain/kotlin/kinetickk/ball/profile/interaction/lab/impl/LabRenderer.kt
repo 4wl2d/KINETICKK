@@ -67,6 +67,7 @@ import kinetickk.ball.profile.interaction.lab.api.LabUpgradeRenderModel
 import kinetickk.ball.profile.interaction.localization.ProfileScreensRedesignText
 import kinetickk.ball.profile.interaction.localization.ProfileText
 import kinetickk.ball.profile.interaction.profileHeaderBackWidth
+import kinetickk.ball.profile.interaction.profileScrollBar
 import kinetickk.ball.profile.interaction.profileScrollCue
 import kinetickk.ball.profile.interaction.PROFILE_DESCRIPTION_MAX_LINES
 import kinetickk.ball.profile.interaction.ProfileTextProbe
@@ -134,6 +135,10 @@ internal fun LabContent(
             Modifier.offset { IntOffset(list.left.roundToInt(), list.top.roundToInt()) }
                 .size(frame.dp(list.width), frame.dp(list.height))
                 .semantics { contentDescription = language.text(ProfileScreensRedesignText.UpgradesList) }
+                // A list longer than the screen always shows its scroll bar: the fades alone read as
+                // the list's end when the fold falls between two rows.
+                .profileScrollBar(listScroll, labScrollBarX(layout), labScrollBarWidth(frame), frame.d(LAB_LIST_PAD), Kk.Mute, Kk.Line2,
+                    "lab.list.thumb")
                 .profileScrollCue(listScroll, Kk.Ink, labListFade(frame))
                 .verticalScroll(listScroll)
                 .testTag("profile-lab-scroll"),
