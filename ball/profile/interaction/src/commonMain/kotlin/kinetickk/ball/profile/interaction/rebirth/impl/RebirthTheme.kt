@@ -288,8 +288,8 @@ internal fun DrawScope.drawRebirthAdvance(
             val labelLayout = measureKkText(measurer, label, measurer.typography.monoStyle((if (regular) 11f else 10f) * frame.k), uppercase = true)
             val numeralLayout = measureKkText(measurer, tier, measurer.typography.wideStyle(numeralSize * frame.k, tabular = true,
                 lineHeightEm = 0.88f))
-            val nameLayout = measureKkText(measurer, direction, measurer.typography.condStyle((if (regular) 60f else 36f) * frame.k),
-                uppercase = true, maxWidth = size.width - frame.d(32f))
+            val nameLayout = kinetickk.ball.profile.interaction.fitKkText(measurer, direction, (if (regular) 60f else 36f) * frame.k,
+                size.width - frame.d(32f), minFactor = 0.4f) { measurer.typography.condStyle(it) }
             val blockHeight = labelLayout.kkBoxHeight + numeralLayout.kkBoxHeight + nameLayout.kkBoxHeight
             val top = (size.height - blockHeight) * 0.5f - frame.d(20f)
             val pivot = Offset(size.width * 0.5f, top + blockHeight * 0.5f)

@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -67,6 +68,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
 import kinetickk.ball.profile.interaction.localization.ProfileScreensRedesignText
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
@@ -308,11 +310,15 @@ private fun ProfileHeader(
                 style = typography.condStyle(titleSize * scale * titleFactor, color = Kk.Bone, lineHeightEm = 1f),
                 maxLines = 1,
                 overflow = TextOverflow.Clip,
-                modifier = Modifier.weight(1f, fill = false),
+                // The width fits the row; the line box may be taller than the phone title row, so
+                // the height is not bounded (a bounded one would clip Cyrillic descenders).
+                modifier = Modifier.weight(1f, fill = false).wrapContentHeight(unbounded = true),
+                onTextLayout = { ProfileTextProbe.record("header.title", null, it, Rect(Offset.Zero, it.size.toSize())) },
             )
             if (count != null) {
                 Spacer(Modifier.width(gap.toDp()))
-                BasicText(count, style = typography.wideStyle(countSize * scale, tabular = true, color = Kk.Mute, lineHeightEm = 1f), maxLines = 1)
+                BasicText(count, style = typography.wideStyle(countSize * scale, tabular = true, color = Kk.Mute, lineHeightEm = 1f), maxLines = 1,
+                    onTextLayout = { ProfileTextProbe.record("header.count", null, it, Rect(Offset.Zero, it.size.toSize())) })
             }
             if (info != null) {
                 Spacer(Modifier.width(gap.toDp()))
@@ -484,10 +490,10 @@ private fun DrawScope.drawProfileButtonContent(
     val cy = bounds.center.y
     if (spread && costLayout != null) {
         var x = bounds.left + d(size.paddingDp)
-        drawKkText(labelLayout, x, cy, color, valign = KkVAlign.CENTER)
+        drawProfileText(labelLayout, x, cy, color, "button.label", valign = KkVAlign.CENTER)
         x = bounds.right - d(size.paddingDp) - costWidth
         drawKkGem(Offset(x + d(gemSize) * 0.5f, cy), color, gemSize)
-        drawKkText(costLayout, x + d(gemSize) + d(6f), cy, color, valign = KkVAlign.CENTER)
+        drawProfileText(costLayout, x + d(gemSize) + d(6f), cy, color, "button.cost", valign = KkVAlign.CENTER)
         return
     }
     val total = iconSize + iconGap + labelLayout.size.width + (if (costLayout != null) d(12f) + costWidth else 0f)
@@ -496,12 +502,12 @@ private fun DrawScope.drawProfileButtonContent(
         drawKkIcon(KkIcon.SYSTEM_LOCKED, Offset(x + iconSize * 0.5f, cy), iconSize, color)
         x += iconSize + iconGap
     }
-    drawKkText(labelLayout, x, cy, color, valign = KkVAlign.CENTER)
+    drawProfileText(labelLayout, x, cy, color, "button.label", valign = KkVAlign.CENTER)
     x += labelLayout.size.width
     if (costLayout != null) {
         x += d(12f)
         drawKkGem(Offset(x + d(gemSize) * 0.5f, cy), color, gemSize)
-        drawKkText(costLayout, x + d(gemSize) + d(6f), cy, color, valign = KkVAlign.CENTER)
+        drawProfileText(costLayout, x + d(gemSize) + d(6f), cy, color, "button.cost", valign = KkVAlign.CENTER)
     }
 }
 
@@ -540,8 +546,30 @@ internal fun profileLoopTime(periodSeconds: Float): Float {
 }
 
 /**
+ * The game's default text size (125 %) renders the boards' reference size: board sizes are
+ * multiplied by `setting / PROFILE_TEXT_BASELINE` (PR decision on the text-size setting).
+ */
+internal const val PROFILE_TEXT_BASELINE = 1.25f
+
+/** The text-size multiplier of the smallest setting (100 %) relative to the boards. */
+internal const val PROFILE_SMALLEST_TEXT_SCALE = 1f / PROFILE_TEXT_BASELINE
+
+/** Board-relative text multiplier for the player's text-size [setting] (1.0–1.75). */
+internal fun profileTextScale(setting: Float): Float = setting / PROFILE_TEXT_BASELINE
+
+/**
+ * Growth of text-holding geometry (rows, tiles, docks) for the board-relative text multiplier
+ * [textScale]: [rate] of the text's growth above the board size. It never goes below 1, so the
+ * smaller text of the 100 % setting keeps the board's rows and touch targets.
+ */
+internal fun profileLayoutGrow(textScale: Float, rate: Float): Float = 1f + (textScale.coerceIn(1f, 2f) - 1f) * rate
+
+/**
  * Measures [text] at [size] (sp, before the text-size setting) and shrinks it (down to
  * [minFactor]) until it fits [maxWidth] in [maxLines]; the last resort ellipsizes.
+ *
+ * Larger text sizes never make a label smaller than it is at the smallest setting: when the
+ * label would have to shrink below that, it keeps the size it has at 100 % text.
  */
 internal fun fitKkText(
     measurer: CanvasTextMeasurer,
@@ -551,6 +579,27 @@ internal fun fitKkText(
     maxLines: Int = 1,
     uppercase: Boolean = true,
     minFactor: Float = 0.62f,
+    style: (Float) -> TextStyle,
+): TextLayoutResult {
+    val fitted = fitKkTextAt(measurer, text, size, maxWidth, maxLines, uppercase, minFactor, style)
+    val smallest = PROFILE_SMALLEST_TEXT_SCALE / measurer.scale
+    if (smallest >= 1f) return fitted
+    val floor = fitKkTextAt(measurer, text, size * smallest, maxWidth, maxLines, uppercase, minFactor, style)
+    return when {
+        !fitted.fitsWhole() && floor.fitsWhole() -> floor
+        fitted.layoutInput.style.fontSize.value < floor.layoutInput.style.fontSize.value -> floor
+        else -> fitted
+    }
+}
+
+private fun fitKkTextAt(
+    measurer: CanvasTextMeasurer,
+    text: String,
+    size: Float,
+    maxWidth: Float,
+    maxLines: Int,
+    uppercase: Boolean,
+    minFactor: Float,
     style: (Float) -> TextStyle,
 ): TextLayoutResult {
     var factor = 1f
@@ -567,11 +616,17 @@ internal fun fitKkText(
     }
 }
 
+/** True when the whole text is shown: nothing clipped or ellipsized and no word split across lines. */
+internal fun TextLayoutResult.fitsWhole(): Boolean = !hasVisualOverflow && !breaksWord()
+
 /**
  * Line height for text that may wrap: the boards' tight 0.86–0.9 line boxes let Cyrillic
  * diacritics (Ё, Й) touch the line above, so wrapped names use a full line.
  */
 internal const val PROFILE_WRAPPED_LINE_HEIGHT = 1.08f
+
+/** Line limit for wrapped descriptions: enough for every catalog text (their panels scroll). */
+internal const val PROFILE_DESCRIPTION_MAX_LINES = 24
 
 /** The smallest share of a style's size [fitKkText] uses to keep every word on one line. */
 internal const val PROFILE_WORD_FLOOR = 0.34f
@@ -596,7 +651,7 @@ internal fun fitKkFactor(
 }
 
 /** True when a soft line break falls inside a word (the word is wider than the line). */
-private fun TextLayoutResult.breaksWord(): Boolean {
+internal fun TextLayoutResult.breaksWord(): Boolean {
     if (lineCount < 2) return false
     val text = layoutInput.text
     for (line in 0 until lineCount - 1) {
@@ -643,3 +698,54 @@ internal fun Modifier.profileScrollCue(scroll: ScrollState, color: Color, fade: 
 
 /** Converts px to dp for Compose sizes. */
 internal fun ProfileFrame.dp(px: Float) = (px / density).dp
+
+/**
+ * One text (or text plate) the Armory, Lab or Rebirth screen drew: its [role], [owner] (row,
+ * cell), [layout] (null for foundation plates such as tags and stamps), drawn [box] and [color].
+ */
+internal class ProfileDrawnText(
+    val role: String,
+    val owner: Any?,
+    val layout: TextLayoutResult?,
+    val box: Rect,
+    val color: Color = Color.Unspecified,
+)
+
+/**
+ * Test hook: receives every text the profile screens draw ([box] in the drawing scope's
+ * coordinates). Null, and free, outside tests; draw-thread confined.
+ */
+internal object ProfileTextProbe {
+    var sink: ((ProfileDrawnText) -> Unit)? = null
+
+    fun record(role: String, owner: Any?, layout: TextLayoutResult?, box: Rect, color: Color = Color.Unspecified) {
+        sink?.invoke(ProfileDrawnText(role, owner, layout, box, color))
+    }
+}
+
+/** [drawKkText] for the profile screens: draws [layout] and reports it to [ProfileTextProbe]. */
+internal fun DrawScope.drawProfileText(
+    layout: TextLayoutResult,
+    x: Float,
+    y: Float,
+    color: Color,
+    role: String,
+    owner: Any? = null,
+    align: KkAlign = KkAlign.START,
+    valign: KkVAlign = KkVAlign.TOP,
+    alpha: Float = 1f,
+) {
+    drawKkText(layout, x, y, color, align, valign, alpha)
+    if (ProfileTextProbe.sink == null) return
+    val left = when (align) {
+        KkAlign.START -> x
+        KkAlign.CENTER -> x - layout.size.width * 0.5f
+        KkAlign.END -> x - layout.size.width
+    }
+    val top = when (valign) {
+        KkVAlign.TOP -> y - layout.kkBoxTop
+        KkVAlign.CENTER -> y - (layout.kkBoxTop + layout.kkBoxBottom) * 0.5f
+        KkVAlign.BASELINE -> y - layout.firstBaseline
+    }
+    ProfileTextProbe.record(role, owner, layout, Rect(left, top, left + layout.size.width, top + layout.size.height), color)
+}

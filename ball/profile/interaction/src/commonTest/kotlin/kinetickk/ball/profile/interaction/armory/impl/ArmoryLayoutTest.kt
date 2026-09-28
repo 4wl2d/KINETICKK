@@ -7,6 +7,7 @@ import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.profile.interaction.ProfileLayoutMode
 import kinetickk.ball.profile.interaction.TestWeapons
 import kinetickk.ball.profile.interaction.profileFrame
+import kinetickk.ball.profile.interaction.profileTextScale
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -137,5 +138,20 @@ class ArmoryLayoutTest {
         assertEquals(1 to 1, armoryGridPages(0f, 0f, 250f, 100f))
         assertEquals(4 to 1, armoryGridPages(0f, 500f, 250f, 100f))
         assertEquals(4 to 4, armoryGridPages(500f, 500f, 250f, 100f))
+    }
+
+    @Test
+    fun smallestTextSizeKeepsTheBoardTilesAndDock() {
+        // At 100 % text the labels shrink; the tiles (the press targets), the grid and the
+        // portrait detail dock keep their size at the board's text size (125 %).
+        for ((width, height) in listOf(1440f to 810f, 844f to 390f, 390f to 844f)) {
+            val small = layout(width, height, textScale = profileTextScale(1f))
+            val default = layout(width, height, textScale = profileTextScale(1.25f))
+            val context = "$width x $height"
+            assertEquals(default.tiles, small.tiles, context)
+            assertEquals(default.gridViewport, small.gridViewport, context)
+            val floor = small.frame.d(if (small.frame.regular) 172f else 84f)
+            small.tiles.forEach { assertTrue(it.height >= floor - 0.01f, "$context tile ${it.height} < $floor") }
+        }
     }
 }

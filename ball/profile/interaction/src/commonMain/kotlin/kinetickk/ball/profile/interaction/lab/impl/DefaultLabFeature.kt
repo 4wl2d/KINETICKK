@@ -70,6 +70,6 @@ class DefaultLabFeature(
             }
         }
 
-        LabContent(stateValue, textScale, listScroll, ::dispatch)
+        LabContent(stateValue, textScale, listScroll, onAction = ::dispatch)
     }
 }

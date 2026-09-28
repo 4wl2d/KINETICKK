@@ -9,6 +9,7 @@ import kinetickk.ball.profile.interaction.ProfileFrame
 import kinetickk.ball.profile.interaction.ProfileLayoutMode
 import kinetickk.ball.profile.interaction.lab.api.LabRenderModel
 import kinetickk.ball.profile.interaction.profileHeaderBackRect
+import kinetickk.ball.profile.interaction.profileLayoutGrow
 import kotlin.math.max
 import kotlin.math.min
 
@@ -81,16 +82,22 @@ internal fun labType(mode: ProfileLayoutMode): LabType = when (mode) {
     ProfileLayoutMode.COMPACT_PORTRAIT -> LabType(20f, 17f, 11f, 18f, 14f, 10f, 17f, 22f)
 }
 
+/**
+ * [textScale] is the board-relative text multiplier ([kinetickk.ball.profile.interaction.profileTextScale]).
+ * [descriptionHeight] measures the selected upgrade's description at a width (the renderer's
+ * layout); without it the slot keeps the board's line count.
+ */
 internal fun labLayout(
     frame: ProfileFrame,
     rowCount: Int,
     maxRanks: Int,
     textScale: Float,
     backWidth: Float,
+    descriptionHeight: ((width: Float) -> Float)? = null,
 ): LabLayout {
     fun d(value: Float) = frame.d(value)
     val t = textScale.coerceIn(0.75f, 2f)
-    val grow = 1f + (t - 1f) * 0.55f
+    val grow = profileLayoutGrow(t, 0.55f)
     val back = profileHeaderBackRect(frame, backWidth)
     val pad = d(12f)
     val type = labType(frame.mode)
@@ -168,8 +175,10 @@ internal fun labLayout(
         Rect(detailLeft, top, detailRight, top + nameHeight)
     }
     val descriptionTop = (if (frame.portrait) icon.bottom else name.bottom) + d(if (regular) 12f else 6f)
-    val descriptionLines = kotlin.math.ceil((if (regular) 3f else 2f) * max(1f, t))
-    val description = Rect(detailLeft, descriptionTop, detailRight, descriptionTop + d(type.body) * 1.4f * descriptionLines * t)
+    // The description slot is as tall as the wrapped description, so the panels follow it.
+    val descriptionBottom = descriptionTop + (descriptionHeight?.invoke(detailRight - detailLeft)
+        ?: (d(type.body) * 1.4f * kotlin.math.ceil((if (regular) 3f else 2f) * max(1f, t)) * t))
+    val description = Rect(detailLeft, descriptionTop, detailRight, descriptionBottom)
     val panelsTop = description.bottom + d(if (regular) 22f else 10f)
     val panelHeight = (d(if (regular) 12f else 8f) * 2f + d(type.mono) * 1.35f * t + d(if (regular) 8f else 5f) +
         d(type.panelValue) * 0.9f * t)
@@ -192,11 +201,16 @@ internal fun labLayout(
         icon, name, description, now, next, rank, buy, buyPinned)
 }
 
+/** Height of the list's scroll cue fades (the list draws them over rows at a scrolled edge). */
+internal fun labListFade(frame: ProfileFrame): Float = frame.d(24f)
+
 /**
- * The list scroll that brings the row [rowTop]..[rowBottom] (content px) fully into view, or
- * null when no scroll is needed. With [whenHidden] only a row that is entirely off screen moves
- * the list, so hover selection (which needs a visible row) never scrolls under the pointer;
- * otherwise (the screen opening on a selection) a partly clipped row is revealed too.
+ * The list scroll that brings the row [rowTop]..[rowBottom] (content px) fully into view, clear
+ * of the [fade] bands the scroll cue draws at an edge with more content, or null when no scroll
+ * is needed. A row near an end scrolls the list all the way (no fade there). With [whenHidden]
+ * only a row that is entirely off screen moves the list, so hover selection (which needs a
+ * visible row) never scrolls under the pointer; otherwise (the screen opening on a selection) a
+ * partly clipped row is revealed too.
  */
 internal fun labRevealScroll(
     value: Float,
@@ -205,14 +219,20 @@ internal fun labRevealScroll(
     viewportHeight: Float,
     maxValue: Float,
     whenHidden: Boolean = true,
+    fade: Float = 0f,
 ): Float? {
-    val above = if (whenHidden) rowBottom <= value else rowTop < value
-    val below = if (whenHidden) rowTop >= value + viewportHeight else rowBottom > value + viewportHeight
-    return when {
-        above -> rowTop.coerceIn(0f, maxValue)
-        below -> (rowBottom - viewportHeight).coerceIn(0f, maxValue)
-        else -> null
+    // A partly clipped row counts the fade over it as clipped (no fade at an end of the list).
+    val topFade = if (value > 0f) fade else 0f
+    val bottomFade = if (value < maxValue) fade else 0f
+    val above = if (whenHidden) rowBottom <= value else rowTop < value + topFade
+    val below = if (whenHidden) rowTop >= value + viewportHeight else rowBottom > value + viewportHeight - bottomFade
+    // Within a fade of an end the list goes to that end, where the cue draws no fade.
+    val target = when {
+        above -> (rowTop - fade).let { if (it <= fade) 0f else it }
+        below -> (rowBottom - viewportHeight + fade).let { if (it >= maxValue - fade) maxValue else it }
+        else -> return null
     }
+    return target.coerceIn(0f, max(0f, maxValue))
 }
 
 private fun labRowColumns(
