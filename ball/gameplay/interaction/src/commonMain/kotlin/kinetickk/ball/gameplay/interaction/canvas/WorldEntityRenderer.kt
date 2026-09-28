@@ -320,14 +320,17 @@ internal fun DrawScope.drawTotem(engine: GameplayRenderModel, shakeX: Float, sha
     drawTotemPlates(location, 1f, roles.you, keyBlock = true, keyIcon = true)
 }
 
-/** Adds the off-screen totem to [batch]; [drawEdgeMarkers] draws it with the frame's other markers. */
+/**
+ * Adds the off-screen totem to [batch], aimed from the unshaken view; [drawEdgeMarkers] draws it
+ * with the frame's other markers.
+ */
 internal fun DrawScope.collectTotemEdgeMarker(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, batch: EdgeMarkerBatch) {
     val totem = engine.totem ?: return
     val location = world(engine, totem.x, totem.y, shakeX, shakeY)
     if (isOnScreen(location, 60f)) return
     val dx = totem.x - engine.coreX
     val dy = totem.y - engine.coreY
-    batch.add(location.x, location.y, sqrt(dx * dx + dy * dy), EdgeMarkerIcon.TOTEM)
+    batch.add(location.x - shakeX, location.y - shakeY, sqrt(dx * dx + dy * dy), EdgeMarkerIcon.TOTEM)
 }
 
 /**

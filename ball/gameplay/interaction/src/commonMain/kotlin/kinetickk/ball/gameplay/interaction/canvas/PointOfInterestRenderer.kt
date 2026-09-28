@@ -157,7 +157,8 @@ internal fun DrawScope.drawPointsOfInterest(engine: GameplayRenderModel, shakeX:
 
 /**
  * Adds to [batch] the edge markers of points of interest whose mark is not shown ([markShown]);
- * [drawEdgeMarkers] draws them with the frame's other markers.
+ * [drawEdgeMarkers] draws them with the frame's other markers. The mark shakes with the world, but
+ * its marker is aimed from the unshaken view.
  */
 internal fun DrawScope.collectPointOfInterestEdgeMarkers(
     engine: GameplayRenderModel,
@@ -184,7 +185,7 @@ internal fun DrawScope.collectPointOfInterestEdgeMarkers(
         if (markShown(target, markHalf(point), keepOut)) continue
         val dx = targetX - engine.coreX
         val dy = targetY - engine.coreY
-        batch.add(target.x, target.y, sqrt(dx * dx + dy * dy), point.kind.edgeIcon())
+        batch.add(target.x - shakeX, target.y - shakeY, sqrt(dx * dx + dy * dy), point.kind.edgeIcon())
     }
 }
 
@@ -541,7 +542,10 @@ private const val EDGE_DISTANCE_LAYOUT_VALUE = 8_880L
  * [EDGE_MARKER_SPACING_DP] from the others. The distances are drawn from cached digit layouts.
  */
 internal fun DrawScope.drawEdgeMarkers(batch: EdgeMarkerBatch, textMeasurer: TextMeasurer) {
-    if (batch.count == 0) return
+    if (batch.count == 0) {
+        WorldOverlayScratch.planner.forget() // markers that come back later are placed afresh
+        return
+    }
     val roles = textMeasurer.roles
     val typography = textMeasurer.typography
     val suffix = WorldStrings.distanceSuffix(textMeasurer.language)

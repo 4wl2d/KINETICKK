@@ -155,9 +155,11 @@ internal class WorldHudKeepOut {
  * already taken, plus [EDGE_MARKER_SPACING_DP], are kept out for the rest, and the markers keep
  * their targets' order around the screen center. Placement remembers the previous frame, so a
  * marker (and a crowded run as a whole) moves only when its target really turned or another spot
- * is clearly better, never flickering between near-equal arrangements. The table of clear
- * positions is rebuilt, and that memory dropped, only when the keep-out, viewport or marker size
- * changes.
+ * is clearly better, and two markers trade places only once their targets have clearly passed
+ * each other, never flickering between near-equal arrangements. Targets are given in the unshaken
+ * view (markers are HUD overlays), so screen shake cannot move a marker. The table of clear
+ * positions is rebuilt, and the memory dropped, when the keep-out, viewport or marker size
+ * changes; the memory is also dropped by a frame without markers ([forget]).
  */
 internal class EdgeMarkerPlanner {
     private val depths = FloatArray(MAX_SAMPLES)
@@ -182,11 +184,13 @@ internal class EdgeMarkerPlanner {
     private var halfHeight = 0f
     private var markerSpacing = 0f
 
-    // Boxes of the markers [place] has placed so far this frame, and its ordering scratch.
+    // Boxes of the markers [place] has placed so far this frame, and its ordering scratch: the
+    // frame's markers in run order (around the screen center, from the widest gap between targets).
     private val placed = FloatArray(EdgeMarkerBatch.CAPACITY * 4)
     private var placedCount = 0
     private val preferred = IntArray(EdgeMarkerBatch.CAPACITY)
-    private val ringOrder = IntArray(EdgeMarkerBatch.CAPACITY)
+    private val runOrder = IntArray(EdgeMarkerBatch.CAPACITY)
+    private val rotated = IntArray(EdgeMarkerBatch.CAPACITY)
     private val arrangedX = FloatArray(EdgeMarkerBatch.CAPACITY)
     private val arrangedY = FloatArray(EdgeMarkerBatch.CAPACITY)
     private val arrangedSample = IntArray(EdgeMarkerBatch.CAPACITY)
@@ -196,20 +200,25 @@ internal class EdgeMarkerPlanner {
     // Per ring sample, its direction from the screen center (degrees clockwise from the right).
     private val sampleAngle = FloatArray(MAX_SAMPLES)
 
-    // Per marker of this frame: its target's direction and the sample it held last frame (-1: none);
-    // per run position, the placed marker's direction counted from [origin] (-1: not yet placed).
+    // Per marker of this frame: its target's direction, last frame's marker it continues, the
+    // sample that one held (-1: none) and how that sample scores for the target now (infinite:
+    // none); per run position, the placed marker's direction counted from [origin] (-1: not yet
+    // placed).
     private val targetAngle = FloatArray(EdgeMarkerBatch.CAPACITY)
     private val targetUx = FloatArray(EdgeMarkerBatch.CAPACITY)
     private val targetUy = FloatArray(EdgeMarkerBatch.CAPACITY)
+    private val continues = IntArray(EdgeMarkerBatch.CAPACITY)
     private val memory = IntArray(EdgeMarkerBatch.CAPACITY)
+    private val memoryError = FloatArray(EdgeMarkerBatch.CAPACITY)
     private val runAngle = FloatArray(EdgeMarkerBatch.CAPACITY)
     private var origin = 0f
 
-    // The markers placed last frame: kind, target direction and ring sample.
+    // The markers placed last frame: kind, target direction, ring sample and position in the run.
     private var lastCount = 0
     private val lastIcon = arrayOfNulls<EdgeMarkerIcon>(EdgeMarkerBatch.CAPACITY)
     private val lastTarget = FloatArray(EdgeMarkerBatch.CAPACITY)
     private val lastSample = IntArray(EdgeMarkerBatch.CAPACITY)
+    private val lastRank = IntArray(EdgeMarkerBatch.CAPACITY)
     private var keepOut: WorldHudKeepOut? = null
     private var keyRevision = -1
     private var keyWidth = Float.NaN
@@ -304,69 +313,70 @@ internal class EdgeMarkerPlanner {
     }
 
     /**
-     * Places every marker of [batch] (the frame's off-screen targets) at once, writing each center
-     * to [EdgeMarkerBatch.markerX] / [EdgeMarkerBatch.markerY]. Each marker takes the position
-     * [position] would choose, unless its box (icon and distance) would come within
-     * [EDGE_MARKER_SPACING_DP] of a marker placed before it: then the best clear position that
-     * keeps that spacing. The markers keep their targets' order around the screen center (the
-     * run starts after the widest gap between targets; ties cannot swap them) and are placed one
-     * after another: from the middle of the run outward, from one end or from the other, and, when
-     * that crowds a marker, from the middle with the middle marker stepped a little along the edge.
-     * The arrangement pointing closest to the targets overall wins, so a crowded run shifts as a
-     * whole where the edge has room.
+     * Places every marker of [batch] (the frame's off-screen targets, in the unshaken view) at
+     * once, writing each center to [EdgeMarkerBatch.markerX] / [EdgeMarkerBatch.markerY]. Each
+     * marker takes the position [position] would choose, unless its box (icon and distance) would
+     * come within [EDGE_MARKER_SPACING_DP] of a marker placed before it: then the best clear
+     * position that keeps that spacing. The markers keep their targets' order around the screen
+     * center (the run starts after the widest gap between targets) and are placed one after
+     * another: from the middle of the run outward, from one end or from the other, and, when that
+     * crowds a marker, from the middle with the middle marker stepped a little along the edge. The
+     * arrangement pointing closest to the targets overall wins, so a crowded run shifts as a whole
+     * where the edge has room.
      *
-     * Continuity with last frame's markers (same kind, target within [TRACK_DEGREES]): a target
-     * turned by less than [TARGET_DEADBAND_DEGREES] keeps the direction placement last used, so
-     * screen shake changes nothing; a spot within [STICK_WINDOW_SAMPLES] of the marker's last one
-     * scores [STICK_NEAR_DEGREES] better, and the last spot itself [STICK_EXACT_DEGREES] more; and
-     * the last arrangement, as it was and followed a few samples either way, is tried first. So a
-     * moving target's marker follows it sample by sample, and a crowded run changes its
-     * arrangement only when another one is clearly better, instead of flipping back and forth
-     * between near-equal ones. Allocation-free.
+     * Continuity with last frame's markers (same kind, target within [TRACK_DEGREES]): two such
+     * markers keep last frame's order until their targets have passed each other by
+     * [ORDER_HYSTERESIS_DEGREES], so targets pointing almost the same way cannot swap their
+     * markers back and forth; a spot within [STICK_WINDOW_SAMPLES] of the marker's last one scores
+     * [STICK_NEAR_DEGREES] better, and the last spot itself [STICK_EXACT_DEGREES] more; a spot
+     * pointing further from the target than the last one scores [RETREAT_DEGREES] worse, so a
+     * marker does not step away from its target to make room for a neighbour only to step back a
+     * few frames later; and the last arrangement, as it was and followed a few samples either way,
+     * is tried first. So a moving target's marker follows it sample by sample, and a crowded run
+     * changes its arrangement only when another one is clearly better, instead of flipping back
+     * and forth between near-equal ones. Allocation-free.
      */
     fun place(batch: EdgeMarkerBatch) {
         val count = batch.count
         if (count == 0) {
-            lastCount = 0
+            forget()
             return
         }
         var remembered = false
         for (index in 0 until count) {
-            var angle = angleOf(batch.targetX[index] - width * 0.5f, batch.targetY[index] - height * 0.5f)
+            val angle = angleOf(batch.targetX[index] - width * 0.5f, batch.targetY[index] - height * 0.5f)
             val last = rememberedMarker(batch.icon[index], angle)
-            memory[index] = if (last >= 0) lastSample[last] else -1
-            if (memory[index] >= 0) remembered = true
-            // Screen shake and sub-pixel drift turn a target's direction a hair every frame: keep
-            // the direction last frame used until the target has really moved.
-            if (last >= 0 && apartDegrees(lastTarget[last], angle) < TARGET_DEADBAND_DEGREES) angle = lastTarget[last]
+            continues[index] = last
+            val held = if (last >= 0) lastSample[last] else -1
+            memory[index] = held
+            if (held >= 0) remembered = true
             targetAngle[index] = angle
             targetUx[index] = cos(angle / DEGREES)
             targetUy[index] = sin(angle / DEGREES)
-            ringOrder[index] = index
+            memoryError[index] = if (held >= 0) errorAt(held, targetUx[index], targetUy[index]) else Float.POSITIVE_INFINITY
+            runOrder[index] = index
         }
-        // Insertion sort by the targets' directions (at most a few markers).
-        for (index in 1 until count) {
-            val marker = ringOrder[index]
-            var slot = index
-            while (slot > 0 && targetAngle[ringOrder[slot - 1]] > targetAngle[marker]) {
-                ringOrder[slot] = ringOrder[slot - 1]
-                slot--
-            }
-            ringOrder[slot] = marker
-        }
+        // By the targets' directions first, to find the run (at most a few markers).
+        sortRun(count, keepLastOrder = false)
         // Directions go round: start the run after the widest gap between neighbouring targets, so a
-        // run across the right edge stays one run; directions count from that gap's middle.
+        // run across the right edge stays one run; directions count from that gap's middle. The gap
+        // from the last direction round to the first is a full turn when they all coincide.
         var start = 0
         var widest = -1f
         for (index in 0 until count) {
-            val previous = targetAngle[ringOrder[(index + count - 1) % count]]
-            val gap = if (count == 1) FULL_TURN else (targetAngle[ringOrder[index]] - previous + FULL_TURN) % FULL_TURN
+            val previous = targetAngle[runOrder[(index + count - 1) % count]]
+            val gap = targetAngle[runOrder[index]] - previous + if (index == 0) FULL_TURN else 0f
             if (gap > widest) {
                 widest = gap
                 start = index
             }
         }
-        origin = (targetAngle[ringOrder[start]] - widest * 0.5f + FULL_TURN) % FULL_TURN
+        origin = (targetAngle[runOrder[start]] - widest * 0.5f + FULL_TURN) % FULL_TURN
+        for (position in 0 until count) rotated[position] = runOrder[(start + position) % count]
+        for (position in 0 until count) runOrder[position] = rotated[position]
+        // Then along the run, where targets that have not clearly passed each other keep last
+        // frame's order.
+        sortRun(count, keepLastOrder = true)
         // Each marker's own best spot: no arrangement scores lower.
         var alone = 0f
         for (index in 0 until count) {
@@ -386,7 +396,7 @@ internal class EdgeMarkerPlanner {
             val pattern = if (fresh < 0) HOLD + candidate else if (fresh < PLACEMENT_PATTERNS) fresh else MIDDLE_OUT
             val step = fresh - PLACEMENT_PATTERNS
             val shift = if (step < 0) 0 else if (step % 2 == 0) -(step / 2 + 1) else step / 2 + 1
-            val total = arrange(batch, start, pattern, shift)
+            val total = arrange(batch, pattern, shift)
             if (total < bestTotal) {
                 bestTotal = total
                 for (index in 0 until count) {
@@ -402,7 +412,45 @@ internal class EdgeMarkerPlanner {
             lastTarget[index] = targetAngle[index]
             lastSample[index] = chosenSample[index]
         }
+        for (position in 0 until count) lastRank[runOrder[position]] = position
         lastCount = count
+    }
+
+    /** Drops the memory of last frame's markers (a frame without any): the next ones are placed afresh. */
+    fun forget() {
+        lastCount = 0
+    }
+
+    /**
+     * Insertion sort of the first [count] entries of [runOrder] by their targets' directions
+     * ([keepLastOrder]: counted from [origin], with [comesBefore]'s memory of last frame's order).
+     */
+    private fun sortRun(count: Int, keepLastOrder: Boolean) {
+        for (index in 1 until count) {
+            val marker = runOrder[index]
+            var slot = index
+            while (slot > 0 && comesBefore(marker, runOrder[slot - 1], keepLastOrder)) {
+                runOrder[slot] = runOrder[slot - 1]
+                slot--
+            }
+            runOrder[slot] = marker
+        }
+    }
+
+    /**
+     * Whether marker [a] goes before marker [b] along the run: its target's direction is smaller.
+     * With [keepLastOrder] (directions counted from [origin]), two markers that continue two of
+     * last frame's markers keep those markers' order while their targets are within
+     * [ORDER_HYSTERESIS_DEGREES] of each other, so they trade places only once the targets have
+     * clearly passed each other.
+     */
+    private fun comesBefore(a: Int, b: Int, keepLastOrder: Boolean): Boolean {
+        if (!keepLastOrder) return targetAngle[a] < targetAngle[b]
+        val ahead = fromOriginDegrees(targetAngle[b]) - fromOriginDegrees(targetAngle[a])
+        val lastA = continues[a]
+        val lastB = continues[b]
+        val remembered = lastA >= 0 && lastB >= 0 && lastA != lastB
+        return if (remembered && abs(ahead) < ORDER_HYSTERESIS_DEGREES) lastRank[lastA] < lastRank[lastB] else ahead > 0f
     }
 
     /**
@@ -424,18 +472,18 @@ internal class EdgeMarkerPlanner {
     }
 
     /**
-     * Places [batch]'s markers in the order [pattern] picks along the run that starts at
-     * [ringOrder] index [start] ([MIDDLE_OUT]: middle first, then alternately one step toward each
-     * end; [FROM_START] / [TRACK_FROM_START]: from the start; [FROM_END] / [TRACK_FROM_END]: from the
-     * end), into [arrangedX] / [arrangedY] / [arrangedSample]. Each marker stays between its
-     * already placed neighbours in the run. [HOLD] keeps every marker on its last spot; the
-     * tracking patterns look only within [STICK_WINDOW_SAMPLES] of it. With a [shift], the first
-     * marker takes the clear ring sample that many samples from its own best one. Returns the
-     * summed score (direction error and depth cost, less continuity), with a large penalty per
-     * marker that found no spaced spot; infinite when the shifted sample is not clear, or a held or
-     * tracked marker lost its place.
+     * Places [batch]'s markers in the order [pattern] picks along the run [runOrder] ([MIDDLE_OUT]:
+     * middle first, then alternately one step toward each end; [FROM_START] / [TRACK_FROM_START]:
+     * from the start; [FROM_END] / [TRACK_FROM_END]: from the end), into [arrangedX] /
+     * [arrangedY] / [arrangedSample]. Each marker stays between its already placed neighbours in
+     * the run. [HOLD] keeps every marker on its last spot; the tracking patterns look only within
+     * [STICK_WINDOW_SAMPLES] of it. With a [shift], the first marker takes the clear ring sample
+     * that many samples from its own best one. Returns the summed score (direction error and depth
+     * cost, less continuity, plus retreat costs), with a large penalty per marker that found no
+     * spaced spot; infinite when the shifted sample is not clear, or a held or tracked marker lost
+     * its place.
      */
-    private fun arrange(batch: EdgeMarkerBatch, start: Int, pattern: Int, shift: Int): Float {
+    private fun arrange(batch: EdgeMarkerBatch, pattern: Int, shift: Int): Float {
         val count = batch.count
         val middle = (count - 1) / 2
         placedCount = 0
@@ -450,7 +498,7 @@ internal class EdgeMarkerPlanner {
                 FROM_START, HOLD, TRACK_FROM_START -> step
                 else -> count - 1 - step
             }
-            val marker = ringOrder[(start + position) % count]
+            val marker = runOrder[position]
             val ux = targetUx[marker]
             val uy = targetUy[marker]
             // The nearest placed neighbours before and after it in the run bound its direction.
@@ -518,10 +566,10 @@ internal class EdgeMarkerPlanner {
     /**
      * Of the [span] ring samples from [from] on, the clear one whose position points closest to the
      * target direction ([ux], [uy]) (a unit vector from the screen center; see [position]), less
-     * [marker]'s continuity bonus ([NO_MARKER]: none); only samples whose direction counted from
-     * [origin] lies strictly between [low] and [high] (degrees), and with [avoidPlaced] only
-     * samples whose marker box keeps [markerSpacing] from every box placed so far this frame. -1
-     * when there is none. Leaves its score in [bestScore].
+     * [marker]'s continuity bonus and plus its retreat cost ([NO_MARKER]: neither); only samples
+     * whose direction counted from [origin] lies strictly between [low] and [high] (degrees), and
+     * with [avoidPlaced] only samples whose marker box keeps [markerSpacing] from every box placed
+     * so far this frame. -1 when there is none. Leaves its score in [bestScore].
      */
     private fun bestIndex(
         marker: Int,
@@ -546,7 +594,8 @@ internal class EdgeMarkerPlanner {
             for (k in -STICK_WINDOW_SAMPLES..STICK_WINDOW_SAMPLES) {
                 val index = ((last + k) % samples + samples) % samples
                 if ((index - first + samples) % samples >= range) continue
-                val candidate = spotScore(index, ux, uy, avoidPlaced, low, high, -1f) - continuity(marker, index)
+                val error = spotScore(index, ux, uy, avoidPlaced, low, high, -1f)
+                val candidate = error - continuity(marker, index) + retreat(marker, error)
                 if (candidate < score) {
                     score = candidate
                     best = index
@@ -559,7 +608,8 @@ internal class EdgeMarkerPlanner {
         for (k in 0 until range) {
             val index = (first + k) % samples
             if (last >= 0 && ringApart(index, last) <= STICK_WINDOW_SAMPLES) continue
-            val candidate = spotScore(index, ux, uy, avoidPlaced, low, high, cutoff)
+            val error = spotScore(index, ux, uy, avoidPlaced, low, high, cutoff)
+            val candidate = error + retreat(marker, error)
             if (candidate < score) {
                 score = candidate
                 best = index
@@ -588,9 +638,22 @@ internal class EdgeMarkerPlanner {
 
     /** Score of ring sample [index] (a clear one) for [marker]'s target direction ([ux], [uy]), as [bestIndex] scores it. */
     private fun scoreAt(marker: Int, index: Int, ux: Float, uy: Float): Float {
-        val dot = directionX[index] * ux + directionY[index] * uy
-        return acos(dot.coerceIn(-1f, 1f)) * DEGREES + depthCost[index] - continuity(marker, index)
+        val error = errorAt(index, ux, uy)
+        return error - continuity(marker, index) + retreat(marker, error)
     }
+
+    /** Direction error plus depth cost of ring sample [index] (a clear one) for the target direction ([ux], [uy]). */
+    private fun errorAt(index: Int, ux: Float, uy: Float): Float {
+        val dot = directionX[index] * ux + directionY[index] * uy
+        return acos(dot.coerceIn(-1f, 1f)) * DEGREES + depthCost[index]
+    }
+
+    /**
+     * How much worse a spot scoring [error] (direction error and depth cost) scores for [marker]
+     * for pointing further from its target than the marker's last spot does.
+     */
+    private fun retreat(marker: Int, error: Float): Float =
+        if (marker != NO_MARKER && error > memoryError[marker] + RETREAT_TOLERANCE_DEGREES) RETREAT_DEGREES else 0f
 
     /** How much better ring sample [index] scores for [marker] for being at or near its last spot. */
     private fun continuity(marker: Int, index: Int): Float {
@@ -612,8 +675,11 @@ internal class EdgeMarkerPlanner {
     }
 
     /** Direction of ring sample [index], counted from [origin] (the middle of the widest gap between this frame's targets). */
-    private fun fromOrigin(index: Int): Float {
-        val counted = sampleAngle[index] - origin
+    private fun fromOrigin(index: Int): Float = fromOriginDegrees(sampleAngle[index])
+
+    /** Direction [degrees] (in [0, 360)), counted from [origin]. */
+    private fun fromOriginDegrees(degrees: Float): Float {
+        val counted = degrees - origin
         return if (counted < 0f) counted + FULL_TURN else counted
     }
 
@@ -826,6 +892,16 @@ internal class EdgeMarkerPlanner {
          */
         const val STICK_EXACT_DEGREES = 0.25f
 
+        /**
+         * Extra cost, in degrees of direction error, of a spot pointing further from the marker's
+         * target than the marker's last spot does: a marker steps away from its target only when
+         * that makes the arrangement clearly better, not to give a neighbour a hair of direction.
+         */
+        const val RETREAT_DEGREES = 10f
+
+        /** Direction error differences below this (degrees) are rounding, not a retreat. */
+        const val RETREAT_TOLERANCE_DEGREES = 0.001f
+
         /** How many ring samples either way of its last spot a marker may follow its target per frame. */
         const val STICK_WINDOW_SAMPLES = 3
 
@@ -835,11 +911,12 @@ internal class EdgeMarkerPlanner {
         const val FULL_TURN = 360f
 
         /**
-         * A target's direction must move this many degrees from the one placement last used before
-         * placement follows it: 3 px of screen shake either way turns a target 700 px away by less,
-         * and the continuity bonus holds a nearer target's marker through the rest.
+         * How far past each other (degrees, seen from the screen center) two targets must move
+         * before their markers trade places: targets pointing almost the same way (the Core flying
+         * along the line through them) cross and uncross by hairs, and their markers must not
+         * swap with each hair.
          */
-        const val TARGET_DEADBAND_DEGREES = 0.5f
+        const val ORDER_HYSTERESIS_DEGREES = 1f
     }
 }
 
@@ -865,7 +942,10 @@ internal class EdgeMarkerBatch {
         return this
     }
 
-    /** Adds an off-screen target at screen ([x], [y]), [worldDistance] from the Core. */
+    /**
+     * Adds an off-screen target at screen ([x], [y]) of the unshaken view (markers are HUD
+     * overlays: screen shake must not move them), [worldDistance] from the Core.
+     */
     fun add(x: Float, y: Float, worldDistance: Float, kind: EdgeMarkerIcon) {
         if (count >= CAPACITY) return
         targetX[count] = x
