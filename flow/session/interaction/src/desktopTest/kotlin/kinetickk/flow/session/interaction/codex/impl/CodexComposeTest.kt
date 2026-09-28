@@ -17,6 +17,8 @@ import javax.imageio.ImageIO
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.unit.width
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
@@ -308,15 +310,108 @@ class CodexComposeTest {
                     }
                 }
             }
-            for ((width, height) in listOf(390 to 844, 360 to 800, 844 to 390)) for (scale in listOf(1f, 1.25f, 1.75f)) {
+            for ((width, height) in listOf(390 to 844, 360 to 800, 844 to 390, 1440 to 810)) for (scale in listOf(1f, 1.25f, 1.75f)) {
                 runOnIdle { widthValue = width; heightValue = height; scaleValue = scale }
-                val root = onRoot().fetchSemanticsNode().boundsInRoot
-                ((0..2).map { "codex-tab-$it" } + (0..3).map { "codex-category-$it" })
+                val where = "${width}x$height ${language.code} @$scale"
+                // Compare with the Codex box itself (not the larger test window), using unclipped bounds:
+                // a scrolling row clips its tabs, so clipped bounds could never leave it.
+                val box = onNodeWithTag("codex").getUnclippedBoundsInRoot()
+                // Wide screens list the categories as nav rows; every tab row present must fit unscrolled.
+                val rows = onAllNodes(hasTestTag("codex-tab-row") or hasTestTag("codex-category-row")).fetchSemanticsNodes()
+                assertTrue(rows.isNotEmpty(), where)
+                rows.forEach { row ->
+                    val range = row.config.getOrNull(SemanticsProperties.HorizontalScrollAxisRange)
+                    assertTrue(range == null || range.maxValue() == 0f, "${row.config[SemanticsProperties.TestTag]} scrolls at rest at $where")
+                }
+                ((0..2).map { "codex-tab-$it" } + (0..3).map { "codex-category-$it" } + listOf("codex-filter-0", "codex-filter-2"))
                     .forEach { tag ->
-                        val bounds = onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
-                        assertTrue(bounds.left >= root.left && bounds.right <= root.right + 0.5f,
-                            "$tag clipped at ${width}x$height ${language.code} @$scale: $bounds")
+                        val bounds = onNodeWithTag(tag).getUnclippedBoundsInRoot()
+                        assertTrue(bounds.left >= box.left - 0.5.dp && bounds.right <= box.right + 0.5.dp,
+                            "$tag leaves the Codex at $where: $bounds in $box")
+                        assertTrue(bounds.width > 0.dp, "$tag is hidden at $where")
                     }
+            }
+        }
+    }
+
+    @Test fun aRowTooWideEvenAtItsSmallestScaleScrollsToEveryTab() = runComposeUiTest {
+        // 300 dp at 175 % in Russian: the category row cannot fit at 60 %, so it scrolls instead.
+        setContent {
+            CompositionLocalProvider(LocalAppLanguage provides AppLanguage.Russian) {
+                Box(Modifier.requiredSize(300.dp, 700.dp)) {
+                    val catalog = remember { codexTestCatalog() }
+                    CodexContent(catalog, CodexRenderModel((0 until 400).toImmutableSet(), CodexRunStacks(), catalog.items), codexTestProgress(), 1.75f) { }
+                }
+            }
+        }
+        val box = onNodeWithTag("codex").getUnclippedBoundsInRoot()
+        val row = "codex-category-row"
+        val range = requireNotNull(onNodeWithTag(row).fetchSemanticsNode().config.getOrNull(SemanticsProperties.HorizontalScrollAxisRange)) {
+            "the overflowing row must scroll"
+        }
+        assertTrue(range.maxValue() > 0f && range.value() == 0f)
+        assertTrue(onNodeWithTag("codex-category-3").getUnclippedBoundsInRoot().right > box.right, "the last tab starts beyond the edge")
+        onNodeWithTag("codex-category-3").performScrollTo().performClick()
+        onNodeWithTag("codex-category-3").assertIsSelected()
+        val shown = onNodeWithTag("codex-category-3").getUnclippedBoundsInRoot()
+        assertTrue(shown.left >= box.left - 0.5.dp && shown.right <= box.right + 0.5.dp, "scrolling brings the last tab in: $shown in $box")
+    }
+
+    @Test fun buildTabBadgesAndNewStampsLeaveTheCellGlyphClear() {
+        val catalog = codexTestCatalog()
+        val stacks = List(400) { if (it == 0 || it == 1) 1 else 0 }.toImmutableList()
+        val build = GameplayBuildSummaryProjection(
+            GameplayInstanceId(RunId(1)), GameplayRevision.ZERO, stacks,
+            character = CoreShape.ORB, weapon = WeaponId.FLUX_WAKE, weaponLevel = 7,
+            relics = immutableListOf(kinetickk.ball.content.api.EquippedRelic(kinetickk.ball.content.api.RelicId.KINETIC_FLYWHEEL, 2)),
+        )
+        // Item 0 was acquired this run and is new: NEW stamp on top, stack badge below.
+        val model = CodexRenderModel(immutableSetOf(), CodexRunStacks(stacks, build), catalog.items, newItemIds = immutableSetOf(0))
+        val keys = listOf("item/0", "item/1", "relic/KINETIC_FLYWHEEL", "weapon/FLUX_WAKE")
+        for (language in AppLanguage.entries) for ((width, height) in listOf(1440 to 810, 390 to 844, 844 to 390)) for (scale in listOf(1f, 1.25f, 1.75f)) androidx.compose.ui.test.v2.runDesktopComposeUiTest(width, height) {
+            setContent {
+                CompositionLocalProvider(LocalAppLanguage provides language, androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(1f, 1f)) {
+                    Box(Modifier.requiredSize(width.dp, height.dp)) { CodexContent(catalog, model, codexTestProgress(), scale) { } }
+                }
+            }
+            onNodeWithTag("codex-tab-0").assertIsSelected()
+            // The Build tab, then the collection grid (smaller cells) with the same in-run items.
+            (keys.map { it to true } + listOf("item/0", "item/1").map { it to false }).forEach { (key, buildTab) ->
+                if (!buildTab) onNodeWithTag("codex-tab-1").performSemanticsAction(SemanticsActions.OnClick)
+                val where = "$key ${if (buildTab) "build" else "collection"} ${width}x$height ${language.code} @$scale"
+                onNodeWithTag("codex-grid").performScrollToKey(key)
+                val cell = onNodeWithTag("codex-slot-$key").fetchSemanticsNode().boundsInRoot
+                val badge = onNodeWithTag("codex-badge-$key", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+                if (key.startsWith("item/")) {
+                    // Drawn pixels: the 1 px strips just left of and just above the badge plate keep the
+                    // cell's plain face, so no glyph ink runs under the badge.
+                    val pixels = onRoot().captureToImage().toPixelMap()
+                    val face = pixels[(cell.right - 2f).toInt(), (cell.top + cell.height * 0.5f).toInt()]
+                    val strips = (badge.top.toInt() + 1 until badge.bottom.toInt() - 1).map { (badge.left - 1f).toInt() to it } +
+                        (badge.left.toInt() + 1 until badge.right.toInt() - 1).map { it to (badge.top - 1f).toInt() }
+                    strips.forEach { (x, y) ->
+                        val pixel = pixels[x, y]
+                        val delta = maxOf(kotlin.math.abs(pixel.red - face.red), kotlin.math.abs(pixel.green - face.green), kotlin.math.abs(pixel.blue - face.blue))
+                        assertTrue(delta < 0.05f, "glyph ink at $x,$y next to the badge ($where)")
+                    }
+                }
+                val stamp = onAllNodesWithTag("codex-new-$key", useUnmergedTree = true).fetchSemanticsNodes().singleOrNull()?.boundsInRoot
+                assertEquals(key == "item/0", stamp != null, where)
+                val top = codexNewBand(stamp?.let { androidx.compose.ui.geometry.Size(it.width, it.height) }, 1f)
+                val glyph = codexCellGlyph(cell.width, top, 1f, codexBadgeBand(codexBadgeFont(codexUiScale(scale)), 1f), badge.width)
+                val center = androidx.compose.ui.geometry.Offset(cell.left + glyph.centerX, cell.top + glyph.centerY)
+                val reach = glyph.radius * CODEX_GLYPH_REACH
+                // The glyph with its stack ring stays clear of the badge plate...
+                val nearest = androidx.compose.ui.geometry.Offset(center.x.coerceIn(badge.left, badge.right), center.y.coerceIn(badge.top, badge.bottom))
+                assertTrue((nearest - center).getDistance() >= reach - 0.5f, "glyph (reach $reach at $center) runs under the badge $badge ($where)")
+                // ...and below the rotated NEW stamp.
+                stamp?.let { assertTrue(it.bottom + it.width * 0.5f * 0.1045f <= center.y - reach + 0.5f, "stamp covers the glyph ($where)") }
+                assertTrue(center.x - reach >= cell.left - 0.5f && center.x + reach <= cell.right + 0.5f && center.y + reach <= cell.bottom + 0.5f,
+                    "glyph leaves the cell ($where)")
+                // Build-tab glyphs stay at least as large as a 64 dp catalog cell's NEW glyph; a 64 dp cell
+                // carrying both a NEW stamp and a badge keeps a readable glyph beside the badge.
+                assertTrue(glyph.radius >= if (buildTab) 16f else 12f, "glyph radius ${glyph.radius} at $where")
+                assertTrue(badge.bottom <= cell.bottom && badge.right <= cell.right, "badge leaves the cell ($where)")
             }
         }
     }

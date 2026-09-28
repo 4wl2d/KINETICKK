@@ -115,7 +115,8 @@ class DefaultHomeFeature(
             CanvasTextMeasurer(
                 delegate = composeTextMeasurer,
                 typography = typography,
-                scale = textScale,
+                // UI text at the design's size at the default text size; display type divides it out.
+                scale = homeUiScale(textScale),
                 language = language,
                 roles = roles,
             )
@@ -203,6 +204,7 @@ class DefaultHomeFeature(
                         hoveredTarget = hoveredTargetValue,
                         openInfo = openInfoValue,
                         activeInfo = activeInfoValue,
+                        textScale = textScale,
                     ),
                     menuMotion,
                 )

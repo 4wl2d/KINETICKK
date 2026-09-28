@@ -20,14 +20,14 @@ class CodexReducerTest {
         val empty = CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items)
         assertTrue(codexCatalogEntries(0, "", CodexItemFilter.ALL, empty, catalog, codexTestProgress()).isEmpty())
         assertTrue(codexFilteredItems(empty, catalog.items.first().name, CodexItemFilter.ALL).isEmpty())
-        val hidden = codexItemEntry(catalog.items.first(), empty)
+        val hidden = codexItemEntry(catalog.items.first(), empty, 0L)
         assertIs<CodexIcon.Unknown>(hidden.icon)
         assertNotEquals(catalog.items.first().name, hidden.title)
         assertFalse(hidden.description.contains(catalog.items.first().description))
         val found = empty.copy(discoveredItemIds = immutableSetOf(0), newItemIds = immutableSetOf(0))
         assertEquals(listOf(0), codexFilteredItems(found, "", CodexItemFilter.ALL).map { it.id })
-        assertTrue(codexItemEntry(catalog.items.first(), found).isNew)
-        assertFalse(codexItemEntry(catalog.items.first(), found.copy(newItemIds = immutableSetOf())).isNew)
+        assertTrue(codexItemEntry(catalog.items.first(), found, 0L).isNew)
+        assertFalse(codexItemEntry(catalog.items.first(), found.copy(newItemIds = immutableSetOf()), 0L).isNew)
     }
 
     @Test fun lockedCharactersRevealTheirUnlockGoalButNotTheirIdentityOrPower() {
@@ -68,7 +68,7 @@ class CodexReducerTest {
                 }
             }
             val item = catalog.items[2]
-            val offered = codexItemEntry(item, run, language).facts.single { !it.isStatus }
+            val offered = codexItemEntry(item, run, 0L, language).facts.single { !it.isStatus }
             assertTrue(level.matches(offered.value), offered.value)
             assertEquals(language.text(SessionText.LEVEL_SHORT, item.unlockLevel), offered.value)
             assertTrue(offered.info != null)

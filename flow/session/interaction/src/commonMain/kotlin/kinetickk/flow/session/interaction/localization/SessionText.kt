@@ -68,6 +68,7 @@ internal enum class SessionText : TextResource {
     RELIC_SLOT,
     EMPTY,
     SYNERGY_REQUIREMENT,
+    SYNERGY_ASPECT_PAIR,
     REQUIRES,
     MISSING,
     COMBINATION,

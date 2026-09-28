@@ -38,7 +38,7 @@ class CodexLocalizationTest {
         val item = ItemDefinition(0, "Cinder Ram", "Cinder Ram", ItemRarity.COMMON,
             ItemModifier(ItemEffect.IMPACT_DAMAGE, 0.1f), ItemModifier(ItemEffect.REGEN, 0.1f), 3, 1, "Impact")
         val model = CodexRenderModel(immutableSetOf(0), CodexRunStacks(), immutableListOf(item))
-        val russianEntry = codexItemEntry(item, model, AppLanguage.Russian)
+        val russianEntry = codexItemEntry(item, model, 0L, AppLanguage.Russian)
         assertEquals(listOf(item), codexFilteredItems(model, russianEntry.title.lowercase(), CodexItemFilter.DISCOVERED, AppLanguage.Russian))
         assertTrue(codexFilteredItems(model, "Cinder", CodexItemFilter.ALL, AppLanguage.Russian).isEmpty())
         assertEquals(listOf(item), codexFilteredItems(model, "cInDeR", CodexItemFilter.ALL, AppLanguage.English))

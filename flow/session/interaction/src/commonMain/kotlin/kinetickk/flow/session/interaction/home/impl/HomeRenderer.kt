@@ -54,6 +54,7 @@ import kinetickk.foundation.design.kkBoxHeight
 import kinetickk.foundation.design.kkChamfer
 import kinetickk.foundation.design.kkLerp
 import kinetickk.foundation.design.kkMix
+import kinetickk.foundation.design.kkStampSize
 import kinetickk.foundation.design.kkStroke
 import kinetickk.foundation.design.labelStyle
 import kinetickk.foundation.design.measureKkText
@@ -138,6 +139,67 @@ internal class HomeMenuMotion {
             tintedBase = measurer
             tintedAccent = accent
         }
+    }
+
+    private var menuBase: CanvasTextMeasurer? = null
+    private var menuMeasurerValue: CanvasTextMeasurer? = null
+
+    /** Measurer of the menu items (see [homeMenuMeasurerScale]), derived from the tinted one. */
+    fun menuMeasurer(tinted: CanvasTextMeasurer): CanvasTextMeasurer {
+        val cached = menuMeasurerValue
+        if (cached != null && menuBase === tinted) return cached
+        val scale = homeMenuMeasurerScale(tinted.scale)
+        return (if (scale == tinted.scale) tinted else CanvasTextMeasurer(tinted.delegate, scale, tinted.language, tinted.typography, tinted.roles))
+            .also {
+                menuMeasurerValue = it
+                menuBase = tinted
+            }
+    }
+
+    private var placementLayout: HomeLayoutGeometry? = null
+    private var placementScale = 0f
+    private var placementLanguage: AppLanguage? = null
+    private val placementFacts = arrayOfNulls<HomeFacts>(HomeMenuTargets.size)
+    private val placementLeft = FloatArray(HomeMenuTargets.size)
+    private val placementSub = BooleanArray(HomeMenuTargets.size)
+
+    /** Left edge (px) of menu item [index] and whether its sub-value fits (see [homeMenuPlacement]), cached. */
+    fun menuPlacement(menu: CanvasTextMeasurer, layout: HomeLayoutGeometry, index: Int, label: String, facts: HomeFacts, density: Float): Float {
+        if (placementLayout !== layout || placementScale != menu.scale || placementLanguage != menu.language) {
+            placementFacts.fill(null)
+            placementLayout = layout
+            placementScale = menu.scale
+            placementLanguage = menu.language
+        }
+        if (placementFacts[index] !== facts) {
+            val bounds = layout.bounds(HomeMenuTargets[index])
+            val placement = homeMenuPlacement(menu, bounds, label, facts.sub, facts.stamp, layout.scene.menuFontSize, density)
+            placementLeft[index] = placement.left
+            placementSub[index] = placement.showSub
+            placementFacts[index] = facts
+        }
+        return placementLeft[index]
+    }
+
+    /** Whether the last [menuPlacement] of item [index] keeps its sub-value. */
+    fun menuShowsSub(index: Int): Boolean = placementSub[index]
+
+    private var formLayout: HomeLayoutGeometry? = null
+    var formNameRight = 0f
+        private set
+    var formDescriptionTop = 0f
+        private set
+    var formDescriptionBottom = 0f
+        private set
+
+    /** Caches the form name's right end and the description span (both follow the layout only). */
+    fun formPanel(layout: HomeLayoutGeometry, density: Float) {
+        if (formLayout === layout) return
+        formLayout = layout
+        formNameRight = homeFormNameRight(layout, density)
+        val (top, bottom) = homeFormDescriptionSpan(layout, density)
+        formDescriptionTop = top
+        formDescriptionBottom = bottom
     }
 
     private var strokeUnit = -1f
@@ -249,7 +311,7 @@ internal class HomeMenuMotion {
             labelKeyMeasurer = text
             labelKeyWidth = tile.width
             CoreShape.entries.forEach { entry ->
-                labelSizes[entry.ordinal] = homeTileLabelSize(model.coreShape(entry).displayName.localizedContent(text.language), tile, density) { name, size ->
+                labelSizes[entry.ordinal] = homeTileLabelSize(model.coreShape(entry).displayName.localizedContent(text.language), tile, density, text.scale) { name, size ->
                     measureKkText(text, name, text.typography.labelStyle(size), uppercase = true).size.width
                 }
             }
@@ -280,17 +342,24 @@ internal fun homeTileCut(tile: Rect, density: Float): Float = (if (tile.width < 
 internal const val HOME_TILE_LABEL_PADDING_DP = 6f
 
 /**
- * Label size (13 down to 7 px) at which [name] fits its tile's face with padding: the slanted face
- * near the label is the tile width minus one cut. 0 hides the label (icon only) when even 7 px
- * does not fit or the tile is too short.
+ * Label size (13 down to the size that draws 7 px at the measurer's [scale]) at which [name] fits
+ * its tile's face with padding: the slanted face near the label is the tile width minus one cut.
+ * 0 hides the label (icon only) when even 7 px does not fit or the tile is too short.
  */
-internal fun homeTileLabelSize(name: String, tile: Rect, density: Float, width: (String, Float) -> Int): Float {
+internal fun homeTileLabelSize(name: String, tile: Rect, density: Float, scale: Float, width: (String, Float) -> Int): Float {
     if (tile.height < 60f * density) return 0f
     val available = tile.width - homeTileCut(tile, density) - 2f * HOME_TILE_LABEL_PADDING_DP * density
-    return HomeTileLabelSizes.firstOrNull { size -> width(name, size) <= available } ?: 0f
+    val smallest = HOME_TILE_LABEL_MIN_PX / scale.coerceAtLeast(0.1f)
+    var size = 13f
+    while (size > smallest) {
+        if (width(name, size) <= available) return size
+        size -= 1f
+    }
+    return if (width(name, smallest) <= available) smallest else 0f
 }
 
-private val HomeTileLabelSizes = listOf(13f, 12f, 11f, 10f, 9f, 8f, 7f)
+/** Smallest drawn size (px) of a form tile label. */
+internal const val HOME_TILE_LABEL_MIN_PX = 7f
 
 /**
  * Seconds into the menu trail cycle (`kk-trail`: 0.9 s, lines delayed 0 / 0.15 / 0.3 s, opaque
@@ -452,7 +521,69 @@ internal class HomeDrawState(
     val hoveredTarget: HomeLayoutTarget?,
     val openInfo: HomeInfoTarget?,
     val activeInfo: HomeInfoTarget?,
+    /** The player's text size setting (the measurer carries the UI factor, [homeUiScale]). */
+    val textScale: Float = HOME_DEFAULT_TEXT_SCALE,
 )
+
+/** The game's default text size, at which Home UI text renders at the design's size. */
+internal const val HOME_DEFAULT_TEXT_SCALE = 1.25f
+
+/**
+ * Measurer scale for Home UI text at the player's [textScale]: 1 (the design's size) at the default
+ * 125 %, 0.8 at 100 %, 1.4 at 175 %. Display type (menu labels, form name, hero word) divides it out.
+ */
+internal fun homeUiScale(textScale: Float): Float = textScale / HOME_DEFAULT_TEXT_SCALE
+
+/**
+ * Measurer scale of the menu items for a Home measurer of [uiScale]. The foundation item derives its
+ * slab, echo and speed lines from the font size before this scale, so it stays at least 1: the
+ * geometry keeps the design size (never larger, see [HOME_MENU_REACH]), and the stamp and
+ * sub-value keep at least their design size and grow with larger text.
+ */
+internal fun homeMenuMeasurerScale(uiScale: Float): Float = max(1f, uiScale)
+
+/** Where a one-column menu item is drawn (px) and whether its optional sub-value is kept. */
+internal class HomeMenuPlacement(val left: Float, val showSub: Boolean)
+
+/**
+ * Keeps a one-column menu item inside its row [bounds] (px): larger text grows its stamp and
+ * sub-value while its slab and speed lines shrink, so it may move left by the reach that frees
+ * (never past [homeSelectedMenuExtent]); if it still runs past the row, the sub-value (shown only
+ * when selected) is left out. Mirrors the foundation item's layout: label after 22 px, each
+ * extra 18 px after the previous one, 26 px moved left when selected (board px at font 64).
+ */
+internal fun homeMenuPlacement(
+    menu: CanvasTextMeasurer,
+    bounds: Rect,
+    label: String,
+    sub: String?,
+    stamp: String?,
+    menuFontPx: Float,
+    density: Float,
+): HomeMenuPlacement {
+    val fontSize = max(1f, menuFontPx / density / menu.scale)
+    val k = fontSize / 64f
+    fun u(value: Float) = value * k * density
+    val text = measureKkText(menu, label, menu.typography.condStyle(fontSize, lineHeightEm = 1f), uppercase = true).size.width
+    val subWidth = sub?.let {
+        measureKkText(menu, it, menu.typography.monoStyle(11f * k.coerceAtLeast(0.8f), trackingEm = 0.06f), uppercase = true).size.width
+    }
+    val stampWidth = stamp?.let { kkStampSize(menu, it, density, 14f * k.coerceAtLeast(0.8f)).width } ?: 0f
+    fun right(left: Float, withSub: Boolean): Float {
+        val stampPart = if (stamp != null) u(18f) + stampWidth else 0f
+        val resting = left + u(22f) + text + stampPart
+        val selected = resting - u(26f) + if (withSub && subWidth != null) u(18f) + subWidth else 0f
+        return max(resting, selected)
+    }
+    val minLeft = bounds.left - max(0f, HOME_MENU_REACH / 64f * (menuFontPx - fontSize * density))
+    fun place(withSub: Boolean): Float {
+        val over = right(bounds.left, withSub) - bounds.right
+        return if (over <= 0f) bounds.left else max(minLeft, bounds.left - over)
+    }
+    val withSub = place(true)
+    if (subWidth == null || right(withSub, true) <= bounds.right) return HomeMenuPlacement(withSub, subWidth != null)
+    return HomeMenuPlacement(place(false), false)
+}
 
 internal fun DrawScope.drawHome(
     model: HomeUiModel,
@@ -469,13 +600,13 @@ internal fun DrawScope.drawHome(
     val accent = motion.accent
     val tinted = motion.tinted(text)
     val language = text.language
-    val facts = motion.facts(model, state.activeTarget, language, text.scale)
+    val facts = motion.facts(model, state.activeTarget, language, state.textScale)
     drawRect(kkMix(Kk.Ink, accent, 0.07f))
     drawKkGrid(Rect(Offset.Zero, size), Kk.Bone.copy(alpha = 0.045f), scene.gridSpacing / density)
     drawBackgroundWord(text, facts.label, scene, accent)
     drawHero(model, text, time, scene, state, motion)
     drawHeader(model, text, scene, accent)
-    drawMenu(model, tinted, layout, motion)
+    drawMenu(model, tinted, layout, motion, state.textScale)
     scene.facts?.let { drawFactsCard(tinted, it, facts, layout, state, motion, accent) }
     drawFormPanel(model, tinted, layout, state, motion)
     drawLegal(text, layout)
@@ -878,30 +1009,103 @@ private fun DrawScope.drawMenu(
     tinted: CanvasTextMeasurer,
     layout: HomeLayoutGeometry,
     motion: HomeMenuMotion,
+    textScale: Float,
 ) {
     val scene = layout.scene
     val language = tinted.language
+    val menu = motion.menuMeasurer(tinted)
     HomeMenuTargets.forEachIndexed { index, target ->
-        val bounds = layout.bounds(target)
         val label = language.text(HomeMenuLabels[index])
-        val facts = motion.menuFacts(model, index, language, tinted.scale)
-        val selection = motion.menuSelection(index)
-        val draw: DrawScope.() -> Unit = {
-            drawKkMenuItem(
-                tinted, bounds.left, bounds.center.y, label,
-                selection = selection,
-                time = motion.trailTime,
-                fontSize = displaySize(tinted, scene.menuFontSize),
-                // The board keeps the stamp right after the label; the sub value joins when selected.
-                // Two-column phone menus have no room for either.
-                stamp = if (scene.menuColumns == 1) facts.stamp else null,
-                sub = if (scene.menuColumns == 1 && selection > 0.01f) facts.sub else null,
-                edgeRight = if (scene.menuColumns == 1) size.width else bounds.right,
-            )
-        }
-        if (scene.menuColumns == 1) draw() else clipRect(bounds.left - 4f * density, bounds.top - 2f * density, bounds.right + 4f * density, bounds.bottom + 2f * density) { draw() }
+        val facts = motion.menuFacts(model, index, language, textScale)
+        // One column: the item stays inside its row (see homeMenuPlacement).
+        val left = if (scene.menuColumns == 1) motion.menuPlacement(menu, layout, index, label, facts, density) else layout.bounds(target).left
+        val showSub = scene.menuColumns == 1 && motion.menuShowsSub(index)
+        drawHomeMenuItem(menu, layout, index, label, facts, left, showSub, motion.menuSelection(index), motion.trailTime)
     }
 }
+
+/**
+ * Menu item [index] as Home draws it with the menu measurer [menu]: from [left] (one column: see
+ * [homeMenuPlacement], which also decides [showSub]) at its row's center, [selection] 0..1.
+ */
+internal fun DrawScope.drawHomeMenuItem(
+    menu: CanvasTextMeasurer,
+    layout: HomeLayoutGeometry,
+    index: Int,
+    label: String,
+    facts: HomeFacts,
+    left: Float,
+    showSub: Boolean,
+    selection: Float,
+    time: Float,
+) {
+    val scene = layout.scene
+    val bounds = layout.bounds(HomeMenuTargets[index])
+    if (scene.menuColumns == 1) {
+        drawKkMenuItem(
+            menu, left, bounds.center.y, label,
+            selection = selection,
+            time = time,
+            fontSize = displaySize(menu, scene.menuFontSize),
+            // The board keeps the stamp right after the label; the sub value joins when selected.
+            stamp = facts.stamp,
+            sub = if (showSub && selection > 0.01f) facts.sub else null,
+            edgeRight = size.width,
+        )
+    } else {
+        // Two-column phone menus have no room for the stamp or the sub value.
+        clipRect(bounds.left - 4f * density, bounds.top - 2f * density, bounds.right + 4f * density, bounds.bottom + 2f * density) {
+            drawKkMenuItem(
+                menu, left, bounds.center.y, label,
+                selection = selection,
+                time = time,
+                fontSize = displaySize(menu, scene.menuFontSize),
+                edgeRight = bounds.right,
+            )
+        }
+    }
+}
+
+/**
+ * The form name at its display size [sizePx], or smaller when that is wider than [room] px (a long
+ * locked name on the smallest landscape screens): shrunk to fit whole, never cut.
+ */
+internal fun homeFormNameLayout(text: CanvasTextMeasurer, name: String, sizePx: Float, room: Float, density: Float): TextLayoutResult {
+    val size = max(1f, sizePx / density / text.scale)
+    val full = measureKkText(text, name, text.typography.wideStyle(size), uppercase = true)
+    if (full.size.width <= room) return full
+    return measureKkText(text, name, text.typography.wideStyle(size * max(0.5f, room / full.size.width) * 0.99f), uppercase = true)
+}
+
+/**
+ * Vertical span (px) the form description may take: between the form name's line box and the tiles
+ * (a selected tile lifts 8 dp).
+ */
+internal fun homeFormDescriptionSpan(layout: HomeLayoutGeometry, density: Float): Pair<Float, Float> {
+    val scene = layout.scene
+    val top = scene.formNameCenterY + scene.formNameSize * 0.45f
+    val bottom = HomeCoreTargets.minOf { layout.bounds(it).top } - 8f * density
+    return top to bottom
+}
+
+/**
+ * The form's description (body 16) in [width] × [height] px, always whole: one line shrunk down to
+ * 12, else two lines from 12 down to 10; null (the form's (!) shows it) when even that is too long.
+ */
+internal fun homeFormDescriptionLayout(text: CanvasTextMeasurer, description: String, width: Float, height: Float): TextLayoutResult? {
+    for (size in HomeDescriptionSizes) {
+        val line = measureKkText(text, description, text.typography.bodyStyle(size), maxWidth = width)
+        if (!line.didOverflowHeight && !line.isLineEllipsized(0) && line.kkBoxHeight <= height) return line
+    }
+    for (size in HomeDescriptionTwoLineSizes) {
+        val lines = measureKkText(text, description, text.typography.bodyStyle(size, lineHeightEm = 1.2f), maxWidth = width, maxLines = 2)
+        if (!lines.didOverflowHeight && !lines.isLineEllipsized(lines.lineCount - 1) && lines.kkBoxHeight <= height) return lines
+    }
+    return null
+}
+
+private val HomeDescriptionSizes = floatArrayOf(16f, 15f, 14f, 13f, 12f)
+private val HomeDescriptionTwoLineSizes = floatArrayOf(12f, 11f, 10f)
 
 /** Measured facts card: the label and big value on the left, then one row per fact. */
 internal class HomeFactsCardLayout(
@@ -1006,23 +1210,23 @@ private fun DrawScope.drawFormPanel(
     val unlocked = model.isCoreShapeUnlocked(shape)
     val definition = model.coreShape(shape)
     val info = layout.info(HomeInfoTarget.FORM)
-    val nameRight = homeFormNameRight(layout, density)
+    motion.formPanel(layout, density)
+    val nameRight = motion.formNameRight
     val name = if (unlocked) definition.displayName.localizedContent(language) else language.text(SessionText.UNKNOWN_CORE)
     drawKkText(
-        text, name, text.typography.wideStyle(displaySize(text, scene.formNameSize)),
-        scene.formNameLeft, scene.formNameCenterY, if (unlocked) Kk.Bone else Kk.Mute,
-        valign = KkVAlign.CENTER, uppercase = true, maxWidth = max(1f, nameRight - scene.formNameLeft),
+        homeFormNameLayout(text, name, scene.formNameSize, nameRight - scene.formNameLeft, density),
+        scene.formNameLeft, scene.formNameCenterY, if (unlocked) Kk.Bone else Kk.Mute, valign = KkVAlign.CENTER,
     )
     if (info != null) {
         drawKkInfoButton(text, info.bounds, active = state.activeInfo == HomeInfoTarget.FORM || state.openInfo == HomeInfoTarget.FORM)
     }
     val description = scene.formDescription
     if (description != null && unlocked) {
-        val layoutText = measureKkText(
-            text, definition.mechanicDescription.localizedContent(language), text.typography.bodyStyle(16f),
-            maxWidth = description.width,
-        )
-        drawKkText(layoutText, description.left, description.center.y, Kk.Bone2, valign = KkVAlign.CENTER)
+        val top = motion.formDescriptionTop
+        val bottom = motion.formDescriptionBottom
+        homeFormDescriptionLayout(text, definition.mechanicDescription.localizedContent(language), description.width, bottom - top)?.let {
+            drawKkText(it, description.left, (top + bottom) * 0.5f, Kk.Bone2, valign = KkVAlign.CENTER)
+        }
     }
     HomeCoreTargets.forEach { target ->
         val tileShape = requireNotNull(target.coreShapeOrNull())
@@ -1050,7 +1254,7 @@ private fun DrawScope.drawFormPanel(
     }
 }
 
-private fun DrawScope.drawLegal(text: CanvasTextMeasurer, layout: HomeLayoutGeometry) {
+internal fun DrawScope.drawLegal(text: CanvasTextMeasurer, layout: HomeLayoutGeometry) {
     val scene = layout.scene
     val legal = homeLegalLayout(text, layout, density)
     var right = scene.legalRight
