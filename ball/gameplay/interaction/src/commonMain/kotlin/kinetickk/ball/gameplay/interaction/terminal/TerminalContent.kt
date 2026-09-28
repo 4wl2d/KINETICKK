@@ -50,6 +50,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.canvas.OverlayRelicSlot
 import kinetickk.ball.gameplay.interaction.canvas.overlayColor
@@ -57,6 +58,7 @@ import kinetickk.ball.gameplay.interaction.canvas.overlayCompact
 import kinetickk.ball.gameplay.interaction.canvas.overlayGrouped
 import kinetickk.ball.gameplay.interaction.canvas.overlayIcon
 import kinetickk.ball.gameplay.interaction.canvas.overlayLevel
+import kinetickk.ball.gameplay.interaction.canvas.overlayRowWidths
 import kinetickk.ball.gameplay.interaction.input.GameplayInput
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.localization.OverlayRedesignText
@@ -74,6 +76,7 @@ import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
+import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.InterfaceTypography
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkButtonSize
@@ -94,13 +97,17 @@ import kinetickk.foundation.design.condStyle
 import kinetickk.foundation.design.drawKkGem
 import kinetickk.foundation.design.drawKkGrid
 import kinetickk.foundation.design.drawKkHalftone
+import kinetickk.foundation.design.drawKkIcon
 import kinetickk.foundation.design.drawKkRadialFade
 import kinetickk.foundation.design.drawKkRelicSlot
 import kinetickk.foundation.design.drawKkRingBurst
-import kinetickk.foundation.design.drawKkWeaponSlot
+import kinetickk.foundation.design.drawKkTag
 import kinetickk.foundation.design.kkLerp
+import kinetickk.foundation.design.kkSlab
 import kinetickk.foundation.design.kkStroke
+import kinetickk.foundation.design.kkTagSize
 import kinetickk.foundation.design.labelStyle
+import kinetickk.foundation.design.measureKkText
 import kinetickk.foundation.design.monoStyle
 import kinetickk.foundation.design.rememberInterfaceTypography
 import kinetickk.foundation.design.rememberKkCanvasMeasurer
@@ -302,7 +309,7 @@ private fun CompactReport(scene: ReportScene, mirrored: Boolean) {
             "kinetickk.gameplay.results.summary", Kk.Ink,
             PaddingValues(start = 18.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
         ) {
-            ReportSummary(scene, frame, titleSize = 38f, matterSize = 34f, gemSize = 20f, stampSize = 15f, slotSize = 46f, relicSize = 28f,
+            ReportSummary(scene, frame, titleSize = 38f, matterSize = 34f, gemSize = 20f, stampSize = 15f, slotSize = 50f, relicSize = 28f,
                 compact = true, gapScale = 0.6f)
         }
         Column(
@@ -318,10 +325,8 @@ private fun CompactReport(scene: ReportScene, mirrored: Boolean) {
                 ReportStatistics(scene, frame, rowHeight = 26f, labelSize = 13f, valueSize = 17f)
             }
             Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                ReportActions(scene, frame, Modifier.weight(1f), primaryHeight = 48f, primaryFont = 22f, ghostFont = 18f)
-                ReportMenu(scene, frame, Modifier, touch = true)
-            }
+            // Menu shares the row, so the row sizes all three buttons together.
+            ReportActions(scene, frame, Modifier.fillMaxWidth(), primaryHeight = 48f, primaryFont = 22f, ghostFont = 18f, withMenu = true)
         }
     }
 }
@@ -335,7 +340,7 @@ private fun PortraitReport(scene: ReportScene) {
             Modifier.fillMaxSize(), "kinetickk.gameplay.results.summary", Kk.Ink,
             PaddingValues(horizontal = 18.dp, vertical = 16.dp),
         ) {
-            ReportSummary(scene, frame, titleSize = 44f, matterSize = 40f, gemSize = 22f, stampSize = 15f, slotSize = 44f, relicSize = 30f,
+            ReportSummary(scene, frame, titleSize = 44f, matterSize = 40f, gemSize = 22f, stampSize = 15f, slotSize = 50f, relicSize = 30f,
                 compact = true, inlineShatter = true)
             Spacer(Modifier.height(20.dp))
             ReportActions(scene, frame, Modifier.fillMaxWidth(), primaryHeight = 56f, primaryFont = 24f, ghostFont = 20f)
@@ -515,20 +520,22 @@ private fun ColumnScope.ReportSummary(
     fun display(value: Float, min: Float) = max(value * k, min)
     fun gap(value: Float): Dp = (value * k * gapScale).dp
     fun box(value: Float): Dp = (value * k).dp
+    // The header, title and stamp sit above the inline shatter, whose halo and debris reach past
+    // its own box (portrait).
     Row(
-        Modifier.enter(scene, 0f, left = true),
+        Modifier.zIndex(1f).enter(scene, 0f, left = true),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         OverlayText(language.text(GameplayText.RunRecord), typography.labelStyle(sp(15f), color = Kk.Mute), uppercase = true)
         presentation.rebirth?.let { OverlayTag(it, variant = KkTagVariant.LINE, textScale = text) }
-        presentation.form?.let { OverlayTag(it, variant = KkTagVariant.LINE, textScale = text) }
+        presentation.form?.let { ReportFormTag(it, presentation.formIcon, text) }
     }
     Spacer(Modifier.height(gap(18f)))
     val titleTop = language.text(if (presentation.victory) OverlayRedesignText.VictoryTitleTop else OverlayRedesignText.DefeatTitleTop)
     val titleBottom = language.text(if (presentation.victory) OverlayRedesignText.VictoryTitleBottom else OverlayRedesignText.DefeatTitleBottom)
     Column(
-        Modifier.fillMaxWidth().semantics(mergeDescendants = true) { heading() }.graphicsLayer {
+        Modifier.zIndex(1f).fillMaxWidth().semantics(mergeDescendants = true) { heading() }.graphicsLayer {
             val p = ((scene.t - 0.1f) / 0.5f).coerceIn(0f, 1f)
             val s = KkSlam.scale(p)
             scaleX = s
@@ -543,7 +550,7 @@ private fun ColumnScope.ReportSummary(
     }
     Spacer(Modifier.height(gap(22f)))
     val stamp = if (presentation.victory) language.text(GameplayText.ArchitectFallen) else presentation.reason
-    Box(Modifier.enter(scene, 0.3f)) {
+    Box(Modifier.zIndex(1f).enter(scene, 0.3f)) {
         OverlayStamp(stamp, Modifier.testTag("kinetickk.gameplay.results.cause"),
             if (presentation.victory) KkStampVariant.YOU else KkStampVariant.THREAT, fontSize = stampSize * k, textScale = text)
     }
@@ -579,10 +586,15 @@ private fun ColumnScope.ReportSummary(
                 Modifier.padding(end = 8.dp), uppercase = true)
             val measurer = rememberKkCanvasMeasurer(1f)
             Box(
-                Modifier.size(box(slotSize)).semantics { this.text = AnnotatedString(presentation.weapon + " " + presentation.weaponLevel.orEmpty()) }
-                    .drawBehind {
-                        drawKkWeaponSlot(measurer, Rect(Offset.Zero, size), icon, presentation.weaponLevel,
-                            maxLevel = presentation.weaponMaxLevel, iconSizeDp = size.width / density * 0.5f)
+                Modifier.size(box(slotSize)).testTag("kinetickk.gameplay.results.weapon")
+                    .semantics { this.text = AnnotatedString(presentation.weapon + " " + presentation.weaponLevel.orEmpty()) }
+                    .drawWithCache {
+                        // The level label keeps inside the sheared face and the icon clears it at every slot size.
+                        val bounds = Rect(Offset.Zero, size)
+                        val placement = weaponSlotPlacement(measurer, bounds, icon, presentation.weaponLevel)
+                        onDrawBehind {
+                            drawPlacedWeaponSlot(measurer, bounds, icon, presentation.weaponLevel, presentation.weaponMaxLevel, placement = placement)
+                        }
                     },
             )
             if (presentation.relics.isNotEmpty()) {
@@ -600,6 +612,44 @@ private fun ColumnScope.ReportSummary(
         }
     }
 }
+
+/**
+ * The Core form's line tag with the form icon before its name (Report board "■ Ram"; the pause
+ * chip draws the same icon). The icon follows the label's size, 6 dp before the text as on the
+ * board; the plate is the line tag's, widened by the icon.
+ */
+@Composable
+private fun ReportFormTag(text: String, icon: KkIcon?, textScale: Float) {
+    if (icon == null) {
+        OverlayTag(text, variant = KkTagVariant.LINE, textScale = textScale)
+        return
+    }
+    val measurer = rememberKkCanvasMeasurer(textScale)
+    val density = LocalDensity.current.density
+    val plate = remember(measurer, text, density) { kkTagSize(measurer, text, density) }
+    val iconPx = FormTagFontSp * FormTagIconEm * textScale * density
+    val lead = iconPx + FormTagIconGapDp * density
+    Box(
+        Modifier.size(((plate.width + lead) / density).dp, (plate.height / density).dp).testTag("kinetickk.gameplay.results.form")
+            .semantics { this.text = AnnotatedString(text) }
+            .drawWithCache {
+                val inset = 0.75f * density
+                val outline = Path().kkSlab(inset, inset, size.width - inset, size.height - inset, 6f * density)
+                onDrawBehind {
+                    drawPath(outline, Kk.Line2, style = kkStroke(1.5f * density))
+                    drawKkIcon(icon, Offset(FormTagPaddingDp * density + iconPx * 0.5f, size.height * 0.5f), iconPx, Kk.Bone)
+                    // The text plate after the icon keeps the tag's own padding; the outline above is the whole tag's.
+                    drawKkTag(measurer, text, Offset(lead, 0f), KkTagVariant.LINE, background = Color.Transparent)
+                }
+            },
+    )
+}
+
+/** Tag label size (`.tag`, 13 px), icon size relative to it, and the board's glyph gap. */
+private const val FormTagFontSp = 13f
+private const val FormTagIconEm = 0.84f
+private const val FormTagIconGapDp = 6f
+private const val FormTagPaddingDp = 10f
 
 /** A single line that shrinks to fit its width (huge wide titles, long Russian words). */
 @Composable
@@ -674,39 +724,105 @@ private fun ReportRows(
     }
 }
 
-/** Victory: Rebirth (primary) + Re-enter; defeat: Re-enter. The game has no Lab action here. */
+/** One button of the report's action row. */
+private class ReportAction(
+    val label: String,
+    val input: GameplayInput,
+    val tag: String,
+    val variant: KkButtonVariant,
+    val size: KkButtonSize,
+    /** Board font size, before the text-size factor. */
+    val font: Float,
+    /** Share of the row's spare width; 0 keeps the natural width plus [slackDp]. */
+    val weight: Float,
+    val height: Dp,
+    val enterDelay: Float,
+    val slackDp: Float = 0f,
+    val contentDescription: String? = null,
+)
+
+/**
+ * Victory: Rebirth (primary) + Re-enter; defeat: Re-enter. The game has no Lab action here. On a
+ * phone in landscape Menu shares the row ([withMenu]). The row is sized as a whole
+ * ([overlayRowWidths]): every label keeps its board size while the row has room, and when it has
+ * not, all labels shrink by one factor, so the primary label stays the largest and a larger text
+ * size never leaves a label smaller than the default did.
+ */
 @Composable
-private fun ReportActions(scene: ReportScene, frame: OverlayFrame, modifier: Modifier, primaryHeight: Float, primaryFont: Float, ghostFont: Float) {
+private fun ReportActions(
+    scene: ReportScene,
+    frame: OverlayFrame,
+    modifier: Modifier,
+    primaryHeight: Float,
+    primaryFont: Float,
+    ghostFont: Float,
+    withMenu: Boolean = false,
+) {
     val language = LocalAppLanguage.current
     val height = (primaryHeight * (if (primaryHeight >= 64f) frame.scale else 1f)).coerceAtLeast(48f).dp
     val big = primaryHeight >= 64f
-    Row(
-        modifier.enter(scene, 0.6f),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        if (scene.presentation.victory) {
-            OverlayButton(
-                language.text(GameplayText.RebirthNext), { scene.onInput(GameplayInput.OpenRebirth) },
-                Modifier.weight(1f).height(height).testTag("kinetickk.gameplay.rebirth"),
-                KkButtonVariant.PRIMARY, if (big) KkButtonSize.LG else KkButtonSize.MD, scene.actionsEnabled,
-                textScale = scene.textScale, fontSize = primaryFont * (if (big) frame.scale else 1f),
-            )
-            OverlayButton(
-                language.text(GameplayText.Reenter), { scene.onInput(GameplayInput.RestartRun) },
-                Modifier.weight(0.62f).height(height).testTag("kinetickk.gameplay.restart"),
-                KkButtonVariant.GHOST, KkButtonSize.MD, scene.actionsEnabled,
-                textScale = scene.textScale, fontSize = ghostFont * (if (big) frame.scale else 1f),
-            )
-        } else {
-            OverlayButton(
-                language.text(GameplayText.Reenter), { scene.onInput(GameplayInput.RestartRun) },
-                Modifier.weight(1f).height(height).testTag("kinetickk.gameplay.restart"),
-                KkButtonVariant.PRIMARY, if (big) KkButtonSize.LG else KkButtonSize.MD, scene.actionsEnabled,
-                textScale = scene.textScale, fontSize = primaryFont * (if (big) frame.scale else 1f),
-            )
+    val fontScale = if (big) frame.scale else 1f
+    val primarySize = if (big) KkButtonSize.LG else KkButtonSize.MD
+    val actions = remember(language, scene.presentation.victory, withMenu, height, primarySize, fontScale, primaryFont, ghostFont) {
+        buildList {
+            if (scene.presentation.victory) {
+                add(ReportAction(language.text(GameplayText.RebirthNext), GameplayInput.OpenRebirth, "kinetickk.gameplay.rebirth",
+                    KkButtonVariant.PRIMARY, primarySize, primaryFont * fontScale, 1f, height, 0.6f))
+                add(ReportAction(language.text(GameplayText.Reenter), GameplayInput.RestartRun, "kinetickk.gameplay.restart",
+                    KkButtonVariant.GHOST, KkButtonSize.MD, ghostFont * fontScale, 0.62f, height, 0.6f))
+            } else {
+                add(ReportAction(language.text(GameplayText.Reenter), GameplayInput.RestartRun, "kinetickk.gameplay.restart",
+                    KkButtonVariant.PRIMARY, primarySize, primaryFont * fontScale, 1f, height, 0.6f))
+            }
+            if (withMenu) {
+                add(ReportAction(language.text(OverlayRedesignText.Menu), GameplayInput.ExitToHome, "kinetickk.gameplay.exit",
+                    KkButtonVariant.GHOST, KkButtonSize.XS, ReportMenuFont, 0f, 48.dp, 0.7f, ReportMenuSlackDp,
+                    language.text(GameplayText.ReturnHome)))
+            }
+        }
+    }
+    val measurer = rememberKkCanvasMeasurer(scene.textScale)
+    val reference = rememberKkCanvasMeasurer(1f)
+    val density = LocalDensity.current.density
+    BoxWithConstraints(modifier) {
+        val available = constraints.maxWidth.toFloat()
+        val (widths, factor) = remember(actions, measurer, reference, density, available) {
+            val gaps = (0 until actions.size - 1).sumOf { index -> reportActionGap(actions, index).toDouble() }.toFloat() * density
+            // One px more than the padding guards against rounding when a shrunk label is measured again.
+            val pads = FloatArray(actions.size) { index -> (actions[index].size.paddingDp + actions[index].slackDp) * density + 1f }
+            val weights = FloatArray(actions.size) { index -> actions[index].weight }
+            fun labels(with: CanvasTextMeasurer) = FloatArray(actions.size) { index -> reportActionLabelWidth(with, actions[index].label, actions[index].font) }
+            val row = overlayRowWidths(labels(measurer), pads, weights, available - gaps)
+            if (measurer.scale <= 1f || row.second >= 1f) return@remember row
+            // Text widths are not exactly linear in the font size: above the default the labels
+            // never end below the size the default text size gives them.
+            val floor = overlayRowWidths(labels(reference), pads, weights, available - gaps).second / measurer.scale
+            if (row.second >= floor) row else labels(measurer).let { grown -> FloatArray(actions.size) { grown[it] * floor + pads[it] } to floor }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            actions.forEachIndexed { index, action ->
+                if (index > 0) Spacer(Modifier.width(reportActionGap(actions, index - 1).dp))
+                OverlayButton(
+                    action.label, { scene.onInput(action.input) },
+                    Modifier.enter(scene, action.enterDelay).size((widths[index] / density).dp, action.height).testTag(action.tag),
+                    action.variant, action.size, scene.actionsEnabled,
+                    textScale = scene.textScale, fontSize = action.font * factor, contentDescription = action.contentDescription,
+                )
+            }
         }
     }
 }
+
+/** Gap after action [index]: 12 dp between actions, 10 dp before Menu. */
+private fun reportActionGap(actions: List<ReportAction>, index: Int): Float =
+    if (actions[index + 1].weight <= 0f) 10f else 12f
+
+/** Width in px of an action label at board size [font] (the [OverlayButton] label style). */
+private fun reportActionLabelWidth(measurer: CanvasTextMeasurer, label: String, font: Float): Float =
+    measureKkText(measurer, label, measurer.typography.condStyle(font, trackingEm = 0.02f, lineHeightEm = 1f), uppercase = true).size.width.toFloat()
+
+private const val ReportMenuFont = 14f
+private const val ReportMenuSlackDp = 12f
 
 @Composable
 private fun ReportMenu(scene: ReportScene, frame: OverlayFrame, modifier: Modifier, touch: Boolean = false) {

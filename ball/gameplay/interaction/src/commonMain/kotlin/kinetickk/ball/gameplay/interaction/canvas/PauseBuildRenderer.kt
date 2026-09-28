@@ -16,6 +16,8 @@ import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.PauseLayoutGeometry
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.localization.OverlayRedesignText
+import kinetickk.ball.gameplay.interaction.terminal.WeaponSlotPlacementMemo
+import kinetickk.ball.gameplay.interaction.terminal.drawPlacedWeaponSlot
 import kinetickk.ball.gameplay.nucleus.model.formatRunTime
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.foundation.common.localization.AppLanguage
@@ -314,10 +316,12 @@ private fun DrawScope.drawCompactBuild(
     fun y(v: Float) = area.top + v * unit
     val width = area.width / unit
     drawBuildHeader(overview, ui, display, x(0f), x(width), y(0f), y(2f), 28f * k, 10f * unit, k, 9f, 16f, time)
-    // The slot's "Lvl N" belongs to the slot component and scales with it.
+    // The slot's "Lvl N" belongs to the slot component (display type); it stays inside the sheared
+    // face and clear of the icon at any level ("Ур. 10" is as wide as the face).
     val slot = PauseRects.of(1, x(0f), y(38f), x(50f), y(88f))
-    drawKkWeaponSlot(display, slot, overview.weaponIcon, overview.weaponLevelText, ready = true,
-        maxLevel = overview.masteryTier == WeaponMastery.ASCENDED, iconSizeDp = 26f * k)
+    val placement = WeaponSlotPlacementMemo.of(this, display, slot, overview.weaponIcon, overview.weaponLevelText, PauseSlotIconShare)
+    drawPlacedWeaponSlot(display, slot, overview.weaponIcon, overview.weaponLevelText, overview.masteryTier == WeaponMastery.ASCENDED,
+        ready = true, placement = placement)
     val nameRoom = (width - 62f) * unit
     drawPauseText(PauseTextKind.WEAPON_NAME, fitOverlayText(ui, overview.weaponName, KkTextRole.COND, 18f * k, nameRoom, uppercase = true),
         x(62f), y(46f), Kk.Bone, nameRoom)
@@ -349,6 +353,9 @@ private fun DrawScope.drawCompactBuild(
     val runTop = statsTop + rows * rowHeight + 12f
     drawRunPanels(overview.compactRun, ui, x(0f), y(runTop), width * unit, 5f * unit, runHeight * unit, 4, k, 8f, 15f)
 }
+
+/** Mobile-Pause board: a 26 px icon in the 50 px slot. */
+private const val PauseSlotIconShare = 26f / 50f
 
 private val CompactStatIndices = setOf(0, 1, 3, 4, 5, 6)
 private val CompactRunIndices = setOf(1, 2, 3, 4)
