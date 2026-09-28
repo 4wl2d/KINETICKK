@@ -149,6 +149,11 @@ internal class ArmoryLayout(
     val need: Rect,
     /** True when the details overflow and [action] is pinned under the scrolling details. */
     val actionPinned: Boolean = false,
+    /** Size (px) of the weapon icon every tile draws, and its centre (tile y): one size for the whole grid. */
+    val tileIcon: Float = 0f,
+    val tileIconY: Float = 0f,
+    /** True when the mastery milestones stack one per line under the level cells. */
+    val ladderStacked: Boolean = false,
 ) {
     val gridScrollMax: Float get() = max(0f, gridContentHeight - gridViewport.height)
     val detailScrollMax: Float get() = max(0f, detailContentHeight - detailViewport.height)
@@ -174,14 +179,44 @@ internal fun armoryType(mode: ProfileLayoutMode): ArmoryType = when (mode) {
     else -> ArmoryType(9.5f, 30f, 17f, 7.5f, 21f, 14f, 11f, 12f, 9.5f, 11f, 22f)
 }
 
-/** Measured heights (px) of the inspected weapon's name block, description and tag rows. */
-internal class ArmoryDetailMetrics(val nameHeight: Float, val descriptionHeight: Float, val tagsHeight: Float)
+/**
+ * Measured heights (px) of the inspected weapon's name block, description and tag rows, and
+ * whether the mastery milestones fit side by side with their bonus groups clearly apart.
+ */
+internal class ArmoryDetailMetrics(
+    val nameHeight: Float,
+    val descriptionHeight: Float,
+    val tagsHeight: Float,
+    val masterySideBySide: Boolean = true,
+)
+
+/** A weapon tile's content padding in px (the board's `padding: 14px 22px 14px 24px`; tighter on phones). */
+internal class ArmoryTileInsets(val left: Float, val top: Float, val right: Float, val bottom: Float)
+
+internal fun armoryTileInsets(frame: ProfileFrame): ArmoryTileInsets = if (frame.regular) {
+    ArmoryTileInsets(frame.d(24f), frame.d(14f), frame.d(22f), frame.d(14f))
+} else {
+    ArmoryTileInsets(frame.d(14f), frame.d(10f), frame.d(12f), frame.d(10f))
+}
+
+/**
+ * The tallest status line and the tallest name block (the name, plus the tag line under it on
+ * the regular tile) of all tiles in the grid, in px.
+ */
+internal class ArmoryTileMetrics(val statusHeight: Float, val nameBlockHeight: Float)
+
+/** Gap (dp at the board scale) between a tile's icon and the status line above / the name below. */
+internal const val ARMORY_TILE_ICON_GAP = 4f
+
+/** The smallest tile icon, as a share of the board's icon: tiles grow in height rather than draw less. */
+internal const val ARMORY_TILE_ICON_MIN = 0.6f
 
 /**
  * [textScale] is the board-relative text multiplier ([kinetickk.ball.profile.interaction.profileTextScale]).
  * [detail] measures the inspected weapon's texts for a name width and the panel width (the
  * renderer's layouts), so the panel stacks what is actually drawn; without it the slots keep
- * the board's line counts.
+ * the board's line counts. [tileText] measures the grid's tile texts for the tiles' inner width,
+ * so every tile draws its icon at one size between them; without it the icon keeps the board's size.
  */
 internal fun armoryLayout(
     frame: ProfileFrame,
@@ -191,6 +226,7 @@ internal fun armoryLayout(
     actionWidth: Float,
     needRoom: Boolean = false,
     masteryCount: Int = 4,
+    tileText: ((innerWidth: Float) -> ArmoryTileMetrics)? = null,
     detail: ((nameWidth: Float, width: Float) -> ArmoryDetailMetrics)? = null,
 ): ArmoryLayout {
     fun d(value: Float) = frame.d(value)
@@ -257,7 +293,20 @@ internal fun armoryLayout(
     val rows = if (weaponCount <= 0) 0 else (weaponCount + columns - 1) / columns
     // Compact grids size their rows to fit the viewport when a row stays at least 84 px tall.
     val fitHeight = if (rows == 0) 0f else (gridBottom - gridTop - pad - gap * (rows - 1)) / rows
-    val tileH = tileHeight(tileWidth, fitHeight)
+    val type = armoryType(frame.mode)
+    // Every tile draws its icon at one size, between the tallest status line and the tallest
+    // name block of the grid, so a name that wraps never shrinks its own icon; when large text
+    // leaves less than the smallest icon, the tiles grow (the grid scrolls) instead.
+    val insets = armoryTileInsets(frame)
+    val tileMetrics = tileText?.invoke(tileWidth - insets.left - insets.right)
+    val iconMax = d(type.tileIcon)
+    val iconMin = iconMax * ARMORY_TILE_ICON_MIN
+    val iconGap = d(ARMORY_TILE_ICON_GAP)
+    val iconBandTop = if (tileMetrics == null) 0f else insets.top + tileMetrics.statusHeight + iconGap
+    val iconBandBelow = if (tileMetrics == null) 0f else insets.bottom + tileMetrics.nameBlockHeight + iconGap
+    val tileH = max(tileHeight(tileWidth, fitHeight), if (tileMetrics == null) 0f else iconBandTop + iconMin + iconBandBelow)
+    val tileIcon = if (tileMetrics == null) iconMax else (tileH - iconBandTop - iconBandBelow).coerceIn(iconMin, iconMax)
+    val tileIconY = if (tileMetrics == null) tileH * 0.5f else (iconBandTop + tileH - iconBandBelow) * 0.5f
     val tiles = List(weaponCount) { index ->
         val column = index % columns
         val row = index / columns
@@ -268,7 +317,6 @@ internal fun armoryLayout(
     val gridViewport = Rect(gridLeft - pad, gridTop - pad, gridRight + pad, max(gridTop, gridBottom))
     val gridContentHeight = if (rows == 0) 0f else pad * 2f + rows * tileH + (rows - 1) * gap
 
-    val type = armoryType(frame.mode)
     val t = textScale.coerceIn(0.75f, 2f)
     val regular = frame.regular
     val plateSize = d(if (regular) 92f else 44f)
@@ -296,9 +344,11 @@ internal fun armoryLayout(
     val masteryTop = tags.bottom + d(if (regular) 26f else 10f)
     val mastery = Rect(detailLeft, masteryTop, detailRight, masteryTop + max(frame.density * 24f, d(type.label) * t))
     val ladderTop = mastery.bottom + d(if (regular) 16f else 6f)
-    // Large text stacks the milestones (one line each) instead of squeezing them side by side.
-    val ladderHeight = if (armoryMasteryStacked(t)) {
-        armoryLadderCellsTop(frame, t) + d(if (regular) 12f else 10f) + d(10f) +
+    // Large text, or a panel too narrow to keep the milestones' bonus groups clearly apart,
+    // stacks the milestones (one line each) instead of squeezing them side by side.
+    val ladderStacked = armoryMasteryStacked(t) || metrics?.masterySideBySide == false
+    val ladderHeight = if (ladderStacked) {
+        armoryLadderCellsTop(frame, stacked = true, textScale = t) + d(if (regular) 12f else 10f) + d(10f) +
             masteryCount * d(type.ladderName) * ARMORY_STACKED_LINE * t
     } else {
         d(if (regular) 94f else 60f) * t
@@ -320,7 +370,8 @@ internal fun armoryLayout(
         if (actionPinned) action.top - d(8f) else limit)
     val detailContentHeight = ladder.bottom + pad - detailViewport.top
     return ArmoryLayout(frame, back, gridViewport, tiles, gridContentHeight, tileH + gap, columns, detailViewport,
-        detailContentHeight, plate, name, description, tags, mastery, ladder, action, need, actionPinned)
+        detailContentHeight, plate, name, description, tags, mastery, ladder, action, need, actionPinned,
+        tileIcon, tileIconY, ladderStacked)
 }
 
 /** Height in px of one detail tag chip at the board-relative text multiplier [textScale]. */
@@ -329,10 +380,10 @@ internal fun armoryTagHeight(frame: ProfileFrame, textScale: Float): Float =
 
 /**
  * Offset of the mastery level cells below the ladder's top: room for the "Lvl N" labels above
- * them, or a small gap when the milestones stack under the cells (their levels are in the list).
+ * them, or a small gap when the milestones are [stacked] under the cells (their levels are in the list).
  */
-internal fun armoryLadderCellsTop(frame: ProfileFrame, textScale: Float): Float = when {
-    armoryMasteryStacked(textScale) -> frame.d(4f)
+internal fun armoryLadderCellsTop(frame: ProfileFrame, stacked: Boolean, textScale: Float): Float = when {
+    stacked -> frame.d(4f)
     else -> frame.d(if (frame.regular) 30f else 22f) * textScale.coerceIn(0.75f, 2f)
 }
 
@@ -341,6 +392,40 @@ internal fun armoryMasteryStacked(textScale: Float): Boolean = textScale >= 1.3f
 
 /** Line pitch of a stacked milestone, in multiples of its name size. */
 internal const val ARMORY_STACKED_LINE = 1.5f
+
+/**
+ * Side-by-side milestones need this many gaps of a bonus group's own inner gap between two
+ * neighbouring groups, so each pair of values reads as one milestone's.
+ */
+internal const val ARMORY_BONUS_SEPARATION = 3f
+
+/**
+ * Whether the milestones fit side by side on a ladder [width] px wide: each bonus group of
+ * [groupWidths] (px, in milestone order) fits before the next milestone's cell, the last one
+ * ends at the right edge, and neighbouring groups stay [ARMORY_BONUS_SEPARATION] × [innerGap] apart.
+ */
+internal fun armoryMasteryFitsSideBySide(
+    frame: ProfileFrame,
+    levels: List<Int>,
+    groupWidths: List<Float>,
+    innerGap: Float,
+    width: Float,
+): Boolean {
+    if (levels.isEmpty()) return true
+    val cells = levels.max().coerceIn(1, 40)
+    val cellGap = frame.d(4f)
+    val pitch = (width - cellGap * (cells - 1)) / cells + cellGap
+    var previousRight = Float.NEGATIVE_INFINITY
+    levels.forEachIndexed { index, level ->
+        val groupWidth = groupWidths[index]
+        val last = index == levels.lastIndex
+        val left = if (last) width - groupWidth else (level - 1).coerceAtLeast(0) * pitch
+        if (!last && groupWidth > (levels[index + 1] - 1) * pitch - left - frame.d(6f)) return false
+        if (left - previousRight < innerGap * ARMORY_BONUS_SEPARATION) return false
+        previousRight = left + groupWidth
+    }
+    return true
+}
 
 /**
  * The scroll value one page away: whole rows that fit the viewport (at least one row), clamped

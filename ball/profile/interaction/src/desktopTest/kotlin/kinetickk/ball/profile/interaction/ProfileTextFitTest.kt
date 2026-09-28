@@ -185,7 +185,7 @@ class ProfileTextFitTest {
                         milestones.forEach { assertTrue(it.box.bottom <= viewport.bottom, "$context milestone ${it.box} below ${viewport.bottom}") }
                     }
                     if (width == 390) {
-                        val cells = layout.ladder.top + armoryLadderCellsTop(layout.frame, profileTextScale(scene.setting))
+                        val cells = layout.ladder.top + armoryLadderCellsTop(layout.frame, layout.ladderStacked, profileTextScale(scene.setting))
                         assertTrue(cells + layout.frame.d(10f) <= viewport.bottom, "$context ladder cells $cells below ${viewport.bottom}")
                     }
                 }
