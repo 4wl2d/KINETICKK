@@ -1015,27 +1015,54 @@ private fun DrawScope.drawMenu(
     val language = tinted.language
     val menu = motion.menuMeasurer(tinted)
     HomeMenuTargets.forEachIndexed { index, target ->
-        val bounds = layout.bounds(target)
         val label = language.text(HomeMenuLabels[index])
         val facts = motion.menuFacts(model, index, language, textScale)
-        val selection = motion.menuSelection(index)
         // One column: the item stays inside its row (see homeMenuPlacement).
-        val left = if (scene.menuColumns == 1) motion.menuPlacement(menu, layout, index, label, facts, density) else bounds.left
+        val left = if (scene.menuColumns == 1) motion.menuPlacement(menu, layout, index, label, facts, density) else layout.bounds(target).left
         val showSub = scene.menuColumns == 1 && motion.menuShowsSub(index)
-        val draw: DrawScope.() -> Unit = {
+        drawHomeMenuItem(menu, layout, index, label, facts, left, showSub, motion.menuSelection(index), motion.trailTime)
+    }
+}
+
+/**
+ * Menu item [index] as Home draws it with the menu measurer [menu]: from [left] (one column: see
+ * [homeMenuPlacement], which also decides [showSub]) at its row's center, [selection] 0..1.
+ */
+internal fun DrawScope.drawHomeMenuItem(
+    menu: CanvasTextMeasurer,
+    layout: HomeLayoutGeometry,
+    index: Int,
+    label: String,
+    facts: HomeFacts,
+    left: Float,
+    showSub: Boolean,
+    selection: Float,
+    time: Float,
+) {
+    val scene = layout.scene
+    val bounds = layout.bounds(HomeMenuTargets[index])
+    if (scene.menuColumns == 1) {
+        drawKkMenuItem(
+            menu, left, bounds.center.y, label,
+            selection = selection,
+            time = time,
+            fontSize = displaySize(menu, scene.menuFontSize),
+            // The board keeps the stamp right after the label; the sub value joins when selected.
+            stamp = facts.stamp,
+            sub = if (showSub && selection > 0.01f) facts.sub else null,
+            edgeRight = size.width,
+        )
+    } else {
+        // Two-column phone menus have no room for the stamp or the sub value.
+        clipRect(bounds.left - 4f * density, bounds.top - 2f * density, bounds.right + 4f * density, bounds.bottom + 2f * density) {
             drawKkMenuItem(
                 menu, left, bounds.center.y, label,
                 selection = selection,
-                time = motion.trailTime,
+                time = time,
                 fontSize = displaySize(menu, scene.menuFontSize),
-                // The board keeps the stamp right after the label; the sub value joins when selected.
-                // Two-column phone menus have no room for either.
-                stamp = if (scene.menuColumns == 1) facts.stamp else null,
-                sub = if (showSub && selection > 0.01f) facts.sub else null,
-                edgeRight = if (scene.menuColumns == 1) size.width else bounds.right,
+                edgeRight = bounds.right,
             )
         }
-        if (scene.menuColumns == 1) draw() else clipRect(bounds.left - 4f * density, bounds.top - 2f * density, bounds.right + 4f * density, bounds.bottom + 2f * density) { draw() }
     }
 }
 
@@ -1227,7 +1254,7 @@ private fun DrawScope.drawFormPanel(
     }
 }
 
-private fun DrawScope.drawLegal(text: CanvasTextMeasurer, layout: HomeLayoutGeometry) {
+internal fun DrawScope.drawLegal(text: CanvasTextMeasurer, layout: HomeLayoutGeometry) {
     val scene = layout.scene
     val legal = homeLegalLayout(text, layout, density)
     var right = scene.legalRight

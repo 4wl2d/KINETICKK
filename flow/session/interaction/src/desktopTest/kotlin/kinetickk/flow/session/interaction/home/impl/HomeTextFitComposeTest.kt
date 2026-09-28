@@ -184,6 +184,92 @@ class HomeTextFitComposeTest {
         }
     }
 
+    @Test
+    fun selectedMenuItemsDrawNoPixelOverTheLegalNotices() {
+        // Phone landscape and portrait (360-px-tall landscape is the 1080 × 2400 targets turned sideways) and desktop.
+        val viewports = listOf(
+            Triple(800, 360, 1f), Triple(844, 390, 1f), Triple(600, 390, 1f), Triple(873, 393, 1f), Triple(914, 411, 1f),
+            Triple(390, 844, 1f), Triple(360, 800, 1f), Triple(412, 915, 1f), Triple(390, 600, 1f), Triple(1_440, 810, 1f),
+            Triple(2_412, 1_080, 3f), Triple(2_400, 1_080, 3f), Triple(1_080, 2_400, 3f),
+        )
+        for (density in listOf(1f, 3f)) for (language in AppLanguage.entries) for (textScale in listOf(1f, 1.25f, 1.75f)) runComposeUiTest {
+            var home: CanvasTextMeasurer? = null
+            var menuMeasurer: CanvasTextMeasurer? = null
+            setContent {
+                CompositionLocalProvider(LocalDensity provides Density(density, 1f), LocalAppLanguage provides language) {
+                    home = rememberKkCanvasMeasurer(homeUiScale(textScale))
+                    menuMeasurer = rememberKkCanvasMeasurer(homeMenuMeasurerScale(homeUiScale(textScale)))
+                }
+            }
+            waitForIdle()
+            runOnIdle {
+                val text = requireNotNull(home)
+                val menu = requireNotNull(menuMeasurer)
+                // Stamps on Armory and Rebirth, sub values on the others: the widest rows.
+                val model = model(WeaponId.SINGULARITY_SPEAR, RebirthDirective.entries.first()).copy(weaponUnlockAffordable = true, canRebirth = true)
+                viewports.filter { it.third == density }.forEach { (width, height, _) ->
+                    val layout = homeLayoutGeometry(width.toFloat(), height.toFloat(), density)
+                    val scene = layout.scene
+                    val legal = rendered(width, height, density) { drawLegal(text, layout) }
+                    val ink = requireNotNull(inkBounds(legal, (scene.legalBaseline - 3f * scene.legalSize).toInt(), height)) { "no legal line" }
+                    val where = "${language.code} ${width}x$height @$textScale"
+                    // The phone layouts' allowance for the notices' tallest glyphs holds for the bundled font
+                    // (desktop adds "Без гарантий", whose Й rises higher, far below its menu).
+                    if (layout.mode != HomeLayoutMode.REGULAR) {
+                        assertTrue(ink.top >= kotlin.math.floor(scene.legalBaseline - HOME_LEGAL_ASCENT_EM * scene.legalSize),
+                            "legal glyphs rise to row ${ink.top}, baseline ${scene.legalBaseline} $where")
+                    }
+                    HomeMenuTargets.forEachIndexed { index, target ->
+                        val bounds = layout.bounds(target)
+                        val label = language.text(HomeMenuLabels[index])
+                        val facts = homeFacts(model, target, language, textScale)
+                        val placement = if (scene.menuColumns == 1) {
+                            homeMenuPlacement(menu, bounds, label, facts.sub, facts.stamp, scene.menuFontSize, density)
+                        } else {
+                            HomeMenuPlacement(bounds.left, false)
+                        }
+                        val item = rendered(width, height, density) {
+                            drawHomeMenuItem(menu, layout, index, label, facts, placement.left, placement.showSub, 1f, HOME_TRAIL_REST_SECONDS)
+                        }
+                        val over = inkBounds(item, ink.top, ink.bottom, ink.left, ink.right)
+                        assertEquals(null, over, "Selected $target (slab, echo or speed line) covers the legal glyphs $ink at $over $where")
+                    }
+                }
+            }
+        }
+    }
+
+    private fun rendered(width: Int, height: Int, density: Float, draw: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit):
+        androidx.compose.ui.graphics.ImageBitmap {
+        val image = androidx.compose.ui.graphics.ImageBitmap(width, height)
+        androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(Density(density), androidx.compose.ui.unit.LayoutDirection.Ltr,
+            androidx.compose.ui.graphics.Canvas(image), androidx.compose.ui.geometry.Size(width.toFloat(), height.toFloat()), draw)
+        return image
+    }
+
+    /** Pixel rows [top, bottom) × columns [left, right) of [image] with any ink, as their bounding box (null when blank). */
+    private fun inkBounds(image: androidx.compose.ui.graphics.ImageBitmap, top: Int, bottom: Int, left: Int = 0, right: Int = image.width):
+        androidx.compose.ui.unit.IntRect? {
+        val y0 = top.coerceIn(0, image.height)
+        val y1 = bottom.coerceIn(y0, image.height)
+        val x0 = left.coerceIn(0, image.width)
+        val x1 = right.coerceIn(x0, image.width)
+        if (y1 <= y0 || x1 <= x0) return null
+        val pixels = IntArray((x1 - x0) * (y1 - y0))
+        image.readPixels(pixels, x0, y0, x1 - x0, y1 - y0)
+        var found: androidx.compose.ui.unit.IntRect? = null
+        for (y in y0 until y1) for (x in x0 until x1) {
+            if (pixels[(y - y0) * (x1 - x0) + (x - x0)] ushr 24 == 0) continue
+            val box = found
+            found = if (box == null) {
+                androidx.compose.ui.unit.IntRect(x, y, x + 1, y + 1)
+            } else {
+                androidx.compose.ui.unit.IntRect(minOf(box.left, x), minOf(box.top, y), maxOf(box.right, x + 1), maxOf(box.bottom, y + 1))
+            }
+        }
+        return found
+    }
+
     private fun drawnMenuItem(menu: CanvasTextMeasurer, width: Float, height: Float, left: Float, centerY: Float, label: String,
         fontSize: Float, selection: Float, stamp: String?, sub: String?): androidx.compose.ui.geometry.Rect {
         var drawn = androidx.compose.ui.geometry.Rect.Zero

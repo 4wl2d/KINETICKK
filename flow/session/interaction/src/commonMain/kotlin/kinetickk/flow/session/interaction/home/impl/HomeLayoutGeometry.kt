@@ -181,10 +181,21 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
         HomeLayoutMode.COMPACT_LANDSCAPE -> {
             // Mobile-Home.png: hero left, stepped menu right, forms along the bottom-left.
             val side = (w * 0.04f).coerceIn(16f, 44f)
-            val rowHeight = ((h - 60f) / 6f).coerceIn(48f, 52f)
             val menuLeft = w * 0.58f
+            val legalBaseline = h - 5f
+            // The lowest (Settings) row is the widest and passes over the legal line. Selected, its echo
+            // ends (49 + 40 turn) × font / 64 below the row's center, dropped by the −2° turn of the
+            // row's left half (see homeSelectedMenuFootprint): the rows shrink from 52 toward 48 px,
+            // then the font, until that edge ends 2 px above the notices' tallest glyphs.
+            val lowestWidth = w - side - (menuLeft - (HomeMenuTargets.size - 1) * 9f)
+            val lowestCenter = legalBaseline - HOME_LEGAL_ASCENT_EM * COMPACT_LEGAL_SIZE - 2f - HOME_MENU_TURN * lowestWidth * 0.5f
+            val echoDrop = (49f + 40f * HOME_MENU_TURN) / 64f
             // 36 px from 660 px wide; narrower screens scale it so Russian labels with a stamp still fit.
-            val menuFont = 36f * min(1f, w / 660f)
+            val widthFont = 36f * min(1f, w / 660f)
+            val rowHeight = ((lowestCenter - echoDrop * widthFont - 50f) / 5.5f).coerceIn(48f, 52f)
+            // Never below the two-column phone font: that floor binds only under 356 px tall, or past
+            // about 1,400 px wide at 360 px tall (no target size).
+            val menuFont = min(widthFont, (lowestCenter - 50f - 5.5f * rowHeight) / echoDrop).coerceAtLeast(28f)
             val rows = HomeMenuTargets.indices.map { index ->
                 val top = 50f + index * rowHeight
                 Rect(menuLeft - index * 9f, top, w - side, top + rowHeight)
@@ -242,8 +253,8 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
                 formNameSize = px(14f),
                 formDescription = null,
                 legalRight = px(w - side),
-                legalBaseline = px(h - 5f),
-                legalSize = px(8f),
+                legalBaseline = px(legalBaseline),
+                legalSize = px(COMPACT_LEGAL_SIZE),
                 legalLeft = px(tilesRight + 12f),
             )
         }
@@ -373,6 +384,15 @@ internal fun homeSelectedMenuFootprint(bounds: Rect, fontSizePx: Float): List<Re
 
 /** sin 2°, rounded up: how far a point of the turned menu item moves per px from its middle. */
 private const val HOME_MENU_TURN = 0.035f
+
+/** The phone legal line's mono size (px before density; see [homeLegalLayout]). */
+private const val COMPACT_LEGAL_SIZE = 8f
+
+/**
+ * How far the legal line's glyphs rise above its baseline, in em of its size: the tallest are the
+ * source link's lowercase ascenders and slash (checked with the bundled font in the Home text tests).
+ */
+internal const val HOME_LEGAL_ASCENT_EM = 0.85f
 
 internal fun HomeLayoutTarget.toHomeAction(): HomeAction = when (this) {
     HomeLayoutTarget.CORE_ORB -> HomeAction.SelectCoreShape(CoreShape.ORB)

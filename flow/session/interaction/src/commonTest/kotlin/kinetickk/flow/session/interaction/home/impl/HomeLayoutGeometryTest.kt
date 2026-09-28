@@ -178,6 +178,33 @@ class HomeMenuClearanceTest {
     }
 
     @Test
+    fun selectedMenuItemsInLandscapeEndAboveTheLegalNotices() {
+        val viewports = listOf(Triple(844f, 390f, 1f), Triple(800f, 360f, 1f), Triple(600f, 390f, 1f), Triple(873f, 393f, 1f),
+            Triple(914f, 411f, 1f), Triple(1_000f, 360f, 1f), Triple(2_532f, 1_170f, 3f)) +
+            TargetDeviceProfiles.map { Triple(it.heightPx, it.widthPx, it.density) }
+        viewports.forEach { (width, height, density) ->
+            val layout = homeLayoutGeometry(width, height, density)
+            val scene = layout.scene
+            assertEquals(HomeLayoutMode.COMPACT_LANDSCAPE, layout.mode, "${width}x$height")
+            // The notices may start anywhere right of legalLeft; their tallest glyphs rise 0.85 em.
+            val legalTop = scene.legalBaseline - HOME_LEGAL_ASCENT_EM * scene.legalSize
+            HomeMenuTargets.forEach { target ->
+                // Slab with echo, and speed lines, each dropped by the turn at their left end.
+                homeSelectedMenuFootprint(layout.bounds(target), scene.menuFontSize).forEach { part ->
+                    if (part.right > scene.legalLeft && part.left < scene.legalRight) {
+                        assertTrue(part.bottom <= legalTop - 2f * density + 0.01f,
+                            "Selected $target reaches ${part.bottom} over the legal line (glyphs from $legalTop) at ${width}x$height")
+                    }
+                }
+            }
+            // Rows stay touch sized; the design's 36 px menu gives way only on 360-px-tall screens.
+            HomeMenuTargets.forEach { target -> assertTrue(layout.bounds(target).height / density >= 48f - 0.01f) }
+            assertTrue(scene.menuFontSize / density >= if (height / density >= 390f) 32f else 30f,
+                "menu font ${scene.menuFontSize / density} at ${width}x$height")
+        }
+    }
+
+    @Test
     fun portraitSpeedLinesOfEverySelectedItemEndInsideTheSideMargin() {
         val viewports = listOf(Triple(390f, 844f, 1f), Triple(360f, 800f, 1f), Triple(412f, 915f, 1f), Triple(1_170f, 2_532f, 3f)) +
             TargetDeviceProfiles.map { Triple(it.widthPx, it.heightPx, it.density) }
