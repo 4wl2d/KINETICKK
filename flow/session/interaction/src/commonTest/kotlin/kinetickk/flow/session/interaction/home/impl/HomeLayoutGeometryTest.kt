@@ -155,6 +155,62 @@ class HomeMenuClearanceTest {
     }
 
     @Test
+    fun selectedMenuItemsInLandscapeStayClearOfTheFormTiles() {
+        val viewports = listOf(Triple(844f, 390f, 1f), Triple(800f, 360f, 1f), Triple(600f, 390f, 1f), Triple(873f, 393f, 1f),
+            Triple(914f, 411f, 1f), Triple(2_532f, 1_170f, 3f)) +
+            TargetDeviceProfiles.map { Triple(it.heightPx, it.widthPx, it.density) }
+        viewports.forEach { (width, height, density) ->
+            val layout = homeLayoutGeometry(width, height, density)
+            assertEquals(HomeLayoutMode.COMPACT_LANDSCAPE, layout.mode, "${width}x$height")
+            HomeMenuTargets.forEach { target ->
+                val extent = homeSelectedMenuExtent(layout.bounds(target), layout.scene.menuFontSize)
+                HomeCoreTargets.forEach { tile ->
+                    val bounds = layout.bounds(tile)
+                    if (extent.top < bounds.bottom && extent.bottom > bounds.top) {
+                        // Slab, echo and all three speed lines end at least 8 px right of the tile.
+                        assertTrue(extent.left - bounds.right >= 8f * density - 0.01f,
+                            "Selected $target reaches ${extent.left} over $tile ending ${bounds.right} at ${width}x$height")
+                    }
+                }
+            }
+            HomeCoreTargets.forEach { tile -> assertTrue(layout.bounds(tile).width / density >= 48f, "$tile at ${width}x$height") }
+        }
+    }
+
+    @Test
+    fun portraitSpeedLinesOfEverySelectedItemEndInsideTheSideMargin() {
+        val viewports = listOf(Triple(390f, 844f, 1f), Triple(360f, 800f, 1f), Triple(412f, 915f, 1f), Triple(1_170f, 2_532f, 3f)) +
+            TargetDeviceProfiles.map { Triple(it.widthPx, it.heightPx, it.density) }
+        viewports.forEach { (width, height, density) ->
+            val layout = homeLayoutGeometry(width, height, density)
+            if (layout.mode != HomeLayoutMode.COMPACT_PORTRAIT || layout.scene.menuColumns != 1) return@forEach
+            HomeMenuTargets.forEach { target ->
+                val extent = homeSelectedMenuExtent(layout.bounds(target), layout.scene.menuFontSize)
+                assertTrue(extent.left >= 16f * density - 0.01f, "Selected $target trail starts at ${extent.left} at ${width}x$height")
+                assertTrue(layout.bounds(target).right <= width - 16f * density + 0.01f)
+            }
+            // The menu still steps left going down.
+            HomeMenuTargets.map(layout::bounds).zipWithNext().forEach { (upper, lower) -> assertTrue(lower.left < upper.left) }
+        }
+    }
+
+    @Test
+    fun theFormNameClearsEverySelectedMenuSlabAndSpeedLine() {
+        listOf(1_440f to 810f, 1_000f to 700f, 844f to 390f, 800f to 360f, 600f to 390f, 873f to 393f, 390f to 844f, 390f to 600f).forEach { (width, height) ->
+            val layout = homeLayoutGeometry(width, height, 1f)
+            val scene = layout.scene
+            val name = androidx.compose.ui.geometry.Rect(scene.formNameLeft, scene.formNameCenterY - scene.formNameSize * 0.65f,
+                homeFormNameRight(layout, 1f), scene.formNameCenterY + scene.formNameSize * 0.65f)
+            HomeMenuTargets.forEach { target ->
+                homeSelectedMenuFootprint(layout.bounds(target), scene.menuFontSize).forEach { part ->
+                    assertFalse(name.overlaps(part), "Selected $target covers the form name $name with $part at ${width}x$height")
+                }
+            }
+            HomeCoreTargets.forEach { tile -> assertFalse(name.overlaps(layout.bounds(tile)), "the name runs into $tile at ${width}x$height") }
+        }
+    }
+
+    @Test
     fun theSpeedLinesComeToRestWithAllThreeFullyDrawn() {
         // kk-trail: a 0.9 s cycle per line, delayed 0 / 0.15 / 0.3 s, opaque from 18 % to 72 %.
         val rest = homeTrailTime(10f)

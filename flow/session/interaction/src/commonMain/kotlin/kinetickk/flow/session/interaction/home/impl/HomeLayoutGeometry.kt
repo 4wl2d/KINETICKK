@@ -183,15 +183,27 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
             val side = (w * 0.04f).coerceIn(16f, 44f)
             val rowHeight = ((h - 60f) / 6f).coerceIn(48f, 52f)
             val menuLeft = w * 0.58f
-            HomeMenuTargets.forEachIndexed { index, target ->
+            // 36 px from 660 px wide; narrower screens scale it so Russian labels with a stamp still fit.
+            val menuFont = 36f * min(1f, w / 660f)
+            val rows = HomeMenuTargets.indices.map { index ->
                 val top = 50f + index * rowHeight
-                actions += HomeActionBounds(target, rect(menuLeft - index * 9f, top, w - side, top + rowHeight))
+                Rect(menuLeft - index * 9f, top, w - side, top + rowHeight)
             }
-            val available = menuLeft - 5f * 9f - 12f - side
-            val singleRow = (available - 30f) / 6f >= 56f
-            val tileWidth = if (singleRow) min(84f, (available - 30f) / 6f) else min(84f, (available - 12f) / 3f)
-            val tileHeight = if (singleRow && h >= 380f) 50f else 48f
-            val tilesTop = if (singleRow) h - 10f - tileHeight else h - 10f - tileHeight * 2f - 6f
+            HomeMenuTargets.forEachIndexed { index, target ->
+                val row = rows[index]
+                actions += HomeActionBounds(target, rect(row.left, row.top, row.right, row.bottom))
+            }
+            // Form tiles end 8 px short of every selected menu slab and speed-line trail that reaches
+            // their band: one row while the tiles stay 56 wide, else two rows of three.
+            fun tilesRight(top: Float): Float = rows.map { homeSelectedMenuExtent(it, menuFont) }
+                .filter { it.bottom > top }.minOfOrNull { it.left - 8f } ?: (rows.minOf { it.left } - 12f)
+            val singleHeight = if (h >= 380f) 50f else 48f
+            val singleTop = h - 10f - singleHeight
+            val singleWidth = (tilesRight(singleTop) - side - 30f) / 6f
+            val singleRow = singleWidth >= 56f
+            val tileHeight = if (singleRow) singleHeight else 48f
+            val tilesTop = if (singleRow) singleTop else h - 10f - tileHeight * 2f - 6f
+            val tileWidth = min(84f, if (singleRow) singleWidth else (tilesRight(tilesTop) - side - 12f) / 3f)
             HomeCoreTargets.forEachIndexed { index, target ->
                 val column = if (singleRow) index else index % 3
                 val row = if (singleRow) 0 else index / 3
@@ -222,7 +234,7 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
                 wordLeft = px(12f),
                 wordTop = px(h - wordSize * 1.02f),
                 wordSize = px(wordSize),
-                menuFontSize = px(36f),
+                menuFontSize = px(menuFont),
                 menuColumns = 1,
                 facts = null,
                 formNameLeft = px(side + 36f),
@@ -242,10 +254,16 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
             val rowHeight = if (columns == 1) 52f else 50f
             val menuTop = h - 16f - rowHeight * (6 / columns)
             val columnWidth = (w - side * 2f - 8f * (columns - 1)) / columns
+            // One column: rows step 6 px left going down, and the lowest row sits so far right that
+            // its selected speed lines end at the side margin. The font (36 px from 418 px wide)
+            // scales down on narrower phones so a Russian label with its stamp still fits the row.
+            val menuFont = if (columns == 1) 36f * min(1f, w / 418f) else 28f
+            val menuReach = HOME_MENU_REACH * menuFont / 64f
             HomeMenuTargets.forEachIndexed { index, target ->
                 if (columns == 1) {
                     val top = menuTop + index * rowHeight
-                    actions += HomeActionBounds(target, rect(side + 30f - index * 6f, top, w - side, top + rowHeight))
+                    val left = side + menuReach + (HomeMenuTargets.size - 1 - index) * 6f
+                    actions += HomeActionBounds(target, rect(left, top, w - side, top + rowHeight))
                 } else {
                     val left = side + (index % 2) * (columnWidth + 8f)
                     val top = menuTop + (index / 2) * rowHeight
@@ -280,7 +298,7 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
                 wordLeft = px(8f),
                 wordTop = px(max(regionTop, nameCenter - 26f - wordSize)),
                 wordSize = px(wordSize),
-                menuFontSize = px(if (columns == 1) 36f else 28f),
+                menuFontSize = px(menuFont),
                 menuColumns = columns,
                 facts = null,
                 formNameLeft = px(side),
@@ -297,22 +315,64 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
     return HomeLayoutGeometry(mode, actions, infos, scene)
 }
 
-/** Right end (px) of the form name: up to its (!) when that follows the name, else the tile row. */
+/**
+ * Right end (px) of the form name: up to its (!) when that follows the name; in landscape (the (!)
+ * leads the name) up to 8 px short of any menu row, selected slab or speed line on the name's band.
+ */
 internal fun homeFormNameRight(layout: HomeLayoutGeometry, density: Float): Float {
+    val scene = layout.scene
     val info = layout.info(HomeInfoTarget.FORM)?.bounds
-    return if (info != null && info.left > layout.scene.formNameLeft) info.left - 12f * density
-    else HomeCoreTargets.maxOf { layout.bounds(it).right }
+    if (info != null && info.left > scene.formNameLeft) return info.left - 12f * density
+    val top = scene.formNameCenterY - scene.formNameSize * 0.65f
+    val bottom = scene.formNameCenterY + scene.formNameSize * 0.65f
+    var right = scene.legalRight
+    HomeMenuTargets.forEach { target ->
+        val bounds = layout.bounds(target)
+        (listOf(bounds) + homeSelectedMenuFootprint(bounds, scene.menuFontSize)).forEach { area ->
+            if (area.top < bottom && area.bottom > top) right = min(right, area.left - 8f * density)
+        }
+    }
+    return right
 }
 
 /**
- * Area a selected menu item covers (px) for a menu font of [fontSizePx]: the item moves 26 board
- * px left, its three speed lines reach 170 px further left, and its slab and echo add 6 px above
- * and 16 px below (`.mi` in kk.css, scaled by font / 64).
+ * How far (board px at a 64 px menu font) a selected menu item reaches left of its row: it moves
+ * 26 px left, and its longest speed line (120 px at 99 % when the lines come to rest, never longer
+ * while they draw in) starts 20 px left of it. Drawn with the design geometry (menu measurer scale
+ * at least 1, see [homeMenuMeasurerScale]); larger text only shrinks it.
+ */
+internal const val HOME_MENU_REACH = 165f
+
+/**
+ * Area a selected menu item covers (px) for a menu font of [fontSizePx]: its slab, echo and speed
+ * lines reach [HOME_MENU_REACH] left, and its slab and echo add 6 px above and 16 px below the row
+ * (`.mi` in kk.css, scaled by font / 64).
  */
 internal fun homeSelectedMenuExtent(bounds: Rect, fontSizePx: Float): Rect {
     val k = fontSizePx / 64f
-    return Rect(bounds.left - (26f + 20f + 150f) * k, bounds.top - 6f * k, bounds.right, bounds.bottom + 16f * k)
+    return Rect(bounds.left - HOME_MENU_REACH * k, bounds.top - 6f * k, bounds.right, bounds.bottom + 16f * k)
 }
+
+/**
+ * The two parts of a selected menu item at rest (px), tighter than [homeSelectedMenuExtent]: the
+ * slab with its echo (from 40 px left of the row, 39 px above to 49 px below its center line) and
+ * the speed lines (from [HOME_MENU_REACH] left to the row, 13 px above to 14 px below the center
+ * line). The item turns −2° about its middle (at most the row's middle): what lies left of it
+ * drops, what lies right of it (the slab out to the screen edge) rises, by sin 2° per px.
+ */
+internal fun homeSelectedMenuFootprint(bounds: Rect, fontSizePx: Float): List<Rect> {
+    val k = fontSizePx / 64f
+    val center = bounds.center.y
+    val rise = HOME_MENU_TURN * (bounds.width + 64f * k)
+    return listOf(
+        Rect(bounds.left - 40f * k, center - 39f * k - rise, bounds.right, center + 49f * k + HOME_MENU_TURN * (bounds.width * 0.5f + 40f * k)),
+        Rect(bounds.left - HOME_MENU_REACH * k, center - 13f * k, bounds.left,
+            center + 14f * k + HOME_MENU_TURN * (bounds.width * 0.5f + HOME_MENU_REACH * k)),
+    )
+}
+
+/** sin 2°, rounded up: how far a point of the turned menu item moves per px from its middle. */
+private const val HOME_MENU_TURN = 0.035f
 
 internal fun HomeLayoutTarget.toHomeAction(): HomeAction = when (this) {
     HomeLayoutTarget.CORE_ORB -> HomeAction.SelectCoreShape(CoreShape.ORB)
