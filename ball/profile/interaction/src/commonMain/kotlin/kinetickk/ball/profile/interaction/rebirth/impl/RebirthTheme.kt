@@ -97,7 +97,6 @@ internal fun DrawScope.drawRebirthBackdrop(
     theme: RebirthTheme,
     layout: RebirthLayout?,
     time: Float,
-    armed: Boolean,
 ) {
     drawRect(theme.background)
     drawProfileGrid(frame)
@@ -142,12 +141,21 @@ internal fun DrawScope.drawRebirthBackdrop(
     if (theme.eventHorizon) {
         drawBlackHole(Offset(center.x + 290f * u, center.y), 720f * u, u, time)
     }
-    if (armed) {
-        val stripe = frame.d(8f)
-        drawKkStripes(Rect(0f, 0f, size.width, stripe), theme.accent, Kk.Ink, time)
-        drawKkStripes(Rect(0f, size.height - stripe, size.width, size.height), theme.accent, Kk.Ink, time)
-    }
 }
+
+/**
+ * The armed screen's hazard stripes along the top and bottom edges (`Rebirth--tier04-armed`), in
+ * the tier accent and ink, moving with [time]. Drawn above the scrolling content and the pinned
+ * Advance band, so neither the scroll fade nor the band covers the bottom one.
+ */
+internal fun DrawScope.drawRebirthArmedStripes(frame: ProfileFrame, theme: RebirthTheme, time: Float) {
+    val stripe = rebirthArmedStripe(frame)
+    drawKkStripes(Rect(0f, 0f, size.width, stripe), theme.accent, Kk.Ink, time)
+    drawKkStripes(Rect(0f, size.height - stripe, size.width, size.height), theme.accent, Kk.Ink, time)
+}
+
+/** Height (px) of the armed screen's hazard stripes along the top and bottom edges (8 px on the board). */
+internal fun rebirthArmedStripe(frame: ProfileFrame): Float = frame.d(8f)
 
 /**
  * Tier 10 black hole (`.bh`): lensing halo, tilted accretion disk turning once per 24 s, the

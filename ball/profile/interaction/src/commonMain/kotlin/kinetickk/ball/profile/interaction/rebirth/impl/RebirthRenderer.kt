@@ -106,7 +106,7 @@ internal fun RebirthContent(
             tag = "profile-rebirth",
             onBack = { onAction(RebirthAction.Back) },
             background = { frame ->
-                drawRebirthBackdrop(frame, theme, holder.layout, clock.floatValue, state == RebirthActionState.ARMED)
+                drawRebirthBackdrop(frame, theme, holder.layout, clock.floatValue)
             },
         ) { frame ->
             val measurer = rememberKkCanvasMeasurer(scale)
@@ -159,6 +159,11 @@ internal fun RebirthContent(
                         drawLine(Kk.Line2, Offset.Zero, Offset(size.width, 0f), frame.density)
                     })
                 RebirthActionRow(frame, type, layout, model, state, scale, language, Offset.Zero, onAction)
+            }
+            if (state == RebirthActionState.ARMED) {
+                // The armed stripes run above the scrolling content and the pinned band, under the
+                // header (drawn last); the pinned Advance ends 12 dp above the bottom edge, clear of them.
+                Box(Modifier.fillMaxSize().drawBehind { drawRebirthArmedStripes(frame, theme, clock.floatValue) })
             }
         }
         if (advanceProgress > 0f && advanceProgress < 1f) {
