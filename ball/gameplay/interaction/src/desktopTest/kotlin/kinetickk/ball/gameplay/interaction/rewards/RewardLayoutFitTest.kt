@@ -127,6 +127,32 @@ class RewardLayoutFitTest {
     }
 
     /**
+     * At the default text size the meld preview shows every signed row with its whole detail
+     * line, also on the phone where the relic row's labels push the preview column down.
+     */
+    @Test
+    fun meldPreviewKeepsEveryRowDetailAtTheDefaultTextSize() {
+        forEachScene(::melding, settings = listOf(1.25f)) { scene, model ->
+            val language = if ("Russian" in scene) AppLanguage.Russian else AppLanguage.English
+            val presentation = model.rewardPresentation(language)
+            val rows = requireNotNull(presentation.cards[requireNotNull(presentation.defaultSelection())].relicPreview).rows
+            assertTrue(rows.size >= 2 && rows.all { it.detail != null }, "$scene: the meld preview has detailed rows: $rows")
+            // The preview measures the plans it drops too; only the placed one shows.
+            val shown = textsUnder("kinetickk.gameplay.rewards.preview-row").filter { (node, _) ->
+                generateSequence(node.layoutInfo) { it.parentInfo }.all { it.isPlaced }
+            }
+            val texts = shown.map { it.second.layoutInput.text.text }
+            rows.forEach { row ->
+                assertTrue(row.title.uppercase() in texts, "$scene: the preview shows the \"${row.title}\" row: $texts")
+                assertTrue(row.detail in texts, "$scene: the \"${row.title}\" row shows its detail \"${row.detail}\": $texts")
+            }
+            shown.forEach { (_, layout) ->
+                assertTrue(!layout.isCut() && !layout.didOverflowHeight, "$scene: \"${layout.layoutInput.text}\" shows whole")
+            }
+        }
+    }
+
+    /**
      * Cards dealt together on the desktop show their whole body without scrolling, all at one
      * size; a deal whose cards fit keeps the size the text setting asks for.
      */

@@ -406,9 +406,9 @@ private const val RelicRankClearance = 8f
 /**
  * Where the relic row ends and the preview column starts (board px): the matrix grows to hold
  * the slot row with its labels at larger text, and a preview column below it (portrait) moves
- * down with it so the rank labels never run into its heading.
+ * down with it so the rank labels never run into its heading. [sideShift] is how far it moved.
  */
-private class RelicRowPlacement(val matrixHeight: Float, val sideTop: Float)
+private class RelicRowPlacement(val matrixHeight: Float, val sideTop: Float, val sideShift: Float)
 
 private fun relicRowPlacement(spec: RelicSpec, frame: OverlayFrame, text: RelicSlotText, density: Float): RelicRowPlacement {
     val labels = (text.nameHeight + 4f * density + text.rankHeight) / (frame.scale * density)
@@ -416,8 +416,11 @@ private fun relicRowPlacement(spec: RelicSpec, frame: OverlayFrame, text: RelicS
     val matrixHeight = max(spec.matrix.height, rowBottom + RelicRankClearance)
     val sideBelow = spec.side.top >= spec.matrix.bottom
     val sideTop = if (sideBelow) max(spec.side.top, spec.matrix.top + matrixHeight + spec.side.top - spec.matrix.bottom) else spec.side.top
-    return RelicRowPlacement(matrixHeight, sideTop)
+    return RelicRowPlacement(matrixHeight, sideTop, sideTop - spec.side.top)
 }
+
+/** Board px of the extra gap above the preview column's button; a pushed-down column gives it up first. */
+private const val RelicButtonGap = 12f
 
 @Composable
 private fun RelicPanel(
@@ -663,7 +666,9 @@ private fun RelicPreviewSide(
             roles = roles,
             modifier = Modifier.weight(1f, fill = false).fillMaxWidth(),
         )
-        Spacer(Modifier.height(frame.dp(12f)))
+        // The column keeps its bottom; when the relic row pushes its top down, the gap above the
+        // button shrinks first so the preview rows keep the height they have at the spec placement.
+        Spacer(Modifier.height(frame.dp((RelicButtonGap - placement.sideShift).coerceAtLeast(0f))))
         val selected = state.selected
         OverlayButton(
             primaryLabel,
