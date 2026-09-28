@@ -19,6 +19,7 @@ import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -58,13 +59,19 @@ internal fun worldLabelSp(board: Float): Float = board / WORLD_TEXT_REFERENCE_SC
 /** Point timers: mono 11 px on the boards. */
 private val POINT_TIMER_SP = worldLabelSp(11f)
 
-/** Collapsing-orbit timer: cond 24 px on the Anomaly board. */
-private val ORBIT_TIMER_SP = worldLabelSp(24f)
+/** Collapsing-orbit label (seconds in the ring): cond 24 px on the Anomaly board. */
+private val ORBIT_LABEL_SP = worldLabelSp(24f)
+
+/** Offer names: `.t-label` 15 px on the Anomaly board. */
+private val POINT_NAME_SP = worldLabelSp(15f)
+
+/** Space between an offer's name and its timer (the board's 4 px column gap). */
+private const val POINT_NAME_GAP_DP = 4f
 
 /** Edge-marker distances: mono 11 px. */
 private val EDGE_DISTANCE_SP = worldLabelSp(11f)
 
-/** Distance from the collapsing-orbit center to its timer label (just outside the progress arc). */
+/** Distance from the collapsing-orbit center to its label (just outside the progress arc). */
 internal const val ORBIT_LABEL_OFFSET = 212f
 
 /** HUD regions, the edge-marker table and the frame's off-screen targets (draw-thread confined). */
@@ -75,8 +82,8 @@ internal object WorldOverlayScratch {
 }
 
 /**
- * Boxes of the point marks, point timers and edge markers drawn in the current world frame, for
- * tests (fixed arrays; recording allocates nothing). Draw-thread confined.
+ * Boxes of the point marks, names and timers, the orbit label and the edge markers drawn in the
+ * current world frame, for tests (fixed arrays; recording allocates nothing). Draw-thread confined.
  */
 internal object WorldDrawProbe {
     private const val CAPACITY = 32
@@ -107,9 +114,10 @@ internal object WorldDrawProbe {
 
 /**
  * What [WorldDrawProbe] records: a point's mark (offer, vault, target beacon), a point timer, an
- * edge marker, the target beacon's place pips as drawn.
+ * edge marker, the target beacon's place pips as drawn, an offer's name, the collapsing orbit's
+ * seconds-in-ring label.
  */
-internal enum class WorldDrawn { POINT_MARK, POINT_TIMER, EDGE_MARKER, BEACON_PIPS }
+internal enum class WorldDrawn { POINT_MARK, POINT_TIMER, EDGE_MARKER, BEACON_PIPS, POINT_NAME, ORBIT_LABEL }
 
 /** Updates the HUD keep-out for this frame: trial panel while a trial runs, boss bar while a boss lives. */
 internal fun DrawScope.worldHudKeepOut(engine: GameplayRenderModel, textMeasurer: TextMeasurer): WorldHudKeepOut {
@@ -128,8 +136,9 @@ internal fun DrawScope.worldHudKeepOut(engine: GameplayRenderModel, textMeasurer
 /**
  * Points of interest as world markers: the sealed anomaly is a gravitic diamond with threat
  * corner brackets, the collapsing orbit a bone ring with a you-color progress arc, the resonant
- * circuit stacked sheared plates with a you-color key block. Each carries only a short timer; the
- * trial's name and rules live in the HUD's trial panel. A mark that would be cut by the screen
+ * circuit stacked sheared plates with a you-color key block. An offer carries its name and timer
+ * (`Anomaly.png`); an active trial's name and rules live in the HUD's trial panel, so its mark
+ * keeps a short timer (the orbit: its seconds in the ring). A mark that would be cut by the screen
  * edge or sit under the HUD is replaced by its edge marker ([collectPointOfInterestEdgeMarkers],
  * drawn over the world): both use [markShown], so exactly one of them draws.
  */
@@ -206,8 +215,9 @@ private fun PointOfInterestKind.edgeIcon(): EdgeMarkerIcon = when (this) {
 }
 
 /**
- * An offer the Core can still fly into: the kind's mark inside a dashed entry ring and its timer.
- * The mark is drawn only while it is fully on screen (its edge marker takes over otherwise).
+ * An offer the Core can still fly into: the kind's mark inside a dashed entry ring, with its name
+ * and timer below. The mark is drawn only while it is fully on screen (its edge marker takes over
+ * otherwise).
  */
 private fun DrawScope.drawOfferedPoint(
     engine: GameplayRenderModel,
@@ -235,7 +245,7 @@ private fun DrawScope.drawOfferedPoint(
         }
         PointOfInterestKind.RESONANT_CIRCUIT -> drawTotemPlates(center, 1.2f, roles.you, keyBlock = true, keyIcon = true)
     }
-    drawPointTimer(point, center, OFFER_RADIUS + 8f, textMeasurer, keepOut)
+    drawOfferLabels(point, center, OFFER_RADIUS + 8f, textMeasurer, keepOut)
 }
 
 private fun DrawScope.drawActivePoint(
@@ -322,28 +332,52 @@ private fun DrawScope.drawActivePoint(
                 drawArc(roles.you, -90f, 360f * progress, false, Offset(center.x - 198f, center.y - 198f),
                     Size(396f, 396f), style = WorldStrokes.arc6)
             }
-            drawOrbitTimer(point, center, textMeasurer, keepOut)
+            drawOrbitLabel(engine, point, center, textMeasurer, keepOut)
         }
     }
 }
 
 /**
- * The collapsing-orbit timer, above the ring or below it, kept on screen horizontally and clear of
- * the HUD (top row, trial panel, bottom clusters). The trial panel already shows the clock, so a
- * label that fits nowhere is skipped.
+ * The collapsing orbit's seconds in the ring ("5.2S", the trial panel's progress value) above the
+ * ring or below it, kept on screen horizontally and clear of the HUD (top row, trial panel, bottom
+ * clusters). The trial panel shows the same value, so a label that fits nowhere is skipped. The
+ * value changes every frame while orbiting, so it is drawn from cached digit layouts.
  */
-private fun DrawScope.drawOrbitTimer(point: PointOfInterestProjection, center: Offset, textMeasurer: TextMeasurer, keepOut: WorldHudKeepOut) {
-    val layout = measureKkText(textMeasurer, WorldStrings.timer(point.remaining),
-        textMeasurer.typography.condStyle(ORBIT_TIMER_SP, tabular = true, color = Kk.Bone))
-    val half = layout.size.width * 0.5f
+private fun DrawScope.drawOrbitLabel(
+    engine: GameplayRenderModel,
+    point: PointOfInterestProjection,
+    center: Offset,
+    textMeasurer: TextMeasurer,
+    keepOut: WorldHudKeepOut,
+) {
+    val language = textMeasurer.language
+    val style = textMeasurer.typography.condStyle(ORBIT_LABEL_SP, tabular = true, color = Kk.Bone)
+    val tenths = orbitRingTenths(point.progress, engine.content.pointsOfInterest.orbitRequiredSeconds)
+    val separator = WorldStrings.decimalSeparator(language)
+    val unit = WorldStrings.secondsSuffix(language)
+    val wholeWidth = kkTabularNumberWidth(textMeasurer, tenths / 10L, style, suffix = separator)
+    val width = wholeWidth + kkTabularNumberWidth(textMeasurer, tenths % 10L, style, suffix = unit)
+    val digit = measureKkText(textMeasurer, "0", style)
+    val half = width * 0.5f
     val edge = d(12f)
     val x = if (size.width > half * 2f + edge * 2f) center.x.coerceIn(half + edge, size.width - half - edge) else size.width * 0.5f
-    val boxBottom = layout.size.height - layout.firstBaseline
-    val baseline = orbitTimerBaseline(center.y, layout.firstBaseline, size.width, size.height, density) { top, base ->
+    val boxBottom = digit.size.height - digit.firstBaseline
+    val baseline = orbitTimerBaseline(center.y, digit.firstBaseline, size.width, size.height, density) { top, base ->
         !keepOut.intersects(x - half, top, x + half, base + boxBottom)
     }
-    if (!baseline.isNaN()) drawKkText(layout, x, baseline, Kk.Bone, KkAlign.CENTER, KkVAlign.BASELINE)
+    if (baseline.isNaN()) return
+    drawKkTabularNumber(textMeasurer, tenths / 10L, style, x - half, baseline, Kk.Bone, KkAlign.START, KkVAlign.BASELINE, suffix = separator)
+    drawKkTabularNumber(textMeasurer, tenths % 10L, style, x - half + wholeWidth, baseline, Kk.Bone, KkAlign.START, KkVAlign.BASELINE,
+        suffix = unit)
+    WorldDrawProbe.record(WorldDrawn.ORBIT_LABEL, x - half, baseline - digit.firstBaseline, x + half, baseline + boxBottom)
 }
+
+/**
+ * Tenths of a second spent inside the collapsing orbit's ring: [progress] of [requiredSeconds],
+ * rounded as the trial panel's progress value ([trialProgressText]).
+ */
+internal fun orbitRingTenths(progress: Float, requiredSeconds: Float): Long =
+    (progress.coerceIn(0f, 1f) * requiredSeconds * 10f).roundToInt().toLong()
 
 /** Index scan without boxing the id (ImmutableList<Int>.contains would box large ids). */
 private fun PointOfInterestProjection.isDefender(id: Int): Boolean {
@@ -407,6 +441,46 @@ private fun DrawScope.drawCornerBrackets(center: Offset, half: Float, color: Col
 
 private fun DrawScope.recordMark(center: Offset, half: Float) =
     WorldDrawProbe.record(WorldDrawn.POINT_MARK, center.x - half, center.y - half, center.x + half, center.y + half)
+
+/**
+ * An offer's name (`.t-label` in the kind's color) stacked above its timer [gap] below the mark at
+ * [center], or the pair above the mark when the screen edge or the HUD is in the way, as
+ * [drawPointTimer] places a timer: skipped when neither side is clear. The pair moves inward to stay
+ * on screen, and a name wider than the screen shrinks to fit.
+ */
+private fun DrawScope.drawOfferLabels(
+    point: PointOfInterestProjection,
+    center: Offset,
+    gap: Float,
+    textMeasurer: TextMeasurer,
+    keepOut: WorldHudKeepOut,
+) {
+    val typography = textMeasurer.typography
+    val color = edgeMarkerColor(point.kind.edgeIcon(), textMeasurer.roles)
+    val nameText = WorldStrings.pointName(point.kind, point.name, textMeasurer.language)
+    val edge = d(8f)
+    val room = size.width - 2f * edge
+    var name = measureKkText(textMeasurer, nameText, typography.labelStyle(POINT_NAME_SP, color = color), uppercase = true)
+    if (name.size.width > room) {
+        val fitted = POINT_NAME_SP * room / name.size.width * 0.98f
+        name = measureKkText(textMeasurer, nameText, typography.labelStyle(fitted, color = color), uppercase = true)
+    }
+    val timer = measureKkText(textMeasurer, WorldStrings.timer(point.remaining), typography.monoStyle(POINT_TIMER_SP, color = Kk.Mute))
+    val nameHeight = name.kkBoxHeight
+    val spacing = d(POINT_NAME_GAP_DP)
+    val width = max(name.size.width, timer.size.width).toFloat()
+    val height = nameHeight + spacing + timer.kkBoxHeight
+    val half = width * 0.5f
+    val x = if (room > width) center.x.coerceIn(edge + half, size.width - edge - half) else size.width * 0.5f
+    val top = pointTimerTop(x, center.y, gap, width, height, size.width, size.height, edge, keepOut)
+    if (top.isNaN()) return
+    drawKkText(name, x, top, color, KkAlign.CENTER, KkVAlign.TOP)
+    drawKkText(timer, x, top + nameHeight + spacing, Kk.Mute, KkAlign.CENTER, KkVAlign.TOP)
+    val nameHalf = name.size.width * 0.5f
+    WorldDrawProbe.record(WorldDrawn.POINT_NAME, x - nameHalf, top, x + nameHalf, top + nameHeight)
+    val timerHalf = timer.size.width * 0.5f
+    WorldDrawProbe.record(WorldDrawn.POINT_TIMER, x - timerHalf, top + nameHeight + spacing, x + timerHalf, top + height)
+}
 
 /**
  * A short mono timer [gap] below the mark at [center], or above it when the screen edge or the HUD
