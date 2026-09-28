@@ -23,14 +23,14 @@ class CodexEntryFactsTest {
 
     @Test
     fun matterUnlockedLevelsFollowTheGameRuleUpToLevelEighty() {
-        // Gameplay: max(runLevel, min(80, 1 + lifetimeMatter / 40)).
-        assertEquals(1, codexMatterOfferLevel(0L))
-        assertEquals(1, codexMatterOfferLevel(39L))
-        assertEquals(2, codexMatterOfferLevel(40L))
-        assertEquals(62, codexMatterOfferLevel(2_440L))
-        assertEquals(80, codexMatterOfferLevel(3_160L))
-        assertEquals(80, codexMatterOfferLevel(Long.MAX_VALUE))
-        assertEquals(1, codexMatterOfferLevel(-5L))
+        // The game offers an item from max(runLevel, min(80, 1 + lifetimeMatter / 40)).
+        assertEquals(1, lifetimeMatterOfferLevel(0L))
+        assertEquals(1, lifetimeMatterOfferLevel(39L))
+        assertEquals(2, lifetimeMatterOfferLevel(40L))
+        assertEquals(62, lifetimeMatterOfferLevel(2_440L))
+        assertEquals(80, lifetimeMatterOfferLevel(3_160L))
+        assertEquals(80, lifetimeMatterOfferLevel(Long.MAX_VALUE))
+        assertEquals(1, lifetimeMatterOfferLevel(-5L))
     }
 
     @Test

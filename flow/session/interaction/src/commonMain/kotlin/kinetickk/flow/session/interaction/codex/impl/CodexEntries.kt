@@ -20,6 +20,7 @@ import kinetickk.ball.content.api.SynergyDefinition
 import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.lifetimeMatterOfferLevel
 import kinetickk.ball.profile.api.HomeProgressProjection
 import kinetickk.flow.session.interaction.codex.api.CodexRenderModel
 import kinetickk.flow.session.interaction.home.impl.coreShapeUnlockProgress
@@ -80,17 +81,9 @@ internal const val CODEX_NONE = "—"
 internal fun codexStatus(language: AppLanguage, value: String, info: String? = null): CodexFact =
     CodexFact(language.text(SessionText.STATUS), value, info, isStatus = true)
 
-/**
- * Catalog level that the profile's lifetime Matter unlocks for ordinary item offers: one level per
- * 40 Matter, up to 80. This is the gameplay rule of `buildItemChoices` and `eligibleItemIds`
- * (an item is offered when its level is at most `max(runLevel, min(80, 1 + lifetimeMatter / 40))`).
- */
-internal fun codexMatterOfferLevel(lifetimeMatter: Long): Int =
-    (1L + lifetimeMatter.coerceAtLeast(0L) / 40L).coerceAtMost(80L).toInt()
-
 /** Run level from which ordinary offers include [item]: 1 once lifetime Matter has unlocked its level. */
 internal fun codexOfferedFromLevel(item: ItemDefinition, lifetimeMatter: Long): Int =
-    if (item.unlockLevel <= codexMatterOfferLevel(lifetimeMatter)) 1 else item.unlockLevel
+    if (item.unlockLevel <= lifetimeMatterOfferLevel(lifetimeMatter)) 1 else item.unlockLevel
 
 internal fun codexItemEntry(item: ItemDefinition, model: CodexRenderModel, lifetimeMatter: Long, language: AppLanguage = AppLanguage.English): CodexEntry {
     if (!model.isDiscovered(item.id)) return unknownEntry("item/${item.id}", language)
