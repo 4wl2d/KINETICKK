@@ -134,7 +134,7 @@ class WorldPointLabelsTest {
                 var pairs = 0
                 for (y in -20..(height + 20) step 29) for (x in -20..(width + 20) step 29) {
                     scope.draw(Density(1f), LayoutDirection.Ltr, canvas, Size(width.toFloat(), height.toFloat())) {
-                        drawWorld(model, VisualFxProjection.EMPTY, x - width * 0.5f, y - height * 0.5f, measurer)
+                        drawWorld(model.lookingAt(width, height, x.toFloat(), y.toFloat()), VisualFxProjection.EMPTY, 0f, 0f, measurer)
                     }
                     val where = "$language $kind at $width x $height text=$textScale, offer at ($x, $y)"
                     val keepOut = WorldOverlayScratch.keepOut
@@ -222,16 +222,23 @@ class WorldPointLabelsTest {
         }
     }
 
-    /** Draws the world with the point's anchor (world origin) at screen ([x], [y]) via the shake offset. */
+    /** Draws the world with the point's anchor (world origin) at screen ([x], [y]), the camera moved there. */
     private fun drawAt(width: Int, height: Int, textScale: Float, model: GameplayRenderModel, x: Float, y: Float) {
         val measurer = measurers.getOrPut(textScale) {
             CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr, cacheSize = 64), textScale,
                 AppLanguage.English, HudTestFonts.typography)
         }
         scope.draw(Density(1f), LayoutDirection.Ltr, canvas, Size(width.toFloat(), height.toFloat())) {
-            drawWorld(model, VisualFxProjection.EMPTY, x - width * 0.5f, y - height * 0.5f, measurer)
+            drawWorld(model.lookingAt(width, height, x, y), VisualFxProjection.EMPTY, 0f, 0f, measurer)
         }
     }
+
+    /**
+     * [this] model with the camera placed so the world origin draws at screen ([x], [y]) (not via
+     * the shake offset: marks and edge markers are decided in the unshaken view).
+     */
+    private fun GameplayRenderModel.lookingAt(width: Int, height: Int, x: Float, y: Float): GameplayRenderModel =
+        with("cameraX" to width * 0.5f - x, "cameraY" to height * 0.5f - y)
 
     private val measurers = HashMap<Float, CanvasTextMeasurer>()
     private val scope = CanvasDrawScope()

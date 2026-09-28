@@ -41,7 +41,7 @@ internal enum class SessionRedesignText(
         "Параметры игры, звука, графики и интерфейса. Изменения применяются сразу.",
     ),
 
-    VERSION("v0.2.0", "v0.2.0"),
+    VERSION("v0.3.0", "v0.3.0"),
     COPYRIGHT("© 2026 Vladislav Tomilov", "© 2026 Владислав Томилов"),
     LICENSE("GPL v3+", "GPL v3+"),
     NO_WARRANTY("No warranty", "Без гарантий"),

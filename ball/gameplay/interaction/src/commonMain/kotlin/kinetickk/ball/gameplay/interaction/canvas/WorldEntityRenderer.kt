@@ -311,7 +311,7 @@ internal fun DrawScope.drawTotem(engine: GameplayRenderModel, shakeX: Float, sha
     val totem = engine.totem ?: return
     val roles = textMeasurer.roles
     val location = world(engine, totem.x, totem.y, shakeX, shakeY)
-    if (!isOnScreen(location, 60f)) return
+    if (!isOnScreen(steady(location, shakeX, shakeY), 60f)) return // decided unshaken, as its edge marker
     val pulse = (sin(totem.pulse) + 1f) * 0.5f
     rotate(engine.elapsed * spin(24f), location) {
         drawCircle(roles.you.copy(alpha = 0.45f), 45f, location, style = WorldStrokes.dashedThin)
@@ -321,16 +321,17 @@ internal fun DrawScope.drawTotem(engine: GameplayRenderModel, shakeX: Float, sha
 }
 
 /**
- * Adds the off-screen totem to [batch], aimed from the unshaken view; [drawEdgeMarkers] draws it
- * with the frame's other markers.
+ * Adds the off-screen totem to [batch]; [drawEdgeMarkers] draws it with the frame's other markers.
+ * Whether it is off screen, and where its marker points, is decided in the unshaken view, as
+ * [drawTotem] decides whether to draw it.
  */
-internal fun DrawScope.collectTotemEdgeMarker(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, batch: EdgeMarkerBatch) {
+internal fun DrawScope.collectTotemEdgeMarker(engine: GameplayRenderModel, batch: EdgeMarkerBatch) {
     val totem = engine.totem ?: return
-    val location = world(engine, totem.x, totem.y, shakeX, shakeY)
+    val location = world(engine, totem.x, totem.y, 0f, 0f)
     if (isOnScreen(location, 60f)) return
     val dx = totem.x - engine.coreX
     val dy = totem.y - engine.coreY
-    batch.add(location.x - shakeX, location.y - shakeY, sqrt(dx * dx + dy * dy), EdgeMarkerIcon.TOTEM)
+    batch.add(location.x, location.y, sqrt(dx * dx + dy * dy), EdgeMarkerIcon.TOTEM)
 }
 
 /**
