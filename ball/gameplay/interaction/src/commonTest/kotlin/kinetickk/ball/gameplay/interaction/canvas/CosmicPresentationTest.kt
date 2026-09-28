@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.interaction.canvas
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.gameplay.interaction.localization.WorldRedesignText
@@ -120,24 +121,27 @@ class CosmicPresentationTest {
         val sizes = listOf(Triple(1_440f, 810f, 1f), Triple(844f, 390f, 1f), Triple(390f, 844f, 1f), Triple(2_532f, 1_170f, 3f))
         sizes.forEach { (width, height, density) ->
             listOf(false to false, true to false, true to true).forEach { (trial, boss) ->
-                val keepOut = WorldHudKeepOut().update(width, height, density, 1.25f, trial, boss)
-                assertTrue(keepOut.count >= 3, "the HUD regions are known at $width x $height")
-                val planner = EdgeMarkerPlanner().prepare(keepOut, width, height, density, 80f * density)
-                val center = Offset(width * 0.5f, height * 0.5f)
-                val inset = EDGE_INSET_DP * density
-                val reach = inset + maxEdgeDepth(width, height) + 0.01f
-                for (step in 0 until 144) {
-                    val angle = step * PI.toFloat() / 72f
-                    val target = center + Offset(cos(angle), sin(angle)) * (width + height)
-                    val marker = planner.position(target)
-                    val where = "$width x $height trial=$trial boss=$boss step=$step at $marker"
-                    val left = planner.markerLeft(marker.x)
-                    val right = planner.markerRight(marker.x)
-                    val half = planner.markerHalfHeight()
-                    assertTrue(left >= 0f && right <= width && marker.y - half >= 0f && marker.y + half <= height, "on screen: $where")
-                    assertFalse(keepOut.intersects(left, marker.y - half, right, marker.y + half), "clear of the HUD: $where")
-                    val edgeDistance = minOf(marker.x, width - marker.x, marker.y, height - marker.y)
-                    assertTrue(edgeDistance <= reach, "hugs an edge, not the field: $where")
+                listOf(1f, 1.25f, 1.75f).forEach { textScale ->
+                    val keepOut = WorldHudKeepOut().update(width, height, density, textScale, trial, boss)
+                    assertTrue(keepOut.count >= 3, "the HUD regions are known at $width x $height")
+                    val planner = EdgeMarkerPlanner().prepare(keepOut, width, height, density, 80f * density * textScale / 1.25f)
+                    val center = Offset(width * 0.5f, height * 0.5f)
+                    val reach = EDGE_INSET_DP * density + maxEdgeDepth(width, height) + 0.01f
+                    for (step in 0 until 144) {
+                        val angle = step * PI.toFloat() / 72f
+                        val target = center + Offset(cos(angle), sin(angle)) * (width + height)
+                        val marker = planner.position(target)
+                        val where = "$width x $height trial=$trial boss=$boss text=$textScale step=$step at $marker"
+                        val left = planner.markerLeft(marker.x)
+                        val right = planner.markerRight(marker.x)
+                        val half = planner.markerHalfHeight()
+                        val box = Rect(left, marker.y - half, right, marker.y + half)
+                        assertTrue(box.left >= 0f && box.right <= width && box.top >= 0f && box.bottom <= height, "on screen: $where")
+                        assertFalse(keepOut.intersects(box.left, box.top, box.right, box.bottom), "clear of the HUD: $where")
+                        assertTrue(outwardGap(box, keepOut.rects(), width, height) <= reach, "hugs an edge or the HUD along it, not the field: $where")
+                        // The position is the only direction cue (no arrow): it points at the target.
+                        assertTrue(angleBetween(marker - center, target - center) <= 30f, "points toward the target: $where")
+                    }
                 }
             }
             // A target straight to the right sits on the right edge at the screen's vertical center.
@@ -147,13 +151,49 @@ class CosmicPresentationTest {
             assertEquals(width - EDGE_INSET_DP * density, right.x, 0.5f)
             assertEquals(height * 0.5f, right.y, 6f * density)
         }
-        // The landscape phone has no free top or bottom band: markers go to the side edges.
-        val phone = WorldHudKeepOut().update(844f, 390f, 1f, 1.25f, trialActive = true, bossPresent = false)
-        val planner = EdgeMarkerPlanner().prepare(phone, 844f, 390f, 1f, 80f)
-        listOf(Offset(260f, -900f), Offset(600f, 1_300f), Offset(422f, -900f)).forEach { target ->
-            val marker = planner.position(target)
-            assertTrue(marker.x <= 24f + maxEdgeDepth(844f, 390f) + 0.01f || marker.x >= 844f - 24f - maxEdgeDepth(844f, 390f) - 0.01f, "side edge for $target: $marker")
+    }
+
+    @Test
+    fun edgeMarkersPointTowardTargetsAboveAndBelowALandscapePhone() {
+        // The phone's top row and bottom clusters cover those edges: the marker sits just inside
+        // them, in the target's direction, not on a side edge.
+        val width = 844f
+        val height = 390f
+        val center = Offset(width * 0.5f, height * 0.5f)
+        listOf(false to false, true to false, false to true, true to true).forEach { (trial, boss) ->
+            listOf(1f, 1.25f, 1.75f).forEach { textScale ->
+                val keepOut = WorldHudKeepOut().update(width, height, 1f, textScale, trial, boss)
+                val planner = EdgeMarkerPlanner().prepare(keepOut, width, height, 1f, 70f * textScale / 1.25f)
+                listOf(Offset(width * 0.5f + 40f, -900f), Offset(width * 0.5f + 40f, height + 900f), Offset(width * 0.5f - 60f, -900f)).forEach { target ->
+                    val marker = planner.position(target)
+                    val error = angleBetween(marker - center, target - center)
+                    assertTrue(error <= 30f, "trial=$trial boss=$boss text=$textScale: marker $marker is $error degrees off the target $target")
+                }
+            }
         }
+    }
+
+    /** Degrees between two directions. */
+    private fun angleBetween(a: Offset, b: Offset): Float {
+        val cosine = (a.x * b.x + a.y * b.y) / (a.getDistance() * b.getDistance())
+        return kotlin.math.acos(cosine.coerceIn(-1f, 1f)) * 180f / PI.toFloat()
+    }
+
+    /**
+     * Smallest gap between [box] and what lies outward of it in some direction: the screen edge or
+     * a HUD region overlapping it across that direction.
+     */
+    private fun outwardGap(box: Rect, regions: List<Rect>, width: Float, height: Float): Float {
+        var gap = minOf(box.left, box.top, width - box.right, height - box.bottom)
+        regions.forEach { region ->
+            val acrossX = region.left < box.right && region.right > box.left
+            val acrossY = region.top < box.bottom && region.bottom > box.top
+            if (acrossX && region.bottom <= box.top) gap = minOf(gap, box.top - region.bottom)
+            if (acrossX && region.top >= box.bottom) gap = minOf(gap, region.top - box.bottom)
+            if (acrossY && region.right <= box.left) gap = minOf(gap, box.left - region.right)
+            if (acrossY && region.left >= box.right) gap = minOf(gap, region.left - box.right)
+        }
+        return gap
     }
 
     @Test

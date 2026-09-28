@@ -84,6 +84,42 @@ class HudHotPathAllocationTest {
         }
     }
 
+    /**
+     * On a landscape phone the chain (bone) and the draining polarity % (threat) are both drawn digit
+     * by digit at the same size; with shared digits on screen (×12 while polarity drains from 21 %
+     * to 10 %) neither may reshape the other's paragraphs, at the default text size and at 100 %.
+     */
+    @Test
+    fun chainAndDrainingPolarityOnAPhoneShareNoDigitLayouts() {
+        listOf(1.25f, 1f).forEach { textScale ->
+            val model = hudTestModel(844f, 390f).with(
+                "combo" to 12, "comboTime" to 1.4f, "comboWindow" to 2.8f, "pointerX" to 300f, "pointerY" to 190f,
+                "polarityStability" to 0.21f,
+            )
+            val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), textScale,
+                AppLanguage.English)
+            val memory = HudPresentationMemory()
+            // 21 % down to 10 % every hundred frames (each step a visible drain).
+            val frames = List(FRAMES) { frame -> model.with("polarityStability" to 0.215f - (frame % 100) * 0.0011f) }
+            val bitmap = ImageBitmap(844, 390)
+            val canvas = Canvas(bitmap)
+            val scope = CanvasDrawScope()
+            val size = Size(844f, 390f)
+            fun empty() = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) { drawRect(Kk.Ink) }
+            fun hud(frame: Int) = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) {
+                drawHud(frames[frame % FRAMES], measurer, 10f + frame * 0.0001f, 0f, 0f, memory)
+            }
+            repeat(FRAMES) { empty(); hud(it) }
+            // Both numbers are on screen together.
+            kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.POLARITY_LABEL), "the polarity % is not drawn")
+            kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.CHAIN), "the chain is not drawn")
+            val emptyBytes = allocated { repeat(FRAMES) { empty() } }
+            val hudBytes = allocated { repeat(FRAMES) { hud(it) } }
+            val perFrame = (hudBytes - emptyBytes) / FRAMES
+            assertTrue(perFrame <= 64, "chain + polarity frame at x$textScale allocates $perFrame bytes above an empty frame")
+        }
+    }
+
     private inline fun allocated(block: () -> Unit): Long {
         val threads = ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
         val id = Thread.currentThread().id
