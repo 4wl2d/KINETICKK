@@ -16,6 +16,8 @@ import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.content.api.PointOfInterestKind
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.layout.runningControlBounds
+import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
+import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
@@ -170,28 +172,112 @@ class HudFeedTest {
                     drawHudFeed(model, fx, measurer, 1f, null)
                 }
                 val context = "$language $w x $h x$textScale \"$message\" ${toast.title} ${toast.details.size} details trial=$trials"
-                val plate = (0 until FeedProbe.plateCount).firstOrNull { !FeedProbe.isBanner(it) }
-                assertNotNull(plate, "$context: toast not drawn")
-                val drawn = (0 until FeedProbe.lineCount).filter { FeedProbe.linePlate(it) == plate }
-                    .map { FeedProbe.lineLayout(it).layoutInput.text.text.replace('\u00A0', ' ') }
+                val drawn = drawnToastLines(context)
                 assertEquals(toast.title.localizedContent(language).uppercase(), drawn.first(), context)
                 check(context, language, toast, drawn)
-                assertFeedLinesFit(context, w, h)
-                assertFeedClearsTheCore(context, w, h)
-                val feed = assertNotNull(HudLayoutProbe.rect(HudBlock.FEED), context)
-                runningControlBounds(w.toFloat(), h.toFloat(), 1f).forEach { control ->
-                    assertFalse(feed.overlaps(control.bounds), "$context: feed $feed covers ${control.target}")
-                }
-                val chain = assertNotNull(HudLayoutProbe.rect(HudBlock.CHAIN), context)
-                if (textScale == 1f) chainAtDisplaySize = chain
-                val displayChain = assertNotNull(chainAtDisplaySize)
-                val shownChain = if (chain.height > displayChain.height + 0.5f) displayChain else chain
-                assertFalse(feed.overlaps(shownChain), "$context: feed $feed meets CHAIN $shownChain")
-                listOf(HudBlock.CLOCK, HudBlock.MATTER_CHIP, HudBlock.KEY_CHIP, HudBlock.BOSS, HudBlock.TRIAL_PANEL).forEach { block ->
-                    val other = HudLayoutProbe.rect(block) ?: return@forEach
-                    assertFalse(feed.overlaps(other), "$context: feed $feed meets $block $other")
-                }
+                if (textScale == 1f) chainAtDisplaySize = HudLayoutProbe.rect(HudBlock.CHAIN)
+                assertFeedClearOfTheHud(context, w, h, assertNotNull(chainAtDisplaySize))
             }
+        }
+    }
+
+    @Test
+    fun theBannerStaysAboveANewestToastThatTakesTheColumnBesideTheCore() {
+        // Short portrait screens under a trial panel or a boss row: no text step holds a four-synergy
+        // toast above or below the Core, so it takes the column beside the Core. The toast keeps its
+        // title and every synergy line there under the banner (stepping its text down where needed),
+        // so the banner does not yield.
+        val toasts = listOf(
+            notice("Replace Ghost Vector", *FOUR_SYNERGIES),
+            notice("Replace Ghost Vector", "Impact damage +0.05", *FOUR_SYNERGIES),
+            notice("Replace Chroma Feedback", "Critical chance +2.5%", "Damage reduction +3%", *FOUR_SYNERGIES),
+        )
+        val scenes = listOf(
+            Triple(360 to 780, listOf(1f, 1.1f), "pointsOfInterest" to immutableListOf(TRIAL)),
+            Triple(360 to 640, TEXT_SCALES, "enemies" to immutableListOf(ELITE)),
+        )
+        for (language in AppLanguage.entries) for ((screen, textScales, panel) in scenes) for (toast in toasts) {
+            val (w, h) = screen
+            var chainAtDisplaySize: androidx.compose.ui.geometry.Rect? = null
+            for (textScale in textScales) {
+                val model = feedModel(w, h, "ELITE SIGNAL").with(panel)
+                val fx = VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(toast))
+                drawFeed(w, h, language, textScale) { measurer ->
+                    drawHud(model, measurer, 1f)
+                    drawHudFeed(model, fx, measurer, 1f, null)
+                }
+                val context = "$language $w x $h x$textScale ${panel.first} ${toast.title} ${toast.details.size} details"
+                assertTrue((0 until FeedProbe.plateCount).any { FeedProbe.isBanner(it) }, "$context: banner not drawn")
+                val drawn = drawnToastLines(context)
+                assertEquals(toast.title.localizedContent(language).uppercase(), drawn.first(), context)
+                FOUR_SYNERGIES.forEach { synergy ->
+                    val expected = synergy.localizedContent(language).uppercase()
+                    assertTrue(expected in drawn, "$context: $expected missing from $drawn")
+                }
+                if (textScale == 1f) chainAtDisplaySize = HudLayoutProbe.rect(HudBlock.CHAIN)
+                assertFeedClearOfTheHud(context, w, h, assertNotNull(chainAtDisplaySize, context))
+            }
+        }
+    }
+
+    @Test
+    fun aBannerNeverCostsTheNewestToastItsTitleOrASynergyLine() {
+        // Wherever the newest toast goes (above, below or beside the Core, at any text step), a banner
+        // above it shows only while the toast keeps every title and synergy line it shows alone. A
+        // banner with a detail line is tall enough to push a toast out of the column beside the Core.
+        val toasts = listOf(
+            notice("Neon Ram", "Impact damage +0.05", "Weapon power +0.04", "+ Vector maneuver"),
+            notice("Replace Ghost Vector", "Impact damage +0.05", *FOUR_SYNERGIES),
+            notice("Replace Chroma Feedback", "Critical chance +2.5%", "Damage reduction +3%", *FOUR_SYNERGIES),
+        )
+        val panels = listOf(null, "pointsOfInterest" to immutableListOf(TRIAL), "enemies" to immutableListOf(ELITE))
+        val phones = listOf(360 to 640, 375 to 667, 360 to 740, 360 to 780, 390 to 844, 640 to 360, 667 to 375, 780 to 360, 844 to 390)
+        for (language in AppLanguage.entries) for ((w, h) in phones) for (panel in panels) for (textScale in TEXT_SCALES) for (toast in toasts) {
+            val fx = VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(toast))
+            val outranking = (listOf(toast.title) + toast.details.filter { it.startsWith("+ ") || it.startsWith("\u2212 ") })
+                .map { it.localizedContent(language).uppercase() }
+            fun shown(message: String): List<String>? {
+                val model = feedModel(w, h, message).let { if (panel == null) it else it.with(panel) }
+                drawFeed(w, h, language, textScale) { measurer -> drawHudFeed(model, fx, measurer, 1f, null) }
+                if ((0 until FeedProbe.plateCount).none { !FeedProbe.isBanner(it) }) return null
+                return drawnToastLines("").filter { it in outranking }
+            }
+            val alone = shown("") ?: continue
+            for (message in listOf("ELITE SIGNAL", "FLUX WAKE // LEVEL 7")) {
+                val context = "$language $w x $h x$textScale ${panel?.first} ${toast.title} ${toast.details.size} details \"$message\""
+                val underBanner = assertNotNull(shown(message), "$context: toast not drawn under the banner")
+                assertTrue(underBanner.containsAll(alone), "$context: alone $alone, under the banner $underBanner")
+            }
+        }
+    }
+
+    /** The lines of the first toast plate drawn in the last frame, in drawing order. */
+    private fun drawnToastLines(context: String): List<String> {
+        val plate = (0 until FeedProbe.plateCount).firstOrNull { !FeedProbe.isBanner(it) }
+        assertNotNull(plate, "$context: toast not drawn")
+        return (0 until FeedProbe.lineCount).filter { FeedProbe.linePlate(it) == plate }
+            .map { FeedProbe.lineLayout(it).layoutInput.text.text.replace('\u00A0', ' ') }
+    }
+
+    /**
+     * The last frame's feed fits, keeps clear of the Core and does not meet the controls or the other
+     * HUD blocks. The chain counter is display type; while it still grows with the text setting (a
+     * HUD finding of its own), the feed is checked against [displayChain], its box at the smallest
+     * setting, whenever the drawn one is taller.
+     */
+    private fun assertFeedClearOfTheHud(context: String, w: Int, h: Int, displayChain: androidx.compose.ui.geometry.Rect) {
+        assertFeedLinesFit(context, w, h)
+        assertFeedClearsTheCore(context, w, h)
+        val feed = assertNotNull(HudLayoutProbe.rect(HudBlock.FEED), context)
+        runningControlBounds(w.toFloat(), h.toFloat(), 1f).forEach { control ->
+            assertFalse(feed.overlaps(control.bounds), "$context: feed $feed covers ${control.target}")
+        }
+        val chain = assertNotNull(HudLayoutProbe.rect(HudBlock.CHAIN), context)
+        val shownChain = if (chain.height > displayChain.height + 0.5f) displayChain else chain
+        assertFalse(feed.overlaps(shownChain), "$context: feed $feed meets CHAIN $shownChain")
+        listOf(HudBlock.CLOCK, HudBlock.MATTER_CHIP, HudBlock.KEY_CHIP, HudBlock.BOSS, HudBlock.TRIAL_PANEL).forEach { block ->
+            val other = HudLayoutProbe.rect(block) ?: return@forEach
+            assertFalse(feed.overlaps(other), "$context: feed $feed meets $block $other")
         }
     }
 
@@ -312,6 +398,9 @@ class HudFeedTest {
         const val FRAMES = 240
         val TEXT_SCALES = listOf(1f, 1.25f, 1.75f)
         val FOUR_SYNERGIES = arrayOf("+ Gravitic grouping", "+ Brake compression", "\u2212 Vector maneuver", "\u2212 Ghost mirror")
+        val TRIAL = PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, 0, 1f / 3f,
+            immutableListOf(1, 2, 3), 0f, 0f)
+        val ELITE = EnemyProjection(4, EnemyType.ELITE, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f, 0f, 0f, 0f, 0f, 0f, 0f, false)
         const val SHOWN_AT = 20f
     }
 }

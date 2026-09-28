@@ -37,6 +37,8 @@ import kotlin.math.min
  * cannot show whole is not shown. Synergy changes ("+ " / "− " details) always stay on their toast;
  * stat deltas fill the remaining detail budget. A toast whose title and synergy lines do not fit its
  * room at the current text size steps its text down toward the smallest text setting until they do.
+ * The newest toast's title and synergy lines outrank the banner: the banner shows while the toast
+ * keeps all of them under it (at some text step, anywhere the toast may go) and yields otherwise.
  * Messages that only restate a state the HUD shows (overheat, polarity strain, overdrive, dash
  * online), trial rules (behind the trial panel's (!)) and instruction tails ("choose a course") are
  * not shown as text.
@@ -53,165 +55,41 @@ internal fun DrawScope.drawHudFeed(
 ) {
     FeedProbe.begin()
     val frame = HudScratch.frame.update(size.width, size.height, density)
-    val language = measurer.language
-    val right: Float
-    var top: Float
-    val maxWidth: Float
-    val maxNotices: Int
-    val maxDetails: Int
-    val limit: Float
-    // Phones keep the Core clear: the camera holds it at the screen center, inside this zone.
-    val clearance = frame.u(CORE_CLEARANCE_DP)
-    val coreTop = frame.height * 0.5f - clearance
-    val coreBottom = frame.height * 0.5f + clearance
-    val coreRight = frame.width * 0.5f + clearance
-    var narrowWidth = Float.NaN
-    var narrowLimit = 0f
-    var lowerTop = Float.NaN
-    var lowerLimit = 0f
-    var sideWidth = Float.NaN
-    when (frame.mode) {
-        GameplayLayoutMode.REGULAR -> {
-            right = frame.width - frame.margin
-            top = frame.chainTop + frame.u(90f)
-            maxWidth = min(frame.u(380f), frame.width * 0.4f)
-            maxNotices = MAX_NOTICES
-            maxDetails = DETAILS_PER_NOTICE
-            // Stop above the Dash/Brake row that sits over the loadout.
-            limit = frame.height - frame.u(REGULAR_HUD_BOTTOM_DP + REGULAR_LOADOUT_HEIGHT_DP + 18f + 52f + 12f)
-        }
-        GameplayLayoutMode.COMPACT_LANDSCAPE -> {
-            right = frame.width - frame.margin - compactLoadoutWidth(engine.content.relicPolicy.maxSlots.coerceIn(0, 8), frame.unit) - frame.u(12f)
-            top = frame.u(62f)
-            maxWidth = min(frame.u(260f) * frame.factor, right - frame.width * 0.5f + frame.u(60f)).coerceAtLeast(frame.u(140f))
-            maxNotices = 1
-            maxDetails = 2
-            // A plate that would reach the Core's band narrows to the column right of the Core, which
-            // stays free down to the controls under it and the bottom cluster. Without that column
-            // (short, narrow screens) plates stop above the Core's band.
-            narrowWidth = (right - coreRight).let { if (it >= frame.u(NARROW_COLUMN_MIN_DP)) it else Float.NaN }
-            limit = if (narrowWidth.isNaN()) min(frame.height * 0.55f, coreTop - frame.u(8f)) else frame.height * 0.55f
-            narrowLimit = frame.height - frame.u(96f)
-            forEachRunningControlBounds(frame.width, frame.height, density) { _, controlLeft, controlTop, controlRight, _ ->
-                if (controlTop > frame.height * 0.5f && controlRight > coreRight && controlLeft < right) {
-                    narrowLimit = min(narrowLimit, controlTop - frame.u(12f))
-                }
-            }
-        }
-        GameplayLayoutMode.COMPACT_PORTRAIT -> {
-            right = frame.width - frame.margin
-            top = if (engine.activeTrial() != null) {
-                TrialFeedLayout.update(frame.width, frame.height, density, measurer.scale).bottom + frame.u(8f)
-            } else if (FeedBoss.select(engine).id >= 0) {
-                frame.top + frame.u(PORTRAIT_PANEL_ROW_DP)
-            } else {
-                frame.top + frame.u(PORTRAIT_BOSS_ROW_DP)
-            }
-            maxWidth = frame.width - frame.margin * 2f
-            maxNotices = 2
-            maxDetails = 2
-            // Plates span the width here: they stop above the Core, and toasts that no longer fit
-            // there continue in the band between the Core and the bottom cluster.
-            limit = min(frame.height - frame.u(238f + 12f), coreTop - frame.u(8f))
-            lowerTop = max(top, coreBottom + frame.u(8f))
-            lowerLimit = frame.height - frame.u(238f + 12f)
-            // Short screens under a trial panel can leave neither band room for a toast: it then takes
-            // the column right of the Core, from the band's top down to the bottom cluster.
-            sideWidth = (right - coreRight).let { if (it >= frame.u(NARROW_COLUMN_MIN_DP)) it else Float.NaN }
-        }
-    }
+    val area = FeedArea.update(engine, frame, measurer, density)
+    val right = area.right
     val gap = frame.u(8f)
+    var top = area.top
     var feedTop = Float.NaN
     var feedLeft = right
-    var bandLimit = limit
     val notices = fx.buildNotifications
-    // The newest toast's title and synergy lines outrank the transient banner: when both do not
-    // fit, the banner yields (its event also shows elsewhere: build toast, weapon slot, world).
-    // Measured in the narrow column where there is one (the taller case); no reserve is needed
-    // when the toast fits below the Core.
-    val narrowable = !narrowWidth.isNaN()
-    val lastLimit = if (narrowable) max(limit, narrowLimit) else limit
-    val levels = shrinkLevels(measurer.scale)
-    var reserve = 0f
-    if (notices.isNotEmpty() && maxNotices > 0) {
-        // At the largest size at which the toast fits: below the Core it needs no reserve. Where no
-        // size holds all its synergy lines, the title with the lines that fit.
-        var level = 0
-        while (level < levels) {
-            val required = noticeLines(notices[notices.size - 1], 0, measurer, frame, if (narrowable) narrowWidth else maxWidth, maxDetails,
-                narrowable, level).requiredHeight(frame, banner = false)
-            if (!lowerTop.isNaN() && required <= lowerLimit - lowerTop) break
-            if (required <= lastLimit - top) {
-                reserve = required + gap
-                break
-            }
-            level++
-        }
-        if (level == levels) {
-            val relaxed = noticeLines(notices[notices.size - 1], 0, measurer, frame, if (narrowable) narrowWidth else maxWidth, maxDetails,
-                narrowable, levels - 1).fit(frame, lastLimit - top, banner = false, relaxed = true)
-            if (relaxed > 0f) reserve = relaxed + gap
-        }
-    }
     if (engine.showsMessage()) {
-        FeedScratch.message.update(engine.message, language)
-        val age = if (memory != null) memory.messageAge(renderTime) else Float.POSITIVE_INFINITY
-        val alpha = (engine.messageTime / 0.45f).coerceIn(0f, 1f) * entranceAlpha(age)
-        val shift = entranceShift(age) * frame.u(80f)
-        val height = placeFeedPlate(frame, top, right, banner = true, maxWidth, min(limit, lastLimit - reserve) - top, narrowWidth,
-            narrowLimit - reserve - top, coreTop, coreBottom, coreRight) { width, narrow -> bannerLines(measurer, frame, width, narrow) }
-        if (height > 0f) {
-            val lines = FeedLines
-            translate(shift, 0f) { drawFeedPlate(measurer, frame, HudPath.MESSAGE, 0, lines, right, top, height, alpha, shift, banner = true) }
-            feedLeft = min(feedLeft, right - lines.plateWidth(frame, banner = true))
-            feedTop = top
-            top += height + gap
+        FeedScratch.message.update(engine.message, measurer.language)
+        if (bannerKeepsTheNewestToast(area, frame, measurer, notices, top, gap)) {
+            val age = if (memory != null) memory.messageAge(renderTime) else Float.POSITIVE_INFINITY
+            val alpha = (engine.messageTime / 0.45f).coerceIn(0f, 1f) * entranceAlpha(age)
+            val shift = entranceShift(age) * frame.u(80f)
+            val height = placeBanner(area, frame, measurer, top)
+            if (height > 0f) {
+                val lines = FeedLines
+                translate(shift, 0f) { drawFeedPlate(measurer, frame, HudPath.MESSAGE, 0, lines, right, top, height, alpha, shift, banner = true) }
+                feedLeft = min(feedLeft, right - lines.plateWidth(frame, banner = true))
+                feedTop = top
+                top += height + gap
+            }
         }
     }
+    var bandLimit = area.limit
     var shown = 0
     var index = notices.size - 1
-    while (index >= 0 && shown < maxNotices) {
+    while (index >= 0 && shown < area.maxNotices) {
         val notice = notices[index]
         val slot = shown
-        var height = 0f
-        var side = false
-        // Each text step tries the current band, then the band below the Core; then (portrait) each
-        // step tries the column beside the Core. Should even the smallest step hold no toast with all
-        // its synergy lines, the newest toast's title shows with the lines that fit.
-        val columns = if (sideWidth.isNaN()) 1 else 2
-        val passes = levels * columns + if (shown == 0) 1 else 0
-        for (pass in 0 until passes) {
-            val relaxed = pass == levels * columns
-            val level = if (relaxed) levels - 1 else pass % levels
-            val sidePass = !relaxed && pass >= levels
-            if (!sidePass) {
-                height = placeFeedPlate(frame, top, right, banner = false, maxWidth, bandLimit - top, narrowWidth, narrowLimit - top,
-                    coreTop, coreBottom, coreRight, relaxed,
-                ) { width, narrow -> noticeLines(notice, slot, measurer, frame, width, maxDetails, narrow, level) }
-                if (height > 0f) break
-                if (!lowerTop.isNaN() && bandLimit != lowerLimit) {
-                    val lower = max(top, lowerTop)
-                    height = placeFeedPlate(frame, lower, right, banner = false, maxWidth, lowerLimit - lower, narrowWidth, narrowLimit - lower,
-                        coreTop, coreBottom, coreRight, relaxed,
-                    ) { width, narrow -> noticeLines(notice, slot, measurer, frame, width, maxDetails, narrow, level) }
-                    if (height > 0f) {
-                        // Continue below the Core.
-                        top = lower
-                        bandLimit = lowerLimit
-                        break
-                    }
-                }
-            }
-            if (!sideWidth.isNaN() && (sidePass || relaxed)) {
-                height = placeFeedPlate(frame, top, right, banner = false, sideWidth, lowerLimit - top, Float.NaN, 0f,
-                    coreTop, coreBottom, coreRight, relaxed) { width, _ -> noticeLines(notice, slot, measurer, frame, width, maxDetails, true, level) }
-                if (height > 0f) {
-                    side = true
-                    break
-                }
-            }
-        }
+        // Should even the smallest step hold no place with all its synergy lines, the newest toast's
+        // title shows with the lines that fit.
+        val height = placeToast(area, frame, measurer, notice, slot, top, bandLimit, relaxed = shown == 0)
         if (height <= 0f) break
+        top = ToastSpot.top
+        bandLimit = ToastSpot.bandLimit
         val lines = FeedLines
         val age = NOTICE_LIFE_SECONDS - notice.life
         val alpha = (notice.life / 0.6f).coerceIn(0f, 1f) * entranceAlpha(age)
@@ -223,9 +101,193 @@ internal fun DrawScope.drawHudFeed(
         shown++
         index--
         // Nothing follows a toast beside the Core: the next one would start level with the Core.
-        if (side) break
+        if (ToastSpot.side) break
     }
     if (!feedTop.isNaN()) HudLayoutProbe.record(HudBlock.FEED, feedLeft, feedTop, right, top - gap)
+}
+
+/**
+ * Where the feed docks in the current frame (px): its right edge and first plate top, the plate
+ * width and band limit, the Core's zone, and per layout the narrow column right of the Core
+ * (landscape), the band below the Core and the column beside it (portrait). Draw-thread scratch,
+ * rewritten every frame.
+ */
+private object FeedArea {
+    var right = 0f
+    var top = 0f
+    var maxWidth = 0f
+    var maxNotices = 0
+    var maxDetails = 0
+    var limit = 0f
+    var coreTop = 0f
+    var coreBottom = 0f
+    var coreRight = 0f
+    var narrowWidth = Float.NaN
+    var narrowLimit = 0f
+    var lowerTop = Float.NaN
+    var lowerLimit = 0f
+    var sideWidth = Float.NaN
+    var levels = 1
+
+    fun update(engine: GameplayRenderModel, frame: HudFrame, measurer: TextMeasurer, density: Float): FeedArea {
+        // Phones keep the Core clear: the camera holds it at the screen center, inside this zone.
+        val clearance = frame.u(CORE_CLEARANCE_DP)
+        coreTop = frame.height * 0.5f - clearance
+        coreBottom = frame.height * 0.5f + clearance
+        coreRight = frame.width * 0.5f + clearance
+        narrowWidth = Float.NaN
+        narrowLimit = 0f
+        lowerTop = Float.NaN
+        lowerLimit = 0f
+        sideWidth = Float.NaN
+        levels = shrinkLevels(measurer.scale)
+        when (frame.mode) {
+            GameplayLayoutMode.REGULAR -> {
+                right = frame.width - frame.margin
+                top = frame.chainTop + frame.u(90f)
+                maxWidth = min(frame.u(380f), frame.width * 0.4f)
+                maxNotices = MAX_NOTICES
+                maxDetails = DETAILS_PER_NOTICE
+                // Stop above the Dash/Brake row that sits over the loadout.
+                limit = frame.height - frame.u(REGULAR_HUD_BOTTOM_DP + REGULAR_LOADOUT_HEIGHT_DP + 18f + 52f + 12f)
+            }
+            GameplayLayoutMode.COMPACT_LANDSCAPE -> {
+                right = frame.width - frame.margin - compactLoadoutWidth(engine.content.relicPolicy.maxSlots.coerceIn(0, 8), frame.unit) - frame.u(12f)
+                top = frame.u(62f)
+                maxWidth = min(frame.u(260f) * frame.factor, right - frame.width * 0.5f + frame.u(60f)).coerceAtLeast(frame.u(140f))
+                maxNotices = 1
+                maxDetails = 2
+                // A plate that would reach the Core's band narrows to the column right of the Core, which
+                // stays free down to the controls under it and the bottom cluster. Without that column
+                // (short, narrow screens) plates stop above the Core's band.
+                narrowWidth = (right - coreRight).let { if (it >= frame.u(NARROW_COLUMN_MIN_DP)) it else Float.NaN }
+                limit = if (narrowWidth.isNaN()) min(frame.height * 0.55f, coreTop - frame.u(8f)) else frame.height * 0.55f
+                narrowLimit = frame.height - frame.u(96f)
+                forEachRunningControlBounds(frame.width, frame.height, density) { _, controlLeft, controlTop, controlRight, _ ->
+                    if (controlTop > frame.height * 0.5f && controlRight > coreRight && controlLeft < right) {
+                        narrowLimit = min(narrowLimit, controlTop - frame.u(12f))
+                    }
+                }
+            }
+            GameplayLayoutMode.COMPACT_PORTRAIT -> {
+                right = frame.width - frame.margin
+                top = if (engine.activeTrial() != null) {
+                    TrialFeedLayout.update(frame.width, frame.height, density, measurer.scale).bottom + frame.u(8f)
+                } else if (FeedBoss.select(engine).id >= 0) {
+                    frame.top + frame.u(PORTRAIT_PANEL_ROW_DP)
+                } else {
+                    frame.top + frame.u(PORTRAIT_BOSS_ROW_DP)
+                }
+                maxWidth = frame.width - frame.margin * 2f
+                maxNotices = 2
+                maxDetails = 2
+                // Plates span the width here: they stop above the Core, and toasts that no longer fit
+                // there continue in the band between the Core and the bottom cluster.
+                limit = min(frame.height - frame.u(238f + 12f), coreTop - frame.u(8f))
+                lowerTop = max(top, coreBottom + frame.u(8f))
+                lowerLimit = frame.height - frame.u(238f + 12f)
+                // Short screens under a trial panel or a boss row can leave neither band room for a
+                // toast: it then takes the column right of the Core, down to the bottom cluster.
+                sideWidth = (right - coreRight).let { if (it >= frame.u(NARROW_COLUMN_MIN_DP)) it else Float.NaN }
+            }
+        }
+        return this
+    }
+}
+
+/** Where [placeToast] put the toast: its top, the band limit that follows it, and whether it is beside the Core. */
+private object ToastSpot {
+    var top = 0f
+    var bandLimit = 0f
+    var side = false
+
+    fun set(top: Float, bandLimit: Float, side: Boolean, height: Float): Float {
+        this.top = top
+        this.bandLimit = bandLimit
+        this.side = side
+        return height
+    }
+}
+
+/**
+ * Lays out the current message's banner at [top] into [FeedLines] and returns its height (0 = not
+ * shown): full width above the Core, or (landscape) in the column beside it.
+ */
+private fun placeBanner(area: FeedArea, frame: HudFrame, measurer: TextMeasurer, top: Float): Float =
+    placeFeedPlate(frame, top, area.right, banner = true, area.maxWidth, area.limit - top, area.narrowWidth, area.narrowLimit - top,
+        area.coreTop, area.coreBottom, area.coreRight) { width, narrow -> bannerLines(measurer, frame, width, narrow) }
+
+/**
+ * Whether the banner at [top] leaves the newest toast every line it outranks the banner with: its
+ * title and synergy lines, or where no step holds them all, as many of them as it shows alone. The
+ * toast steps its text down (or moves below or beside the Core) to make room for both; the banner
+ * yields only when it cannot. The banner's event also shows elsewhere (build toast, weapon slot,
+ * world).
+ */
+private fun bannerKeepsTheNewestToast(
+    area: FeedArea,
+    frame: HudFrame,
+    measurer: TextMeasurer,
+    notices: List<BuildNotificationProjection>,
+    top: Float,
+    gap: Float,
+): Boolean {
+    if (notices.isEmpty() || area.maxNotices == 0) return true
+    val newest = notices[notices.size - 1]
+    if (placeToast(area, frame, measurer, newest, 0, top, area.limit, relaxed = true) <= 0f) return true
+    val alone = FeedLines.shownRequired()
+    val banner = placeBanner(area, frame, measurer, top)
+    if (banner <= 0f) return false
+    return placeToast(area, frame, measurer, newest, 0, top + banner + gap, area.limit, relaxed = true) > 0f &&
+        FeedLines.shownRequired() >= alone
+}
+
+/**
+ * Lays out toast [notice] in feed position [slot] from [top] into [FeedLines] and returns its height
+ * (0 = not shown); [ToastSpot] tells where it went. Each text step tries the band above the Core
+ * (ending at [bandLimit]), then the band below the Core; then (portrait) each step tries the column
+ * beside the Core. [relaxed]: should even the smallest step hold no place with every synergy line,
+ * the title shows with the lines that fit, in the same order of places.
+ */
+private fun placeToast(
+    area: FeedArea,
+    frame: HudFrame,
+    measurer: TextMeasurer,
+    notice: BuildNotificationProjection,
+    slot: Int,
+    top: Float,
+    bandLimit: Float,
+    relaxed: Boolean,
+): Float {
+    val levels = area.levels
+    val columns = if (area.sideWidth.isNaN()) 1 else 2
+    val passes = levels * columns + if (relaxed) 1 else 0
+    for (pass in 0 until passes) {
+        val last = pass == levels * columns
+        val level = if (last) levels - 1 else pass % levels
+        val sidePass = !last && pass >= levels
+        if (!sidePass) {
+            var height = placeFeedPlate(frame, top, area.right, banner = false, area.maxWidth, bandLimit - top, area.narrowWidth,
+                area.narrowLimit - top, area.coreTop, area.coreBottom, area.coreRight, last,
+            ) { width, narrow -> noticeLines(notice, slot, measurer, frame, width, area.maxDetails, narrow, level) }
+            if (height > 0f) return ToastSpot.set(top, bandLimit, side = false, height)
+            if (!area.lowerTop.isNaN() && bandLimit != area.lowerLimit) {
+                // Continue below the Core.
+                val lower = max(top, area.lowerTop)
+                height = placeFeedPlate(frame, lower, area.right, banner = false, area.maxWidth, area.lowerLimit - lower, area.narrowWidth,
+                    area.narrowLimit - lower, area.coreTop, area.coreBottom, area.coreRight, last,
+                ) { width, narrow -> noticeLines(notice, slot, measurer, frame, width, area.maxDetails, narrow, level) }
+                if (height > 0f) return ToastSpot.set(lower, area.lowerLimit, side = false, height)
+            }
+        }
+        if (!area.sideWidth.isNaN() && (sidePass || last)) {
+            val height = placeFeedPlate(frame, top, area.right, banner = false, area.sideWidth, area.lowerLimit - top, Float.NaN, 0f,
+                area.coreTop, area.coreBottom, area.coreRight, last,
+            ) { width, _ -> noticeLines(notice, slot, measurer, frame, width, area.maxDetails, true, level) }
+            if (height > 0f) return ToastSpot.set(top, bandLimit, side = true, height)
+        }
+    }
+    return 0f
 }
 
 /**
@@ -416,6 +478,13 @@ private object FeedLines {
     operator fun get(index: Int): TextLayoutResult = layouts[index]!!
 
     fun isVisible(index: Int): Boolean = visible[index]
+
+    /** How many of the title and required lines the last [fit] that placed the plate shows. */
+    fun shownRequired(): Int {
+        var shown = 0
+        for (index in 0 until count) if (required[index] && visible[index]) shown++
+        return shown
+    }
 
     fun title(measurer: TextMeasurer, frame: HudFrame, slot: Int, text: String, maxWidth: Float, banner: Boolean) {
         val size = (if (frame.regular) frame.t(if (banner) 24f else 20f) else if (banner) 18f else 16f) / REFERENCE_TEXT_SCALE * shrink
