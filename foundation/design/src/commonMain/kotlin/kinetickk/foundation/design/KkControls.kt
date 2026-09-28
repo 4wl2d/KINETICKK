@@ -126,7 +126,6 @@ fun DrawScope.drawKkButton(
             }
             val facePath = KkPathMemo.slab(bounds, cut)
             drawPath(facePath, face)
-            if (armed && interactive) drawPath(facePath, Color.White, alpha = 0.2f * kkPulse(time, 0.9f))
             if (locked) drawKkHatch(facePath)
             if ((variant == KkButtonVariant.HAZARD || armed) && interactive && roles.hatchThreats) {
                 // MONO: the hatch stays a rim so the label keeps a solid face.
@@ -134,6 +133,8 @@ fun DrawScope.drawKkButton(
                 val rim = d(4f)
                 drawPath(KkPathMemo.slab(bounds.left + rim, bounds.top + rim, bounds.right - rim, bounds.bottom - rim, cut), face)
             }
+            // After the MONO rim so the armed pulse lights the whole face in every palette.
+            if (armed && interactive) drawPath(facePath, Color.White, alpha = 0.2f * kkPulse(time, 0.9f))
             if (holdProgress > 0f && interactive) {
                 val holdLeft = bounds.left + d(10f)
                 val holdRight = holdLeft + (bounds.width - d(20f)) * holdProgress.coerceIn(0f, 1f)
