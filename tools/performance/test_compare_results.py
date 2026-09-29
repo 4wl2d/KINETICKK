@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import argparse
 import unittest
 
 import compare_results
@@ -33,6 +34,32 @@ def source_contract(digest: str = "a" * 64) -> dict[str, object]:
     }
 
 
+def gc_comparison(baseline: list[float], candidate: list[float]) -> dict[str, object]:
+    def run(collections: list[float]) -> dict[str, object]:
+        return {
+            "adapter": "test", "revision": "a" * 40, "dirty": False,
+            "environment": {}, "profile": {"name": "standard"},
+            "sourceContract": source_contract(), "_source": {"file": "test.json"},
+            "scenarios": [{
+                "name": "sparse_gc", "category": "harness", "description": "GC counter samples.",
+                "metadata": {}, "validation": validation_evidence(),
+                "samples": [{
+                    "wallNanosPerOperation": 1.0, "cpuNanosPerOperation": 1.0,
+                    "allocatedBytesPerOperation": 16.0, "gcNanosPerOperation": 0.0,
+                    "gcCollectionsPerOperation": value,
+                } for value in collections],
+            }],
+        }
+
+    return compare_results.build_comparison(
+        [run(baseline) for _ in range(4)], [run(candidate) for _ in range(4)],
+        argparse.Namespace(
+            baseline_name="base", candidate_name="candidate", semantic_contract="outcome-fingerprint",
+            bootstrap_resamples=1_000, effect_threshold_percent=5.0,
+        ),
+    )
+
+
 class CompareResultsTest(unittest.TestCase):
     def test_percentile_interpolates_and_clamps(self) -> None:
         values = [10.0, 20.0, 30.0, 40.0]
@@ -50,11 +77,33 @@ class CompareResultsTest(unittest.TestCase):
         self.assertEqual("improvement", classify(-8.0, (-10.0, -6.0), 5.0, True))
         self.assertEqual("insufficient-data", classify(None, None, 5.0, True))
 
-    def test_zero_baseline_does_not_hide_a_positive_cost(self) -> None:
+    def test_zero_baseline_requires_evidence_of_a_positive_cost(self) -> None:
         classify = compare_results.classify_with_zero_baseline
 
         self.assertEqual("stable", classify(None, None, 5.0, True, 0.0, 0.0))
-        self.assertEqual("regression", classify(None, None, 5.0, True, 0.0, 0.001))
+        self.assertEqual("insufficient-data", classify(None, None, 5.0, True, 0.0, 0.001))
+        self.assertEqual("regression", classify(None, None, 5.0, True, 0.0, 0.001, (0.001, 0.001)))
+        self.assertEqual("inconclusive", classify(None, (-100.0, 100.0), 5.0, True, 0.0, 0.001, (-0.001, 0.001)))
+
+    def test_sparse_gc_samples_do_not_become_a_regression_at_zero_median(self) -> None:
+        report = gc_comparison([0.0] * 6 + [0.00001] * 4, [0.0] * 5 + [0.00001] * 5)
+        metric = report["scenarios"][0]["metrics"]["gcCollectionsPerOperation"]
+        interval = metric["bootstrap95Absolute"]
+        self.assertIsNotNone(interval)
+        assert interval is not None
+        self.assertLessEqual(interval[0], 0.0)
+        self.assertGreaterEqual(interval[1], 0.0)
+        self.assertEqual("inconclusive", metric["classification"])
+        self.assertFalse(compare_results.has_regression(report))
+
+    def test_new_consistent_cost_from_zero_still_fails_the_gate(self) -> None:
+        report = gc_comparison([0.0] * 10, [0.001] * 10)
+        metrics = report["scenarios"][0]["metrics"]
+        self.assertEqual("stable", metrics["wallNanosPerOperation"]["classification"])
+        self.assertEqual("regression", metrics["gcCollectionsPerOperation"]["classification"])
+        self.assertTrue(compare_results.has_regression(report))
+        # A stable wall-time summary must not hide the metric that actually fails CI.
+        self.assertIn("`sparse_gc` | `gcCollectionsPerOperation`", compare_results.render_markdown(report))
 
     def test_semantic_metadata_blocks_invalid_comparison(self) -> None:
         compatible, differences = compare_results.compatible_metadata(

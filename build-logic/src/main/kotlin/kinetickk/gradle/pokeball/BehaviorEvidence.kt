@@ -297,8 +297,8 @@ internal val runtimeBehaviorEvidence = listOf(
     BehaviorEvidence(
         ":ball:profile:interaction", "kinetickk.ball.profile.interaction.armory.impl.ArmoryReducerTest",
         setOf(
-            "pageSliceReturnsThreeForExactAndFirstNPlusOneInputs",
-            "presentationClockAcceptsMaximumAndClampsNextRepresentableDelta",
+            "pageStepsAndBackAreLocalPresentationEffects",
+            "primaryActionEmitsOnlyTheTypedProfileIntentWhenAvailable",
         ),
     ),
     BehaviorEvidence(

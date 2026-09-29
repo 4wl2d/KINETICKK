@@ -6,7 +6,6 @@ package kinetickk.ball.gameplay.interaction.canvas
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Canvas
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.scale
@@ -14,6 +13,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
+import kinetickk.foundation.design.Kk
 import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
@@ -25,11 +25,11 @@ class TesseractRenderingTest {
     fun actualCanvasProjectionKeepsVisibleCenterAndRotatesAcrossFourPoses() {
         val bitmap = ImageBitmap(800, 200)
         CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(800f, 200f)) {
-            drawRect(Color(0xFF050810))
+            drawRect(Kk.Ink)
             repeat(4) { index ->
                 val center = Offset(index * 200f + 100f, 100f)
                 scale(3f, center) {
-                    drawTesseractCore(center, index * 1.4f, Color(0xFFB7A7FF))
+                    drawTesseractCore(center, index * 1.4f, Kk.Bone)
                 }
             }
         }

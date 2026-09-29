@@ -11,20 +11,15 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
-import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
-import kinetickk.ball.gameplay.interaction.layout.gameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.performance.GameplayPerformanceSnapshot
 import kinetickk.ball.gameplay.interaction.performance.PerformanceDurationStats
-import kinetickk.foundation.design.Acid
-import kinetickk.foundation.design.Cyan
-import kinetickk.foundation.design.Muted
-import kinetickk.foundation.design.Orange
+import kinetickk.foundation.design.Kk
+import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.TextMeasurer
-import kinetickk.foundation.design.White
-import kinetickk.foundation.design.d
-import kinetickk.foundation.design.drawLabel
+import kinetickk.foundation.design.drawKkText
 import kinetickk.foundation.design.formatCompact
+import kinetickk.foundation.design.labelStyle
+import kinetickk.foundation.design.monoStyle
 import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -73,117 +68,107 @@ internal fun DrawScope.drawPerformanceHud(
     projection: PerformanceHudProjection,
     textMeasurer: TextMeasurer,
 ) {
-    val left = d(8f)
-    val top = d(8f)
-    val compact = gameplayLayoutMode(size.width, size.height, density) != GameplayLayoutMode.REGULAR
-    if (compact) {
-        drawCompactPerformanceHud(projection, textMeasurer, left, top)
-        return
+    val frame = HudScratch.frame.update(size.width, size.height, density)
+    val trial = PerformanceTrialLayout.update(size.width, size.height, density, textMeasurer.scale)
+    val left = frame.margin
+    val top = trial.top
+    if (frame.regular) {
+        drawRegularPerformanceHud(projection, textMeasurer, frame, left, top)
+    } else {
+        drawCompactPerformanceHud(projection, textMeasurer, frame, left, top)
     }
+}
 
-    drawRegularPerformanceHud(projection, textMeasurer, left, top)
+private val PerformanceTrialLayout = HudTrialPanelLayout()
+
+/** Top-left diagnostics panel: ink-2 chamfered slip, `you` rule, mono readouts. */
+private fun DrawScope.drawPerformancePanel(frame: HudFrame, left: Float, top: Float, width: Float, height: Float, roles: KkRolePalette) {
+    val cut = frame.u(10f)
+    drawPath(HudDrawCache.paths.chamfer(HudPath.PERF_PANEL.ordinal, HudDrawCache.rect(HudRect.PERF_PANEL, left, top, left + width, top + height), cut),
+        Kk.Ink2.copy(alpha = 0.92f))
+    drawRect(roles.you, Offset(left, top), Size(width - cut, frame.u(2f)))
 }
 
 private fun DrawScope.drawCompactPerformanceHud(
     projection: PerformanceHudProjection,
     textMeasurer: TextMeasurer,
+    frame: HudFrame,
     left: Float,
     top: Float,
 ) {
-    val controlReserve = d(136f)
-    val width = min(d(220f), size.width - d(16f) - controlReserve).coerceAtLeast(d(180f))
-    val height = d(100f)
-    val fontSize = 8f
-    val textLeft = left + d(8f)
-    val maxTextWidth = width - d(16f)
-
-    drawRect(kinetickk.foundation.design.OverlayPanel, Offset(left, top), Size(width, height))
-    drawRect(Cyan.copy(alpha = 0.82f), Offset(left, top), Size(width, height), style = Stroke(d(1f)))
-    drawLabel(
-        textMeasurer = textMeasurer,
-        text = textMeasurer.language.text(GameplayText.PerformanceCompactTitle),
-        x = textLeft,
-        y = top + d(7f),
-        fontSize = fontSize + 0.5f,
-        color = Acid,
-        maxWidth = maxTextWidth,
-    )
-    projection.compactLines.forEachIndexed { index, line ->
-        drawPerformanceLine(
-            textMeasurer = textMeasurer,
-            text = line,
-            x = textLeft,
-            y = top + d(22f + index * 14f),
-            fontSize = fontSize,
-            color = compactPerformanceLineColor(index, projection.hasSlowFrames),
-            maxWidth = maxTextWidth,
-        )
+    val roles = textMeasurer.roles
+    val width = min(frame.u(360f), frame.width - frame.margin * 2f)
+    val fontSize = 10f
+    val lineStep = fontSize * 1.35f * hudUiScale(textMeasurer.scale) * density + frame.u(2f)
+    val padding = frame.u(10f)
+    val height = padding * 2f + lineStep * (1 + projection.compactLines.size)
+    drawPerformancePanel(frame, left, top, width, height, roles)
+    val textLeft = left + padding
+    val maxTextWidth = width - padding * 2f
+    drawPerformanceLine(textMeasurer, HudText.PERF_TITLE, textMeasurer.language.text(GameplayText.PerformanceTitle),
+        textLeft, top + padding, fontSize, roles.you, maxTextWidth, label = true)
+    val lines = projection.compactLines
+    for (index in lines.indices) {
+        drawPerformanceLine(textMeasurer, PerformanceSlots[index.coerceAtMost(PerformanceSlots.size - 1)], lines[index], textLeft,
+            top + padding + lineStep * (index + 1), fontSize, compactPerformanceLineColor(index, projection.hasSlowFrames, roles), maxTextWidth)
     }
 }
 
 private fun DrawScope.drawRegularPerformanceHud(
     projection: PerformanceHudProjection,
     textMeasurer: TextMeasurer,
+    frame: HudFrame,
     left: Float,
     top: Float,
 ) {
-    val width = min(d(610f), size.width - d(16f)).coerceAtLeast(d(180f))
-    val height = d(116f)
-    val fontSize = if (size.width / density < 760f) 8f else 9f
-    val textLeft = left + d(8f)
-    val maxTextWidth = width - d(16f)
-
-    drawRect(kinetickk.foundation.design.OverlayPanel, Offset(left, top), Size(width, height))
-    drawRect(Cyan.copy(alpha = 0.82f), Offset(left, top), Size(width, height), style = Stroke(d(1f)))
-    drawLabel(
-        textMeasurer = textMeasurer,
-        text = textMeasurer.language.text(GameplayText.PerformanceTitle),
-        x = textLeft,
-        y = top + d(7f),
-        fontSize = fontSize + 0.5f,
-        color = Acid,
-        maxWidth = maxTextWidth,
-    )
-    drawPerformanceLine(textMeasurer, projection.frameLine, textLeft, top + d(25f), fontSize, White, maxTextWidth)
-    drawPerformanceLine(textMeasurer, projection.dispatchLine, textLeft, top + d(42f), fontSize, Muted, maxTextWidth)
-    drawPerformanceLine(textMeasurer, projection.canvasLine, textLeft, top + d(59f), fontSize, Muted, maxTextWidth)
-    drawPerformanceLine(
-        textMeasurer,
-        projection.rateLine,
-        textLeft,
-        top + d(76f),
-        fontSize,
-        if (projection.hasSlowFrames) Orange else Cyan,
-        maxTextWidth,
-    )
-    drawPerformanceLine(textMeasurer, projection.entitiesLine, textLeft, top + d(93f), fontSize, White, maxTextWidth)
+    val roles = textMeasurer.roles
+    val width = min(frame.u(640f), frame.width - frame.margin * 2f).coerceAtLeast(frame.u(180f))
+    val fontSize = 11f * frame.textFactor
+    val lineStep = fontSize * 1.35f * hudUiScale(textMeasurer.scale) * density + frame.u(3f)
+    val padding = frame.u(12f)
+    val height = padding * 2f + lineStep * 6f
+    drawPerformancePanel(frame, left, top, width, height, roles)
+    val textLeft = left + padding
+    val maxTextWidth = width - padding * 2f
+    drawPerformanceLine(textMeasurer, HudText.PERF_TITLE, textMeasurer.language.text(GameplayText.PerformanceTitle),
+        textLeft, top + padding, fontSize, roles.you, maxTextWidth, label = true)
+    drawPerformanceLine(textMeasurer, HudText.PERF_0, projection.frameLine, textLeft, top + padding + lineStep, fontSize, roles.you, maxTextWidth)
+    drawPerformanceLine(textMeasurer, HudText.PERF_1, projection.dispatchLine, textLeft, top + padding + lineStep * 2f, fontSize,
+        roles.you.copy(alpha = 0.7f), maxTextWidth)
+    drawPerformanceLine(textMeasurer, HudText.PERF_2, projection.canvasLine, textLeft, top + padding + lineStep * 3f, fontSize,
+        roles.you.copy(alpha = 0.7f), maxTextWidth)
+    drawPerformanceLine(textMeasurer, HudText.PERF_3, projection.rateLine, textLeft, top + padding + lineStep * 4f, fontSize,
+        if (projection.hasSlowFrames) roles.heat else roles.you, maxTextWidth)
+    drawPerformanceLine(textMeasurer, HudText.PERF_4, projection.entitiesLine, textLeft, top + padding + lineStep * 5f, fontSize,
+        roles.you, maxTextWidth)
 }
 
-private fun compactPerformanceLineColor(index: Int, hasSlowFrames: Boolean): Color = when (index) {
-    0 -> White
-    1 -> Muted
-    2, 3 -> if (hasSlowFrames) Orange else Cyan
-    else -> White
+private val PerformanceSlots = arrayOf(HudText.PERF_0, HudText.PERF_1, HudText.PERF_2, HudText.PERF_3, HudText.PERF_4)
+
+private fun compactPerformanceLineColor(index: Int, hasSlowFrames: Boolean, roles: KkRolePalette): Color = when (index) {
+    0 -> roles.you
+    1 -> roles.you.copy(alpha = 0.7f)
+    2, 3 -> if (hasSlowFrames) roles.heat else roles.you
+    else -> roles.you
 }
 
 private fun DrawScope.drawPerformanceLine(
     textMeasurer: TextMeasurer,
+    slot: HudText,
     text: String,
     x: Float,
     y: Float,
     fontSize: Float,
     color: Color,
     maxWidth: Float,
+    label: Boolean = false,
 ) {
-    drawLabel(
-        textMeasurer = textMeasurer,
-        text = text,
-        x = x,
-        y = y,
-        fontSize = fontSize,
-        color = color,
-        maxWidth = maxWidth,
-    )
+    // UI text: follows the text size relative to the board and shrinks to fit the panel, never cut.
+    val size = if (label) fontSize + 1f else fontSize
+    val layout = HudDrawCache.fitted(slot, HudMeasurers.ui(textMeasurer), text, size, maxWidth, uppercase = label) { fitted ->
+        if (label) textMeasurer.typography.labelStyle(fitted) else textMeasurer.typography.monoStyle(fitted)
+    }
+    drawKkText(layout, x, y, color)
 }
 
 private fun PerformanceDurationStats.hudLine(label: String, language: AppLanguage): String =
@@ -204,5 +189,3 @@ private fun Double.tenths(language: AppLanguage): String {
     val separator = if (language == AppLanguage.Russian) ',' else '.'
     return "${scaled / 10}$separator${abs(scaled % 10)}"
 }
-
-internal val COMPACT_PERFORMANCE_TITLE = GameplayText.PerformanceCompactTitle.english

@@ -280,6 +280,63 @@ class InteractionFxReducerTest {
         assertTrue(cleared.boundedSizes().all { it == 0 })
     }
 
+    @Test
+    fun damageNumbersDriftAwayFromTheLastSampledCore() {
+        val reducer = InteractionFxReducer(seed = 56)
+        reducer.apply(listOf(VisualFxCue.DamageNumberAdded(10f, 20f, 12, false)))
+        val beforeSample = reducer.snapshot().damageNumbers.single()
+        assertEquals(0f, beforeSample.driftX)
+        assertEquals(-1f, beforeSample.driftY, "Without a Core sample numbers rise")
+        assertEquals(InteractionFxLimits.DAMAGE_NUMBER_LIFE_SECONDS, beforeSample.life)
+
+        reducer.apply(
+            listOf(
+                VisualFxCue.MotionSample(0.01f, 100f, 100f, 0f, 0f),
+                VisualFxCue.DamageNumberAdded(130f, 60f, 12, true),
+                VisualFxCue.DamageNumberAdded(100f, 100f, 12, false),
+                VisualFxCue.WorldRebased(1_000f, 0f),
+                VisualFxCue.DamageNumberAdded(-900f, 140f, 12, false),
+            ),
+        )
+        val numbers = reducer.snapshot().damageNumbers
+        assertEquals(0.6f, numbers[1].driftX, 0.0001f)
+        assertEquals(-0.8f, numbers[1].driftY, 0.0001f)
+        assertEquals(-1f, numbers[2].driftY, "A hit on the Core itself rises")
+        assertEquals(1f, numbers[3].driftY, 0.0001f, "The sampled Core moves with a world rebase")
+        assertEquals(0f, numbers[3].driftX, 0.0001f)
+
+        reducer.apply(listOf(VisualFxCue.ClearAll, VisualFxCue.DamageNumberAdded(500f, 500f, 12, false)))
+        assertEquals(-1f, reducer.snapshot().damageNumbers.single().driftY, "Clearing forgets the Core sample")
+    }
+
+    @Test
+    fun burstsLeadWithShardsWithoutChangingTheParticleCount() {
+        listOf(ParticleDensity.LOW, ParticleDensity.NORMAL, ParticleDensity.HIGH).forEach { density ->
+            val reducer = InteractionFxReducer(seed = 57)
+            reducer.apply(
+                listOf(
+                    VisualFxCue.Burst(0f, 0f, 12, 1, density),
+                    VisualFxCue.DirectionalBurst(0f, 0f, 8, 3, 1f, 0f, density),
+                ),
+            )
+            val particles = reducer.snapshot().particles
+            val multiplier = when (density) {
+                ParticleDensity.LOW -> 0.45f
+                ParticleDensity.NORMAL -> 1f
+                ParticleDensity.HIGH -> 1.4f
+            }
+            val burst = (12 * multiplier).toInt().coerceAtLeast(1)
+            val directional = (8 * multiplier).toInt().coerceAtLeast(1)
+            assertEquals(burst + directional, particles.size)
+            listOf(particles.take(burst), particles.drop(burst)).forEach { group ->
+                group.forEachIndexed { index, particle ->
+                    assertEquals(index < InteractionFxLimits.SHARDS_PER_BURST, particle.size >= InteractionFxLimits.SHARD_MIN_SIZE,
+                        "$density particle $index")
+                }
+            }
+        }
+    }
+
     private fun InteractionFxReducer.applyAndSnapshot(cues: Iterable<VisualFxCue>) =
         apply(cues).let { snapshot() }
 

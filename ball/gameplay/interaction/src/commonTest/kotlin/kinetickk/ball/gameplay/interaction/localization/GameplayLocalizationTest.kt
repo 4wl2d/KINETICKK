@@ -6,7 +6,6 @@ package kinetickk.ball.gameplay.interaction.localization
 import kinetickk.ball.gameplay.interaction.canvas.toPerformanceHudProjection
 import kinetickk.ball.gameplay.interaction.gameplayBrakeStateDescription
 import kinetickk.ball.gameplay.interaction.performance.GameplayPerformanceSnapshot
-import kinetickk.ball.gameplay.interaction.rewards.relicRewardOperation
 import kinetickk.ball.gameplay.interaction.rewards.rewardHeading
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
@@ -35,15 +34,13 @@ class GameplayLocalizationTest {
 
     @Test
     fun changingLanguageChangesRewardsAndAccessibilityWithoutChangingTheirValues() {
-        assertEquals("Merge", rewardHeading(ChoiceType.RELIC_BIND, RelicChoiceAction.MELD_TARGET, AppLanguage.English))
+        assertEquals("Meld", rewardHeading(ChoiceType.RELIC_BIND, RelicChoiceAction.MELD_TARGET, AppLanguage.English))
         assertEquals("Слияние", rewardHeading(ChoiceType.RELIC_BIND, RelicChoiceAction.MELD_TARGET, AppLanguage.Russian))
-        assertEquals("СЛИЯНИЕ // Р2 → Р3", relicRewardOperation(RelicChoiceAction.MELD_TARGET, 0, 2, 0, 5, AppLanguage.Russian))
-        assertEquals("REPLACE SLOT 4", relicRewardOperation(RelicChoiceAction.REPLACE, 0, 2, 3, 5, AppLanguage.English))
-        assertEquals("ЗАМЕНИТЬ ЯЧЕЙКУ 4", relicRewardOperation(RelicChoiceAction.REPLACE, 0, 2, 3, 5, AppLanguage.Russian))
         assertEquals("pressed", gameplayBrakeStateDescription(true, AppLanguage.English))
         assertEquals("нажат", gameplayBrakeStateDescription(true, AppLanguage.Russian))
         assertEquals("отпущен", gameplayBrakeStateDescription(false, AppLanguage.Russian))
-        assertEquals("УР. 7   ДАННЫЕ 12/20", AppLanguage.Russian.text(GameplayText.LevelData, 7, 12, 20))
+        assertEquals("Lvl 7", AppLanguage.English.text(HudRedesignText.WeaponLevel, 7))
+        assertEquals("Ур. 7", AppLanguage.Russian.text(HudRedesignText.WeaponLevel, 7))
     }
 
     @Test

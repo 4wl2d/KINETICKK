@@ -9,6 +9,9 @@ import kinetickk.ball.profile.api.*
 import kinetickk.flow.session.interaction.codex.api.*
 import kinetickk.flow.session.interaction.testItems
 import kinetickk.foundation.collections.*
+import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.text
+import kinetickk.flow.session.interaction.localization.SessionText
 import kotlin.test.*
 
 class CodexReducerTest {
@@ -17,14 +20,14 @@ class CodexReducerTest {
         val empty = CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items)
         assertTrue(codexCatalogEntries(0, "", CodexItemFilter.ALL, empty, catalog, codexTestProgress()).isEmpty())
         assertTrue(codexFilteredItems(empty, catalog.items.first().name, CodexItemFilter.ALL).isEmpty())
-        val hidden = codexItemEntry(catalog.items.first(), empty)
+        val hidden = codexItemEntry(catalog.items.first(), empty, 0L)
         assertIs<CodexIcon.Unknown>(hidden.icon)
         assertNotEquals(catalog.items.first().name, hidden.title)
         assertFalse(hidden.description.contains(catalog.items.first().description))
         val found = empty.copy(discoveredItemIds = immutableSetOf(0), newItemIds = immutableSetOf(0))
         assertEquals(listOf(0), codexFilteredItems(found, "", CodexItemFilter.ALL).map { it.id })
-        assertTrue(codexItemEntry(catalog.items.first(), found).isNew)
-        assertFalse(codexItemEntry(catalog.items.first(), found.copy(newItemIds = immutableSetOf())).isNew)
+        assertTrue(codexItemEntry(catalog.items.first(), found, 0L).isNew)
+        assertFalse(codexItemEntry(catalog.items.first(), found.copy(newItemIds = immutableSetOf()), 0L).isNew)
     }
 
     @Test fun lockedCharactersRevealTheirUnlockGoalButNotTheirIdentityOrPower() {
@@ -35,12 +38,41 @@ class CodexReducerTest {
         val entry = codexShapeEntry(shape, model(), progress)
         assertEquals("Unknown core", entry.title)
         assertEquals("Defeat three elites", entry.description)
-        assertEquals("Progress · 2 / 3", entry.availability)
+        assertEquals(CodexFact("Progress", "2/3"), entry.facts.single { it.label == "Progress" })
+        assertEquals("Locked", entry.status)
         assertFalse(entry.discovered)
         assertTrue(codexCatalogEntries(3, shape.displayName, CodexItemFilter.ALL, model(), catalog, progress).isEmpty())
         val opened = codexShapeEntry(shape, model(), progress.copy(unlockedCoreShapes = immutableSetOf(CoreShape.ORB, CoreShape.PRISM)))
         assertEquals(shape.displayName, opened.title)
         assertTrue(opened.description.contains("Hidden power"))
+    }
+
+    @Test fun availabilityIsShownAsLabelledValuesWithLevelsInLvlForm() {
+        val catalog = codexTestCatalog()
+        val run = model()
+        val noRun = run.copy(runStacks = CodexRunStacks())
+        val known = run.copy(discoveredRelicIds = RelicId.entries.toImmutableSet())
+        for (language in AppLanguage.entries) {
+            val level = Regex(if (language == AppLanguage.English) "^Lvl \\d+$" else "^Ур\\. \\d+$")
+            val entries = listOf(run, noRun).flatMap { m -> codexCatalogEntries(0, "", CodexItemFilter.ALL, m, catalog, codexTestProgress(), language) } +
+                (1..3).flatMap { category -> codexCatalogEntries(category, "", CodexItemFilter.ALL, known, catalog, codexTestProgress(), language) }
+            assertTrue(entries.isNotEmpty())
+            entries.forEach { entry ->
+                assertTrue(entry.facts.isNotEmpty(), "${entry.key} has no facts")
+                entry.facts.forEach { fact ->
+                    // Short label + short value; any sentence lives behind the fact's (!).
+                    assertTrue(fact.label.length <= 16 && fact.value.length <= 16, "${entry.key}: $fact")
+                    assertFalse(fact.label.any(Char::isDigit), "${entry.key}: digits belong in the value, $fact")
+                    assertFalse('.' in fact.value.removePrefix("Ур."), "${entry.key}: sentence value $fact")
+                    fact.info?.let { assertTrue(it.endsWith('.'), "${entry.key}: explanation expected behind (!)") }
+                }
+            }
+            val item = catalog.items[2]
+            val offered = codexItemEntry(item, run, 0L, language).facts.single { !it.isStatus }
+            assertTrue(level.matches(offered.value), offered.value)
+            assertEquals(language.text(SessionText.LEVEL_SHORT, item.unlockLevel), offered.value)
+            assertTrue(offered.info != null)
+        }
     }
 
     @Test fun relicsAndSynergyRecipesAppearOnlyAfterTheirComponentsAreFound() {

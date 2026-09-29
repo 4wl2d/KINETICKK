@@ -4,38 +4,22 @@
 package kinetickk.ball.gameplay.interaction.canvas
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.rotate
 import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPolicy
 import kinetickk.foundation.design.CanvasRuneStyle
+import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.drawRuneMedallion
+import kinetickk.foundation.design.kkStroke
 import kotlin.math.PI
-import androidx.compose.ui.graphics.drawscope.Fill
-import androidx.compose.ui.graphics.drawscope.Stroke
-import kinetickk.foundation.design.drawPolygon
 
-private val RelicInk = Color(0xFFF4F6FF)
-private val RelicBackground = Color(0xFF050610)
-private val RelicCyan = Color(0xFF42F5E9)
-private val RelicViolet = Color(0xFFA96CFF)
-private val RelicBlue = Color(0xFF73A6FF)
-private val RelicMagenta = Color(0xFFFF4DC4)
-private val RelicAcid = Color(0xFFB6FF5B)
-private val RelicOrange = Color(0xFFFF714B)
-private val RelicGold = Color(0xFFFFD45B)
-
-internal fun relicAspectColor(aspect: RelicAspect): Color = when (aspect) {
-    RelicAspect.VECTOR -> RelicCyan
-    RelicAspect.GRAVITIC -> RelicViolet
-    RelicAspect.ION -> RelicBlue
-    RelicAspect.RIFT -> RelicMagenta
-    RelicAspect.PRISM -> RelicAcid
-    RelicAspect.ENTROPY -> RelicOrange
-    RelicAspect.SOVEREIGN -> RelicGold
-}
+/** Aspect colors come from the redesign aspect tokens, in RelicAspect order. */
+internal fun relicAspectColor(aspect: RelicAspect): Color = Kk.aspect(aspect.ordinal)
 
 /** Interaction maps semantic identity, aspect and rank into a shared geometric mark. */
 internal fun DrawScope.drawRelicIcon(
@@ -68,15 +52,22 @@ internal fun DrawScope.drawRelicIcon(
     )
 }
 
-/** Generic signal used before an elite pickup resolves into a catalog relic. */
+/**
+ * Generic signal used before an elite pickup resolves into a catalog relic: an empty relic slot
+ * (ink diamond, bone outline) holding a small legendary diamond that slowly turns.
+ */
 internal fun DrawScope.drawUnresolvedRelicIcon(center: Offset, radius: Float, time: Float) {
-    val accent = RelicGold
-    val stroke = (radius * 0.085f).coerceAtLeast(0.7f)
-    drawCircle(accent.copy(alpha = 0.11f), radius * 1.35f, center)
-    drawPolygon(center, radius, 6, time * 0.35f, RelicBackground.copy(alpha = 0.88f), Fill)
-    drawPolygon(center, radius, 6, time * 0.35f, accent, Stroke(stroke))
-    drawPolygon(center, radius * 0.58f, 4, -time * 0.65f, RelicInk, Stroke(stroke))
-    drawCircle(RelicMagenta, radius * 0.13f, center)
+    val stroke = (radius * 0.14f).coerceAtLeast(1f)
+    val half = radius * 0.72f
+    rotate(45f, center) {
+        drawRect(Kk.RLegend.copy(alpha = 0.12f), Offset(center.x - half * 1.35f, center.y - half * 1.35f), Size(half * 2.7f, half * 2.7f))
+        drawRect(Kk.Ink2, Offset(center.x - half, center.y - half), Size(half * 2f, half * 2f))
+        drawRect(Kk.Bone, Offset(center.x - half, center.y - half), Size(half * 2f, half * 2f), style = kkStroke(stroke))
+    }
+    val inner = radius * 0.3f
+    rotate(45f + time * 20f, center) {
+        drawRect(Kk.RLegend, Offset(center.x - inner, center.y - inner), Size(inner * 2f, inner * 2f))
+    }
 }
 
 internal fun RelicId.toCanvasRuneStyle(): CanvasRuneStyle = when (this) {

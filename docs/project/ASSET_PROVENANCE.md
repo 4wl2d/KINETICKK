@@ -21,10 +21,25 @@ external artwork. These project-authored resources use GPL-3.0-or-later:
 | `app/android/src/main/res/mipmap-anydpi/ic_launcher.xml` | `9bd8ccfedb57bab70c2f6c373314018d1cc094626b00236c58421bd608a49440` |
 | `app/android/src/main/res/values/colors.xml` | `5a79b48550bb79d73fcba14e57073eade497392cebede004603586a64a47612b` |
 
-The game currently stores no external music, sound-effect, model, font, or
-texture files. Audio is synthesized at runtime by project code, visuals are
-drawn by project code, and the UI requests a system monospace font rather than
-bundling a font file.
+The game currently stores no external music, sound-effect, model, or texture
+files. Audio is synthesized at runtime by project code and visuals are drawn by
+project code. The interface bundles third-party fonts under the SIL Open Font
+License 1.1 as Compose resources; `THIRD_PARTY_NOTICES.md` lists every bundled
+font. The redesign fonts were added on 2026-09-27 as modified static, subset
+instances of the upstream Google Fonts families:
+
+| Asset | Creator / source | Added | SHA-256 | Rights status |
+|---|---|---:|---|---|
+| `foundation/design/src/commonMain/composeResources/font/kk_wide_black.ttf` | Unbounded 900; The Unbounded Project Authors, from github.com/google/fonts `ofl/unbounded`; static instance + subset via fontTools | 2026-09-27 | `d192d80e2f122f694598236c103c455402198bb3d2e958132aecd6e307b7b268` | SIL OFL 1.1; notice in `composeResources/files/unbounded-OFL.txt` |
+| `foundation/design/src/commonMain/composeResources/font/kk_wide_bold.ttf` | Unbounded 700; The Unbounded Project Authors, from github.com/google/fonts `ofl/unbounded`; static instance + subset via fontTools | 2026-09-27 | `fdc95ee8b284c30c4d736f3e810f7a3ddcde4f3d4634901fed5c214c1bb2afbe` | SIL OFL 1.1; notice in `composeResources/files/unbounded-OFL.txt` |
+| `foundation/design/src/commonMain/composeResources/font/kk_cond_black_italic.ttf` | Sofia Sans Extra Condensed 900 italic; The Sofia Sans Project Authors, from github.com/google/fonts `ofl/sofiasansextracondensed`; static instance + subset via fontTools; Cyrillic character map pointed at the Russian `locl` forms (`tools/fonts/russian_cyrillic_defaults.py`) | 2026-09-27 | `bbac552575f15bb2608cb667b0dfc892d425e5b7f793b80a8dbdb2cb25dd4bd6` | SIL OFL 1.1; notice in `composeResources/files/sofia-sans-extra-condensed-OFL.txt` |
+| `foundation/design/src/commonMain/composeResources/font/kk_cond_black.ttf` | Sofia Sans Extra Condensed 900; The Sofia Sans Project Authors, from github.com/google/fonts `ofl/sofiasansextracondensed`; static instance + subset via fontTools; Cyrillic character map pointed at the Russian `locl` forms (`tools/fonts/russian_cyrillic_defaults.py`) | 2026-09-27 | `91bfd551455f7017e6c5bf2b1c9851b6919c8f2ae5a54b9dccd1a90685147e32` | SIL OFL 1.1; notice in `composeResources/files/sofia-sans-extra-condensed-OFL.txt` |
+| `foundation/design/src/commonMain/composeResources/font/kk_cond_extrabold.ttf` | Sofia Sans Extra Condensed 800; The Sofia Sans Project Authors, from github.com/google/fonts `ofl/sofiasansextracondensed`; static instance + subset via fontTools; Cyrillic character map pointed at the Russian `locl` forms (`tools/fonts/russian_cyrillic_defaults.py`) | 2026-09-27 | `5d06544ccf4e8404f7dbe8b9f5490b6366d4d5a3fd0a3419c52f08a0ee213f90` | SIL OFL 1.1; notice in `composeResources/files/sofia-sans-extra-condensed-OFL.txt` |
+| `foundation/design/src/commonMain/composeResources/font/kk_body_regular.ttf` | Sofia Sans Semi Condensed 400; The Sofia Sans Project Authors, from github.com/google/fonts `ofl/sofiasanssemicondensed`; static instance + subset via fontTools; Cyrillic character map pointed at the Russian `locl` forms (`tools/fonts/russian_cyrillic_defaults.py`) | 2026-09-27 | `4fd26f53fec7097039a84851aaec8a91b1dbd41c2b15eab52e1a118e3f5abdc6` | SIL OFL 1.1; notice in `composeResources/files/sofia-sans-semi-condensed-OFL.txt` |
+| `foundation/design/src/commonMain/composeResources/font/kk_body_medium.ttf` | Sofia Sans Semi Condensed 500; The Sofia Sans Project Authors, from github.com/google/fonts `ofl/sofiasanssemicondensed`; static instance + subset via fontTools; Cyrillic character map pointed at the Russian `locl` forms (`tools/fonts/russian_cyrillic_defaults.py`) | 2026-09-27 | `756cec9e0a5947938d2fb47c5cfc62242b3413792f332c46ee4557684a254c6e` | SIL OFL 1.1; notice in `composeResources/files/sofia-sans-semi-condensed-OFL.txt` |
+| `foundation/design/src/commonMain/composeResources/font/kk_body_bold.ttf` | Sofia Sans Semi Condensed 700; The Sofia Sans Project Authors, from github.com/google/fonts `ofl/sofiasanssemicondensed`; static instance + subset via fontTools; Cyrillic character map pointed at the Russian `locl` forms (`tools/fonts/russian_cyrillic_defaults.py`) | 2026-09-27 | `ca4c94a2b387bb32f44812282cfef8129f382ce8ebbf65f96a0996f308188c10` | SIL OFL 1.1; notice in `composeResources/files/sofia-sans-semi-condensed-OFL.txt` |
+| `foundation/design/src/commonMain/composeResources/font/kk_mono_medium.ttf` | Martian Mono 500; The Martian Mono Project Authors, from github.com/google/fonts `ofl/martianmono`; static instance + subset via fontTools | 2026-09-27 | `6d3df948980564679577bd1f75ea437f8bc55fe2ef5fbd541c5e5721cff993c9` | SIL OFL 1.1; notice in `composeResources/files/martian-mono-OFL.txt` |
+| `foundation/design/src/commonMain/composeResources/font/kk_mono_bold.ttf` | Martian Mono 700; The Martian Mono Project Authors, from github.com/google/fonts `ofl/martianmono`; static instance + subset via fontTools | 2026-09-27 | `f5db3d0dc1e8fc295f439ddd80eab15b709de026e860de26ea76c5dcb36306f6` | SIL OFL 1.1; notice in `composeResources/files/martian-mono-OFL.txt` |
 
 The preferred source for a screenshot is the corresponding game source and the
 steps needed to reproduce the screen. Keep editable source files for future art,

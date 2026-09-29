@@ -8,6 +8,7 @@ import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.profile.api.ColorVision
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
@@ -24,7 +25,9 @@ import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kinetickk.foundation.common.localization.AppLanguage
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class ProfileCodecTest {
     @Test
@@ -106,6 +109,62 @@ class ProfileCodecTest {
             val payload = DEFAULT_GOLDEN.replace("\"languageCode\":\"ru\"", "\"languageCode\":\"$invalid\"")
             assertEquals(ProfileSnapshotRejection.INVALID_STABLE_ID, decodeRejection(payload), invalid)
         }
+    }
+
+    @Test
+    fun existingSavesWithoutColorVisionDecodeAsDefaultAndReEncodeByteIdentically() {
+        for (existing in listOf(DEFAULT_GOLDEN, REPRESENTATIVE_GOLDEN)) {
+            val snapshot = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(existing)).snapshot
+            assertEquals(ColorVision.DEFAULT, snapshot.profile.preferences.colorVision)
+            assertEquals(existing, requireEncoded(snapshot))
+        }
+        val representative = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(REPRESENTATIVE_GOLDEN)).snapshot
+        assertEquals(2_718L, representative.revision.value)
+        assertEquals(AppLanguage.English, representative.profile.preferences.language)
+        assertEquals(true, representative.profile.preferences.runStatisticsOnLeft)
+        assertEquals(setOf(RelicId.GHOST_VECTOR, RelicId.MASS_ECHO), representative.profile.collection.discoveredRelicIds)
+
+        // Saves predating language selection and the statistics side stay readable and canonical.
+        val oldest = DEFAULT_GOLDEN.replace(",\"languageCode\":\"ru\",\"runStatisticsOnLeft\":false", "")
+        val decodedOldest = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(oldest)).snapshot
+        assertEquals(ColorVision.DEFAULT, decodedOldest.profile.preferences.colorVision)
+        assertEquals(DEFAULT_GOLDEN, requireEncoded(decodedOldest))
+    }
+
+    @Test
+    fun everyColorVisionRoundTripsAndOnlyNonDefaultChoicesAreWritten() {
+        val base = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(REPRESENTATIVE_GOLDEN)).snapshot
+        ColorVision.entries.forEach { colorVision ->
+            val snapshot = base.copy(profile = base.profile.copy(
+                preferences = base.profile.preferences.copy(colorVision = colorVision),
+            ))
+            val encoded = requireEncoded(snapshot)
+            assertEquals(snapshot, assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(encoded)).snapshot)
+            if (colorVision == ColorVision.DEFAULT) {
+                assertFalse(encoded.contains("colorVisionId"))
+                assertEquals(REPRESENTATIVE_GOLDEN, encoded)
+            } else {
+                // The field is appended after the existing preferences; nothing else moves.
+                val field = ",\"colorVisionId\":\"${colorVision.name}\""
+                assertTrue(encoded.contains("\"runStatisticsOnLeft\":true$field},\"economy\""), encoded)
+                assertEquals(REPRESENTATIVE_GOLDEN, encoded.replace(field, ""))
+            }
+        }
+    }
+
+    @Test
+    fun unknownExplicitDefaultAndNullColorVisionIdsAreRejected() {
+        val mono = requireEncoded(testSnapshot(PlayerProfile(preferences = PlayerPreferences(colorVision = ColorVision.MONO))))
+        listOf("DEFAULT", "default", "mono", "Mono", "", "SEPIA", "PROTANOPIA").forEach { invalid ->
+            val payload = mono.replace("\"colorVisionId\":\"MONO\"", "\"colorVisionId\":\"$invalid\"")
+            assertEquals(ProfileSnapshotRejection.INVALID_STABLE_ID, decodeRejection(payload), invalid)
+        }
+        assertEquals(ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD, decodeRejection(
+            mono.replace("\"colorVisionId\":\"MONO\"", "\"colorVisionId\":null"),
+        ))
+        assertEquals(ProfileSnapshotRejection.MALFORMED_JSON, decodeRejection(
+            mono.replace("\"colorVisionId\":\"MONO\"", "\"colorVisionId\":4"),
+        ))
     }
 
     @Test
@@ -454,3 +513,23 @@ private const val DEFAULT_GOLDEN: String =
         "\"rebirthProgress\":{\"level\":0,\"highestCleared\":-1}," +
         "\"characterAchievements\":{\"eliteKills\":\"0\",\"dashHits\":\"0\",\"completedOrbits\":\"0\"," +
         "\"architectVictories\":\"0\",\"victoriousCharacterIds\":[]}}}"
+
+/** Produced by the codec before Color vision existed; it must stay readable and byte-identical. */
+private const val REPRESENTATIVE_GOLDEN: String =
+    "{\"revision\":\"2718\",\"profile\":{" +
+        "\"preferences\":{\"soundEnabled\":false,\"musicEnabled\":true,\"masterVolumePercent\":37," +
+        "\"simulationSpeedPercent\":135,\"textScalePercent\":150,\"screenShake\":false," +
+        "\"particleDensityId\":\"LOW\",\"damageNumbers\":true,\"damageNumberSizeId\":\"HUGE\"," +
+        "\"damageNumberFormatId\":\"FULL\",\"damageNumberTierThreshold\":2500,\"languageCode\":\"en\",\"runStatisticsOnLeft\":true}," +
+        "\"economy\":{\"matter\":\"4321\",\"lifetimeMatter\":\"98765\"}," +
+        "\"loadout\":{\"coreShapeId\":\"RING\",\"selectedWeaponId\":\"ARC_COIL\"," +
+        "\"unlockedWeaponIds\":[\"ARC_COIL\",\"FLUX_WAKE\",\"MORNINGSTAR\"]},\"labProgress\":{\"ranks\":[" +
+        "{\"id\":\"ARMORY_LICENSE\",\"rank\":1},{\"id\":\"CORE_INTEGRITY\",\"rank\":0}," +
+        "{\"id\":\"CRYO_VENTS\",\"rank\":0},{\"id\":\"DASH_CAPACITOR\",\"rank\":1}," +
+        "{\"id\":\"DATA_ARCHIVE\",\"rank\":0},{\"id\":\"KINETIC_AMPLIFIER\",\"rank\":1}," +
+        "{\"id\":\"MAGNETIC_RESONANCE\",\"rank\":2},{\"id\":\"SALVAGE_PROTOCOL\",\"rank\":2}]}," +
+        "\"collection\":{\"discoveredItemIds\":[3,7,42],\"newItemIds\":[42]," +
+        "\"discoveredRelicIds\":[\"GHOST_VECTOR\",\"MASS_ECHO\"],\"newRelicIds\":[\"MASS_ECHO\"]}," +
+        "\"rebirthProgress\":{\"level\":4,\"highestCleared\":3}," +
+        "\"characterAchievements\":{\"eliteKills\":\"12\",\"dashHits\":\"340\",\"completedOrbits\":\"5\"," +
+        "\"architectVictories\":\"2\",\"victoriousCharacterIds\":[\"ORB\",\"RING\"]}}}"

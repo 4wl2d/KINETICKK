@@ -57,5 +57,7 @@ class NumberLocalizationTest {
         assertEquals("1,35x", formatMultiplier(1.35f, AppLanguage.Russian))
         assertEquals("0,75x", formatMultiplier(0.75f, AppLanguage.Russian))
         assertEquals("2x", formatMultiplier(2f, AppLanguage.Russian))
+        assertEquals("1.05x", formatMultiplier(1.05f))
+        assertEquals("1.5x", formatMultiplier(1.5f))
     }
 }

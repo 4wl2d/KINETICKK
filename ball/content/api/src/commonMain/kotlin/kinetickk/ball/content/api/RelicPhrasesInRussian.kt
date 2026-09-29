@@ -6,7 +6,7 @@ package kinetickk.ball.content.api
 internal val RelicPhrasesInRussian: Map<String, String> = mapOf(
     "Kinetic Flywheel" to "Кинетический маховик",
     "The weapon stores excess velocity as striking force instead of losing it to drag." to "Оружие сохраняет избыточную скорость как силу удара, вместо того чтобы терять её из-за сопротивления.",
-    "+5% weapon damage above 500 u/s per rank; the bonus doubles above 1,600 u/s." to "+5% к урону оружия за ранг при скорости выше 500 ед/с; выше 1 600 ед/с бонус удваивается.",
+    "+5% weapon damage above 500 u/s per rank; the bonus doubles above 1,600 u/s." to "+5% к урону оружия за ранг при скорости выше 500 ед/с; выше 1\u00A0600 ед/с бонус удваивается.",
     "Ghost Vector" to "Призрачный вектор",
     "Every dash leaves a cutting vector through enemies near the Core's departure point." to "Каждый рывок оставляет режущий вектор среди врагов возле точки отправления Ядра.",
     "+24 dash-cut damage and +14 effect radius per rank." to "+24 к урону разреза при рывке и +14 к радиусу эффекта за ранг.",

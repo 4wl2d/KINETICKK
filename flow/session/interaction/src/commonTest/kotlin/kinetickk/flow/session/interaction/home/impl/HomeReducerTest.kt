@@ -90,8 +90,10 @@ class HomeReducerTest {
                 resolveHomePress(viewport, it.x, it.y)
             },
         )
-        assertEquals(HomeAction.StartRun, resolveHomePress(viewport, 300f, 275f))
-        assertEquals(HomeAction.OpenRebirth, resolveHomePress(viewport, 300f, 460f))
+        // 1280 × 720 is the 16:9 reference scaled by 8/9: the menu sits on the right half.
+        assertEquals(HomeAction.StartRun, resolveHomePress(viewport, 1_000f, 140f))
+        assertEquals(HomeAction.OpenRebirth, resolveHomePress(viewport, 1_000f, 340f))
+        assertEquals(null, resolveHomePress(viewport, 300f, 275f), "The hero is decoration, not a target")
     }
 }
 

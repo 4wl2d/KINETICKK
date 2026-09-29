@@ -82,6 +82,62 @@ class LabReducerTest {
     }
 
     @Test
+    fun activationSelectsFirstAndBuysTheSelectedRow() {
+        val model = LabProfileSnapshot(PlayerEconomy(matter = 1_000L), LabProgress()).toRenderModel(TestMetaUpgrades)
+        val start = LabState(model)
+        assertEquals(MetaUpgradeId.CORE_INTEGRITY, start.selectedUpgrade?.id)
+
+        val select = LabReducer.reduce(start, LabAction.Activate(MetaUpgradeId.CRYO_VENTS))
+        assertEquals(MetaUpgradeId.CRYO_VENTS, select.state.selectedUpgrade?.id)
+        assertTrue(select.effects.isEmpty())
+        val buy = LabReducer.reduce(select.state, LabAction.Activate(MetaUpgradeId.CRYO_VENTS))
+        assertEquals(MetaUpgradeId.CRYO_VENTS, assertIs<LabEffect.Purchase>(buy.effects.single()).id)
+        // Hover/focus selection never purchases.
+        assertTrue(LabReducer.reduce(start, LabAction.Select(MetaUpgradeId.CORE_INTEGRITY)).effects.isEmpty())
+    }
+
+    @Test
+    fun purchaseFeedbackRestartsOnlyForAcceptedPurchases() {
+        val model = LabProfileSnapshot(PlayerEconomy(matter = 1_000L), LabProgress()).toRenderModel(TestMetaUpgrades)
+        val bought = LabProfileSnapshot(PlayerEconomy(matter = 900L), LabProgress(listOf(1, 0, 0, 0, 0, 0, 0, 0)))
+            .toRenderModel(TestMetaUpgrades)
+        val first = LabReducer.purchased(LabState(model), MetaUpgradeId.CORE_INTEGRITY, bought, accepted = true)
+        assertEquals(LabPurchaseFlash(MetaUpgradeId.CORE_INTEGRITY, 1), first.flash)
+        assertEquals(bought, first.model)
+        val again = LabReducer.purchased(first, MetaUpgradeId.CORE_INTEGRITY, bought, accepted = true)
+        assertEquals(2, again.flash?.sequence)
+        val refused = LabReducer.purchased(again, MetaUpgradeId.DATA_ARCHIVE, bought, accepted = false)
+        assertEquals(again.flash, refused.flash)
+    }
+
+    @Test
+    fun rankValuesTotalThePerRankModifierInTheLanguageFormat() {
+        val percent = kinetickk.ball.content.api.ItemModifier(kinetickk.ball.content.api.ItemEffect.IMPACT_DAMAGE, 0.05f)
+        val flat = kinetickk.ball.content.api.ItemModifier(kinetickk.ball.content.api.ItemEffect.MAX_INTEGRITY, 10f)
+        val fraction = kinetickk.ball.content.api.ItemModifier(kinetickk.ball.content.api.ItemEffect.MAX_INTEGRITY, 0.25f)
+        val english = kinetickk.foundation.common.localization.AppLanguage.English
+        val russian = kinetickk.foundation.common.localization.AppLanguage.Russian
+        assertEquals("+25%", labRankValue(percent, 5, english))
+        assertEquals("+40", labRankValue(flat, 4, english))
+        assertEquals("+0.75", labRankValue(fraction, 3, english))
+        assertEquals("+0,75", labRankValue(fraction, 3, russian))
+        assertEquals("+0.25", labRankValue(fraction, 1, english))
+        assertEquals(null, labRankValue(flat, 0, english))
+        assertEquals(null, labRankValue(null, 3, english))
+        val model = LabProfileSnapshot(PlayerEconomy(), LabProgress(listOf(1, 2, 0, 0, 0, 0, 0, 3))).toRenderModel(TestMetaUpgrades)
+        assertEquals(6 to TestMetaUpgrades.sumOf { it.maxRanks }, model.rankTotals())
+    }
+
+    @Test
+    fun purchaseFlashNudgesOutAndBackWithOneInvertedFrame() {
+        assertEquals(0f, labFlashNudge(0f, 8f))
+        assertEquals(8f, labFlashNudge(0.3f, 8f), 0.01f)
+        assertEquals(0f, labFlashNudge(1f, 8f))
+        assertTrue(labFlashInverted(0f) && labFlashInverted(0.07f))
+        assertTrue(!labFlashInverted(0.08f) && !labFlashInverted(1f))
+    }
+
+    @Test
     fun backEmitsClickThenNavigationOutput() {
         val model = LabProfileSnapshot(PlayerEconomy(), LabProgress()).toRenderModel(TestMetaUpgrades)
         val effects = LabReducer.reduce(LabState(model), LabAction.Back).effects

@@ -1,7 +1,7 @@
 <!-- SPDX-FileCopyrightText: 2026 Vladislav Tomilov -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# KINETICKK 0.2.0 privacy note
+# KINETICKK 0.3.0 privacy note
 
 Updated: 7 September 2026
 
@@ -22,6 +22,6 @@ Android and web do not use the desktop crash reporter.
 The optional performance HUD measures frame timing and entity counts locally.
 It does not transmit measurements.
 
-This note covers the 0.2.0 application code. GitHub, hosting providers, and app
+This note covers the 0.3.0 application code. GitHub, hosting providers, and app
 stores may process their own logs, account information, or purchases under
 their separate privacy terms.

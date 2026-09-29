@@ -20,7 +20,7 @@ jobs:
   desktop-and-architecture:
     name: Desktop and architecture
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       POKEBALL_SNAPSHOT_DIR: ${{ github.workspace }}/pokeball
     defaults:
@@ -56,19 +56,38 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@4733eaac7c1b0da527e4206b7671e0061de1ce37 # v6
+        with:
+          # PR caches are scoped to their merge ref; forks only restore trusted caches.
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
 
       - name: Verify architecture and run desktop tests
-        run: >-
-          ./gradlew
-          -PpokeballSnapshotDir="$POKEBALL_SNAPSHOT_DIR"
-          verifyArchitecture
-          verifyPokeballArchitecture
-          verifyPokeballConformance
-          desktopTest
-          -Pkinetickk.gradle.isolatedProfile=true
-          --isolated-projects
-          --no-daemon
-          --stacktrace
+        run: |
+          set -o pipefail
+          mkdir -p build/ci
+          ./gradlew \
+            -PpokeballSnapshotDir="$POKEBALL_SNAPSHOT_DIR" \
+            verifyArchitecture \
+            verifyPokeballArchitecture \
+            verifyPokeballConformance \
+            desktopTest \
+            -Pkinetickk.gradle.isolatedProfile=true \
+            --isolated-projects \
+            --no-daemon \
+            --continue \
+            --console=plain \
+            --stacktrace | tee build/ci/desktop.log
+
+      - name: Upload desktop test and architecture reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: desktop-reports-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            kinetickk/build/ci/
+            kinetickk/**/build/test-results/**/*.xml
+            kinetickk/**/build/reports/
+          if-no-files-found: warn
+          retention-days: 7
 
   android-build:
     name: Android app and instrumentation compile
@@ -115,6 +134,9 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@4733eaac7c1b0da527e4206b7671e0061de1ce37 # v6
+        with:
+          # PR caches are scoped to their merge ref; forks only restore trusted caches.
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
 
       - name: Build app APKs and compile instrumentation APK
         run: |
@@ -270,6 +292,9 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@4733eaac7c1b0da527e4206b7671e0061de1ce37 # v6
+        with:
+          # PR caches are scoped to their merge ref; forks only restore trusted caches.
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
 
       - name: Set up Chrome for Testing
         id: chrome

@@ -4,29 +4,93 @@
 package kinetickk.foundation.design
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.Color
-import org.jetbrains.compose.resources.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.intl.LocaleList
+import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.generated.resources.Res
-import kinetickk.foundation.design.generated.resources.onest
-import kinetickk.foundation.design.generated.resources.oswald
+import kinetickk.foundation.design.generated.resources.kk_body_bold
+import kinetickk.foundation.design.generated.resources.kk_body_medium
+import kinetickk.foundation.design.generated.resources.kk_body_regular
+import kinetickk.foundation.design.generated.resources.kk_cond_black
+import kinetickk.foundation.design.generated.resources.kk_cond_black_italic
+import kinetickk.foundation.design.generated.resources.kk_cond_extrabold
+import kinetickk.foundation.design.generated.resources.kk_mono_bold
+import kinetickk.foundation.design.generated.resources.kk_mono_medium
+import kinetickk.foundation.design.generated.resources.kk_wide_black
+import kinetickk.foundation.design.generated.resources.kk_wide_bold
+import org.jetbrains.compose.resources.Font
 
+/**
+ * Font families per type role (SPEC section 4):
+ * - [wide]: Unbounded 900/700 (clock, titles, big numerals, speed).
+ * - [cond]: Sofia Sans Extra Condensed 900 italic, 900 upright, 800 upright (menus, buttons,
+ *   headings, damage numbers).
+ * - [label]: the cond family used at 800 upright with +9 % tracking (labels, tabs, tags).
+ * - [body]: Sofia Sans Semi Condensed 400/500/700 (descriptions, tooltips).
+ * - [mono]: Martian Mono 500/700 (readouts, small data).
+ *
+ * [display] is the heading family for plain [textStyle] call sites: its bold weight resolves to
+ * cond 900 italic. New code uses the role builders in `KkText.kt`.
+ */
+@Immutable
 data class InterfaceTypography(
     val body: FontFamily = FontFamily.SansSerif,
     val display: FontFamily = FontFamily.SansSerif,
-)
-
-@Composable
-fun rememberInterfaceTypography(): InterfaceTypography {
-    val body = Font(Res.font.onest)
-    val display = Font(Res.font.oswald, weight = FontWeight.Bold)
-    return remember(body, display) { InterfaceTypography(FontFamily(body), FontFamily(display)) }
+    val wide: FontFamily = FontFamily.SansSerif,
+    val cond: FontFamily = FontFamily.SansSerif,
+    val label: FontFamily = cond,
+    val mono: FontFamily = FontFamily.Monospace,
+    /**
+     * The app language's locale for every role style. Sofia Sans draws Bulgarian Cyrillic forms by
+     * default and switches to Russian forms through its `locl` feature, which needs this locale.
+     */
+    val localeList: LocaleList? = null,
+) {
+    /** Per-instance memo behind the role builders; not part of equality. */
+    internal val styleMemo: KkStyleMemo = KkStyleMemo()
 }
 
+/** Loads the bundled redesign fonts once per composition. */
 @Composable
-fun interfaceTextStyle(size: Float, color: Color = White, weight: FontWeight = FontWeight.Normal, display: Boolean = false): androidx.compose.ui.text.TextStyle {
-    val typography = rememberInterfaceTypography()
-    return textStyle(size, color, if (display) FontWeight.Bold else weight, if (display) typography.display else typography.body)
+fun rememberInterfaceTypography(): InterfaceTypography {
+    val wideBlack = Font(Res.font.kk_wide_black, FontWeight.Black)
+    val wideBold = Font(Res.font.kk_wide_bold, FontWeight.Bold)
+    val condBlackItalic = Font(Res.font.kk_cond_black_italic, FontWeight.Black, FontStyle.Italic)
+    val condBlack = Font(Res.font.kk_cond_black, FontWeight.Black)
+    val condExtraBold = Font(Res.font.kk_cond_extrabold, FontWeight.ExtraBold)
+    val bodyRegular = Font(Res.font.kk_body_regular, FontWeight.Normal)
+    val bodyMedium = Font(Res.font.kk_body_medium, FontWeight.Medium)
+    val bodyBold = Font(Res.font.kk_body_bold, FontWeight.Bold)
+    val monoMedium = Font(Res.font.kk_mono_medium, FontWeight.Medium)
+    val monoBold = Font(Res.font.kk_mono_bold, FontWeight.Bold)
+    // Legacy headings request Bold/Normal upright: map them onto the new condensed heading faces.
+    val displayBold = Font(Res.font.kk_cond_black_italic, FontWeight.Bold)
+    val displayNormal = Font(Res.font.kk_cond_extrabold, FontWeight.Normal)
+    val language = LocalAppLanguage.current
+    return remember(
+        wideBlack, wideBold, condBlackItalic, condBlack, condExtraBold, bodyRegular, bodyMedium,
+        bodyBold, monoMedium, monoBold, displayBold, displayNormal, language,
+    ) {
+        val cond = FontFamily(condBlackItalic, condBlack, condExtraBold)
+        InterfaceTypography(
+            body = FontFamily(bodyRegular, bodyMedium, bodyBold),
+            display = FontFamily(displayBold, displayNormal),
+            wide = FontFamily(wideBlack, wideBold),
+            cond = cond,
+            label = cond,
+            mono = FontFamily(monoMedium, monoBold),
+            localeList = language.localeList(),
+        )
+    }
+}
+
+/** Text shaping locale of an app language (selects the fonts' Russian letterforms for Russian). */
+fun AppLanguage.localeList(): LocaleList = when (this) {
+    AppLanguage.English -> LocaleList("en")
+    AppLanguage.Russian -> LocaleList("ru")
 }

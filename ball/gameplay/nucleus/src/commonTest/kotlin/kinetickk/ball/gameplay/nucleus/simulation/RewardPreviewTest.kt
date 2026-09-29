@@ -111,8 +111,8 @@ class RewardPreviewTest {
         assertFalse(replacement.requiresSlot)
         assertTrue(replacement.removedSynergies.contains("Vector maneuver"))
         assertTrue(replacement.addedSynergies.contains("Gravitic grouping"))
-        assertEquals(0f, replacement.changes.single { it.name == "Damage · dash" }.after)
-        assertTrue(replacement.changes.single { it.name == "Damage · current mass" }.after > 0f)
+        assertEquals(0f, replacement.changes.single { it.name == "Damage: dash" }.after)
+        assertTrue(replacement.changes.single { it.name == "Damage: current mass" }.after > 0f)
         assertEquals(RelicId.GHOST_VECTOR, state.equippedRelics[1].id)
     }
 
@@ -123,13 +123,13 @@ class RewardPreviewTest {
             offer(ChoiceOption(ChoiceType.RELIC, "Ghost", "", "", relicId = RelicId.GHOST_VECTOR, relicAction = RelicChoiceAction.ACQUIRE))
         }
         val ghost = state.rewardPreviews().single()
-        assertEquals(24f, ghost.changes.single { it.name == "Damage · dash" }.before)
-        assertEquals(48f, ghost.changes.single { it.name == "Damage · dash" }.after)
-        assertEquals(100f, ghost.changes.single { it.name == "Radius · dash" }.after)
+        assertEquals(24f, ghost.changes.single { it.name == "Damage: dash" }.before)
+        assertEquals(48f, ghost.changes.single { it.name == "Damage: dash" }.after)
+        assertEquals(100f, ghost.changes.single { it.name == "Radius: dash" }.after)
         state.acquireRelic(RelicId.MASS_ECHO)
         val item = state.content.items.first { it.primary.effect == ItemEffect.MASS }
         state.offer(ChoiceOption(ChoiceType.ITEM, item.name, "", "", itemId = item.id))
-        val mass = state.rewardPreviews().single().changes.single { it.name == "Damage · current mass" }
+        val mass = state.rewardPreviews().single().changes.single { it.name == "Damage: current mass" }
         assertTrue(mass.after > mass.before)
     }
 

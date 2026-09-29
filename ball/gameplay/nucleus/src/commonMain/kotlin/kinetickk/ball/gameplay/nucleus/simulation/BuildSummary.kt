@@ -9,6 +9,7 @@ import kinetickk.ball.content.api.ItemModifier
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.lifetimeMatterOfferLevel
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
@@ -36,7 +37,7 @@ internal fun MutableGameState.buildSummary(
     synergies = buildSynergySummaries(),
     eligibleItemIds = content.items.filter { item ->
         val ordinaryOfferEligible = item.unlockLevel <=
-            maxOf(level, (1L + lifetimeMatter / 40L).coerceAtMost(80L).toInt())
+            maxOf(level, lifetimeMatterOfferLevel(lifetimeMatter))
         val currentlyOffered = phase == GamePhase.CHOICE && choices.any { it.itemId == item.id }
         (ordinaryOfferEligible || currentlyOffered) && hasUsefulItemEffect(item)
     }.map { it.id }.toImmutableList(),

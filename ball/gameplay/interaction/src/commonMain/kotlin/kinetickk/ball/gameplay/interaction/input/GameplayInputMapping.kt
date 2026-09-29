@@ -5,6 +5,8 @@ package kinetickk.ball.gameplay.interaction.input
 
 import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
+import kinetickk.ball.gameplay.interaction.canvas.HudTrialPanelLayout
+import kinetickk.ball.gameplay.interaction.canvas.activeTrial
 import kinetickk.ball.gameplay.interaction.layout.PauseTarget
 import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
 import kinetickk.ball.gameplay.interaction.layout.containsInclusive
@@ -18,6 +20,7 @@ sealed interface GameplayInput {
     data class Action(val action: GameplayInteractionPulse) : GameplayInput
     data object OpenSettings : GameplayInput
     data object OpenRebirth : GameplayInput
+    data object OpenCodex : GameplayInput
     data object ExitToHome : GameplayInput
     data object RestartRun : GameplayInput
     data object TogglePerformance : GameplayInput
@@ -52,7 +55,18 @@ fun GameplayRenderModel.isHudControlPosition(x: Float, y: Float): Boolean =
         uiScale = uiScale,
         x = x,
         y = y,
-    )
+    ) || isTrialInfoPosition(x, y)
+
+/**
+ * Whether ([x], [y]) is on the active trial panel's (!) target. The pointer steers everywhere else;
+ * a press here toggles the rules and never steers (the host keeps the open state).
+ */
+internal fun GameplayRenderModel.isTrialInfoPosition(x: Float, y: Float): Boolean =
+    phase == GamePhase.RUNNING && activeTrial() != null &&
+        TrialInfoHitLayout.update(screenWidth, screenHeight, uiScale, settings.textScale).infoTargetContains(x, y, uiScale)
+
+/** Pointer-thread scratch layout for [isTrialInfoPosition] (never shared with drawing). */
+private val TrialInfoHitLayout = HudTrialPanelLayout()
 
 internal fun GameplayHitTestState.resolveGameplayPress(x: Float, y: Float): GameplayInput? =
     resolveGameplayPress(
@@ -113,6 +127,7 @@ private fun resolvePausePress(
     return when (target) {
         PauseTarget.RESUME -> GameplayInput.Action(GameplayInteractionPulse.PauseToggled)
         PauseTarget.SETTINGS -> GameplayInput.OpenSettings
+        PauseTarget.CODEX -> GameplayInput.OpenCodex
         PauseTarget.PERFORMANCE -> GameplayInput.TogglePerformance
         PauseTarget.EXIT -> GameplayInput.ExitToHome
     }

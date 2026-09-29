@@ -83,8 +83,9 @@ class InventoryIconParityTest {
 
     private companion object {
         val Center = Offset(48f, 48f)
-        val Accents = listOf(Color(0xFF42F5E9), Color(0xFFA96CFF), Color(0xFF73A6FF), Color(0xFFFF4DC4),
-            Color(0xFFB6FF5B), Color(0xFFFF714B), Color(0xFFFFD45B))
+        /** Relic aspect accents are the redesign aspect tokens (`tokens.json`), in aspect order. */
+        val Accents = listOf(Color(0xFFD8FF3E), Color(0xFF9B7BFF), Color(0xFF45E0FF), Color(0xFFFF4FA3),
+            Color(0xFFE4F1FF), Color(0xFFFF6A2B), Color(0xFFFFC93C))
         val FrameSides = listOf(3, 6, 8, 4, 5, 7, 10)
     }
 }

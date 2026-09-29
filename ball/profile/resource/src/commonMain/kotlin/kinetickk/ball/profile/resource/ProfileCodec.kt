@@ -10,6 +10,7 @@ import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.ball.profile.api.CharacterAchievementProgress
+import kinetickk.ball.profile.api.ColorVision
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
@@ -154,6 +155,10 @@ private data class PlayerPreferencesDto(
     val languageCode: String? = null,
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val runStatisticsOnLeft: Boolean? = null,
+    // Written only for a non-default choice: absence means ColorVision.DEFAULT, so every save that
+    // predates the setting (and every default profile) keeps its exact canonical bytes.
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val colorVisionId: String? = null,
 )
 
 @Serializable
@@ -235,6 +240,7 @@ private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
                 damageNumberTierThreshold = preferences.damageNumberTierThreshold,
                 languageCode = preferences.language.code,
                 runStatisticsOnLeft = preferences.runStatisticsOnLeft,
+                colorVisionId = preferences.colorVision.wireIdOrNull(),
             ),
             economy = PlayerEconomyDto(
                 matter = profile.economy.matter.toString(),
@@ -320,6 +326,7 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
             damageNumberTierThreshold = profile.preferences.damageNumberTierThreshold,
             language = profile.preferences.languageCode?.appLanguage() ?: AppLanguage.Russian,
             runStatisticsOnLeft = profile.preferences.runStatisticsOnLeft ?: false,
+            colorVision = profile.preferences.colorVisionId?.colorVision() ?: ColorVision.DEFAULT,
         ),
         economy = PlayerEconomy(
             matter = profile.economy.matter.parseCanonicalNonNegativeLong(),
@@ -642,6 +649,23 @@ private fun DamageNumberFormat.wireId(): String = when (this) {
 private fun String.damageNumberFormat(): DamageNumberFormat = when (this) {
     "COMPACT" -> DamageNumberFormat.COMPACT
     "FULL" -> DamageNumberFormat.FULL
+    else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
+}
+
+/** DEFAULT has no wire id: it is represented only by the absent field. */
+private fun ColorVision.wireIdOrNull(): String? = when (this) {
+    ColorVision.DEFAULT -> null
+    ColorVision.PROTAN -> "PROTAN"
+    ColorVision.DEUTAN -> "DEUTAN"
+    ColorVision.TRITAN -> "TRITAN"
+    ColorVision.MONO -> "MONO"
+}
+
+private fun String.colorVision(): ColorVision = when (this) {
+    "PROTAN" -> ColorVision.PROTAN
+    "DEUTAN" -> ColorVision.DEUTAN
+    "TRITAN" -> ColorVision.TRITAN
+    "MONO" -> ColorVision.MONO
     else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
 }
 

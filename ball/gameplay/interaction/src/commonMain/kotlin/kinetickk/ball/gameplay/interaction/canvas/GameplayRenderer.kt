@@ -13,6 +13,9 @@ import kinetickk.ball.gameplay.interaction.terminal.drawCoreDeath
 import kotlin.math.cos
 import kotlin.math.sin
 
+/** Screen shake never moves the frame more than this many dp. */
+internal const val MAX_SCREEN_SHAKE_DP = 6f
+
 internal fun DrawScope.drawGameplay(
     engine: GameplayRenderModel,
     visualFx: VisualFxProjection,
@@ -20,23 +23,30 @@ internal fun DrawScope.drawGameplay(
     renderTime: Float,
     pauseLayout: PauseLayoutGeometry?,
     terminalElapsed: Float = 0f,
+    hudMemory: HudPresentationMemory? = null,
+    trialInfoOpen: Boolean = false,
 ) {
-    drawRect(SpaceBlack)
-    val shake = if (engine.settings.screenShake && engine.phase == GamePhase.RUNNING) engine.screenShake else 0f
+    drawRect(Kk.Ink)
+    val shake = if (engine.settings.screenShake && engine.phase == GamePhase.RUNNING) {
+        engine.screenShake.coerceAtMost(d(MAX_SCREEN_SHAKE_DP))
+    } else {
+        0f
+    }
     val shakeX = if (shake > 0f) sin(engine.elapsed * 91f) * shake else 0f
     val shakeY = if (shake > 0f) cos(engine.elapsed * 77f) * shake else 0f
-    drawBackdrop(engine, shakeX, shakeY, renderTime)
+    drawBackdrop(engine, shakeX, shakeY, renderTime, textMeasurer.roles)
 
     drawWorld(engine, visualFx, shakeX, shakeY, textMeasurer)
-    if (engine.phase == GamePhase.GAME_OVER) drawCoreDeath(engine, terminalElapsed)
-    else drawScreenFx(engine, renderTime)
+    if (engine.phase == GamePhase.GAME_OVER) drawCoreDeath(engine, terminalElapsed, textMeasurer.roles)
+    else drawScreenFx(engine, renderTime, textMeasurer.roles)
     if (shouldDrawRunningPresentation(engine.phase)) {
-        drawHud(engine, textMeasurer)
-        drawBuildNotifications(visualFx, textMeasurer)
+        drawHud(engine, textMeasurer, renderTime, shakeX, shakeY, hudMemory, trialInfoOpen)
+        drawHudFeed(engine, visualFx, textMeasurer, renderTime, hudMemory)
+        drawTrialTooltip(engine, textMeasurer, trialInfoOpen)
     }
 
     when (engine.phase) {
-        GamePhase.PAUSED -> drawPause(textMeasurer, requireNotNull(pauseLayout))
+        GamePhase.PAUSED -> drawPause(engine, textMeasurer, requireNotNull(pauseLayout), renderTime)
         GamePhase.CHOICE -> Unit // Reward cards and reroll are visible Compose controls.
         GamePhase.GAME_OVER, GamePhase.VICTORY -> Unit // TerminalContent owns the animated report and actions.
         GamePhase.RUNNING -> Unit

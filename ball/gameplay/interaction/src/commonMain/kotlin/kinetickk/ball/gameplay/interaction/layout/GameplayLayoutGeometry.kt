@@ -4,26 +4,7 @@
 package kinetickk.ball.gameplay.interaction.layout
 
 import androidx.compose.ui.geometry.Rect
-import kotlin.math.ceil
-import kotlin.math.min
-
-internal enum class GameplayLayoutMode {
-    REGULAR,
-    COMPACT_PORTRAIT,
-    COMPACT_LANDSCAPE,
-}
-
-internal fun gameplayLayoutMode(width: Float, height: Float, scale: Float): GameplayLayoutMode {
-    val safeScale = scale.coerceAtLeast(1f)
-    val logicalWidth = width / safeScale
-    val logicalHeight = height / safeScale
-    val compactPhone = logicalWidth <= 480f || (logicalHeight <= 480f && logicalWidth <= 1_000f)
-    return when {
-        !compactPhone -> GameplayLayoutMode.REGULAR
-        logicalWidth <= logicalHeight -> GameplayLayoutMode.COMPACT_PORTRAIT
-        else -> GameplayLayoutMode.COMPACT_LANDSCAPE
-    }
-}
+import kotlin.math.max
 
 internal enum class RunningControlTarget {
     BRAKE,
@@ -37,6 +18,63 @@ internal data class RunningControlBounds(
     val bounds: Rect,
 )
 
+/** Minimum touch/click target of every running control, in dp. */
+internal const val RUNNING_CONTROL_MIN_DP = 48f
+
+/** Width of the REGULAR Dash and Brake slabs, in reference dp. */
+internal const val REGULAR_TOUCH_BUTTON_DP = 124f
+
+/** Bottom inset of the REGULAR bottom clusters (core status, loadout), in reference dp. */
+internal const val REGULAR_HUD_BOTTOM_DP = 30f
+
+/**
+ * Height of the REGULAR bottom-right loadout block: synergy bracket headroom (three stacked
+ * levels), relic row, gap, weapon slot, gap, mastery pips.
+ */
+internal const val REGULAR_LOADOUT_HEIGHT_DP = 4f + 36f + 12f + 54f + 5f + 4f
+
+/**
+ * REGULAR HUD unit in px per reference dp: the 1440×810 board layout at full size on ordinary
+ * desktop windows, shrunk (down to 72 %) on narrow ones so the clusters never meet.
+ */
+internal fun regularHudUnit(width: Float, scale: Float): Float {
+    val safeScale = scale.coerceAtLeast(1f)
+    return safeScale * (width / safeScale / 1_180f).coerceIn(0.72f, 1f)
+}
+
+/** Horizontal factor of the phone layouts relative to the 844 × 390 and 390 × 844 boards. */
+internal fun compactHudFactor(width: Float, scale: Float, portrait: Boolean): Float {
+    val logicalWidth = width / scale.coerceAtLeast(1f)
+    return if (portrait) ((logicalWidth - 32f) / 358f).coerceIn(0.8f, 1f) else (logicalWidth / 844f).coerceIn(0.75f, 1f)
+}
+
+/** Side margin of the running HUD in px (board safe margins on phones). */
+internal fun runningHudMargin(width: Float, height: Float, scale: Float): Float {
+    val safeScale = scale.coerceAtLeast(1f)
+    return when (gameplayLayoutMode(width, height, safeScale)) {
+        GameplayLayoutMode.REGULAR -> 32f * regularHudUnit(width, safeScale)
+        GameplayLayoutMode.COMPACT_LANDSCAPE -> 44f * safeScale * compactHudFactor(width, safeScale, portrait = false)
+        GameplayLayoutMode.COMPACT_PORTRAIT -> 16f * safeScale
+    }
+}
+
+/** Top inset of the phone portrait HUD (status bar area of the Mobile-Portrait board). */
+internal const val PORTRAIT_HUD_TOP_DP = 47f
+
+/** Portrait rows below [PORTRAIT_HUD_TOP_DP], in dp: chips + chain, then the boss (elite/Architect) row. */
+internal const val PORTRAIT_CHIP_ROW_DP = 61f
+internal const val PORTRAIT_CHIP_ROW_HEIGHT_DP = 26f
+internal const val PORTRAIT_BOSS_ROW_DP = PORTRAIT_CHIP_ROW_DP + PORTRAIT_CHIP_ROW_HEIGHT_DP + 10f
+internal const val PORTRAIT_BOSS_ROW_HEIGHT_DP = 34f
+
+/** First free portrait row below the boss row (trial panel, feed), in dp below the HUD top. */
+internal const val PORTRAIT_PANEL_ROW_DP = PORTRAIT_BOSS_ROW_DP + PORTRAIT_BOSS_ROW_HEIGHT_DP + 10f
+
+/**
+ * Running controls in canvas px. REGULAR: pause top-right, Dash and Brake as one row right-aligned
+ * above the bottom-right loadout. Phones follow the Mobile boards: Dash and Brake at the thumb side,
+ * performance and pause in the top-right row. Every target is at least [RUNNING_CONTROL_MIN_DP].
+ */
 internal inline fun forEachRunningControlBounds(
     width: Float,
     height: Float,
@@ -50,46 +88,70 @@ internal inline fun forEachRunningControlBounds(
     ) -> Unit,
 ) {
     val safeScale = scale.coerceAtLeast(1f)
-    if (gameplayLayoutMode(width, height, safeScale) == GameplayLayoutMode.REGULAR) {
-        val bottom = height - 20f * safeScale
-        val top = bottom - 64f * safeScale
-        action(RunningControlTarget.DASH, width - 180f * safeScale, top, width - 20f * safeScale, bottom)
-        action(RunningControlTarget.BRAKE, width - 352f * safeScale, top, width - 192f * safeScale, bottom)
-    } else {
-        val margin = 12f * safeScale
-        val controlSize = 64f * safeScale
-        val utilityWidth = 52f * safeScale
-        val utilityHeight = 48f * safeScale
-        val utilityTop = 10f * safeScale
-        val pauseRight = width - 10f * safeScale
-        action(
-            RunningControlTarget.BRAKE,
-            margin,
-            height - margin - controlSize,
-            margin + controlSize,
-            height - margin,
-        )
-        action(
-            RunningControlTarget.DASH,
-            width - margin - controlSize,
-            height - margin - controlSize,
-            width - margin,
-            height - margin,
-        )
-        action(
-            RunningControlTarget.PERFORMANCE,
-            pauseRight - utilityWidth * 2f - 8f * safeScale,
-            utilityTop,
-            pauseRight - utilityWidth - 8f * safeScale,
-            utilityTop + utilityHeight,
-        )
-        action(
-            RunningControlTarget.PAUSE,
-            pauseRight - utilityWidth,
-            utilityTop,
-            pauseRight,
-            utilityTop + utilityHeight,
-        )
+    val minimum = RUNNING_CONTROL_MIN_DP * safeScale
+    val half = minimum * 0.5f
+    val margin = runningHudMargin(width, height, safeScale)
+    when (gameplayLayoutMode(width, height, safeScale)) {
+        GameplayLayoutMode.REGULAR -> {
+            val unit = regularHudUnit(width, safeScale)
+            val bottom = height - (REGULAR_HUD_BOTTOM_DP + REGULAR_LOADOUT_HEIGHT_DP + 18f) * unit
+            val top = bottom - max(52f * unit, minimum)
+            // Equal slabs: each fits its icon and its label at the board size in either language.
+            val dashLeft = width - margin - max(REGULAR_TOUCH_BUTTON_DP * unit, minimum)
+            action(RunningControlTarget.DASH, dashLeft, top, width - margin, bottom)
+            val brakeRight = dashLeft - 8f * unit
+            action(RunningControlTarget.BRAKE, brakeRight - max(REGULAR_TOUCH_BUTTON_DP * unit, minimum), top, brakeRight, bottom)
+            val pauseX = width - margin - 20f * unit
+            val pauseY = 24f * unit + 18f * unit
+            action(RunningControlTarget.PAUSE, pauseX - half, pauseY - half, pauseX + half, pauseY + half)
+        }
+        GameplayLayoutMode.COMPACT_LANDSCAPE -> {
+            val factor = compactHudFactor(width, safeScale, portrait = false)
+            val boxTop = height - (18f + 150f) * safeScale
+            action(
+                RunningControlTarget.DASH,
+                width - margin - max(104f * factor * safeScale, minimum),
+                boxTop,
+                width - margin,
+                boxTop + 84f * safeScale,
+            )
+            val brakeLeft = width - margin - 190f * factor * safeScale
+            action(
+                RunningControlTarget.BRAKE,
+                brakeLeft,
+                height - (18f + 64f) * safeScale,
+                brakeLeft + max(84f * factor * safeScale, minimum),
+                height - 18f * safeScale,
+            )
+            val pauseX = width - margin - 22f * safeScale
+            val rowY = 30f * safeScale
+            val performanceX = pauseX - 52f * safeScale
+            action(RunningControlTarget.PERFORMANCE, performanceX - half, rowY - half, performanceX + half, rowY + half)
+            action(RunningControlTarget.PAUSE, pauseX - half, rowY - half, pauseX + half, rowY + half)
+        }
+        GameplayLayoutMode.COMPACT_PORTRAIT -> {
+            val factor = compactHudFactor(width, safeScale, portrait = true)
+            val bottom = height - 36f * safeScale
+            action(
+                RunningControlTarget.BRAKE,
+                margin,
+                bottom - 70f * safeScale,
+                margin + max(104f * factor * safeScale, minimum),
+                bottom,
+            )
+            action(
+                RunningControlTarget.DASH,
+                width - margin - max(120f * factor * safeScale, minimum),
+                bottom - 80f * safeScale,
+                width - margin,
+                bottom,
+            )
+            val pauseX = width - margin - 22f * safeScale
+            val rowY = (PORTRAIT_HUD_TOP_DP + 11f + 20f) * safeScale
+            val performanceX = pauseX - 52f * safeScale
+            action(RunningControlTarget.PERFORMANCE, performanceX - half, rowY - half, performanceX + half, rowY + half)
+            action(RunningControlTarget.PAUSE, pauseX - half, rowY - half, pauseX + half, rowY + half)
+        }
     }
 }
 
@@ -105,204 +167,36 @@ internal fun runningControlBounds(
     return controls
 }
 
-internal enum class PauseTarget {
-    RESUME,
-    SETTINGS,
-    PERFORMANCE,
-    EXIT,
-}
-
-internal class PauseActionBounds(
-    val target: PauseTarget,
-    val bounds: Rect,
-)
-
-internal class PauseLayoutGeometry(
-    val mode: GameplayLayoutMode,
-    val titleY: Float,
-    val actions: List<PauseActionBounds>,
-)
-
-internal fun pauseLayoutGeometry(width: Float, height: Float, scale: Float): PauseLayoutGeometry {
+/**
+ * The running Build (Codex) button, a Compose control placed beside the canvas controls: left of
+ * pause (REGULAR), left of performance (landscape phones), between Brake and Dash (portrait).
+ */
+internal fun runningBuildButtonBounds(width: Float, height: Float, scale: Float): Rect {
     val safeScale = scale.coerceAtLeast(1f)
-    fun d(value: Float): Float = value * safeScale
-    val mode = gameplayLayoutMode(width, height, safeScale)
-    if (mode == GameplayLayoutMode.REGULAR) {
-        val center = width * 0.5f
-        return PauseLayoutGeometry(
-            mode,
-            titleY = height * 0.30f,
-            actions = listOf(
-                PauseActionBounds(PauseTarget.RESUME, Rect(center - d(150f), height * 0.5f, center + d(150f), height * 0.5f + d(52f))),
-                PauseActionBounds(PauseTarget.SETTINGS, Rect(center - d(150f), height * 0.62f, center + d(150f), height * 0.62f + d(52f))),
-                PauseActionBounds(PauseTarget.EXIT, Rect(center - d(150f), height * 0.74f, center + d(150f), height * 0.74f + d(52f))),
-            ),
-        )
+    val half = RUNNING_CONTROL_MIN_DP * safeScale * 0.5f
+    var pause = Rect.Zero
+    var performance = Rect.Zero
+    var dash = Rect.Zero
+    forEachRunningControlBounds(width, height, safeScale) { target, left, top, right, bottom ->
+        when (target) {
+            RunningControlTarget.PAUSE -> pause = Rect(left, top, right, bottom)
+            RunningControlTarget.PERFORMANCE -> performance = Rect(left, top, right, bottom)
+            RunningControlTarget.DASH -> dash = Rect(left, top, right, bottom)
+            RunningControlTarget.BRAKE -> Unit
+        }
     }
-    val buttonWidth = min(d(320f), width - d(24f))
-    val buttonHeight = d(48f)
-    val gap = d(8f)
-    val totalHeight = buttonHeight * 4f + gap * 3f
-    val start = if (mode == GameplayLayoutMode.COMPACT_LANDSCAPE) {
-        d(72f)
-    } else {
-        maxOf(d(180f), height * 0.34f)
+    return when (gameplayLayoutMode(width, height, safeScale)) {
+        GameplayLayoutMode.REGULAR -> {
+            val x = pause.center.x - max(48f * regularHudUnit(width, safeScale), half * 2f)
+            Rect(x - half, pause.center.y - half, x + half, pause.center.y + half)
+        }
+        GameplayLayoutMode.COMPACT_LANDSCAPE -> {
+            val x = performance.center.x - 52f * safeScale
+            Rect(x - half, performance.center.y - half, x + half, performance.center.y + half)
+        }
+        GameplayLayoutMode.COMPACT_PORTRAIT -> {
+            val x = width * 0.5f
+            Rect(x - half, dash.center.y - half, x + half, dash.center.y + half)
+        }
     }
-    val left = (width - buttonWidth) * 0.5f
-    val targets = listOf(PauseTarget.RESUME, PauseTarget.SETTINGS, PauseTarget.PERFORMANCE, PauseTarget.EXIT)
-    return PauseLayoutGeometry(
-        mode = mode,
-        titleY = if (mode == GameplayLayoutMode.COMPACT_LANDSCAPE) d(24f) else height * 0.18f,
-        actions = targets.mapIndexed { index, target ->
-            val top = min(start, height - d(12f) - totalHeight) + index * (buttonHeight + gap)
-            PauseActionBounds(target, Rect(left, top, left + buttonWidth, top + buttonHeight))
-        },
-    )
 }
-
-internal class ChoiceLayoutGeometry(
-    val mode: GameplayLayoutMode,
-    val titleY: Float,
-    val subtitleY: Float,
-    val cards: List<Rect>,
-    val reroll: Rect?,
-    val compactCardContent: Boolean,
-)
-
-internal fun choiceLayoutGeometry(
-    width: Float,
-    height: Float,
-    scale: Float,
-    choiceCount: Int,
-    canReroll: Boolean,
-): ChoiceLayoutGeometry {
-    val safeScale = scale.coerceAtLeast(1f)
-    fun d(value: Float): Float = value * safeScale
-    val count = choiceCount.coerceAtLeast(1)
-    val mode = gameplayLayoutMode(width, height, safeScale)
-    if (mode == GameplayLayoutMode.REGULAR) {
-        val gap = d(if (count >= 4) 10f else 18f)
-        val maxCardWidth = d(when {
-            count >= 4 -> 190f
-            count == 3 -> 250f
-            else -> 300f
-        })
-        val availableCardWidth = (width - d(30f) - gap * (count - 1)) / count
-        val cardWidth = min(maxCardWidth, availableCardWidth).coerceAtLeast(d(92f))
-        val total = cardWidth * count + gap * (count - 1)
-        val startX = (width - total) * 0.5f
-        val top = height * if (count >= 4) 0.29f else 0.31f
-        val bottomReserve = d(if (canReroll) 105f else 35f)
-        val cardHeight = min(d(405f), height - bottomReserve - top).coerceAtLeast(d(170f))
-        val rerollY = height - d(72f)
-        return ChoiceLayoutGeometry(
-            mode,
-            titleY = height * 0.14f,
-            subtitleY = height * 0.17f + d(36f),
-            cards = List(count) { index ->
-                val left = startX + index * (cardWidth + gap)
-                Rect(left, top, left + cardWidth, top + cardHeight)
-            },
-            reroll = if (canReroll) Rect(width * 0.5f - d(90f), rerollY - d(22f), width * 0.5f + d(90f), rerollY + d(22f)) else null,
-            compactCardContent = false,
-        )
-    }
-    if (mode == GameplayLayoutMode.COMPACT_LANDSCAPE) {
-        val margin = d(12f)
-        val gap = d(10f)
-        val top = d(152f)
-        val rerollHeight = d(48f)
-        val bottom = if (canReroll) height - d(68f) else height - d(12f)
-        val cardWidth = (width - margin * 2f - gap * (count - 1)) / count
-        val cardHeight = (bottom - top).coerceAtLeast(d(136f))
-        return ChoiceLayoutGeometry(
-            mode,
-            titleY = d(58f),
-            subtitleY = d(94f),
-            cards = List(count) { index ->
-                val left = margin + index * (cardWidth + gap)
-                Rect(left, top, left + cardWidth, top + cardHeight)
-            },
-            reroll = if (canReroll) Rect(width * 0.5f - d(100f), height - d(58f), width * 0.5f + d(100f), height - d(58f) + rerollHeight) else null,
-            compactCardContent = true,
-        )
-    }
-    val margin = d(12f)
-    val gap = d(10f)
-    val columns = min(2, count)
-    val rows = ceil(count / columns.toDouble()).toInt()
-    val top = maxOf(d(154f), height * 0.19f)
-    val bottom = if (canReroll) height - d(76f) else height - d(12f)
-    val cardWidth = (width - margin * 2f - gap * (columns - 1)) / columns
-    val cardHeight = min(d(390f), (bottom - top - gap * (rows - 1)) / rows)
-    return ChoiceLayoutGeometry(
-        mode,
-        titleY = d(62f),
-        subtitleY = d(108f),
-        cards = List(count) { index ->
-            val row = index / columns
-            val column = index % columns
-            val rowCount = min(columns, count - row * columns)
-            val rowStart = (width - (cardWidth * rowCount + gap * (rowCount - 1))) * 0.5f
-            val left = rowStart + column * (cardWidth + gap)
-            val cardTop = top + row * (cardHeight + gap)
-            Rect(left, cardTop, left + cardWidth, cardTop + cardHeight)
-        },
-        reroll = if (canReroll) Rect(width * 0.5f - d(100f), height - d(60f), width * 0.5f + d(100f), height - d(12f)) else null,
-        compactCardContent = false,
-    )
-}
-
-internal class TerminalLayoutGeometry(
-    val mode: GameplayLayoutMode,
-    val titleY: Float,
-    val subtitleY: Float,
-    val statsY: Float,
-    val restart: Rect,
-    val rebirth: Rect?,
-    val exit: Rect,
-)
-
-internal fun terminalLayoutGeometry(width: Float, height: Float, scale: Float, victory: Boolean): TerminalLayoutGeometry {
-    val safeScale = scale.coerceAtLeast(1f)
-    fun d(value: Float): Float = value * safeScale
-    val mode = gameplayLayoutMode(width, height, safeScale)
-    if (mode == GameplayLayoutMode.REGULAR) {
-        val center = width * 0.5f
-        val buttonY = height * 0.72f
-        val rebirth = if (victory) Rect(center - d(120f), buttonY + d(50f), center + d(120f), buttonY + d(90f)) else null
-        val exitTop = buttonY + d(if (victory) 100f else 50f)
-        return TerminalLayoutGeometry(
-            mode,
-            titleY = height * 0.25f,
-            subtitleY = height * 0.36f,
-            statsY = height * 0.47f,
-            restart = Rect(center - d(155f), buttonY - d(38f), center + d(155f), buttonY + d(38f)),
-            rebirth = rebirth,
-            exit = Rect(center - d(120f), exitTop, center + d(120f), min(height - d(12f), exitTop + d(40f))),
-        )
-    }
-    val margin = d(12f)
-    val buttonWidth = min(d(320f), width - margin * 2f)
-    val buttonHeight = d(48f)
-    val gap = d(8f)
-    val buttonCount = if (victory) 3 else 2
-    val total = buttonHeight * buttonCount + gap * (buttonCount - 1)
-    val start = height - margin - total
-    val left = (width - buttonWidth) * 0.5f
-    val restart = Rect(left, start, left + buttonWidth, start + buttonHeight)
-    val rebirth = if (victory) Rect(left, start + buttonHeight + gap, left + buttonWidth, start + buttonHeight * 2f + gap) else null
-    val exitTop = start + (buttonHeight + gap) * (buttonCount - 1)
-    return TerminalLayoutGeometry(
-        mode,
-        titleY = if (mode == GameplayLayoutMode.COMPACT_LANDSCAPE) d(28f) else height * 0.13f,
-        subtitleY = if (mode == GameplayLayoutMode.COMPACT_LANDSCAPE) d(66f) else height * 0.21f,
-        statsY = if (mode == GameplayLayoutMode.COMPACT_LANDSCAPE) d(102f) else height * 0.30f,
-        restart = restart,
-        rebirth = rebirth,
-        exit = Rect(left, exitTop, left + buttonWidth, exitTop + buttonHeight),
-    )
-}
-
-internal fun containsInclusive(bounds: Rect, x: Float, y: Float): Boolean =
-    x in bounds.left..bounds.right && y in bounds.top..bounds.bottom

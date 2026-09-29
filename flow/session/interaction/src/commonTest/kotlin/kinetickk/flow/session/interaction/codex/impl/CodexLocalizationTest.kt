@@ -28,9 +28,9 @@ class CodexLocalizationTest {
         assertEquals(english.map { it.key }, russian.map { it.key })
         assertEquals("Круг", russian.single().title)
         assertEquals("Circle", english.single().title)
-        assertEquals("ОТКРЫТО", russian.single().availability)
-        assertTrue(russian.single().description.contains("Улучшения лаборатории"))
-        assertEquals("UNLOCKED", english.single().availability)
+        assertEquals("Открыто", russian.single().status)
+        assertTrue(russian.single().help.orEmpty().contains("Улучшения лаборатории"))
+        assertEquals("Unlocked", english.single().status)
     }
 
     @Test
@@ -38,12 +38,12 @@ class CodexLocalizationTest {
         val item = ItemDefinition(0, "Cinder Ram", "Cinder Ram", ItemRarity.COMMON,
             ItemModifier(ItemEffect.IMPACT_DAMAGE, 0.1f), ItemModifier(ItemEffect.REGEN, 0.1f), 3, 1, "Impact")
         val model = CodexRenderModel(immutableSetOf(0), CodexRunStacks(), immutableListOf(item))
-        val russianEntry = codexItemEntry(item, model, AppLanguage.Russian)
+        val russianEntry = codexItemEntry(item, model, 0L, AppLanguage.Russian)
         assertEquals(listOf(item), codexFilteredItems(model, russianEntry.title.lowercase(), CodexItemFilter.DISCOVERED, AppLanguage.Russian))
         assertTrue(codexFilteredItems(model, "Cinder", CodexItemFilter.ALL, AppLanguage.Russian).isEmpty())
         assertEquals(listOf(item), codexFilteredItems(model, "cInDeR", CodexItemFilter.ALL, AppLanguage.English))
         assertEquals("Обычный", russianEntry.kind)
         assertTrue(russianEntry.description.contains("Восстановление прочности: +0,1/с"))
-        assertTrue(russianEntry.availability.contains("ОТКРЫТО"))
+        assertEquals(CodexFact("Выпадает с", "Ур. 1", russianEntry.facts.single().info), russianEntry.facts.single())
     }
 }

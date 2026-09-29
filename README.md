@@ -109,7 +109,7 @@ is uploaded. See the [privacy note](docs/project/PRIVACY.md).
 
 ## Status
 
-Version **0.2.0** is a playable prototype. Before 1.0.0, only the current
+Version **0.3.0** is a playable prototype. Before 1.0.0, only the current
 profile schema is supported: incompatible profiles start from defaults, and
 older save locations remain untouched. Balance, content, and save formats may
 change during development.

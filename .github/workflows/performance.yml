@@ -68,6 +68,8 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@4733eaac7c1b0da527e4206b7671e0061de1ce37 # v6
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
 
       - name: Select benchmark profile
         env:
@@ -235,6 +237,7 @@ jobs:
             mode_description="gate selection failed before a comparison could start"
             reports=()
           fi
+          # shellcheck disable=SC2016 # Markdown backticks must stay literal.
           {
             printf '# JVM performance\n\n'
             printf -- '- Mode: %s\n\n' "$mode_description"
@@ -300,6 +303,8 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@4733eaac7c1b0da527e4206b7671e0061de1ce37 # v6
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
 
       - name: Prime production dependencies and Gradle toolchains
         run: >-

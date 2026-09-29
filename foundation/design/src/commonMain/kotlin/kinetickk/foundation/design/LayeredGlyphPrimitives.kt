@@ -14,7 +14,7 @@ import kotlin.math.PI
 import kotlin.math.sin
 
 private val LayeredInk = Color(0xFFF4F6FF)
-private val LayeredBackground = Color(0xFF050610)
+private val LayeredBackground = Kk.Ink
 
 /** Two layered glyphs, a polygonal frame, dot markers and an optional outer arc. */
 fun DrawScope.drawLayeredGlyph(

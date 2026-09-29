@@ -57,6 +57,7 @@ import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.assertContentDescriptionContains
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.performSemanticsAction
@@ -88,9 +89,7 @@ import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.LocalAppLanguage
-import kinetickk.foundation.design.SpaceBlack
-import kinetickk.foundation.design.Violet
-import kinetickk.foundation.design.White
+import kinetickk.foundation.design.Kk
 import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
@@ -139,8 +138,8 @@ class GameplayLocalizedRenderingTest {
                         RewardContent(
                             RewardPresentation(
                                 AppLanguage.Russian.text(GameplayText.ChooseArtifact),
-                                AppLanguage.Russian.text(GameplayText.TimeSuspended),
-                                cards, White, Violet, 3,
+                                "",
+                                cards, Kk.Bone, Kk.Pol, 3,
                             ),
                             choiceLayoutGeometry(current.width.toFloat(), current.height.toFloat(), 1f, 3, true),
                             current.width.toFloat(), 1f, current.textScale, 0f, true, {}, {},
@@ -155,8 +154,8 @@ class GameplayLocalizedRenderingTest {
                             if (current.scene == Scene.HUD) {
                                 drawGameplay(model, VisualFxProjection.EMPTY, textMeasurer, 0f, null)
                             } else if (current.scene == Scene.PAUSE) {
-                                drawRect(SpaceBlack)
-                                drawPause(textMeasurer, pauseLayoutGeometry(size.width, size.height, 1f))
+                                drawRect(Kk.Ink)
+                                drawPause(model, textMeasurer, pauseLayoutGeometry(size.width, size.height, 1f))
 
                             }
                         }
@@ -177,7 +176,8 @@ class GameplayLocalizedRenderingTest {
             compose.runOnIdle { scenario.value = current }
             compose.onNodeWithTag("localized-gameplay").assertIsDisplayed()
             if (current.scene == Scene.REWARDS) {
-                compose.onNodeWithText("Взять · 1", useUnmergedTree = true).assertIsDisplayed()
+                compose.onNodeWithTag("kinetickk.gameplay.take").assertIsDisplayed()
+                    .assertContentDescriptionContains("Взять", substring = true)
                 compose.onNodeWithTag("kinetickk.gameplay.reroll").assertIsDisplayed()
             }
             capture("gameplay-ru-${current.scene.name.lowercase()}-${current.width}x${current.height}-${current.textScale}")
@@ -280,8 +280,8 @@ class GameplayLocalizedRenderingTest {
             val model = remember { model(Scenario(640, 420, Scene.GAME_OVER)) }
             Box(Modifier.requiredSize(640.dp, 420.dp).testTag("localized-gameplay")) {
                 Canvas(Modifier.fillMaxSize()) {
-                    drawRect(SpaceBlack)
-                    drawCoreDeath(model, time.value)
+                    drawRect(Kk.Ink)
+                    drawCoreDeath(model, time.value, kinetickk.foundation.design.KkRolePalette.Default)
                 }
             }
         }
@@ -289,7 +289,7 @@ class GameplayLocalizedRenderingTest {
             val pixels = compose.onNodeWithTag("localized-gameplay").captureToImage().toPixelMap()
             var count = 0
             for (y in 0 until pixels.height) for (x in 0 until pixels.width) {
-                if (pixels[x, y].toArgb() != SpaceBlack.toArgb()) count++
+                if (pixels[x, y].toArgb() != Kk.Ink.toArgb()) count++
             }
             return count
         }

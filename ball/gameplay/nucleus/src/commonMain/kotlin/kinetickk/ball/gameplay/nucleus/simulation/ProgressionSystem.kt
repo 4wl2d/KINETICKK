@@ -15,6 +15,7 @@ import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.lifetimeMatterOfferLevel
 
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.render.*
@@ -44,7 +45,7 @@ internal fun MutableGameState.openItemChoice() {
 }
 
 internal fun MutableGameState.buildItemChoices() {
-    val lifetimeUnlock = (1L + lifetimeMatter / 40L).coerceAtMost(80L).toInt()
+    val lifetimeUnlock = lifetimeMatterOfferLevel(lifetimeMatter)
     val catalogLevel = max(level, lifetimeUnlock)
     val unlocked = content.items.filter { it.unlockLevel <= catalogLevel }
     val eligible = unlocked.filter { hasUsefulItemEffect(it) }
