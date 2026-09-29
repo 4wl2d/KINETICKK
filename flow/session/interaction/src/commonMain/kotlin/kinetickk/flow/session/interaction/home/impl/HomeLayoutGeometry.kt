@@ -272,7 +272,6 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
             val side = 16f
             val columns = if (h < 660f) 2 else 1
             val rowHeight = if (columns == 1) 52f else 50f
-            val menuTop = h - 16f - rowHeight * (6 / columns)
             val columnWidth = (w - side * 2f - 8f * (columns - 1)) / columns
             // One column: rows step 6 px left going down, and the lowest row sits so far right that
             // its selected speed lines end at the side margin. The font (36 px from 418 px wide)
@@ -283,6 +282,18 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
             // label left of it.
             val menuFont = if (columns == 1) 36f * min(1f, w / 418f) else 28f * min(1f, columnWidth / 166f)
             val menuReach = HOME_MENU_REACH * menuFont / 64f
+            val legalBaseline = h - 4f
+            val rowCount = HomeMenuTargets.size / columns
+            val lastRowLeft = if (columns == 1) side + menuReach else side + columnWidth + 8f
+            val lastRow = Rect(lastRowLeft, 0f, w - side, rowHeight)
+            val selectedBottom = homeSelectedMenuFootprint(lastRow, menuFont).maxOf { it.bottom }
+            // Reserve the whole legal line above its baseline, plus 2 px, including the
+            // selected row's rotated echo. A fixed bottom inset overlaps taller Linux glyphs.
+            val menuTop = min(
+                h - 16f - rowHeight * rowCount,
+                legalBaseline - HOME_LEGAL_ASCENT_EM * COMPACT_LEGAL_SIZE - 2f -
+                    (rowCount - 1) * rowHeight - selectedBottom,
+            )
             HomeMenuTargets.forEachIndexed { index, target ->
                 if (columns == 1) {
                     val top = menuTop + index * rowHeight
@@ -330,8 +341,8 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
                 formNameSize = px(16f),
                 formDescription = null,
                 legalRight = px(w - side),
-                legalBaseline = px(h - 4f),
-                legalSize = px(8f),
+                legalBaseline = px(legalBaseline),
+                legalSize = px(COMPACT_LEGAL_SIZE),
                 legalLeft = px(side),
             )
         }

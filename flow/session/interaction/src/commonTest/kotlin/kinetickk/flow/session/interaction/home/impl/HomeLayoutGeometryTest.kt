@@ -178,14 +178,15 @@ class HomeMenuClearanceTest {
     }
 
     @Test
-    fun selectedMenuItemsInLandscapeEndAboveTheLegalNotices() {
+    fun selectedMenuItemsOnPhonesEndAboveTheLegalNotices() {
         val viewports = listOf(Triple(844f, 390f, 1f), Triple(800f, 360f, 1f), Triple(600f, 390f, 1f), Triple(873f, 393f, 1f),
-            Triple(914f, 411f, 1f), Triple(1_000f, 360f, 1f), Triple(2_532f, 1_170f, 3f)) +
-            TargetDeviceProfiles.map { Triple(it.heightPx, it.widthPx, it.density) }
+            Triple(914f, 411f, 1f), Triple(1_000f, 360f, 1f), Triple(2_532f, 1_170f, 3f),
+            Triple(390f, 844f, 1f), Triple(412f, 915f, 1f), Triple(390f, 600f, 1f)) +
+            TargetDeviceProfiles.flatMap { listOf(Triple(it.widthPx, it.heightPx, it.density), Triple(it.heightPx, it.widthPx, it.density)) }
         viewports.forEach { (width, height, density) ->
             val layout = homeLayoutGeometry(width, height, density)
             val scene = layout.scene
-            assertEquals(HomeLayoutMode.COMPACT_LANDSCAPE, layout.mode, "${width}x$height")
+            assertTrue(layout.mode != HomeLayoutMode.REGULAR, "${width}x$height")
             // Linux renders the 8 px legal text up to 8 px above its baseline. Keep this
             // observed bound independent of the production allowance so it catches under-reservation.
             val legalTop = scene.legalBaseline - scene.legalSize
@@ -200,8 +201,10 @@ class HomeMenuClearanceTest {
             }
             // Rows stay touch sized; the design's 36 px menu gives way only on 360-px-tall screens.
             HomeMenuTargets.forEach { target -> assertTrue(layout.bounds(target).height / density >= 48f - 0.01f) }
-            assertTrue(scene.menuFontSize / density >= if (height / density >= 390f) 32f else 30f,
-                "menu font ${scene.menuFontSize / density} at ${width}x$height")
+            if (layout.mode == HomeLayoutMode.COMPACT_LANDSCAPE) {
+                assertTrue(scene.menuFontSize / density >= if (height / density >= 390f) 32f else 30f,
+                    "menu font ${scene.menuFontSize / density} at ${width}x$height")
+            }
         }
     }
 
