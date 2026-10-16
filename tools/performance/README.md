@@ -25,7 +25,7 @@ bash tools/performance/scripts/compare-pr-base.sh --base FULL_BASE_SHA --profile
 The runner uses separate base worktrees and fresh JVMs in A-B-B-A order.
 It requires matching harness, semantic workloads, fingerprints, and environment.
 Release 0.2.0 uses `gameplay-core-v3` and
-`profile-persistence-current-schema-v3`; older workloads are not comparable.
+`profile-persistence-current-schema-v4`; older workloads are not comparable.
 CI produces candidate-only results when the base lacks the current contract,
 then resumes comparisons once both sides support it. Candidate-only results
 carry no claim about improvement or regression against the base.

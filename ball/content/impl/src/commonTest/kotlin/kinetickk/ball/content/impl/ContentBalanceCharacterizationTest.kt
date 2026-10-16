@@ -4,9 +4,13 @@
 package kinetickk.ball.content.impl
 
 import kinetickk.ball.content.api.ContentBounds
+import kinetickk.ball.content.api.EffectAction
+import kinetickk.ball.content.api.EffectClause
+import kinetickk.ball.content.api.EffectCondition
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRarity
+import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicDefinition
@@ -23,10 +27,10 @@ class ContentBalanceCharacterizationTest {
     fun itemCatalogCardinalityOrderingAndContentAreGolden() {
         val items = ui.items
 
-        assertEquals(ContentBounds.MAX_ITEMS, items.size)
-        assertEquals((0 until ContentBounds.MAX_ITEMS).toList(), items.map(ItemDefinition::id))
+        assertEquals(80, items.size)
+        assertEquals((0 until items.size).toList(), items.map(ItemDefinition::id))
         assertEquals(
-            "456e042b2ce96b71",
+            "cc3ef5639ddd44a8",
             goldenFingerprint {
                 add("item-effects")
                 ItemEffect.entries.forEach { effect ->
@@ -42,18 +46,62 @@ class ContentBalanceCharacterizationTest {
                 }
                 add("items")
                 add(items.size)
-                items.forEach { item ->
-                    add(item.id)
-                    add(item.name)
-                    add(item.description)
-                    add(item.rarity.name)
-                    add(item.primary.effect.name)
-                    add(item.primary.amount)
-                    add(item.secondary.effect.name)
-                    add(item.secondary.amount)
-                    add(item.maxStacks)
-                    add(item.unlockLevel)
-                    add(item.family)
+                items.forEach(::addItem)
+            },
+        )
+    }
+
+    @Test
+    fun buildCatalogTuningIsGolden() {
+        val build = ui.build
+
+        assertEquals(
+            "ddc97d3ff0dc5b50",
+            goldenFingerprint {
+                build.elements.forEach { element ->
+                    add(element.element.name)
+                    add(element.statusDescription)
+                    add(element.breakDescription)
+                    add(element.breakThreshold)
+                    add(element.decaySeconds)
+                    add(element.perStack)
+                    add(element.breakPower)
+                    add(element.breakRadius)
+                    add(element.breakFloor)
+                }
+                build.reactions.forEach { reaction ->
+                    add(reaction.id.name)
+                    add(reaction.name)
+                    add(reaction.description)
+                    add(reaction.power)
+                    add(reaction.radius)
+                    add(reaction.residue?.name ?: "-")
+                    add(reaction.residueStacks)
+                }
+                build.resonances.forEach { resonance ->
+                    add(resonance.tag.name)
+                    add(resonance.description)
+                    resonance.tiers.forEach(::add)
+                }
+                build.affinityTiers.forEach { add(it.description) }
+                build.pairings.forEach { pairing ->
+                    add(pairing.id.name)
+                    add(pairing.first.name)
+                    add(pairing.second.name)
+                    add(pairing.kind.name)
+                    add(pairing.name)
+                    add(pairing.description)
+                }
+                with(build.policy) {
+                    resonanceThresholds.forEach(::add)
+                    affinityThresholds.forEach(::add)
+                    stackMagnitudes.forEach(::add)
+                    listOf(
+                        rebornMagnitude, rebornChancePerTier, maximumRebornChance, attunementBonus, severanceSeconds,
+                        harmonyScale, dissonanceScale, amplificationSoftCap, criticalMultiplierCap, vulnerabilityCap,
+                        overdriveGainCap, reactionCooldownSeconds, reactionPairCooldownSeconds,
+                    ).forEach(::add)
+                    listOf(breaksPerSecond, reactionsPerSecond, maximumFields, masteredTagPoints).forEach(::add)
                 }
             },
         )
@@ -156,20 +204,31 @@ class ContentBalanceCharacterizationTest {
     fun relicLimitsOrderingAndContentIdentityAreGolden() {
         val relics = ui.relics
 
-        assertEquals(ContentBounds.MAX_RELICS, relics.size)
+        assertEquals(RelicId.entries.size, relics.size)
+        assertEquals(true, relics.size <= ContentBounds.MAX_RELICS)
         assertEquals(4, ui.relicPolicy.maxSlots)
-        assertEquals(5, ui.relicPolicy.maxRank)
+        assertEquals(3, ui.relicPolicy.maxRank)
         assertEquals(RelicId.entries.toList(), relics.map(RelicDefinition::id))
         assertEquals(
-            "5b480a9cc724582c",
+            "e28830052640c2c5",
             goldenFingerprint {
                 add(relics.size)
                 relics.forEach { relic ->
                     add(relic.id.name)
                     add(relic.name)
                     add(relic.aspect.name)
-                    add(relic.description)
-                    add(relic.rankEffect)
+                    relic.keys.forEach { add(it.name) }
+                    add("|")
+                    relic.attunedTags.forEach { add(it.name) }
+                    add("|")
+                    add(relic.upside)
+                    add(relic.liability)
+                    relic.values.forEach { value ->
+                        add(value.base)
+                        add(value.perRank)
+                    }
+                    add(relic.minimumRebirth)
+                    add(relic.meldable)
                 }
             },
         )
@@ -181,6 +240,112 @@ private data class MetaPolicy(
     val maxRanks: Int,
     val baseCost: Int,
 )
+
+private fun GoldenFingerprint.addItem(item: ItemDefinition) {
+    add(item.id)
+    add(item.name)
+    add(item.description)
+    add(item.rarity.name)
+    item.tags.forEach { add(it.name) }
+    add("|")
+    item.elements.forEach { add(it.name) }
+    add("|")
+    item.stats.forEach { stat ->
+        add(stat.effect.name)
+        add(stat.amount)
+    }
+    add("|")
+    item.clauses.forEach(::addClause)
+    add("|")
+    item.rules.forEach(::addRule)
+    add("|")
+    add(item.maxStacks)
+    add(item.unlockLevel)
+    add(item.minimumRebirth)
+    add(item.risk)
+}
+
+private fun GoldenFingerprint.addClause(clause: EffectClause) {
+    add(clause.trigger.name)
+    clause.conditions.forEach(::addCondition)
+    add("actions")
+    clause.actions.forEach(::addAction)
+    add(clause.cooldownSeconds)
+    add(clause.everyNth)
+    add(clause.luckShortened)
+}
+
+private fun GoldenFingerprint.addCondition(condition: EffectCondition) {
+    when (condition) {
+        is EffectCondition.SpeedAtLeast -> { add("speed-at-least"); add(condition.speed) }
+        is EffectCondition.SpeedBelow -> { add("speed-below"); add(condition.speed) }
+        is EffectCondition.IntegrityBelow -> { add("integrity-below"); add(condition.fraction) }
+        is EffectCondition.HeatAtLeast -> { add("heat-at-least"); add(condition.heat) }
+        EffectCondition.ShieldUp -> add("shield-up")
+        EffectCondition.OverdriveActive -> add("overdrive-active")
+        EffectCondition.Braking -> add("braking")
+        is EffectCondition.ComboAtLeast -> { add("combo-at-least"); add(condition.combo) }
+        is EffectCondition.TargetHas -> { add("target-has"); add(condition.element?.name ?: "-"); add(condition.stacks) }
+        EffectCondition.TargetElite -> add("target-elite")
+        EffectCondition.TargetFrozen -> add("target-frozen")
+        is EffectCondition.TargetBelow -> { add("target-below"); add(condition.fraction) }
+        EffectCondition.SourceImpact -> add("source-impact")
+        EffectCondition.SourceWeapon -> add("source-weapon")
+        is EffectCondition.ElementIs -> { add("element-is"); add(condition.element.name) }
+    }
+}
+
+private fun GoldenFingerprint.addAction(action: EffectAction) {
+    when (action) {
+        is EffectAction.ApplyStatus -> { add("apply"); add(action.pick.name); add(action.stacks); add(action.radius) }
+        is EffectAction.Burst -> { add("burst"); add(action.radius); add(action.basis.name); add(action.scale) }
+        is EffectAction.Strike -> { add("strike"); add(action.basis.name); add(action.scale) }
+        is EffectAction.Chain -> {
+            add("chain"); add(action.count); add(action.range); add(action.basis.name); add(action.scale)
+            add(action.pick?.name ?: "-"); add(action.stacks)
+        }
+        is EffectAction.Shards -> { add("shards"); add(action.count); add(action.basis.name); add(action.scale); add(action.pick?.name ?: "-") }
+        is EffectAction.Pull -> { add("pull"); add(action.radius); add(action.strength) }
+        is EffectAction.Push -> { add("push"); add(action.radius); add(action.strength) }
+        is EffectAction.Heal -> { add("heal"); add(action.amount) }
+        is EffectAction.Shield -> { add("shield"); add(action.amount) }
+        is EffectAction.Vent -> { add("vent"); add(action.heat) }
+        is EffectAction.Overdrive -> { add("overdrive"); add(action.charge) }
+        is EffectAction.Buff -> { add("buff"); add(action.stat.name); add(action.amount); add(action.seconds); add(action.maxStacks) }
+        is EffectAction.ExtendCombo -> { add("extend-combo"); add(action.seconds) }
+        is EffectAction.RefreshWeapon -> { add("refresh-weapon"); add(action.seconds) }
+        is EffectAction.GainData -> { add("gain-data"); add(action.amount) }
+        is EffectAction.Detonate -> { add("detonate"); action.elements.forEach { add(it.name) }; add(action.scale) }
+        is EffectAction.Well -> {
+            add("well"); add(action.radius); add(action.seconds); add(action.basis.name); add(action.scale)
+            add(action.pick?.name ?: "-")
+        }
+    }
+}
+
+private fun GoldenFingerprint.addRule(rule: ItemRule) {
+    when (rule) {
+        is ItemRule.WhileModifier -> { add("while"); addCondition(rule.condition); add(rule.stat.name); add(rule.amount) }
+        is ItemRule.ElementPotency -> { add("potency"); add(rule.element.name); add(rule.amount) }
+        is ItemRule.StatusDuration -> { add("duration"); add(rule.element.name); add(rule.multiplier) }
+        is ItemRule.BreakThreshold -> { add("threshold"); add(rule.element.name); add(rule.reduction) }
+        is ItemRule.BreakPower -> { add("break-power"); add(rule.element.name); add(rule.amount) }
+        is ItemRule.BreakSpread -> { add("break-spread"); add(rule.element.name); add(rule.stacks); add(rule.radius) }
+        is ItemRule.ReactionPower -> { add("reaction-power"); add(rule.amount) }
+        is ItemRule.ReactionResidue -> { add("reaction-residue"); add(rule.stacks) }
+        is ItemRule.ReactionRecoil -> { add("reaction-recoil"); add(rule.damage); add(rule.radius) }
+        is ItemRule.AlwaysCrit -> { add("always-crit"); addCondition(rule.condition) }
+        is ItemRule.CritDamageVersus -> { add("crit-damage-versus"); addCondition(rule.condition); add(rule.amount) }
+        is ItemRule.DamageVersus -> { add("damage-versus"); addCondition(rule.condition); add(rule.amount) }
+        is ItemRule.NonCriticalDamage -> { add("non-critical"); add(rule.amount) }
+        is ItemRule.ComboDamage -> { add("combo-damage"); add(rule.perCombo); add(rule.cap) }
+        is ItemRule.BonusRerolls -> { add("rerolls"); add(rule.count) }
+        is ItemRule.GuaranteedCritAfter -> { add("guaranteed-crit"); add(rule.misses) }
+        is ItemRule.FreeDash -> { add("free-dash"); add(rule.heat); add(rule.cooldownSeconds) }
+        is ItemRule.OfferCards -> { add("offer-cards"); add(rule.count) }
+        is ItemRule.Convert -> { add("convert"); add(rule.kind.name); add(rule.amount) }
+    }
+}
 
 private fun goldenFingerprint(values: GoldenFingerprint.() -> Unit): String =
     GoldenFingerprint().apply(values).finish()
@@ -196,6 +361,8 @@ private class GoldenFingerprint {
     fun add(value: Int) = add(value.toString())
 
     fun add(value: Float) = add(value.toBits())
+
+    fun add(value: Boolean) = add(if (value) 1 else 0)
 
     fun finish(): String = hash.toString(radix = 16).padStart(16, '0')
 

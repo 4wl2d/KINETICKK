@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
+import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
@@ -15,15 +16,14 @@ import kinetickk.ball.content.api.PointOfInterestKind
 import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
-import kinetickk.ball.content.api.RelicAspect
-import kinetickk.ball.content.api.RelicDefinition
-import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPolicy
+import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureRelics
 import kinetickk.ball.gameplay.nucleus.GameplayContext
 import kinetickk.ball.gameplay.nucleus.GameplayDecision
 import kinetickk.ball.gameplay.nucleus.GameplayNucleus
@@ -117,6 +117,17 @@ class HudPresentationMemoryTest {
     }
 
     @Test
+    fun bossTargetCarriesTheTrackedBossesAffinity() {
+        val boss = BossTarget()
+        val shifting = bossAffinity(EnemyType.ARCHITECT)
+        val architect = enemy(9, EnemyType.ARCHITECT, 0.5f).copy(affinityBits = shifting)
+        val elite = enemy(7, EnemyType.ELITE, 0.5f).copy(affinityBits = bossAffinity(EnemyType.ELITE))
+        assertEquals(shifting, boss.select(base.with("enemies" to listOf(elite, architect).toImmutableList())).affinityBits)
+        // Selecting again without a boss forgets it.
+        assertEquals(0, boss.select(base).affinityBits)
+    }
+
+    @Test
     fun stateMessagesAndTrialRulesStayOutOfTheFeed() {
         assertFalse(base.with("message" to "OVERHEAT", "messageTime" to 1f).showsMessage())
         assertFalse(base.with("message" to "POLARITY FIELD STRAIN", "messageTime" to 1f).showsMessage())
@@ -191,9 +202,10 @@ private fun memoryFixtureContent() = GameplayContentSnapshot(
     version = KINETICKK_CONTENT_VERSION,
     items = immutableListOf(
         ItemDefinition(
-            0, "Cinder Ram", "Cinder Ram binds the Impact family to a Cinder component: +5% Impact damage and +4% Weapon power per stack (max 8).",
-            ItemRarity.COMMON, ItemModifier(ItemEffect.IMPACT_DAMAGE, 0.05f), ItemModifier(ItemEffect.WEAPON_POWER, 0.04f),
-            maxStacks = 8, unlockLevel = 1, family = "Impact",
+            0, "Ballast Core", "Lead in the heart of the Core turns every collision into a shove.",
+            ItemRarity.COMMON, immutableListOf(BuildTag.RAM),
+            stats = immutableListOf(StatDelta(ItemEffect.MASS, 0.12f), StatDelta(ItemEffect.IMPACT_DAMAGE, 0.06f)),
+            maxStacks = 3, unlockLevel = 1,
         ),
     ),
     weapons = WeaponId.entries.map { WeaponDefinition(it, it.name, "Fixture.", listOf("TRAIL"), 0) }.toImmutableList(),
@@ -201,7 +213,7 @@ private fun memoryFixtureContent() = GameplayContentSnapshot(
     metaUpgrades = MetaUpgradeId.entries.map { id ->
         MetaUpgradeDefinition(id, "Fixture", "Fixture", 1, 1, ItemModifier(ItemEffect.MAX_INTEGRITY, 1f))
     }.toImmutableList(),
-    relics = RelicId.entries.map { id -> RelicDefinition(id, id.name, RelicAspect.VECTOR, "Fixture", "Fixture") }.toImmutableList(),
+    relics = rewardFixtureRelics.toImmutableList(),
     rebirth = RebirthPolicySnapshot(
         minimumLevel = 0, maximumLevel = 0,
         profiles = immutableListOf(RebirthProfile(
@@ -210,5 +222,5 @@ private fun memoryFixtureContent() = GameplayContentSnapshot(
         )),
         maxActiveEnemies = 120, minSpawnIntervalSeconds = 0.09f, minEliteIntervalSeconds = 24f,
     ),
-    relicPolicy = RelicPolicy(4, 5),
+    relicPolicy = RelicPolicy(4, 3),
 )

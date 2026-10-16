@@ -31,6 +31,37 @@ class CodexLayoutRulesTest {
     }
 
     @Test
+    fun sortSegmentsDropTheirLabelBeforeShrinkingAndNeverScroll() {
+        val natural = listOf(80f, 100f, 120f)
+        // 300 dp of segments and two 3 dp gaps: 306 dp, 366 dp with a 60 dp label.
+        assertEquals(CodexSortFit(true, 1f), codexSortFit(natural, 60f, 366f))
+        assertEquals(CodexSortFit(false, 1f), codexSortFit(natural, 60f, 365f))
+        assertEquals(CodexSortFit(false, 1f), codexSortFit(natural, null, 400f))
+        assertEquals(CodexSortFit(false, 1f), codexSortFit(natural, 60f, 306f))
+        assertEquals(0.8f, codexSortFit(natural, 60f, 246f).scale, 0.0001f)
+        assertEquals(CODEX_TAB_MIN_SCALE, codexSortFit(natural, null, 50f).scale)
+    }
+
+    @Test
+    fun matrixHeaderNamesItsBandsBetween30And96DpAndAtMostAThirdOfTheGrid() {
+        // A fake font: names 8 dp long per sp.
+        val widest = { size: Float -> size * 8f }
+        fun assertFit(height: Float, font: Float, fit: CodexItemsHeadFit) {
+            assertEquals(height, fit.height, 0.01f)
+            assertEquals(font, fit.font)
+        }
+        assertFit(82f, 9f, codexItemsHeadFit(600f, widest))
+        // A third of a 240 dp grid: the names shrink in half steps to 7.5 sp.
+        assertFit(72f, 7.5f, codexItemsHeadFit(240f, widest))
+        // Not even 7 sp fits a third of a 200 dp grid: the header grows for 7 sp names rather than leaving them out.
+        assertFit(66f, 7f, codexItemsHeadFit(200f, widest))
+        assertFit(30f, 9f, codexItemsHeadFit(600f) { 10f })
+        // Names longer than 96 dp even at 7 sp are left out; a grid too short for 30 dp still gets 30.
+        assertTrue(codexItemsHeadFit(600f) { it * 20f }.font.isNaN())
+        assertEquals(30f, codexItemsHeadFit(50f) { 100f }.height, 0.01f)
+    }
+
+    @Test
     fun fittingSizeShrinksUntilTheLongestWordFitsWithoutSplittingIt() {
         // A fake font: every letter is half the size wide.
         val width = { word: String, size: Float -> (word.length * size * 0.5f).toInt() }
@@ -81,5 +112,19 @@ class CodexLayoutRulesTest {
         // Only a word wider than the whole row shrinks the labels, together and never below the minimum.
         val narrow = codexPairFit(russian, 90f, 12f, 16f, 10f, word, value)
         assertTrue(narrow.stacked && "столкновений".length * narrow.labelSize * 0.5f <= 90f && narrow.labelSize >= 10f)
+    }
+
+    @Test
+    fun rowSpansFillEveryLineAndDifferByAtMostOneCell() {
+        for (maxLineSpan in 1..14) for (minCells in 1..6) {
+            val perLine = (maxLineSpan / minCells).coerceIn(1, maxLineSpan)
+            val line = (0 until perLine).map { codexRowSpan(maxLineSpan, minCells, it) }
+            assertEquals(maxLineSpan, line.sum(), "line of $maxLineSpan with rows of $minCells")
+            assertTrue(line.max() - line.min() <= 1, "$line")
+            // The next line starts over with the same spans.
+            assertEquals(line.first(), codexRowSpan(maxLineSpan, minCells, perLine))
+        }
+        // Rows wider than the line take the whole line.
+        assertEquals(3, codexRowSpan(3, 5, 0))
     }
 }

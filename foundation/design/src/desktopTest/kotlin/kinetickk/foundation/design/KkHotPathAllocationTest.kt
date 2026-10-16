@@ -32,13 +32,22 @@ class KkHotPathAllocationTest {
         val badgeAt = Offset(20f, 60f)
         val paths = KkPathCache(4)
         val grid = Rect(400f, 100f, 540f, 170f)
+        var frameIndex = 0
         val hudFrame: DrawScope.(Float) -> Unit = { time ->
+            // The tone and element lookups change every frame, as damage numbers and status rims do.
+            val tone = frameIndex++ % 6
             drawKkMeter(meter, 0.62f, measurer.roles.threat, measurer.roles, segments = 10, ghost = 0.1f, threat = true)
             drawKkMeter(meter, 0.8f, measurer.roles.you, measurer.roles, stripes = KkMeterStripes.YOU, time = time)
             drawKkTickLadder(meter, measurer.roles, 30, 22, 18, 28)
             drawKkPips(Offset(20f, 40f), 5, 3, measurer.roles.shield, nextOutlined = true, emptyOutlined = true)
             drawKkRelicSlot(Offset(340f, 50f), Kk.AIon, KkIcon.ASPECT_ION, ring = measurer.roles.you)
             drawKkSynergyLink(Offset(362f, 50f), Offset(376f, 50f), measurer.roles.you)
+            // Status and damage tones and the element/tag glyphs are per-frame lookups too.
+            for (index in 0..5) drawKkIcon(KkIcon.Aspects[index], Offset(20f + index * 18f, 100f), 16f, measurer.roles.tone(index))
+            for (index in 0 until KkIcon.Tags.size) drawKkIcon(KkIcon.Tags[index], Offset(140f + index * 18f, 100f), 16f, Kk.Bone)
+            drawKkRelicSlot(Offset(390f, 50f), measurer.roles.element(tone % 5), KkIcon.Elements[tone % 5])
+            drawKkPips(Offset(20f, 112f), 4, 2, Kk.tone(tone), sizeDp = 6f)
+            drawKkIcon(KkIcon.Aspects[tone], Offset(128f, 112f), 12f, measurer.roles.tone(tone))
             drawKkWeaponSlot(measurer, slot, KkIcon.WEAPONS_ARC_COIL, "Lvl 3", cooldown = 0.4f, ready = true)
             drawKkIcon(KkIcon.WEAPONS_GRAVITY_MINES, Offset(420f, 50f), 32f, measurer.roles.you)
             drawKkLevelBadge(measurer, badgeAt, 24, time = time)
@@ -49,13 +58,13 @@ class KkHotPathAllocationTest {
             drawKkShutter(200f, measurer.roles)
             drawKkTag(measurer, "Elite", Offset(20f, 150f), KkTagVariant.THREAT)
             drawKkStamp(measurer, "Overheat", Offset(120f, 150f), KkStampVariant.THREAT)
-            drawKkToast(measurer, Offset(260f, 120f), "Build updated", "Echo Reactor", gem = true)
+            drawKkToast(measurer, Offset(260f, 120f), "Reaction discovered", "+ Superconduct", gem = true)
             drawKkHatch(grid)
             drawKkHalftone(grid, measurer.roles.you)
             drawKkGrid(grid)
             drawKkStripes(grid, measurer.roles.threat, time = time)
             drawKkSeparator(300f, 20f, 11f, Kk.Bone)
-            drawKkSynergyBracket(measurer, 320f, 400f, 100f, measurer.roles.you, tag = "Synergy")
+            drawKkSynergyBracket(measurer, 320f, 400f, 100f, measurer.roles.you, tag = "Cold Verdict")
             drawKkText(measurer, "07:42", measurer.typography.wideStyle(44f, tabular = true), 280f, 10f, Kk.Bone)
         }
         val bitmap = ImageBitmap(560, 180)

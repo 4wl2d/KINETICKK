@@ -6,7 +6,7 @@
   "validationContractVersion": 1,
   "suiteVersions": {
     "gameplay": "gameplay-core-v3",
-    "profile": "profile-persistence-current-schema-v3"
+    "profile": "profile-persistence-current-schema-v4"
   },
   "sourceRoles": [
     "adapter",

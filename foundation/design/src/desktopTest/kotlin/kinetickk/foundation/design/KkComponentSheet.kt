@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 
 /**
  * Review sheet mirroring `docs/design/redesign/boards/Components.dc.html` (1440 × 3060 at density
@@ -232,13 +233,15 @@ internal fun DrawScope.drawKkComponentsSheet(m: CanvasTextMeasurer, time: Float)
 
     // Cards, relics, weapon slots.
     sectionTitle("Cards, relics, weapon slots", 2315f, "Rarity reads through effects first, color second")
+    // Material carries rarity; the icon hue is the card's element (tone 0 kinetic .. 5 entropy).
     val cards = listOf(
-        listOf("Common", "Stack 1/4", "Bastion Lattice", "+14", "Flat face"),
-        listOf("Uncommon", "Stack 2/4", "Verdant Seed", "+0.6/s", "Inner glow"),
-        listOf("Rare", "Stack 1/5", "Rime Thruster", "+24%", "Glow, sheen sweep, echo"),
-        listOf("Epic", "New", "Echo Reactor", "+31%", "Halftone, rising sparks, pulsing echo"),
-        listOf("Legendary", "New", "Cataclysm Lens", "+19%", "Rays, foil name, striped echo, burst"),
+        listOf("Common", "Stack 1/3", "Ballast Core", "+12%", "Flat face"),
+        listOf("Uncommon", "Stack 2/2", "Vector Coil", "+0.6/s", "Inner glow"),
+        listOf("Rare", "Stack 1/2", "Stillpoint", "+24%", "Glow, sheen sweep, echo"),
+        listOf("Epic", "New", "Tungsten Heart", "+45%", "Chrome, rising sparks, pulsing echo"),
+        listOf("Legendary", "New", "Solar Choir", "+19%", "Rays, foil name, striped echo, burst"),
     )
+    val cardTones = listOf(0, 3, 2, 0, 1)
     cards.forEachIndexed { index, card ->
         val rank = index + 1
         val cx = left + index * (fifth + 22f)
@@ -246,20 +249,30 @@ internal fun DrawScope.drawKkComponentsSheet(m: CanvasTextMeasurer, time: Float)
         val selected = if (rank == 5) 1f else 0f
         withKkCardLift(bounds, selected) {
             drawKkCard(m, bounds, rank, time, selected, card[0], card[1], bandHeightDp = 32f)
-            drawKkIconPlate(Rect(cx + 26f, 2408f, cx + 84f, 2466f), KkIcon.SYSTEM_INTEGRITY, Kk.rarity(rank))
+            // Element pip on the band: the glyph names the element where hue cannot (Mono, ramps).
+            val bandLabel = measureKkText(m, card[0], t.labelStyle(12f), uppercase = true)
+            drawKkIcon(KkIcon.Aspects[cardTones[index]], Offset(cx + 18f + 14f + bandLabel.size.width + 16f, bounds.top + 16f), 14f, Kk.Ink)
+            drawKkIconPlate(Rect(cx + 26f, 2408f, cx + 84f, 2466f), KkIcon.SYSTEM_INTEGRITY, m.roles.tone(cardTones[index]))
             drawKkCardName(m, card[2], Offset(cx + 24f, 2480f), rank, time, maxWidth = fifth - 40f)
             drawKkText(m, card[3], t.wideStyle(18f), cx + 24f, 2516f, Kk.rarity(rank), uppercase = true)
             drawKkText(measureKkText(m, card[4], t.monoStyle(9f), uppercase = true, maxWidth = fifth - 46f, maxLines = 2), cx + 22f, 2570f, Kk.Mute)
         }
     }
-    cap("Relic diamonds: 7 aspects, synergy link", left, 2668f)
+    cap("Relic diamonds: 7 aspects, harmony and dissonance", left, 2668f)
     var rx = left + 22f
     val relicY = 2702f
-    drawKkRelicSlot(Offset(rx, relicY), Kk.AVector, KkIcon.ASPECT_VECTOR)
-    drawKkSynergyLink(Offset(rx + 22f, relicY), Offset(rx + 22f + 14f, relicY), m.roles.you)
-    rx += 58f
-    Kk.Aspects.forEachIndexed { index, color ->
-        drawKkRelicSlot(Offset(rx, relicY), color, KkIcon.Aspects[index])
+    // Harmony (Cold Verdict: Cryo with Kinetic) in `you`, dissonance (Thermal Paradox: Thermal
+    // against Cryo) in threat.
+    listOf(Triple(2, 0, m.roles.you), Triple(1, 2, m.roles.threat)).forEach { (first, second, link) ->
+        drawKkRelicSlot(Offset(rx, relicY), m.roles.tone(first), KkIcon.Aspects[first])
+        drawKkSynergyLink(Offset(rx + 22f, relicY), Offset(rx + 36f, relicY), link)
+        drawKkRelicSlot(Offset(rx + 58f, relicY), m.roles.tone(second), KkIcon.Aspects[second])
+        rx += 128f
+    }
+    KkIcon.Aspects.forEachIndexed { index, icon ->
+        // Elemental aspects follow the vision mode's element ramp; Sovereign stays gold.
+        val color = if (index == KkIcon.Aspects.lastIndex) Kk.ASovereign else m.roles.tone(index)
+        drawKkRelicSlot(Offset(rx, relicY), color, icon)
         rx += 54f
     }
     drawKkRelicSlot(Offset(rx, relicY), Color.Unspecified)
@@ -272,10 +285,11 @@ internal fun DrawScope.drawKkComponentsSheet(m: CanvasTextMeasurer, time: Float)
 
     // Messages & labels.
     sectionTitle("Messages & labels", 2794f)
-    cap("Toasts: reward, signal, warning", left, 2836f)
-    drawKkToast(m, Offset(left, 2852f), "Build updated", "Echo Reactor", gem = true)
-    drawKkToast(m, Offset(left, 2904f), "Elite signal", "Warden", icon = KkIcon.SYSTEM_ELITE, iconColor = m.roles.threat)
-    drawKkToast(m, Offset(left, 2956f), "Singularity proximity", tone = KkToastTone.WARNING)
+    cap("Toasts: discovery, signal, warning", left, 2836f)
+    drawKkToast(m, Offset(left, 2852f), "Reaction discovered", "+ Superconduct", gem = true)
+    drawKkToast(m, Offset(left, 2904f), "Pairing discovered", "+ Cold Verdict", gem = true)
+    drawKkToast(m, Offset(left, 2956f), "Elite signal", "Warden", icon = KkIcon.SYSTEM_ELITE, iconColor = m.roles.threat)
+    drawKkToast(m, Offset(left, 3008f), "Singularity proximity", tone = KkToastTone.WARNING)
     cap("Tooltip: stat compare", col2, 2836f)
     val tip = Rect(col2, 2852f, col2 + 300f, 2940f)
     drawKkSlip(tip)
@@ -289,7 +303,7 @@ internal fun DrawScope.drawKkComponentsSheet(m: CanvasTextMeasurer, time: Float)
     sx += next.size.width + 10f
     drawKkText(m, "+72%", t.wideStyle(22f, tabular = true), sx, tip.top + 46f, Color(0xFF3D5200), valign = KkVAlign.BASELINE)
     sx = tip.left + 14f
-    listOf("Items +36", "Synergy +12", "Lab 0").forEachIndexed { index, part ->
+    listOf("Items +36", "Resonance +12", "Lab 0").forEachIndexed { index, part ->
         if (index > 0) {
             drawKkSeparator(sx + 8f, tip.top + 68f, 11f, Color(0xFF3A3A34))
             sx += 16f
@@ -329,12 +343,20 @@ internal fun DrawScope.drawKkFoundationExtrasSheet(m: CanvasTextMeasurer, time: 
     drawKkText(m, "Архитектор", t.wideStyle(22f), 1040f, 470f, Kk.Bone, uppercase = true)
     drawKkText(m, "SPD 684 U/S  07:42", t.monoStyle(14f), left, 500f, Kk.Bone)
 
-    // Icons.
+    // Icons: weapons in `you`, aspects in their element tone (Sovereign gold), tags and system bone.
+    val iconLabelStyle = t.monoStyle(9f).copy(textAlign = TextAlign.Center)
     KkIcon.entries.forEachIndexed { index, icon ->
         val x = left + (index % 14) * 94f + 43f
-        val y = 580f + (index / 14) * 90f
-        drawKkIcon(icon, Offset(x, y), 32f, if (icon.key.startsWith("weapons.")) m.roles.you else Kk.Bone)
-        drawKkText(m, icon.label, t.monoStyle(9f), x, y + 26f, Kk.Mute, align = KkAlign.CENTER, uppercase = true, maxWidth = 90f)
+        val y = 580f + (index / 14) * 72f
+        val aspect = KkIcon.Aspects.indexOf(icon)
+        val color = when {
+            icon.key.startsWith("weapons.") -> m.roles.you
+            aspect == KkIcon.Aspects.lastIndex -> Kk.ASovereign
+            aspect >= 0 -> m.roles.tone(aspect)
+            else -> Kk.Bone
+        }
+        drawKkIcon(icon, Offset(x, y), 32f, color)
+        drawKkText(measureKkText(m, icon.label, iconLabelStyle, uppercase = true, maxWidth = 86f, maxLines = 2), x, y + 22f, Kk.Mute, KkAlign.CENTER)
     }
 
     // Fills and shapes.
@@ -362,7 +384,13 @@ internal fun DrawScope.drawKkFoundationExtrasSheet(m: CanvasTextMeasurer, time: 
     drawPath(shapes.sheared(5, Rect(left + 810f, shapesTop, left + 970f, shapesTop + 60f)), m.roles.pol)
     drawKkSeparator(left + 1000f, shapesTop + 30f, 30f, Kk.Bone)
 
-    // Role palettes per Color vision mode.
+    // Role palettes and the six damage tones (kinetic, then the element ramp) per Color vision
+    // mode, each tone swatch carrying its glyph in whichever of ink and bone reads better on it.
+    fun cap(text: String, x: Float, y: Float) {
+        drawKkText(m, text, t.monoStyle(10f), x, y, Kk.Mute, valign = KkVAlign.CENTER, uppercase = true)
+    }
+    listOf("You", "Threat", "Heat", "Shield", "Polarity").forEachIndexed { index, role -> cap(role, left + 120f + index * 120f, 1164f) }
+    listOf("Kinetic", "Thermal", "Cryo", "Ion", "Gravitic", "Entropy").forEachIndexed { index, tone -> cap(tone, kkToneSwatch(index, 0).left, 1164f) }
     KkVisionMode.entries.forEachIndexed { row, mode ->
         val y = 1180f + row * 44f
         drawKkText(m, mode.name, t.labelStyle(13f), left, y + 14f, Kk.Bone, valign = KkVAlign.CENTER)
@@ -371,6 +399,13 @@ internal fun DrawScope.drawKkFoundationExtrasSheet(m: CanvasTextMeasurer, time: 
             val cellRect = Rect(left + 120f + index * 120f, y, left + 230f + index * 120f, y + 28f)
             drawKkSlab(cellRect, color, 8f)
             if (index == 1) drawKkThreatHatch(KkPathCache(1).slab(0, cellRect, 8f), p, Kk.Ink)
+        }
+        for (index in 0..5) {
+            val color = p.tone(index)
+            val cellRect = kkToneSwatch(index, row)
+            drawKkSlab(cellRect, color, 8f)
+            val glyph = if (wcagContrast(Kk.Ink, color) >= wcagContrast(Kk.Bone, color)) Kk.Ink else Kk.Bone
+            drawKkIcon(KkIcon.Aspects[index], cellRect.center, 20f, glyph)
         }
     }
 
@@ -385,6 +420,10 @@ internal fun DrawScope.drawKkFoundationExtrasSheet(m: CanvasTextMeasurer, time: 
         drawKkText(m, "${ms.toInt()} ms", t.monoStyle(), frame.left, frame.bottom + 14f, Kk.Mute, uppercase = true)
     }
 }
+
+/** Damage tone swatch [index] (0 kinetic .. 5 entropy) in vision mode [row] of the extras sheet. */
+internal fun kkToneSwatch(index: Int, row: Int): Rect =
+    Rect(804f + index * 94f, 1180f + row * 44f, 890f + index * 94f, 1208f + row * 44f)
 
 private fun DrawScope.drawKkShutterInto(frame: Rect, elapsedMs: Float, roles: KkRolePalette) {
     clipRect(frame.left, frame.top, frame.right, frame.bottom) {

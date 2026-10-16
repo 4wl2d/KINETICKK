@@ -37,6 +37,7 @@ import kinetickk.foundation.design.drawKkSheared
 import kinetickk.foundation.design.drawKkText
 import kinetickk.foundation.design.drawKkThreatHatch
 import kinetickk.foundation.design.kkLoop
+import kinetickk.foundation.design.kkShake
 import kinetickk.foundation.design.kkStroke
 import kinetickk.foundation.design.labelStyle
 import kinetickk.foundation.design.measureKkText
@@ -210,14 +211,9 @@ private class PreviewScope(
     }
 
     fun shakeOffset(): Offset {
-        // pv-sh2: 0.32 s loop through (-4, 2), (4, -3), (-2, -2).
-        val p = kkLoop(time, 0.32f)
-        return when {
-            p < 0.25f -> Offset(-4f * p / 0.25f, 2f * p / 0.25f)
-            p < 0.5f -> lerpOffset(Offset(-4f, 2f), Offset(4f, -3f), (p - 0.25f) / 0.25f)
-            p < 0.75f -> lerpOffset(Offset(4f, -3f), Offset(-2f, -2f), (p - 0.5f) / 0.25f)
-            else -> lerpOffset(Offset(-2f, -2f), Offset.Zero, (p - 0.75f) / 0.25f)
-        }
+        // The game's shake: a hard hit every 1.6 s whose sway fades over 0.8 s, then calm.
+        val trauma = 1f - kkLoop(time, 1.6f) * 2f
+        return kkShake(trauma, time, 4f)
     }
 
     fun arena(palette: KkRolePalette) {
@@ -410,8 +406,6 @@ internal fun settingsTextSizeSample(language: AppLanguage): List<Pair<String, St
 )
 
 private class DamageSample(val amount: Long, val x: Float, val y: Float, val lane: Float, val tierScale: Float, val delay: Float)
-
-private fun lerpOffset(a: Offset, b: Offset, t: Float): Offset = Offset(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)
 
 /** One reusable scratch path; the preview is drawn on the UI thread only. */
 private object PreviewPaths {

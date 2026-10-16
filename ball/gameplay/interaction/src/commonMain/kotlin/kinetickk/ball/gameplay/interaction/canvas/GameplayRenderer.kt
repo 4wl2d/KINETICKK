@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import kinetickk.foundation.design.*
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
@@ -10,11 +11,16 @@ import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.layout.PauseLayoutGeometry
 import kinetickk.ball.gameplay.interaction.terminal.drawCoreDeath
-import kotlin.math.cos
-import kotlin.math.sin
 
 /** Screen shake never moves the frame more than this many dp. */
 internal const val MAX_SCREEN_SHAKE_DP = 6f
+
+/** The simulation's strongest shake (a hard ram): only it reaches [MAX_SCREEN_SHAKE_DP]. */
+internal const val FULL_SCREEN_SHAKE = 15f
+
+/** Screen offset for the simulation's decaying shake [magnitude] (0..[FULL_SCREEN_SHAKE]) at run [time]. */
+internal fun screenShakeOffset(magnitude: Float, time: Float, maxOffset: Float): Offset =
+    kkShake(magnitude / FULL_SCREEN_SHAKE, time, maxOffset)
 
 internal fun DrawScope.drawGameplay(
     engine: GameplayRenderModel,
@@ -28,12 +34,12 @@ internal fun DrawScope.drawGameplay(
 ) {
     drawRect(Kk.Ink)
     val shake = if (engine.settings.screenShake && engine.phase == GamePhase.RUNNING) {
-        engine.screenShake.coerceAtMost(d(MAX_SCREEN_SHAKE_DP))
+        screenShakeOffset(engine.screenShake, engine.elapsed, d(MAX_SCREEN_SHAKE_DP))
     } else {
-        0f
+        Offset.Zero
     }
-    val shakeX = if (shake > 0f) sin(engine.elapsed * 91f) * shake else 0f
-    val shakeY = if (shake > 0f) cos(engine.elapsed * 77f) * shake else 0f
+    val shakeX = shake.x
+    val shakeY = shake.y
     drawBackdrop(engine, shakeX, shakeY, renderTime, textMeasurer.roles)
 
     drawWorld(engine, visualFx, shakeX, shakeY, textMeasurer)

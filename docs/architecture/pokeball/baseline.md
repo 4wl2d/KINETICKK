@@ -75,8 +75,9 @@ and counter-thrust remain available at exhaustion. Gameplay owns six character
 abilities, optional world-fixed trials and bounded relic synergies. Codex reads
 one coherent immutable build summary and preserves pause/reward selection.
 
-The catalog remains exactly 400 items, 12 weapons, 8 meta upgrades, 40 relics,
-six characters, and Rebirth levels `0..10`. Existing stable declaration order is captured as
+The catalog has 80 hand-authored items, 12 weapons, 8 meta upgrades, 20 Relics,
+six characters, and Rebirth levels `0..10` (see the build-system intentional
+delta below). Existing stable declaration order is captured as
 explicit stable IDs during the migration; consumers receive immutable versioned
 snapshots instead of reaching global catalog objects.
 
@@ -90,6 +91,19 @@ requests remain rejected. Normal cue and music behavior is unchanged;
 failure-path observability is intentionally tightened as described below.
 
 ## Intentional delta
+
+The build system replaced the generated 400-item stat catalog, the 40 rank-only
+Relics and the 12 Relic synergies. Items are Trigger–Condition–Effect clause
+data over archetype tags and five status elements with threshold Breaks and ten
+reactions; 20 Relics rewrite rules with mandatory liabilities, ranks `1..3`,
+key-predictable harmony/dissonance and 20 named pairings; offers are
+build-aware with a separate reward random stream; Rebirth gates content, rolls
+Reborn cards and carries heirloom Relics. Seeded traces therefore differ from
+the previous baseline and were re-baselined once. Profile saves from the
+retired catalog keep all progress except item and Relic discoveries, which no
+longer map to the new content. The kill sweep now removes only enemies whose
+death was resolved, so a kill caused during the sweep resolves on the next step
+instead of being dropped.
 
 The compact exit workflow removes the old causal-depth assertion that failed
 when a busy Profile refused progress before acceptance. An injected

@@ -9,20 +9,30 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.text.TextLayoutResult
-import kinetickk.ball.gameplay.interaction.rewards.overlayUiTextScale
+import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.ItemDefinition
+import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.RelicDefinition
+import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RelicPairingId
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponMastery
+import kinetickk.ball.content.api.liabilityText
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.PauseLayoutGeometry
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
+import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
 import kinetickk.ball.gameplay.interaction.localization.OverlayRedesignText
-import kinetickk.ball.gameplay.interaction.terminal.WeaponSlotPlacementMemo
-import kinetickk.ball.gameplay.interaction.terminal.drawPlacedWeaponSlot
+import kinetickk.ball.gameplay.interaction.rewards.overlayUiTextScale
 import kinetickk.ball.gameplay.nucleus.model.formatRunTime
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
+import kinetickk.ball.gameplay.nucleus.render.RelicLinkKind
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.*
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.roundToLong
 
 /** Tone of a run statistic value in the build overview. */
@@ -32,66 +42,174 @@ internal enum class PauseValueTone { BONE, YOU, THREAT }
 internal class PauseRunStat(val label: String, val value: String, val tone: PauseValueTone)
 
 /**
- * The pause build overview of one committed frame: form, rebirth and level tags, the run's
- * weapon with its mastery, the relic matrix with its synergies, stats and run statistics.
+ * One bound relic of the pause matrix: its rune, rank and the net multiplier its links (harmony,
+ * dissonance, Hollow Crown) give its upside, read from the build. [spent] marks a used Ouroboros seal.
+ */
+internal class PauseRelicEntry(
+    val definition: RelicDefinition,
+    val rank: Int,
+    val maxRank: Int,
+    val multiplier: String,
+    val tone: PauseValueTone,
+    val spent: Boolean,
+)
+
+/**
+ * A bracket over the relic matrix from slot [from] to [to] on stack [level]: only named pairings
+ * and dissonance get one (harmony shows as the multipliers alone). [name] is the pairing's name,
+ * "?" until met, or the generic rule's word.
+ */
+internal class PauseBracket(
+    val from: Int,
+    val to: Int,
+    val level: Int,
+    val name: String,
+    val interferes: Boolean,
+    val discovered: Boolean,
+)
+
+/** One line of the always-visible cost list; [lingering] is a replaced relic's cost that still applies. */
+internal class PauseCostLine(val definition: RelicDefinition, val text: String, val lingering: Boolean)
+
+/** A tag with at least one point: its ladder notched at the resonance thresholds. */
+internal class PauseTagEntry(val tag: BuildTag, val label: String, val points: Int, val tier: Int)
+
+/** An element meter notched at the affinity thresholds; [dominant] gets the ring. */
+internal class PauseElementEntry(val element: Int, val label: String, val affinity: Int, val tier: Int, val dominant: Boolean)
+
+/** A reaction both of whose elements the build sources: its name once met, "?" before. */
+internal class PauseReactionEntry(val id: ReactionId, val name: String, val discovered: Boolean)
+
+/** An owned item: stacks as the icon's arc, hatched when bound relics disable it, a gold rim when Reborn. */
+internal class PauseItemEntry(val item: ItemDefinition, val stacks: Int, val suppressed: Boolean, val reborn: Boolean)
+
+/**
+ * The pause build view of one committed frame (SPEC build view): the run's weapon and its level,
+ * form, level and Rebirth tier; the relic matrix with its brackets, multipliers and cost list;
+ * resonance tags and element meters; the reactions the build can reach; the owned items; four
+ * derived stats and the run.
  */
 internal class PauseBuildOverview(
     val heading: String,
+    val weaponIcon: KkIcon,
+    val weaponName: String,
+    val weaponLevelText: String,
+    val masteryTier: WeaponMastery,
     val form: String,
     val formIcon: KkIcon,
     val rebirth: String,
+    val rebirthLevel: Int,
     val levelLabel: String,
     val level: Int,
-    val weaponLabel: String,
-    val weaponIcon: KkIcon,
-    val weaponName: String,
-    val mastery: String,
-    val masteryTier: WeaponMastery,
-    val weaponLevel: Int,
-    val weaponLevelText: String,
     val relicsLabel: String,
-    val relics: List<OverlayRelicSlot?>,
-    val links: List<OverlaySynergyLink>,
-    val synergyNames: List<String>,
-    val synergyDescriptions: List<String>,
+    val relics: List<PauseRelicEntry?>,
+    val brackets: List<PauseBracket>,
+    val costLabel: String,
+    val costs: List<PauseCostLine>,
+    val resonanceLabel: String,
+    val tags: List<PauseTagEntry>,
+    val tagThresholds: List<Int>,
+    val elementsLabel: String,
+    val elements: List<PauseElementEntry>,
+    val affinityThresholds: List<Int>,
+    val reactionsLabel: String,
+    val reactions: List<PauseReactionEntry>,
+    val noReactions: String,
+    val itemsLabel: String,
+    val items: List<PauseItemEntry>,
+    val noItems: String,
     val statsLabel: String,
     val stats: List<OverlayStat>,
     val runLabel: String,
     val run: List<PauseRunStat>,
 ) {
-    // Mobile-Pause shows six stats (impact, weapon power, magnetism, cooling, integrity, dash)
-    // and four run panels (destroyed, elites, matter, chain); selected once, not per frame.
-    val compactStats: List<OverlayStat> = stats.filterIndexed { index, _ -> index in CompactStatIndices }
-    val compactRun: List<PauseRunStat> = run.filterIndexed { index, _ -> index in CompactRunIndices }
+    /** The names the brackets carry, in bracket order. */
+    val synergyNames: List<String> = brackets.map { it.name }
+
+    /** Bracket stacks in use. */
+    val bracketLevels: Int = (brackets.maxOfOrNull { it.level } ?: -1) + 1
 }
 
 internal fun GameplayRenderModel.pauseBuildOverview(language: AppLanguage): PauseBuildOverview {
-    val relics = List(content.relicPolicy.maxSlots) { index ->
-        equippedRelics.getOrNull(index)?.let { OverlayRelicSlot(it.id, content.relic(it.id).aspect, it.rank) }
+    val policy = content.relicPolicy
+    val slots = List(policy.maxSlots) { index -> equippedRelics.getOrNull(index) }
+    val relics = slots.map { equipped ->
+        equipped?.let {
+            val upside = build.relicUpside(it.id)
+            PauseRelicEntry(
+                definition = content.relic(it.id),
+                rank = it.rank,
+                maxRank = policy.maxRank,
+                multiplier = overlayMultiplier(upside, language),
+                tone = when {
+                    upside > 1.0005f -> PauseValueTone.YOU
+                    upside < 0.9995f -> PauseValueTone.THREAT
+                    else -> PauseValueTone.BONE
+                },
+                spent = it.id == RelicId.OUROBOROS_SEAL && build.ouroborosSpent,
+            )
+        }
     }
-    val links = overlaySynergyLinks(relics.map { it?.id }, content)
+    val links = overlayRelicLinks(slots.map { it?.id })
+    val brackets = pauseBrackets(links, language)
+    val costs = relics.filterNotNull().map {
+        PauseCostLine(it.definition, it.definition.liabilityText(language).keepUnitsWithNumbers(), lingering = false)
+    } + build.severed.filter { severed -> slots.none { it?.id == severed.id } }.map {
+        val definition = content.relic(it.id)
+        PauseCostLine(definition, definition.liabilityText(language).keepUnitsWithNumbers(), lingering = true)
+    }
+    val tags = BuildTag.entries.filter { build.tagPoints(it) > 0 }
+        .sortedWith(compareByDescending<BuildTag> { build.tagPoints(it) }.thenBy { it.ordinal })
+        .map { PauseTagEntry(it, it.displayLabel.localizedContent(language), build.tagPoints(it), build.tagTier(it)) }
+    val elements = StatusElement.entries.map {
+        PauseElementEntry(it.ordinal, it.displayLabel.localizedContent(language), build.affinity(it), build.affinityTier(it), build.dominant == it)
+    }
+    val reactions = build.reachableReactions.map { id ->
+        val discovered = isReactionDiscovered(id)
+        PauseReactionEntry(id, if (discovered) content.build.reaction(id).name.localizedContent(language) else
+            language.text(HudRedesignText.UnknownReaction), discovered)
+    }
+    val items = content.items.filter { itemStack(it.id) > 0 }.map {
+        PauseItemEntry(it, itemStack(it.id), it.id in build.suppressedItemIds, it.id in build.rebornItemIds)
+    }
     val stats = runStatistics
+    val buildPolicy = content.build.policy
     return PauseBuildOverview(
         heading = language.text(OverlayRedesignText.Build),
+        weaponIcon = weapon.overlayIcon(),
+        weaponName = currentWeaponDefinition.name.localizedContent(language),
+        weaponLevelText = language.text(HudRedesignText.WeaponLevel, weaponLevel),
+        masteryTier = currentWeaponMastery,
         form = content.coreShape(coreShape).displayName.localizedContent(language),
         formIcon = coreShape.overlayIcon(),
         rebirth = language.text(OverlayRedesignText.RebirthTag, rebirthLevel),
+        rebirthLevel = rebirthLevel,
         levelLabel = language.text(OverlayRedesignText.LevelLabel),
         level = level,
-        weaponLabel = language.text(OverlayRedesignText.Weapon),
-        weaponIcon = weapon.overlayIcon(),
-        weaponName = currentWeaponDefinition.name.localizedContent(language),
-        mastery = currentWeaponMastery.displayLabel.localizedContent(language),
-        masteryTier = currentWeaponMastery,
-        weaponLevel = weaponLevel,
-        weaponLevelText = overlayLevel(weaponLevel, language),
-        relicsLabel = language.text(OverlayRedesignText.Relics) + " " + equippedRelics.size + "/" + content.relicPolicy.maxSlots,
+        relicsLabel = language.text(OverlayRedesignText.Relics) + " " + equippedRelics.size + "/" + policy.maxSlots,
         relics = relics,
-        links = links,
-        synergyNames = links.map { it.definition.name.localizedContent(language) },
-        synergyDescriptions = links.map { it.definition.description.localizedContent(language) },
+        brackets = brackets,
+        costLabel = language.text(OverlayRedesignText.Cost),
+        costs = costs.take(MAX_COST_LINES),
+        resonanceLabel = language.text(HudRedesignText.Resonance),
+        tags = tags,
+        tagThresholds = buildPolicy.resonanceThresholds,
+        elementsLabel = language.text(HudRedesignText.Elements),
+        elements = elements,
+        affinityThresholds = buildPolicy.affinityThresholds,
+        reactionsLabel = language.text(HudRedesignText.Reactions),
+        reactions = reactions,
+        noReactions = language.text(HudRedesignText.NoReactions),
+        itemsLabel = language.text(HudRedesignText.Items),
+        items = items,
+        noItems = language.text(HudRedesignText.NoItems),
         statsLabel = language.text(OverlayRedesignText.Stats),
-        stats = overlayBuildStats(language),
+        stats = listOf(
+            OverlayStat(language.text(HudRedesignText.ImpactPower), overlayMultiplier(damageMultiplier, language), damageMultiplier > 1.001f),
+            OverlayStat(language.text(HudRedesignText.WeaponPower), overlayMultiplier(effectiveWeaponPower, language), effectiveWeaponPower > 1.001f),
+            OverlayStat(language.text(HudRedesignText.CriticalChance), overlayPercent(critChance, language), false),
+            OverlayStat(language.text(HudRedesignText.ShieldCapacity), overlayGrouped(maxShield.roundToLong(), language), false),
+        ),
         runLabel = language.text(GameplayText.DetailedStatistics),
         run = listOf(
             PauseRunStat(language.text(OverlayRedesignText.RunTimeShort), formatRunTime(elapsed), PauseValueTone.BONE),
@@ -102,6 +220,27 @@ internal fun GameplayRenderModel.pauseBuildOverview(language: AppLanguage): Paus
             PauseRunStat(language.text(OverlayRedesignText.DamageShort), overlayCompact(stats.damageDealt.roundToLong(), language), PauseValueTone.BONE),
         ),
     )
+}
+
+/** Cost lines the view keeps: four bound relics and up to two lingering ones. */
+private const val MAX_COST_LINES = 6
+
+/** Bracket stacks drawn over the matrix; a link that finds no free stack shows only in its multipliers. */
+private const val MAX_BRACKET_LEVELS = 2
+
+/**
+ * Brackets for named pairings and dissonance, each on the lowest stack where no bracket over an
+ * overlapping or touching slot span sits; narrower spans claim the lower stacks first.
+ */
+private fun GameplayRenderModel.pauseBrackets(links: List<OverlayRelicLink>, language: AppLanguage): List<PauseBracket> {
+    val placed = ArrayList<PauseBracket>()
+    links.filter { it.kind != RelicLinkKind.HARMONY }.sortedBy { it.last - it.first }.forEach { link ->
+        var level = 0
+        while (placed.any { it.level == level && it.from <= link.last && link.first <= it.to }) level++
+        if (level >= MAX_BRACKET_LEVELS) return@forEach
+        placed += PauseBracket(link.first, link.last, level, link.overlayName(content, language), link.interferes, link.discovered)
+    }
+    return placed
 }
 
 /**
@@ -127,14 +266,29 @@ private object PauseBuildMemo {
         }
     }
 
+    /** Every value the overview reads (the build projection compares whole, by value). */
     private fun GameplayRenderModel.sameBuild(other: GameplayRenderModel): Boolean =
         content === other.content && elapsed == other.elapsed && level == other.level && kills == other.kills &&
-            weapon == other.weapon && weaponLevel == other.weaponLevel && runMatter == other.runMatter &&
-            rebirthLevel == other.rebirthLevel && coreShape == other.coreShape && equippedRelics == other.equippedRelics &&
-            runStatistics == other.runStatistics && damageMultiplier == other.damageMultiplier &&
-            effectiveWeaponPower == other.effectiveWeaponPower && mass == other.mass && magnetStrength == other.magnetStrength &&
-            coolingRate == other.coolingRate && maxHp == other.maxHp && dashImpulse == other.dashImpulse &&
-            critChance == other.critChance && overdriveGain == other.overdriveGain && pickupRadius == other.pickupRadius
+            weapon == other.weapon && weaponLevel == other.weaponLevel &&
+            runMatter == other.runMatter && rebirthLevel == other.rebirthLevel && coreShape == other.coreShape &&
+            equippedRelics == other.equippedRelics && build == other.build && runStatistics == other.runStatistics &&
+            damageMultiplier == other.damageMultiplier && effectiveWeaponPower == other.effectiveWeaponPower &&
+            critChance == other.critChance && maxShield == other.maxShield && itemStacksSnapshot == other.itemStacksSnapshot &&
+            reactionDiscoveries() == other.reactionDiscoveries() && pairingDiscoveries() == other.pairingDiscoveries()
+
+    private fun GameplayRenderModel.reactionDiscoveries(): Int {
+        var mask = 0
+        val ids = ReactionId.entries
+        for (index in ids.indices) if (isReactionDiscovered(ids[index])) mask = mask or (1 shl index)
+        return mask
+    }
+
+    private fun GameplayRenderModel.pairingDiscoveries(): Int {
+        var mask = 0
+        val ids = RelicPairingId.entries
+        for (index in ids.indices) if (isPairingDiscovered(ids[index])) mask = mask or (1 shl index)
+        return mask
+    }
 }
 
 internal fun DrawScope.drawPauseBuild(engine: GameplayRenderModel, measurer: CanvasTextMeasurer, layout: PauseLayoutGeometry, time: Float) {
@@ -174,8 +328,8 @@ internal object PauseMeasurers {
 
 /** What a pause text is, for the layout probe. */
 internal enum class PauseTextKind {
-    TITLE, TIMER, HEADING, TAG, LABEL, WEAPON_NAME, MASTERY, LEVEL, SYNERGY_NAME, SYNERGY_DESCRIPTION,
-    STAT_LABEL, STAT_VALUE, RUN_LABEL, RUN_VALUE,
+    TITLE, TIMER, HEADING, TAG, LABEL, SYNERGY_NAME, MULTIPLIER, COST, TAG_NAME, ELEMENT_NAME, REACTION, EMPTY,
+    STAT_LABEL, STAT_VALUE, RUN_LABEL, RUN_VALUE, MORE,
 }
 
 /** One laid-out pause text: where it was drawn ([rect], px) and the width it had to fit ([box]). */
@@ -212,13 +366,6 @@ internal fun DrawScope.drawPauseText(
     records += PauseTextRecord(kind, layout, Rect(left, top, left + layout.size.width, top + layout.size.height), box)
 }
 
-private fun masteryColor(tier: WeaponMastery, roles: KkRolePalette): Color = when (tier) {
-    WeaponMastery.CALIBRATED -> Kk.Mute
-    WeaponMastery.AMPLIFIED -> roles.you
-    WeaponMastery.RESONANT -> Kk.Bone
-    WeaponMastery.ASCENDED -> Kk.RLegend
-}
-
 private fun runColor(tone: PauseValueTone, roles: KkRolePalette): Color = when (tone) {
     PauseValueTone.BONE -> Kk.Bone
     PauseValueTone.YOU -> roles.you
@@ -226,8 +373,12 @@ private fun runColor(tone: PauseValueTone, roles: KkRolePalette): Color = when (
 }
 
 /**
- * Pause board: build header, weapon + relics column, stats column, six run panels. [ui] measures
- * text that follows the text-size setting, [display] the level numerals.
+ * Pause board, two columns under the header: relics (brackets, runes, multipliers), their cost
+ * list, the reachable reactions and four derived stats on the left; resonance ladders, element
+ * meters and the owned items on the right; the six run panels across the bottom. Sections flow
+ * down their column at the measured height of their text, so larger text sizes push, never
+ * overlap; the cost list and the reactions share what is left. [ui] measures text that follows the
+ * text-size setting, [display] the level badge.
  */
 private fun DrawScope.drawRegularBuild(
     overview: PauseBuildOverview,
@@ -237,69 +388,59 @@ private fun DrawScope.drawRegularBuild(
     unit: Float,
     time: Float,
 ) {
-    val roles = ui.roles
     val k = unit / density
     fun x(v: Float) = area.left + v * unit
     fun y(v: Float) = area.top + v * unit
     val width = area.width / unit
-    drawBuildHeader(overview, ui, display, x(0f), x(width), y(0f), y(4f), 40f * k, 16f * unit, k, 12f, 20f, time)
-    val column = (width - 20f) / 2f
-    // Weapon column.
-    drawPauseLabel(overview.weaponLabel, ui, 15f * k, x(0f), y(58f), column * unit)
-    val weaponRow = PauseRects.of(0, x(0f), y(83f), x(column), y(129f))
-    drawRect(Kk.Ink2, weaponRow.topLeft, weaponRow.size)
-    drawKkIcon(overview.weaponIcon, Offset(weaponRow.left + 24f * unit, weaponRow.center.y), 24f * unit, roles.you)
-    // The level numeral is display type; its label, the mastery and the name follow the setting.
-    val levelNumber = measureKkText(display, kkIntString(overview.weaponLevel), display.typography.wideStyle(16f * k, tabular = true))
-    drawPauseText(PauseTextKind.LEVEL, levelNumber, weaponRow.right - 12f * unit, weaponRow.center.y, Kk.Bone, levelNumber.size.width.toFloat(),
-        KkAlign.END, KkVAlign.CENTER)
-    val textRoom = weaponRow.width - 12f * unit - levelNumber.size.width - 48f * unit
-    val levelLabel = fitOverlayText(ui, overview.levelLabel, KkTextRole.LABEL, 10f * k, textRoom * 0.25f, uppercase = true)
-    drawPauseText(PauseTextKind.LABEL, levelLabel, weaponRow.right - 16f * unit - levelNumber.size.width, weaponRow.center.y + 2f * unit,
-        Kk.Mute, textRoom * 0.25f, KkAlign.END, KkVAlign.CENTER)
-    // The weapon name keeps its size first; the mastery tier gives way when both do not fit.
-    val shared = weaponRow.right - 30f * unit - levelNumber.size.width - levelLabel.size.width - 12f * unit - (weaponRow.left + 48f * unit)
-    val nameWidth = measureKkText(ui, overview.weaponName, ui.typography.condStyle(21f * k), uppercase = true).size.width
-    val masteryRoom = maxOf(shared - nameWidth, shared * 0.35f)
-    val mastery = fitOverlayText(ui, overview.mastery, KkTextRole.MONO, 11f * k, masteryRoom, uppercase = true)
-    drawPauseText(PauseTextKind.MASTERY, mastery, weaponRow.right - 30f * unit - levelNumber.size.width - levelLabel.size.width,
-        weaponRow.center.y, masteryColor(overview.masteryTier, roles), masteryRoom, KkAlign.END, KkVAlign.CENTER)
-    val nameRoom = shared - mastery.size.width
-    drawPauseText(PauseTextKind.WEAPON_NAME, fitOverlayText(ui, overview.weaponName, KkTextRole.COND, 21f * k, nameRoom, uppercase = true),
-        weaponRow.left + 48f * unit, weaponRow.center.y, Kk.Bone, nameRoom, valign = KkVAlign.CENTER)
-    // Relic matrix.
-    drawPauseLabel(overview.relicsLabel, ui, 15f * k, x(0f), y(147f), column * unit)
-    drawPauseRelics(overview, x(22f), y(194f), 44f * k, 52f * unit)
-    // Active synergies under the matrix: name, then the whole description on up to two lines.
-    var synergyTop = y(230f)
-    for (index in 0 until minOf(2, overview.synergyNames.size)) {
-        val color = overview.links[index].definition.overlayColor()
-        val name = fitOverlayText(ui, overview.synergyNames[index], KkTextRole.COND, 18f * k, column * unit, uppercase = true)
-        drawPauseText(PauseTextKind.SYNERGY_NAME, name, x(0f), synergyTop, color, column * unit)
-        val description = fitOverlayText(ui, overview.synergyDescriptions[index], KkTextRole.MONO, 9f * k, column * unit,
-            maxLines = 2, uppercase = true, minScale = 0.85f)
-        drawPauseText(PauseTextKind.SYNERGY_DESCRIPTION, description, x(0f), synergyTop + name.kkBoxHeight + 4f * unit, Kk.Mute, column * unit)
-        synergyTop += name.kkBoxHeight + description.kkBoxHeight + 12f * unit
-    }
-    // Stats column.
-    val statsLeft = column + 20f
-    drawPauseLabel(overview.statsLabel, ui, 15f * k, x(statsLeft), y(58f), column * unit)
-    drawStatRows(overview.stats, ui, display, area, unit, statsLeft, 83f, 29f, 1, column, 10f, 20f * k, 15f * k)
+    drawBuildHeader(overview, ui, display, x(0f), x(width), y(0f), y(4f), 40f * k, 16f * unit, k, 12f, 20f, time, weaponName = true)
+    val column = 352f
+    val right = 376f
+    val rightWidth = width - right
+    val gap = 12f * unit
+    val runTop = y(640f)
+    val columnBottom = runTop - gap
+    // Left column: the relic matrix, its costs (never hidden), then the reactions fill the rest.
+    var top = drawPauseLabel(overview.relicsLabel, ui, 15f * k, x(0f), y(58f), column * unit) + 4f * unit
+    top = drawPauseRelics(overview, ui, x(0f), top + 4f * unit, column * unit, 56f * unit, 88f * unit, 22f * unit, k, names = true, time = time) + gap
+    top = drawPauseLabel(overview.costLabel, ui, 15f * k, x(0f), top, column * unit) + 6f * unit
+    // The costs take what they need of the column, keeping two rows of reaction chips under them.
+    val reactionsHeight = pauseLabelHeight(overview.reactionsLabel, ui, 15f * k, column * unit) + 6f * unit + 26f * unit * 2f + 6f * unit
+    val costBottom = drawPauseCosts(overview, ui, x(0f), top, column * unit, columnBottom - gap - reactionsHeight, 12f * k, k)
+    top = drawPauseLabel(overview.reactionsLabel, ui, 15f * k, x(0f), costBottom + gap, column * unit) + 6f * unit
+    drawPauseReactions(overview, ui, x(0f), top, column * unit, columnBottom, 26f * unit, 13f * k, k)
+    // Right column: resonance and element meters, the four derived stats at the foot, the items between.
+    top = drawPauseLabel(overview.resonanceLabel, ui, 15f * k, x(right), y(58f), rightWidth * unit) + 6f * unit
+    top = drawPauseTags(overview, ui, x(right), top, rightWidth * unit, 24f * unit * maxOf(1f, ui.scale * 0.85f), 1, 15f * k, k) + gap
+    top = drawPauseLabel(overview.elementsLabel, ui, 15f * k, x(right), top, rightWidth * unit) + 6f * unit
+    top = drawPauseElements(overview, ui, x(right), top, rightWidth * unit, 58f * unit * maxOf(1f, ui.scale * 0.85f), k, names = true) + gap
+    val statRow = 27f * unit * maxOf(1f, ui.scale * 0.9f)
+    val statsTop = columnBottom - pauseLabelHeight(overview.statsLabel, ui, 15f * k, rightWidth * unit) - overview.stats.size * statRow
+    top = drawPauseLabel(overview.itemsLabel, ui, 15f * k, x(right), top, rightWidth * unit) + 6f * unit
+    drawPauseItems(overview, ui, x(right), top, rightWidth * unit, statsTop - gap - top, 44f * unit, k)
+    val rowsTop = drawPauseLabel(overview.statsLabel, ui, 15f * k, x(right), statsTop, rightWidth * unit)
+    drawStatRows(overview.stats, ui, display, area, unit, right, (rowsTop - area.top) / unit, statRow / unit, 1, rightWidth, 10f, 20f * k, 15f * k)
     // Run statistics.
-    val runTop = 83f + overview.stats.size * 29f + 20f
-    drawPauseLabel(overview.runLabel, ui, 15f * k, x(0f), y(runTop), width * unit)
-    drawRunPanels(overview.run, ui, x(0f), y(runTop + 25f), width * unit, 8f * unit, 58f * unit, 6, k, 9f, 20f)
+    val panelsTop = drawPauseLabel(overview.runLabel, ui, 15f * k, x(0f), runTop, width * unit) + 6f * unit
+    drawRunPanels(overview.run, ui, x(0f), panelsTop, width * unit, 8f * unit, minOf(58f * unit * maxOf(1f, ui.scale * 0.8f), area.bottom - panelsTop),
+        6, k, 9f, 20f)
 }
 
-/** A section label (label role, uppercase) fitted to [box]. */
-private fun DrawScope.drawPauseLabel(text: String, measurer: CanvasTextMeasurer, size: Float, x: Float, y: Float, box: Float) {
-    drawPauseText(PauseTextKind.LABEL, fitOverlayText(measurer, text, KkTextRole.LABEL, size, box, uppercase = true), x, y, Kk.Mute, box)
+/** A section label (label role, uppercase) fitted to [box]; returns its bottom. */
+private fun DrawScope.drawPauseLabel(text: String, measurer: CanvasTextMeasurer, size: Float, x: Float, y: Float, box: Float): Float {
+    val layout = fitOverlayText(measurer, text, KkTextRole.LABEL, size, box, uppercase = true)
+    drawPauseText(PauseTextKind.LABEL, layout, x, y, Kk.Mute, box)
+    return y + layout.kkBoxHeight
 }
+
+/** Height of a section label as [drawPauseLabel] draws it. */
+private fun pauseLabelHeight(text: String, measurer: CanvasTextMeasurer, size: Float, box: Float): Float =
+    fitOverlayText(measurer, text, KkTextRole.LABEL, size, box, uppercase = true).kkBoxHeight
 
 /**
- * Mobile-Pause board: smaller header, weapon slot, relic row, six stats and four run panels.
- * Landscape keeps two stat columns; portrait has the height for one column and the synergy
- * description.
+ * Mobile-Pause boards, one flow under the header: the relic matrix (with the reactions beside it
+ * on landscape), the cost list, resonance in two columns with the element meters, then (portrait)
+ * the reactions and (landscape) the four derived stats in two columns. A section that no longer
+ * fits the area at a large text size is left out rather than cut.
  */
 private fun DrawScope.drawCompactBuild(
     overview: PauseBuildOverview,
@@ -310,59 +451,638 @@ private fun DrawScope.drawCompactBuild(
     time: Float,
     portrait: Boolean,
 ) {
-    val roles = ui.roles
     val k = unit / density
     fun x(v: Float) = area.left + v * unit
     fun y(v: Float) = area.top + v * unit
     val width = area.width / unit
-    drawBuildHeader(overview, ui, display, x(0f), x(width), y(0f), y(2f), 28f * k, 10f * unit, k, 9f, 16f, time)
-    // The slot's "Lvl N" belongs to the slot component (display type); it stays inside the sheared
-    // face and clear of the icon at any level ("Ур. 10" is as wide as the face).
-    val slot = PauseRects.of(1, x(0f), y(38f), x(50f), y(88f))
-    val placement = WeaponSlotPlacementMemo.of(this, display, slot, overview.weaponIcon, overview.weaponLevelText, PauseSlotIconShare)
-    drawPlacedWeaponSlot(display, slot, overview.weaponIcon, overview.weaponLevelText, overview.masteryTier == WeaponMastery.ASCENDED,
-        ready = true, placement = placement)
-    val nameRoom = (width - 62f) * unit
-    drawPauseText(PauseTextKind.WEAPON_NAME, fitOverlayText(ui, overview.weaponName, KkTextRole.COND, 18f * k, nameRoom, uppercase = true),
-        x(62f), y(46f), Kk.Bone, nameRoom)
-    drawPauseText(PauseTextKind.MASTERY, fitOverlayText(ui, overview.mastery, KkTextRole.MONO, 10f * k, nameRoom, uppercase = true),
-        x(62f), y(70f), masteryColor(overview.masteryTier, roles), nameRoom)
-    val slotsRight = drawPauseRelics(overview, x(17f), y(117f), 34f * k, 40f * unit)
-    var statsTop = 146f
-    overview.synergyNames.firstOrNull()?.let { name ->
-        val color = overview.links[0].definition.overlayColor()
-        val room = x(width) - slotsRight - 6f * unit
-        drawPauseText(PauseTextKind.SYNERGY_NAME, fitOverlayText(ui, name, KkTextRole.COND, 16f * k, room, uppercase = true),
-            slotsRight + 6f * unit, y(117f), color, room, valign = KkVAlign.CENTER)
-        if (portrait) {
-            val description = fitOverlayText(ui, overview.synergyDescriptions[0], KkTextRole.MONO, 9f * k, width * unit,
-                maxLines = 2, uppercase = true, minScale = 0.85f)
-            drawPauseText(PauseTextKind.SYNERGY_DESCRIPTION, description, x(0f), y(142f), Kk.Mute, width * unit)
-            statsTop = 146f + description.kkBoxHeight / unit + 4f
+    val gap = 8f * unit
+    val grow = maxOf(1f, ui.scale * 0.85f)
+    drawBuildHeader(overview, ui, display, x(0f), x(width), y(0f), y(2f), 28f * k, 10f * unit, k, 9f, 16f, time, weaponName = false)
+    var top = y(34f)
+    // Bound relics' costs only: a replaced relic's lingering cost shows in the regular view.
+    val bound = overview.relics.count { it != null }
+    val tagRow = 15f * unit * grow
+    if (!portrait) {
+        val relicsBottom = drawPauseRelics(overview, ui, x(0f), top, 196f * unit, 30f * unit, 46f * unit, 9f * unit, k, names = false, time = time)
+        val chipsTop = drawPauseLabel(overview.reactionsLabel, ui, 11f * k, x(206f), top, (width - 206f) * unit) + 4f * unit
+        drawPauseReactions(overview, ui, x(206f), chipsTop, (width - 206f) * unit, maxOf(relicsBottom, chipsTop + 50f * unit), 22f * unit, 11f * k, k)
+        top = maxOf(relicsBottom, chipsTop + 50f * unit) + gap
+        val statRow = 22f * unit * grow
+        val elementRow = 12f * unit * grow
+        val resonanceHeight = pauseLabelHeight(overview.resonanceLabel, ui, 11f * k, 236f * unit) + 4f * unit +
+            maxOf(3f * tagRow, STATUS_ELEMENT_COUNT * elementRow)
+        // Costs come before the derived stats: at a large text size the stats give way to keep two
+        // readable lines per cost.
+        val costNeed = bound * (2f * 9.5f * k * ui.scale * density * COST_LINE_HEIGHT + 4f * unit)
+        val showStats = top + costNeed + gap + resonanceHeight + gap + 2f * statRow <= area.bottom
+        val statsTop = if (showStats) area.bottom - 2f * statRow else area.bottom + gap
+        top = drawPauseCosts(overview, ui, x(0f), top, width * unit, statsTop - gap - resonanceHeight - gap, 9.5f * k, k, maxEntries = bound) + gap
+        val rowsTop = drawPauseLabel(overview.resonanceLabel, ui, 11f * k, x(0f), top, 236f * unit) + 4f * unit
+        drawPauseTags(overview, ui, x(0f), rowsTop, 236f * unit, tagRow, 2, 10.5f * k, k, maxRows = 3)
+        val meterTop = drawPauseLabel(overview.elementsLabel, ui, 11f * k, x(248f), top, (width - 248f) * unit) + 4f * unit
+        drawPauseElementRows(overview, ui.roles, x(248f), meterTop, (width - 248f) * unit, elementRow, k)
+        if (showStats) {
+            drawStatRows(overview.stats, ui, display, area, unit, 0f, (statsTop - area.top) / unit, statRow / unit, 2, (width - 20f) / 2f, 8f,
+                15f * k, 12f * k)
         }
+        return
     }
-    val shown = overview.compactStats
-    val columns = if (portrait) 1 else 2
-    val column = (width - 20f * (columns - 1)) / columns
-    val rows = (shown.size + columns - 1) / columns
-    // Rows and run panels grow with the text size as far as the build area allows.
-    val runHeight = 44f * maxOf(1f, ui.scale)
-    val room = area.height / unit - statsTop - 12f - runHeight
-    val rowHeight = minOf(maxOf(26f, 26f * ui.scale), room / rows).coerceAtLeast(26f)
-    drawStatRows(shown, ui, display, area, unit, 0f, statsTop, rowHeight, columns, column, 8f, 18f * k, 14f * k)
-    val runTop = statsTop + rows * rowHeight + 12f
-    drawRunPanels(overview.compactRun, ui, x(0f), y(runTop), width * unit, 5f * unit, runHeight * unit, 4, k, 8f, 15f)
+    top = drawPauseRelics(overview, ui, x(0f), top, width * unit, 36f * unit, 56f * unit, 9f * unit, k, names = false, time = time) + gap
+    // What follows the costs, without the resonance rows: the costs and up to three rows of tags share the rest.
+    val rest = gap + pauseLabelHeight(overview.resonanceLabel, ui, 11f * k, width * unit) + 4f * unit + gap +
+        pauseLabelHeight(overview.elementsLabel, ui, 11f * k, width * unit) + 4f * unit + 20f * unit * grow + gap +
+        pauseLabelHeight(overview.reactionsLabel, ui, 11f * k, width * unit) + 4f * unit + 20f * unit
+    // A larger text size never leaves the costs smaller than the default does: below that, the tags give up rows.
+    val costBottom = drawPauseCosts(overview, ui, x(0f), top, width * unit, area.bottom - rest - 3f * tagRow, 9.5f * k, k, maxEntries = bound,
+        minScale = (1f / ui.scale).coerceIn(MIN_COST_SCALE, 1f), limit = area.bottom - rest - tagRow)
+    val tagRows = floor((area.bottom - rest - costBottom) / tagRow + 0.001f).toInt().coerceIn(1, 3)
+    top = drawPauseLabel(overview.resonanceLabel, ui, 11f * k, x(0f), costBottom + gap, width * unit) + 4f * unit
+    top = drawPauseTags(overview, ui, x(0f), top, width * unit, tagRow, 2, 10.5f * k, k, maxRows = tagRows) + gap
+    top = drawPauseLabel(overview.elementsLabel, ui, 11f * k, x(0f), top, width * unit) + 4f * unit
+    top = drawPauseElements(overview, ui, x(0f), top, width * unit, 20f * unit * grow, k, names = false) + gap
+    top = drawPauseLabel(overview.reactionsLabel, ui, 11f * k, x(0f), top, width * unit) + 4f * unit
+    drawPauseReactions(overview, ui, x(0f), top, width * unit, area.bottom, 20f * unit, 10.5f * k, k)
 }
 
-/** Mobile-Pause board: a 26 px icon in the 50 px slot. */
-private const val PauseSlotIconShare = 26f / 50f
+/**
+ * The relic matrix from [top]: bracket stacks ([PauseBracket], named in the regular layout), then
+ * the diamonds with each relic's own rune in its element's hue, its rank as pips and the net
+ * multiplier of its upside under it. Empty slots show the hatched slot.
+ */
+private fun DrawScope.drawPauseRelics(
+    overview: PauseBuildOverview,
+    ui: CanvasTextMeasurer,
+    left: Float,
+    top: Float,
+    width: Float,
+    slot: Float,
+    pitch: Float,
+    levelStep: Float,
+    k: Float,
+    names: Boolean,
+    time: Float,
+): Float {
+    val roles = ui.roles
+    val half = slot * 0.5f
+    val stacks = overview.bracketLevels.coerceIn(0, MAX_BRACKET_STACKS)
+    val slotTop = top + stacks * levelStep + if (stacks > 0) levelStep * 0.5f else 0f
+    val centerY = slotTop + half
+    val firstCenter = left + half + 6f * k * density
+    val stroke = 2f * k * density
+    for (index in overview.brackets.indices) {
+        val bracket = overview.brackets[index]
+        val color = if (bracket.interferes) roles.threat else Kk.Bone
+        val ax = firstCenter + bracket.from * pitch
+        val bx = firstCenter + bracket.to * pitch
+        val lineY = slotTop - levelStep * 0.35f - bracket.level * levelStep
+        val legBottom = if (bracket.level == 0) slotTop - 2f * k * density else lineY + levelStep - 3f * k * density
+        val effect = if (bracket.discovered) null else WorldStrokes.dashEffect
+        drawLine(color, Offset(ax - stroke * 0.5f, lineY), Offset(bx + stroke * 0.5f, lineY), stroke, pathEffect = effect)
+        drawLine(color, Offset(ax, lineY), Offset(ax, legBottom), stroke)
+        drawLine(color, Offset(bx, lineY), Offset(bx, legBottom), stroke)
+        if (names) {
+            val box = (bx - ax) + pitch * 0.8f
+            val name = fitOverlayText(ui, bracket.name, KkTextRole.COND, 13f * k, box, uppercase = true)
+            drawPauseText(PauseTextKind.SYNERGY_NAME, name, (ax + bx) * 0.5f, lineY - 3f * k * density, color, box,
+                KkAlign.CENTER, KkVAlign.BASELINE)
+        }
+    }
+    val pipHeight = (if (names) 3f else 2.5f) * k
+    val pipsTop = slotTop + slot + 4f * k * density
+    val multiplierTop = pipsTop + pipHeight * density + 3f * k * density
+    var bottom = pipsTop + pipHeight * density
+    for (index in overview.relics.indices) {
+        val center = Offset(firstCenter + index * pitch, centerY)
+        if (center.x + half > left + width + 1f) break
+        val relic = overview.relics[index]
+        if (relic == null) {
+            drawKkRelicSlot(center, Color.Unspecified, sizeDp = slot / density)
+            continue
+        }
+        val hue = relicHue(relic.definition, roles)
+        val alpha = if (relic.spent) 0.45f else 1f
+        drawKkRelicSlot(center, hue, sizeDp = slot / density, alpha = alpha)
+        drawRelicRune(relic.definition, center, half * 0.62f, hue, alpha)
+        if (relic.definition.isSovereign) {
+            // Sovereign relics carry the gold of Rebirth on their rim.
+            drawPath(PauseShapes.diamond(index, center.x, center.y, half + 3f * k * density), Kk.Gold, alpha = 0.7f * alpha,
+                style = kkStroke(1.5f * k * density))
+        }
+        val pipWidth = (if (names) 7f else 5f) * k
+        val pipsWidth = relic.maxRank * pipWidth * density + (relic.maxRank - 1) * 2f * k * density
+        drawKkPips(Offset(center.x - pipsWidth * 0.5f, pipsTop), relic.maxRank, relic.rank, hue, sizeDp = pipHeight, widthDp = pipWidth,
+            gapDp = 2f * k, emptyColor = Kk.Ink4)
+        val box = pitch - 4f * k * density
+        val multiplier = fitOverlayText(ui, relic.multiplier, KkTextRole.COND, (if (names) 15f else 11f) * k, box, tabular = true)
+        drawPauseText(PauseTextKind.MULTIPLIER, multiplier, center.x, multiplierTop, runColor(relic.tone, roles), box, KkAlign.CENTER)
+        bottom = maxOf(bottom, multiplierTop + multiplier.kkBoxHeight)
+    }
+    return bottom
+}
 
-private val CompactStatIndices = setOf(0, 1, 3, 4, 5, 6)
-private val CompactRunIndices = setOf(1, 2, 3, 4)
+/** Bracket stacks reserved over the pause matrix. */
+private const val MAX_BRACKET_STACKS = 2
+
+/**
+ * The cost list from [top], fitted to end by [bottom]: one entry per liability (bound relics first,
+ * then the lingering cost of a replaced one, faded), each a threat stripe, the relic's rune and the
+ * cost text on up to three lines. Every entry shares one text size ([PauseCostFit]), never below
+ * [minScale] of [size], and is as tall as its own text; at that floor the list may run on to
+ * [limit]. Costs never hide behind a toggle; should even that leave entries out, a "+N" mark
+ * counts them. Returns the list's bottom.
+ */
+private fun DrawScope.drawPauseCosts(
+    overview: PauseBuildOverview,
+    ui: CanvasTextMeasurer,
+    left: Float,
+    top: Float,
+    width: Float,
+    bottom: Float,
+    size: Float,
+    k: Float,
+    maxEntries: Int = Int.MAX_VALUE,
+    minScale: Float = MIN_COST_SCALE,
+    limit: Float = bottom,
+): Float {
+    val roles = ui.roles
+    val rune = 7f * k * density
+    val textLeft = left + rune * 2f + 8f * k * density
+    val box = left + width - textLeft
+    val count = minOf(overview.costs.size, maxEntries)
+    if (count == 0) return top
+    val gap = 6f * k * density
+    val runeHeight = rune * 2f + 2f * k * density
+    val fit = PauseCostFit.of(overview.costs, count, ui, size, box, bottom - top, runeHeight, gap, minScale)
+    var y = top
+    var shown = 0
+    for (index in 0 until count) {
+        val height = fit.height(index)
+        // An entry that does not fit leaves room for the count of those after it.
+        val reserve = if (index < count - 1) fit.moreHeight else 0f
+        if (y + height + reserve > maxOf(bottom, limit) + 1f) break
+        val cost = overview.costs[index]
+        val alpha = if (cost.lingering) 0.55f else 1f
+        val text = fit.layout(index)
+        drawRect(roles.threat, Offset(left, y + 1f * k * density), Size(2.5f * k * density, height - 2f * k * density), alpha = alpha)
+        drawRelicRune(cost.definition, Offset(left + 4f * k * density + rune, y + rune + 1f * k * density), rune, relicHue(cost.definition, roles),
+            alpha)
+        drawPauseText(PauseTextKind.COST, text, textLeft, y, if (cost.lingering) roles.threat.copy(alpha = 0.7f) else Kk.Bone2, box)
+        y += height + gap
+        shown++
+    }
+    if (shown < count) {
+        val more = fitOverlayText(ui, moreLabel(count - shown), KkTextRole.MONO, size, box)
+        drawPauseText(PauseTextKind.MORE, more, textLeft, y, roles.threat, box)
+        y += more.kkBoxHeight + gap
+    }
+    return y - gap
+}
+
+/**
+ * The fitted cost list of the last drawn frame (a paused frame redraws the same list): one text
+ * size for every entry, the largest from the requested size down to its floor (a share of it) at
+ * which all of them, each on up to [COST_LINES] lines without breaking inside a word, fit the
+ * room; at the floor the list is as tall as its text. Fitted once per list, measurer, box and room.
+ */
+private object PauseCostFit {
+    private var costs: List<PauseCostLine>? = null
+    private var measurer: CanvasTextMeasurer? = null
+    private val key = FloatArray(7) { Float.NaN }
+    private val layouts = arrayOfNulls<TextLayoutResult>(MAX_COST_LINES)
+    private val heights = FloatArray(MAX_COST_LINES)
+
+    /** Height of the "+N" mark of entries left out. */
+    var moreHeight = 0f
+        private set
+
+    fun layout(index: Int): TextLayoutResult = requireNotNull(layouts[index])
+
+    fun height(index: Int): Float = heights[index]
+
+    fun of(
+        costs: List<PauseCostLine>,
+        count: Int,
+        measurer: CanvasTextMeasurer,
+        size: Float,
+        box: Float,
+        room: Float,
+        minHeight: Float,
+        gap: Float,
+        minScale: Float,
+    ): PauseCostFit {
+        if (this.costs === costs && this.measurer === measurer && key[0] == count.toFloat() && key[1] == size && key[2] == box &&
+            key[3] == room && key[4] == minHeight && key[5] == gap && key[6] == minScale
+        ) return this
+        this.costs = costs
+        this.measurer = measurer
+        key[0] = count.toFloat()
+        key[1] = size
+        key[2] = box
+        key[3] = room
+        key[4] = minHeight
+        key[5] = gap
+        key[6] = minScale
+        var scale = 1f
+        while (true) {
+            val last = scale <= minScale + 0.001f
+            var total = -gap
+            var whole = true
+            for (index in 0 until count) {
+                val layout = measureKkText(measurer, costs[index].text, measurer.typography.kkStyle(KkTextRole.BODY, size * scale),
+                    maxWidth = box, maxLines = COST_LINES)
+                whole = whole && layout.fitsWithoutCuts()
+                layouts[index] = layout
+                heights[index] = maxOf(layout.kkBoxHeight, minHeight)
+                total += heights[index] + gap
+            }
+            if ((whole && total <= room) || last) break
+            scale = maxOf(minScale, scale - 0.05f)
+        }
+        moreHeight = measureKkText(measurer, "+9", measurer.typography.kkStyle(KkTextRole.MONO, size)).kkBoxHeight + gap
+        return this
+    }
+}
+
+/** "+N", the count of entries a full list leaves out (cached: the paused frame redraws it). */
+private fun moreLabel(count: Int): String = MoreLabels[count.coerceIn(0, MoreLabels.lastIndex)]
+
+private val MoreLabels = Array(64) { "+$it" }
+
+/** The cost list's smallest text, as a share of its size (see [drawPauseCosts]), and the lines an entry may take. */
+private const val MIN_COST_SCALE = 0.6f
+private const val COST_LINES = 3
+
+/** A number keeps its unit on its line ("30 %" and "600 ед/с" never break before the unit). */
+private fun String.keepUnitsWithNumbers(): String = UnitAfterNumber.replace(this) { it.groupValues[1] + "\u00A0" + it.groupValues[2] }
+
+/**
+ * A space between a number and its unit. Units end where no letter follows (an explicit class:
+ * `\b` sees only ASCII letters on some platforms, so it never ends a Cyrillic unit).
+ */
+private val UnitAfterNumber = Regex("([0-9]) (%|ед/с(?![А-Яа-яЁё])|ед(?![А-Яа-яЁё])|u/s(?![A-Za-z])|u(?![A-Za-z])|s(?![A-Za-z])|с(?![А-Яа-яЁё]))")
+
+/** Line height of the body role the costs use, with a little room for glyph overhang. */
+private const val COST_LINE_HEIGHT = 1.46f
+
+/**
+ * Resonance from [top]: one row per tag with points, in [columns] columns (row-major): the tag's
+ * glyph and name, then a ladder of ticks for its points with a notch at each tier threshold, lit
+ * in the you color once reached. [maxRows] caps the rows per column; tags past the cap leave a
+ * "+N" mark in the last cell.
+ */
+private fun DrawScope.drawPauseTags(
+    overview: PauseBuildOverview,
+    ui: CanvasTextMeasurer,
+    left: Float,
+    top: Float,
+    width: Float,
+    row: Float,
+    columns: Int,
+    size: Float,
+    k: Float,
+    maxRows: Int = Int.MAX_VALUE,
+): Float {
+    val roles = ui.roles
+    val tags = overview.tags
+    if (tags.isEmpty()) return top
+    val gap = 12f * k * density
+    val cell = (width - gap * (columns - 1)) / columns
+    val thresholds = overview.tagThresholds
+    val ticks = (thresholds.lastOrNull() ?: 7).coerceIn(3, 9)
+    val glyph = row * 0.72f
+    // The name keeps about two fifths of the cell; the ladder takes the rest, its ticks up to 16 dp wide.
+    val ladderRoom = (cell - glyph - 6f * k * density - 8f * k * density) * 0.58f
+    val tick = (ladderRoom / (ticks + (ticks - 1) * 0.45f)).coerceIn(3f, 16f * k * density)
+    val tickGap = tick * 0.45f
+    val ladder = ticks * tick + (ticks - 1) * tickGap
+    val pipHeightPx = (row * 0.34f).coerceAtMost(tick * 1.2f).coerceAtLeast(3f)
+    val nameBox = (cell - glyph - 6f * k * density - ladder - 8f * k * density).coerceAtLeast(10f)
+    val capacity = if (maxRows == Int.MAX_VALUE) Int.MAX_VALUE else maxRows * columns
+    val shown = if (tags.size > capacity) capacity - 1 else tags.size
+    if (shown < tags.size) {
+        val x = left + (shown % columns) * (cell + gap)
+        val more = fitOverlayText(ui, moreLabel(tags.size - shown), KkTextRole.COND, size, cell)
+        drawPauseText(PauseTextKind.MORE, more, x, top + (shown / columns) * row + row * 0.5f, Kk.Bone2, cell, valign = KkVAlign.CENTER)
+    }
+    for (index in 0 until shown) {
+        val rowIndex = index / columns
+        val tag = tags[index]
+        val x = left + (index % columns) * (cell + gap)
+        val y = top + rowIndex * row
+        val middle = y + row * 0.5f
+        drawKkIcon(KkIcon.Tags[tag.tag.ordinal], Offset(x + glyph * 0.5f, middle), glyph, if (tag.tier > 0) Kk.Bone else Kk.Mute)
+        val name = fitOverlayText(ui, tag.label, KkTextRole.COND, size, nameBox, uppercase = true)
+        drawPauseText(PauseTextKind.TAG_NAME, name, x + glyph + 6f * k * density, middle, if (tag.tier > 0) Kk.Bone else Kk.Bone2, nameBox,
+            valign = KkVAlign.CENTER)
+        val ladderLeft = x + cell - ladder
+        val pipTop = middle - pipHeightPx * 0.5f
+        drawKkPips(Offset(ladderLeft, pipTop), ticks, tag.points.coerceAtMost(ticks), Kk.Bone, sizeDp = pipHeightPx / density,
+            widthDp = tick / density, gapDp = tickGap / density, emptyColor = Kk.Ink4)
+        for (threshold in thresholds) {
+            if (threshold > ticks) continue
+            val notchX = ladderLeft + threshold * (tick + tickGap) - tickGap * 0.5f
+            val reached = tag.points >= threshold
+            drawRect(if (reached) roles.you else Kk.Mute, Offset(notchX - 0.75f * k * density, pipTop - pipHeightPx * 0.45f),
+                Size(1.5f * k * density, pipHeightPx * 1.9f))
+        }
+    }
+    val rows = minOf(maxRows, (tags.size + columns - 1) / columns)
+    return top + rows * row
+}
+
+/**
+ * Five element cells across [width] from [top]: the glyph (ringed on the dominant element), then
+ * (with [names]) the element's name under it across the cell, and a meter of one pip per affinity
+ * point notched at the affinity tiers. The names share one size, the size the longest of them
+ * needs, and sit clear of the ring.
+ */
+private fun DrawScope.drawPauseElements(
+    overview: PauseBuildOverview,
+    ui: CanvasTextMeasurer,
+    left: Float,
+    top: Float,
+    width: Float,
+    height: Float,
+    k: Float,
+    names: Boolean,
+): Float {
+    val roles = ui.roles
+    val cells = overview.elements.size.coerceAtLeast(1)
+    val cell = width / cells
+    val glyph = (height * if (names) 0.36f else 0.62f).coerceAtMost(18f * k * density)
+    val ringStroke = 1.5f * k * density
+    val ring = glyph * DOMINANT_RING
+    val box = cell - 6f * k * density
+    val nameSize = if (names) sharedElementNameSize(overview, ui, 12f * k, box) else 0f
+    for (index in overview.elements.indices) {
+        val element = overview.elements[index]
+        val color = roles.element(element.element)
+        val cellLeft = left + index * cell
+        // The ring stays inside the cell.
+        val glyphCenter = if (names) Offset(cellLeft + ring + ringStroke, top + ring + ringStroke) else
+            Offset(cellLeft + glyph * 0.6f, top + height * 0.5f)
+        val shown = element.affinity > 0
+        drawKkIcon(elementIcon(element.element), glyphCenter, glyph, if (shown) color else Kk.Ink4)
+        if (element.dominant) drawCircle(color, ring, glyphCenter, style = kkStroke(ringStroke))
+        if (names) {
+            val nameTop = glyphCenter.y + ring + ringStroke + 3f * k * density
+            val name = fitOverlayText(ui, element.label, KkTextRole.COND, nameSize, box, uppercase = true)
+            drawPauseText(PauseTextKind.ELEMENT_NAME, name, cellLeft, nameTop, if (shown) Kk.Bone else Kk.Mute, box)
+            drawElementMeter(overview, element, color, cellLeft, nameTop + name.kkBoxHeight + 4f * k * density, box, k)
+        } else {
+            val meterLeft = cellLeft + glyph * 1.4f
+            drawElementMeter(overview, element, color, meterLeft, top + height * 0.5f - 2.5f * k * density, cell - (meterLeft - cellLeft) - 6f * k * density, k)
+        }
+    }
+    return top + height
+}
+
+/** The dominant element's ring, as a share of its glyph's size. */
+private const val DOMINANT_RING = 0.78f
+
+/** The size (before the text scale) at which every element name fits [box]: the one the longest needs. */
+private fun sharedElementNameSize(overview: PauseBuildOverview, ui: CanvasTextMeasurer, size: Float, box: Float): Float {
+    var shared = 1f
+    for (index in overview.elements.indices) {
+        val fitted = fitOverlayText(ui, overview.elements[index].label, KkTextRole.COND, size, box, uppercase = true)
+        shared = minOf(shared, fitted.layoutInput.style.fontSize.value / (size * ui.scale))
+    }
+    return size * shared
+}
+
+/** Element meters as rows (compact landscape): glyph then the meter, one element per row. */
+private fun DrawScope.drawPauseElementRows(
+    overview: PauseBuildOverview,
+    roles: KkRolePalette,
+    left: Float,
+    top: Float,
+    width: Float,
+    row: Float,
+    k: Float,
+) {
+    val glyph = row * 0.72f
+    for (index in overview.elements.indices) {
+        val element = overview.elements[index]
+        val color = roles.element(element.element)
+        val middle = top + index * row + row * 0.5f
+        val center = Offset(left + glyph * 0.6f, middle)
+        drawKkIcon(elementIcon(element.element), center, glyph, if (element.affinity > 0) color else Kk.Ink4)
+        if (element.dominant) drawCircle(color, glyph * DOMINANT_RING, center, style = kkStroke(1.2f * k * density))
+        drawElementMeter(overview, element, color, left + glyph * 1.6f, middle - 2.5f * k * density, width - glyph * 1.6f, k)
+    }
+}
+
+/** One pip per affinity point (eight shown), notched at each affinity tier; reached notches in the element's hue. */
+private fun DrawScope.drawElementMeter(overview: PauseBuildOverview, element: PauseElementEntry, color: Color, left: Float, top: Float, width: Float, k: Float) {
+    val count = AFFINITY_PIPS
+    val gap = 2f * k * density
+    val pip = ((width - gap * (count - 1)) / count).coerceIn(2f, 8f * k * density)
+    val height = 5f * k * density
+    drawKkPips(Offset(left, top), count, element.affinity.coerceAtMost(count), color, sizeDp = height / density, widthDp = pip / density,
+        gapDp = gap / density, emptyColor = Kk.Ink4)
+    for (threshold in overview.affinityThresholds) {
+        if (threshold > count) continue
+        val x = left + threshold * (pip + gap) - gap * 0.5f
+        drawRect(if (element.affinity >= threshold) color else Kk.Mute, Offset(x - 0.6f * k * density, top - 2f * k * density),
+            Size(1.2f * k * density, height + 4f * k * density))
+    }
+}
+
+private const val AFFINITY_PIPS = 8
+
+/**
+ * Reaction chips flowing from [top] to [bottom]: each a plate with both elements' glyphs and the
+ * reaction's name, or "?" over a hatch while it is still unknown. Chips that find no room leave a
+ * "+N" mark in their place. Without a reachable pair, a muted line says so.
+ */
+private fun DrawScope.drawPauseReactions(
+    overview: PauseBuildOverview,
+    ui: CanvasTextMeasurer,
+    left: Float,
+    top: Float,
+    width: Float,
+    bottom: Float,
+    chip: Float,
+    size: Float,
+    k: Float,
+) {
+    val roles = ui.roles
+    val reactions = overview.reactions
+    if (reactions.isEmpty()) {
+        val text = fitOverlayText(ui, overview.noReactions, KkTextRole.MONO, size * 0.8f, width, uppercase = true)
+        drawPauseText(PauseTextKind.EMPTY, text, left, top + chip * 0.5f, Kk.Mute, width, valign = KkVAlign.CENTER)
+        return
+    }
+    val gap = 6f * k * density
+    val glyph = chip * 0.5f
+    val lead = glyph * 2f + 10f * k * density
+    val maxText = width - lead - 10f * k * density
+    val count = minOf(reactions.size, ReactionChips.CAPACITY)
+    // Place every chip first; when some find no room, the last shown ones give way to the "+N" mark.
+    var shown = ReactionChips.place(reactions, count, ui, left, top, width, bottom, chip, gap, lead, maxText, size, k, density)
+    var more: TextLayoutResult? = null
+    var moreX = 0f
+    var moreY = 0f
+    while (shown < count) {
+        val mark = fitOverlayText(ui, moreLabel(count - shown), KkTextRole.COND, size, maxText)
+        val markWidth = mark.size.width + 12f * k * density
+        val afterX = if (shown == 0) left else ReactionChips.x(shown - 1) + ReactionChips.width(shown - 1) + gap
+        val afterY = if (shown == 0) top else ReactionChips.y(shown - 1)
+        if (afterX + markWidth <= left + width + 0.5f && afterY + chip <= bottom + 0.5f) {
+            more = mark
+            moreX = afterX
+            moreY = afterY
+            break
+        }
+        if (afterY + chip + gap + chip <= bottom + 0.5f) {
+            more = mark
+            moreX = left
+            moreY = afterY + chip + gap
+            break
+        }
+        if (shown == 0) break
+        shown--
+    }
+    for (index in 0 until shown) {
+        val reaction = reactions[index]
+        val x = ReactionChips.x(index)
+        val y = ReactionChips.y(index)
+        val chipWidth = ReactionChips.width(index)
+        val first = roles.element(reaction.id.first.ordinal)
+        val second = roles.element(reaction.id.second.ordinal)
+        val plate = PauseShapes.slab(index, x, y, x + chipWidth, y + chip, 6f * k * density)
+        drawPath(plate, Kk.Ink2)
+        if (!reaction.discovered) drawKkHatch(plate)
+        // Both elements' glyphs, and a two-tone edge along the plate's foot.
+        drawKkIcon(elementIcon(reaction.id.first.ordinal), Offset(x + 6f * k * density + glyph * 0.5f, y + chip * 0.5f), glyph, first)
+        drawKkIcon(elementIcon(reaction.id.second.ordinal), Offset(x + 8f * k * density + glyph * 1.5f, y + chip * 0.5f), glyph, second)
+        drawRect(first, Offset(x + 6f * k * density, y + chip - 2f * k * density), Size(chipWidth * 0.5f - 6f * k * density, 2f * k * density))
+        drawRect(second, Offset(x + chipWidth * 0.5f, y + chip - 2f * k * density), Size(chipWidth * 0.5f - 10f * k * density, 2f * k * density))
+        drawPauseText(PauseTextKind.REACTION, ReactionChips.name(index), x + lead, y + chip * 0.5f,
+            if (reaction.discovered) Kk.Bone else Kk.Mute, maxText, valign = KkVAlign.CENTER)
+    }
+    if (more != null) drawPauseText(PauseTextKind.MORE, more, moreX + 6f * k * density, moreY + chip * 0.5f, Kk.Bone2, maxText, valign = KkVAlign.CENTER)
+}
+
+/** Where the reaction chips of the last drawn list sit (draw-thread scratch, no allocation). */
+private object ReactionChips {
+    val CAPACITY = ReactionId.entries.size
+    private val xs = FloatArray(CAPACITY)
+    private val ys = FloatArray(CAPACITY)
+    private val widths = FloatArray(CAPACITY)
+    private val names = arrayOfNulls<TextLayoutResult>(CAPACITY)
+
+    fun x(index: Int) = xs[index]
+    fun y(index: Int) = ys[index]
+    fun width(index: Int) = widths[index]
+    fun name(index: Int): TextLayoutResult = requireNotNull(names[index])
+
+    /** Flows [count] chips in rows from [left], [top]; returns how many fit above [bottom]. */
+    fun place(
+        reactions: List<PauseReactionEntry>,
+        count: Int,
+        ui: CanvasTextMeasurer,
+        left: Float,
+        top: Float,
+        width: Float,
+        bottom: Float,
+        chip: Float,
+        gap: Float,
+        lead: Float,
+        maxText: Float,
+        size: Float,
+        k: Float,
+        density: Float,
+    ): Int {
+        var x = left
+        var y = top
+        for (index in 0 until count) {
+            val name = fitOverlayText(ui, reactions[index].name, KkTextRole.COND, size, maxText, uppercase = true)
+            val chipWidth = lead + name.size.width + 10f * k * density
+            if (x > left && x + chipWidth > left + width + 0.5f) {
+                x = left
+                y += chip + gap
+            }
+            if (y + chip > bottom + 0.5f) return index
+            xs[index] = x
+            ys[index] = y
+            widths[index] = chipWidth
+            names[index] = name
+            x += chipWidth + gap
+        }
+        return count
+    }
+}
+
+/**
+ * The owned items as an icon grid from [top] within [height]: the largest pitch up to [pitch]
+ * that fits them all (never below 60 % of it), stacks as each icon's arc, a threat hatch over items
+ * the bound relics disable and a gold rim on Reborn copies. Items past the grid leave a "+N" mark.
+ */
+private fun DrawScope.drawPauseItems(
+    overview: PauseBuildOverview,
+    ui: CanvasTextMeasurer,
+    left: Float,
+    top: Float,
+    width: Float,
+    height: Float,
+    pitch: Float,
+    k: Float,
+) {
+    val roles = ui.roles
+    val items = overview.items
+    if (items.isEmpty()) {
+        val text = fitOverlayText(ui, overview.noItems, KkTextRole.MONO, 11f * k, width, uppercase = true)
+        drawPauseText(PauseTextKind.EMPTY, text, left, top + pitch * 0.4f, Kk.Mute, width, valign = KkVAlign.CENTER)
+        return
+    }
+    var cell = pitch
+    while (cell > pitch * 0.6f) {
+        val perRow = floor(width / cell).toInt().coerceAtLeast(1)
+        if (ceil(items.size / perRow.toFloat()) * cell <= height) break
+        cell -= 2f * k * density
+    }
+    val perRow = floor(width / cell).toInt().coerceAtLeast(1)
+    val rows = floor(height / cell).toInt().coerceAtLeast(1)
+    // Items past the grid leave a "+N" mark in its last cell.
+    val shown = if (items.size > perRow * rows) perRow * rows - 1 else items.size
+    if (shown < items.size) {
+        val center = Offset(left + (shown % perRow) * cell + cell * 0.5f, top + (shown / perRow) * cell + cell * 0.5f)
+        val more = fitOverlayText(ui, moreLabel(items.size - shown), KkTextRole.COND, 15f * k, cell)
+        drawPauseText(PauseTextKind.MORE, more, center.x, center.y, Kk.Bone2, cell, KkAlign.CENTER, KkVAlign.CENTER)
+    }
+    for (index in 0 until shown) {
+        val item = items[index]
+        val center = Offset(left + (index % perRow) * cell + cell * 0.5f, top + (index / perRow) * cell + cell * 0.5f)
+        val radius = cell * 0.36f
+        val hue = item.item.elements.firstOrNull()?.let { roles.element(it.ordinal) } ?: roles.kinetic
+        drawItemImage(item.item, center, radius, hue, item.stacks)
+        if (item.reborn) drawCircle(Kk.Gold, radius * 1.18f, center, style = kkStroke(1.5f * k * density))
+        if (item.suppressed) {
+            drawCircle(kkFillBrush(KkFillKind.HATCH, roles.threat), radius * 1.12f, center)
+            drawCircle(roles.threat, radius * 1.12f, center, alpha = 0.8f, style = kkStroke(1.2f * k * density))
+        }
+    }
+}
+
+/** The element's hue of a relic (the preset's volt for Kinetic, gold for Sovereign) in this color vision palette. */
+internal fun relicHue(definition: RelicDefinition, roles: KkRolePalette): Color = definition.aspect.overlayColor(roles)
+
+/** Shapes the paused frame redraws in place: one path per slot, rebuilt only when its geometry moves. */
+private object PauseShapes {
+    private val diamonds = KkPathCache(8)
+    private val slabs = KkPathCache(16)
+
+    fun diamond(slot: Int, cx: Float, cy: Float, r: Float) = diamonds.diamond(slot.coerceIn(0, 7), cx, cy, r)
+
+    fun slab(slot: Int, left: Float, top: Float, right: Float, bottom: Float, cut: Float) =
+        slabs.slab(slot.coerceIn(0, 15), left, top, right, bottom, cut)
+}
 
 /**
  * "Build" heading at [left] and the tags right-aligned at [right] on one row: when both do not
- * fit, the tags shrink first (to 60 %), then the heading.
+ * fit, the tags shrink first (to 60 %), then the heading. [weaponName] names the weapon on its chip
+ * (the regular board); phones show its icon and level.
  */
 private fun DrawScope.drawBuildHeader(
     overview: PauseBuildOverview,
@@ -378,11 +1098,12 @@ private fun DrawScope.drawBuildHeader(
     badgeLabel: Float,
     badgeNumber: Float,
     time: Float,
+    weaponName: Boolean,
 ) {
     val heading = measureKkText(ui, overview.heading, ui.typography.condStyle(headingSize), uppercase = true).size.width
-    val natural = buildTagsWidth(overview, ui, display, k, 1f, badgeLabel, badgeNumber)
+    val natural = buildTagsWidth(overview, ui, display, k, 1f, badgeLabel, badgeNumber, weaponName)
     val tagScale = ((right - left - heading - gap) / natural).coerceIn(0.6f, 1f)
-    val tagsLeft = drawBuildTags(overview, ui, display, right, tagsTop, k, tagScale, badgeLabel, badgeNumber, time)
+    val tagsLeft = drawBuildTags(overview, ui, display, right, tagsTop, k, tagScale, badgeLabel, badgeNumber, time, weaponName)
     val box = tagsLeft - left - gap
     drawPauseText(PauseTextKind.HEADING, fitOverlayText(ui, overview.heading, KkTextRole.COND, headingSize, box, uppercase = true),
         left, headingTop, Kk.Bone, box)
@@ -396,13 +1117,20 @@ private fun DrawScope.buildTagsWidth(
     tagScale: Float,
     badgeLabel: Float,
     badgeNumber: Float,
+    weaponName: Boolean,
 ): Float {
     val badge = kkLevelBadgeSize(display, overview.level, density, overview.levelLabel, badgeLabel, badgeNumber)
     val tagHeight = 22f * k * maxOf(1f, ui.scale) * tagScale
     val fontSize = 13f * k * tagScale
-    return badge.width + 8f * density + 20f * density + kkTagSize(ui, overview.rebirth, density, tagHeight, fontSize).width +
-        kkTagSize(ui, overview.form, density, tagHeight, fontSize).width + tagHeight * density * 0.8f
+    return badge.width + 8f * density + 30f * density + kkTagSize(ui, overview.rebirth, density, tagHeight, fontSize).width +
+        kkTagSize(ui, overview.form, density, tagHeight, fontSize).width + tagHeight * density * 0.8f +
+        weaponChipWidth(overview, ui, tagHeight, fontSize, weaponName)
 }
+
+/** Width of the weapon chip: its icon, the name when shown, and its level. */
+private fun DrawScope.weaponChipWidth(overview: PauseBuildOverview, ui: CanvasTextMeasurer, tagHeight: Float, fontSize: Float, weaponName: Boolean): Float =
+    tagHeight * density * 0.9f + kkTagSize(ui, overview.weaponLevelText, density, tagHeight, fontSize).width +
+        if (weaponName) kkTagSize(ui, overview.weaponName, density, tagHeight, fontSize).width - 10f * density else 0f
 
 /**
  * One list of build stats: labels share one fitted size; values right-aligned in their column
@@ -543,6 +1271,7 @@ private fun DrawScope.drawBuildTags(
     badgeLabel: Float,
     badgeNumber: Float,
     time: Float,
+    weaponName: Boolean,
 ): Float {
     val badge = kkLevelBadgeSize(display, overview.level, density, overview.levelLabel, badgeLabel, badgeNumber)
     var x = right - badge.width - 8f * density
@@ -552,7 +1281,12 @@ private fun DrawScope.drawBuildTags(
     val fontSize = 13f * k * tagScale
     val rebirth = kkTagSize(ui, overview.rebirth, density, tagHeight, fontSize)
     x -= 10f * density + rebirth.width
-    drawKkTag(ui, overview.rebirth, Offset(x, tagTop), KkTagVariant.DEFAULT, tagHeight, fontSize)
+    // Gold means Rebirth: the tier chip turns gold from the first Rebirth on.
+    if (overview.rebirthLevel > 0) {
+        drawKkTag(ui, overview.rebirth, Offset(x, tagTop), KkTagVariant.DEFAULT, tagHeight, fontSize, background = Kk.Gold, foreground = Kk.Ink)
+    } else {
+        drawKkTag(ui, overview.rebirth, Offset(x, tagTop), KkTagVariant.LINE, tagHeight, fontSize)
+    }
     recordPauseTag(ui, overview.rebirth, x, tagTop, rebirth)
     val form = kkTagSize(ui, overview.form, density, tagHeight, fontSize)
     val iconSpace = tagHeight * density * 0.8f
@@ -562,6 +1296,24 @@ private fun DrawScope.drawBuildTags(
     drawKkIcon(overview.formIcon, Offset(formRect.left + 6f * density + iconSpace * 0.45f, formRect.center.y), iconSpace * 0.62f, Kk.Ink)
     drawKkTag(ui, overview.form, Offset(x + iconSpace, tagTop), KkTagVariant.BONE, tagHeight, fontSize, background = Color.Transparent)
     recordPauseTag(ui, overview.form, x, tagTop, Size(form.width + iconSpace, form.height))
+    // The run's weapon: its icon in the you color, its name (regular board) and its level, gold-lit
+    // at the last mastery.
+    val chip = weaponChipWidth(overview, ui, tagHeight, fontSize, weaponName)
+    x -= 10f * density + chip
+    val chipRect = PauseRects.of(1, x, tagTop, x + chip, tagTop + tagHeight * density)
+    drawKkSlab(chipRect, Kk.Ink3, 6f * density)
+    val weaponIcon = tagHeight * density * 0.9f
+    drawKkIcon(overview.weaponIcon, Offset(chipRect.left + weaponIcon * 0.6f, chipRect.center.y), weaponIcon * 0.62f, ui.roles.you)
+    var textX = x + weaponIcon - 4f * density
+    if (weaponName) {
+        val name = drawKkTag(ui, overview.weaponName, Offset(textX, tagTop), KkTagVariant.DEFAULT, tagHeight, fontSize,
+            background = Color.Transparent, foreground = Kk.Bone)
+        textX = name.right - 10f * density
+    }
+    val levelColor = if (overview.masteryTier == WeaponMastery.entries.last()) Kk.RLegend else Kk.Bone2
+    drawKkTag(ui, overview.weaponLevelText, Offset(textX, tagTop), KkTagVariant.DEFAULT, tagHeight, fontSize, background = Color.Transparent,
+        foreground = levelColor)
+    recordPauseTag(ui, if (weaponName) overview.weaponName else overview.weaponLevelText, x, tagTop, Size(chip, tagHeight * density))
     return x
 }
 
@@ -570,27 +1322,6 @@ private fun recordPauseTag(measurer: CanvasTextMeasurer, text: String, x: Float,
     val records = PauseTextProbe.records ?: return
     records += PauseTextRecord(PauseTextKind.TAG, measureKkText(measurer, text, measurer.typography.labelStyle(13f)), Rect(Offset(x, y), size),
         Float.POSITIVE_INFINITY)
-}
-
-/** Relic diamonds with synergy link bars; returns the right edge of the row. */
-private fun DrawScope.drawPauseRelics(overview: PauseBuildOverview, firstCenterX: Float, centerY: Float, sizeDp: Float, pitch: Float): Float {
-    val half = sizeDp * density * 0.5f
-    for (linkIndex in overview.links.indices) {
-        val link = overview.links[linkIndex]
-        for (step in 0 until link.slots.size - 1) {
-            val a = link.slots[step]
-            val b = link.slots[step + 1]
-            drawKkSynergyLink(Offset(firstCenterX + a * pitch + half, centerY), Offset(firstCenterX + b * pitch - half, centerY),
-                link.definition.overlayColor())
-        }
-    }
-    for (index in overview.relics.indices) {
-        val relic = overview.relics[index]
-        val center = Offset(firstCenterX + index * pitch, centerY)
-        if (relic != null) drawKkRelicSlot(center, relic.aspect.overlayColor(), relic.aspect.overlayIcon(), sizeDp)
-        else drawKkRelicSlot(center, Color.Unspecified, sizeDp = sizeDp)
-    }
-    return firstCenterX + (overview.relics.size - 1) * pitch + half
 }
 
 /**
@@ -794,7 +1525,7 @@ private fun measureFitted(
 
 /** Recently fitted pause texts (draw-thread confined, round robin). */
 private object PauseFitMemo {
-    private const val CAPACITY = 48
+    private const val CAPACITY = 128
     private val texts = arrayOfNulls<String>(CAPACITY)
     private val roles = arrayOfNulls<KkTextRole>(CAPACITY)
     private val delegates = arrayOfNulls<Any>(CAPACITY)

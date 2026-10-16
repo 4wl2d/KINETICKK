@@ -12,6 +12,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
@@ -31,7 +32,12 @@ import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.EquippedRelic
+import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.gameplay.nucleus.render.BuildForecast
+import kinetickk.ball.gameplay.nucleus.render.ForecastKind
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.interaction.canvas.isCut
@@ -61,8 +67,8 @@ import kotlin.test.assertTrue
 class RewardLayoutFitTest {
     private val frames = listOf(1440 to 810, 844 to 390, 390 to 844)
     private val settings = listOf(1.25f, 1.75f)
-    private val relics3 = listOf(EquippedRelic(RelicId.KINETIC_FLYWHEEL, 2), EquippedRelic(RelicId.GHOST_VECTOR, 1), EquippedRelic(RelicId.ORBITAL_NAIL, 1))
-    private val relics4 = relics3 + EquippedRelic(RelicId.VOLTAIC_FILAMENT, 1)
+    private val relics3 = listOf(EquippedRelic(RelicId.PERPETUAL_VECTOR, 2), EquippedRelic(RelicId.GYRE_ENGINE, 1), EquippedRelic(RelicId.FURNACE_COVENANT, 1))
+    private val relics4 = relics3 + EquippedRelic(RelicId.AEGIS_INVERSION, 1)
 
     /**
      * Every landscape totem row shows "Lvl N", the ticks and the whole mastery tier name inside
@@ -137,7 +143,8 @@ class RewardLayoutFitTest {
             val language = if ("Russian" in scene) AppLanguage.Russian else AppLanguage.English
             val presentation = model.rewardPresentation(language)
             val rows = requireNotNull(presentation.cards[requireNotNull(presentation.defaultSelection())].relicPreview).rows
-            assertTrue(rows.size >= 2 && rows.all { it.detail != null }, "$scene: the meld preview has detailed rows: $rows")
+            // The next-rank row shows the values the meld raises; the link rows keep their detail.
+            assertTrue(rows.size >= 2 && rows.all { it.detail != null || it.after != null }, "$scene: the meld preview has detailed rows: $rows")
             // The preview measures the plans it drops too; only the placed one shows.
             val shown = textsUnder("kinetickk.gameplay.rewards.preview-row").filter { (node, _) ->
                 generateSequence(node.layoutInfo) { it.parentInfo }.all { it.isPlaced }
@@ -145,7 +152,10 @@ class RewardLayoutFitTest {
             val texts = shown.map { it.second.layoutInput.text.text }
             rows.forEach { row ->
                 assertTrue(row.title.uppercase() in texts, "$scene: the preview shows the \"${row.title}\" row: $texts")
-                assertTrue(row.detail in texts, "$scene: the \"${row.title}\" row shows its detail \"${row.detail}\": $texts")
+                row.detail?.let { detail ->
+                    assertTrue(rewardKeepUnits(detail) in texts, "$scene: the \"${row.title}\" row shows its detail \"$detail\": $texts")
+                }
+                row.after?.let { after -> assertTrue(after in texts, "$scene: the \"${row.title}\" row shows its value \"$after\": $texts") }
             }
             shown.forEach { (_, layout) ->
                 assertTrue(!layout.isCut() && !layout.didOverflowHeight, "$scene: \"${layout.layoutInput.text}\" shows whole")
@@ -169,7 +179,9 @@ class RewardLayoutFitTest {
             val language = if ("Russian" in scene) AppLanguage.Russian else AppLanguage.English
             val paragraphs = model.choices.indices.flatMap { index ->
                 val descriptions = model.rewardCardPresentation(model.choices[index], index, language).descriptions
-                textsUnder("kinetickk.gameplay.choice.${index + 1}.text").filter { (_, layout) -> layout.layoutInput.text.text in descriptions }
+                // Rendered with their units held to their numbers.
+                val shown = descriptions.map(::rewardKeepUnits)
+                textsUnder("kinetickk.gameplay.choice.${index + 1}.text").filter { (_, layout) -> layout.layoutInput.text.text in shown }
             }
             assertTrue(paragraphs.size >= model.choices.size, "$scene: every card shows its description")
             val size = paragraphs.map { it.second.layoutInput.style.fontSize.value }.distinct()
@@ -182,6 +194,114 @@ class RewardLayoutFitTest {
             val default = requireNotNull(sizes["weapons 1440x810 $language 1.25"])
             assertEquals(1.25f, default / smallest, 0.01f, "$language weapon bodies at 125 % against 100 %")
         }
+    }
+
+    /**
+     * Upright cards at the board, phone, narrow phone and portrait sizes: the chips beside the icon
+     * end above the text, the footer (action tag and forecast chips) starts below it, and the whole
+     * text shows without scrolling at the default text size, in both languages.
+     */
+    @Test
+    fun cardChipsAndFootersKeepClearOfTheText() {
+        val sizes = listOf(300 to 450, 220 to 254, 195 to 254, 178 to 305)
+        val bound = listOf(EquippedRelic(RelicId.PERPETUAL_VECTOR, 2), EquippedRelic(RelicId.GYRE_ENGINE, 1))
+        var checked = 0
+        for ((width, height) in sizes) for (language in AppLanguage.entries) {
+            val items = rewardFixtureModel(
+                choices = listOf(itemChoice(0), itemChoice(2, reborn = true), itemChoice(5)), relics = listOf(EquippedRelic(RelicId.GLASS_COMET, 1)),
+                previews = listOf(
+                    RewardPreview(immutableListOf(RewardStatChange("Cooling", 23.2f, 24.8f, "/s")), immutableListOf(
+                        BuildForecast(ForecastKind.REACTION, reaction = ReactionId.THERMAL_SHOCK, discovered = false),
+                        BuildForecast(ForecastKind.TAG_TIER, tag = BuildTag.ANCHOR, before = 0, after = 1),
+                        BuildForecast(ForecastKind.AFFINITY, element = StatusElement.CRYO, before = 1, after = 2))),
+                    RewardPreview(immutableListOf(RewardStatChange("Weapon power", 1.36f, 1.84f, "×")), immutableListOf(
+                        BuildForecast(ForecastKind.TAG_TIER, tag = BuildTag.OVERCLOCK, before = 0, after = 1))),
+                    RewardPreview(forecasts = immutableListOf(BuildForecast(ForecastKind.SUPPRESSED),
+                        BuildForecast(ForecastKind.AFFINITY, element = StatusElement.ION, before = 0, after = 1))),
+                ),
+            )
+            val relics = rewardFixtureModel(choiceType = ChoiceType.RELIC, relics = bound,
+                choices = listOf(RelicId.STASIS_ANCHOR, RelicId.STORMHEART_CAPACITOR).map { id ->
+                    val relic = rewardFixtureContent.relic(id)
+                    ChoiceOption(ChoiceType.RELIC, relic.name, relic.upside, relic.aspect.displayLabel.uppercase(), relicId = id,
+                        relicAction = RelicChoiceAction.ACQUIRE)
+                } + ChoiceOption(ChoiceType.RELIC, "Leave hollow", "", "DECLINE", relicAction = RelicChoiceAction.DECLINE))
+            val cards = listOf(items, relics).flatMap { model -> model.choices.mapIndexed { index, choice -> model.rewardCardPresentation(choice, index, language) } }
+            cards.forEach { card ->
+                runDesktopComposeUiTest(width + 20, height + 20, effectContext = object : MotionDurationScale {
+                    override val scaleFactor = 0f
+                }) {
+                    setContent {
+                        CompositionLocalProvider(LocalAppLanguage provides language, LocalDensity provides Density(1f)) {
+                            // The landscape phone deal sizes come from a phone layout.
+                            RewardCard(card, 0, overlayUiTextScale(1.25f), 0f, true, Modifier.requiredSize(width.dp, height.dp),
+                                phoneDeal = height == 254) {}
+                        }
+                    }
+                    waitForIdle()
+                    val scene = "${card.title} ${width}x$height $language"
+                    val body = onNode(hasTestTag("kinetickk.gameplay.choice.1.text"), useUnmergedTree = true).fetchSemanticsNode()
+                    assertEquals(0f, body.config[SemanticsProperties.VerticalScrollAxisRange].maxValue(), "$scene shows its whole text")
+                    val text = body.boundsInRoot
+                    val shown = textsUnder("kinetickk.gameplay.choice.1.text").map { it.first.boundsInRoot }.filter { it.height > 0f }
+                    val textTop = shown.minOfOrNull { it.top } ?: text.top
+                    onAllNodes(hasTestTag("kinetickk.gameplay.choice.1.chips"), useUnmergedTree = true).fetchSemanticsNodes().forEach { node ->
+                        val chips = node.children.map { it.boundsInRoot }.filter { it.height > 0f }
+                        chips.forEach { chip -> assertTrue(chip.bottom <= textTop + 0.5f && chip.right <= width + 0.5f, "$scene: chip $chip clear of the text at $textTop") }
+                    }
+                    onAllNodes(hasTestTag("kinetickk.gameplay.choice.1.footer"), useUnmergedTree = true).fetchSemanticsNodes().forEach { node ->
+                        val footer = node.boundsInRoot
+                        assertTrue(footer.top >= text.bottom - 0.5f && footer.bottom <= height + 0.5f && footer.right <= width + 0.5f,
+                            "$scene: footer $footer below the text $text")
+                    }
+                    assertTextFitsWithoutBreakingWords(scene)
+                    checked++
+                }
+            }
+        }
+        assertTrue(checked >= 4 * 2 * 6, "Checked every card at every size ($checked)")
+    }
+
+    /**
+     * A relic's cost always shows whole, at every frame and text size in both languages (the compact
+     * landscape deal at 175 % in Russian included): never cut, below the scrolling text (so the scroll
+     * fade never reaches it), above the action footer and inside the card.
+     */
+    @Test
+    fun relicCostsShowWholeAtEveryTextSize() {
+        var checked = 0
+        forEachScene(::relicOffers) { scene, model ->
+            model.choices.indices.forEach { index ->
+                val tag = "kinetickk.gameplay.choice.${index + 1}"
+                // Compared in each block's own coordinates: dealt cards lean, so their boxes in the root overlap.
+                val card = onNodeWithTag(tag).fetchSemanticsNode().layoutInfo.coordinates
+                val textNode = onNode(hasTestTag("$tag.text"), useUnmergedTree = true).fetchSemanticsNode()
+                // The text's coordinates are its scrolled content's: the viewport is the content less its scroll range.
+                val text = textNode.layoutInfo.coordinates
+                val range = textNode.config[SemanticsProperties.VerticalScrollAxisRange]
+                val viewport = text.size.height - range.maxValue()
+                val footer = onAllNodes(hasTestTag("$tag.footer"), useUnmergedTree = true).fetchSemanticsNodes().firstOrNull()?.layoutInfo?.coordinates
+                val costs = textsUnder("$tag.cost").filter { (node, _) -> generateSequence(node.layoutInfo) { it.parentInfo }.all { it.isPlaced } }
+                assertTrue(costs.isNotEmpty(), "$scene: card ${index + 1} shows its cost")
+                costs.forEach { (node, layout) ->
+                    val line = "$scene card ${index + 1}: cost \"${layout.layoutInput.text}\""
+                    val cost = node.layoutInfo.coordinates
+                    val top = Offset.Zero
+                    val bottom = Offset(0f, cost.size.height.toFloat())
+                    assertTrue(!layout.isCut() && !layout.didOverflowHeight && cost.size.height > 0, "$line is cut (${layout.size})")
+                    val belowText = text.localPositionOf(cost, top).y + range.value() - viewport
+                    assertTrue(belowText >= -0.5f, "$line starts ${-belowText} px inside the scrolling text's viewport")
+                    val inCard = card.size.height - card.localPositionOf(cost, bottom).y
+                    assertTrue(inCard >= -0.5f, "$line ends ${-inCard} px below the card")
+                    footer?.let {
+                        val aboveFooter = -it.localPositionOf(cost, bottom).y
+                        assertTrue(aboveFooter >= -0.5f, "$line runs ${-aboveFooter} px into the footer")
+                    }
+                    checked++
+                }
+            }
+        }
+        assertTrue(checked >= 3 * 2 * 2 * 3, "Checked every relic card's cost ($checked)")
     }
 
     /**
@@ -297,12 +417,11 @@ class RewardLayoutFitTest {
         choiceType = ChoiceType.RELIC_BIND, relics = relics4, language = language, width = width, height = height, textScale = setting,
         choices = relics4.mapIndexed { index, equipped ->
             val current = rewardFixtureContent.relic(equipped.id)
-            ChoiceOption(ChoiceType.RELIC_BIND, "Replace ${current.name}", "", "", relicId = RelicId.PERIAPSIS_HOOK,
+            ChoiceOption(ChoiceType.RELIC_BIND, "Replace ${current.name}", "", "", relicId = RelicId.EVENT_HORIZON,
                 relicAction = RelicChoiceAction.REPLACE, relicSlot = index)
         },
         previews = relics4.map {
-            RewardPreview(immutableListOf(RewardStatChange("Damage: distance >300", 0f, 8f, "%", sourceRelic = RelicId.PERIAPSIS_HOOK)),
-                addedSynergies = immutableListOf("Gravitic grouping"), removedSynergies = immutableListOf("Vector maneuver"))
+            RewardPreview(immutableListOf(RewardStatChange("Damage: distance >300", 0f, 8f, "%", sourceRelic = RelicId.EVENT_HORIZON)))
         },
     )
 
@@ -312,7 +431,7 @@ class RewardLayoutFitTest {
             ChoiceOption(ChoiceType.RELIC_BIND, "Meld ${rewardFixtureContent.relic(equipped.id).name}", "", "", relicId = equipped.id,
                 relicAction = RelicChoiceAction.MELD_TARGET, relicSlot = index)
         },
-        previews = listOf(RewardPreview(immutableListOf(RewardStatChange("Damage: speed ≥500", 10f, 15f, "%", sourceRelic = RelicId.KINETIC_FLYWHEEL)))),
+        previews = listOf(RewardPreview(immutableListOf(RewardStatChange("Damage: speed ≥500", 10f, 15f, "%", sourceRelic = RelicId.PERPETUAL_VECTOR)))),
     )
 
     private fun weapons(language: AppLanguage, width: Float, height: Float, setting: Float) = rewardFixtureModel(
@@ -325,23 +444,23 @@ class RewardLayoutFitTest {
 
     private fun relicOffers(language: AppLanguage, width: Float, height: Float, setting: Float) = rewardFixtureModel(
         choiceType = ChoiceType.RELIC, relics = relics3, language = language, width = width, height = height, textScale = setting,
-        choices = listOf(RelicId.VOLTAIC_FILAMENT, RelicId.PERIAPSIS_HOOK, RelicId.GHOST_VECTOR).map { id ->
+        choices = listOf(RelicId.AEGIS_INVERSION, RelicId.EVENT_HORIZON, RelicId.GYRE_ENGINE).map { id ->
             val relic = rewardFixtureContent.relic(id)
-            ChoiceOption(ChoiceType.RELIC, relic.name, relic.description, relic.aspect.displayLabel.uppercase(), relicId = id, relicAction = RelicChoiceAction.ACQUIRE)
+            ChoiceOption(ChoiceType.RELIC, relic.name, relic.upside, relic.aspect.displayLabel.uppercase(), relicId = id, relicAction = RelicChoiceAction.ACQUIRE)
         },
         previews = listOf(
-            RewardPreview(immutableListOf(RewardStatChange("Arc: hit, every 0.28s", 0f, 16f, "%", sourceRelic = RelicId.VOLTAIC_FILAMENT))),
-            RewardPreview(immutableListOf(RewardStatChange("Damage: distance >300", 0f, 8f, "%", sourceRelic = RelicId.PERIAPSIS_HOOK)),
-                addedSynergies = immutableListOf("Gravitic grouping")),
-            RewardPreview(immutableListOf(RewardStatChange("Damage: dash", 24f, 48f, "", sourceRelic = RelicId.GHOST_VECTOR))),
+            RewardPreview(immutableListOf(RewardStatChange("Arc: hit, every 0.28s", 0f, 16f, "%", sourceRelic = RelicId.AEGIS_INVERSION))),
+            RewardPreview(immutableListOf(RewardStatChange("Damage: distance >300", 0f, 8f, "%", sourceRelic = RelicId.EVENT_HORIZON))),
+            // Ranking up a bound relic changes no build stat; its card carries the upside and the liability.
+            RewardPreview(),
         ),
     )
 
     private fun relicOffersWithMeld(language: AppLanguage, width: Float, height: Float, setting: Float) = rewardFixtureModel(
         choiceType = ChoiceType.RELIC, relics = relics4, language = language, width = width, height = height, textScale = setting,
-        choices = listOf(RelicId.PERIAPSIS_HOOK, RelicId.ECHO_CHAMBER).map { id ->
+        choices = listOf(RelicId.EVENT_HORIZON, RelicId.ECHO_CHAMBER).map { id ->
             val relic = rewardFixtureContent.relic(id)
-            ChoiceOption(ChoiceType.RELIC, relic.name, relic.description, relic.aspect.displayLabel.uppercase(), relicId = id, relicAction = RelicChoiceAction.ACQUIRE)
+            ChoiceOption(ChoiceType.RELIC, relic.name, relic.upside, relic.aspect.displayLabel.uppercase(), relicId = id, relicAction = RelicChoiceAction.ACQUIRE)
         } + ChoiceOption(ChoiceType.RELIC, "Meld resonance", "Collapse this offering into one of the four bound Relics and raise its rank.", "MELD",
             relicAction = RelicChoiceAction.MELD),
     )

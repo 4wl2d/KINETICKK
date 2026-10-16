@@ -49,10 +49,10 @@ class GameplayComponentFingerprintTest {
     @Test
     fun relicWitnessPreservesBothIdentityAndRankWithoutObjectHashes() {
         val relic = EquippedRelic(RelicId.ECHO_CHAMBER, rank = 2)
-        val expected = 8_528_754_464_390_207_192L
+        val expected = -7_438_867_821_674_710_841L
         assertEquals(expected, canonicalRelicFingerprint(relic))
         assertEquals(expected, canonicalRelicFingerprint(relic.copy()))
-        assertNotEquals(expected, canonicalRelicFingerprint(relic.copy(id = RelicId.GHOST_VECTOR)))
+        assertNotEquals(expected, canonicalRelicFingerprint(relic.copy(id = RelicId.BLINK_DRIVE)))
         assertNotEquals(expected, canonicalRelicFingerprint(relic.copy(rank = 3)))
     }
 
@@ -62,24 +62,26 @@ class GameplayComponentFingerprintTest {
             type = ChoiceType.RELIC,
             title = "Echo",
             description = "Repeat",
-            tag = "RIFT",
+            tag = "KINETIC",
             relicId = RelicId.ECHO_CHAMBER,
             relicAction = RelicChoiceAction.MELD,
             relicSlot = 0,
         )
-        // Previous witness plus the newly owned nullable rewardFocus field (-1 when absent).
-        val expected = 3_144_022_955_760_528_523L
+        // Previous witness plus the nullable rewardFocus field (-1 when absent) and the Reborn and Heirloom flags.
+        val expected = -8_789_539_912_842_911_048L
         assertEquals(expected, canonicalChoiceFingerprint(choice))
         assertEquals(expected, canonicalChoiceFingerprint(choice.copy()))
         listOf(
             choice.copy(type = ChoiceType.RELIC_BIND),
             choice.copy(weaponId = WeaponId.MORNINGSTAR),
             choice.copy(totemAction = TotemAction.CHANGE_WEAPON),
-            choice.copy(relicId = RelicId.GHOST_VECTOR),
+            choice.copy(relicId = RelicId.BLINK_DRIVE),
             choice.copy(relicAction = RelicChoiceAction.REPLACE),
             choice.copy(relicSlot = 1),
             choice.copy(title = "Changed"),
-            choice.copy(rewardFocus = RewardFocus.RIFT),
+            choice.copy(rewardFocus = RewardFocus.THERMAL),
+            choice.copy(reborn = true),
+            choice.copy(heirloom = true),
             choice.copy(rewardFocus = RewardFocus.ENTROPY),
         ).forEach { changed ->
             assertNotEquals(expected, canonicalChoiceFingerprint(changed))

@@ -1,0 +1,406 @@
+// SPDX-FileCopyrightText: 2026 Vladislav Tomilov
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package kinetickk.ball.content.impl
+
+import kinetickk.ball.content.api.BuffStat
+import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.BuildTag.ANCHOR
+import kinetickk.ball.content.api.BuildTag.ARSENAL
+import kinetickk.ball.content.api.BuildTag.BULWARK
+import kinetickk.ball.content.api.BuildTag.CHAIN
+import kinetickk.ball.content.api.BuildTag.DRIVE
+import kinetickk.ball.content.api.BuildTag.FORTUNE
+import kinetickk.ball.content.api.BuildTag.OVERCLOCK
+import kinetickk.ball.content.api.BuildTag.PRECISION
+import kinetickk.ball.content.api.BuildTag.RAM
+import kinetickk.ball.content.api.ContentBounds
+import kinetickk.ball.content.api.ConversionKind
+import kinetickk.ball.content.api.DamageBasis
+import kinetickk.ball.content.api.EffectAction
+import kinetickk.ball.content.api.EffectClause
+import kinetickk.ball.content.api.EffectCondition
+import kinetickk.ball.content.api.EffectTrigger
+import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.ElementPick
+import kinetickk.ball.content.api.ItemDefinition
+import kinetickk.ball.content.api.ItemEffect
+import kinetickk.ball.content.api.ItemRarity
+import kinetickk.ball.content.api.ItemRarity.COMMON
+import kinetickk.ball.content.api.ItemRarity.EPIC
+import kinetickk.ball.content.api.ItemRarity.LEGENDARY
+import kinetickk.ball.content.api.ItemRarity.RARE
+import kinetickk.ball.content.api.ItemRarity.UNCOMMON
+import kinetickk.ball.content.api.ItemRule
+import kinetickk.ball.content.api.StatDelta
+import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.toImmutableList
+
+// Compact authoring vocabulary. Every value is validated by the api constructors.
+private fun stat(effect: ItemEffect, amount: Float) = StatDelta(effect, amount)
+
+private fun on(
+    trigger: EffectTrigger,
+    vararg actions: EffectAction,
+    given: List<EffectCondition> = emptyList(),
+    cooldown: Float = 0f,
+    every: Int = 1,
+) = EffectClause(trigger, given.toImmutableList(), actions.toList().toImmutableList(), cooldown, every)
+
+private fun apply(element: StatusElement, stacks: Int, radius: Float = 0f) =
+    EffectAction.ApplyStatus(ElementPick.of(element), stacks, radius)
+
+private fun applyPick(pick: ElementPick, stacks: Int, radius: Float = 0f) =
+    EffectAction.ApplyStatus(pick, stacks, radius)
+
+private class ItemDraft(
+    val name: String,
+    val flavor: String,
+    val rarity: ItemRarity,
+    val tags: List<BuildTag>,
+    val elements: List<StatusElement> = emptyList(),
+    val stats: List<StatDelta> = emptyList(),
+    val clauses: List<EffectClause> = emptyList(),
+    val rules: List<ItemRule> = emptyList(),
+    val stacks: Int = when (rarity) {
+        COMMON -> 3
+        UNCOMMON, RARE -> 2
+        EPIC, LEGENDARY -> 1
+    },
+    val unlock: Int = 1,
+    val rebirth: Int = 0,
+    val risk: Boolean = false,
+)
+
+private val Drafts: List<ItemDraft> = listOf(
+    // RAM: collisions, mass and raw momentum.
+    ItemDraft("Ballast Core", "Lead in the heart of the Core turns every collision into a shove.", COMMON, listOf(RAM),
+        stats = listOf(stat(ItemEffect.MASS, 0.12f), stat(ItemEffect.IMPACT_DAMAGE, 0.06f)),
+        clauses = listOf(on(EffectTrigger.IMPACT, EffectAction.Burst(80f, DamageBasis.HIT, 0.25f),
+            given = listOf(EffectCondition.SpeedAtLeast(800f))))),
+    ItemDraft("Shock Plate", "A reactive plate that answers every collision with a wave.", UNCOMMON, listOf(RAM, ANCHOR),
+        clauses = listOf(on(EffectTrigger.IMPACT, EffectAction.Push(140f, 260f),
+            EffectAction.Burst(140f, DamageBasis.IMPACT, 0.2f), cooldown = 0.8f)), unlock = 4),
+    ItemDraft("Wrecking Momentum", "Every wreck you cause feeds the next one.", UNCOMMON, listOf(RAM, CHAIN),
+        clauses = listOf(on(EffectTrigger.KILL, EffectAction.Buff(BuffStat.IMPACT, 0.3f, 2.5f, maxStacks = 3),
+            given = listOf(EffectCondition.SourceImpact))), unlock = 6),
+    ItemDraft("Kinetic Lance", "At true speed the Core stops being a ball and becomes a spear.", RARE, listOf(RAM, PRECISION),
+        clauses = listOf(on(EffectTrigger.IMPACT, EffectAction.Chain(1, 260f, DamageBasis.HIT, 0.6f),
+            given = listOf(EffectCondition.SpeedAtLeast(1_200f)))),
+        rules = listOf(ItemRule.AlwaysCrit(EffectCondition.SpeedAtLeast(1_200f))), unlock = 10),
+    ItemDraft("Tungsten Heart", "Unbearably heavy. Unstoppable once moving.", EPIC, listOf(RAM),
+        stats = listOf(stat(ItemEffect.MASS, 0.45f), stat(ItemEffect.IMPACT_DAMAGE, 0.25f),
+            stat(ItemEffect.DASH_POWER, -0.2f)), unlock = 14, risk = true),
+
+    // DRIVE: speed, Dash and the line you carve.
+    ItemDraft("Afterburner", "The exhaust of a Dash lingers in the weapon.", COMMON, listOf(DRIVE),
+        clauses = listOf(on(EffectTrigger.DASH, EffectAction.Buff(BuffStat.DAMAGE, 0.16f, 1.6f)))),
+    ItemDraft("Phase Edge", "A Dash that passes through an enemy leaves a cut behind.", COMMON, listOf(DRIVE, RAM),
+        clauses = listOf(on(EffectTrigger.DASH_HIT, EffectAction.Strike(DamageBasis.IMPACT, 0.45f))), unlock = 2),
+    ItemDraft("Slipstream Fins", "Air rushing over the hull carries the heat away.", UNCOMMON, listOf(DRIVE, OVERCLOCK),
+        rules = listOf(ItemRule.WhileModifier(EffectCondition.SpeedAtLeast(1_100f), BuffStat.COOLING, 0.6f)), unlock = 5),
+    ItemDraft("Vector Coil", "Every Dash discharges the field it tore through.", UNCOMMON, listOf(DRIVE), listOf(StatusElement.ION),
+        clauses = listOf(on(EffectTrigger.DASH, apply(StatusElement.ION, 2, 150f))), unlock = 7),
+    ItemDraft("Afterimage", "For a moment after a Dash, every weak point is visible.", RARE, listOf(DRIVE, PRECISION),
+        clauses = listOf(on(EffectTrigger.DASH, EffectAction.Buff(BuffStat.CRIT_CHANCE, 0.45f, 1f))), unlock = 11),
+    ItemDraft("Redline Governor", "Rewards speed and punishes hesitation in equal measure.", EPIC, listOf(DRIVE),
+        rules = listOf(
+            ItemRule.WhileModifier(EffectCondition.SpeedAtLeast(1_400f), BuffStat.DAMAGE, 0.35f),
+            ItemRule.WhileModifier(EffectCondition.SpeedBelow(500f), BuffStat.DAMAGE_TAKEN, 0.3f),
+        ), unlock = 15, risk = true),
+
+    // ANCHOR: Brake, control and the art of stopping.
+    ItemDraft("Brake Caliper", "The momentum you shed has to go somewhere.", COMMON, listOf(ANCHOR),
+        clauses = listOf(on(EffectTrigger.BRAKE_RELEASE, EffectAction.Push(180f, 300f),
+            EffectAction.Burst(180f, DamageBasis.BRAKE, 0.35f)))),
+    ItemDraft("Grav Hook", "Stopping hard drags the world in after you.", UNCOMMON, listOf(ANCHOR), listOf(StatusElement.GRAVITIC),
+        clauses = listOf(on(EffectTrigger.BRAKE_RELEASE, EffectAction.Pull(260f, 320f), apply(StatusElement.GRAVITIC, 2, 260f))),
+        unlock = 5),
+    ItemDraft("Inertial Damper", "Braced and braking, the Core shrugs hits off.", UNCOMMON, listOf(ANCHOR, BULWARK),
+        rules = listOf(ItemRule.WhileModifier(EffectCondition.Braking, BuffStat.DAMAGE_TAKEN, -0.4f)), unlock = 6),
+    ItemDraft("Stillpoint", "At the center of a stop, the air itself freezes.", RARE, listOf(ANCHOR), listOf(StatusElement.CRYO),
+        clauses = listOf(on(EffectTrigger.BRAKE_RELEASE, apply(StatusElement.CRYO, 3, 220f))),
+        rules = listOf(ItemRule.WhileModifier(EffectCondition.Braking, BuffStat.COOLING, 1f)), unlock = 10),
+    ItemDraft("Arrest Engine", "A full stop, released as a full blast.", EPIC, listOf(ANCHOR),
+        clauses = listOf(on(EffectTrigger.BRAKE_RELEASE, EffectAction.Burst(240f, DamageBasis.BRAKE, 0.9f),
+            EffectAction.Vent(30f), cooldown = 2f)), unlock = 14),
+
+    // ARSENAL: the weapon system and its cadence.
+    ItemDraft("Calibrated Coil", "A cleaner signal into the weapon.", COMMON, listOf(ARSENAL),
+        stats = listOf(stat(ItemEffect.WEAPON_POWER, 0.08f)),
+        clauses = listOf(on(EffectTrigger.WEAPON_HIT, EffectAction.Strike(DamageBasis.HIT, 0.6f), every = 6))),
+    ItemDraft("Hair Trigger", "Every kill shaves a moment off the next shot.", UNCOMMON, listOf(ARSENAL, CHAIN),
+        clauses = listOf(on(EffectTrigger.KILL, EffectAction.RefreshWeapon(0.18f), cooldown = 0.5f)), unlock = 4),
+    ItemDraft("Elemental Rounds", "The weapon learns whatever your build breathes.", UNCOMMON, listOf(ARSENAL),
+        clauses = listOf(on(EffectTrigger.WEAPON_HIT, applyPick(ElementPick.DOMINANT, 1), every = 4)), unlock = 6),
+    ItemDraft("Payload Splitter", "A critical payload splits and seeks a second target.", RARE, listOf(ARSENAL, PRECISION),
+        clauses = listOf(on(EffectTrigger.CRIT, EffectAction.Chain(1, 380f, DamageBasis.HIT, 0.5f),
+            given = listOf(EffectCondition.SourceWeapon))), unlock = 9),
+    ItemDraft("Overcharged Capacitor", "More power than the cooling loop was ever rated for.", EPIC, listOf(ARSENAL, OVERCLOCK),
+        stats = listOf(stat(ItemEffect.WEAPON_POWER, 0.35f), stat(ItemEffect.COOLING, -0.25f)), unlock = 13, risk = true),
+
+    // PRECISION: critical hits and weak points.
+    ItemDraft("Focus Lens", "A finer read on where things break.", COMMON, listOf(PRECISION),
+        stats = listOf(stat(ItemEffect.CRIT_CHANCE, 0.05f)),
+        rules = listOf(ItemRule.GuaranteedCritAfter(4))),
+    ItemDraft("Weakpoint Scanner", "A status is a crack; the scanner finds it.", UNCOMMON, listOf(PRECISION),
+        rules = listOf(ItemRule.CritDamageVersus(EffectCondition.TargetHas(null), 0.4f)), unlock = 4),
+    ItemDraft("Hunter's Sigil", "Every precise wound starts to rot.", UNCOMMON, listOf(PRECISION), listOf(StatusElement.ENTROPY),
+        clauses = listOf(on(EffectTrigger.CRIT, apply(StatusElement.ENTROPY, 2))), unlock = 7),
+    ItemDraft("Killshot", "A wounded enemy is already finished.", RARE, listOf(PRECISION, CHAIN),
+        clauses = listOf(on(EffectTrigger.CRIT, EffectAction.Strike(DamageBasis.VICTIM_MAX_HP, 0.35f),
+            EffectAction.Vent(6f), EffectAction.ExtendCombo(0.4f),
+            given = listOf(EffectCondition.TargetBelow(0.35f)), cooldown = 0.5f)), unlock = 11),
+    ItemDraft("Glass Edge", "Sharp enough to cut anything, brittle against everything else.", EPIC, listOf(PRECISION),
+        stats = listOf(stat(ItemEffect.CRIT_DAMAGE, 0.8f)),
+        rules = listOf(ItemRule.NonCriticalDamage(-0.15f)), unlock = 15, risk = true),
+
+    // BULWARK: shields, integrity and recovery.
+    ItemDraft("Shield Cell", "A spare charge of hard light.", COMMON, listOf(BULWARK),
+        stats = listOf(stat(ItemEffect.SHIELD_CAPACITY, 20f)),
+        clauses = listOf(on(EffectTrigger.SHIELD_BREAK, EffectAction.Push(160f, 320f)))),
+    ItemDraft("Nanite Mesh", "Repair swarms that never sleep.", COMMON, listOf(BULWARK),
+        stats = listOf(stat(ItemEffect.REGEN, 0.5f), stat(ItemEffect.MAX_INTEGRITY, 8f))),
+    ItemDraft("Reactive Plating", "Hit it and it hits back.", UNCOMMON, listOf(BULWARK, RAM),
+        clauses = listOf(on(EffectTrigger.HURT, EffectAction.Burst(170f, DamageBasis.FLAT, 40f), cooldown = 1f)), unlock = 5),
+    ItemDraft("Capacitor Aegis", "A collapsing shield spills its charge.", UNCOMMON, listOf(BULWARK), listOf(StatusElement.ION),
+        clauses = listOf(on(EffectTrigger.SHIELD_BREAK, apply(StatusElement.ION, 3, 220f),
+            EffectAction.Burst(220f, DamageBasis.SHIELD, 1f))), unlock = 8),
+    ItemDraft("Hardlight Weave", "Healing that has nowhere left to go becomes armor.", RARE, listOf(BULWARK),
+        stats = listOf(stat(ItemEffect.SHIELD_CAPACITY, 10f), stat(ItemEffect.MAX_INTEGRITY, 10f)),
+        rules = listOf(ItemRule.Convert(ConversionKind.OVERHEAL_TO_SHIELD, 1.5f)), unlock = 8),
+    ItemDraft("Last Stand", "When the Core is nearly gone, it refuses to go.", EPIC, listOf(BULWARK),
+        clauses = listOf(on(EffectTrigger.HURT, EffectAction.Shield(45f),
+            EffectAction.Buff(BuffStat.DAMAGE_REDUCTION, 0.4f, 3f),
+            given = listOf(EffectCondition.IntegrityBelow(0.3f)), cooldown = 25f)), unlock = 14),
+
+    // OVERCLOCK: heat, cooling and Overdrive.
+    ItemDraft("Heat Sink", "Copper fins drink the heat.", COMMON, listOf(OVERCLOCK),
+        stats = listOf(stat(ItemEffect.COOLING, 0.2f)),
+        rules = listOf(ItemRule.FreeDash(25f, 4f))),
+    ItemDraft("Thermal Vent", "Overheating stops being a failure and becomes a weapon.", UNCOMMON, listOf(OVERCLOCK),
+        listOf(StatusElement.THERMAL),
+        clauses = listOf(on(EffectTrigger.OVERHEAT, EffectAction.Burst(200f, DamageBasis.IMPACT, 0.8f),
+            apply(StatusElement.THERMAL, 3, 200f), cooldown = 3f)), unlock = 5),
+    ItemDraft("Overdrive Primer", "Overdrive arrives faster and arrives armored.", UNCOMMON, listOf(OVERCLOCK),
+        stats = listOf(stat(ItemEffect.OVERDRIVE_GAIN, 0.25f)),
+        clauses = listOf(on(EffectTrigger.OVERDRIVE, EffectAction.Shield(25f))), unlock = 5),
+    ItemDraft("Reactor Spike", "Overdrive opens with a lightning storm.", RARE, listOf(OVERCLOCK, ARSENAL),
+        clauses = listOf(on(EffectTrigger.OVERDRIVE, EffectAction.Vent(100f),
+            EffectAction.Chain(5, 520f, DamageBasis.WEAPON, 1.5f))), unlock = 10),
+    ItemDraft("Redline Reactor", "Run it hot or do not run it at all.", EPIC, listOf(OVERCLOCK),
+        stats = listOf(stat(ItemEffect.COOLING, -0.2f)),
+        rules = listOf(ItemRule.WhileModifier(EffectCondition.HeatAtLeast(60f), BuffStat.DAMAGE, 0.3f)),
+        unlock = 13, risk = true),
+
+    // CHAIN: kills, combos and momentum between targets.
+    ItemDraft("Combo Battery", "Holds the rhythm a little longer.", COMMON, listOf(CHAIN),
+        stats = listOf(stat(ItemEffect.COMBO_WINDOW, 0.8f)),
+        clauses = listOf(on(EffectTrigger.KILL, EffectAction.Vent(15f), every = 10))),
+    ItemDraft("Momentum Ledger", "Every kill in the chain is written into the next hit.", UNCOMMON, listOf(CHAIN),
+        rules = listOf(ItemRule.ComboDamage(0.01f, 0.3f)), unlock = 4),
+    ItemDraft("Chain Detonation", "The fallen do not leave quietly.", UNCOMMON, listOf(CHAIN, RAM),
+        clauses = listOf(on(EffectTrigger.KILL, EffectAction.Burst(100f, DamageBasis.VICTIM_MAX_HP, 0.3f))), unlock = 6),
+    ItemDraft("Killstreak Engine", "A long chain spins the reactor up.", RARE, listOf(CHAIN, OVERCLOCK),
+        clauses = listOf(on(EffectTrigger.KILL, EffectAction.Overdrive(3f),
+            given = listOf(EffectCondition.ComboAtLeast(10)), cooldown = 1f)), unlock = 9),
+    ItemDraft("Domino Protocol", "Every second fall knocks five more over.", EPIC, listOf(CHAIN),
+        clauses = listOf(on(EffectTrigger.KILL, EffectAction.Chain(5, 360f, DamageBasis.VICTIM_MAX_HP, 0.5f), every = 2)),
+        unlock = 13),
+
+    // FORTUNE: Data, Matter, luck and choice.
+    ItemDraft("Magnet Lens", "Pulls loose Data from farther away.", COMMON, listOf(FORTUNE),
+        stats = listOf(stat(ItemEffect.PICKUP_RADIUS, 45f), stat(ItemEffect.DATA_GAIN, 0.05f))),
+    ItemDraft("Lucky Coin", "Flip it once more.", UNCOMMON, listOf(FORTUNE),
+        stats = listOf(stat(ItemEffect.LUCK, 0.3f)),
+        rules = listOf(ItemRule.BonusRerolls(1)), unlock = 3),
+    ItemDraft("Data Siphon", "Elites carry archives; this opens them.", UNCOMMON, listOf(FORTUNE, CHAIN),
+        stats = listOf(stat(ItemEffect.DATA_GAIN, 0.08f)),
+        clauses = listOf(on(EffectTrigger.KILL, EffectAction.GainData(25f), given = listOf(EffectCondition.TargetElite))),
+        unlock = 6),
+    ItemDraft("Jackpot Relay", "Every so often the odds pay out, and luck makes it sooner.", RARE, listOf(FORTUNE, CHAIN),
+        stats = listOf(stat(ItemEffect.MATTER_GAIN, 0.1f)),
+        clauses = listOf(EffectClause(EffectTrigger.KILL, actions = listOf(
+            EffectAction.Burst(150f, DamageBasis.VICTIM_MAX_HP, 0.4f), EffectAction.GainData(1f),
+        ).toImmutableList(), everyNth = 8, luckShortened = true)), unlock = 8),
+    ItemDraft("Gambler's Ledger", "One more card on the table, one less margin for error.", EPIC, listOf(FORTUNE),
+        stats = listOf(stat(ItemEffect.MAX_INTEGRITY, -15f)),
+        rules = listOf(ItemRule.OfferCards(1)), unlock = 12, risk = true),
+
+    // THERMAL.
+    ItemDraft("Igniter", "Sparks fly from every collision.", COMMON, listOf(OVERCLOCK), listOf(StatusElement.THERMAL),
+        clauses = listOf(on(EffectTrigger.IMPACT, apply(StatusElement.THERMAL, 2)))),
+    ItemDraft("Incendiary Rounds", "The weapon runs hot on purpose.", COMMON, listOf(ARSENAL), listOf(StatusElement.THERMAL),
+        clauses = listOf(on(EffectTrigger.WEAPON_HIT, apply(StatusElement.THERMAL, 1), every = 3)), unlock = 2),
+    ItemDraft("Kindling", "Fires that burn longer and hotter.", UNCOMMON, emptyList(), listOf(StatusElement.THERMAL),
+        rules = listOf(ItemRule.ElementPotency(StatusElement.THERMAL, 0.4f), ItemRule.StatusDuration(StatusElement.THERMAL, 1.5f)),
+        unlock = 5),
+    ItemDraft("Flashpoint", "Ignition arrives early and arrives loud.", RARE, emptyList(), listOf(StatusElement.THERMAL),
+        rules = listOf(ItemRule.BreakThreshold(StatusElement.THERMAL, 2), ItemRule.BreakPower(StatusElement.THERMAL, 0.4f)), unlock = 9),
+    ItemDraft("Phoenix Coil", "Every Ignite feeds the Core a little fire.", EPIC, listOf(BULWARK), listOf(StatusElement.THERMAL),
+        clauses = listOf(on(EffectTrigger.BREAK, EffectAction.Heal(3f), EffectAction.Shield(5f),
+            given = listOf(EffectCondition.ElementIs(StatusElement.THERMAL)), cooldown = 0.5f)), unlock = 13),
+    ItemDraft("Solar Choir", "When one fire sings, the others answer.", LEGENDARY, listOf(CHAIN), listOf(StatusElement.THERMAL),
+        rules = listOf(ItemRule.BreakSpread(StatusElement.THERMAL, 3, 140f)), unlock = 16, rebirth = 2),
+
+    // CRYO.
+    ItemDraft("Frost Plating", "Strike the Core and feel the cold bite back.", COMMON, listOf(BULWARK), listOf(StatusElement.CRYO),
+        clauses = listOf(on(EffectTrigger.HURT, apply(StatusElement.CRYO, 3, 200f)))),
+    ItemDraft("Rime Rounds", "Every shot leaves frost behind.", COMMON, listOf(ARSENAL), listOf(StatusElement.CRYO),
+        clauses = listOf(on(EffectTrigger.WEAPON_HIT, apply(StatusElement.CRYO, 1), every = 2)), unlock = 2),
+    ItemDraft("Cold Snap", "A Dash drags winter in its wake.", UNCOMMON, listOf(DRIVE), listOf(StatusElement.CRYO),
+        clauses = listOf(on(EffectTrigger.DASH, apply(StatusElement.CRYO, 2, 170f))), unlock = 5),
+    ItemDraft("Permafrost", "The cold sets faster and holds longer.", RARE, emptyList(), listOf(StatusElement.CRYO),
+        rules = listOf(ItemRule.BreakThreshold(StatusElement.CRYO, 2), ItemRule.BreakPower(StatusElement.CRYO, 0.4f)), unlock = 9),
+    ItemDraft("Shatterglass", "Frozen things only ever break one way.", EPIC, listOf(PRECISION), listOf(StatusElement.CRYO),
+        clauses = listOf(on(EffectTrigger.CRIT, EffectAction.Shards(4, DamageBasis.HIT, 0.3f, ElementPick.CRYO),
+            given = listOf(EffectCondition.TargetFrozen))),
+        rules = listOf(ItemRule.AlwaysCrit(EffectCondition.TargetFrozen)), unlock = 13),
+    ItemDraft("Glacial Heart", "Collide with the frozen and the whole field cracks.", LEGENDARY, listOf(RAM), listOf(StatusElement.CRYO),
+        clauses = listOf(on(EffectTrigger.IMPACT, EffectAction.Burst(160f, DamageBasis.HIT, 1f), apply(StatusElement.CRYO, 3, 160f),
+            given = listOf(EffectCondition.TargetFrozen))), unlock = 16, rebirth = 2),
+
+    // ION.
+    ItemDraft("Static Brush", "Collisions build a charge on whatever they touch.", COMMON, listOf(DRIVE), listOf(StatusElement.ION),
+        clauses = listOf(on(EffectTrigger.IMPACT, apply(StatusElement.ION, 2)))),
+    ItemDraft("Arc Relay", "Every third shot jumps.", COMMON, listOf(ARSENAL), listOf(StatusElement.ION),
+        clauses = listOf(on(EffectTrigger.WEAPON_HIT, EffectAction.Chain(2, 260f, DamageBasis.HIT, 0.3f, ElementPick.ION),
+            every = 3)), unlock = 2),
+    ItemDraft("Capacitor Bank", "Stores more, releases sooner.", UNCOMMON, emptyList(), listOf(StatusElement.ION),
+        rules = listOf(ItemRule.BreakThreshold(StatusElement.ION, 2), ItemRule.BreakPower(StatusElement.ION, 0.3f)), unlock = 5),
+    ItemDraft("Tesla Spur", "A sharp turn throws lightning off the hull.", RARE, listOf(DRIVE), listOf(StatusElement.ION),
+        clauses = listOf(on(EffectTrigger.TURN, EffectAction.Chain(3, 340f, DamageBasis.IMPACT, 0.7f, ElementPick.ION))),
+        unlock = 9),
+    ItemDraft("Storm Lattice", "Every Overload winds the reactor tighter.", EPIC, listOf(CHAIN), listOf(StatusElement.ION),
+        clauses = listOf(on(EffectTrigger.BREAK, EffectAction.Overdrive(4f),
+            EffectAction.Buff(BuffStat.ACTIVATION, 0.25f, 3f),
+            given = listOf(EffectCondition.ElementIs(StatusElement.ION)), cooldown = 1f)), unlock = 13),
+
+    // GRAVITIC.
+    ItemDraft("Graviton Seed", "Shots that weigh down whatever they hit.", COMMON, listOf(ARSENAL), listOf(StatusElement.GRAVITIC),
+        clauses = listOf(on(EffectTrigger.WEAPON_HIT, apply(StatusElement.GRAVITIC, 1), every = 3))),
+    ItemDraft("Lodestone", "Heavy things are drawn to heavier things.", COMMON, listOf(ANCHOR), listOf(StatusElement.GRAVITIC),
+        clauses = listOf(on(EffectTrigger.IMPACT, apply(StatusElement.GRAVITIC, 2))), unlock = 2),
+    ItemDraft("Tidal Hook", "A turn swings the field and everything in it.", UNCOMMON, listOf(ANCHOR), listOf(StatusElement.GRAVITIC),
+        clauses = listOf(on(EffectTrigger.TURN, EffectAction.Pull(240f, 260f), apply(StatusElement.GRAVITIC, 1, 240f),
+            cooldown = 1f)), unlock = 5),
+    ItemDraft("Crush Depth", "The collapse begins sooner and ends harder.", RARE, emptyList(), listOf(StatusElement.GRAVITIC),
+        rules = listOf(ItemRule.BreakThreshold(StatusElement.GRAVITIC, 2), ItemRule.BreakPower(StatusElement.GRAVITIC, 0.5f)), unlock = 9),
+    ItemDraft("Dark Star", "Every Collapse leaves a hole in the world.", EPIC, emptyList(), listOf(StatusElement.GRAVITIC),
+        clauses = listOf(on(EffectTrigger.BREAK, EffectAction.Well(180f, 1.6f, DamageBasis.FLAT, 20f),
+            given = listOf(EffectCondition.ElementIs(StatusElement.GRAVITIC)), cooldown = 0.8f)), unlock = 13),
+
+    // ENTROPY.
+    ItemDraft("Rust Spores", "Shots that leave something growing.", COMMON, listOf(ARSENAL), listOf(StatusElement.ENTROPY),
+        clauses = listOf(on(EffectTrigger.WEAPON_HIT, apply(StatusElement.ENTROPY, 1), every = 2))),
+    ItemDraft("Corrosive Touch", "Whatever you collide with starts to come apart.", COMMON, listOf(RAM), listOf(StatusElement.ENTROPY),
+        clauses = listOf(on(EffectTrigger.IMPACT, apply(StatusElement.ENTROPY, 3))), unlock = 2),
+    ItemDraft("Necrotic Lattice", "Rot that eats deeper.", UNCOMMON, emptyList(), listOf(StatusElement.ENTROPY),
+        rules = listOf(ItemRule.ElementPotency(StatusElement.ENTROPY, 0.5f)), unlock = 5),
+    ItemDraft("Rot Bloom", "The rotting dead seed the living.", RARE, listOf(CHAIN), listOf(StatusElement.ENTROPY),
+        clauses = listOf(on(EffectTrigger.KILL, apply(StatusElement.ENTROPY, 4, 150f),
+            given = listOf(EffectCondition.TargetHas(StatusElement.ENTROPY)))), unlock = 9),
+    ItemDraft("Necrotic Exchange", "Your repair swarms learn to eat instead of mend.", EPIC, listOf(BULWARK),
+        listOf(StatusElement.ENTROPY),
+        stats = listOf(stat(ItemEffect.REGEN, 0.6f)),
+        clauses = listOf(on(EffectTrigger.BREAK, EffectAction.Heal(3f),
+            given = listOf(EffectCondition.ElementIs(StatusElement.ENTROPY)), cooldown = 0.5f)),
+        rules = listOf(ItemRule.Convert(ConversionKind.REGENERATION_TO_DECAY, 2f)), unlock = 13, risk = true),
+
+    // Conversions as low-damage enablers.
+    ItemDraft("Deadeye Reticle", "Stop hoping for a lucky hit. Make every hit count.", EPIC, listOf(PRECISION),
+        stats = listOf(stat(ItemEffect.CRIT_CHANCE, 0.05f)),
+        rules = listOf(ItemRule.Convert(ConversionKind.CRIT_CHANCE_TO_DAMAGE, 2.5f)), unlock = 12, risk = true),
+    ItemDraft("Detonator Spur", "A Dash through a burning, rotting enemy finishes the job at once.", RARE, listOf(DRIVE),
+        listOf(StatusElement.THERMAL, StatusElement.ENTROPY),
+        clauses = listOf(on(EffectTrigger.DASH_HIT,
+            EffectAction.Detonate(listOf(StatusElement.THERMAL, StatusElement.ENTROPY).toImmutableList(), 1.5f)))),
+    // Cross-element reactions.
+    ItemDraft("Catalyst Matrix", "Makes every reaction more violent.", RARE, emptyList(),
+        rules = listOf(ItemRule.ReactionPower(0.35f)), unlock = 8),
+    ItemDraft("Prismatic Core", "Teaches the weapon your second element.", EPIC, listOf(ARSENAL),
+        clauses = listOf(on(EffectTrigger.WEAPON_HIT, applyPick(ElementPick.SECONDARY, 2), every = 5)), unlock = 12),
+    ItemDraft("Resonance Fork", "A reaction that rings on after it ends.", LEGENDARY, emptyList(),
+        rules = listOf(ItemRule.ReactionResidue(2)), unlock = 16, rebirth = 4),
+    ItemDraft("Volatile Compound", "Stronger reactions, and nothing between you and them.", EPIC, listOf(FORTUNE),
+        rules = listOf(ItemRule.ReactionPower(0.8f), ItemRule.ReactionRecoil(5f, 140f)), unlock = 14, risk = true),
+)
+
+internal fun defaultItems(): ImmutableList<ItemDefinition> =
+    Drafts.mapIndexed { index, draft ->
+        ItemDefinition(
+            id = index,
+            name = draft.name,
+            description = draft.flavor,
+            rarity = draft.rarity,
+            tags = draft.tags.toImmutableList(),
+            elements = draft.elements.toImmutableList(),
+            stats = draft.stats.toImmutableList(),
+            clauses = draft.clauses.toImmutableList(),
+            rules = draft.rules.toImmutableList(),
+            maxStacks = draft.stacks,
+            unlockLevel = draft.unlock,
+            minimumRebirth = draft.rebirth,
+            risk = draft.risk,
+        )
+    }.toImmutableList().also(::validateItems)
+
+internal fun validateItems(items: List<ItemDefinition>) {
+    check(items.size <= ContentBounds.MAX_ITEMS) { "Item catalog exceeds ${ContentBounds.MAX_ITEMS} items" }
+    check(items.withIndex().all { (index, item) -> item.id == index }) { "Item ids must be contiguous from zero" }
+    check(items.map { it.name }.toSet().size == items.size) { "Item names must be unique" }
+    check(items.map { it.description }.toSet().size == items.size) { "Item flavor lines must be unique" }
+    check(items.all { it.tags.isNotEmpty() || it.elements.isNotEmpty() || it.rules.any { rule -> rule is ItemRule.ReactionPower || rule is ItemRule.ReactionResidue } }) {
+        "Every item belongs to an archetype, an element or the reaction family"
+    }
+    BuildTag.entries.forEach { tag ->
+        check(items.count { tag in it.tags } >= 5) { "$tag needs at least five items to be draftable" }
+    }
+    StatusElement.entries.forEach { element ->
+        check(items.count { element in it.elements } >= 5) { "$element needs at least five items" }
+        check(items.any { element in it.elements && it.unlockLevel <= 2 }) { "$element needs an early enabler" }
+    }
+}
+
+/**
+ * Progressive content validation: every explicit element an item touches is declared on the item (so
+ * cards and affinity counts never lie), and no combination of threshold reductions can drop a Break
+ * below two stacks.
+ */
+internal fun validateBuildReferences(items: List<ItemDefinition>, build: kinetickk.ball.content.api.BuildCatalog) {
+    items.forEach { item ->
+        val touched = buildSet {
+            item.clauses.forEach { clause ->
+                clause.actions.forEach { action ->
+                    when (action) {
+                        is EffectAction.ApplyStatus -> action.pick.element?.let(::add)
+                        is EffectAction.Chain -> action.pick?.element?.let(::add)
+                        is EffectAction.Shards -> action.pick?.element?.let(::add)
+                        is EffectAction.Well -> action.pick?.element?.let(::add)
+                        else -> Unit
+                    }
+                }
+            }
+            item.rules.forEach { rule ->
+                when (rule) {
+                    is ItemRule.ElementPotency -> add(rule.element)
+                    is ItemRule.StatusDuration -> add(rule.element)
+                    is ItemRule.BreakThreshold -> add(rule.element)
+                    is ItemRule.BreakPower -> add(rule.element)
+                    is ItemRule.BreakSpread -> add(rule.element)
+                    else -> Unit
+                }
+            }
+        }
+        require(item.elements.containsAll(touched)) { "${item.name} touches undeclared elements $touched" }
+    }
+    StatusElement.entries.forEach { element ->
+        val reduction = items.sumOf { item ->
+            item.rules.filterIsInstance<ItemRule.BreakThreshold>().filter { it.element == element }.sumOf { it.reduction }
+        }
+        // One affinity tier also lowers the threshold by one.
+        require(build.element(element).breakThreshold - reduction - 1 >= 2) {
+            "$element break threshold can fall below two stacks"
+        }
+    }
+}

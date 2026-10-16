@@ -25,10 +25,8 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.GameplayContentSnapshot
-import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemModifier
-import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
 import kinetickk.ball.content.api.MetaUpgradeDefinition
 import kinetickk.ball.content.api.MetaUpgradeId
@@ -36,8 +34,6 @@ import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicId
-import kinetickk.ball.content.api.RelicAspect
-import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicPolicy
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
@@ -70,6 +66,7 @@ import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.rewards.RewardContent
 import kinetickk.ball.gameplay.interaction.rewards.RewardPresentation
 import kinetickk.ball.gameplay.interaction.rewards.rewardCardPresentation
+import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureContent
 import kinetickk.ball.gameplay.nucleus.GameplayContext
 import kinetickk.ball.gameplay.nucleus.GameplayDecision
 import kinetickk.ball.gameplay.nucleus.GameplayNucleus
@@ -317,16 +314,8 @@ class GameplayLocalizedRenderingTest {
 /** Interaction consumes Content's public snapshots; a small fixture exercises real text grammars. */
 private fun localizationFixtureContent() = GameplayContentSnapshot(
     version = KINETICKK_CONTENT_VERSION,
-    items = listOf("Cinder", "Neon", "Gravitic").mapIndexed { index, component ->
-        val name = "$component Ram"
-        ItemDefinition(
-            index, name,
-            "$name binds the Impact family to a $component component: +5% Impact damage and +4% Weapon power per stack (max 8).",
-            if (index == 1) ItemRarity.UNCOMMON else ItemRarity.COMMON,
-            ItemModifier(ItemEffect.IMPACT_DAMAGE, 0.05f), ItemModifier(ItemEffect.WEAPON_POWER, 0.04f),
-            maxStacks = 8, unlockLevel = 1, family = "Impact",
-        )
-    }.toImmutableList(),
+    // Shipped items and relics, so the Russian scenes render real catalog phrases.
+    items = rewardFixtureContent.items,
     weapons = immutableListOf(WeaponDefinition(
         WeaponId.FLUX_WAKE, "Flux Wake", "Your trail hardens into a cutting wake; enemies crossing it take damage.",
         listOf("TRAIL"), 0,
@@ -335,9 +324,7 @@ private fun localizationFixtureContent() = GameplayContentSnapshot(
     metaUpgrades = MetaUpgradeId.entries.map { id ->
         MetaUpgradeDefinition(id, "Fixture", "Fixture", 1, 1, ItemModifier(ItemEffect.MAX_INTEGRITY, 1f))
     }.toImmutableList(),
-    relics = RelicId.entries.map { id ->
-        RelicDefinition(id, id.name, RelicAspect.entries.first(), "Fixture", "Fixture")
-    }.toImmutableList(),
+    relics = rewardFixtureContent.relics,
     rebirth = RebirthPolicySnapshot(
         minimumLevel = 0, maximumLevel = 0,
         profiles = immutableListOf(RebirthProfile(
@@ -346,5 +333,5 @@ private fun localizationFixtureContent() = GameplayContentSnapshot(
         )),
         maxActiveEnemies = 120, minSpawnIntervalSeconds = 0.09f, minEliteIntervalSeconds = 24f,
     ),
-    relicPolicy = RelicPolicy(4, 5),
+    relicPolicy = RelicPolicy(4, 3),
 )

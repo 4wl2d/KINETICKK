@@ -50,21 +50,62 @@ class BuildSummaryTest {
     }
 
     @Test
-    fun cappedModifiersAreExcludedUnlessAnotherModifierOrFamilyProcStillHelps() {
+    fun fullySuppressedAndMaxedItemsAreExcludedWhilePartlySuppressedItemsStillHelp() {
         val game = MutableGameState(canonicalGameplayContent, seed = 15).apply { startRun() }
-        val item = ItemDefinition(0, "Capped", "Capped test", ItemRarity.COMMON,
-            ItemModifier(ItemEffect.CRIT_CHANCE, 0.1f), ItemModifier(ItemEffect.DAMAGE_REDUCTION, 0.1f),
-            8, 1, "Test")
-        game.critChance = 0.75f
-        game.damageReduction = 0.65f
-        assertFalse(game.hasUsefulItemEffect(item))
-        game.damageReduction = 0.64f
-        assertTrue(game.hasUsefulItemEffect(item))
-        game.damageReduction = 0.65f
-        game.familyStacks[0] = 2
-        assertTrue(game.hasUsefulItemEffect(item))
-        game.itemStacks[0] = 8
-        assertFalse(game.hasUsefulItemEffect(item))
+        val shieldCell = game.content.items.single { it.name == "Shield Cell" }
+        val naniteMesh = game.content.items.single { it.name == "Nanite Mesh" }
+        assertTrue(game.hasUsefulItemEffect(shieldCell))
+
+        // Glass Comet removes shields: every effect of Shield Cell is disabled, so it is never useful.
+        game.acquireRelic(RelicId.GLASS_COMET)
+        assertEquals(1f, game.itemSuppressedShare(shieldCell))
+        assertFalse(game.hasUsefulItemEffect(shieldCell))
+        assertFalse(shieldCell in game.offerableItems())
+
+        // Verdant Rot disables regeneration but not integrity: half the item still helps.
+        game.acquireRelic(RelicId.VERDANT_ROT)
+        assertEquals(0.5f, game.itemSuppressedShare(naniteMesh))
+        assertTrue(game.hasUsefulItemEffect(naniteMesh))
+        game.itemStacks[naniteMesh.id] = naniteMesh.maxStacks
+        assertFalse(game.hasUsefulItemEffect(naniteMesh))
+
+        // Owned, fully disabled items are reported to the build read.
+        game.acquireItem(shieldCell.id)
+        val summary = game.buildSummary(GameplayInstanceId(RunId(1)), GameplayRevision(1))
+        assertEquals(listOf(shieldCell.id), summary.suppressedItemIds.toList())
+        assertEquals(listOf(shieldCell.id), game.buildProjection().suppressedItemIds.toList())
+    }
+
+    @Test
+    fun buildReadCarriesTagsAffinityLinksReachableReactionsAndRebornItems() {
+        val game = MutableGameState(canonicalGameplayContent, seed = 16).apply { startRun() }
+        val igniter = game.content.items.single { it.name == "Igniter" }
+        val rime = game.content.items.single { it.name == "Rime Rounds" }
+        game.acquireItem(igniter.id, reborn = true)
+        game.acquireItem(rime.id)
+        game.acquireRelic(RelicId.FURNACE_COVENANT)
+        game.acquireRelic(RelicId.OVERDRIVE_CASCADE)
+        val summary = game.buildSummary(GameplayInstanceId(RunId(1)), GameplayRevision(2))
+
+        // A Reborn item counts double; each Thermal-aspect relic adds one; ORB leans toward Drive.
+        assertEquals(2, summary.tags.single { it.tag == BuildTag.OVERCLOCK }.points)
+        assertEquals(1, summary.tags.single { it.tag == BuildTag.DRIVE }.points)
+        val thermal = summary.elements.single { it.element == StatusElement.THERMAL }
+        assertEquals(4, thermal.affinity)
+        assertEquals(2, thermal.tier)
+        assertTrue(thermal.dominant)
+        assertEquals(listOf(ReactionId.THERMAL_SHOCK), summary.reachableReactions.toList())
+        assertEquals(listOf(igniter.id), summary.rebornItemIds.toList())
+        val link = summary.relicLinks.single()
+        assertEquals(BuildRelicLinkKind.CONCORD, link.kind)
+        assertEquals(RelicPairingId.MELTDOWN, link.pairing)
+        assertTrue(link.discovered)
+        assertTrue(summary.severedRelicIds.isEmpty())
+
+        game.replaceRelic(0, RelicId.GYRE_ENGINE)
+        val replaced = game.buildSummary(GameplayInstanceId(RunId(1)), GameplayRevision(3))
+        assertEquals(listOf(RelicId.FURNACE_COVENANT), replaced.severedRelicIds.toList())
+        assertTrue(replaced.relicLinks.isEmpty())
     }
 
     @Test
@@ -73,7 +114,7 @@ class BuildSummaryTest {
         val game = MutableGameState(content, seed = 18).apply { startRun() }
         val instance = GameplayInstanceId(RunId(1))
         val revision = GameplayRevision(8)
-        val aboveLevel = content.items.first { it.unlockLevel > game.level }
+        val aboveLevel = content.items.first { it.unlockLevel > game.level && itemRewardFocus(it) == RewardFocus.OFFENSE }
         val ordinary = game.buildSummary(instance, revision)
         assertTrue(0 in ordinary.eligibleItemIds)
         assertFalse(aboveLevel.id in ordinary.eligibleItemIds)
@@ -99,7 +140,7 @@ class BuildSummaryTest {
         game.overdriveTime = 5f
         game.update(1f / 60f)
         assertTrue(game.takeVisualFxCues().filterIsInstance<VisualFxCue.BuildChanged>().isEmpty())
-        val item = game.content.items.first { it.primary.effect == ItemEffect.WEAPON_POWER }
+        val item = game.content.items.first { item -> item.stats.any { it.effect == ItemEffect.WEAPON_POWER && it.amount > 0f } }
         val before = game.captureBuildChange()
         val powerBefore = game.effectiveWeaponPower()
         game.acquireItem(item.id)

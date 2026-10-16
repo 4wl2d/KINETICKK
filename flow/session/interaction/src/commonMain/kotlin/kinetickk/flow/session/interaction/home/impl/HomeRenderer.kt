@@ -86,12 +86,24 @@ internal class HomeMenuMotion {
     private val tiles = FloatArray(CoreShape.entries.size)
     private var activeIndex = 0
     private var accentFrom = KkHomePalette.START.accent
-    private var accentTo = accentFrom
+    private var accentTarget = HomeLayoutTarget.START
     private var accentElapsedMs = KkTime.PaletteShift.toFloat()
     var accent: Color = accentFrom
         private set
 
-    fun advance(target: HomeLayoutTarget, coreShape: CoreShape, deltaSeconds: Float) {
+    /** Clock of the Codex accent sweep, and the sweep step the settled accent shows (−1 when none). */
+    private var sweepSeconds = 0f
+    private var sweepStep = -1
+    private var sweepHues: List<Color>? = null
+    private var sweepColors: List<Color> = HomeCodexSweep
+    /** Cache slot of each sweep step: the first step showing the same accent (the holds share one). */
+    private var sweepSlots: IntArray = homeCodexSweepSlots(HomeCodexSweep)
+
+    /**
+     * Advances the frame clock. The accent eases into the selected item's palette; on the Codex it
+     * then follows the element sweep through [hues] in cached steps, so a steady frame allocates nothing.
+     */
+    fun advance(target: HomeLayoutTarget, coreShape: CoreShape, deltaSeconds: Float, hues: List<Color> = Kk.Elements) {
         val delta = deltaSeconds.coerceIn(0f, MAX_HOME_PRESENTATION_FRAME_DELTA_SECONDS)
         val index = HomeMenuTargets.indexOf(target).coerceAtLeast(0)
         selectedSeconds = if (index == activeIndex) selectedSeconds + delta else 0f
@@ -103,14 +115,26 @@ internal class HomeMenuMotion {
         for (index in tiles.indices) {
             tiles[index] = if (index == coreShape.ordinal) min(1f, tiles[index] + step) else max(0f, tiles[index] - step)
         }
-        val next = menuAccent(target)
-        if (next != accentTo) {
+        sweepSeconds = (sweepSeconds + delta) % HOME_CODEX_SWEEP_SECONDS
+        val sweep = homeCodexSweepStep(sweepSeconds)
+        if (hues !== sweepHues) {
+            // A new color-vision palette: its own sweep, and fresh tints for it.
+            sweepHues = hues
+            sweepColors = homeCodexSweep(hues)
+            sweepSlots = homeCodexSweepSlots(sweepColors)
+            sweepBase = null
+            sweepBrushCenter = Offset.Unspecified
+        }
+        val next = if (target == HomeLayoutTarget.CODEX) sweepColors[sweep] else menuAccent(target)
+        if (target != accentTarget) {
             accentFrom = accent
-            accentTo = next
+            accentTarget = target
             accentElapsedMs = 0f
         }
         accentElapsedMs = min(KkTime.PaletteShift.toFloat(), accentElapsedMs + delta * 1000f)
-        accent = lerp(accentFrom, accentTo, KkEase.Out.transform(accentElapsedMs / KkTime.PaletteShift))
+        val settled = accentElapsedMs >= KkTime.PaletteShift
+        accent = if (settled) next else lerp(accentFrom, next, KkEase.Out.transform(accentElapsedMs / KkTime.PaletteShift))
+        sweepStep = if (settled && target == HomeLayoutTarget.CODEX) sweepSlots[sweep] else -1
     }
 
     private var selectedSeconds = HOME_TRAIL_REST_SECONDS
@@ -131,6 +155,16 @@ internal class HomeMenuMotion {
 
     /** Home palettes recolor the `you` accents of the menu components (the board overrides --volt). */
     fun tinted(measurer: CanvasTextMeasurer): CanvasTextMeasurer {
+        val step = sweepStep
+        if (step >= 0) {
+            if (sweepBase !== measurer) {
+                sweepTinted.fill(null)
+                sweepMenu.fill(null)
+                sweepBase = measurer
+            }
+            return sweepTinted[step] ?: CanvasTextMeasurer(measurer.delegate, measurer.scale, measurer.language, measurer.typography,
+                measurer.roles.copy(you = accent)).also { sweepTinted[step] = it }
+        }
         val cached = tinted
         if (cached != null && tintedBase === measurer && tintedAccent == accent) return cached
         return CanvasTextMeasurer(measurer.delegate, measurer.scale, measurer.language, measurer.typography,
@@ -141,19 +175,33 @@ internal class HomeMenuMotion {
         }
     }
 
+    // One tinted measurer, menu measurer and trail brush per sweep step, built once and reused.
+    private var sweepBase: CanvasTextMeasurer? = null
+    private val sweepTinted = arrayOfNulls<CanvasTextMeasurer>(HOME_CODEX_SWEEP_STEPS)
+    private val sweepMenu = arrayOfNulls<CanvasTextMeasurer>(HOME_CODEX_SWEEP_STEPS)
+    private var sweepBrushCenter = Offset.Unspecified
+    private val sweepBrushes = arrayOfNulls<Brush>(HOME_CODEX_SWEEP_STEPS)
+
     private var menuBase: CanvasTextMeasurer? = null
     private var menuMeasurerValue: CanvasTextMeasurer? = null
 
     /** Measurer of the menu items (see [homeMenuMeasurerScale]), derived from the tinted one. */
     fun menuMeasurer(tinted: CanvasTextMeasurer): CanvasTextMeasurer {
+        val step = sweepStep
+        if (step >= 0 && sweepTinted[step] === tinted) {
+            return sweepMenu[step] ?: menuMeasurerOf(tinted).also { sweepMenu[step] = it }
+        }
         val cached = menuMeasurerValue
         if (cached != null && menuBase === tinted) return cached
+        return menuMeasurerOf(tinted).also {
+            menuMeasurerValue = it
+            menuBase = tinted
+        }
+    }
+
+    private fun menuMeasurerOf(tinted: CanvasTextMeasurer): CanvasTextMeasurer {
         val scale = homeMenuMeasurerScale(tinted.scale)
-        return (if (scale == tinted.scale) tinted else CanvasTextMeasurer(tinted.delegate, scale, tinted.language, tinted.typography, tinted.roles))
-            .also {
-                menuMeasurerValue = it
-                menuBase = tinted
-            }
+        return if (scale == tinted.scale) tinted else CanvasTextMeasurer(tinted.delegate, scale, tinted.language, tinted.typography, tinted.roles)
     }
 
     private var placementLayout: HomeLayoutGeometry? = null
@@ -227,21 +275,32 @@ internal class HomeMenuMotion {
 
     /** Conic trail (`conic-gradient` from 190° to 357°, transparent to accent) around [center]. */
     fun trailBrush(center: Offset): Brush {
+        val step = sweepStep
+        if (step >= 0) {
+            if (sweepBrushCenter != center) {
+                sweepBrushes.fill(null)
+                sweepBrushCenter = center
+            }
+            return sweepBrushes[step] ?: trailBrushOf(center).also { sweepBrushes[step] = it }
+        }
         val cached = brush
         if (cached != null && brushAccent == accent && brushCenter == center) return cached
-        return Brush.sweepGradient(
+        return trailBrushOf(center).also {
+            brush = it
+            brushAccent = accent
+            brushCenter = center
+        }
+    }
+
+    private fun trailBrushOf(center: Offset): Brush =
+        Brush.sweepGradient(
             0f to accent.copy(alpha = 0f),
             TRAIL_START / 360f to accent.copy(alpha = 0f),
             (TRAIL_START + TRAIL_SWEEP) / 360f to accent,
             (TRAIL_START + TRAIL_SWEEP + 1f) / 360f to accent.copy(alpha = 0f),
             1f to accent.copy(alpha = 0f),
             center = center,
-        ).also {
-            brush = it
-            brushAccent = accent
-            brushCenter = center
-        }
-    }
+        )
 
     val shapePath = Path()
     val shardPath = Path()
@@ -257,12 +316,14 @@ internal class HomeMenuMotion {
     }
 
     /** Enemy silhouettes on the 24-unit grid (triangle, diamond, hexagon, pentagon). */
-    val enemies: List<Path> = listOf(
-        gridPath(12f, 3f, 21f, 20f, 3f, 20f),
-        gridPath(12f, 2f, 22f, 12f, 12f, 22f, 2f, 12f),
-        gridPath(7f, 3f, 17f, 3f, 22f, 12f, 17f, 21f, 7f, 21f, 2f, 12f),
-        gridPath(12f, 3f, 21f, 10f, 17.5f, 21f, 6.5f, 21f, 3f, 10f),
-    )
+    val enemies: List<Path> by lazy {
+        listOf(
+            gridPath(12f, 3f, 21f, 20f, 3f, 20f),
+            gridPath(12f, 2f, 22f, 12f, 12f, 22f, 2f, 12f),
+            gridPath(7f, 3f, 17f, 3f, 22f, 12f, 17f, 21f, 7f, 21f, 2f, 12f),
+            gridPath(12f, 3f, 21f, 10f, 17.5f, 21f, 6.5f, 21f, 3f, 10f),
+        )
+    }
     val enemyStroke = Stroke(2f, join = StrokeJoin.Miter)
 
     private var factsKey: Any? = null
@@ -375,7 +436,13 @@ internal const val HOME_TRAIL_REST_SECONDS: Float = 0.55f
 /** The trail runs from selection until [HOME_TRAIL_REST_SECONDS] and then rests there. */
 internal fun homeTrailTime(secondsSinceSelected: Float): Float = secondsSinceSelected.coerceIn(0f, HOME_TRAIL_REST_SECONDS)
 
-/** Home palette accent of the selected/hovered menu item (applies to the items the game has). */
+/**
+ * Home palette accent of the selected/hovered menu item (applies to the items the game has). Each
+ * color names what the item opens: volt is you (and Kinetic), bone the armory, kept apart from
+ * START's volt, the deeper volt your permanent upgrades, gold Rebirth (the Rebirth screen keeps its
+ * per-tier themes), mute the system.
+ * The Codex sweeps through the element hues instead (see [HomeCodexSweep]); its static entry is Cryo.
+ */
 internal fun menuAccent(target: HomeLayoutTarget): Color = when (target) {
     HomeLayoutTarget.LAB -> KkHomePalette.LAB.accent
     HomeLayoutTarget.ARMORY -> KkHomePalette.ARMORY.accent
@@ -384,6 +451,43 @@ internal fun menuAccent(target: HomeLayoutTarget): Color = when (target) {
     HomeLayoutTarget.SETTINGS -> KkHomePalette.SETTINGS.accent
     else -> KkHomePalette.START.accent
 }
+
+/** One full sweep of the Codex accent through the five element hues. */
+internal const val HOME_CODEX_SWEEP_SECONDS: Float = 8f
+
+/**
+ * Distinct accents of one sweep (30 per second); each is tinted once and then reused. With the
+ * smooth blend below, one step moves a hue change by at most about 5 %, so the sweep reads as a glide.
+ */
+internal const val HOME_CODEX_SWEEP_STEPS: Int = 240
+
+/** Sweep step shown at [seconds] into the sweep. */
+internal fun homeCodexSweepStep(seconds: Float): Int =
+    ((seconds.mod(HOME_CODEX_SWEEP_SECONDS) / HOME_CODEX_SWEEP_SECONDS) * HOME_CODEX_SWEEP_STEPS).toInt().coerceIn(0, HOME_CODEX_SWEEP_STEPS - 1)
+
+/**
+ * Accent at [phase] 0..1 of the Codex sweep: it holds each element hue for 40 % of its share,
+ * then glides (a smooth in-and-out, steepest at 1.5 × the linear rate) into the next, wrapping
+ * from Entropy back to Thermal.
+ */
+internal fun homeCodexSweepColor(phase: Float, hues: List<Color> = Kk.Elements): Color {
+    val position = phase.mod(1f) * hues.size
+    val index = position.toInt().coerceIn(0, hues.lastIndex)
+    val blend = ((position - index - HOME_CODEX_SWEEP_HOLD) / (1f - HOME_CODEX_SWEEP_HOLD)).coerceIn(0f, 1f)
+    return lerp(hues[index], hues[(index + 1) % hues.size], blend * blend * (3f - 2f * blend))
+}
+
+private const val HOME_CODEX_SWEEP_HOLD = 0.4f
+
+/** The accents of one Codex sweep through [hues], indexed by [homeCodexSweepStep]. */
+internal fun homeCodexSweep(hues: List<Color>): List<Color> =
+    List(HOME_CODEX_SWEEP_STEPS) { step -> homeCodexSweepColor(step.toFloat() / HOME_CODEX_SWEEP_STEPS, hues) }
+
+/** For each step of [sweep], the first step with the same accent, so equal accents share one cache slot. */
+internal fun homeCodexSweepSlots(sweep: List<Color>): IntArray = IntArray(sweep.size) { step -> sweep.indexOf(sweep[step]) }
+
+/** The default palette's Codex sweep. */
+internal val HomeCodexSweep: List<Color> = homeCodexSweep(Kk.Elements)
 
 internal val HomeMenuLabels = listOf(
     SessionText.START_RUN,
@@ -967,7 +1071,9 @@ private fun DrawScope.drawHeader(model: HomeUiModel, text: CanvasTextMeasurer, s
     while (count > 0 && chipsWidth(model, text, scene, count, language) > scene.chipsRight - headerLeft) count--
     var right = scene.chipsRight
     for (index in count - 1 downTo 0) {
-        right -= drawChip(text, right, scene, homeChip(model, language, compact, index), accent) + 8f * density
+        // The chips keep their own meaning whatever item is selected: Matter is yours (volt), Rebirth gold.
+        val chipAccent = if (index == 1) Kk.Gold else text.roles.you
+        right -= drawChip(text, right, scene, homeChip(model, language, compact, index), chipAccent) + 8f * density
     }
 }
 

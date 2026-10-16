@@ -20,12 +20,14 @@ class ComparativeBuildScenarioTest {
             startRun()
             settings = settings.copy(simulationSpeed = 1f)
         }
-        fun MutableGameState.addSix(effect: ItemEffect) {
-            val item = content.items.first { it.primary.effect == effect && it.maxStacks >= 6 }
-            repeat(6) { acquireItem(item.id) }
+        /** Every pure stat item (no liability) that improves [effects], at full stacks. */
+        fun MutableGameState.addAll(vararg effects: ItemEffect) {
+            content.items.filter { item ->
+                item.stats.any { it.effect in effects && it.amount > 0f } && item.stats.none { it.amount < 0f } && !item.risk
+            }.forEach { item -> repeat(item.maxStacks) { acquireItem(item.id) } }
         }
         val baseline = fresh()
-        val economic = fresh().apply { addSix(ItemEffect.DATA_GAIN); addSix(ItemEffect.MATTER_GAIN) }
+        val economic = fresh().apply { addAll(ItemEffect.DATA_GAIN, ItemEffect.MATTER_GAIN) }
         listOf(baseline, economic).forEach { game ->
             // The same eighty defeated drifters produce the same base rewards and pickup locations.
             repeat(80) { game.killEnemyForTesting(EnemyType.DRIFTER, game.coreX, game.coreY) }
@@ -40,7 +42,7 @@ class ComparativeBuildScenarioTest {
 
         fun surviveHits(defended: Boolean): Pair<Int, Float> {
             val game = fresh().apply {
-                if (defended) { addSix(ItemEffect.SHIELD_CAPACITY); addSix(ItemEffect.DAMAGE_REDUCTION) }
+                if (defended) addAll(ItemEffect.SHIELD_CAPACITY, ItemEffect.MAX_INTEGRITY)
                 enemies.clear(); spawnClock = Float.MAX_VALUE; nextEliteAt = Float.MAX_VALUE
                 screenWidth = 1920f; screenHeight = 1080f
             }
@@ -107,6 +109,20 @@ class ComparativeBuildScenarioTest {
             }
             report += "COVERAGE ${profile.name},${shape.name},${viable.size},${viable.joinToString { it.name }}"
         }
+        // Additive boss-fight columns: per-phase seconds and integrity lost per second of the fight.
+        report += "BOSS_FIGHT_NOTE spawnClock held: ordinary adds excluded; shift escorts included"
+        report += "BOSS_FIGHT_COLUMNS profile,shape,build,phase0Seconds,phase1Seconds,phase2Seconds,fightSeconds,integrityLossPercentPerSecond,endReason"
+        for (result in results.filter { it.encounter == Encounter.BOSS }) {
+            val phases = result.phaseSeconds.joinToString(",") { if (it < 0f) "-" else ((it * 10f).roundToInt() / 10f).toString() }
+            val lossRate = ((result.integrityLossPerSecond * 1_000f).roundToInt() / 1_000f).toString()
+            report += "BOSS_FIGHT ${result.profile.name},${result.shape.name},${result.build.name},$phases,${result.seconds.toInt()},$lossRate,${result.endReason}"
+        }
+        report += "CLEAR_COLUMNS profile,shape,build,crowdSeconds,eliteSeconds,mobileSeconds (-1: not cleared)"
+        for (profile in ProfileCondition.entries) for (shape in CoreShape.entries) for (build in BuildDirection.entries) {
+            val rows = results.filter { it.profile == profile && it.shape == shape && it.build == build }
+            fun cleared(encounter: Encounter) = ((rows.single { it.encounter == encounter }.clearedSeconds * 10f).roundToInt() / 10f).toString()
+            report += "CLEAR ${profile.name},${shape.name},${build.name},${cleared(Encounter.CROWD)},${cleared(Encounter.ELITE)},${cleared(Encounter.MOBILE)}"
+        }
         report.forEach(::println)
         java.io.File(System.getProperty("java.io.tmpdir"), "kinetickk-comparative-results.txt").writeText(report.joinToString("\n"))
         for (profile in ProfileCondition.entries) for (shape in CoreShape.entries) {
@@ -124,28 +140,35 @@ class ComparativeBuildScenarioTest {
 }
 
 private enum class ProfileCondition(val labRank: Int, val rebirth: Int) { FRESH(0, 0), LAB(6, 0), REBIRTH(6, 3) }
-private enum class BuildDirection(val weapon: WeaponId, val relics: List<RelicId>, val effects: List<ItemEffect>) {
+/** Each direction commits its relics and twelve elemental or archetype items; no named relic pairing. */
+private enum class BuildDirection(val weapon: WeaponId, val relics: List<RelicId>, val items: List<Pair<String, Int>>) {
     KINETIC(WeaponId.MORNINGSTAR,
-        listOf(RelicId.MASS_ECHO, RelicId.ORBITAL_NAIL, RelicId.SLIPSTREAM_RELAY, RelicId.BORROWED_MOMENT),
-        listOf(ItemEffect.MASS, ItemEffect.IMPACT_DAMAGE, ItemEffect.DAMAGE_REDUCTION)),
+        listOf(RelicId.NEUTRON_HEART, RelicId.EXECUTIONERS_PRISM, RelicId.STORMHEART_CAPACITOR, RelicId.GYRE_ENGINE),
+        listOf("Ballast Core" to 3, "Kinetic Lance" to 2, "Wrecking Momentum" to 2, "Shock Plate" to 2, "Phase Edge" to 3)),
+    THERMAL(WeaponId.ARC_COIL,
+        listOf(RelicId.CINDER_CROWN, RelicId.FURNACE_COVENANT, RelicId.ECHO_CHAMBER, RelicId.EXECUTIONERS_PRISM),
+        listOf("Igniter" to 3, "Incendiary Rounds" to 3, "Kindling" to 2, "Flashpoint" to 2, "Thermal Vent" to 2)),
+    CRYO(WeaponId.RIFT_BLADES,
+        listOf(RelicId.ABSOLUTE_ZERO, RelicId.NEUTRON_HEART, RelicId.ECHO_CHAMBER, RelicId.GYRE_ENGINE),
+        listOf("Frost Plating" to 3, "Rime Rounds" to 3, "Cold Snap" to 2, "Permafrost" to 2, "Stillpoint" to 2)),
     DISCHARGE(WeaponId.PRISM_RELAY,
-        listOf(RelicId.VOLTAIC_FILAMENT, RelicId.STATIC_CHORUS, RelicId.GLASS_WITNESS, RelicId.BORROWED_MOMENT),
-        listOf(ItemEffect.WEAPON_POWER, ItemEffect.ATTACK_SPEED, ItemEffect.CRIT_CHANCE)),
-    ORBITAL(WeaponId.ION_SWARM,
-        listOf(RelicId.ECHO_CHAMBER, RelicId.PALIMPSEST_ROUND, RelicId.MASS_ECHO, RelicId.ORBITAL_NAIL),
-        listOf(ItemEffect.WEAPON_POWER, ItemEffect.ATTACK_SPEED, ItemEffect.SHIELD_CAPACITY)),
-    BLADES(WeaponId.RIFT_BLADES,
-        listOf(RelicId.GHOST_VECTOR, RelicId.SLIPSTREAM_RELAY, RelicId.STATIC_CHORUS, RelicId.ION_DEBT),
-        listOf(ItemEffect.WEAPON_POWER, ItemEffect.MASS, ItemEffect.COOLING)),
-    SALVAGE(WeaponId.FLUX_WAKE,
-        listOf(RelicId.GHOST_VECTOR, RelicId.SLIPSTREAM_RELAY, RelicId.ECHO_CHAMBER, RelicId.PALIMPSEST_ROUND),
-        listOf(ItemEffect.DATA_GAIN, ItemEffect.MATTER_GAIN, ItemEffect.PICKUP_RADIUS)),
+        listOf(RelicId.STORMHEART_CAPACITOR, RelicId.ECHO_CHAMBER, RelicId.EXECUTIONERS_PRISM, RelicId.NEUTRON_HEART),
+        listOf("Static Brush" to 3, "Arc Relay" to 3, "Capacitor Bank" to 2, "Tesla Spur" to 2, "Vector Coil" to 2)),
+    ENTROPY(WeaponId.ION_SWARM,
+        listOf(RelicId.PANDEMIC_CODEX, RelicId.ECHO_CHAMBER, RelicId.EVENT_HORIZON, RelicId.EXECUTIONERS_PRISM),
+        listOf("Rust Spores" to 3, "Corrosive Touch" to 3, "Necrotic Lattice" to 2, "Rot Bloom" to 2, "Hunter's Sigil" to 2)),
 }
 private enum class Encounter(val seconds: Int) { CROWD(25), ELITE(45), MOBILE(30), BOSS(180) }
+/** Non-boss encounters meet enemies as they spawn at this point of the run. */
+private const val ENCOUNTER_ELAPSED_SECONDS = 540f
 private data class EncounterResult(
     val shape: CoreShape, val build: BuildDirection, val profile: ProfileCondition, val encounter: Encounter,
     val damage: Float, val percent: Float, val targetKills: Int, val integrity: Float, val seconds: Float,
     val matter: Long, val levels: Int, val maximumEnemies: Int, val endReason: String,
+    /** Boss encounters only: seconds spent in each phase (-1 when never reached) and integrity lost per second. */
+    val phaseSeconds: List<Float> = emptyList(), val integrityLossPerSecond: Float = 0f,
+    /** Seconds until every target was down, or -1. */
+    val clearedSeconds: Float = -1f,
 )
 
 private fun runEncounter(
@@ -161,20 +184,22 @@ private fun runEncounter(
         if (encounter == Encounter.BOSS) {
             elapsed = content.tempo.bossAtSeconds
             runGrace = 0f
+        } else {
+            elapsed = ENCOUNTER_ELAPSED_SECONDS
         }
         screenWidth = 1920f
         screenHeight = 1080f
         level = 18
         nextLevelData = content.tempo.dataRequiredForLevel(level)
         weaponLevel = 10
-        // Equal twenty-item budget, four relics at rank three; no named special pair.
-        listOf(ItemEffect.MAX_INTEGRITY, ItemEffect.MAX_INTEGRITY, ItemEffect.REGEN, ItemEffect.COOLING).forEach { effect ->
-            val item = content.items.first { it.primary.effect == effect }
-            repeat(2) { acquireItem(item.id) }
+        // Equal twenty-item budget (eight shared survival stacks, twelve committed), four relics at rank three.
+        listOf("Nanite Mesh" to 2, "Shield Cell" to 2, "Heat Sink" to 2, "Hardlight Weave" to 2).forEach { (name, stacks) ->
+            val item = content.items.single { it.name == name }
+            repeat(stacks) { acquireItem(item.id) }
         }
-        build.effects.forEach { effect ->
-            val item = content.items.first { it.primary.effect == effect }
-            repeat(4) { acquireItem(item.id) }
+        build.items.forEach { (name, stacks) ->
+            val item = content.items.single { it.name == name }
+            repeat(stacks) { acquireItem(item.id) }
         }
         build.relics.forEach { relic -> repeat(3) { acquireRelic(relic) } }
         enemies.clear()
@@ -192,23 +217,24 @@ private fun runEncounter(
         previousSingularityX = coreX + 360f
         previousSingularityY = coreY
     }
-    assertFalse(game.content.synergies.filter { it.requiredRelics.isNotEmpty() }.any { definition ->
-        definition.requiredRelics.all { game.relicRank(it) > 0 }
-    }, "Fixture accidentally depends on a special pair")
+    assertEquals(20, game.itemStacks.sum(), "Every direction spends the same item budget")
+    assertEquals(0, game.build.pairingMask, "Fixture accidentally depends on a named relic pairing")
     val startedAt = game.elapsed
     if (encounter == Encounter.BOSS) assertEquals(game.content.tempo.bossAtSeconds, startedAt)
     val count = when (encounter) { Encounter.CROWD -> 12; Encounter.MOBILE -> 6; else -> 1 }
     val targets = (0 until count).map { index ->
         val angle = index * TAU / count
         val type = when (encounter) { Encounter.CROWD -> EnemyType.DRIFTER; Encounter.ELITE -> EnemyType.ELITE; Encounter.MOBILE -> EnemyType.INTERCEPTOR; Encounter.BOSS -> EnemyType.ARCHITECT }
-        val hp = when (encounter) { Encounter.CROWD -> 100f; Encounter.ELITE -> 1100f; Encounter.MOBILE -> 195f; Encounter.BOSS -> 5400f }
-        game.addEnemyForTesting(cos(angle) * if (count > 1) 170f else 0f, sin(angle) * if (count > 1) 170f else 0f,
-            hp = game.rebirthProfile.enemyHealth(hp), radius = if (encounter == Encounter.BOSS) 74f else if (encounter == Encounter.ELITE) 38f else 18f, type = type).apply {
-                if (encounter == Encounter.BOSS) actionTimer = 1.2f
-            }
+        // The production spawn stats: profile, integrity curve, rebirth and the Elite aspect rotation.
+        game.spawnedEnemy(type, cos(angle) * if (count > 1) 170f else 0f, sin(angle) * if (count > 1) 170f else 0f)
+            .also { game.enemies += it }
     }
     var heading = 0f
     var maxEnemies = count
+    val phaseStartedAt = FloatArray(3) { -1f }.also { it[0] = startedAt }
+    var integrityLost = 0f
+    var clearedAt = -1f
+    var previousIntegrity = game.hp
     repeat(secondsOverride * 60) { frame ->
         if (game.phase != GamePhase.RUNNING) {
             if (game.phase == GamePhase.CHOICE && game.choices.isNotEmpty()) game.choose(0) else return@repeat
@@ -224,9 +250,8 @@ private fun runEncounter(
             CoreShape.RING -> 145f // The expanded annulus, outside its dead zone.
             CoreShape.TESSERACT -> 200f // Spatially separated dash origins can form a lattice.
             else -> when (build) {
-                BuildDirection.KINETIC, BuildDirection.BLADES -> 140f
-                BuildDirection.DISCHARGE, BuildDirection.ORBITAL -> 370f
-                BuildDirection.SALVAGE -> 100f
+                BuildDirection.KINETIC, BuildDirection.CRYO -> 140f
+                BuildDirection.DISCHARGE, BuildDirection.ENTROPY, BuildDirection.THERMAL -> 370f
             }
         }
         val angularSpeed = if (shape == CoreShape.ORB) 1.8f else 1.3f
@@ -248,7 +273,7 @@ private fun runEncounter(
             val closestDistance = length(closestX, closestY)
             if (dx * relativeVx + dy * relativeVy < 0f && closestDistance < 60f) {
                 val push = (60f - closestDistance) / 60f * 1_200f
-                if (build == BuildDirection.KINETIC || build == BuildDirection.BLADES) {
+                if (build == BuildDirection.KINETIC || build == BuildDirection.CRYO) {
                     val speed = max(1f, length(relativeVx, relativeVy))
                     val side = if (-relativeVy * game.velocityX + relativeVx * game.velocityY >= 0f) 1f else -1f
                     accelerationX += -relativeVy / speed * side * push
@@ -282,15 +307,29 @@ private fun runEncounter(
             else -> game.speed > 850f
         }
         game.setBrake(brake)
-        val abilityDash = (shape == CoreShape.SHARD || shape == CoreShape.TESSERACT || shape == CoreShape.PRISM || build == BuildDirection.DISCHARGE || build == BuildDirection.ORBITAL) && frame % 140 == 0
+        val abilityDash = (shape == CoreShape.SHARD || shape == CoreShape.TESSERACT || shape == CoreShape.PRISM || build == BuildDirection.DISCHARGE || build == BuildDirection.ENTROPY) && frame % 140 == 0
         if ((urgentThreat || abilityDash) && !brake && game.heat < 45f) game.requestDash()
         game.update(1f / 60f)
         game.takeVisualFxCues()
         game.takeSoundCues()
         maxEnemies = max(maxEnemies, game.enemies.size)
+        integrityLost += max(0f, previousIntegrity - game.hp)
+        previousIntegrity = game.hp
+        if (clearedAt < 0f && targets.all { it.dead || it.hp <= 0f }) clearedAt = game.elapsed - startedAt
+        if (encounter == Encounter.BOSS) {
+            val bossPhase = targets.single().phase.coerceIn(0, 2)
+            if (phaseStartedAt[bossPhase] < 0f) phaseStartedAt[bossPhase] = game.elapsed
+        }
     }
     val damage = targets.sumOf { (it.maxHp - max(0f, it.hp)).toDouble() }.toFloat()
     val total = targets.sumOf { it.maxHp.toDouble() }.toFloat()
+    val seconds = game.elapsed - startedAt
+    val phaseSeconds = if (encounter != Encounter.BOSS) emptyList() else (0 until 3).map { phase ->
+        val start = phaseStartedAt[phase]
+        val end = (phase + 1 until 3).map { phaseStartedAt[it] }.firstOrNull { it >= 0f } ?: game.elapsed
+        if (start < 0f) -1f else end - start
+    }
     return EncounterResult(shape, build, profile, encounter, damage, 100f * damage / total,
-        targets.count { it.dead || it.hp <= 0f }, game.hp / game.maxHp, game.elapsed - startedAt, game.runMatter, game.level - 18, maxEnemies, game.message)
+        targets.count { it.dead || it.hp <= 0f }, game.hp / game.maxHp, seconds, game.runMatter, game.level - 18, maxEnemies, game.message,
+        phaseSeconds, if (seconds > 0f) 100f * integrityLost / game.maxHp / seconds else 0f, clearedAt)
 }

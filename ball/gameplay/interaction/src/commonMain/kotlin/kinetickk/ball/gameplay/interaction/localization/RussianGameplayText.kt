@@ -25,7 +25,7 @@ internal fun russianGameplayText(key: GameplayText): String = when (key) {
     GameplayText.DamageAccountingHint -> "Урон учитывает снятую прочность, без избыточного урона."
     GameplayText.NoStatChange -> "Характеристики уже на пределе"
     GameplayText.AffectedComponent -> "Усиливает"
-    GameplayText.FamilyResonance -> "Резонанс семейства"
+    GameplayText.SharedTag -> "Общий тег"
     GameplayText.WeaponInteraction -> "Эффект оружия"
     GameplayText.SynergyConnection -> "Синергия"
     GameplayText.Gameplay -> "Игра KINETICKK"

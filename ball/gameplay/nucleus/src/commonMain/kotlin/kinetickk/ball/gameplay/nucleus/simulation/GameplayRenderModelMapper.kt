@@ -47,12 +47,12 @@ internal fun MutableGameState.toRenderModel(
         braking = braking,
         elapsed = elapsed,
         heat = heat,
-        overheated = overheated,
+        overheated = overheated && !build.upside(kinetickk.ball.content.api.RelicId.FURNACE_COVENANT),
         dashPhaseTime = dashPhaseTime,
         hp = hp,
         maxHp = maxHp,
         shield = shield,
-        maxShield = maxShield,
+        maxShield = shieldCapacity(),
         level = level,
         data = data,
         nextLevelData = nextLevelData,
@@ -87,22 +87,24 @@ internal fun MutableGameState.toRenderModel(
             choices === identitySource.choices && reusableCollections != null &&
             buildStats() == identitySource.buildStats() &&
             equippedRelics === identitySource.equippedRelics && weapon == identitySource.weapon && elapsed == identitySource.elapsed &&
-            itemStacks.sharesStorageWith(identitySource.itemStacks)
+            itemStacks.sharesStorageWith(identitySource.itemStacks) && build === identitySource.build &&
+            discoveredPairingMask == identitySource.discoveredPairingMask &&
+            discoveredReactionMask == identitySource.discoveredReactionMask
         ) reusableCollections.rewardPreviews else rewardPreviews(),
         coolingRate = coolingRate,
         magnetStrength = magnetStrength,
         dashImpulse = dashImpulse,
-        dashHeatCost = dashHeatCost,
+        dashHeatCost = effectiveDashHeatCost(),
         regenPerSecond = regenPerSecond,
         critChance = critChance,
         critMultiplier = critMultiplier,
-        pickupRadius = pickupRadius,
-        luck = luck,
+        pickupRadius = effectivePickupRadius(),
+        luck = effectiveLuck(),
         dataGain = dataGain,
         matterGain = matterGain,
         attackSpeed = attackSpeed,
         damageReduction = damageReduction,
-        comboWindow = comboWindow,
+        comboWindow = effectiveComboWindow(),
         overdriveGain = overdriveGain,
         dragCoefficient = dragCoefficient,
         polarityStability = polarityStability,
@@ -153,7 +155,9 @@ internal fun MutableGameState.toRenderModel(
                     value.weaponCooldown.sameBitsAs(previous.weaponCooldown) &&
                     value.previousX.sameBitsAs(previous.previousX) &&
                     value.previousY.sameBitsAs(previous.previousY) &&
-                    value.dead == previous.dead
+                    value.dead == previous.dead &&
+                    statusBits(value) == previous.statusBits &&
+                    affinityBits(value) == previous.affinityBits
             }
             ?: enemies.mapToImmutableList { value ->
                 EnemyProjection(
@@ -173,6 +177,8 @@ internal fun MutableGameState.toRenderModel(
                     previousX = value.previousX,
                     previousY = value.previousY,
                     dead = value.dead,
+                    statusBits = statusBits(value),
+                    affinityBits = affinityBits(value),
                 )
             },
         projectiles = projectiles.reuseEmptyProjection(reusableCollections?.projectiles)
@@ -315,6 +321,18 @@ internal fun MutableGameState.toRenderModel(
             reusableCollections?.relicRanks,
         ) ?: relicRanks.reuseIfContentEqual(reusableCollections?.relicRanks)
             ?: relicRanks.toImmutableList(),
+        build = reusableCollections?.build?.takeIf { previous ->
+            identitySource != null && build === identitySource.build && severedRelics.isEmpty() &&
+                discoveredPairingMask == identitySource.discoveredPairingMask &&
+                previous.stormCharge.sameBitsAs(stormCharge) &&
+                previous.stasisMeter.sameBitsAs(stasisMeter / MutableGameState.STASIS_SECONDS) &&
+                previous.stasisBank == stasisBank &&
+                previous.ouroborosSpent == ouroborosSpent &&
+                previous.invulnerable == (invulnerableUntil > elapsed) &&
+                previous.overdriveBurnout == (overdriveBurnoutUntil > elapsed)
+        } ?: buildProjection(),
+        discoveredReactionMask = discoveredReactionMask,
+        discoveredPairingMask = discoveredPairingMask,
     )
 }
 

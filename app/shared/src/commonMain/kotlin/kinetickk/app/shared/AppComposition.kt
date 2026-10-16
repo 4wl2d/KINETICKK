@@ -113,6 +113,9 @@ internal class AppCompositionOwner(
         profilePort = this.profilePort,
         rebirthPolicy = uiCatalog.rebirth,
         audioService = this.audioService,
+        relics = uiCatalog.relics,
+        items = uiCatalog.items,
+        buildPolicy = uiCatalog.build.policy,
     )
     private val codexFeature: CodexFeature = codexFeature ?: DefaultCodexFeature(
         profilePort = this.profilePort,

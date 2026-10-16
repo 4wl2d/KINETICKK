@@ -73,31 +73,36 @@ class GameSystemsTest {
     }
 
     @Test
-    fun itemStacksStopAtMaximumAndThreeFamilyItemsTriggerResonance() {
+    fun itemStacksStopAtMaximumWithDiminishingMagnitudeAndThreeTagItemsTriggerResonance() {
         val engine = gameScenario(seed = 14, initialMatter = 0)
-        val first = requireNotNull(engine.content.item(0))
-        val second = requireNotNull(engine.content.item(1))
-        val third = requireNotNull(engine.content.item(2))
+        val ram = engine.content.items.filter { BuildTag.RAM in it.tags }.take(3)
+        val ballast = ram.first()
+        val massPerStack = ballast.stats.single { it.effect == ItemEffect.MASS }.amount
+        val magnitudes = engine.content.build.policy.stackMagnitudes
 
-        engine.acquireItemForTesting(first.id)
-        engine.acquireItemForTesting(second.id)
-        val damageBeforeResonance = engine.damageMultiplier
-        val weaponPowerBeforeResonance = engine.weaponPower
+        engine.acquireItemForTesting(ram[0].id)
+        engine.acquireItemForTesting(ram[1].id)
+        assertEquals(0, engine.tagTier(BuildTag.RAM))
         val massBeforeThirdItem = engine.mass
 
-        engine.acquireItemForTesting(third.id)
+        engine.acquireItemForTesting(ram[2].id)
 
-        assertEquals(damageBeforeResonance + third.primary.amount + 0.04f, engine.damageMultiplier, 0.0001f)
-        assertEquals(weaponPowerBeforeResonance + 0.06f, engine.weaponPower, 0.0001f)
-        assertEquals(massBeforeThirdItem + third.secondary.amount, engine.mass, 0.0001f)
-        assertEquals("IMPACT RESONANCE", engine.message)
+        assertEquals(1, engine.tagTier(BuildTag.RAM))
+        assertEquals("RAM RESONANCE", engine.message)
+        assertEquals(massBeforeThirdItem, engine.mass, 0.0001f, "Resonance must not rewrite base stats")
+
+        // Each further stack adds only its marginal share of the diminishing stack magnitude.
+        val massAfterOne = engine.mass
+        engine.acquireItemForTesting(ballast.id)
+        assertEquals(massAfterOne + massPerStack * (magnitudes[1] - magnitudes[0]), engine.mass, 0.0001f)
 
         val acquisitionsBeforeRepeatedStacks = engine.acquiredItemCount
-        repeat(third.maxStacks + 5) { engine.acquireItemForTesting(third.id) }
+        repeat(ballast.maxStacks + 5) { engine.acquireItemForTesting(ballast.id) }
 
-        assertEquals(third.maxStacks, engine.itemStack(third.id))
+        assertEquals(ballast.maxStacks, engine.itemStack(ballast.id))
+        assertEquals(1f + massPerStack * magnitudes[ballast.maxStacks - 1], engine.mass, 0.0001f)
         assertEquals(
-            acquisitionsBeforeRepeatedStacks + third.maxStacks - 1,
+            acquisitionsBeforeRepeatedStacks + ballast.maxStacks - 2,
             engine.acquiredItemCount,
             "Attempts above maxStacks must not count as acquisitions",
         )

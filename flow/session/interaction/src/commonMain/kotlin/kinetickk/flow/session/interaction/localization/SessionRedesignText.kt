@@ -33,8 +33,8 @@ internal enum class SessionRedesignText(
         "Победите Архитектора, чтобы открыть более сложный уровень. Сборка забега сбрасывается. Материя, улучшения, открытое оружие, находки и настройки сохраняются.",
     ),
     CODEX_INFO(
-        "Everything you have found in runs: items, weapons, relics, forms and synergies.",
-        "Всё, что вы нашли в забегах: предметы, оружие, реликвии, формы и синергии.",
+        "Everything you have found in runs: items, weapons, relics, forms, reactions and relic pairings.",
+        "Всё, что вы нашли в забегах: предметы, оружие, реликвии, формы, реакции и сочетания реликвий.",
     ),
     SETTINGS_INFO(
         "Game, sound, graphics and interface options. Changes apply immediately.",

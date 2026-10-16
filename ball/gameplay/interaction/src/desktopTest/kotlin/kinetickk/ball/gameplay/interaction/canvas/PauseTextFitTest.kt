@@ -17,7 +17,13 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.EquippedRelic
+import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RelicPairingId
+import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.gameplay.nucleus.render.BuildProjection
+import kinetickk.ball.gameplay.nucleus.render.SeveredRelicProjection
+import kinetickk.foundation.collections.immutableListOf
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
 import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureModel
@@ -32,14 +38,24 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * The real pause renderer at the three reference frames, in English and Russian, at 100 %, the
+ * The real pause build view at the three reference frames, in English and Russian, at 100 %, the
  * default 125 % and 175 % text size: every text it lays out fits the width it was given, is never
- * cut with an ellipsis, never breaks inside a word and stays on screen inside its area.
+ * cut with an ellipsis, never breaks inside a word, stays on screen inside its area and meets no
+ * other text.
  */
 @OptIn(ExperimentalTestApi::class)
 class PauseTextFitTest {
     private val frames = listOf(1440 to 810, 844 to 390, 390 to 844)
-    private val relics = listOf(EquippedRelic(RelicId.KINETIC_FLYWHEEL, 2), EquippedRelic(RelicId.GHOST_VECTOR, 1), EquippedRelic(RelicId.ORBITAL_NAIL, 1))
+    private val relics = listOf(EquippedRelic(RelicId.PERPETUAL_VECTOR, 2), EquippedRelic(RelicId.GYRE_ENGINE, 1), EquippedRelic(RelicId.FURNACE_COVENANT, 1))
+    private val build = BuildProjection(
+        tagPoints = immutableListOf(5, 3, 0, 2, 0, 1, 4, 0, 0),
+        tagTiers = immutableListOf(2, 1, 0, 0, 0, 0, 1, 0, 0),
+        affinity = immutableListOf(4, 2, 0, 1, 0),
+        affinityTiers = immutableListOf(2, 1, 0, 0, 0),
+        dominant = StatusElement.THERMAL,
+        reachableReactions = immutableListOf(ReactionId.THERMAL_SHOCK, ReactionId.WILDFIRE),
+        rebornItemIds = immutableListOf(3),
+    )
 
     @Test
     fun everyPauseTextFitsItsBoxWholeAtEveryTextSize() {
@@ -47,7 +63,9 @@ class PauseTextFitTest {
             val scene = "pause ${width}x$height $language ${textScale}x"
             val records = drawPause(width, height, language, textScale)
             val layout = pauseLayoutGeometry(width.toFloat(), height.toFloat(), 1f)
-            assertTrue(records.any { it.kind == PauseTextKind.STAT_LABEL }, "$scene draws the stats")
+            listOf(PauseTextKind.MULTIPLIER, PauseTextKind.COST, PauseTextKind.TAG_NAME, PauseTextKind.REACTION).forEach { kind ->
+                assertTrue(records.any { it.kind == kind }, "$scene draws $kind")
+            }
             records.forEach { record ->
                 val text = record.layout.layoutInput.text.text
                 assertTrue(record.layout.size.width <= record.box + 0.5f, "$scene: \"$text\" (${record.kind}) ${record.layout.size.width} fits ${record.box}")
@@ -66,26 +84,76 @@ class PauseTextFitTest {
             records.filter { it.kind == PauseTextKind.TAG }.forEach { tag ->
                 assertTrue(heading.right <= tag.rect.left + 0.5f, "$scene: the heading ends before the tags")
             }
-            val labels = records.filter { it.kind == PauseTextKind.STAT_LABEL }
-            // One list, one type size.
-            assertEquals(1, labels.map { it.layout.layoutInput.style.fontSize }.distinct().size, "$scene: stat labels share one size")
-            // One row of run panels, one label size and one value size (a long total such as
-            // "184,3 тыс." gets its panel the room it needs instead of shrinking alone).
-            for (kind in listOf(PauseTextKind.RUN_LABEL, PauseTextKind.RUN_VALUE)) {
-                val sizes = records.filter { it.kind == kind }.map { it.layout.layoutInput.style.fontSize.value }
-                assertTrue(sizes.size >= 4, "$scene draws the run panels")
-                assertEquals(1, sizes.distinct().size, "$scene: run panel ${kind.name} share one size: $sizes")
+            // No two drawn texts overlap (the sections stack without colliding at every size).
+            val drawn = records.filter { it.kind !in setOf(PauseTextKind.TAG, PauseTextKind.TITLE, PauseTextKind.TIMER) }
+            drawn.forEachIndexed { index, a ->
+                drawn.drop(index + 1).forEach { b ->
+                    val overlap = a.rect.intersect(b.rect)
+                    assertTrue(overlap.width <= 1f || overlap.height <= 1f,
+                        "$scene: \"${a.layout.layoutInput.text}\" (${a.kind}) ${a.rect} meets \"${b.layout.layoutInput.text}\" (${b.kind}) ${b.rect}")
+                }
             }
+            // The cost list keeps one entry per liability, each on at most three lines, all at one size.
+            val costs = records.filter { it.kind == PauseTextKind.COST }
+            assertEquals(relics.size, costs.size, "$scene: one cost line per bound relic")
+            costs.forEach { assertTrue(it.layout.lineCount <= 3, "$scene: a cost takes at most three lines") }
+            assertEquals(1, costs.map { it.layout.layoutInput.style.fontSize }.distinct().size, "$scene: costs share one size")
+            // The weapon and its level head the view.
+            assertTrue(records.any { it.kind == PauseTextKind.TAG && it.layout.layoutInput.text.text.contains(if (language == AppLanguage.English)
+                (if (layout.mode == GameplayLayoutMode.REGULAR) "Flux Wake" else "Lvl 7") else (if (layout.mode == GameplayLayoutMode.REGULAR)
+                "Потоковый след" else "Ур. 7"), ignoreCase = true) }, "$scene shows the weapon chip")
+            val labels = records.filter { it.kind == PauseTextKind.STAT_LABEL }
+            if (labels.isNotEmpty()) assertEquals(1, labels.map { it.layout.layoutInput.style.fontSize }.distinct().size, "$scene: stat labels share one size")
             val columns = labels.map { it.rect.left }.distinct().size
             when (layout.mode) {
-                GameplayLayoutMode.COMPACT_PORTRAIT -> {
-                    assertEquals(1, columns, "$scene: portrait shows the stats in one column")
-                    val description = records.single { it.kind == PauseTextKind.SYNERGY_DESCRIPTION }
-                    assertTrue(description.layout.lineCount <= 2, "$scene: the synergy description takes at most two lines")
+                GameplayLayoutMode.COMPACT_PORTRAIT -> assertTrue(labels.isEmpty(), "$scene: portrait keeps relics, resonance and reactions")
+                // Phone landscape shows the stats in two columns while the costs keep two readable lines.
+                GameplayLayoutMode.COMPACT_LANDSCAPE -> if (textScale <= 1.25f) assertEquals(2, columns, "$scene: phone landscape keeps two stat columns")
+                    else assertTrue(columns in setOf(0, 2), "$scene: phone landscape stats in two columns or left out")
+                GameplayLayoutMode.REGULAR -> {
+                    assertEquals(1, columns, "$scene: the desktop stats column")
+                    // One row of run panels, one label size and one value size.
+                    for (kind in listOf(PauseTextKind.RUN_LABEL, PauseTextKind.RUN_VALUE)) {
+                        val sizes = records.filter { it.kind == kind }.map { it.layout.layoutInput.style.fontSize.value }
+                        assertTrue(sizes.size >= 4, "$scene draws the run panels")
+                        assertEquals(1, sizes.distinct().size, "$scene: run panel ${kind.name} share one size: $sizes")
+                    }
+                    assertTrue(records.any { it.kind == PauseTextKind.SYNERGY_NAME }, "$scene names the matrix brackets")
                 }
-                GameplayLayoutMode.COMPACT_LANDSCAPE -> assertEquals(2, columns, "$scene: phone landscape keeps two stat columns")
-                GameplayLayoutMode.REGULAR -> assertEquals(1, columns, "$scene: the desktop stats column")
             }
+        }
+    }
+
+    /**
+     * Four bound relics and a replaced one whose cost lingers: every cost shows (the lingering one on
+     * the desktop board), all at one size, in entries as tall as their text, and a larger text size
+     * never leaves the costs smaller than the default did.
+     */
+    @Test
+    fun costsShareOneSizeThatNeverShrinksWhenTheTextSizeGrows() {
+        val bound = listOf(EquippedRelic(RelicId.PERPETUAL_VECTOR, 2), EquippedRelic(RelicId.GYRE_ENGINE, 1),
+            EquippedRelic(RelicId.FURNACE_COVENANT, 1), EquippedRelic(RelicId.HOLLOW_CROWN, 1))
+        val lingering = build.copy(severed = immutableListOf(SeveredRelicProjection(RelicId.EVENT_HORIZON, 20f)))
+        for ((width, height) in frames) for (language in AppLanguage.entries) {
+            val sizes = listOf(1f, 1.25f, 1.75f).map { textScale ->
+                val scene = "pause ${width}x$height $language ${textScale}x"
+                val records = drawPause(width, height, language, textScale, bound, lingering)
+                val regular = pauseLayoutGeometry(width.toFloat(), height.toFloat(), 1f).mode == GameplayLayoutMode.REGULAR
+                val costs = records.filter { it.kind == PauseTextKind.COST }
+                assertEquals(if (regular) 5 else 4, costs.size, "$scene: every cost shows")
+                assertTrue(records.none { it.kind == PauseTextKind.MORE && it.rect.top in costs.first().rect.top..costs.last().rect.bottom + 40f },
+                    "$scene: no cost is counted away")
+                val fonts = costs.map { it.layout.layoutInput.style.fontSize.value }.distinct()
+                assertEquals(1, fonts.size, "$scene: costs share one size: $fonts")
+                // Entries follow one another at their own height (no fixed pitch leaving holes).
+                costs.zipWithNext().forEach { (a, b) ->
+                    val gap = b.rect.top - a.layout.size.height - a.rect.top
+                    assertTrue(gap in -1f..14f, "$scene: ${gap}px between cost entries")
+                }
+                fonts.single()
+            }
+            val scene = "pause ${width}x$height $language"
+            assertTrue(sizes[2] >= sizes[1] - 0.01f, "$scene: costs at 175 % (${sizes[2]}) are not smaller than at 125 % (${sizes[1]})")
         }
     }
 
@@ -93,7 +161,7 @@ class PauseTextFitTest {
     fun statLabelsNeverShrinkWhenTheTextSizeGrows() {
         fun labelSize(records: List<PauseTextRecord>) =
             records.first { it.kind == PauseTextKind.STAT_LABEL }.layout.layoutInput.style.fontSize.value
-        for ((width, height) in frames) for (language in AppLanguage.entries) {
+        for ((width, height) in frames.filter { it.first >= 1_000 }) for (language in AppLanguage.entries) {
             val sizes = listOf(1f, 1.25f, 1.75f).map { labelSize(drawPause(width, height, language, it)) }
             val scene = "pause ${width}x$height $language"
             assertTrue(sizes[1] >= sizes[0] - 0.01f, "$scene: stat labels at 125 % (${sizes[1]}) are not smaller than at 100 % (${sizes[0]})")
@@ -109,15 +177,24 @@ class PauseTextFitTest {
             records.first { it.kind == kind }.layout.layoutInput.style.fontSize.value
         assertEquals(size(default, PauseTextKind.TITLE), size(large, PauseTextKind.TITLE), "Paused ignores the text size")
         assertEquals(size(default, PauseTextKind.TIMER), size(large, PauseTextKind.TIMER), "the frozen clock ignores the text size")
-        assertEquals(size(default, PauseTextKind.LEVEL), size(large, PauseTextKind.LEVEL), "the weapon level numeral ignores the text size")
         assertEquals(size(default, PauseTextKind.LABEL) * 1.4f, size(large, PauseTextKind.LABEL), 0.05f, "UI labels follow the text size")
         // At the default the UI text renders at the board size (Pause board: section labels 15 px).
         assertEquals(15f, size(default, PauseTextKind.LABEL), 0.05f)
     }
 
-    private fun drawPause(width: Int, height: Int, language: AppLanguage, textScale: Float): List<PauseTextRecord> {
+    private fun drawPause(
+        width: Int,
+        height: Int,
+        language: AppLanguage,
+        textScale: Float,
+        relics: List<EquippedRelic> = this.relics,
+        build: BuildProjection = this.build,
+    ): List<PauseTextRecord> {
+        // A full build: two named brackets, tags and elements with points, two reactions (one met).
         val model = rewardFixtureModel(phase = GamePhase.PAUSED, relics = relics, language = language,
-            width = width.toFloat(), height = height.toFloat(), textScale = textScale)
+            width = width.toFloat(), height = height.toFloat(), textScale = textScale, build = build,
+            discoveredPairings = setOf(RelicPairingId.ENDLESS_GYRE), itemStacks = listOf(1, 1, 1, 2, 2))
+            .with("discoveredReactionMask" to (1 shl ReactionId.WILDFIRE.ordinal))
         val records = mutableListOf<PauseTextRecord>()
         PauseTextProbe.records = records
         try {

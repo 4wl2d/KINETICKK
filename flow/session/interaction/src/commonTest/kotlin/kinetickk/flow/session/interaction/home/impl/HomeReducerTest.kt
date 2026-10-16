@@ -99,7 +99,7 @@ class HomeReducerTest {
 
 private fun homeReducer(): HomeReducer = HomeReducer(
     coreShapes = TestCoreShapes,
-    itemCount = 400,
+    itemCount = 80,
     weaponCount = 12,
     rebirthPolicy = TestRebirthPolicy,
 )

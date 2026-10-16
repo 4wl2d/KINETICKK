@@ -11,8 +11,10 @@ import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MetaUpgradeId
-import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RelicPairingId
+import kinetickk.ball.content.api.WeaponId
 import kinetickk.foundation.common.localization.AppLanguage
 
 /** Persistent ordinal order; append-only changes require an explicit save-format decision. */
@@ -116,16 +118,37 @@ data class LabProgress(
     fun rank(id: MetaUpgradeId): Int = ranks.getOrElse(id.ordinal) { 0 }
 }
 
+/** Relics remembered as Heirlooms: at most one per Relic slot bound at the Architect victory. */
+const val MAX_HEIRLOOM_RELICS: Int = 4
+
 data class PlayerCollection(
     val discoveredItemIds: ImmutableSet<Int> = immutableSetOf(),
     val newItemIds: ImmutableSet<Int> = immutableSetOf(),
     val discoveredRelicIds: ImmutableSet<RelicId> = immutableSetOf(),
     val newRelicIds: ImmutableSet<RelicId> = immutableSetOf(),
+    /** Element reactions the player has triggered at least once; the Codex reveals only these. */
+    val discoveredReactionIds: ImmutableSet<ReactionId> = immutableSetOf(),
+    /** Named Relic pairings the player has bound together at least once. */
+    val discoveredPairingIds: ImmutableSet<RelicPairingId> = immutableSetOf(),
+    /**
+     * Relics bound at the last Architect victory, in slot order, at most [MAX_HEIRLOOM_RELICS] and
+     * distinct. The next run offers them once; resolving that offer clears the list.
+     */
+    val heirloomRelicIds: ImmutableList<RelicId> = immutableListOf(),
 ) {
-    constructor(discoveredItemIds: Set<Int>, newItemIds: Set<Int> = emptySet(),
-        discoveredRelicIds: Set<RelicId> = emptySet(), newRelicIds: Set<RelicId> = emptySet()) : this(
+    constructor(
+        discoveredItemIds: Set<Int>,
+        newItemIds: Set<Int> = emptySet(),
+        discoveredRelicIds: Set<RelicId> = emptySet(),
+        newRelicIds: Set<RelicId> = emptySet(),
+        discoveredReactionIds: Set<ReactionId> = emptySet(),
+        discoveredPairingIds: Set<RelicPairingId> = emptySet(),
+        heirloomRelicIds: List<RelicId> = emptyList(),
+    ) : this(
         discoveredItemIds.toImmutableSet(), newItemIds.toImmutableSet(),
         discoveredRelicIds.toImmutableSet(), newRelicIds.toImmutableSet(),
+        discoveredReactionIds.toImmutableSet(), discoveredPairingIds.toImmutableSet(),
+        heirloomRelicIds.toImmutableList(),
     )
 }
 

@@ -59,7 +59,7 @@ internal fun MutableGameState.rebaseWorldIfNeeded() {
         lattice = characterRuntime.lattice.map { it.copy(x = it.x - shiftX, y = it.y - shiftY) },
     )
     pointsOfInterest = pointsOfInterest.map { it.copy(x = it.x - shiftX, y = it.y - shiftY) }
-    rebaseSynergyEffects(shiftX, shiftY)
+    rebaseCombatFields(shiftX, shiftY)
     totem?.let { it.x -= shiftX; it.y -= shiftY }
     morningstarX -= shiftX
     morningstarY -= shiftY

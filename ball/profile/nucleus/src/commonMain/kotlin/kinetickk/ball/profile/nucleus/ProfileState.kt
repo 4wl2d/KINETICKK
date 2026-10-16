@@ -6,6 +6,7 @@ package kinetickk.ball.profile.nucleus
 import kinetickk.ball.content.api.ProfilePolicySnapshot
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.LabProgress
+import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
 import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.ProfileBootstrapBlockReason
@@ -16,6 +17,7 @@ import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileSnapshotReadResult
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.foundation.collections.immutableSetOf
+import kinetickk.foundation.collections.toImmutableSet
 
 /** Complete immutable snapshot owned and published by the Profile acceptor. */
 data class ProfileState(
@@ -73,27 +75,46 @@ private fun constructInitialProfileState(
         )
         is ProfileSnapshotReadResult.Observed -> {
             val snapshot = result.snapshot
+            val loaded = snapshot?.profile?.withCatalogDiscoveries(policy)
             when {
-                snapshot == null -> state(
+                snapshot == null || loaded == null -> state(
                     revision = ProfileRevision(1L),
                     bootstrap = ProfileBootstrapStatus.Ready,
                     persistence = ProfilePersistenceStatus.NotAttempted,
                 )
                 snapshot.revision.value > MAX_LOADABLE_SNAPSHOT_REVISION ||
-                    !isPolicyCompatibleAtConstruction(snapshot.profile, policy) -> state(
+                    !isPolicyCompatibleAtConstruction(loaded, policy) -> state(
                     revision = ProfileRevision(1L),
                     bootstrap = ProfileBootstrapStatus.Ready,
                     persistence = ProfilePersistenceStatus.NotAttempted,
                 )
                 else -> state(
                     revision = ProfileRevision(snapshot.revision.value + 1L),
-                    profile = snapshot.profile,
+                    profile = loaded,
                     bootstrap = ProfileBootstrapStatus.Ready,
                     persistence = ProfilePersistenceStatus.Persisted(snapshot.revision),
                 )
             }
         }
     }
+}
+
+/**
+ * Item discoveries are catalog indices: an id the captured catalog no longer contains is a retired
+ * entry, not a corrupt economy. Loading forgets such ids (and their unseen markers) and keeps every
+ * other fact; the next accepted write persists the filtered collection.
+ */
+private fun PlayerProfile.withCatalogDiscoveries(policy: ProfilePolicySnapshot): PlayerProfile {
+    val current = collection
+    if (current.discoveredItemIds.all(policy::containsItem) && current.newItemIds.all(policy::containsItem)) {
+        return this
+    }
+    return copy(
+        collection = current.copy(
+            discoveredItemIds = current.discoveredItemIds.filter(policy::containsItem).toImmutableSet(),
+            newItemIds = current.newItemIds.filter(policy::containsItem).toImmutableSet(),
+        ),
+    )
 }
 
 /**
@@ -141,12 +162,14 @@ private fun isPolicyCompatibleAtConstruction(
     policy.metaUpgrades.forEach { definition ->
         if (profile.labProgress.rank(definition.id) !in 0..definition.maxRanks) return false
     }
+    val heirlooms = profile.collection.heirloomRelicIds
     if (
         profile.collection.discoveredItemIds.size > policy.itemCount ||
         profile.collection.discoveredItemIds.any { !policy.containsItem(it) } ||
         !profile.collection.discoveredItemIds.containsAll(profile.collection.newItemIds) ||
         !profile.collection.discoveredRelicIds.containsAll(profile.collection.newRelicIds) ||
-        profile.collection.discoveredRelicIds.size > kinetickk.ball.content.api.ContentBounds.MAX_RELICS
+        profile.collection.discoveredRelicIds.size > kinetickk.ball.content.api.ContentBounds.MAX_RELICS ||
+        heirlooms.size > MAX_HEIRLOOM_RELICS || heirlooms.toSet().size != heirlooms.size
     ) return false
     if (
         profile.rebirthProgress.level !in policy.rebirth.minimumLevel..policy.rebirth.maximumLevel ||

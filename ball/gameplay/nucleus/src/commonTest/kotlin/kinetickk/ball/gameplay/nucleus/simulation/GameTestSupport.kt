@@ -5,7 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.*
 
-import kinetickk.ball.gameplay.nucleus.model.DelayedRelicHit
+import kinetickk.ball.gameplay.nucleus.model.EchoHit
 import kinetickk.ball.gameplay.nucleus.model.Enemy
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.model.Pickup
@@ -38,12 +38,27 @@ internal fun MutableGameState.addEnemyForTesting(
         hp = hp,
         maxHp = hp,
         radius = radius,
-        relicCounters = IntArray(content.relics.size),
-        relicTimers = FloatArray(content.relics.size),
-        relicValues = FloatArray(content.relics.size),
     )
     enemies += enemy
     return enemy
+}
+
+/**
+ * The Architect in its final phase and out of its shift, with [hp] below one capped hit: past every gate,
+ * so a single damage instance may still finish it.
+ */
+internal fun MutableGameState.finalPhaseArchitectForTesting(
+    x: Float,
+    y: Float,
+    maxHp: Float = 5_400f,
+    hp: Float = 40f,
+): Enemy {
+    require(hp > 0f && hp < ARCHITECT_HIT_CAP * maxHp) { "The Architect must sit below one capped hit" }
+    return addEnemyForTesting(x, y, hp = maxHp, type = EnemyType.ARCHITECT).also { architect ->
+        architect.phase = ARCHITECT_FINAL_PHASE
+        architect.shiftUntil = 0f
+        architect.hp = hp
+    }
 }
 
 internal fun MutableGameState.activateTotemForTesting(x: Float = coreX, y: Float = coreY) {
@@ -74,8 +89,8 @@ internal fun MutableGameState.addTrailPointForTesting() {
     trail += TrailPoint(coreX, coreY, 0f)
 }
 
-internal fun MutableGameState.addDelayedRelicHitForTesting() {
-    delayedRelicHits += DelayedRelicHit(RelicId.ECHO_CHAMBER, 0, 1f, 1f)
+internal fun MutableGameState.addEchoHitForTesting() {
+    echoHits += EchoHit(enemyId = 0, delay = 1f, damage = 1f, appliesDominant = false)
 }
 
 internal fun MutableGameState.killEnemyForTesting(
@@ -84,7 +99,7 @@ internal fun MutableGameState.killEnemyForTesting(
     y: Float = coreY,
 ) {
     val enemy = addEnemyForTesting(x, y, hp = 1f, type = type)
-    damageEnemy(enemy, 2f, relicKillProcsEligible = true)
+    damageEnemy(enemy, 2f, killEligible = true)
     onEnemyKilled(enemy)
     enemies.remove(enemy)
 }
@@ -99,13 +114,11 @@ internal fun MutableGameState.triggerWeaponContactForTesting(target: Enemy, cont
 internal fun MutableGameState.damageEnemyForTesting(target: Enemy, amount: Float): Float =
     damageEnemy(target, amount).amount
 
-internal fun MutableGameState.relicProcCountForTesting(id: RelicId): Int = relicProcCounts[id.ordinal]
-
 internal fun MutableGameState.agonyMutationCountForTesting(id: WeaponId): Int = agonyMutationCounts[id.ordinal]
 
 internal fun MutableGameState.agonyMutationCountsForTesting(): List<Int> = agonyMutationCounts.toList()
 
-internal fun MutableGameState.delayedRelicHitCountForTesting(): Int = delayedRelicHits.size
+internal fun MutableGameState.echoHitCountForTesting(): Int = echoHits.size
 
 internal fun MutableGameState.grantDataForTesting(amount: Float) = gainData(amount)
 

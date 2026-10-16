@@ -6,9 +6,13 @@ package kinetickk.ball.gameplay.nucleus.simulation
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.PointOfInterestKind
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RelicPairingId
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.nucleus.model.CharacterRuntime
+import kinetickk.ball.gameplay.nucleus.model.SeveredRelic
+import kinetickk.ball.gameplay.nucleus.model.StatusCell
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.PointOfInterestState
 import kinetickk.ball.gameplay.nucleus.model.Projectile
@@ -22,12 +26,15 @@ import kinetickk.ball.gameplay.nucleus.reducer.GameReducer
 import kinetickk.ball.gameplay.nucleus.reducer.GameReductionResult
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
+import kinetickk.ball.gameplay.nucleus.render.EnemyAffinity
+import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotSame
 import kotlin.test.assertSame
@@ -139,6 +146,115 @@ class GameplayRenderModelMapperTest {
     }
 
     @Test
+    fun buildProjectionIsReusedForAnUnchangedBuildAndRebuiltWhenARelicGaugeMoves() {
+        val source = buildTestState(
+            RelicId.STORMHEART_CAPACITOR,
+            RelicId.FURNACE_COVENANT,
+            RelicId.OVERDRIVE_CASCADE,
+        )
+        val retained = source.toRenderModel()
+        assertTrue(retained.isPairingDiscovered(RelicPairingId.MELTDOWN))
+        assertTrue(retained.build.links.single { it.pairing == RelicPairingId.MELTDOWN }.discovered)
+        assertEquals(source.build.affinity(StatusElement.THERMAL), retained.build.affinity(StatusElement.THERMAL))
+
+        val scalar = source.copyForScalarInputReduction()
+        assertSame(retained.build, scalar.toRenderModel(reusableCollections = retained, identitySource = source).build)
+
+        val charged = source.copyForReduction().apply { stormCharge = 0.5f }
+        val recharged = charged.toRenderModel(reusableCollections = retained, identitySource = source)
+        assertNotSame(retained.build, recharged.build)
+        assertEquals(0.5f, recharged.build.stormCharge)
+        assertEquals(0f, retained.build.stormCharge)
+    }
+
+    @Test
+    fun buildViewIsRebuiltWhenAnyOneOfItsLiveInputsChanges() {
+        fun source(setup: MutableGameState.() -> Unit = {}) =
+            buildTestState(RelicId.STASIS_ANCHOR, RelicId.OUROBOROS_SEAL).apply { elapsed = 10f }.apply(setup)
+        val cases: List<Triple<String, MutableGameState.() -> Unit, MutableGameState.() -> Unit>> = listOf(
+            Triple("storm charge", {}, { stormCharge = 0.25f }),
+            Triple("stasis meter", {}, { stasisMeter = 1f }),
+            Triple("stasis bank", {}, { stasisBank = 4 }),
+            Triple("ouroboros spent", {}, { ouroborosSpent = true }),
+            Triple("invulnerability ends with time alone", { invulnerableUntil = 10.1f }, { elapsed = 10.2f }),
+            Triple("burnout ends with time alone", { overdriveBurnoutUntil = 10.1f }, { elapsed = 10.2f }),
+            Triple("a severed relic", {}, { severedRelics = listOf(SeveredRelic(RelicId.GLASS_COMET, until = 50f)) }),
+            Triple("a discovered pairing", {}, {
+                discoveredPairingMask = discoveredPairingMask or (1 shl RelicPairingId.MELTDOWN.ordinal)
+            }),
+            Triple("a recompiled build", {}, { acquireItem(content.items.first().id) }),
+        )
+        cases.forEach { (name, setup, change) ->
+            val committed = source(setup)
+            val retained = committed.toRenderModel()
+            assertSame(retained.build, committed.copyForReduction().toRenderModel(retained, identitySource = committed).build, name)
+            val candidate = committed.copyForReduction().apply(change)
+            val projected = candidate.toRenderModel(retained, identitySource = committed)
+            assertNotSame(retained.build, projected.build, name)
+            assertEquals(candidate.buildProjection(), projected.build, name)
+            assertEquals(committed.buildProjection(), retained.build, "$name: the retained view stays immutable")
+        }
+    }
+
+    @Test
+    fun enemyViewIsRebuiltWhenOnlyItsStatusChangesWithTime() {
+        val source = buildTestState().apply { elapsed = 5f }
+        val enemy = source.dummy(x = 300f)
+        // A Frozen enemy keeps its position, velocity and integrity while it thaws.
+        enemy.status[StatusCell.FROZEN_UNTIL] = 5.05f
+        enemy.status[StatusCell.EMBRITTLED_UNTIL] = 5.05f
+        val retained = source.toRenderModel()
+        assertTrue(retained.enemies.single().statusBits and STATUS_FROZEN_BIT != 0)
+
+        val unchanged = source.copyForReduction().toRenderModel(retained, identitySource = source)
+        assertSame(retained.enemies, unchanged.enemies)
+
+        val thawed = source.copyForReduction().apply { elapsed = 5.1f }
+        val projected = thawed.toRenderModel(retained, identitySource = source)
+        assertNotSame(retained.enemies, projected.enemies)
+        assertEquals(0, projected.enemies.single().statusBits and (STATUS_FROZEN_BIT or STATUS_EMBRITTLED_BIT))
+        assertTrue(retained.enemies.single().statusBits and STATUS_FROZEN_BIT != 0, "The retained view stays immutable")
+
+        val stacked = source.copyForReduction().apply { enemies.single().status[StatusCell.STACKS + StatusElement.ION.ordinal] = 2f }
+        val restacked = stacked.toRenderModel(retained, identitySource = source)
+        assertNotSame(retained.enemies, restacked.enemies)
+        assertEquals(2, (restacked.enemies.single().statusBits shr (StatusElement.ION.ordinal * 4)) and 0xF)
+    }
+
+    @Test
+    fun enemyViewIsRebuiltWhenOnlyItsAffinityChanges() {
+        val source = buildTestState().apply { elapsed = 5f }
+        // A shifting Architect keeps its position, velocity, integrity and statuses while the shift runs out.
+        source.addEnemyForTesting(x = 300f, y = 0f, type = EnemyType.ARCHITECT).apply {
+            phase = 1
+            shiftUntil = 5.05f
+        }
+        val retained = source.toRenderModel()
+        assertTrue(EnemyAffinity.shifting(retained.enemies.single().affinityBits))
+        assertEquals(1, EnemyAffinity.phase(retained.enemies.single().affinityBits))
+
+        val unchanged = source.copyForReduction().toRenderModel(retained, identitySource = source)
+        assertSame(retained.enemies, unchanged.enemies, "Equal affinity reuses the projection")
+
+        val settled = source.copyForReduction().apply { elapsed = 5.1f }
+        val projected = settled.toRenderModel(retained, identitySource = source)
+        assertNotSame(retained.enemies, projected.enemies)
+        assertEquals(retained.enemies.single().statusBits, projected.enemies.single().statusBits)
+        assertFalse(EnemyAffinity.shifting(projected.enemies.single().affinityBits))
+        assertEquals(1, EnemyAffinity.phase(projected.enemies.single().affinityBits))
+        assertTrue(EnemyAffinity.shifting(retained.enemies.single().affinityBits), "The retained view stays immutable")
+
+        val hardened = source.copyForReduction().apply {
+            assignAspect(enemies.single(), StatusElement.CRYO.ordinal, immune = false)
+        }
+        val reprojected = hardened.toRenderModel(retained, identitySource = source)
+        assertNotSame(retained.enemies, reprojected.enemies)
+        assertEquals(StatusElement.CRYO.ordinal, EnemyAffinity.aspect(reprojected.enemies.single().affinityBits))
+        assertEquals(StatusElement.THERMAL.ordinal, EnemyAffinity.weakness(reprojected.enemies.single().affinityBits))
+        assertEquals(EnemyAffinity.NONE, EnemyAffinity.aspect(retained.enemies.single().affinityBits))
+    }
+
+    @Test
     fun equalStableCollectionsAndEmptyDynamicProjectionsAreStructurallyShared() {
         val source = populatedState()
         val retained = source.toRenderModel()
@@ -164,7 +280,7 @@ class GameplayRenderModelMapperTest {
         val source = populatedState()
         val retained = source.toRenderModel()
         val changedCandidate = source.copyForReduction().apply {
-            equippedRelics = listOf(EquippedRelic(RelicId.KINETIC_FLYWHEEL, rank = 2))
+            equippedRelics = listOf(EquippedRelic(RelicId.PERPETUAL_VECTOR, rank = 2))
             choices = listOf(choice(title = "Changed"))
             itemStacks[0] = 3
             discoveredItemIds += 202
@@ -182,12 +298,12 @@ class GameplayRenderModelMapperTest {
         assertEquals("Initial", retained.choices.single().title)
         assertEquals(2, retained.itemStack(0))
         assertEquals(1, retained.discoveredItemCount)
-        assertEquals(1, retained.relicRank(RelicId.KINETIC_FLYWHEEL))
+        assertEquals(1, retained.relicRank(RelicId.PERPETUAL_VECTOR))
         assertEquals(2, projected.equippedRelics.single().rank)
         assertEquals("Changed", projected.choices.single().title)
         assertEquals(3, projected.itemStack(0))
         assertEquals(2, projected.discoveredItemCount)
-        assertEquals(2, projected.relicRank(RelicId.KINETIC_FLYWHEEL))
+        assertEquals(2, projected.relicRank(RelicId.PERPETUAL_VECTOR))
     }
 
     @Test
@@ -339,7 +455,7 @@ class GameplayRenderModelMapperTest {
         seed = 712,
         initialMatter = 0,
     ).apply {
-        equippedRelics = listOf(EquippedRelic(RelicId.KINETIC_FLYWHEEL, rank = 1))
+        equippedRelics = listOf(EquippedRelic(RelicId.PERPETUAL_VECTOR, rank = 1))
         choices = listOf(choice(title = "Initial"))
         itemStacks[0] = 2
         discoveredItemIds += 101
@@ -412,7 +528,7 @@ class GameplayRenderModelMapperTest {
                 it.id, it.type, it.x.toRawBits(), it.y.toRawBits(), it.vx.toRawBits(), it.vy.toRawBits(),
                 it.hp.toRawBits(), it.maxHp.toRawBits(), it.radius.toRawBits(), it.actionTimer.toRawBits(),
                 it.flash.toRawBits(), it.contactCooldown.toRawBits(), it.weaponCooldown.toRawBits(),
-                it.previousX.toRawBits(), it.previousY.toRawBits(), it.dead,
+                it.previousX.toRawBits(), it.previousY.toRawBits(), it.dead, it.statusBits, it.affinityBits,
             )
         },
         "projectiles" to projectiles.map {
@@ -455,6 +571,9 @@ class GameplayRenderModelMapperTest {
         "itemStacks" to itemStacks.toList(),
         "discoveredItemIds" to discoveredItemIds.toList(),
         "relicRanks" to relicRanks.toList(),
+        "build" to build,
+        "discoveredReactionMask" to discoveredReactionMask,
+        "discoveredPairingMask" to discoveredPairingMask,
     )
 
     private class ReadGuardList<Element>(

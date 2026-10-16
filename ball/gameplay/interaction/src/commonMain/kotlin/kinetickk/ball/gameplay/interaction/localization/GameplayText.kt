@@ -9,7 +9,7 @@ internal enum class GameplayText : TextResource {
     NewDiscovery,
     NoStatChange,
     AffectedComponent,
-    FamilyResonance,
+    SharedTag,
     WeaponInteraction,
     SynergyConnection,
     Gameplay,

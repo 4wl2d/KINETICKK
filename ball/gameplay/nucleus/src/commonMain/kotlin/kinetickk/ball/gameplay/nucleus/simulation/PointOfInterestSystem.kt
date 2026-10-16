@@ -8,7 +8,7 @@ import kinetickk.ball.content.api.DirectedReward
 import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.ItemDefinition
-import kinetickk.ball.content.api.ItemEffect
+import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.render.*
@@ -125,13 +125,11 @@ internal fun MutableGameState.activatePointOfInterest(point: PointOfInterestStat
     val ids = mutableListOf<Int>()
     if (point.kind == PointOfInterestKind.SEALED_ANOMALY) repeat(3) { index ->
         val angle = TAU * index / 3f
-        val integrity = rebirthProfile.enemyHealth(100f * (1f + elapsed / content.tempo.bossAtSeconds))
+        val integrity = spawnIntegrity(EnemyType.WARDEN) * POINT_DEFENDER_HEALTH_SHARE
         val enemy = Enemy(
             id = nextEntityId++, type = EnemyType.WARDEN,
             x = point.x + cos(angle) * 130f, y = point.y + sin(angle) * 130f,
             hp = integrity, maxHp = integrity, radius = 26f, actionTimer = 0.8f + index * 0.4f,
-            relicCounters = IntArray(content.relics.size), relicTimers = FloatArray(content.relics.size),
-            relicValues = FloatArray(content.relics.size),
         )
         enemies += enemy
         ids += enemy.id
@@ -169,8 +167,8 @@ internal fun MutableGameState.openDirectedReward(reward: DirectedReward) {
     }
     val focuses = when (reward) {
         DirectedReward.WEAPON -> listOf(RewardFocus.MOTION, RewardFocus.CONTROL, RewardFocus.STRIKE)
-        DirectedReward.RELIC -> listOf(RewardFocus.VECTOR, RewardFocus.GRAVITIC, RewardFocus.ION,
-            RewardFocus.RIFT, RewardFocus.PRISM, RewardFocus.ENTROPY).shuffled(gameplayRandom).take(3)
+        DirectedReward.RELIC -> listOf(RewardFocus.KINETIC, RewardFocus.THERMAL, RewardFocus.CRYO,
+            RewardFocus.ION, RewardFocus.GRAVITIC, RewardFocus.ENTROPY).shuffled(rewardRandom).take(3)
         DirectedReward.ITEM_AND_REPAIR -> listOf(RewardFocus.OFFENSE, RewardFocus.DEFENSE, RewardFocus.ECONOMY)
     }
     choices = focuses.map { ChoiceOption(activeChoiceType, it.label, "Choose a direction, then one of three matching offers.",
@@ -185,21 +183,29 @@ internal fun MutableGameState.selectRewardFocus(focus: RewardFocus) {
     when (reward) {
         DirectedReward.RELIC -> {
             val aspect = RelicAspect.valueOf(focus.name)
-            choices = content.relics.filter { it.aspect == aspect && relicRank(it.id) < content.relicPolicy.maxRank }
-                .shuffled(gameplayRandom).take(3).map {
-                    ChoiceOption(ChoiceType.RELIC, it.name, it.description, it.aspect.displayLabel,
-                        relicId = it.id, relicAction = RelicChoiceAction.ACQUIRE)
-                }
+            val pool = offerableRelics()
+            val matching = pool.filter { it.aspect == aspect }.shuffled(rewardRandom).take(3)
+            // Small aspects are topped up with the build's best attuned relics instead of leaving dead cards.
+            val filler = pool.filter { it !in matching && it.aspect != RelicAspect.SOVEREIGN }
+                .sortedByDescending { relic -> relic.attunedTags.sumOf { build.tagPoints(it) } }
+                .take(3 - matching.size)
+            choices = (matching + filler).map {
+                ChoiceOption(ChoiceType.RELIC, it.name, it.upside, it.aspect.displayLabel,
+                    relicId = it.id, relicAction = RelicChoiceAction.ACQUIRE)
+            } + relicOfferTailCard()
         }
         DirectedReward.ITEM_AND_REPAIR -> {
-            val pool = content.items.filter { itemStacks[it.id] < it.maxStacks && hasUsefulItemEffect(it) && itemRewardFocus(it) == focus }
-            choices = pool.shuffled(gameplayRandom).take(3).map {
-                ChoiceOption(ChoiceType.ITEM, it.name, compactItemDescription(it), it.rarity.displayLabel, itemId = it.id)
+            val pool = content.items.filter {
+                it.minimumRebirth <= rebirthLevel && hasUsefulItemEffect(it) && itemRewardFocus(it) == focus
+            }
+            choices = pool.shuffled(rewardRandom).take(3).map {
+                ChoiceOption(ChoiceType.ITEM, it.name, it.description, it.rarity.displayLabel, itemId = it.id,
+                    reborn = rewardRandom.nextFloat() < rebornChance())
             }
         }
         DirectedReward.WEAPON -> {
             val pool = content.weapons.filter { it.id != weapon && weaponRewardFocus(it.id) == focus }
-                .shuffled(gameplayRandom).take(2)
+                .shuffled(rewardRandom).take(2)
             choices = listOf(ChoiceOption(ChoiceType.TOTEM, "Amplify ${currentWeaponDefinition.name}",
                 "Raise current weapon mastery by one level.", "AMPLIFY", weaponId = weapon,
                 totemAction = TotemAction.AMPLIFY_CURRENT)) + pool.map {
@@ -214,10 +220,9 @@ internal fun MutableGameState.selectRewardFocus(focus: RewardFocus) {
     }
 }
 
-internal fun itemRewardFocus(item: ItemDefinition): RewardFocus = when (item.primary.effect) {
-    ItemEffect.MAX_INTEGRITY, ItemEffect.REGEN, ItemEffect.SHIELD_CAPACITY, ItemEffect.DAMAGE_REDUCTION,
-    ItemEffect.COOLING, ItemEffect.DASH_EFFICIENCY -> RewardFocus.DEFENSE
-    ItemEffect.DATA_GAIN, ItemEffect.MATTER_GAIN, ItemEffect.PICKUP_RADIUS, ItemEffect.LUCK -> RewardFocus.ECONOMY
+internal fun itemRewardFocus(item: ItemDefinition): RewardFocus = when {
+    BuildTag.FORTUNE in item.tags -> RewardFocus.ECONOMY
+    BuildTag.BULWARK in item.tags || BuildTag.ANCHOR in item.tags -> RewardFocus.DEFENSE
     else -> RewardFocus.OFFENSE
 }
 

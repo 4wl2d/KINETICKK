@@ -5,7 +5,12 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.foundation.collections.toImmutableSet
 
+import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.EquippedRelic
+import kinetickk.ball.content.api.ItemRule
+import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.RelicPairingId
+import kinetickk.foundation.collections.toImmutableList
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemModifier
@@ -29,7 +34,10 @@ import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 
-internal const val MAX_GENERATED_REWARD_CHOICES: Int = 3
+internal const val MAX_GENERATED_REWARD_CHOICES: Int = 4
+
+/** A Totem recalibration offers three different weapon systems; Gambler's Ledger only widens item offers. */
+internal const val WEAPON_OFFER_CHOICES: Int = 3
 
 internal fun MutableGameState.openItemChoice() {
     activeChoiceType = ChoiceType.ITEM
@@ -42,42 +50,6 @@ internal fun MutableGameState.openItemChoice() {
     }
     dashBufferTime = 0f
     phase = GamePhase.CHOICE
-}
-
-internal fun MutableGameState.buildItemChoices() {
-    val lifetimeUnlock = lifetimeMatterOfferLevel(lifetimeMatter)
-    val catalogLevel = max(level, lifetimeUnlock)
-    val unlocked = content.items.filter { it.unlockLevel <= catalogLevel }
-    val eligible = unlocked.filter { hasUsefulItemEffect(it) }
-    val selected = mutableListOf<ItemDefinition>()
-    repeat(MAX_GENERATED_REWARD_CHOICES) itemChoiceLoop@{
-        val preferred = eligible.filter { candidate -> selected.none { it.id == candidate.id } }
-        val available = preferred
-        if (available.isEmpty()) return@itemChoiceLoop
-        val rarity = rollRarity()
-        val rarityPool = available.filter { it.rarity == rarity }.ifEmpty { available }
-        selected += rarityPool[gameplayRandom.nextInt(rarityPool.size)]
-    }
-    choices = selected.map {
-        ChoiceOption(
-            type = ChoiceType.ITEM,
-            title = it.name,
-            description = compactItemDescription(it),
-            tag = it.rarity.displayLabel.uppercase(),
-            itemId = it.id,
-        )
-    }
-}
-
-internal fun MutableGameState.rollRarity(): ItemRarity {
-    val roll = gameplayRandom.nextFloat() - luck.coerceIn(0f, 2f) * 0.08f
-    return when {
-        roll < 0.03f -> ItemRarity.LEGENDARY
-        roll < 0.13f -> ItemRarity.EPIC
-        roll < 0.34f -> ItemRarity.RARE
-        roll < 0.67f -> ItemRarity.UNCOMMON
-        else -> ItemRarity.COMMON
-    }
 }
 
 internal fun MutableGameState.openTotemChoice() {
@@ -120,8 +92,8 @@ internal fun MutableGameState.openWeaponChoice() {
 internal fun MutableGameState.buildWeaponChoices() {
     val pool = content.weapons
         .filter { it.id != weapon }
-        .shuffled(gameplayRandom)
-        .take(MAX_GENERATED_REWARD_CHOICES)
+        .shuffled(rewardRandom)
+        .take(WEAPON_OFFER_CHOICES)
     choices = pool.map {
         ChoiceOption(
             type = ChoiceType.WEAPON,
@@ -140,67 +112,16 @@ internal fun MutableGameState.openRelicChoice() {
     phase = GamePhase.CHOICE
 }
 
-internal fun MutableGameState.buildRelicChoices() {
-    val selected = mutableListOf<RelicDefinition>()
-    repeat(MAX_GENERATED_REWARD_CHOICES) relicChoiceLoop@{
-        val excluded = selected.mapTo(mutableSetOf()) { it.id }
-        val sovereignChance = (0.08f + luck.coerceIn(0f, 2f) * 0.01f).coerceAtMost(0.10f)
-        val preferredAspect = if (gameplayRandom.nextFloat() < sovereignChance) {
-            RelicAspect.SOVEREIGN
-        } else {
-            RelicAspect.entries[gameplayRandom.nextInt(RelicAspect.entries.size - 1)]
-        }
-        val preferred = content.relics.filter { it.aspect == preferredAspect && it.id !in excluded }
-        val available = preferred.ifEmpty { content.relics.filter { it.id !in excluded } }
-        selected += available[gameplayRandom.nextInt(available.size)]
-    }
-    choices = buildList {
-        for (relicIndex in selected.indices) {
-            val relic = selected[relicIndex]
-            val currentRank = relicRank(relic.id)
-            add(
-                ChoiceOption(
-                    type = ChoiceType.RELIC,
-                    title = relic.name,
-                    description = if (currentRank > 0) {
-                        if (currentRank < content.relicPolicy.maxRank) {
-                            "Merge the duplicate resonance and advance rank $currentRank to ${currentRank + 1}."
-                        } else {
-                            "This resonance is already rank ${content.relicPolicy.maxRank}; selecting it salvages Kinetic Matter."
-                        }
-                    } else {
-                        relic.description
-                    },
-                    tag = relic.aspect.displayLabel.uppercase(),
-                    relicId = relic.id,
-                    relicAction = RelicChoiceAction.ACQUIRE,
-                ),
-            )
-        }
-        if (equippedRelics.size >= content.relicPolicy.maxSlots) {
-            val slotCountLabel = content.relicPolicy.maxSlots.let { if (it == 4) "four" else it.toString() }
-            add(
-                ChoiceOption(
-                    type = ChoiceType.RELIC,
-                    title = "Meld resonance",
-                    description = "Collapse this offering into one of the $slotCountLabel bound Relics and raise its rank.",
-                    tag = "MELD",
-                    relicAction = RelicChoiceAction.MELD,
-                ),
-            )
-        }
-    }
-}
-
 internal fun MutableGameState.openRelicBindChoice() {
     activeChoiceType = ChoiceType.RELIC_BIND
     val action = pendingRelicBindAction ?: return
     val incoming = pendingBindingRelic
-    choices = equippedRelics.mapIndexed { index, equipped ->
+    choices = equippedRelics.mapIndexedNotNull { index, equipped ->
         val current = content.relic(equipped.id)
         when (action) {
             RelicChoiceAction.REPLACE -> {
                 val replacement = content.relic(incoming ?: return)
+                if (equipped.id == RelicId.OUROBOROS_SEAL && ouroborosLockedUntil > elapsed) return@mapIndexedNotNull null
                 ChoiceOption(
                     type = ChoiceType.RELIC_BIND,
                     title = "Replace ${current.name}",
@@ -214,18 +135,24 @@ internal fun MutableGameState.openRelicBindChoice() {
             RelicChoiceAction.MELD_TARGET -> ChoiceOption(
                 type = ChoiceType.RELIC_BIND,
                 title = "Meld ${current.name}",
-                description = if (equipped.rank < content.relicPolicy.maxRank) {
+                description = if (canMeld(equipped.id)) {
                     "Collapse the offering into slot ${index + 1} and advance rank ${equipped.rank} to ${equipped.rank + 1}."
                 } else {
-                    "Slot ${index + 1} is already rank ${content.relicPolicy.maxRank}; salvage the excess resonance."
+                    "Slot ${index + 1} cannot be melded further; salvage the excess resonance."
                 },
                 tag = "SLOT ${index + 1} // RANK ${equipped.rank}",
                 relicId = equipped.id,
                 relicAction = RelicChoiceAction.MELD_TARGET,
                 relicSlot = index,
             )
-            RelicChoiceAction.ACQUIRE, RelicChoiceAction.MELD -> return
+            RelicChoiceAction.ACQUIRE, RelicChoiceAction.MELD, RelicChoiceAction.DECLINE -> return
         }
+    }
+    if (choices.isEmpty()) {
+        pendingBindingRelic = null
+        pendingRelicBindAction = null
+        grantMatter(content.relicPolicy.salvageMatter.toFloat())
+        return
     }
     dashBufferTime = 0f
     phase = GamePhase.CHOICE
@@ -244,14 +171,11 @@ internal fun MutableGameState.acquireRelic(id: RelicId) {
     if (currentIndex >= 0) {
         discoverRelic(id)
         val current = equippedRelics[currentIndex]
-        if (current.rank >= content.relicPolicy.maxRank) {
-            grantMatter(8f)
+        if (current.rank >= content.relicPolicy.maxRank || id == RelicId.HOLLOW_CROWN) {
+            grantMatter(content.relicPolicy.salvageMatter.toFloat())
             message = content.relic(id).name.uppercase() + " // RESONANCE SALVAGED"
         } else {
-            val updated = equippedRelics.toMutableList()
-            updated[currentIndex] = current.copy(rank = current.rank + 1)
-            equippedRelics = updated.toList()
-            relicRanks[id.ordinal] = current.rank + 1
+            setRelicRank(currentIndex, current.rank + 1)
             message = content.relic(id).name.uppercase() + " // RANK " + (current.rank + 1)
         }
         messageTime = 1.7f
@@ -261,13 +185,29 @@ internal fun MutableGameState.acquireRelic(id: RelicId) {
     discoverRelic(id)
     equippedRelics = equippedRelics + EquippedRelic(id, 1)
     relicRanks[id.ordinal] = 1
+    severedRelics = severedRelics.filter { it.id != id }
+    recordRelicGain(id)
+    onRelicSetChanged()
     message = content.relic(id).name.uppercase() + " // BOUND"
     messageTime = 1.7f
 }
 
+private fun MutableGameState.setRelicRank(slot: Int, rank: Int) {
+    val current = equippedRelics[slot]
+    val updated = equippedRelics.toMutableList()
+    updated[slot] = current.copy(rank = rank)
+    equippedRelics = updated.toList()
+    relicRanks[current.id.ordinal] = rank
+    // Rank three adds a second affinity point, which is a newer gain than the bind.
+    if (rank >= 3) recordRelicGain(current.id)
+    onRelicSetChanged()
+}
+
+/** Replacing a relic severs it: its liability lingers for the policy's severance time. */
 internal fun MutableGameState.replaceRelic(slot: Int, id: RelicId) {
     if (slot !in equippedRelics.indices) return
     val replaced = equippedRelics[slot]
+    if (replaced.id == RelicId.OUROBOROS_SEAL && ouroborosLockedUntil > elapsed) return
     clearRelicRuntime(replaced.id)
     val updated = equippedRelics.toMutableList()
     discoverRelic(id)
@@ -275,6 +215,13 @@ internal fun MutableGameState.replaceRelic(slot: Int, id: RelicId) {
     equippedRelics = updated.toList()
     relicRanks[replaced.id.ordinal] = 0
     relicRanks[id.ordinal] = 1
+    recordRelicGain(id)
+    val severance = content.build.policy.severanceSeconds
+    if (severance > 0f) {
+        severedRelics = (severedRelics.filter { it.id != replaced.id && it.id != id } +
+            SeveredRelic(replaced.id, elapsed + severance)).takeLast(MutableGameState.MAX_SEVERED_RELICS)
+    }
+    onRelicSetChanged()
     message = content.relic(id).name.uppercase() + " // SLOT ${slot + 1} BOUND"
     messageTime = 1.7f
 }
@@ -282,43 +229,59 @@ internal fun MutableGameState.replaceRelic(slot: Int, id: RelicId) {
 internal fun MutableGameState.meldRelic(slot: Int) {
     if (slot !in equippedRelics.indices) return
     val current = equippedRelics[slot]
-    if (current.rank >= content.relicPolicy.maxRank) {
-        grantMatter(8f)
+    if (!canMeld(current.id)) {
+        grantMatter(content.relicPolicy.salvageMatter.toFloat())
         message = content.relic(current.id).name.uppercase() + " // RESONANCE SALVAGED"
     } else {
-        val updated = equippedRelics.toMutableList()
-        updated[slot] = current.copy(rank = current.rank + 1)
-        equippedRelics = updated.toList()
-        relicRanks[current.id.ordinal] = current.rank + 1
+        setRelicRank(slot, current.rank + 1)
         message = content.relic(current.id).name.uppercase() + " // RANK " + (current.rank + 1)
     }
     messageTime = 1.7f
 }
 
+/** Declining a relic keeps the slot empty (or skips an Heirloom) for a small salvage. */
+internal fun MutableGameState.declineRelic(heirloom: Boolean) {
+    if (heirloom) {
+        rerollsRemaining += content.relicPolicy.heirloomDeclineRerolls
+        pendingHeirloomResolved = true
+        heirloomCandidates = emptyList()
+        message = "HEIRLOOM LEFT // +2 REROLLS"
+    } else {
+        grantMatter(content.relicPolicy.salvageMatter.toFloat())
+        message = "SLOT LEFT HOLLOW"
+    }
+    messageTime = 1.6f
+}
+
+private fun MutableGameState.onRelicSetChanged() {
+    recompileBuild()
+    discoverBoundPairings()
+    // Bound relics change effective capacities; keep the gauges within them.
+    shield = min(shield, shieldCapacity() * kotlin.math.max(1f, build.overhealOverfill))
+}
+
 internal fun MutableGameState.clearRelicRuntime(id: RelicId) {
-    clearDependentSynergyEffects(id)
     val index = id.ordinal
     relicCooldowns[index] = 0f
     relicCounters[index] = 0
     when (id) {
-        RelicId.SLIPSTREAM_RELAY -> slipstreamRelayTime = 0f
-        RelicId.BRAKEPOINT_MEMORY -> brakepointCharge = 0f
-        RelicId.BORROWED_MOMENT -> borrowedMomentTime = 0f
+        RelicId.STORMHEART_CAPACITOR -> stormCharge = 0f
+        RelicId.STASIS_ANCHOR -> {
+            stasisBank = 0
+            stasisMeter = MutableGameState.STASIS_SECONDS
+        }
+        RelicId.ECHO_CHAMBER -> echoHits.clear()
+        RelicId.CINDER_CROWN -> for (enemyIndex in enemies.indices) enemies[enemyIndex].status[kinetickk.ball.gameplay.nucleus.model.StatusCell.CINDER_BANK] = 0f
         else -> Unit
-    }
-    delayedRelicHits.removeMatchingStable { delayedHit ->
-        delayedHit.relicId == id || id == RelicId.VOLTAIC_FILAMENT && delayedHit.linkedEnemyId >= 0
-    }
-    for (enemyIndex in enemies.indices) {
-        val enemy = enemies[enemyIndex]
-        enemy.relicCounters[index] = 0
-        enemy.relicTimers[index] = 0f
-        enemy.relicValues[index] = 0f
     }
 }
 
 internal fun MutableGameState.openNextPendingChoice() {
     if (phase != GamePhase.RUNNING) return
+    if (heirloomPending) {
+        openHeirloomChoice()
+        if (phase != GamePhase.RUNNING) return
+    }
     when {
         pendingLevelChoices > 0 -> {
             pendingLevelChoices--
@@ -359,60 +322,65 @@ internal fun MutableGameState.amplifyCurrentWeapon() {
     messageTime = 1.5f
 }
 
-internal fun MutableGameState.acquireItem(itemId: Int) {
+internal fun MutableGameState.acquireItem(itemId: Int, reborn: Boolean = false) {
     val item = content.item(itemId) ?: return
-    if (itemStacks[itemId] >= item.maxStacks) {
+    val before = itemStacks[itemId]
+    if (before >= item.maxStacks) {
         grantMatter((item.rarity.rank * 2).toFloat())
         message = item.name.uppercase() + " SALVAGED"
         messageTime = 1.4f
         return
     }
-    itemStacks[itemId]++
+    itemStacks[itemId] = before + 1
+    if (reborn) rebornItems[itemId] = 1
+    if (before == 0) acquisitionOrder = acquisitionOrder + itemId
     acquiredItemCount++
     recentItem = item
-    applyItemModifier(item.primary)
-    applyItemModifier(item.secondary)
-    val family = item.id / 20
-    familyStacks[family]++
-    if (familyStacks[family] % 3 == 0) {
-        weaponPower += 0.06f
-        damageMultiplier += 0.04f
-        message = item.family.uppercase() + " RESONANCE"
-    } else {
-        message = item.name.uppercase() + " ACQUIRED"
-    }
+    val policy = content.build.policy
+    // Each stack adds its marginal share of the diminishing stack magnitude.
+    val marginal = policy.stackMagnitude(before + 1) - policy.stackMagnitude(before)
+    val rebornScale = if (rebornItems[itemId] != 0) policy.rebornMagnitude else 1f
+    item.stats.forEach { stat -> applyStatDelta(stat.effect, stat.amount * marginal * rebornScale) }
+    item.rules.forEach { rule -> if (rule is ItemRule.BonusRerolls) rerollsRemaining += rule.count }
+    val tiersBefore = BuildTag.entries.map { tagTier(it) }
+    recompileBuild()
+    val reachedTier = BuildTag.entries.firstOrNull { tagTier(it) > tiersBefore[it.ordinal] }
+    message = if (reachedTier != null) reachedTier.displayLabel.uppercase() + " RESONANCE" else item.name.uppercase() + " ACQUIRED"
     messageTime = 1.7f
     if (discoveredItemIds.add(itemId)) pendingDiscoveredItemIds += itemId
 }
 
-internal fun MutableGameState.applyItemModifier(modifier: ItemModifier) {
-    when (modifier.effect) {
-        ItemEffect.IMPACT_DAMAGE -> damageMultiplier += modifier.amount
-        ItemEffect.WEAPON_POWER -> weaponPower += modifier.amount
-        ItemEffect.MASS -> mass += modifier.amount
-        ItemEffect.MAGNETISM -> magnetStrength *= 1f + modifier.amount
-        ItemEffect.COOLING -> coolingRate *= 1f + modifier.amount
+/** Applies a signed passive stat change. Capped stats use incremental diminishing returns. */
+internal fun MutableGameState.applyStatDelta(effect: ItemEffect, amount: Float) {
+    when (effect) {
+        ItemEffect.IMPACT_DAMAGE -> damageMultiplier = max(0.1f, damageMultiplier + amount)
+        ItemEffect.WEAPON_POWER -> weaponPower = max(0.1f, weaponPower + amount)
+        ItemEffect.MASS -> mass = max(0.2f, mass + amount)
+        ItemEffect.MAGNETISM -> magnetStrength *= max(0.2f, 1f + amount)
+        ItemEffect.COOLING -> coolingRate *= max(0.2f, 1f + amount)
         ItemEffect.MAX_INTEGRITY -> {
-            maxHp += modifier.amount
-            hp += modifier.amount
+            maxHp = max(10f, maxHp + amount)
+            // Aegis Inversion (bound or lingering) never restores integrity, only raises the ceiling.
+            val sealed = build.liability(kinetickk.ball.content.api.RelicId.AEGIS_INVERSION)
+            hp = if (amount > 0f && !sealed) hp + amount else min(hp, maxHp)
         }
-        ItemEffect.REGEN -> regenPerSecond += modifier.amount
-        ItemEffect.DASH_POWER -> dashImpulse *= 1f + modifier.amount
-        ItemEffect.DASH_EFFICIENCY -> dashHeatCost = max(12f, dashHeatCost * (1f - modifier.amount.coerceAtMost(0.25f)))
-        ItemEffect.CRIT_CHANCE -> critChance = min(0.75f, critChance + modifier.amount)
-        ItemEffect.CRIT_DAMAGE -> critMultiplier += modifier.amount
-        ItemEffect.PICKUP_RADIUS -> pickupRadius += modifier.amount
-        ItemEffect.LUCK -> luck += modifier.amount
-        ItemEffect.DATA_GAIN -> dataGain += modifier.amount
-        ItemEffect.MATTER_GAIN -> matterGain += modifier.amount
-        ItemEffect.ATTACK_SPEED -> attackSpeed += modifier.amount
+        ItemEffect.REGEN -> regenPerSecond = max(0f, regenPerSecond + amount)
+        ItemEffect.DASH_POWER -> dashImpulse *= max(0.2f, 1f + amount)
+        ItemEffect.DASH_EFFICIENCY -> dashHeatCost = max(12f, dashHeatCost * (1f - amount.coerceAtMost(0.25f)))
+        ItemEffect.CRIT_CHANCE -> critChance = (critChance + amount * (1f - critChance / 0.75f)).coerceIn(0f, 0.75f)
+        ItemEffect.CRIT_DAMAGE -> critMultiplier = max(1f, critMultiplier + amount)
+        ItemEffect.PICKUP_RADIUS -> pickupRadius = max(40f, pickupRadius + amount)
+        ItemEffect.LUCK -> luck = max(0f, luck + amount)
+        ItemEffect.DATA_GAIN -> dataGain = max(0.1f, dataGain + amount)
+        ItemEffect.MATTER_GAIN -> matterGain = max(0.1f, matterGain + amount)
+        ItemEffect.ATTACK_SPEED -> attackSpeed = max(0.2f, attackSpeed + amount)
         ItemEffect.SHIELD_CAPACITY -> {
-            maxShield += modifier.amount
-            shield += modifier.amount
+            maxShield = max(0f, maxShield + amount)
+            if (amount > 0f) shield += amount
         }
-        ItemEffect.DAMAGE_REDUCTION -> damageReduction = min(0.65f, damageReduction + modifier.amount)
-        ItemEffect.COMBO_WINDOW -> comboWindow += modifier.amount
-        ItemEffect.OVERDRIVE_GAIN -> overdriveGain += modifier.amount
+        ItemEffect.DAMAGE_REDUCTION -> damageReduction = (damageReduction + amount * (1f - damageReduction / 0.65f)).coerceIn(0f, 0.65f)
+        ItemEffect.COMBO_WINDOW -> comboWindow = max(0.5f, comboWindow + amount)
+        ItemEffect.OVERDRIVE_GAIN -> overdriveGain = max(0.1f, overdriveGain + amount)
     }
 }
 
@@ -452,18 +420,22 @@ internal fun MutableGameState.grantMatter(base: Float) {
     }
 }
 
+/** Banks run Matter not banked yet; idempotent, and Matter granted after a terminal bank still counts. */
 internal fun MutableGameState.bankRunMatter() {
-    if (bankedThisRun || runMatter <= 0L) return
-    bankedThisRun = true
-    totalMatter = saturatedAdd(totalMatter, runMatter)
-    lifetimeMatter = saturatedAdd(lifetimeMatter, runMatter)
-    pendingBankedMatter = saturatedAdd(pendingBankedMatter, runMatter)
+    val fresh = runMatter - bankedRunMatter
+    if (fresh <= 0L) return
+    bankedRunMatter = runMatter
+    totalMatter = saturatedAdd(totalMatter, fresh)
+    lifetimeMatter = saturatedAdd(lifetimeMatter, fresh)
+    pendingBankedMatter = saturatedAdd(pendingBankedMatter, fresh)
 }
 
 internal fun MutableGameState.takeProgressUpdate(): GameplayProgressUpdate? {
     if (
         pendingBankedMatter == 0L &&
         pendingDiscoveredItemIds.isEmpty() && pendingDiscoveredRelicMask == 0L &&
+        pendingDiscoveredReactionMask == 0 && pendingDiscoveredPairingMask == 0 &&
+        pendingVictoryRelics == null && !pendingHeirloomResolved &&
         pendingClearedRebirthLevel == null && pendingEliteKills == 0 && pendingDashHits == 0 &&
         pendingCompletedOrbits == 0 && pendingArchitectDefeatedWith == null
     ) {
@@ -476,6 +448,10 @@ internal fun MutableGameState.takeProgressUpdate(): GameplayProgressUpdate? {
         clearedRebirthLevel = pendingClearedRebirthLevel,
         eliteKills = pendingEliteKills, dashHits = pendingDashHits,
         completedOrbits = pendingCompletedOrbits, architectDefeatedWith = pendingArchitectDefeatedWith,
+        discoveredReactionIds = ReactionId.entries.filter { pendingDiscoveredReactionMask and (1 shl it.ordinal) != 0 }.toImmutableSet(),
+        discoveredPairingIds = RelicPairingId.entries.filter { pendingDiscoveredPairingMask and (1 shl it.ordinal) != 0 }.toImmutableSet(),
+        victoryRelicIds = pendingVictoryRelics?.toImmutableList(),
+        heirloomResolved = pendingHeirloomResolved,
     )
     pendingBankedMatter = 0L
     pendingDiscoveredItemIds.clear()
@@ -485,6 +461,10 @@ internal fun MutableGameState.takeProgressUpdate(): GameplayProgressUpdate? {
     pendingDashHits = 0
     pendingCompletedOrbits = 0
     pendingArchitectDefeatedWith = null
+    pendingDiscoveredReactionMask = 0
+    pendingDiscoveredPairingMask = 0
+    pendingVictoryRelics = null
+    pendingHeirloomResolved = false
     return update
 }
 

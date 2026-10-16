@@ -7,7 +7,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.translate
+import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.GameplayContentSnapshot
+import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.gameplay.interaction.fx.BuildNoticeKind
+import kinetickk.ball.gameplay.interaction.fx.BuildNoticeTitles
 import androidx.compose.ui.text.TextLayoutResult
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.fx.BuildNotificationProjection
@@ -92,10 +99,14 @@ internal fun DrawScope.drawHudFeed(
         top = ToastSpot.top
         bandLimit = ToastSpot.bandLimit
         val lines = FeedLines
-        val age = NOTICE_LIFE_SECONDS - notice.life
+        // The entrance runs once from the toast's opening; a merged line does not replay it.
+        val age = notice.age
         val alpha = (notice.life / 0.6f).coerceIn(0f, 1f) * entranceAlpha(age)
         val shift = entranceShift(age) * frame.u(80f)
-        translate(shift, 0f) { drawFeedPlate(measurer, frame, NoticePaths[slot], 1 + slot, lines, right, top, height, alpha, shift, banner = false) }
+        val style = FeedScratch.styles[slot].of(notice, engine.content)
+        translate(shift, 0f) {
+            drawFeedPlate(measurer, frame, NoticePaths[slot], 1 + slot, lines, right, top, height, alpha, shift, banner = false, style = style)
+        }
         feedLeft = min(feedLeft, right - lines.plateWidth(frame, banner = false))
         if (feedTop.isNaN()) feedTop = top
         top += height + gap
@@ -162,7 +173,7 @@ private object FeedArea {
                 if (boss.id >= 0) {
                     val architect = boss.type == EnemyType.ARCHITECT
                     if (right - maxWidth < frame.width * 0.5f + HudTopGeometry.bossBarWidth(frame, architect) * 0.5f) {
-                        top = max(top, HudTopGeometry.bossBottom(frame, architect, measurer.scale) + frame.u(8f))
+                        top = max(top, HudTopGeometry.bossBottom(frame, architect, measurer.scale, rail = boss.statusBits != 0) + frame.u(8f))
                     }
                 }
                 maxNotices = 1
@@ -335,7 +346,6 @@ private fun shrinkLevels(scale: Float): Int =
 private fun shrinkFactor(level: Int, scale: Float): Float =
     if (level == 0) 1f else max(scale - level * SHRINK_STEP, SMALLEST_TEXT_SCALE) / scale
 
-private const val NOTICE_LIFE_SECONDS = 6f
 private const val MAX_NOTICES = 3
 
 /**
@@ -352,6 +362,16 @@ private const val FEED_TEXT_SLOTS = 2 + MAX_NOTICES * (1 + DETAILS_PER_NOTICE)
 private fun noticeTitleSlot(notice: Int) = 2 + notice * (1 + DETAILS_PER_NOTICE)
 
 private val NoticePaths = arrayOf(HudPath.NOTICE_0, HudPath.NOTICE_1, HudPath.NOTICE_2)
+
+/** Resonance tier pips after a tier line ("+ Ram" and three sheared pips, the reached ones lit). */
+private const val TIER_PIPS = 3
+private const val TIER_PIP_WIDTH_DP = 8f
+private const val TIER_PIP_HEIGHT_DP = 5f
+private const val TIER_PIP_GAP_DP = 2f
+private const val TIER_PIPS_GAP_DP = 7f
+
+private fun tierPipsWidth(frame: HudFrame, shrink: Float): Float =
+    (TIER_PIPS * TIER_PIP_WIDTH_DP + (TIER_PIPS - 1) * TIER_PIP_GAP_DP) * frame.unit * shrink
 
 /** Synergy switched on ("+ name") or off ("− name") in a build notice (`emitBuildChange`). */
 internal fun isSynergyLine(detail: String): Boolean = detail.startsWith("+ ") || detail.startsWith("\u2212 ")
@@ -444,8 +464,10 @@ private fun noticeLines(
     }
     for (line in 0 until picked) {
         val source = notice.details[FeedPick[line]]
-        val text = FeedScratch.details[slot * DETAILS_PER_NOTICE + line].of(source, language)
-        lines.detail(measurer, frame, titleSlot + 1 + line, text, maxWidth, banner = false, required = isSynergyLine(source), uppercase = true)
+        val localized = FeedScratch.details[slot * DETAILS_PER_NOTICE + line]
+        val text = localized.of(source, language)
+        lines.detail(measurer, frame, titleSlot + 1 + line, text, maxWidth, banner = false, required = isSynergyLine(source), uppercase = true,
+            tier = localized.tier, element = localized.element)
     }
     return lines.seal(measurer)
 }
@@ -477,6 +499,14 @@ private object FeedLines {
     private val detailTexts = arrayOfNulls<String>(1 + DETAILS_PER_NOTICE)
     private val detailUpper = BooleanArray(1 + DETAILS_PER_NOTICE)
     private val detailNeeds = FloatArray(1 + DETAILS_PER_NOTICE)
+
+    /** Resonance tier (1..3) a line ends in as pips, 0 for none, and the line's element (-1 none). */
+    private val tiers = IntArray(1 + DETAILS_PER_NOTICE)
+    private val elements = IntArray(1 + DETAILS_PER_NOTICE)
+    private val trailings = FloatArray(1 + DETAILS_PER_NOTICE)
+    private val gaps = FloatArray(1 + DETAILS_PER_NOTICE)
+    private val pipLeft = FloatArray(1 + DETAILS_PER_NOTICE)
+    private val pipCenter = FloatArray(1 + DETAILS_PER_NOTICE)
     private var detailSize = 0f
     private var detailWidth = 0f
     var count = 0
@@ -489,6 +519,9 @@ private object FeedLines {
     private var bank = 0
     private var shrink = 1f
 
+    /** The text step's size factor (pips shrink with the text). */
+    val shrinkFactor: Float get() = shrink
+
     fun clear(narrow: Boolean, scale: Float, level: Int): FeedLines {
         count = 0
         bank = (level * 2 + if (narrow) 1 else 0) * FEED_TEXT_SLOTS
@@ -499,6 +532,15 @@ private object FeedLines {
     operator fun get(index: Int): TextLayoutResult = layouts[index]!!
 
     fun isVisible(index: Int): Boolean = visible[index]
+
+    fun tier(index: Int): Int = tiers[index]
+
+    fun element(index: Int): Int = elements[index]
+
+    /** Where a tier line's pips start (px right of the text's left) and their center (px below the line box top). */
+    fun pipLeft(index: Int): Float = pipLeft[index]
+
+    fun pipCenter(index: Int): Float = pipCenter[index]
 
     /** How many of the title and required lines the last [fit] that placed the plate shows. */
     fun shownRequired(): Int {
@@ -514,6 +556,9 @@ private object FeedLines {
         widths[0] = FeedTexts.contentWidth(bank + slot)
         whole[0] = FeedTexts.isWhole(bank + slot)
         required[0] = true
+        tiers[0] = 0
+        elements[0] = -1
+        trailings[0] = 0f
         count = 1
     }
 
@@ -526,15 +571,24 @@ private object FeedLines {
         banner: Boolean,
         required: Boolean,
         uppercase: Boolean,
+        tier: Int = 0,
+        element: Int = -1,
     ) {
         if (count == 0 || count >= layouts.size) return
         detailSize = (if (frame.regular) frame.t(11f) else 10f) / REFERENCE_TEXT_SCALE * shrink
         detailWidth = (maxWidth - startPadding(frame, banner) - endPadding(frame) - leadSpace(frame, banner)).coerceAtLeast(1f)
+        val gap = if (tier > 0) frame.u(TIER_PIPS_GAP_DP) * shrink else 0f
+        val trailing = if (tier > 0) tierPipsWidth(frame, shrink) + gap else 0f
         // Details take up to two lines, then shrink or wrap further on their plate rather than being cut.
         detailSlots[count] = bank + slot
         detailTexts[count] = text
         detailUpper[count] = uppercase
-        detailNeeds[count] = FeedTexts.need(bank + slot, measurer, text, mono = true, detailSize, detailWidth, lines = 2, uppercase)
+        detailNeeds[count] = FeedTexts.need(bank + slot, measurer, text, mono = true, detailSize, (detailWidth - trailing).coerceAtLeast(1f),
+            lines = 2, uppercase)
+        tiers[count] = tier
+        elements[count] = element
+        trailings[count] = trailing
+        gaps[count] = gap
         this.required[count] = required
         count++
     }
@@ -549,10 +603,12 @@ private object FeedLines {
         for (index in 1 until count) if (!detailNeeds[index].isNaN()) cap = min(cap, detailNeeds[index])
         for (index in 1 until count) {
             val slot = detailSlots[index]
-            layouts[index] = FeedTexts.fit(slot, measurer, detailTexts[index]!!, mono = true, detailSize, detailWidth, lines = 2,
-                uppercase = detailUpper[index], cap = cap)
-            widths[index] = FeedTexts.contentWidth(slot)
+            layouts[index] = FeedTexts.fit(slot, measurer, detailTexts[index]!!, mono = true, detailSize,
+                (detailWidth - trailings[index]).coerceAtLeast(1f), lines = 2, uppercase = detailUpper[index], cap = cap)
+            widths[index] = FeedTexts.contentWidth(slot) + trailings[index]
             whole[index] = FeedTexts.isWhole(slot)
+            pipLeft[index] = FeedTexts.lastLineRight(slot) + gaps[index]
+            pipCenter[index] = FeedTexts.lastLineCenter(slot)
         }
         return this
     }
@@ -632,6 +688,7 @@ private fun DrawScope.drawFeedPlate(
     alpha: Float,
     shift: Float,
     banner: Boolean,
+    style: FeedNoticeStyle? = null,
 ) {
     if (alpha <= 0f) return
     val width = lines.plateWidth(frame, banner)
@@ -645,22 +702,40 @@ private fun DrawScope.drawFeedPlate(
     val rowTop = top + verticalPadding(frame)
     val row = lines.titleRow(frame, banner)
     val rowCenter = rowTop + row * 0.5f
+    val roles = measurer.roles
     if (!banner) {
         val lead = leadSize(frame)
-        drawKkGem(Offset(left + startPadding(frame, banner) + lead * 0.5f, rowCenter), measurer.roles.you, lead / density)
+        val gem = Offset(left + startPadding(frame, banner) + lead * 0.5f, rowCenter)
+        val first = style?.first(roles) ?: roles.you
+        val second = style?.second(roles) ?: first
+        drawKkGem(gem, first, lead / density)
+        // A reaction's gem is split between its two elements.
+        if (second != first) clipRect(gem.x, gem.y - lead, gem.x + lead, gem.y + lead) { drawKkGem(gem, second, lead / density) }
     }
     val title = lines[0]
     drawKkText(title, textLeft, rowCenter, Kk.Bone, valign = KkVAlign.CENTER)
     val titleTop = rowCenter - (title.kkBoxTop + title.kkBoxBottom) * 0.5f
     FeedProbe.line(title, textLeft + shift, titleTop, textLeft + shift + title.size.width, titleTop + title.size.height)
     var y = rowTop + row
+    val detailColor = if (style != null && style.bright) Kk.Bone2 else Kk.Mute
     for (index in 1 until lines.count) {
         if (!lines.isVisible(index)) continue
         val detail = lines[index]
         y += detailGap(frame)
-        drawKkText(detail, textLeft, y, Kk.Mute)
+        drawKkText(detail, textLeft, y, detailColor)
         val detailTop = y - detail.kkBoxTop
         FeedProbe.line(detail, textLeft + shift, detailTop, textLeft + shift + detail.size.width, detailTop + detail.size.height)
+        val tier = lines.tier(index)
+        if (tier > 0) {
+            // A resonance or affinity tier reads as lit pips (tag tiers in bone, element tiers in their hue).
+            val element = lines.element(index)
+            val color = if (element >= 0) roles.element(element) else Kk.Bone
+            val scale = frame.unit / density * lines.shrinkFactor
+            val pipHeight = TIER_PIP_HEIGHT_DP * scale
+            drawKkPips(Offset(textLeft + lines.pipLeft(index), y + lines.pipCenter(index) - pipHeight * density * 0.5f), TIER_PIPS,
+                tier.coerceIn(0, TIER_PIPS), color, sizeDp = pipHeight, widthDp = TIER_PIP_WIDTH_DP * scale, gapDp = TIER_PIP_GAP_DP * scale,
+                emptyColor = Kk.Ink4)
+        }
         y += detail.kkBoxHeight
     }
     if (fading) drawContext.canvas.restore()
@@ -703,6 +778,8 @@ private object FeedTexts {
     private val fitKeys = FeedTextKeys(SLOTS)
     private val layouts = arrayOfNulls<TextLayoutResult>(SLOTS)
     private val contentWidths = FloatArray(SLOTS)
+    private val lastRights = FloatArray(SLOTS)
+    private val lastCenters = FloatArray(SLOTS)
     private val wholes = BooleanArray(SLOTS)
 
     /** The size fraction [text] needs to show whole in [width] (the first fit step), or NaN when none does. */
@@ -748,12 +825,21 @@ private object FeedTexts {
         var content = 0f
         for (line in 0 until layout.lineCount) content = max(content, layout.getLineRight(line))
         contentWidths[slot] = min(content, layout.size.width.toFloat())
+        val last = layout.lineCount - 1
+        lastRights[slot] = min(layout.getLineRight(last), layout.size.width.toFloat())
+        lastCenters[slot] = (layout.getLineTop(last) + layout.getLineBottom(last)) * 0.5f - layout.kkBoxTop
         wholes[slot] = step != NO_FIT && layout.fitsWithoutCuts()
         return layout
     }
 
     /** Width of the widest line of the slot's last fitted layout. */
     fun contentWidth(slot: Int): Float = contentWidths[slot]
+
+    /** Right edge of the last line of the slot's last fitted layout. */
+    fun lastLineRight(slot: Int): Float = lastRights[slot]
+
+    /** Vertical center of that last line, below the layout's text box top. */
+    fun lastLineCenter(slot: Int): Float = lastCenters[slot]
 
     /** Whether the slot's last fitted layout shows its whole text (see [fitsWithoutCuts]). */
     fun isWhole(slot: Int): Boolean = wholes[slot]
@@ -952,21 +1038,129 @@ private class SplitMessage {
 
 /**
  * A string localized once per (source, language). A synergy line keeps its sign on the name's line
- * (a no-break space follows "+" / "−") when it wraps.
+ * (a no-break space follows "+" / "−") when it wraps. The nucleus's discovery titles read through
+ * [HudRedesignText]; a resonance or affinity tier line ("+ Ram II") loses its numeral, which the
+ * feed draws as lit pips ([tier]); a tier or Break line knows its element ([element]).
  */
 private class LocalizedText {
     private var source: String? = null
     private var language: AppLanguage? = null
     private var text = ""
 
+    /** Tier 1..3 of a resonance or affinity line, 0 otherwise. */
+    var tier = 0
+        private set
+
+    /** The element a tier or Break line names, -1 otherwise. */
+    var element = -1
+        private set
+
     fun of(value: String, language: AppLanguage): String {
         if (value != source || language !== this.language) {
             source = value
             this.language = language
-            val localized = value.localizedContent(language)
-            text = if (isSynergyLine(localized)) localized[0] + "\u00A0" + localized.substring(2) else localized
+            tier = 0
+            element = -1
+            val title = discoveryTitle(value)
+            val tierLine = if (title == null) TierLine.matchEntire(value) else null
+            val label = tierLine?.groupValues?.get(2)
+            val tag = label?.let { name -> BuildTag.entries.firstOrNull { it.displayLabel == name } }
+            val tierElement = label?.let { name -> StatusElement.entries.firstOrNull { it.displayLabel == name } }
+            text = when {
+                title != null -> language.text(title)
+                tierLine != null && (tag != null || tierElement != null) -> {
+                    tier = tierLine.groupValues[3].length
+                    element = tierElement?.ordinal ?: -1
+                    tierLine.groupValues[1] + "\u00A0" + label.localizedContent(language)
+                }
+                else -> {
+                    element = StatusElement.entries.firstOrNull { value == "+ " + it.breakLabel }?.ordinal ?: -1
+                    val localized = value.localizedContent(language)
+                    if (isSynergyLine(localized)) localized[0] + "\u00A0" + localized.substring(2) else localized
+                }
+            }
         }
         return text
+    }
+}
+
+/** A resonance or affinity tier reached ("+ Ram II", `emitBuildChange`). */
+private val TierLine = Regex("([+\u2212]) (.+) (I|II|III)")
+
+/** The feed's own wording for the nucleus's discovery titles and its Break notes. */
+private fun discoveryTitle(title: String): HudRedesignText? = when (title) {
+    BuildNoticeTitles.REACTION_DISCOVERED -> HudRedesignText.ReactionDiscovered
+    BuildNoticeTitles.PAIRING_DISCOVERED -> HudRedesignText.PairingDiscovered
+    BuildNoticeTitles.INCOMPATIBILITY_DISCOVERED -> HudRedesignText.IncompatibilityDiscovered
+    BuildNoticeTitles.BREAK -> HudRedesignText.BreakNotice
+    else -> null
+}
+
+/**
+ * How one toast is marked, resolved once per toast: its gem's colors (a reaction's two elements,
+ * a pairing in bone for concord or threat for discord, as its brackets read in the HUD and pause,
+ * a warning in threat, a Break in its element, acquisitions in the you color) and whether its
+ * lines read bright (discoveries name things worth reading).
+ */
+internal class FeedNoticeStyle {
+    // Keyed by value: a toast is copied every frame as its life runs down, keeping its details list.
+    private var title: String? = null
+    private var details: List<String>? = null
+    private var kind: BuildNoticeKind? = null
+    private var content: GameplayContentSnapshot? = null
+    private var firstCode = YOU
+    private var secondCode = YOU
+    var bright = false
+        private set
+
+    fun of(notice: BuildNotificationProjection, content: GameplayContentSnapshot): FeedNoticeStyle {
+        if (notice.details === details && notice.kind == kind && notice.title == title && content === this.content) return this
+        title = notice.title
+        details = notice.details
+        kind = notice.kind
+        this.content = content
+        val line = notice.details.firstOrNull().orEmpty()
+        bright = notice.kind != BuildNoticeKind.CHANGE
+        firstCode = YOU
+        secondCode = YOU
+        when (notice.kind) {
+            BuildNoticeKind.CHANGE -> Unit
+            BuildNoticeKind.WARNING -> {
+                firstCode = THREAT
+                secondCode = THREAT
+            }
+            BuildNoticeKind.BREAK -> {
+                val element = StatusElement.entries.firstOrNull { line == "+ " + it.breakLabel }
+                firstCode = element?.ordinal ?: BONE
+                secondCode = firstCode
+            }
+            BuildNoticeKind.DISCOVERY -> if (notice.title == BuildNoticeTitles.PAIRING_DISCOVERED) {
+                firstCode = if (line.startsWith("\u2212 ")) THREAT else BONE
+                secondCode = firstCode
+            } else {
+                val reaction = content.build.reactions.firstOrNull { line == "+ " + it.name }
+                firstCode = reaction?.id?.first?.ordinal ?: BONE
+                secondCode = reaction?.id?.second?.ordinal ?: BONE
+            }
+        }
+        return this
+    }
+
+    fun first(roles: KkRolePalette): Color = color(firstCode, roles)
+
+    fun second(roles: KkRolePalette): Color = color(secondCode, roles)
+
+    private fun color(code: Int, roles: KkRolePalette): Color = when (code) {
+        YOU -> roles.you
+        THREAT -> roles.threat
+        BONE -> Kk.Bone
+        else -> roles.element(code)
+    }
+
+    private companion object {
+        const val YOU = -1
+        const val THREAT = -2
+        const val BONE = -3
     }
 }
 
@@ -974,6 +1168,7 @@ private object FeedScratch {
     val message = SplitMessage()
     val titles = Array(MAX_NOTICES) { LocalizedText() }
     val details = Array(MAX_NOTICES * DETAILS_PER_NOTICE) { LocalizedText() }
+    val styles = Array(MAX_NOTICES) { FeedNoticeStyle() }
     val fallback = HudKeyedText()
 }
 

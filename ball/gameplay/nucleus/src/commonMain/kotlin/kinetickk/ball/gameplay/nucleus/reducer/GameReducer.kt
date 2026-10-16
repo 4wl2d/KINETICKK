@@ -229,7 +229,11 @@ internal class GameReducer {
             pendingEliteKills != 0 ||
             pendingDashHits != 0 ||
             pendingCompletedOrbits != 0 ||
-            pendingArchitectDefeatedWith != null
+            pendingArchitectDefeatedWith != null ||
+            pendingDiscoveredReactionMask != 0 ||
+            pendingDiscoveredPairingMask != 0 ||
+            pendingVictoryRelics != null ||
+            pendingHeirloomResolved
 
     private fun Float.sameBitsAs(other: Float): Boolean = toBits() == other.toBits()
 }

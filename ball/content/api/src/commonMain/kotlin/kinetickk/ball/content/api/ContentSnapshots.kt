@@ -4,6 +4,7 @@
 package kinetickk.ball.content.api
 
 import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.toImmutableList
 
 data class RebirthPolicySnapshot(
     val minimumLevel: Int,
@@ -67,11 +68,18 @@ data class GameplayContentSnapshot(
     val relicPolicy: RelicPolicy,
     val pointsOfInterest: PointOfInterestPolicy = PointOfInterestPolicy(),
     val tempo: RunTempoProfile = RunTempoProfile(),
-    val synergies: ImmutableList<SynergyDefinition> = defaultSynergyDefinitions(),
+    val build: BuildCatalog = defaultBuildCatalog(),
     val coreShapes: ImmutableList<CoreShapeDefinition> = defaultCoreShapeDefinitions(),
 ) {
-    /** Derived once per immutable catalog snapshot, rather than once per gameplay state. */
-    val itemFamilyCount: Int = items.maxOfOrNull { it.id / 20 + 1 } ?: 0
+    /** Global clause index of each item's first clause; derived once per immutable snapshot. */
+    val clauseOffsets: ImmutableList<Int> = items.runningFold(0) { offset, item -> offset + item.clauses.size }
+        .dropLast(1).toImmutableList()
+
+    val totalClauseCount: Int = items.sumOf { it.clauses.size }
+
+    fun clauseIndex(itemId: Int, clause: Int): Int = clauseOffsets[itemId] + clause
+
+    fun pairing(a: RelicId, b: RelicId): RelicPairingDefinition? = build.pairing(a, b)
 
     fun coreShape(id: CoreShape): CoreShapeDefinition = coreShapes.first { it.id == id }
 
@@ -105,7 +113,7 @@ data class UiCatalogSnapshot(
     val relicPolicy: RelicPolicy,
     val pointsOfInterest: PointOfInterestPolicy = PointOfInterestPolicy(),
     val tempo: RunTempoProfile = RunTempoProfile(),
-    val synergies: ImmutableList<SynergyDefinition> = defaultSynergyDefinitions(),
+    val build: BuildCatalog = defaultBuildCatalog(),
 ) {
     fun item(id: Int): ItemDefinition? = items.getOrNull(id)?.takeIf { item -> item.id == id }
 

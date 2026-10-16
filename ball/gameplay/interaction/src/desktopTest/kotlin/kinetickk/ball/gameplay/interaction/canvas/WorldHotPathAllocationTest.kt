@@ -14,6 +14,7 @@ import androidx.compose.ui.text.TextMeasurer as ComposeTextMeasurer
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
+import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
@@ -27,14 +28,17 @@ import kinetickk.ball.content.api.PointOfInterestKind
 import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
-import kinetickk.ball.content.api.RelicAspect
-import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPolicy
+import kinetickk.ball.content.api.StatDelta
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
 import kinetickk.ball.gameplay.interaction.fx.DamageNumberProjection
+import kinetickk.ball.gameplay.interaction.fx.ElementBurstProjection
+import kinetickk.ball.gameplay.interaction.fx.ReactionStampProjection
+import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureRelics
 import kinetickk.ball.gameplay.interaction.fx.MotionEchoProjection
 import kinetickk.ball.gameplay.interaction.fx.ParticleProjection
 import kinetickk.ball.gameplay.interaction.fx.ShockwaveProjection
@@ -93,7 +97,8 @@ class WorldHotPathAllocationTest {
             }
             assertTrue(count(roles.threat) > 400, "Enemies, bullets and the singularity use the threat role")
             assertTrue(count(roles.you) > 150, "Trail, weapon and progress use the you role")
-            assertTrue(count(Kk.Bone) > 400, "The Core body is bone")
+            // The Core alone (Kinetic damage numbers take the preset's volt, counted with the you role above).
+            assertTrue(count(Kk.Bone) > 300, "The Core body is bone (${count(Kk.Bone)} px)")
             val other = if (roles == KkRolePalette.Default) KkRolePalette.Protan else KkRolePalette.Default
             assertTrue(count(other.threat) < 20, "No hard-coded threat color leaks into the world")
         }
@@ -229,9 +234,18 @@ class WorldHotPathAllocationTest {
             ShockwaveProjection(CORE + 120f, CORE + 80f, 0.22f, 0.26f, 110f, 3),
         ),
         damageNumbers = listOf(96L, 184L, 742L, 4_800L).mapIndexed { index, amount ->
-            DamageNumberProjection(CORE + index * 70f, CORE - 90f, amount, critical = index == 3, life = 0.4f, driftX = 0.6f, driftY = -0.8f)
+            DamageNumberProjection(CORE + index * 70f, CORE - 90f, amount, critical = index == 3, life = 0.4f, driftX = 0.6f, driftY = -0.8f,
+                tone = index)
         }.toImmutableList(),
         weaponArcs = immutableListOf(WeaponArcProjection(CORE, CORE, CORE + 180f, CORE + 60f, 0.1f)),
+        // Every Break figure, two reactions (one merged) and a first-discovery name stamp.
+        elementBursts = ((0 until 5).map { element ->
+            ElementBurstProjection(CORE - 220f + element * 90f, CORE + 160f, element, -1, -1, 80f, 0.3f, 0.5f, 1)
+        } + listOf(
+            ElementBurstProjection(CORE + 160f, CORE - 160f, 0, 1, 0, 90f, 0.4f, 0.7f, 3),
+            ElementBurstProjection(CORE - 160f, CORE - 160f, 2, 4, 8, 120f, 0.2f, 0.7f, 1),
+        )).toImmutableList(),
+        reactionStamps = immutableListOf(ReactionStampProjection(CORE + 40f, CORE - 40f, 0, 0.5f, 0.9f)),
     )
 
     private fun busyModel(weapon: WeaponId, drift: Float = 0f): GameplayRenderModel {
@@ -239,7 +253,11 @@ class WorldHotPathAllocationTest {
             val angle = index * 0.7f
             val distance = if (type == EnemyType.ARCHITECT) 260f else 180f + index * 12f
             EnemyProjection(index + 1, type, CORE + kotlin.math.cos(angle) * distance, CORE + kotlin.math.sin(angle) * distance, 0f, 0f,
-                50f, 100f, if (type == EnemyType.ARCHITECT) 74f else 20f, 0.2f, if (index == 2) 1f else 0f, 0f, 0f, CORE, CORE, false)
+                50f, 100f, if (type == EnemyType.ARCHITECT) 74f else 20f, 0.2f, if (index == 2) 1f else 0f, 0f, 0f, CORE, CORE, false,
+                statusBits = BusyStatuses[index % BusyStatuses.size],
+                // Every type's aspect, weakness and frame, an immune Gravitic elite and a shifting Thermal Architect.
+                affinityBits = runAffinity(type, eliteAspect = StatusElement.GRAVITIC, architectAspect = StatusElement.THERMAL,
+                    architectPhase = 1, shifting = true))
         }
         return GameplayRenderModel(
             content = Content, phase = GamePhase.RUNNING, settings = PlayerPreferences(textScale = 1.25f), rebirthLevel = 5,
@@ -282,6 +300,18 @@ class WorldHotPathAllocationTest {
     }
 
     private companion object {
+        /**
+         * Statuses of the busy frame's enemies: a reaction ready (Thermal with Cryo), a primed Ion arc,
+         * Frozen and Brittle, Embrittled, a full Entropy fill, none.
+         */
+        val BusyStatuses = intArrayOf(
+            5 or (3 shl 4),
+            (6 shl 8) or (1 shl 23),
+            (4 shl 4) or (1 shl 20) or (1 shl 21),
+            (2 shl 12) or (1 shl 22),
+            9 shl 16,
+            0,
+        )
         const val MEASURED_FRAMES = 300
         const val HUD_FRAMES = 400
 
@@ -293,20 +323,21 @@ class WorldHotPathAllocationTest {
 
         val Content = GameplayContentSnapshot(
             version = KINETICKK_CONTENT_VERSION,
-            items = immutableListOf(ItemDefinition(0, "Ram", "Ram", ItemRarity.COMMON, ItemModifier(ItemEffect.IMPACT_DAMAGE, 0.05f),
-                ItemModifier(ItemEffect.WEAPON_POWER, 0.04f), 8, 1, "Impact")),
+            items = immutableListOf(ItemDefinition(0, "Ram", "Ram", ItemRarity.COMMON, immutableListOf(BuildTag.RAM),
+                stats = immutableListOf(StatDelta(ItemEffect.IMPACT_DAMAGE, 0.05f), StatDelta(ItemEffect.WEAPON_POWER, 0.04f)),
+                maxStacks = 3, unlockLevel = 1)),
             weapons = WeaponId.entries.map { WeaponDefinition(it, it.name, "Fixture", listOf("TAG"), 0) }.toImmutableList(),
             weaponMasteries = WeaponMastery.entries.toImmutableList(),
             metaUpgrades = MetaUpgradeId.entries.map { id ->
                 MetaUpgradeDefinition(id, "F", "F", 1, 1, ItemModifier(ItemEffect.MAX_INTEGRITY, 1f))
             }.toImmutableList(),
-            relics = RelicId.entries.map { id -> RelicDefinition(id, id.name, RelicAspect.entries.first(), "F", "F") }.toImmutableList(),
+            relics = rewardFixtureRelics.toImmutableList(),
             rebirth = RebirthPolicySnapshot(
                 minimumLevel = 0, maximumLevel = 0,
                 profiles = immutableListOf(RebirthProfile(0, RebirthDirective.BASELINE, 5, 1f, 1f, 1f, 1f, 1f, 1f, 0f, 1f, 0f, 1f, 0, 120, 0.09f, 24f)),
                 maxActiveEnemies = 120, minSpawnIntervalSeconds = 0.09f, minEliteIntervalSeconds = 24f,
             ),
-            relicPolicy = RelicPolicy(4, 5),
+            relicPolicy = RelicPolicy(4, 3),
         )
     }
 }

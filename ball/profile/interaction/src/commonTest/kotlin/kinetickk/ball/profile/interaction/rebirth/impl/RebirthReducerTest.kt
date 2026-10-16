@@ -3,6 +3,8 @@
 
 package kinetickk.ball.profile.interaction.rebirth.impl
 
+import kinetickk.ball.content.api.BuildPolicy
+import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.CollectionProjection
 import kinetickk.ball.profile.api.HomeProgressProjection
@@ -18,9 +20,12 @@ import kinetickk.ball.profile.api.RebirthProfileSnapshot
 import kinetickk.ball.profile.api.RebirthProgressProjection
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.ProfileRevision
+import kinetickk.ball.profile.interaction.TestItems
+import kinetickk.ball.profile.interaction.TestRelics
 import kinetickk.ball.profile.interaction.testRebirthPolicy
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthOutput
+import kinetickk.ball.profile.interaction.rebirth.api.RebirthUnlock
 import kinetickk.ball.profile.api.RunBootstrapProjection
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
@@ -30,6 +35,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class RebirthReducerTest {
@@ -60,6 +67,50 @@ class RebirthReducerTest {
             canAdvance = true,
         ).toRenderModel(rebirthPolicy, eligible = false)
         assertFalse(shellBlocked.canAdvance)
+    }
+
+    @Test
+    fun buildContentMapsTheTargetTiersUnlocksRebornOddsAndHeirlooms() {
+        val rebirthPolicy = testRebirthPolicy()
+        val content = RebirthBuildContent(TestRelics, TestItems, BuildPolicy())
+        // Gated content in unlock order: by tier, Relics before items, then catalog order.
+        assertEquals(listOf(1, 2, 2, 3, 4, 5), content.unlocks.map { it.tier })
+        assertEquals(listOf(RelicId.AGONY_SCEPTER, RelicId.HOLLOW_CROWN, RelicId.OUROBOROS_SEAL),
+            content.unlocks.filterIsInstance<RebirthUnlock.Relic>().map { it.definition.id })
+        assertEquals(listOf(1, 3, 2), content.unlocks.filterIsInstance<RebirthUnlock.Item>().map { it.definition.id })
+
+        fun model(level: Int, heirlooms: List<RelicId> = emptyList()) = rebirthProjection(
+            progress = RebirthProgress(level = level, highestCleared = level),
+            canAdvance = true,
+        ).toRenderModel(rebirthPolicy, build = content, heirloomIds = heirlooms)
+
+        val first = model(0)
+        val firstBuild = assertNotNull(first.build)
+        assertEquals(0f, firstBuild.currentRebornChance)
+        assertEquals(0.05f, firstBuild.nextRebornChance, 0.0001f)
+        assertEquals(listOf(RelicId.AGONY_SCEPTER),
+            first.targetUnlocks.map { assertIs<RebirthUnlock.Relic>(it).definition.id })
+        // Both tier 2 legendaries; no relic joins at tier 2.
+        assertEquals(listOf(1, 3), model(1).targetUnlocks.map { assertIs<RebirthUnlock.Item>(it).definition.id })
+        assertTrue(model(5).targetUnlocks.isEmpty())
+
+        // The odds cap at the policy's 40 %; the last tier shows no further unlocks.
+        val capped = assertNotNull(model(8).build)
+        assertEquals(0.4f, capped.currentRebornChance, 0.0001f)
+        assertEquals(0.4f, capped.nextRebornChance, 0.0001f)
+        val maximum = model(rebirthPolicy.maximumLevel)
+        assertTrue(maximum.isMaximumTier)
+        assertTrue(maximum.targetUnlocks.isEmpty())
+        assertEquals(0.4f, assertNotNull(maximum.build).nextRebornChance, 0.0001f)
+
+        // Heirlooms keep the stored slot order; repeats and Relics the catalog lacks are dropped.
+        val stored = listOf(RelicId.FURNACE_COVENANT, RelicId.GLASS_COMET, RelicId.PERPETUAL_VECTOR, RelicId.FURNACE_COVENANT)
+        assertEquals(listOf(RelicId.FURNACE_COVENANT, RelicId.PERPETUAL_VECTOR),
+            assertNotNull(model(3, stored).build).heirlooms.map { it.id })
+        assertTrue(assertNotNull(model(3).build).heirlooms.isEmpty())
+
+        // Without catalog content the screen keeps its build-free model.
+        assertNull(rebirthProjection(RebirthProgress(2, 2), canAdvance = true).toRenderModel(rebirthPolicy).build)
     }
 
     @Test
@@ -140,6 +191,9 @@ class RebirthReducerTest {
             profilePort = UnusedProfilePort,
             rebirthPolicy = testRebirthPolicy(),
             audioService = audio,
+            relics = TestRelics,
+            items = TestItems,
+            buildPolicy = BuildPolicy(),
         )
 
         feature.playAcceptedFeedback()

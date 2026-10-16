@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -41,6 +42,7 @@ import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.*
+import kinetickk.foundation.collections.immutableListOf
 import kinetickk.ball.gameplay.interaction.layout.choiceLayoutGeometry
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
@@ -224,14 +226,95 @@ class RewardContentTest {
             RewardCard(card(), 0, scale, 0f, true, Modifier.requiredSize(width.dp, height.dp)) {}
         }
         listOf(1f, 1.25f, 1.75f).forEach { scale ->
-            listOf(180f to 240f, 179f to 240f, 180f to 239f, 220f to 256f, 300f to 450f).forEach { (width, height) ->
+            // 300 × 419 is the board card of a 1280 × 720 window: it keeps the board layout.
+            listOf(180f to 240f, 179f to 240f, 180f to 239f, 220f to 256f, 300f to 450f, 300f to 419f).forEach { (width, height) ->
                 compose.runOnIdle { dimensions.value = Triple(width, height, scale) }
-                // Phone-shaped cards (Mobile-LevelUp 220 × 256) use the compact header too.
-                val compact = rewardCardIsCompact(width, height) || height < width * 1.3f
+                // Squat cards (Mobile-LevelUp 220 × 256) use the compact header too.
+                val compact = rewardCardUsesCompactLayout(width, height)
+                assertEquals(width < 180f || height < 240f || height < width * 1.3f, compact)
+                if (width == 300f && height == 419f) assertTrue(!compact, "A short board card keeps the board layout")
                 val header = if (compact) "compact" else "expanded"
                 compose.onNodeWithTag("kinetickk.gameplay.choice.1.$header", useUnmergedTree = true).assertIsDisplayed()
                 val body = compose.onNodeWithTag("kinetickk.gameplay.choice.1.text", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
                 assertTrue(body.height > 0f, "Scrollable body remains reachable at $width × $height / $scale")
+            }
+        }
+    }
+
+    @Test
+    fun theLayoutModeDecidesThePhoneCardLayoutNotTheCardShape() {
+        // A 1280 × 720 board deals 300 × 419 cards (and a 1366 × 768 laptop window about 300 × 390):
+        // the board layout, scaled. The four-card landscape phone deal (195 × 254) stays compact.
+        assertTrue(!rewardCardUsesCompactLayout(300f, 419f))
+        assertTrue(rewardCardUsesCompactLayout(195f, 254f, phoneDeal = true))
+        val board = rewardFixtureModel(choices = listOf(itemChoice(0), itemChoice(1), itemChoice(2)), width = 1280f, height = 720f)
+        val phone = rewardFixtureModel(choices = List(4) { itemChoice(it) }, width = 844f, height = 390f)
+        val shown = mutableStateOf(board)
+        compose.setContent {
+            val model = shown.value
+            CompositionLocalProvider(LocalAppLanguage provides AppLanguage.English, LocalDensity provides Density(1f)) {
+                Box(Modifier.requiredSize(model.screenWidth.dp, model.screenHeight.dp)) {
+                    RewardContent(model, choiceLayoutGeometry(model.screenWidth, model.screenHeight, 1f, model.choices.size, model.choicesCanReroll),
+                        0f, true, {}, {})
+                }
+            }
+        }
+        val layout = choiceLayoutGeometry(1280f, 720f, 1f, 3, true)
+        assertTrue(layout.cards.all { it.height < it.width * 1.4f }, "The board cards are squat at 720p (${layout.cards.first()})")
+        (1..3).forEach { index ->
+            compose.onNodeWithTag("kinetickk.gameplay.choice.$index.expanded", useUnmergedTree = true).assertExists()
+        }
+        compose.runOnIdle { shown.value = phone }
+        (1..4).forEach { index -> compose.onNodeWithTag("kinetickk.gameplay.choice.$index.compact", useUnmergedTree = true).assertExists() }
+    }
+
+    @Test
+    fun aPhoneRiskCardShowsItsCostWhenItsStatsMakeWayForItsRules() {
+        // Overcharged Capacitor trades Cooling −25 % for weapon power: the cost is a striped Cost line on every card size.
+        val shown = mutableStateOf(AppLanguage.English)
+        compose.setContent {
+            val language = shown.value
+            val card = rewardFixtureModel(choices = listOf(itemChoice(2))).rewardCardPresentation(itemChoice(2), 0, language)
+            CompositionLocalProvider(LocalAppLanguage provides language, LocalDensity provides Density(1f)) {
+                RewardCard(card, 0, 1f, 0f, true, Modifier.requiredSize(220.dp, 256.dp), phoneDeal = true) {}
+            }
+        }
+        listOf(AppLanguage.English, AppLanguage.Russian).forEach { language ->
+            compose.runOnIdle { shown.value = language }
+            compose.onNodeWithTag("kinetickk.gameplay.choice.1.compact", useUnmergedTree = true).assertExists()
+            val texts = compose.onAllNodes(androidx.compose.ui.test.hasAnyAncestor(androidx.compose.ui.test.hasTestTag("kinetickk.gameplay.choice.1.text")) and
+                androidx.compose.ui.test.SemanticsMatcher.keyIsDefined(SemanticsProperties.Text), useUnmergedTree = true).fetchSemanticsNodes()
+                .flatMap { node -> node.config.getOrNull(SemanticsProperties.Text).orEmpty().map { it.text } }
+            assertTrue(texts.any { it.contains("25") && it.contains('−') }, "$language: the cost line shows ($texts)")
+            assertTrue(texts.any { it.contains("35") }, "$language: the weapon power gain stays ($texts)")
+        }
+    }
+
+    @Test
+    fun aPhoneCardsNewStampStaysAboveItsBandAtEveryTextSize() {
+        val card = rewardFixtureModel(choices = listOf(itemChoice(1))).rewardCardPresentation(itemChoice(1), 0)
+        check(card.isNewDiscovery)
+        val scale = mutableStateOf(1f)
+        val size = mutableStateOf(220f to 256f)
+        compose.setContent {
+            CompositionLocalProvider(LocalAppLanguage provides AppLanguage.Russian, LocalDensity provides Density(1f)) {
+                Box(Modifier.requiredSize(400.dp, 400.dp)) {
+                    Box(Modifier.requiredSize(size.value.first.dp, size.value.second.dp).testTag("card")) {
+                        RewardCard(card, 0, scale.value, 0f, true, Modifier.requiredSize(size.value.first.dp, size.value.second.dp), phoneDeal = true) {}
+                    }
+                }
+            }
+        }
+        // Landscape and portrait phone deals at the default and the largest text size.
+        listOf(220f to 256f, 178f to 305f).forEach { dimensions ->
+            listOf(1f, 1.4f).forEach { textScale ->
+                compose.runOnIdle { size.value = dimensions; scale.value = textScale }
+                val cardTop = compose.onNodeWithTag("card").fetchSemanticsNode().boundsInRoot.top
+                val stamp = compose.onNodeWithTag("kinetickk.gameplay.choice.1.new", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+                // The band's labels and pips are centered in its 30 dp: the stamp keeps to the frame above them.
+                val u = minOf(dimensions.first / 220f, dimensions.second / 256f).coerceIn(0.6f, 1.25f)
+                assertTrue(stamp.bottom <= cardTop + (RewardNewStampOverlapDp + 4f) * u,
+                    "Stamp $stamp reaches into the band of a ${dimensions.first} × ${dimensions.second} card at $textScale (top $cardTop)")
             }
         }
     }
@@ -348,13 +431,13 @@ class RewardContentTest {
     @Test
     fun relicReplacementArmsNothingUntilASlotIsLiftedAndThenTakesThatSlot() {
         val selections = mutableListOf<Int>()
-        val relics = listOf(EquippedRelic(RelicId.KINETIC_FLYWHEEL, 2), EquippedRelic(RelicId.GHOST_VECTOR, 1),
-            EquippedRelic(RelicId.ORBITAL_NAIL, 1), EquippedRelic(RelicId.VOLTAIC_FILAMENT, 1))
+        val relics = listOf(EquippedRelic(RelicId.PERPETUAL_VECTOR, 2), EquippedRelic(RelicId.GYRE_ENGINE, 1),
+            EquippedRelic(RelicId.FURNACE_COVENANT, 1), EquippedRelic(RelicId.AEGIS_INVERSION, 1))
         val model = rewardFixtureModel(
             choiceType = ChoiceType.RELIC_BIND, relics = relics, rerolls = 0,
             choices = relics.mapIndexed { index, equipped ->
                 ChoiceOption(ChoiceType.RELIC_BIND, "Replace ${equipped.id}", "Break slot ${index + 1}.", "REPLACE",
-                    relicId = RelicId.PERIAPSIS_HOOK, relicAction = RelicChoiceAction.REPLACE, relicSlot = index)
+                    relicId = RelicId.EVENT_HORIZON, relicAction = RelicChoiceAction.REPLACE, relicSlot = index)
             },
         )
         showModel(model, 1000f, 700f) { selections += it }
@@ -409,7 +492,7 @@ class RewardContentTest {
                 }
             }
         }
-        val relics = listOf(EquippedRelic(RelicId.KINETIC_FLYWHEEL, 2), EquippedRelic(RelicId.GHOST_VECTOR, 1), EquippedRelic(RelicId.ORBITAL_NAIL, 1))
+        val relics = listOf(EquippedRelic(RelicId.PERPETUAL_VECTOR, 2), EquippedRelic(RelicId.GYRE_ENGINE, 1), EquippedRelic(RelicId.FURNACE_COVENANT, 1))
         val models = listOf(
             rewardFixtureModel(choiceType = ChoiceType.TOTEM, choices = listOf(
                 ChoiceOption(ChoiceType.TOTEM, "Amplify Flux Wake", "Advance.", "", weaponId = WeaponId.FLUX_WAKE, totemAction = TotemAction.AMPLIFY_CURRENT),
@@ -485,21 +568,24 @@ class RewardContentTest {
     private fun conciseCards(): List<RewardCardPresentation> {
         val names = listOf("Эгида «Память»", "Демпфер «Гравитация»", "Сборщик «Эхо»")
         val effects = listOf(ItemEffect.SHIELD_CAPACITY to ItemEffect.DATA_GAIN, ItemEffect.DAMAGE_REDUCTION to ItemEffect.MASS, ItemEffect.PICKUP_RADIUS to ItemEffect.COMBO_WINDOW)
+        val tags = listOf(BuildTag.BULWARK, BuildTag.ANCHOR, BuildTag.FORTUNE)
         val changes = listOf(
             listOf(RewardStatPresentation("Щит", "0", "7,2", true), RewardStatPresentation("Получение данных", "1×", "1,02×", true)),
             listOf(RewardStatPresentation("Снижение урона", "0", "1,5%", true), RewardStatPresentation("Масса", "1", "1,02", true)),
             listOf(RewardStatPresentation("Радиус сбора", "150", "163,96", true), RewardStatPresentation("Окно комбо", "2,8 с", "2,84 с", true)),
         )
         return names.mapIndexed { index, name ->
-            val item = ItemDefinition(320 + index, name, "Catalog flavor must stay outside reward cards", ItemRarity.COMMON,
-                ItemModifier(effects[index].first, 1f), ItemModifier(effects[index].second, 1f), 8, 1, "Family")
+            val item = ItemDefinition(80 + index, name, "Catalog flavor must stay outside reward cards", ItemRarity.COMMON,
+                immutableListOf(tags[index]),
+                stats = immutableListOf(StatDelta(effects[index].first, 1f), StatDelta(effects[index].second, 1f)), maxStacks = 3, unlockLevel = 1)
             RewardCardPresentation(
                 ChoiceOption(ChoiceType.ITEM, name, item.description, "ОБЫЧНЫЙ", itemId = item.id),
                 Color(0xFF94A0BC), "ОБЫЧНЫЙ", emptyList(), "", item = item, itemStack = 1,
-                relicPolicy = RelicPolicy(4, 5), changes = changes[index], bandEnd = "Копии 1/8", connections = when (index) {
+                relicPolicy = RelicPolicy(4, 3), changes = changes[index], bandEnd = "Копии 1/3", connections = when (index) {
                     1 -> listOf(RewardConnection("Ядро", "Усиливает", core = CoreShape.entries.first()), RewardConnection("Эхо массы", "Усиливает",
-                        relic = RelicDefinition(RelicId.MASS_ECHO, "Mass Echo", RelicAspect.GRAVITIC, "Mass interaction", "Damage from mass")))
-                    2 -> listOf(RewardConnection("Сбор данных", "Усиливает", core = CoreShape.entries.first()))
+                        relic = rewardFixtureContent.relic(RelicId.NEUTRON_HEART)))
+                    2 -> listOf(RewardConnection("Ядро", "Усиливает", core = CoreShape.entries.first()),
+                        RewardConnection("Сбор данных", "Усиливает", item = rewardFixtureContent.item(4)))
                     else -> listOf(RewardConnection("Ядро", "Усиливает", core = CoreShape.entries.first()))
                 },
             )

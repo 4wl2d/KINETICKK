@@ -72,30 +72,36 @@ class RewardCardPlatesTest {
                 check(card.rank >= 4)
                 runDesktopComposeUiTest(width * 2 + 20, height) {
                     val time = mutableFloatStateOf(0f)
+                    // The bare face lays its art out in the room the card's text leaves, as the card does.
+                    val plates = RewardFacePlates()
                     setContent {
                         CompositionLocalProvider(LocalAppLanguage provides language, LocalDensity provides Density(1f)) {
                             val measurer = rememberKkCanvasMeasurer(1f)
                             Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                                 // Clipped: legendary rays reach far past a card and would paint over its neighbour.
                                 Box(Modifier.requiredSize(width.dp, height.dp).clipToBounds().testTag("card")) {
-                                    RewardCard(card, 0, 1f, 0f, true, Modifier.requiredSize(width.dp, height.dp), time = time) {}
+                                    RewardCard(card, 0, 1f, 0f, true, Modifier.requiredSize(width.dp, height.dp), time = time, facePlates = plates) {}
                                 }
                                 Canvas(Modifier.requiredSize(width.dp, height.dp).clipToBounds().testTag("face")) {
-                                    drawRewardCardFace(measurer, card, card.accent, time.floatValue, 0f, -1f)
+                                    drawRewardCardFace(measurer, card, card.accent, time.floatValue, 0f, -1f,
+                                        textBottom = plates.textBottom, footerTop = plates.footerTop)
                                 }
                             }
                         }
                     }
                     waitForIdle()
                     val cardRoot = onNodeWithTag("card").fetchSemanticsNode().boundsInRoot
-                    // Everything drawn over the face on purpose: glyphs (the name with its glow), the icon plate.
+                    // Everything drawn over the face on purpose: glyphs (the name with its glow), the icon plate
+                    // and the chips beside it and in the footer.
                     val drawn = onAllNodes(hasAnyAncestor(hasTestTag("card")) and SemanticsMatcher.keyIsDefined(SemanticsActions.GetTextLayoutResult),
                         useUnmergedTree = true).fetchSemanticsNodes().map { node ->
                         val text = node.config.getOrNull(SemanticsProperties.Text).orEmpty().joinToString { it.text }
                         // The epic name glow spreads 8 dp around the name.
                         val pad = if (text == card.title.uppercase()) 10f else 2f
                         node.boundsInRoot.translate(-cardRoot.left, -cardRoot.top).inflate(pad)
-                    } + onAllNodes(hasTestTag("kinetickk.gameplay.choice.1.compact") or hasTestTag("kinetickk.gameplay.choice.1.expanded"),
+                    } + onAllNodes(hasTestTag("kinetickk.gameplay.choice.1.compact") or hasTestTag("kinetickk.gameplay.choice.1.expanded") or
+                        hasTestTag("kinetickk.gameplay.choice.1.chips") or hasTestTag("kinetickk.gameplay.choice.1.footer") or
+                        hasTestTag(RewardCostTag),
                         useUnmergedTree = true).fetchSemanticsNodes().map { node ->
                         node.boundsInRoot.translate(-cardRoot.left, -cardRoot.top).inflate(2f)
                     }
@@ -125,11 +131,14 @@ class RewardCardPlatesTest {
         val height = minOf(rendered.height, face.height)
         val plate = Kk.Ink2.toArgb()
         val cut = 22f
+        // The deepest rarity frame (the prismatic border, 3.5 dp, and its bone rim, 3 dp, scaled with
+        // the card but never below 80 %) and its 1 dp ink seam, with a pixel of antialiasing.
+        val frame = 6.5f * (width / 300f).coerceIn(0.8f, 1.25f) + 2f
         fun coverage(x: Int, y: Int): Float? {
-            if (y < 4 || y > height - 5) return null
-            // Stay clear of the slanted face outline (the card's own edge) and of intended drawing.
-            val left = cut * (1f - y / height.toFloat()) + 4f
-            val right = width - cut * (y / height.toFloat()) - 4f
+            if (y < frame || y > height - 1 - frame) return null
+            // Stay clear of the slanted face outline (the card's own edge and its frame) and of intended drawing.
+            val left = cut * (1f - y / height.toFloat()) + maxOf(4f, frame)
+            val right = width - cut * (y / height.toFloat()) - maxOf(4f, frame)
             if (x < left || x > right) return null
             if (drawn.any { x >= it.left && x <= it.right && y >= it.top && y <= it.bottom }) return null
             val a = rendered[x, y].toArgb()

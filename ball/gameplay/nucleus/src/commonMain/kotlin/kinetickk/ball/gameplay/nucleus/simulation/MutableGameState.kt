@@ -57,7 +57,14 @@ internal class MutableGameState(
         const val MAX_PROJECTILES = 650
         const val MAX_PICKUPS = 420
         const val MAX_TRAIL_POINTS = 110
-        const val MAX_DELAYED_RELIC_HITS = 256
+        const val MAX_ECHO_HITS = 256
+        const val MAX_BUFFS = 16
+        const val MAX_CHAIN_SCRATCH = 21
+        const val REACTION_BURST = 12f
+        const val BREAK_BURST = 16f
+        const val STASIS_SECONDS = 3f
+        const val REWARD_SEED_SALT = 0x5EED_A11
+        const val MAX_SEVERED_RELICS = 4
         const val MAX_GAMEPLAY_SOUND_CUES = 32
         const val MAX_WEAPON_NODES = 8
         const val MAX_WEAPON_ORBITALS = 8
@@ -68,6 +75,10 @@ internal class MutableGameState(
     internal var gameplayRandom: CloneableXorWowRandom = reductionSource?.gameplayRandom?.let { source ->
         if (shareStableReductionStorage) source else source.copy()
     } ?: CloneableXorWowRandom(seed)
+    /** Offers draw from their own stream, so drafting choices never shift spawns or crits. */
+    internal var rewardRandom: CloneableXorWowRandom = reductionSource?.rewardRandom?.let { source ->
+        if (shareStableReductionStorage) source else source.copy()
+    } ?: CloneableXorWowRandom(seed xor REWARD_SEED_SALT)
     internal var activeRebirthProfile: RebirthProfile = reductionSource?.activeRebirthProfile
         ?: content.rebirth.profile(
             bootstrapProgress?.rebirthProgress?.level ?: initialRebirthLevel,
@@ -108,10 +119,93 @@ internal class MutableGameState(
         if (shareStableReductionStorage) it else it.fork()
     }
         ?: CopyOnWriteIntArray(IntArray(content.items.size))
-    internal val familyStacks: CopyOnWriteIntArray = reductionSource?.familyStacks?.let {
+    internal val rebornItems: CopyOnWriteIntArray = reductionSource?.rebornItems?.let {
         if (shareStableReductionStorage) it else it.fork()
     }
-        ?: CopyOnWriteIntArray(IntArray(content.itemFamilyCount))
+        ?: CopyOnWriteIntArray(IntArray(content.items.size))
+    /**
+     * Build gains in order: item ids at first acquisition and relic binds or rank-three upgrades as
+     * [relicGain] entries. Decides affinity ties. Immutable value, replaced on change.
+     */
+    internal var acquisitionOrder: List<Int> = reductionSource?.acquisitionOrder ?: emptyList()
+    /** Immutable compiled build shared by reduction siblings; replaced by [recompileBuild]. */
+    internal var build: CompiledBuild = reductionSource?.build ?: CompiledBuild.empty(content)
+    internal val clauseReadyAt: CopyOnWriteFloatArray = reductionSource?.clauseReadyAt?.let {
+        if (shareStableReductionStorage) it else it.fork()
+    } ?: CopyOnWriteFloatArray(FloatArray(content.totalClauseCount))
+    internal val clauseCounters: CopyOnWriteIntArray = reductionSource?.clauseCounters?.let {
+        if (shareStableReductionStorage) it else it.fork()
+    } ?: CopyOnWriteIntArray(IntArray(content.totalClauseCount))
+    /** Fractional status stacks per item, so stack magnitudes apply deterministically without RNG. */
+    internal val statusAccumulators: CopyOnWriteFloatArray = reductionSource?.statusAccumulators?.let {
+        if (shareStableReductionStorage) it else it.fork()
+    } ?: CopyOnWriteFloatArray(FloatArray(content.items.size))
+    /** Earliest time each item may apply statuses again (per-item rate bound). */
+    internal val itemStatusReadyAt: CopyOnWriteFloatArray = reductionSource?.itemStatusReadyAt?.let {
+        if (shareStableReductionStorage) it else it.fork()
+    } ?: CopyOnWriteFloatArray(FloatArray(content.items.size))
+    internal var buffs: List<ActiveBuff> = reductionSource?.buffs ?: emptyList()
+    internal var combatFields: List<kinetickk.ball.gameplay.nucleus.model.CombatField> =
+        reductionSource?.combatFields ?: emptyList()
+    internal var reactionTokens: Float = reductionSource?.reactionTokens ?: REACTION_BURST
+    internal var breakTokens: Float = reductionSource?.breakTokens ?: BREAK_BURST
+    internal var discoveredReactionMask: Int = reductionSource?.discoveredReactionMask
+        ?: bootstrapProgress?.collection?.discoveredReactionIds?.fold(0) { mask, id -> mask or (1 shl id.ordinal) } ?: 0
+    internal var pendingDiscoveredReactionMask: Int = reductionSource?.pendingDiscoveredReactionMask ?: 0
+    internal var discoveredPairingMask: Int = reductionSource?.discoveredPairingMask
+        ?: bootstrapProgress?.collection?.discoveredPairingIds?.fold(0) { mask, id -> mask or (1 shl id.ordinal) } ?: 0
+    internal var pendingDiscoveredPairingMask: Int = reductionSource?.pendingDiscoveredPairingMask ?: 0
+    internal var heirloomCandidates: List<RelicId> = reductionSource?.heirloomCandidates
+        ?: bootstrapProgress?.collection?.heirloomRelicIds?.toList().orEmpty()
+    internal var heirloomPending: Boolean = reductionSource?.heirloomPending ?: false
+    internal var heirloomOfferActive: Boolean = reductionSource?.heirloomOfferActive ?: false
+    internal var pendingHeirloomResolved: Boolean = reductionSource?.pendingHeirloomResolved ?: false
+    internal var pendingVictoryRelics: List<RelicId>? = reductionSource?.pendingVictoryRelics
+    internal var severedRelics: List<SeveredRelic> = reductionSource?.severedRelics ?: emptyList()
+    internal var ouroborosSpent: Boolean = reductionSource?.ouroborosSpent ?: false
+    internal var ouroborosLockedUntil: Float = reductionSource?.ouroborosLockedUntil ?: 0f
+    internal var invulnerableUntil: Float = reductionSource?.invulnerableUntil ?: 0f
+    internal var glassInvulnerabilityReadyAt: Float = reductionSource?.glassInvulnerabilityReadyAt ?: 0f
+    internal var bulwarkInvulnerabilityReadyAt: Float = reductionSource?.bulwarkInvulnerabilityReadyAt ?: 0f
+    internal var stormCharge: Float = reductionSource?.stormCharge ?: 0f
+    internal var stasisMeter: Float = reductionSource?.stasisMeter ?: STASIS_SECONDS
+    internal var stasisBank: Int = reductionSource?.stasisBank ?: 0
+    internal var stasisLockedUntil: Float = reductionSource?.stasisLockedUntil ?: 0f
+    internal var sinceTurn: Float = reductionSource?.sinceTurn ?: 0f
+    internal var gyreReadyAt: Float = reductionSource?.gyreReadyAt ?: 0f
+    /** Endless Gyre's delayed second ring: when it fires (negative when none is pending) and its damage. */
+    internal var gyreEchoAt: Float = reductionSource?.gyreEchoAt ?: -1f
+    internal var gyreEchoDamage: Float = reductionSource?.gyreEchoDamage ?: 0f
+    internal var overdriveBurnoutUntil: Float = reductionSource?.overdriveBurnoutUntil ?: 0f
+    internal var overdriveExtension: Float = reductionSource?.overdriveExtension ?: 0f
+    internal var overdriveKills: Int = reductionSource?.overdriveKills ?: 0
+    internal var aegisAbsorbed: Float = reductionSource?.aegisAbsorbed ?: 0f
+    internal var aegisNovaReadyAt: Float = reductionSource?.aegisNovaReadyAt ?: 0f
+    internal var shieldBreakArmed: Boolean = reductionSource?.shieldBreakArmed ?: false
+    internal var shieldBreakReadyAt: Float = reductionSource?.shieldBreakReadyAt ?: 0f
+    internal var overheatArmed: Boolean = reductionSource?.overheatArmed ?: true
+    internal var wasBraking: Boolean = reductionSource?.wasBraking ?: false
+    internal var brakeHoldTime: Float = reductionSource?.brakeHoldTime ?: 0f
+    internal var brakeShedSpeed: Float = reductionSource?.brakeShedSpeed ?: 0f
+    internal var critMissStreak: Int = reductionSource?.critMissStreak ?: 0
+    internal var freeDashPrimed: Boolean = reductionSource?.freeDashPrimed ?: false
+    internal var freeDashReadyAt: Float = reductionSource?.freeDashReadyAt ?: 0f
+    internal var comboKillCounter: Int = reductionSource?.comboKillCounter ?: 0
+    internal var glassCharge: Float = reductionSource?.glassCharge ?: 0f
+    internal var cinderRecoilReadyAt: Float = reductionSource?.cinderRecoilReadyAt ?: 0f
+    internal var offerPity: Int = reductionSource?.offerPity ?: 0
+    internal var dashHitThisDash: Boolean = reductionSource?.dashHitThisDash ?: false
+    internal var clauseDepth: Int = reductionSource?.clauseDepth ?: 0
+    internal var arsenalCounter: Int = reductionSource?.arsenalCounter ?: 0
+    internal var necroticClock: Float = reductionSource?.necroticClock ?: 0f
+    /** Visual cue budget for statuses and reactions within the current fixed step. */
+    internal var statusCuesThisStep: Int = reductionSource?.statusCuesThisStep ?: 0
+    /** Candidate-private scratch for bounded chain targeting; never read across steps. */
+    internal val chainScratch: IntArray = IntArray(MAX_CHAIN_SCRATCH)
+    /** Nesting level of [chainScratch] use within the current step; zero between steps. */
+    internal var chainDepth: Int = 0
+    /** The enemy whose Freeze the current hit is shattering, so that hit's clauses still see it Frozen; -1 between hits. */
+    internal var shatteringEnemyId: Int = -1
     internal var soundCueStorage: MutableList<GameplayAudioCue>? =
         reductionSource?.soundCueStorage?.let { source -> ArrayList(source) }
     internal val soundCues: PendingSoundCueBuffer
@@ -136,6 +230,8 @@ internal class MutableGameState(
     internal var nextEntityId: Int = reductionSource?.nextEntityId ?: 1
     internal var spawnClock: Float = reductionSource?.spawnClock ?: 0f
     internal var nextEliteAt: Float = reductionSource?.nextEliteAt ?: content.tempo.firstEliteAtSeconds
+    /** Elites spawned this run; picks each new Elite's aspect. */
+    internal var elitesSpawned: Int = reductionSource?.elitesSpawned ?: 0
     internal var dashBufferTime: Float = reductionSource?.dashBufferTime ?: 0f
     internal var bossSpawned: Boolean = reductionSource?.bossSpawned ?: false
     internal var keyboardBrakeActive: Boolean = reductionSource?.keyboardBrakeActive ?: false
@@ -170,16 +266,12 @@ internal class MutableGameState(
         if (shareStableReductionStorage) it else it.fork()
     }
         ?: CopyOnWriteIntArray(IntArray(content.relics.size))
-    internal val relicProcCounts: CopyOnWriteIntArray = reductionSource?.relicProcCounts?.let {
-        if (shareStableReductionStorage) it else it.fork()
-    }
-        ?: CopyOnWriteIntArray(IntArray(content.relics.size))
-    internal val delayedRelicHits: MutableList<DelayedRelicHit> = reductionSource?.delayedRelicHits
+    internal val echoHits: MutableList<EchoHit> = reductionSource?.echoHits
         ?.let { source ->
             if (shareStableReductionStorage) {
                 source
             } else {
-                source.mapTo(ArrayList(source.size), DelayedRelicHit::copy)
+                source.mapTo(ArrayList(source.size), EchoHit::copy)
             }
         }
         ?: mutableListOf()
@@ -187,17 +279,6 @@ internal class MutableGameState(
         if (shareStableReductionStorage) it else it.fork()
     }
         ?: CopyOnWriteIntArray(IntArray(content.weapons.size))
-    internal var slipstreamRelayTime: Float = reductionSource?.slipstreamRelayTime ?: 0f
-    internal var borrowedMomentTime: Float = reductionSource?.borrowedMomentTime ?: 0f
-    internal var brakepointCharge: Float = reductionSource?.brakepointCharge ?: 0f
-    internal var synergyEffects: List<SynergyEffect> = reductionSource?.synergyEffects ?: emptyList()
-    internal val synergyCooldowns: CopyOnWriteFloatArray = reductionSource?.synergyCooldowns?.let {
-        if (shareStableReductionStorage) it else it.fork()
-    } ?: CopyOnWriteFloatArray(FloatArray(kinetickk.ball.content.api.SynergyId.entries.size))
-    internal var synergyManeuverCharge: Float = reductionSource?.synergyManeuverCharge ?: 0f
-    internal var ghostDashPending: Boolean = reductionSource?.ghostDashPending ?: false
-    internal var ghostDashStartX: Float = reductionSource?.ghostDashStartX ?: 0f
-    internal var ghostDashStartY: Float = reductionSource?.ghostDashStartY ?: 0f
     internal var dataFraction: Float = reductionSource?.dataFraction ?: 0f
     internal var matterFraction: Float = reductionSource?.matterFraction ?: 0f
     internal var shieldRechargeDelay: Float = reductionSource?.shieldRechargeDelay ?: 0f
@@ -214,7 +295,8 @@ internal class MutableGameState(
     internal var hurtCooldown: Float = reductionSource?.hurtCooldown ?: 0f
     internal var lastAimDirectionX: Float = reductionSource?.lastAimDirectionX ?: 1f
     internal var lastAimDirectionY: Float = reductionSource?.lastAimDirectionY ?: 0f
-    internal var bankedThisRun: Boolean = reductionSource?.bankedThisRun ?: false
+    /** Run Matter already banked; later grants in the same run bank only the difference. */
+    internal var bankedRunMatter: Long = reductionSource?.bankedRunMatter ?: 0L
     internal var activeChoiceType: ChoiceType = reductionSource?.activeChoiceType ?: ChoiceType.ITEM
 
     var phase: GamePhase = reductionSource?.phase ?: GamePhase.RUNNING
@@ -475,7 +557,8 @@ internal class MutableGameState(
     val choiceType: ChoiceType get() = activeChoiceType
     val choicesCanReroll: Boolean
         get() = phase == GamePhase.CHOICE && directedReward == null && rerollsRemaining > 0 && when (activeChoiceType) {
-            ChoiceType.ITEM, ChoiceType.WEAPON, ChoiceType.RELIC -> true
+            ChoiceType.ITEM, ChoiceType.WEAPON -> true
+        ChoiceType.RELIC -> !heirloomOfferActive
             ChoiceType.TOTEM, ChoiceType.RELIC_BIND -> false
         }
     val pendingRelicChoiceCount: Int get() = pendingRelicChoices

@@ -3,17 +3,23 @@
 
 package kinetickk.ball.content.impl
 
+import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.ItemDefinition
-import kinetickk.ball.content.api.ItemEffect
+import kinetickk.ball.content.api.ItemRarity
+import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
 import kinetickk.ball.content.api.MetaUpgradeDefinition
 import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
+import kinetickk.ball.content.api.isLiability
 import kinetickk.foundation.collections.immutableListOf
+import kinetickk.foundation.collections.toImmutableList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -29,19 +35,8 @@ class ContentCatalogTest {
     private val ui = catalog.uiCatalog()
 
     @Test
-    fun itemFamilyCapacityFollowsTheCapturedItemsWhenTheSnapshotIsCopied() {
-        assertEquals(20, gameplay.itemFamilyCount)
-        assertEquals(0, gameplay.copy(items = immutableListOf()).itemFamilyCount)
-        assertEquals(
-            3,
-            gameplay.copy(items = immutableListOf(gameplay.items.first().copy(id = 40))).itemFamilyCount,
-        )
-        assertEquals(20, gameplay.itemFamilyCount)
-    }
-
-    @Test
     fun authorityPublishesOneVersionedSetOfCachedQuerySnapshots() {
-        assertEquals("kinetickk-content-1", catalog.version.value)
+        assertEquals("kinetickk-content-2", catalog.version.value)
         assertEquals(KINETICKK_CONTENT_VERSION, catalog.version)
         assertEquals(catalog.version, gameplay.version)
         assertEquals(catalog.version, profile.version)
@@ -52,6 +47,8 @@ class ContentCatalogTest {
         assertSame(ui, catalog.uiCatalog())
         assertSame(gameplay.rebirth, profile.rebirth)
         assertSame(gameplay.rebirth, ui.rebirth)
+        assertSame(gameplay.build, ui.build)
+        assertSame(gameplay.items, ui.items)
     }
 
     @Test
@@ -61,47 +58,150 @@ class ContentCatalogTest {
         assertFalse((gameplay.weaponMasteries as Any) is MutableList<*>)
         assertFalse((gameplay.metaUpgrades as Any) is MutableList<*>)
         assertFalse((gameplay.relics as Any) is MutableList<*>)
+        assertFalse((gameplay.clauseOffsets as Any) is MutableList<*>)
+        assertFalse((gameplay.build.pairings as Any) is MutableList<*>)
         assertFalse((profile.coreShapes as Any) is MutableList<*>)
         assertTrue(gameplay.weapons.all { weapon -> (weapon.tags as Any) !is MutableList<*> })
+        assertTrue(gameplay.items.all { item -> (item.clauses as Any) !is MutableList<*> && (item.rules as Any) !is MutableList<*> })
 
-        val mutableItems = defaultContentBootstrapData().items.toMutableList()
+        val bootstrapItems = defaultContentBootstrapData().items
+        val mutableItems = bootstrapItems.toMutableList()
         val copiedCatalog = createContentCatalogForTesting(
             defaultContentBootstrapData().copy(items = mutableItems),
         )
         mutableItems.clear()
 
-        assertEquals(ContentBounds.MAX_ITEMS, copiedCatalog.gameplayContent().items.size)
+        assertEquals(bootstrapItems.size, copiedCatalog.gameplayContent().items.size)
+        assertEquals(bootstrapItems, copiedCatalog.gameplayContent().items)
     }
 
     @Test
-    fun itemCatalogContainsFourHundredDistinctValidItems() {
+    fun itemCatalogContainsEightyDistinctHandAuthoredItemsWithinTheBound() {
         val items = gameplay.items
 
-        assertEquals(ContentBounds.MAX_ITEMS, items.size)
-        assertEquals(20, ItemEffect.entries.size)
-        assertEquals((0 until ContentBounds.MAX_ITEMS).toList(), items.map(ItemDefinition::id))
-        assertEquals(items.size, items.map(ItemDefinition::id).toSet().size)
+        assertEquals(80, items.size)
+        assertTrue(items.size <= ContentBounds.MAX_ITEMS)
+        assertEquals((0 until items.size).toList(), items.map(ItemDefinition::id))
         assertEquals(items.size, items.map(ItemDefinition::name).toSet().size)
         assertEquals(items.size, items.map(ItemDefinition::description).toSet().size)
-        assertEquals(items.size, items.map(::mechanicalSignature).toSet().size)
+        assertEquals(items.size, items.map(::mechanicalSignature).toSet().size, "Two items share the same mechanics")
 
         items.forEach { item ->
-            assertTrue(item.name.isNotBlank(), "Item ${item.id} has a blank name")
-            assertTrue(item.description.isNotBlank(), "Item ${item.id} has a blank description")
-            assertTrue(item.family.isNotBlank(), "Item ${item.id} has a blank family")
-            assertTrue(item.primary.amount.isFinite() && item.primary.amount > 0f)
-            assertTrue(item.secondary.amount.isFinite() && item.secondary.amount > 0f)
-            assertEquals(9 - item.rarity.rank, item.maxStacks)
-            assertTrue(item.maxStacks in 1..8, "Item ${item.id} has invalid max stacks")
-            assertTrue(item.unlockLevel in 1..80, "Item ${item.id} has invalid unlock level")
+            val expectedStacks = when (item.rarity) {
+                ItemRarity.COMMON -> 3
+                ItemRarity.UNCOMMON, ItemRarity.RARE -> 2
+                ItemRarity.EPIC, ItemRarity.LEGENDARY -> 1
+            }
+            assertEquals(expectedStacks, item.maxStacks, "${item.name} stacks follow its rarity")
+            assertTrue(item.unlockLevel in 1..ContentBounds.MAX_ITEMS, "${item.name} has an invalid unlock level")
+            assertTrue(
+                item.tags.isNotEmpty() || item.elements.isNotEmpty() ||
+                    item.rules.any { it is ItemRule.ReactionPower || it is ItemRule.ReactionResidue },
+                "${item.name} belongs to no archetype, element or reaction family",
+            )
+            if (item.risk) {
+                assertTrue(item.stats.any { it.amount < 0f } || item.rules.any { it.isLiability }, "${item.name} hides its cost")
+            }
             assertEquals(item, gameplay.item(item.id))
+            assertEquals(item, ui.item(item.id))
             assertTrue(profile.containsItem(item.id))
         }
 
         assertNull(gameplay.item(-1))
-        assertNull(gameplay.item(ContentBounds.MAX_ITEMS))
+        assertNull(gameplay.item(items.size))
         assertFalse(profile.containsItem(-1))
-        assertFalse(profile.containsItem(ContentBounds.MAX_ITEMS))
+        assertFalse(profile.containsItem(items.size))
+    }
+
+    @Test
+    fun everyArchetypeAndElementIsDraftableAndRebirthGatesTheLegendaries() {
+        val items = gameplay.items
+
+        BuildTag.entries.forEach { tag ->
+            assertTrue(items.count { tag in it.tags } >= 5, "$tag needs at least five items")
+        }
+        StatusElement.entries.forEach { element ->
+            assertTrue(items.count { element in it.elements } >= 5, "$element needs at least five items")
+            assertTrue(items.any { element in it.elements && it.unlockLevel <= 2 }, "$element needs an early enabler")
+        }
+        val legendaries = items.filter { it.rarity == ItemRarity.LEGENDARY }
+        assertEquals(setOf("Solar Choir", "Glacial Heart", "Resonance Fork"), legendaries.map { it.name }.toSet())
+        assertEquals(mapOf("Solar Choir" to 2, "Glacial Heart" to 2, "Resonance Fork" to 4), legendaries.associate { it.name to it.minimumRebirth })
+        assertTrue(items.filter { it.rarity != ItemRarity.LEGENDARY }.all { it.minimumRebirth == 0 })
+        assertTrue(items.filter { it.risk }.all { it.rarity == ItemRarity.EPIC }, "Volatile offers draw from high-risk epics")
+    }
+
+    @Test
+    fun clauseOffsetsFollowTheCapturedItemsWhenTheSnapshotIsCopied() {
+        val items = gameplay.items
+
+        assertEquals(items.sumOf { it.clauses.size }, gameplay.totalClauseCount)
+        assertEquals(items.size, gameplay.clauseOffsets.size)
+        var expected = 0
+        items.forEach { item ->
+            assertEquals(expected, gameplay.clauseOffsets[item.id])
+            item.clauses.indices.forEach { clause -> assertEquals(expected + clause, gameplay.clauseIndex(item.id, clause)) }
+            expected += item.clauses.size
+        }
+
+        val empty = gameplay.copy(items = immutableListOf())
+        assertEquals(0, empty.totalClauseCount)
+        assertTrue(empty.clauseOffsets.isEmpty())
+        val oneClause = items.first { it.clauses.size == 1 }
+        val single = gameplay.copy(items = immutableListOf(oneClause.copy(id = 0, clauses = (oneClause.clauses + oneClause.clauses).toImmutableList())))
+        assertEquals(2, single.totalClauseCount)
+        assertEquals(1, single.clauseIndex(0, 1))
+        assertEquals(expected, gameplay.totalClauseCount)
+    }
+
+    @Test
+    fun buildCatalogCoversEveryElementPairWithExactlyOneReaction() {
+        val build = gameplay.build
+
+        assertEquals(StatusElement.entries.toList(), build.elements.map { it.element })
+        assertEquals(ReactionId.entries.toList(), build.reactions.map { it.id })
+        assertEquals(BuildTag.entries.toList(), build.resonances.map { it.tag })
+        assertEquals(ContentBounds.RESONANCE_TIERS, build.affinityTiers.size)
+
+        val pairs = StatusElement.entries.flatMapIndexed { index, first ->
+            StatusElement.entries.drop(index + 1).map { second -> first to second }
+        }
+        assertEquals(ReactionId.entries.size, pairs.size)
+        pairs.forEach { (first, second) ->
+            val reaction = ReactionId.between(first, second)
+            assertEquals(reaction, ReactionId.between(second, first))
+            assertTrue(reaction != null && reaction.involves(first) && reaction.involves(second))
+        }
+        assertEquals(ReactionId.entries.toSet(), pairs.mapNotNull { (a, b) -> ReactionId.between(a, b) }.toSet())
+        StatusElement.entries.forEach { element -> assertNull(ReactionId.between(element, element)) }
+
+        build.elements.forEach { definition ->
+            assertTrue(definition.breakFloor in 2..definition.breakThreshold)
+            assertEquals(definition.breakThreshold + 4, definition.stackCap)
+        }
+        build.reactions.forEach { reaction ->
+            assertTrue(reaction.residue == null || reaction.residue in setOf(reaction.id.first, reaction.id.second))
+        }
+    }
+
+    @Test
+    fun buildPolicyTiersMagnitudesAndRebornChanceFollowTheirCurves() {
+        val policy = gameplay.build.policy
+
+        assertEquals(listOf(0, 0, 0, 1, 1, 2, 2, 3, 3), (0..8).map { policy.tier(it, policy.resonanceThresholds) })
+        assertEquals(listOf(0, 0, 1, 1, 2, 2, 3), (0..6).map { policy.tier(it, policy.affinityThresholds) })
+        assertEquals(3, policy.tier(99, policy.affinityThresholds))
+
+        assertEquals(0f, policy.stackMagnitude(0))
+        assertEquals(1f, policy.stackMagnitude(1))
+        assertEquals(policy.stackMagnitude(ContentBounds.MAX_ITEM_STACKS), policy.stackMagnitude(ContentBounds.MAX_ITEM_STACKS + 1))
+        val gains = (1..ContentBounds.MAX_ITEM_STACKS).map(policy::stackMagnitude).zipWithNext { a, b -> b - a }
+        assertTrue(gains.zipWithNext().all { (a, b) -> b < a }, "Extra stacks give diminishing returns")
+
+        assertEquals(0f, policy.rebornChance(-1))
+        assertEquals(0f, policy.rebornChance(0))
+        assertEquals(0.05f, policy.rebornChance(1))
+        assertEquals(policy.maximumRebornChance, policy.rebornChance(ContentBounds.MAX_REBIRTH_LEVEL))
     }
 
     @Test
@@ -160,17 +260,10 @@ class ContentCatalogTest {
         assertEquals(0, profile.coreShape(CoreShape.ORB).unlockTarget)
         assertEquals(3, profile.coreShape(CoreShape.PRISM).unlockTarget)
         assertEquals(20, profile.coreShape(CoreShape.SHARD).unlockTarget)
+        assertEquals(profile.coreShapes, gameplay.coreShapes)
     }
 
-    private fun mechanicalSignature(item: ItemDefinition): List<Pair<Int, Int>> {
-        val totals = FloatArray(ItemEffect.entries.size)
-        totals[item.primary.effect.ordinal] += item.primary.amount
-        totals[item.secondary.effect.ordinal] += item.secondary.amount
-        return buildList {
-            totals.forEachIndexed { index, amount ->
-                if (amount != 0f) add(index to amount.toBits())
-            }
-            add(-1 to item.maxStacks)
-        }
-    }
+    /** Everything that changes how an item plays, ignoring its name, flavor and id. */
+    private fun mechanicalSignature(item: ItemDefinition): List<Any> =
+        listOf(item.rarity, item.tags, item.elements, item.stats, item.clauses, item.rules, item.maxStacks, item.risk)
 }

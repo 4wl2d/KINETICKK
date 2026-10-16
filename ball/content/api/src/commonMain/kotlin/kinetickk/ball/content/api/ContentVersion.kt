@@ -16,14 +16,37 @@ value class ContentVersion(val value: String) {
 }
 
 /** Canonical version published by the current Content implementation. */
-val KINETICKK_CONTENT_VERSION: ContentVersion = ContentVersion("kinetickk-content-1")
+val KINETICKK_CONTENT_VERSION: ContentVersion = ContentVersion("kinetickk-content-2")
 
 /** Bootstrap limits. Runtime decisions use the corresponding captured snapshot fields. */
 object ContentBounds {
-    const val MAX_ITEMS: Int = 400
+    const val MAX_ITEMS: Int = 96
+    const val MAX_COMBAT_FIELDS: Int = 16
     const val MAX_WEAPONS: Int = 12
     const val MAX_META_UPGRADES: Int = 8
-    const val MAX_RELICS: Int = 40
+    const val MAX_RELICS: Int = 24
+    const val MAX_RELIC_PAIRINGS: Int = 32
+    const val MAX_RELIC_VALUES: Int = 4
     const val MIN_REBIRTH_LEVEL: Int = 0
     const val MAX_REBIRTH_LEVEL: Int = 10
+
+    /** Discoveries persisted before this catalog generation belong to the retired 400-item catalog. */
+    const val COLLECTION_GENERATION: Int = 2
+
+    /** Profiles from the retired catalog may list up to this many discovered items before discard. */
+    const val LEGACY_MAX_ITEMS: Int = 400
+    const val LEGACY_MAX_RELICS: Int = 40
+
+    const val MAX_ITEM_STACKS: Int = 3
+    const val MAX_ITEM_STATS: Int = 3
+    const val MAX_ITEM_CLAUSES: Int = 2
+    const val MAX_ITEM_RULES: Int = 3
+    const val MAX_CLAUSE_ACTIONS: Int = 3
+    const val MAX_CLAUSE_CONDITIONS: Int = 2
+    const val MAX_CHAIN_TARGETS: Int = 6
+    const val MAX_SHARDS: Int = 6
+    const val MAX_BUFF_STACKS: Int = 3
+    const val MAX_EFFECT_RADIUS: Float = 600f
+    const val MAX_STATUS_THRESHOLD: Int = 12
+    const val RESONANCE_TIERS: Int = 3
 }

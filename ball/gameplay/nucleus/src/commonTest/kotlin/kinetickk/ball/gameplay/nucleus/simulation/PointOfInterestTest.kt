@@ -114,8 +114,10 @@ class PointOfInterestTest {
         val focus = game.choices[0].rewardFocus!!
         assertFalse(game.choicesCanReroll)
         game.choose(0)
-        assertEquals(3, game.choices.size)
-        assertTrue(game.choices.all { game.content.relic(it.relicId!!).aspect.name == focus.name })
+        // Three matching relics, then the slot-aware tail card so the offer never forces a pick.
+        assertEquals(4, game.choices.size)
+        assertEquals(kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction.DECLINE, game.choices.last().relicAction)
+        assertTrue(game.choices.dropLast(1).all { game.content.relic(it.relicId!!).aspect.name == focus.name })
         game.choose(0)
         assertEquals(GamePhase.RUNNING, game.phase)
         assertEquals(1, game.equippedRelics.size)

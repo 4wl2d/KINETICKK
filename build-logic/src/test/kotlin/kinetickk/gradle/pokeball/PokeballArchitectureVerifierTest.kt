@@ -17,7 +17,7 @@ class PokeballArchitectureVerifierTest {
             "enum class CanvasRuneStyle { RING, CROSS }\nfun drawRuneMedallion() = Unit",
         )
         assertTrue(foundationAndRegistryViolations(listOf(geometry)).isEmpty())
-        listOf("ItemEffect", "ItemRarity", "RelicId").forEach { domainType ->
+        listOf("ItemEffect", "ItemRarity", "RelicId", "StatusElement", "BuildTag", "ReactionId", "RelicPairingId", "RelicKey").forEach { domainType ->
             val leaked = geometry.copy(text = geometry.text + "\nfun map(value: $domainType) = Unit")
             assertTrue(foundationAndRegistryViolations(listOf(leaked)).any { domainType in it })
         }

@@ -100,8 +100,9 @@ class DefaultHomeFeature(
         var activeInfoValue by remember { mutableStateOf<HomeInfoTarget?>(null) }
         val menuMotion = remember { HomeMenuMotion() }
         val actionFocus = remember { HomeLayoutTarget.entries.associateWith { FocusRequester() } }
-        LaunchedEffect(inputEnabled, viewportValue.width > 0f) {
-            if (inputEnabled && viewportValue.width > 0f) actionFocus.getValue(activeTargetValue).requestFocus()
+        val actionsReady = inputEnabled && viewportValue.width > 0f && viewportValue.height > 0f
+        LaunchedEffect(actionsReady) {
+            if (actionsReady) actionFocus.getValue(activeTargetValue).requestFocus()
         }
         @Suppress("UNUSED_EXPRESSION")
         revisionValue
@@ -150,13 +151,14 @@ class DefaultHomeFeature(
         }
 
         val selectedShapeValue by rememberUpdatedState(uiModel.coreShape)
+        val elementHuesValue by rememberUpdatedState(roles.elements)
         LaunchedEffect(Unit) {
             var previousFrame = withFrameNanos { it }
             while (true) {
                 val frame = withFrameNanos { it }
                 val delta = selectHomePresentationFrameDeltaSeconds((frame - previousFrame) / 1_000_000_000f)
                 renderTimeSecondsValue += delta
-                menuMotion.advance(activeTargetValue, selectedShapeValue, delta)
+                menuMotion.advance(activeTargetValue, selectedShapeValue, delta, elementHuesValue)
                 previousFrame = frame
             }
         }
@@ -209,7 +211,7 @@ class DefaultHomeFeature(
                     menuMotion,
                 )
             }
-            if (inputEnabled && viewportValue.width > 0f && viewportValue.height > 0f) {
+            if (actionsReady) {
                 layout.actions.forEach { action ->
                     key(action.target) {
                         val shape = action.target.coreShapeOrNull()

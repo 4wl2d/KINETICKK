@@ -6,13 +6,16 @@ package kinetickk.ball.profile.resource
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.profile.api.ColorVision
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
 import kinetickk.ball.profile.api.LabProgress
+import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
@@ -34,37 +37,216 @@ class ProfileCodecTest {
     fun collectionDiscoveriesRoundTripAndLegacyProfilesKeepTheirProgress() {
         val old = testSnapshot(PlayerProfile(economy = PlayerEconomy(42L, 600L), collection = PlayerCollection(setOf(1, 3))), revision = 19L)
         val legacy = requireEncoded(old)
+        assertTrue(legacy.contains("\"collection\":{\"itemCatalogEpoch\":2,\"discoveredItemIds\":[1,3]}"), legacy)
         kotlin.test.assertFalse(legacy.contains("newItemIds"))
         kotlin.test.assertFalse(legacy.contains("discoveredRelicIds"))
+        listOf("discoveredReactionIds", "discoveredPairingIds", "heirloomRelicIds").forEach { field ->
+            assertFalse(legacy.contains(field), field)
+        }
         assertEquals(old, assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(legacy)).snapshot)
-        val relics = kinetickk.ball.content.api.RelicId.entries.toSet()
+        val relics = RelicId.entries.toSet()
         val maximum = old.copy(profile = old.profile.copy(collection = PlayerCollection(
             (0 until ContentBounds.MAX_ITEMS).toSet(), (0 until ContentBounds.MAX_ITEMS).toSet(), relics, relics,
+            ReactionId.entries.toSet(), RelicPairingId.entries.toSet(), RelicId.entries.takeLast(MAX_HEIRLOOM_RELICS),
         )))
         assertEquals(maximum, assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(requireEncoded(maximum))).snapshot)
     }
 
     @Test
+    fun retiredCatalogSaveKeepsEveryOtherFactAndDropsOnlyItsDiscoveries() {
+        val legacyCollection = "\"collection\":{\"discoveredItemIds\":[" +
+            (0 until ContentBounds.LEGACY_MAX_ITEMS).joinToString(",") + "],\"newItemIds\":[399]," +
+            "\"discoveredRelicIds\":[" + RETIRED_RELIC_IDS.joinToString(",") { "\"$it\"" } + "]," +
+            "\"newRelicIds\":[\"KINETIC_FLYWHEEL\",\"MASS_ECHO\"]}"
+        val payload = LEGACY_REPRESENTATIVE_GOLDEN.replace(LEGACY_REPRESENTATIVE_COLLECTION, legacyCollection)
+        assertEquals(ContentBounds.LEGACY_MAX_RELICS, RETIRED_RELIC_IDS.size)
+
+        val decoded = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(payload)).snapshot
+        val profile = decoded.profile
+        assertEquals(2_718L, decoded.revision.value)
+        assertEquals(PlayerCollection(), profile.collection)
+        assertEquals(PlayerEconomy(4_321L, 98_765L), profile.economy)
+        assertEquals(PlayerLoadout(CoreShape.RING, WeaponId.ARC_COIL, setOf(WeaponId.ARC_COIL, WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR)), profile.loadout)
+        assertEquals(LabProgress(listOf(0, 1, 2, 0, 1, 2, 0, 1)), profile.labProgress)
+        assertEquals(RebirthProgress(4, 3), profile.rebirthProgress)
+        assertEquals(
+            kinetickk.ball.profile.api.CharacterAchievementProgress(12L, 340L, 5L, 2L, kinetickk.foundation.collections.immutableSetOf(CoreShape.ORB, CoreShape.RING)),
+            profile.characterAchievements,
+        )
+        assertEquals(AppLanguage.English, profile.preferences.language)
+        assertTrue(profile.preferences.runStatisticsOnLeft)
+        // Everything except the collection matches the current-catalog save of the same player.
+        val current = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(REPRESENTATIVE_GOLDEN)).snapshot
+        assertEquals(current.profile.copy(collection = PlayerCollection()), profile)
+        // The next write upgrades the save to the current catalog generation.
+        val upgraded = REPRESENTATIVE_GOLDEN.replace(REPRESENTATIVE_COLLECTION, EMPTY_CURRENT_COLLECTION)
+        assertEquals(upgraded, requireEncoded(decoded))
+        assertEquals(decoded, assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(upgraded)).snapshot)
+
+        // The retired goldens themselves stay readable and upgrade the same way.
+        val legacyDefault = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(LEGACY_DEFAULT_GOLDEN)).snapshot
+        assertEquals(testSnapshot(), legacyDefault)
+        assertEquals(DEFAULT_GOLDEN, requireEncoded(legacyDefault))
+        val legacyRepresentative = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(LEGACY_REPRESENTATIVE_GOLDEN)).snapshot
+        assertEquals(decoded, legacyRepresentative)
+
+        // Explicit retired generations behave like the absent epoch; the codec still checks structure.
+        for (epoch in 0 until ContentBounds.COLLECTION_GENERATION) {
+            val explicit = payload.replace("\"collection\":{", "\"collection\":{\"itemCatalogEpoch\":$epoch,")
+            assertEquals(decoded, assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(explicit)).snapshot, "epoch $epoch")
+        }
+        assertEquals(ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE, decodeRejection(
+            payload.replace("\"newRelicIds\":[\"KINETIC_FLYWHEEL\",\"MASS_ECHO\"]", "\"newRelicIds\":[\"MASS_ECHO\",\"KINETIC_FLYWHEEL\"]"),
+        ))
+        // The retired codec never wrote the new fields, so a save without an epoch cannot carry them.
+        listOf(
+            ",\"discoveredReactionIds\":[\"FUSION\"]",
+            ",\"discoveredPairingIds\":[\"MELTDOWN\"]",
+            ",\"heirloomRelicIds\":[\"GLASS_COMET\"]",
+        ).forEach { field ->
+            val invented = LEGACY_REPRESENTATIVE_GOLDEN.replace("\"newRelicIds\":[\"MASS_ECHO\"]}", "\"newRelicIds\":[\"MASS_ECHO\"]$field}")
+            assertEquals(ProfileSnapshotRejection.INCONSISTENT_PROFILE, decodeRejection(invented), field)
+        }
+    }
+
+    @Test
+    fun catalogEpochIsWrittenByEveryEncodeAndOnlyKnownGenerationsDecode() {
+        assertTrue(requireEncoded(testSnapshot()).contains("\"itemCatalogEpoch\":${ContentBounds.COLLECTION_GENERATION}"))
+        val epoch = "\"itemCatalogEpoch\":2"
+        listOf(-1, ContentBounds.COLLECTION_GENERATION + 1, Int.MAX_VALUE).forEach { invalid ->
+            assertEquals(
+                ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+                decodeRejection(DEFAULT_GOLDEN.replace(epoch, "\"itemCatalogEpoch\":$invalid")),
+                invalid.toString(),
+            )
+        }
+        assertEquals(ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD, decodeRejection(DEFAULT_GOLDEN.replace(epoch, "\"itemCatalogEpoch\":null")))
+        // A quoted number parses but is not what the encoder writes.
+        assertEquals(ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD, decodeRejection(DEFAULT_GOLDEN.replace(epoch, "\"itemCatalogEpoch\":\"2\"")))
+        assertEquals(ProfileSnapshotRejection.MALFORMED_JSON, decodeRejection(DEFAULT_GOLDEN.replace(epoch, "\"itemCatalogEpoch\":true")))
+        // The epoch leads the collection; any other position is not the canonical encoding.
+        assertEquals(ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD, decodeRejection(
+            DEFAULT_GOLDEN.replace("{$epoch,\"discoveredItemIds\":[]}", "{\"discoveredItemIds\":[],$epoch}"),
+        ))
+    }
+
+    @Test
+    fun buildDiscoveriesAndHeirloomsRoundTripInTheirCanonicalOrder() {
+        val representative = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(REPRESENTATIVE_GOLDEN)).snapshot
+        val collection = representative.profile.collection
+        assertEquals(setOf(ReactionId.EMBRITTLE, ReactionId.THERMAL_SHOCK), collection.discoveredReactionIds)
+        assertEquals(setOf(RelicPairingId.HEAVY_BLINK), collection.discoveredPairingIds)
+        assertEquals(listOf(RelicId.GLASS_COMET, RelicId.BLINK_DRIVE), collection.heirloomRelicIds)
+
+        // Heirlooms keep slot order, so both orders are canonical and distinct.
+        val swapped = REPRESENTATIVE_GOLDEN.replace(
+            "\"heirloomRelicIds\":[\"GLASS_COMET\",\"BLINK_DRIVE\"]",
+            "\"heirloomRelicIds\":[\"BLINK_DRIVE\",\"GLASS_COMET\"]",
+        )
+        val reordered = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(swapped)).snapshot
+        assertEquals(listOf(RelicId.BLINK_DRIVE, RelicId.GLASS_COMET), reordered.profile.collection.heirloomRelicIds)
+        assertEquals(swapped, requireEncoded(reordered))
+
+        // Discovery sets are written sorted whatever their in-memory order.
+        val unordered = testSnapshot(PlayerProfile(collection = PlayerCollection(
+            emptySet(),
+            discoveredReactionIds = ReactionId.entries.reversed().toSet(),
+            discoveredPairingIds = RelicPairingId.entries.reversed().toSet(),
+            heirloomRelicIds = listOf(RelicId.OUROBOROS_SEAL, RelicId.ABSOLUTE_ZERO),
+        )))
+        val encoded = requireEncoded(unordered)
+        assertEquals(ReactionId.entries.map { it.name }.sorted(), encoded.extractStringArray("discoveredReactionIds"))
+        assertEquals(RelicPairingId.entries.map { it.name }.sorted(), encoded.extractStringArray("discoveredPairingIds"))
+        assertEquals(listOf("OUROBOROS_SEAL", "ABSOLUTE_ZERO"), encoded.extractStringArray("heirloomRelicIds"))
+        assertEquals(unordered, assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(encoded)).snapshot)
+
+        // Unknown or retired ids in a current-generation save are still invalid stable ids.
+        listOf(
+            "\"discoveredRelicIds\":[\"BLINK_DRIVE\"" to "\"discoveredRelicIds\":[\"AAA_UNKNOWN\"",
+            "\"heirloomRelicIds\":[\"GLASS_COMET\"" to "\"heirloomRelicIds\":[\"KINETIC_FLYWHEEL\"",
+            "\"discoveredReactionIds\":[\"EMBRITTLE\"" to "\"discoveredReactionIds\":[\"BURN\"",
+            "\"discoveredPairingIds\":[\"HEAVY_BLINK\"" to "\"discoveredPairingIds\":[\"heavy_blink\"",
+        ).forEach { (canonical, invalid) ->
+            assertEquals(ProfileSnapshotRejection.INVALID_STABLE_ID, decodeRejection(REPRESENTATIVE_GOLDEN.replace(canonical, invalid)), invalid)
+        }
+    }
+
+    @Test
+    fun collectionIngressBoundsAcceptNAndRejectFirstNPlusOne() {
+        val maximum = testSnapshot(PlayerProfile(collection = PlayerCollection(
+            (0 until ContentBounds.MAX_ITEMS).toSet(),
+            discoveredRelicIds = RelicId.entries.toSet(),
+            discoveredReactionIds = ReactionId.entries.toSet(),
+            discoveredPairingIds = RelicPairingId.entries.toSet(),
+            heirloomRelicIds = RelicId.entries.take(MAX_HEIRLOOM_RELICS),
+        )))
+        val encoded = requireEncoded(maximum)
+        assertEquals(maximum, assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(encoded)).snapshot)
+
+        fun appended(field: String, extra: List<String>): String {
+            val body = Regex("\\\"$field\\\":\\[(.*?)]").find(encoded)!!.groupValues[1]
+            return encoded.replace("\"$field\":[$body]", "\"$field\":[$body,${extra.joinToString(",")}]")
+        }
+        val overflowing = mapOf(
+            "discoveredItemIds" to listOf(ContentBounds.MAX_ITEMS.toString()),
+            // Only twenty Relics exist, so the current bound is reached with sorted names past them.
+            "discoveredRelicIds" to (1..ContentBounds.MAX_RELICS - RelicId.entries.size + 1).map { "\"ZZ$it\"" },
+            "discoveredReactionIds" to listOf("\"ZZ\""),
+            "discoveredPairingIds" to listOf("\"ZZ\""),
+            "heirloomRelicIds" to listOf("\"${RelicId.entries.last().name}\""),
+        )
+        overflowing.forEach { (field, extra) ->
+            assertEquals(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE, decodeRejection(appended(field, extra)), field)
+        }
+
+        // A retired-catalog save may list up to the retired bounds and is rejected one past them.
+        val legacyAtBound = LEGACY_DEFAULT_GOLDEN.replace(
+            "\"collection\":{\"discoveredItemIds\":[]}",
+            "\"collection\":{\"discoveredItemIds\":[" + (0 until ContentBounds.LEGACY_MAX_ITEMS).joinToString(",") +
+                "],\"discoveredRelicIds\":[" + RETIRED_RELIC_IDS.joinToString(",") { "\"$it\"" } + "]}",
+        )
+        assertEquals(testSnapshot(), assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(legacyAtBound)).snapshot)
+        assertEquals(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE, decodeRejection(
+            legacyAtBound.replace(",${ContentBounds.LEGACY_MAX_ITEMS - 1}]", ",${ContentBounds.LEGACY_MAX_ITEMS - 1},${ContentBounds.LEGACY_MAX_ITEMS}]"),
+        ))
+        assertEquals(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE, decodeRejection(
+            legacyAtBound.replace("\"${RETIRED_RELIC_IDS.last()}\"]", "\"${RETIRED_RELIC_IDS.last()}\",\"ZZ_RETIRED\"]"),
+        ))
+    }
+
+    @Test
     fun unseenMarkersCannotInventDiscoveriesAndRelicWireIdsAreValidated() {
         val snapshot = testSnapshot(PlayerProfile(collection = PlayerCollection(setOf(1), setOf(1),
-            setOf(kinetickk.ball.content.api.RelicId.KINETIC_FLYWHEEL), setOf(kinetickk.ball.content.api.RelicId.KINETIC_FLYWHEEL))))
+            setOf(RelicId.PERPETUAL_VECTOR), setOf(RelicId.PERPETUAL_VECTOR))))
         val encoded = requireEncoded(snapshot)
         assertEquals(ProfileSnapshotRejection.INCONSISTENT_PROFILE, decodeRejection(encoded.replace("\"newItemIds\":[1]", "\"newItemIds\":[2]")))
-        assertEquals(ProfileSnapshotRejection.INVALID_STABLE_ID, decodeRejection(encoded.replace("KINETIC_FLYWHEEL", "UNKNOWN_RELIC")))
+        assertEquals(ProfileSnapshotRejection.INVALID_STABLE_ID, decodeRejection(encoded.replace("PERPETUAL_VECTOR", "UNKNOWN_RELIC")))
+        // A retired Relic name is unknown in a save of the current catalog generation.
+        assertEquals(ProfileSnapshotRejection.INVALID_STABLE_ID, decodeRejection(encoded.replace("PERPETUAL_VECTOR", "KINETIC_FLYWHEEL")))
+        assertEquals(ProfileSnapshotRejection.INCONSISTENT_PROFILE, decodeRejection(
+            encoded.replace("\"newRelicIds\":[\"PERPETUAL_VECTOR\"]", "\"newRelicIds\":[\"BLINK_DRIVE\"]"),
+        ))
         assertEquals(ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE, decodeRejection(encoded.replace("\"newItemIds\":[1]", "\"newItemIds\":[1,1]")))
     }
 
     @Test
     fun discoveryFieldsRejectUnsortedValuesAndDuplicates() {
-        val relics = setOf(RelicId.GHOST_VECTOR, RelicId.KINETIC_FLYWHEEL)
+        val relics = setOf(RelicId.BLINK_DRIVE, RelicId.PERPETUAL_VECTOR)
         val snapshot = testSnapshot(PlayerProfile(
-            collection = PlayerCollection(setOf(1, 3), setOf(1, 3), relics, relics),
+            collection = PlayerCollection(
+                setOf(1, 3), setOf(1, 3), relics, relics,
+                setOf(ReactionId.FUSION, ReactionId.WILDFIRE),
+                setOf(RelicPairingId.BLACK_STAR, RelicPairingId.MELTDOWN),
+                listOf(RelicId.PERPETUAL_VECTOR, RelicId.BLINK_DRIVE),
+            ),
         ))
         val encoded = requireEncoded(snapshot)
         val fields = mapOf(
             "newItemIds" to listOf("1", "3"),
-            "discoveredRelicIds" to listOf("\"GHOST_VECTOR\"", "\"KINETIC_FLYWHEEL\""),
-            "newRelicIds" to listOf("\"GHOST_VECTOR\"", "\"KINETIC_FLYWHEEL\""),
+            "discoveredRelicIds" to listOf("\"BLINK_DRIVE\"", "\"PERPETUAL_VECTOR\""),
+            "newRelicIds" to listOf("\"BLINK_DRIVE\"", "\"PERPETUAL_VECTOR\""),
+            "discoveredReactionIds" to listOf("\"FUSION\"", "\"WILDFIRE\""),
+            "discoveredPairingIds" to listOf("\"BLACK_STAR\"", "\"MELTDOWN\""),
         )
         for ((field, values) in fields) {
             val canonical = "\"$field\":[${values.joinToString(",")}]"
@@ -77,6 +259,19 @@ class ProfileCodecTest {
                 )
             }
         }
+        // Heirlooms are ordered by slot rather than sorted, but a Relic fills at most one slot.
+        val heirlooms = "\"heirloomRelicIds\":[\"PERPETUAL_VECTOR\",\"BLINK_DRIVE\"]"
+        assertTrue(encoded.contains(heirlooms), encoded)
+        assertEquals(ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE, decodeRejection(
+            encoded.replace(heirlooms, "\"heirloomRelicIds\":[\"PERPETUAL_VECTOR\",\"PERPETUAL_VECTOR\"]"),
+        ))
+        assertEncodeRejection(
+            ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
+            testSnapshot(PlayerProfile(collection = PlayerCollection(
+                kinetickk.foundation.collections.immutableSetOf(),
+                heirloomRelicIds = kinetickk.foundation.collections.immutableListOf(RelicId.GLASS_COMET, RelicId.GLASS_COMET),
+            ))),
+        )
     }
 
     @Test
@@ -122,13 +317,19 @@ class ProfileCodecTest {
         assertEquals(2_718L, representative.revision.value)
         assertEquals(AppLanguage.English, representative.profile.preferences.language)
         assertEquals(true, representative.profile.preferences.runStatisticsOnLeft)
-        assertEquals(setOf(RelicId.GHOST_VECTOR, RelicId.MASS_ECHO), representative.profile.collection.discoveredRelicIds)
+        assertEquals(
+            setOf(RelicId.BLINK_DRIVE, RelicId.GLASS_COMET, RelicId.OUROBOROS_SEAL),
+            representative.profile.collection.discoveredRelicIds,
+        )
+        assertEquals(setOf(RelicId.OUROBOROS_SEAL), representative.profile.collection.newRelicIds)
 
         // Saves predating language selection and the statistics side stay readable and canonical.
         val oldest = DEFAULT_GOLDEN.replace(",\"languageCode\":\"ru\",\"runStatisticsOnLeft\":false", "")
         val decodedOldest = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(oldest)).snapshot
         assertEquals(ColorVision.DEFAULT, decodedOldest.profile.preferences.colorVision)
         assertEquals(DEFAULT_GOLDEN, requireEncoded(decodedOldest))
+        val legacyOldest = LEGACY_DEFAULT_GOLDEN.replace(",\"languageCode\":\"ru\",\"runStatisticsOnLeft\":false", "")
+        assertEquals(DEFAULT_GOLDEN, requireEncoded(assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(legacyOldest)).snapshot))
     }
 
     @Test
@@ -222,7 +423,13 @@ class ProfileCodecTest {
                 unlockedWeapons = WeaponId.entries.reversed().toSet(),
             ),
             labProgress = LabProgress(MetaUpgradeId.entries.map { 1 }),
-            collection = PlayerCollection((0 until ContentBounds.MAX_ITEMS).reversed().toSet()),
+            collection = PlayerCollection(
+                (0 until ContentBounds.MAX_ITEMS).reversed().toSet(),
+                discoveredRelicIds = RelicId.entries.reversed().toSet(),
+                discoveredReactionIds = ReactionId.entries.toSet(),
+                discoveredPairingIds = RelicPairingId.entries.toSet(),
+                heirloomRelicIds = RelicId.entries.reversed().take(MAX_HEIRLOOM_RELICS),
+            ),
             rebirthProgress = RebirthProgress(7, 6),
         )
         val snapshot = testSnapshot(profile, revision = 42L)
@@ -241,6 +448,13 @@ class ProfileCodecTest {
             encoded.extractStringArray("unlockedWeaponIds"),
         )
         assertEquals((0 until ContentBounds.MAX_ITEMS).toList(), encoded.extractIntArray("discoveredItemIds"))
+        assertEquals(RelicId.entries.map(RelicId::name).sorted(), encoded.extractStringArray("discoveredRelicIds"))
+        assertEquals(ReactionId.entries.size, decoded.snapshot.profile.collection.discoveredReactionIds.size)
+        assertEquals(RelicPairingId.entries.size, decoded.snapshot.profile.collection.discoveredPairingIds.size)
+        assertEquals(
+            RelicId.entries.reversed().take(MAX_HEIRLOOM_RELICS).map(RelicId::name),
+            encoded.extractStringArray("heirloomRelicIds"),
+        )
         assertEquals(
             MetaUpgradeId.entries.map { it.name }.sorted(),
             RANK_ID.findAll(encoded).map { it.groupValues[1] }.toList(),
@@ -419,6 +633,16 @@ class ProfileCodecTest {
                 PlayerProfile(collection = PlayerCollection((0..ContentBounds.MAX_ITEMS).toSet())),
             ),
         )
+        val heirlooms = RelicId.entries.take(MAX_HEIRLOOM_RELICS)
+        val atBound = testSnapshot(PlayerProfile(collection = PlayerCollection(emptySet(), heirloomRelicIds = heirlooms)))
+        assertEquals(atBound, assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(requireEncoded(atBound))).snapshot)
+        assertEncodeRejection(
+            ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+            testSnapshot(PlayerProfile(collection = PlayerCollection(
+                emptySet(),
+                heirloomRelicIds = RelicId.entries.take(MAX_HEIRLOOM_RELICS + 1),
+            ))),
+        )
     }
 
     @Test
@@ -509,13 +733,63 @@ private const val DEFAULT_GOLDEN: String =
         "{\"id\":\"CRYO_VENTS\",\"rank\":0},{\"id\":\"DASH_CAPACITOR\",\"rank\":0}," +
         "{\"id\":\"DATA_ARCHIVE\",\"rank\":0},{\"id\":\"KINETIC_AMPLIFIER\",\"rank\":0}," +
         "{\"id\":\"MAGNETIC_RESONANCE\",\"rank\":0},{\"id\":\"SALVAGE_PROTOCOL\",\"rank\":0}]}," +
+        "\"collection\":{\"itemCatalogEpoch\":2,\"discoveredItemIds\":[]}," +
+        "\"rebirthProgress\":{\"level\":0,\"highestCleared\":-1}," +
+        "\"characterAchievements\":{\"eliteKills\":\"0\",\"dashHits\":\"0\",\"completedOrbits\":\"0\"," +
+        "\"architectVictories\":\"0\",\"victoriousCharacterIds\":[]}}}"
+
+private const val EMPTY_CURRENT_COLLECTION: String = "\"collection\":{\"itemCatalogEpoch\":2,\"discoveredItemIds\":[]}"
+
+private const val REPRESENTATIVE_COLLECTION: String =
+    "\"collection\":{\"itemCatalogEpoch\":2,\"discoveredItemIds\":[3,7,42],\"newItemIds\":[42]," +
+        "\"discoveredRelicIds\":[\"BLINK_DRIVE\",\"GLASS_COMET\",\"OUROBOROS_SEAL\"],\"newRelicIds\":[\"OUROBOROS_SEAL\"]," +
+        "\"discoveredReactionIds\":[\"EMBRITTLE\",\"THERMAL_SHOCK\"],\"discoveredPairingIds\":[\"HEAVY_BLINK\"]," +
+        "\"heirloomRelicIds\":[\"GLASS_COMET\",\"BLINK_DRIVE\"]}"
+
+/** A current-catalog save without Color vision; it must stay readable and byte-identical. */
+private const val REPRESENTATIVE_GOLDEN: String =
+    "{\"revision\":\"2718\",\"profile\":{" +
+        "\"preferences\":{\"soundEnabled\":false,\"musicEnabled\":true,\"masterVolumePercent\":37," +
+        "\"simulationSpeedPercent\":135,\"textScalePercent\":150,\"screenShake\":false," +
+        "\"particleDensityId\":\"LOW\",\"damageNumbers\":true,\"damageNumberSizeId\":\"HUGE\"," +
+        "\"damageNumberFormatId\":\"FULL\",\"damageNumberTierThreshold\":2500,\"languageCode\":\"en\",\"runStatisticsOnLeft\":true}," +
+        "\"economy\":{\"matter\":\"4321\",\"lifetimeMatter\":\"98765\"}," +
+        "\"loadout\":{\"coreShapeId\":\"RING\",\"selectedWeaponId\":\"ARC_COIL\"," +
+        "\"unlockedWeaponIds\":[\"ARC_COIL\",\"FLUX_WAKE\",\"MORNINGSTAR\"]},\"labProgress\":{\"ranks\":[" +
+        "{\"id\":\"ARMORY_LICENSE\",\"rank\":1},{\"id\":\"CORE_INTEGRITY\",\"rank\":0}," +
+        "{\"id\":\"CRYO_VENTS\",\"rank\":0},{\"id\":\"DASH_CAPACITOR\",\"rank\":1}," +
+        "{\"id\":\"DATA_ARCHIVE\",\"rank\":0},{\"id\":\"KINETIC_AMPLIFIER\",\"rank\":1}," +
+        "{\"id\":\"MAGNETIC_RESONANCE\",\"rank\":2},{\"id\":\"SALVAGE_PROTOCOL\",\"rank\":2}]}," +
+        REPRESENTATIVE_COLLECTION + "," +
+        "\"rebirthProgress\":{\"level\":4,\"highestCleared\":3}," +
+        "\"characterAchievements\":{\"eliteKills\":\"12\",\"dashHits\":\"340\",\"completedOrbits\":\"5\"," +
+        "\"architectVictories\":\"2\",\"victoriousCharacterIds\":[\"ORB\",\"RING\"]}}}"
+
+/** Byte-exact default save of the retired 400-item catalog, written before the catalog epoch existed. */
+private const val LEGACY_DEFAULT_GOLDEN: String =
+    "{\"revision\":\"0\",\"profile\":{" +
+        "\"preferences\":{\"soundEnabled\":true,\"musicEnabled\":true,\"masterVolumePercent\":65," +
+        "\"simulationSpeedPercent\":100,\"textScalePercent\":125,\"screenShake\":true," +
+        "\"particleDensityId\":\"NORMAL\",\"damageNumbers\":true,\"damageNumberSizeId\":\"NORMAL\"," +
+        "\"damageNumberFormatId\":\"COMPACT\",\"damageNumberTierThreshold\":50,\"languageCode\":\"ru\",\"runStatisticsOnLeft\":false}," +
+        "\"economy\":{\"matter\":\"0\",\"lifetimeMatter\":\"0\"}," +
+        "\"loadout\":{\"coreShapeId\":\"ORB\",\"selectedWeaponId\":\"FLUX_WAKE\"," +
+        "\"unlockedWeaponIds\":[\"FLUX_WAKE\"]},\"labProgress\":{\"ranks\":[" +
+        "{\"id\":\"ARMORY_LICENSE\",\"rank\":0},{\"id\":\"CORE_INTEGRITY\",\"rank\":0}," +
+        "{\"id\":\"CRYO_VENTS\",\"rank\":0},{\"id\":\"DASH_CAPACITOR\",\"rank\":0}," +
+        "{\"id\":\"DATA_ARCHIVE\",\"rank\":0},{\"id\":\"KINETIC_AMPLIFIER\",\"rank\":0}," +
+        "{\"id\":\"MAGNETIC_RESONANCE\",\"rank\":0},{\"id\":\"SALVAGE_PROTOCOL\",\"rank\":0}]}," +
         "\"collection\":{\"discoveredItemIds\":[]}," +
         "\"rebirthProgress\":{\"level\":0,\"highestCleared\":-1}," +
         "\"characterAchievements\":{\"eliteKills\":\"0\",\"dashHits\":\"0\",\"completedOrbits\":\"0\"," +
         "\"architectVictories\":\"0\",\"victoriousCharacterIds\":[]}}}"
 
-/** Produced by the codec before Color vision existed; it must stay readable and byte-identical. */
-private const val REPRESENTATIVE_GOLDEN: String =
+private const val LEGACY_REPRESENTATIVE_COLLECTION: String =
+    "\"collection\":{\"discoveredItemIds\":[3,7,42],\"newItemIds\":[42]," +
+        "\"discoveredRelicIds\":[\"GHOST_VECTOR\",\"MASS_ECHO\"],\"newRelicIds\":[\"MASS_ECHO\"]}"
+
+/** Byte-exact save of the retired catalog generation, produced before Color vision existed. */
+private const val LEGACY_REPRESENTATIVE_GOLDEN: String =
     "{\"revision\":\"2718\",\"profile\":{" +
         "\"preferences\":{\"soundEnabled\":false,\"musicEnabled\":true,\"masterVolumePercent\":37," +
         "\"simulationSpeedPercent\":135,\"textScalePercent\":150,\"screenShake\":false," +
@@ -533,3 +807,15 @@ private const val REPRESENTATIVE_GOLDEN: String =
         "\"rebirthProgress\":{\"level\":4,\"highestCleared\":3}," +
         "\"characterAchievements\":{\"eliteKills\":\"12\",\"dashHits\":\"340\",\"completedOrbits\":\"5\"," +
         "\"architectVictories\":\"2\",\"victoriousCharacterIds\":[\"ORB\",\"RING\"]}}}"
+
+/** Every Relic name of the retired 40-Relic catalog, sorted as that codec wrote them. */
+private val RETIRED_RELIC_IDS: List<String> = listOf(
+    "AGONY_SCEPTER", "BORROWED_MOMENT", "BRAKEPOINT_MEMORY", "CHROMA_FEEDBACK", "CIRCUIT_BREAKER",
+    "CROWN_OF_FOUR_WINDS", "CRUSH_DEPTH", "DEVOURERS_TOLL", "DOOM_CLOCK", "ECHO_CHAMBER",
+    "ENGINE_OF_PARADOX", "EVENTIDE_ANCHOR", "FRACTURE_GATE", "FRACTURE_LENS", "GHOST_VECTOR",
+    "GLASS_WITNESS", "HARDLIGHT_EDGE", "HEAT_DEBT", "ION_DEBT", "KINETIC_FLYWHEEL",
+    "LAST_LIGHT", "MASS_ECHO", "MIRROR_CUT", "MIRROR_OF_THE_HUNT", "ORBITAL_NAIL",
+    "OVERTAKE_PROTOCOL", "PALIMPSEST_ROUND", "PERIAPSIS_HOOK", "POLARITY_SLING", "QUIETUS_BLOOM",
+    "RETURN_CIRCUIT", "SCAR_TISSUE", "SECOND_HAND", "SLIPSTREAM_RELAY", "SPECTRAL_FAN",
+    "SPLIT_HORIZON", "STATIC_CHORUS", "STORM_INDEX", "TIDAL_LOCK", "VOLTAIC_FILAMENT",
+)

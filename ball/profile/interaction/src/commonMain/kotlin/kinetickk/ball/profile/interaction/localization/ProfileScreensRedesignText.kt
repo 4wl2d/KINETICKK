@@ -65,4 +65,15 @@ internal enum class ProfileScreensRedesignText(
     ),
     RebirthMaximum("Every Rebirth tier is cleared.", "Все ступени перерождения пройдены."),
     AdvanceLabel("Rebirth", "Перерождение"),
+    BuildUnlocks("Build unlocks", "Новое для сборки"),
+    RebornCards("Reborn cards", "Перерождённые карты"),
+    PercentValue("{0}%", "{0}%"),
+    UnlockRelic("Relic", "Реликвия"),
+    UnlockItem("Item", "Предмет"),
+    Heirlooms("Heirlooms", "Наследие"),
+    RebirthBuildInfo(
+        "Reborn cards are stronger copies of items, and their tags count twice. Relics bound when the Architect falls become Heirlooms: from tier 1 on, the next run opens with a choice of them.",
+        "Перерождённые карты сильнее обычных предметов, а их метки считаются дважды. Реликвии, привязанные при победе над Архитектором, становятся наследием: со ступени 1 следующий забег начинается с выбора из них.",
+    ),
+    BuildSummary("{0}. {1} {2}, next {3}.", "{0}. {1} {2}, далее {3}."),
 }

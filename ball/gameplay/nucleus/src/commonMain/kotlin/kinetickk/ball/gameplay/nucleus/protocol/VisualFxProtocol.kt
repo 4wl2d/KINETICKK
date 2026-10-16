@@ -69,11 +69,29 @@ sealed interface VisualFxCue {
         val colorIndex: Int,
     ) : VisualFxCue
 
+    /** [tone] is 0 for Kinetic damage, otherwise 1 + the status element ordinal. */
     data class DamageNumberAdded(
         val x: Float,
         val y: Float,
         val amount: Long,
         val critical: Boolean,
+        val tone: Int = 0,
+    ) : VisualFxCue
+
+    /** A status Break (Ignite, Freeze, Overload, Collapse, Rupture) at a world point. */
+    data class StatusBroken(
+        val x: Float,
+        val y: Float,
+        val element: Int,
+    ) : VisualFxCue
+
+    /** An elemental reaction at a world point; [firstDiscovery] marks the profile's first occurrence. */
+    data class ReactionTriggered(
+        val x: Float,
+        val y: Float,
+        val reaction: Int,
+        val radius: Float,
+        val firstDiscovery: Boolean,
     ) : VisualFxCue
 
     data class WeaponArcAdded(
@@ -84,7 +102,7 @@ sealed interface VisualFxCue {
         val life: Float,
     ) : VisualFxCue
 
-    /** Preserves the baseline policy: only particles and damage text rebase. */
+    /** Particles, damage text and Break and reaction flashes rebase; shockwaves stay in place. */
     data class WorldRebased(
         val shiftX: Float,
         val shiftY: Float,
@@ -177,6 +195,8 @@ internal class BoundedVisualFxCueAccumulator private constructor(
         is VisualFxCue.DirectionalBurst,
         is VisualFxCue.ShockwaveAdded,
         is VisualFxCue.DamageNumberAdded,
+        is VisualFxCue.StatusBroken,
+        is VisualFxCue.ReactionTriggered,
         is VisualFxCue.WeaponArcAdded,
         -> false
     }

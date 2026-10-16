@@ -234,7 +234,7 @@ class WorldEdgeMarkerSpacingTest {
     fun gameScreenShakeNeverMovesAMarker() {
         // Offers and the totem from 30 px inside the screen edge to 400 px past it (offers spawn
         // 560 px from the Core), the screen shaken the way the renderer shakes it at its strongest
-        // ([MAX_SCREEN_SHAKE_DP] along sin/cos of the run time): marks and markers are decided,
+        // ([screenShakeOffset] at [FULL_SCREEN_SHAKE]): marks and markers are decided,
         // and markers aimed, in the unshaken view, so no mark turns into a marker or back and not
         // one marker moves.
         val failures = ArrayList<String>()
@@ -258,9 +258,9 @@ class WorldEdgeMarkerSpacingTest {
                 if (beyond >= 150f) assertEquals(3, settled.size, "$where: one marker per target")
                 val strength = MAX_SCREEN_SHAKE_DP * density
                 for (frame in 0 until GAME_SHAKE_FRAMES) {
-                    val time = 3f + frame / 60f
+                    val shake = screenShakeOffset(FULL_SCREEN_SHAKE, 3f + frame / 60f, strength)
                     draw(dpWidth, dpHeight, density, language, 1.25f, false, offers, targets[2],
-                        shakeX = sin(time * 91f) * strength, shakeY = cos(time * 77f) * strength)
+                        shakeX = shake.x, shakeY = shake.y)
                     val now = markerCenters()
                     if (now != settled) failures += "$where shaken frame $frame: $settled -> $now"
                     val marks = WorldDrawProbe.rects(WorldDrawn.POINT_MARK).size

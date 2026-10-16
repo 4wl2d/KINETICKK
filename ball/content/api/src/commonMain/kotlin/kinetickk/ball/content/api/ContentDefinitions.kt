@@ -4,6 +4,7 @@
 package kinetickk.ball.content.api
 
 import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 
 enum class ModifierUnit {
@@ -29,7 +30,8 @@ enum class ItemEffect(
     CRIT_CHANCE("Critical chance", ModifierUnit.PERCENT),
     CRIT_DAMAGE("Critical damage", ModifierUnit.PERCENT),
     PICKUP_RADIUS("Pickup radius", ModifierUnit.FLAT),
-    LUCK("Luck", ModifierUnit.PERCENT),
+    /** A plain scalar, not a share: offers, drops and Luck-sensitive every-Nth gates read it directly. */
+    LUCK("Luck", ModifierUnit.FLAT),
     DATA_GAIN("Data gain", ModifierUnit.PERCENT),
     MATTER_GAIN("Matter gain", ModifierUnit.PERCENT),
     ATTACK_SPEED("Attack speed", ModifierUnit.PERCENT),
@@ -61,26 +63,56 @@ data class ItemModifier(
     }
 }
 
+/**
+ * A hand-authored item. Passive [stats] apply per stack; [clauses] are Trigger–Condition–Effect
+ * rules; [rules] modify whole systems while the item is owned. Ids are dense catalog indices.
+ */
 data class ItemDefinition(
     val id: Int,
     val name: String,
+    /** Flavor line; mechanical text is generated from the data below. */
     val description: String,
     val rarity: ItemRarity,
-    val primary: ItemModifier,
-    val secondary: ItemModifier,
+    val tags: ImmutableList<BuildTag>,
+    val elements: ImmutableList<StatusElement> = immutableListOf(),
+    val stats: ImmutableList<StatDelta> = immutableListOf(),
+    val clauses: ImmutableList<EffectClause> = immutableListOf(),
+    val rules: ImmutableList<ItemRule> = immutableListOf(),
     val maxStacks: Int,
     val unlockLevel: Int,
-    val family: String,
+    val minimumRebirth: Int = 0,
+    /** High-risk items carry a liability and feed the Volatile offer lane. */
+    val risk: Boolean = false,
 ) {
     init {
         require(id >= 0) { "Item id must be non-negative" }
         require(name.isNotBlank()) { "Item name must not be blank" }
         require(description.isNotBlank()) { "Item description must not be blank" }
-        require(maxStacks > 0) { "Item maxStacks must be positive" }
+        require(maxStacks in 1..ContentBounds.MAX_ITEM_STACKS) { "Item maxStacks must be within the stack bound" }
         require(unlockLevel > 0) { "Item unlockLevel must be positive" }
-        require(family.isNotBlank()) { "Item family must not be blank" }
+        require(minimumRebirth in ContentBounds.MIN_REBIRTH_LEVEL..ContentBounds.MAX_REBIRTH_LEVEL)
+        require(tags.size <= 2 && tags.toSet().size == tags.size) { "Items carry at most two distinct tags" }
+        require(elements.size <= 2 && elements.toSet().size == elements.size) { "Items carry at most two distinct elements" }
+        require(stats.size <= ContentBounds.MAX_ITEM_STATS)
+        require(clauses.size <= ContentBounds.MAX_ITEM_CLAUSES)
+        require(rules.size <= ContentBounds.MAX_ITEM_RULES)
+        require(stats.isNotEmpty() || clauses.isNotEmpty() || rules.isNotEmpty()) { "Item must do something" }
+        require(!risk || stats.any { it.amount < 0f } || rules.any(ItemRule::isLiability)) {
+            "A high-risk item must declare its liability"
+        }
     }
 }
+
+/** Rules that cost the owner something; risk items must declare at least one. */
+val ItemRule.isLiability: Boolean
+    get() = when (this) {
+        is ItemRule.WhileModifier -> (stat == BuffStat.DAMAGE_TAKEN) == (amount > 0f)
+        is ItemRule.NonCriticalDamage -> amount < 0f
+        is ItemRule.DamageVersus -> amount < 0f
+        is ItemRule.ReactionRecoil -> true
+        is ItemRule.Convert -> kind != ConversionKind.OVERHEAL_TO_SHIELD
+        else -> false
+    }
 
 enum class WeaponId {
     FLUX_WAKE,

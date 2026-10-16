@@ -114,10 +114,29 @@ internal fun RebirthContent(
             val numeralMeasurer = rememberKkCanvasMeasurer(1f)
             val type = rebirthType(frame.mode)
             val backWidth = profileHeaderBackWidth(measurer, frame, language.text(ProfileScreensRedesignText.Back))
-            val layout = rebirthLayout(frame, model.minimumTier, model.maximumTier, model.targetTier, scale, backWidth)
+            // Featured unlock rows size to their descriptions: the first pass gives the build
+            // table's edges, the descriptions measured there give each row's line count.
+            val blurbs = remember(model, language) { model.targetUnlocks.map { rebirthUnlockBlurb(it, language) } }
+            val probe = rebirthLayout(frame, model.minimumTier, model.maximumTier, model.targetTier, scale, backWidth,
+                model.buildRowCount(), model.heirloomRowCount())
+            val unlockLines = rebirthUnlockLines(measurer, frame, type, probe.buildRows.firstOrNull(), blurbs)
+            val layout = if (unlockLines.isEmpty()) probe else {
+                rebirthLayout(frame, model.minimumTier, model.maximumTier, model.targetTier, scale, backWidth,
+                    model.buildRowCount(), model.heirloomRowCount(), unlockLines)
+            }
             SideEffect { holder.layout = layout }
             val viewport = layout.viewport
             val scroll = rememberScrollState()
+            if (layout.heroFixed) {
+                // Landscape phones: the hero column stays in place beside the scrolling tables.
+                Box(Modifier.fillMaxSize().drawBehind {
+                    drawRebirthSection(measurer, numeralMeasurer, frame, type, layout, model, theme, language)
+                    drawRebirthLadderUnlocks(frame, layout, model, theme)
+                }) {
+                    RebirthLadderNode(frame, layout, model, language, Offset.Zero)
+                    RebirthActionRow(frame, type, layout, model, state, scale, language, Offset.Zero, onAction)
+                }
+            }
             Box(
                 Modifier.offset { IntOffset(viewport.left.roundToInt(), viewport.top.roundToInt()) }
                     .size(frame.dp(viewport.width), frame.dp(viewport.height))
@@ -129,24 +148,39 @@ internal fun RebirthContent(
                     Modifier.fillMaxWidth().height(frame.dp(layout.contentHeight))
                         .drawBehind {
                             translate(-viewport.left, -viewport.top) {
-                                drawRebirthSection(measurer, numeralMeasurer, frame, type, layout, model, theme, language)
+                                if (!layout.heroFixed) {
+                                    drawRebirthSection(measurer, numeralMeasurer, frame, type, layout, model, theme, language)
+                                    drawRebirthLadderUnlocks(frame, layout, model, theme)
+                                }
                                 drawRebirthTable(measurer, frame, type, layout, model, theme, language)
+                                drawRebirthBuild(measurer, frame, type, layout, model, theme, language, blurbs, unlockLines)
                             }
                         },
                 ) {
-                    val ladder = layout.ladder
-                    Box(
-                        Modifier.offset { IntOffset((ladder.left - viewport.left).roundToInt(), (ladder.top - viewport.top).roundToInt()) }
-                            .size(frame.dp(ladder.width), frame.dp(ladder.height))
-                            .testTag("profile-rebirth-ladder")
-                            .semantics {
-                                contentDescription = language.text(ProfileScreensRedesignText.TierLadder, model.minimumTier,
-                                    model.maximumTier, model.current.tier)
-                            },
-                    )
-                    if (!layout.actionPinned) {
-                        RebirthActionRow(frame, type, layout, model, state, scale, language, Offset(viewport.left, viewport.top), onAction)
+                    val origin = Offset(viewport.left, viewport.top)
+                    if (!layout.heroFixed) RebirthLadderNode(frame, layout, model, language, origin)
+                    val buildHeader = layout.buildHeader
+                    val buildDescription = rebirthBuildDescription(model, language)
+                    if (buildHeader != null && buildDescription != null) {
+                        val bottom = maxOf(layout.buildRows.lastOrNull()?.bottom ?: buildHeader.bottom,
+                            layout.heirloomRows.lastOrNull()?.bottom ?: 0f)
+                        val right = layout.heirloomLabel?.right?.let { maxOf(it, buildHeader.right) } ?: buildHeader.right
+                        Box(
+                            Modifier.offset {
+                                IntOffset((buildHeader.left - origin.x).roundToInt(), (buildHeader.top - origin.y).roundToInt())
+                            }
+                                .size(frame.dp(right - buildHeader.left), frame.dp(bottom - buildHeader.top))
+                                .testTag("profile-rebirth-build")
+                                .semantics { contentDescription = buildDescription },
+                        )
+                        // The build (!) beside the table's title: how Reborn cards and Heirlooms work.
+                        val info = rebirthBuildInfoRect(frame, buildHeader, rebirthBuildTitle(measurer, frame, type, buildHeader, language))
+                        Box(Modifier.offset { IntOffset((info.left - origin.x).roundToInt(), (info.top - origin.y).roundToInt()) }) {
+                            KkInfoButton(rebirthBuildInfoText(language), Modifier.testTag("profile-rebirth-build-info"),
+                                placement = KkTooltipPlacement.ABOVE_START, textScale = scale)
+                        }
                     }
+                    if (layout.actionScrolls) RebirthActionRow(frame, type, layout, model, state, scale, language, origin, onAction)
                 }
             }
             if (layout.actionPinned) {
@@ -173,6 +207,21 @@ internal fun RebirthContent(
         }
       }
     }
+}
+
+/** The ladder's semantics node (its tiers read aloud); [origin] is the parent's screen position. */
+@Composable
+private fun RebirthLadderNode(frame: ProfileFrame, layout: RebirthLayout, model: RebirthRenderModel, language: AppLanguage, origin: Offset) {
+    val ladder = layout.ladder
+    Box(
+        Modifier.offset { IntOffset((ladder.left - origin.x).roundToInt(), (ladder.top - origin.y).roundToInt()) }
+            .size(frame.dp(ladder.width), frame.dp(ladder.height))
+            .testTag("profile-rebirth-ladder")
+            .semantics {
+                contentDescription = language.text(ProfileScreensRedesignText.TierLadder, model.minimumTier,
+                    model.maximumTier, model.current.tier)
+            },
+    )
 }
 
 /** Advance (or Confirm/Locked/Max) with its (!) info; [origin] is the parent's screen position. */
@@ -239,7 +288,11 @@ internal fun RebirthAdvanceOverlay(progress: Float, theme: RebirthTheme, tier: S
 /** Strike-through thickness for the "from" numeral: the board's 8 px on a 52 px (58 × 0.9) box. */
 internal fun rebirthStrikeThickness(numeralBoxHeight: Float): Float = numeralBoxHeight * (8f / 52.2f)
 
-/** The (!) text: what the game keeps, preceded by why Advance is unavailable. */
+/**
+ * The Advance (!) text: what the game keeps, preceded by why Advance is unavailable. How Reborn
+ * cards and Heirlooms work sits behind the build table's own (!) ([rebirthBuildInfoText]), so
+ * each tooltip stays whole at the largest text size.
+ */
 internal fun rebirthInfoText(model: RebirthRenderModel, state: RebirthActionState, language: AppLanguage): String {
     val keeps = language.text(ProfileScreensRedesignText.RebirthKeeps)
     return when (state) {
@@ -421,7 +474,8 @@ private fun DrawScope.drawRebirthTable(
     }
 }
 
-private fun DrawScope.drawRebirthRow(
+/** One comparison row; [inset] moves the label right of a leading mark. */
+internal fun DrawScope.drawRebirthRow(
     measurer: CanvasTextMeasurer,
     frame: ProfileFrame,
     type: RebirthType,
@@ -429,20 +483,22 @@ private fun DrawScope.drawRebirthRow(
     column: Float,
     row: RebirthRow,
     nextColor: Color,
+    inset: Float = 0f,
+    role: String = "rebirth.row",
 ) {
     val k = frame.k
     val cy = rect.center.y
-    val label = fitKkText(measurer, row.label, type.body * k, rect.width - column * 2f - frame.d(8f), uppercase = false,
+    val label = fitKkText(measurer, row.label, type.body * k, rect.width - inset - column * 2f - frame.d(8f), uppercase = false,
         minFactor = 0.55f) { measurer.typography.bodyStyle(it) }
-    drawProfileText(label, rect.left, cy, Kk.Bone, "rebirth.row.label", valign = KkVAlign.CENTER)
+    drawProfileText(label, rect.left + inset, cy, Kk.Bone, "$role.label", valign = KkVAlign.CENTER)
     val current = fitKkText(measurer, row.current, type.mono * k, column - frame.d(6f), minFactor = 0.6f) {
         measurer.typography.monoStyle(it)
     }
-    drawProfileText(current, rect.right - column, cy, Kk.Mute, "rebirth.row.value", align = KkAlign.END, valign = KkVAlign.CENTER)
+    drawProfileText(current, rect.right - column, cy, Kk.Mute, "$role.value", align = KkAlign.END, valign = KkVAlign.CENTER)
     val next = fitKkText(measurer, row.next, type.mono * k, column - frame.d(6f), minFactor = 0.6f) {
         measurer.typography.monoStyle(it, weight = FontWeight.Bold)
     }
-    drawProfileText(next, rect.right, cy, nextColor, "rebirth.row.value", align = KkAlign.END, valign = KkVAlign.CENTER)
+    drawProfileText(next, rect.right, cy, nextColor, "$role.value", align = KkAlign.END, valign = KkVAlign.CENTER)
     drawLine(Kk.Line, Offset(rect.left, rect.bottom), Offset(rect.right, rect.bottom), frame.density)
 }
 

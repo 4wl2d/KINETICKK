@@ -67,14 +67,6 @@ internal enum class SessionText : TextResource {
     EMPTY_RELIC_HELP,
     RELIC_SLOT,
     EMPTY,
-    SYNERGY_REQUIREMENT,
-    SYNERGY_ASPECT_PAIR,
-    REQUIRES,
-    MISSING,
-    COMBINATION,
-    ACTIVE,
-    NO_RUN_INACTIVE,
-    INACTIVE,
     ITEMS_TITLE,
     WEAPONS_TITLE,
     RELICS_TITLE,
@@ -86,10 +78,8 @@ internal enum class SessionText : TextResource {
     ITEMS,
     CHARACTER_SOURCE,
     LAB_SOURCE,
-    SYNERGIES_SOURCE,
     MASTERY_SOURCE,
     TEMPORARY_SOURCE,
-    SYNERGY_HELP,
     STACK_QUANTITY,
     NO_RUN,
     NO_RUN_HELP,
@@ -99,7 +89,6 @@ internal enum class SessionText : TextResource {
     EMPTY_INVENTORY_HELP,
     TAB_BUILD,
     TAB_CATALOG,
-    TAB_SYNERGIES,
     ;
 
     override val english: String get() = englishSessionText(this)

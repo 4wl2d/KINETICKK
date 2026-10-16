@@ -118,14 +118,13 @@ class CosmicPresentationTest {
     }
 
     @Test
-    fun damageNumberTiersAreBoneYouHeatThreatAndGrow() {
-        assertEquals(
-            listOf(Kk.Bone, remapped.you, remapped.heat, remapped.threat),
-            DamageNumberTier.entries.map { damageNumberColor(it, remapped) },
-        )
-        val scales = DamageNumberTier.entries.map(::damageNumberScale)
-        assertEquals(scales.sorted(), scales)
-        assertEquals(scales.size, scales.toSet().size)
+    fun damageNumbersTakeTheirElementHueAndGrowByTier() {
+        // Hue means element: Kinetic hits read in the preset's volt (movement is your weapon), status
+        // damage in its element's color vision hue.
+        assertEquals(remapped.you, damageNumberColor(0, remapped))
+        assertEquals(KkRolePalette.Protan.you, damageNumberColor(0, KkRolePalette.Protan))
+        (1..5).forEach { tone -> assertEquals(remapped.element(tone - 1), damageNumberColor(tone, remapped)) }
+        assertEquals(listOf(1f, 1.2f, 1.45f, 1.8f), DamageNumberTier.entries.map(::damageNumberScale))
         assertEquals(0.4f, damageNumberPop(0f, 0f), 0.001f)
         assertEquals(1.25f, damageNumberPop(90f, 0.15f), 0.01f)
         assertEquals(1f, damageNumberPop(300f, 0.5f), 0.001f)
@@ -139,11 +138,20 @@ class CosmicPresentationTest {
     }
 
     @Test
-    fun ramImpactInvertsOnlyTheImpactFrame() {
-        assertTrue(isRamImpactFrame(0.72f))
-        assertTrue(isRamImpactFrame(0.72f - 1f / 120f))
-        assertFalse(isRamImpactFrame(0.72f - 0.02f))
-        assertFalse(isRamImpactFrame(0f))
+    fun screenShakeKicksOnlyOnHardHitsAndNeverPassesItsCap() {
+        // A dash or a light hit leaves the simulation's shake at 5; the hardest ram at 15.
+        var dashPeak = 0f
+        var ramPeak = 0f
+        for (frame in 0 until 600) {
+            val time = frame / 60f
+            val dash = screenShakeOffset(5f, time, MAX_SCREEN_SHAKE_DP)
+            val ram = screenShakeOffset(FULL_SCREEN_SHAKE, time, MAX_SCREEN_SHAKE_DP)
+            dashPeak = maxOf(dashPeak, kotlin.math.abs(dash.x), kotlin.math.abs(dash.y))
+            ramPeak = maxOf(ramPeak, kotlin.math.abs(ram.x), kotlin.math.abs(ram.y))
+        }
+        assertTrue(dashPeak < 1f, "a dash barely nudges the frame ($dashPeak dp)")
+        assertTrue(ramPeak in MAX_SCREEN_SHAKE_DP * 0.8f..MAX_SCREEN_SHAKE_DP, "the hardest ram kicks up to the cap ($ramPeak dp)")
+        assertEquals(Offset.Zero, screenShakeOffset(0f, 2f, MAX_SCREEN_SHAKE_DP))
     }
 
     @Test

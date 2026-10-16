@@ -18,8 +18,8 @@ class PendingOutputBufferIsolationTest {
         val source = MutableGameState(canonicalGameplayContent, seed = 9001)
         val retained = source.toRenderModel()
         val candidate = source.copyForReduction()
-        val first = kinetickk.ball.content.api.RelicId.KINETIC_FLYWHEEL
-        val second = kinetickk.ball.content.api.RelicId.GHOST_VECTOR
+        val first = kinetickk.ball.content.api.RelicId.PERPETUAL_VECTOR
+        val second = kinetickk.ball.content.api.RelicId.BLINK_DRIVE
         candidate.acquireRelic(first)
         assertTrue(candidate.toRenderModel().isRelicDiscovered(first))
         assertFalse(retained.isRelicDiscovered(first))

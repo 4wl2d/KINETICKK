@@ -10,6 +10,7 @@ import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.simulation.*
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.test.Test
 
@@ -17,18 +18,18 @@ class RelicSystemTest {
     @Test
     fun startingANewRunClearsTheRunRelicMatrix() {
         val engine = runningEngine(seed = 200)
-        engine.acquireRelicForTesting(RelicId.KINETIC_FLYWHEEL)
-        engine.acquireRelicForTesting(RelicId.KINETIC_FLYWHEEL)
-        assertEquals(listOf(EquippedRelic(RelicId.KINETIC_FLYWHEEL, 2)), engine.equippedRelics)
+        engine.acquireRelicForTesting(RelicId.PERPETUAL_VECTOR)
+        engine.acquireRelicForTesting(RelicId.PERPETUAL_VECTOR)
+        assertEquals(listOf(EquippedRelic(RelicId.PERPETUAL_VECTOR, 2)), engine.equippedRelics)
 
         engine.startRun()
 
         assertTrue(engine.equippedRelics.isEmpty())
-        assertEquals(0, engine.relicRank(RelicId.KINETIC_FLYWHEEL))
+        assertEquals(0, engine.relicRank(RelicId.PERPETUAL_VECTOR))
     }
 
     @Test
-    fun relicMatrixStopsAtFourSlotsAndDuplicateRanksStopAtFive() {
+    fun relicMatrixStopsAtFourSlotsAndDuplicateRanksStopAtThree() {
         val engine = runningEngine(seed = 201)
         val installed = RelicId.entries.take(engine.content.relicPolicy.maxSlots)
         installed.forEach(engine::acquireRelicForTesting)
@@ -47,26 +48,32 @@ class RelicSystemTest {
         assertEquals(1, engine.equippedRelics.count { it.id == duplicate })
     }
 
+    /** Generic Meld stops at rank 2; rank 3 needs the relic itself offered again. */
     @Test
-    fun meldRelicAcceptsRankFiveAndSalvagesTheFirstRankSixCandidate() {
+    fun meldRaisesToRankTwoSalvagesBeyondItAndDuplicatesReachRankThree() {
         val engine = runningEngine(seed = 202)
-        val relic = RelicId.KINETIC_FLYWHEEL
+        val relic = RelicId.PERPETUAL_VECTOR
+        val meldCeiling = 2
         engine.acquireRelicForTesting(relic)
-        repeat(engine.content.relicPolicy.maxRank - 2) {
-            engine.meldRelic(slot = 0)
-        }
 
         engine.meldRelic(slot = 0)
 
-        assertEquals(engine.content.relicPolicy.maxRank, engine.relicRank(relic))
+        assertEquals(meldCeiling, engine.relicRank(relic))
+        assertFalse(engine.canMeld(relic))
         val exactRankState = engine.equippedRelics
         val matterBeforeOverflow = engine.runMatter
 
         engine.meldRelic(slot = 0)
 
         assertEquals(exactRankState, engine.equippedRelics)
-        assertEquals(engine.content.relicPolicy.maxRank, engine.relicRank(relic))
+        assertEquals(meldCeiling, engine.relicRank(relic))
         assertEquals(matterBeforeOverflow + 8L, engine.runMatter)
+
+        // The relic itself offered again still reaches the policy rank, never beyond it.
+        engine.acquireRelicForTesting(relic)
+        assertEquals(engine.content.relicPolicy.maxRank, engine.relicRank(relic))
+        engine.acquireRelicForTesting(relic)
+        assertEquals(engine.content.relicPolicy.maxRank, engine.relicRank(relic))
     }
 
     @Test
@@ -129,14 +136,14 @@ class RelicSystemTest {
     @Test
     fun relicRanksRemainBoundWhenTheRunWeaponChanges() {
         val engine = runningEngine(seed = 204)
-        repeat(3) { engine.acquireRelicForTesting(RelicId.VOLTAIC_FILAMENT) }
+        repeat(3) { engine.acquireRelicForTesting(RelicId.GYRE_ENGINE) }
         repeat(2) { engine.acquireRelicForTesting(RelicId.ECHO_CHAMBER) }
         val beforeSwap = engine.equippedRelics
 
         WeaponId.entries.drop(1).forEach { weapon ->
             engine.equipWeaponForTesting(weapon)
             assertEquals(beforeSwap, engine.equippedRelics, "Relics changed while equipping $weapon")
-            assertEquals(3, engine.relicRank(RelicId.VOLTAIC_FILAMENT))
+            assertEquals(3, engine.relicRank(RelicId.GYRE_ENGINE))
             assertEquals(2, engine.relicRank(RelicId.ECHO_CHAMBER))
         }
     }
@@ -158,7 +165,7 @@ class RelicSystemTest {
     fun lethalCoreImpactQualifiesForOnDeathRelics() {
         val engine = runningEngine(seed = 211)
         engine.enemies.clear()
-        engine.acquireRelicForTesting(RelicId.EVENTIDE_ANCHOR)
+        engine.acquireRelicForTesting(RelicId.GLASS_COMET)
         engine.updatePointer(1_280f, 360f)
         engine.addEnemyForTesting(x = 100f, y = 0f, hp = 1f, radius = 12f)
         engine.setVelocityForTesting(24_000f, 0f)
@@ -166,7 +173,9 @@ class RelicSystemTest {
         engine.update(GameScenario.FIXED_STEP)
 
         assertEquals(1, engine.kills)
-        assertEquals(1, engine.relicProcCountForTesting(RelicId.EVENTIDE_ANCHOR))
+        // A fast impact kill is the Glass Comet's invulnerability edge, and it starts its cooldown.
+        assertTrue(engine.invulnerableUntil > engine.elapsed)
+        assertEquals(engine.elapsed + GLASS_INVULNERABILITY_COOLDOWN, engine.glassInvulnerabilityReadyAt, 0.0001f)
     }
 
     @Test
@@ -253,10 +262,8 @@ class RelicSystemTest {
         val engine = runningEngine(seed = 360)
         engine.enemies.clear()
         engine.equipWeaponForTesting(WeaponId.GRAVITY_MINES)
-        engine.acquireRelicForTesting(RelicId.VOLTAIC_FILAMENT)
         engine.acquireRelicForTesting(RelicId.ECHO_CHAMBER)
         val primary = engine.addEnemyForTesting(90f, 0f, hp = 100_000f)
-        val chained = engine.addEnemyForTesting(145f, 0f, hp = 100_000f)
 
         repeat(100) {
             val damage = engine.triggerWeaponContactForTesting(primary, continuous = true)
@@ -265,16 +272,16 @@ class RelicSystemTest {
 
         assertEquals(
             1,
-            engine.relicProcCountForTesting(RelicId.VOLTAIC_FILAMENT),
-            "A continuous contact stream bypassed the Relic qualification gate or recursively retriggered",
-        )
-        assertEquals(
-            1,
-            engine.delayedRelicHitCountForTesting(),
+            engine.echoHitCountForTesting(),
             "Continuous contacts queued more than one Echo Chamber hit inside a qualification window",
         )
-        assertTrue(chained.hp < chained.maxHp, "The one qualified filament did not reach its secondary target")
-        assertTrue(chained.hp.isFinite())
+
+        // The echo lands once and never queues an echo of itself.
+        val hpBeforeEcho = primary.hp
+        repeat(60) { engine.updateRelicRuntime(GameScenario.FIXED_STEP) }
+        assertTrue(primary.hp < hpBeforeEcho, "The queued echo never landed")
+        assertEquals(0, engine.echoHitCountForTesting())
+        assertTrue(primary.hp.isFinite())
     }
 
     @Test
@@ -333,8 +340,7 @@ class RelicSystemTest {
         engine.enemies.forEach { enemy ->
             val values = listOf(enemy.x, enemy.y, enemy.vx, enemy.vy, enemy.hp, enemy.flash)
             assertTrue(values.all(Float::isFinite), "$relicId produced non-finite enemy state: $values")
-            assertTrue(enemy.relicTimers.all(Float::isFinite), "$relicId produced a non-finite enemy timer")
-            assertTrue(enemy.relicValues.all(Float::isFinite), "$relicId produced a non-finite enemy value")
+            assertTrue((0 until StatusCell.COUNT).all { enemy.status[it].isFinite() }, "$relicId produced a non-finite status cell")
         }
         engine.projectiles.forEach { projectile ->
             val values = listOf(projectile.x, projectile.y, projectile.vx, projectile.vy, projectile.life, projectile.damage)

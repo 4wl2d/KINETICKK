@@ -5,14 +5,17 @@ package kinetickk.flow.session.interaction
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.CoreShapeDefinition
+import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
-import kinetickk.ball.content.api.ItemModifier
 import kinetickk.ball.content.api.ItemRarity
+import kinetickk.ball.content.api.StatDelta
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 
 internal val TestCoreShapes: ImmutableList<CoreShapeDefinition> =
@@ -32,17 +35,21 @@ internal val TestRebirthPolicy: RebirthPolicySnapshot = RebirthPolicySnapshot(
     minEliteIntervalSeconds = 24f,
 )
 
-internal fun testItems(count: Int = 400): ImmutableList<ItemDefinition> =
+/** The shipped catalog's size; codex fixtures default to it. */
+internal const val TEST_ITEM_COUNT = 80
+
+/** Plain test items: one tag each, every fourth with an element, one passive stat. */
+internal fun testItems(count: Int = TEST_ITEM_COUNT): ImmutableList<ItemDefinition> =
     (0 until count).map { id ->
         ItemDefinition(
             id = id,
             name = "Item $id",
             description = "Test item $id",
             rarity = ItemRarity.COMMON,
-            primary = ItemModifier(ItemEffect.IMPACT_DAMAGE, 1f),
-            secondary = ItemModifier(ItemEffect.WEAPON_POWER, 1f),
+            tags = immutableListOf(BuildTag.entries[id % BuildTag.entries.size]),
+            elements = if (id % 4 == 0) immutableListOf(StatusElement.entries[(id / 4) % StatusElement.entries.size]) else immutableListOf(),
+            stats = immutableListOf(StatDelta(ItemEffect.IMPACT_DAMAGE, 0.1f)),
             maxStacks = 1,
             unlockLevel = 1,
-            family = "Test",
         )
     }.toImmutableList()

@@ -33,7 +33,7 @@ enum class EnemyType {
 enum class PickupType { DATA, KEY, REPAIR, RELIC }
 enum class ChoiceType { ITEM, TOTEM, WEAPON, RELIC, RELIC_BIND }
 enum class TotemAction { AMPLIFY_CURRENT, CHANGE_WEAPON }
-enum class RelicChoiceAction { ACQUIRE, MELD, REPLACE, MELD_TARGET }
+enum class RelicChoiceAction { ACQUIRE, MELD, REPLACE, MELD_TARGET, DECLINE }
 enum class WeaponNodeType { GRAVITY_MINE }
 
 data class ChoiceOption(
@@ -48,6 +48,10 @@ data class ChoiceOption(
     val relicAction: RelicChoiceAction? = null,
     val relicSlot: Int? = null,
     val rewardFocus: kinetickk.ball.content.api.RewardFocus? = null,
+    /** Reborn cards are stronger and count double for resonance; rolled when the offer was built. */
+    val reborn: Boolean = false,
+    /** Part of the run-opening Heirloom offer. */
+    val heirloom: Boolean = false,
 )
 
 data class CharacterLatticePoint(val x: Float, val y: Float)
@@ -90,6 +94,10 @@ data class EnemyProjection(
     val previousX: Float,
     val previousY: Float,
     val dead: Boolean,
+    /** Five 4-bit stack counts in StatusElement order, then frozen, brittle, embrittled and primed flags. */
+    val statusBits: Int = 0,
+    /** Aspect, weakness, frame and Architect shift state; decode with [EnemyAffinity]. */
+    val affinityBits: Int = 0,
 )
 
 data class ProjectileProjection(
@@ -233,6 +241,9 @@ class GameplayRenderModel(
     val effectiveWeaponPower: Float = weaponPower,
     val rewardPreviews: ImmutableList<RewardPreview> = kinetickk.foundation.collections.immutableListOf(),
     internal val discoveredRelicMask: Long = 0L,
+    val build: BuildProjection = BuildProjection(),
+    internal val discoveredReactionMask: Int = 0,
+    internal val discoveredPairingMask: Int = 0,
 ) {
     val speed: Float get() = vectorLength(velocityX, velocityY)
     val runProgress: Float get() = content.tempo.progress(elapsed)
@@ -255,6 +266,8 @@ class GameplayRenderModel(
     val discoveredItemCount: Int get() = discoveredItemIds.size
     fun isItemDiscovered(id: Int): Boolean = id in discoveredItemIds
     fun isRelicDiscovered(id: kinetickk.ball.content.api.RelicId): Boolean = discoveredRelicMask and (1L shl id.ordinal) != 0L
+    fun isReactionDiscovered(id: kinetickk.ball.content.api.ReactionId): Boolean = discoveredReactionMask and (1 shl id.ordinal) != 0
+    fun isPairingDiscovered(id: kinetickk.ball.content.api.RelicPairingId): Boolean = discoveredPairingMask and (1 shl id.ordinal) != 0
     val currentWeaponDefinition: WeaponDefinition get() = content.weapon(weapon)
     val currentWeaponMastery: WeaponMastery get() = content.weaponMasteryForLevel(weaponLevel)
     val nextWeaponMastery: WeaponMastery? get() = content.weaponMasteryAfter(weaponLevel)

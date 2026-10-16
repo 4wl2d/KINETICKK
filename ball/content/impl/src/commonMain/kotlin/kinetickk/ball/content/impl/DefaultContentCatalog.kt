@@ -3,6 +3,7 @@
 
 package kinetickk.ball.content.impl
 
+import kinetickk.ball.content.api.BuildCatalog
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.ContentCatalog
 import kinetickk.ball.content.api.ContentVersion
@@ -24,6 +25,8 @@ import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
+import kinetickk.ball.content.api.RunTempoProfile
+import kinetickk.ball.content.api.defaultBuildCatalog
 import kinetickk.foundation.collections.toImmutableList
 
 /** Creates the query-only Content authority that application composition owns for its lifetime. */
@@ -43,8 +46,8 @@ internal data class ContentBootstrapData(
     val maxActiveEnemies: Int,
     val minSpawnIntervalSeconds: Float,
     val minEliteIntervalSeconds: Float,
-    val tempo: kinetickk.ball.content.api.RunTempoProfile = kinetickk.ball.content.api.RunTempoProfile(),
-    val synergies: List<kinetickk.ball.content.api.SynergyDefinition> = kinetickk.ball.content.api.defaultSynergyDefinitions(),
+    val tempo: RunTempoProfile = RunTempoProfile(),
+    val build: BuildCatalog = defaultBuildCatalog(),
 )
 
 internal fun defaultContentBootstrapData(): ContentBootstrapData = ContentBootstrapData(
@@ -56,7 +59,7 @@ internal fun defaultContentBootstrapData(): ContentBootstrapData = ContentBootst
     relics = defaultRelics(),
     coreShapes = defaultCoreShapeDefinitions(),
     rebirthProfiles = defaultRebirthProfiles(),
-    relicPolicy = RelicPolicy(maxSlots = 4, maxRank = 5),
+    relicPolicy = RelicPolicy(maxSlots = 4, maxRank = 3),
     maxActiveEnemies = DEFAULT_MAX_ACTIVE_ENEMIES,
     minSpawnIntervalSeconds = DEFAULT_MIN_SPAWN_INTERVAL_SECONDS,
     minEliteIntervalSeconds = DEFAULT_MIN_ELITE_INTERVAL_SECONDS,
@@ -78,7 +81,6 @@ private class DefaultContentCatalog(data: ContentBootstrapData) : ContentCatalog
     private val metaUpgrades = data.metaUpgrades.toImmutableList()
     private val relics = data.relics.toImmutableList()
     private val coreShapes = data.coreShapes.toImmutableList()
-    private val synergies = data.synergies.toImmutableList()
     private val rebirthProfiles = data.rebirthProfiles.toImmutableList()
 
     private val rebirth = RebirthPolicySnapshot(
@@ -109,7 +111,7 @@ private class DefaultContentCatalog(data: ContentBootstrapData) : ContentCatalog
         rebirth = rebirth,
         relicPolicy = data.relicPolicy,
         tempo = data.tempo,
-        synergies = synergies,
+        build = data.build,
         coreShapes = coreShapes,
     )
 
@@ -124,7 +126,7 @@ private class DefaultContentCatalog(data: ContentBootstrapData) : ContentCatalog
         rebirth = rebirth,
         relicPolicy = data.relicPolicy,
         tempo = data.tempo,
-        synergies = synergies,
+        build = data.build,
     )
 
     override fun profilePolicy(): ProfilePolicySnapshot = profilePolicy
@@ -163,11 +165,11 @@ private fun validateBootstrap(data: ContentBootstrapData) {
         "Relic ids must match the stable RelicId order"
     }
 
-    requireBound("synergies", data.synergies.size, 12)
-    requireUniqueIds("synergy", data.synergies.map { it.id })
-    require(data.synergies.map { it.id } == kinetickk.ball.content.api.SynergyId.entries.toList()) {
-        "Synergy ids must match the stable SynergyId order"
-    }
+    validatePairings(data.relics, data.build)
+    require(data.build.pairings.all { pairing ->
+        data.relics.any { it.id == pairing.first } && data.relics.any { it.id == pairing.second }
+    }) { "Pairings must join catalog Relics" }
+    validateBuildReferences(data.items, data.build)
 
     requireUniqueIds("core-shape", data.coreShapes.map(CoreShapeDefinition::id))
     require(data.coreShapes.map(CoreShapeDefinition::id) == CoreShape.entries.toList()) {

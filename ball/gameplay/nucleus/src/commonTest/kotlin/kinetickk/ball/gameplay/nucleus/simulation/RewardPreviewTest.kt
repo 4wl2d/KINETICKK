@@ -3,8 +3,10 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.content.api.ItemEffect
+import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
@@ -12,7 +14,7 @@ import kotlin.test.*
 
 class RewardPreviewTest {
     @Test
-    fun everyArtifactForecastMatchesSelectionIncludingCapsAndThirdFamilyBonus() {
+    fun everyItemForecastMatchesSelectionIncludingCapsAndStackMagnitude() {
         for (item in canonicalGameplayContent.items) {
             val state = engine().apply {
                 acquireItem(item.id)
@@ -33,12 +35,41 @@ class RewardPreviewTest {
                     assertNotNull(forecast, "${item.name}: ${old.name}")
                     assertEquals(old.value, forecast.before)
                     assertEquals(new.value, forecast.after)
-                } else assertNull(forecast)
+                } else assertNull(forecast, "${item.name}: ${old.name}")
             }
-            assertTrue(preview.changes.any { it.name == "Weapon power" }, "Third family copy must include resonance")
             assertEquals(before, state.buildStats(), "Read must preserve accepted stats")
-            assertEquals(2, state.itemStack(item.id))
+            assertEquals(minOf(2, item.maxStacks), state.itemStack(item.id))
         }
+    }
+
+    @Test
+    fun forecastsNameSuppressionFirstThenReactionsTiersAndAffinity() {
+        val state = engine()
+        val igniter = state.content.items.single { it.name == "Igniter" }
+        val rime = state.content.items.single { it.name == "Rime Rounds" }
+        val nanite = state.content.items.single { it.name == "Nanite Mesh" }
+        state.acquireItem(igniter.id)
+        state.offer(ChoiceOption(ChoiceType.ITEM, rime.name, rime.description, "", itemId = rime.id))
+        val reaction = state.rewardPreviews().single().forecasts
+        assertEquals(ForecastKind.REACTION, reaction.first().kind)
+        assertEquals(ReactionId.THERMAL_SHOCK, reaction.first().reaction)
+        assertFalse(reaction.first().discovered, "An unseen reaction stays a question for the card")
+        assertTrue(reaction.any { it.kind == ForecastKind.AFFINITY && it.element == StatusElement.CRYO && it.before == 0 && it.after == 1 })
+
+        state.discoveredReactionMask = 1 shl ReactionId.THERMAL_SHOCK.ordinal
+        assertTrue(state.rewardPreviews().single().forecasts.first().discovered)
+
+        val ram = state.content.items.filter { BuildTag.RAM in it.tags }.take(3)
+        state.acquireItem(ram[0].id)
+        state.acquireItem(ram[1].id)
+        state.offer(ChoiceOption(ChoiceType.ITEM, ram[2].name, "", "", itemId = ram[2].id))
+        val tier = state.rewardPreviews().single().forecasts.single { it.kind == ForecastKind.TAG_TIER && it.tag == BuildTag.RAM }
+        assertEquals(0, tier.before)
+        assertEquals(1, tier.after)
+
+        state.acquireRelic(RelicId.VERDANT_ROT)
+        state.offer(ChoiceOption(ChoiceType.ITEM, nanite.name, "", "", itemId = nanite.id))
+        assertEquals(ForecastKind.SUPPRESSED, state.rewardPreviews().single().forecasts.first().kind)
     }
 
     @Test
@@ -99,38 +130,43 @@ class RewardPreviewTest {
     @Test
     fun fullMatrixWaitsForSlotAndReplacementShowsLostSynergyAndEffects() {
         val state = engine().apply {
-            listOf(RelicId.KINETIC_FLYWHEEL, RelicId.GHOST_VECTOR, RelicId.ORBITAL_NAIL, RelicId.VOLTAIC_FILAMENT).forEach(::acquireRelic)
-            offer(ChoiceOption(ChoiceType.RELIC, "New relic", "", "", relicId = RelicId.MASS_ECHO, relicAction = RelicChoiceAction.ACQUIRE))
+            listOf(RelicId.BLINK_DRIVE, RelicId.GYRE_ENGINE, RelicId.GLASS_COMET, RelicId.ECHO_CHAMBER).forEach(::acquireRelic)
+            offer(ChoiceOption(ChoiceType.RELIC, "New relic", "", "", relicId = RelicId.STORMHEART_CAPACITOR, relicAction = RelicChoiceAction.ACQUIRE))
         }
         val pending = state.rewardPreviews().single()
         assertTrue(pending.requiresSlot)
         assertTrue(pending.changes.isEmpty())
-        state.offer(ChoiceOption(ChoiceType.RELIC_BIND, "Replace", "", "", relicId = RelicId.MASS_ECHO,
-            relicSlot = 1, relicAction = RelicChoiceAction.REPLACE))
+        // The links it would form are shown per bound relic before a slot is chosen.
+        assertEquals(
+            listOf(ForecastKind.HARMONY to RelicId.BLINK_DRIVE, ForecastKind.HARMONY to RelicId.GYRE_ENGINE),
+            pending.forecasts.map { it.kind to it.relic },
+        )
+        state.offer(ChoiceOption(ChoiceType.RELIC_BIND, "Replace", "", "", relicId = RelicId.STORMHEART_CAPACITOR,
+            relicSlot = 0, relicAction = RelicChoiceAction.REPLACE))
         val replacement = state.rewardPreviews().single()
         assertFalse(replacement.requiresSlot)
-        assertTrue(replacement.removedSynergies.contains("Vector maneuver"))
-        assertTrue(replacement.addedSynergies.contains("Gravitic grouping"))
-        assertEquals(0f, replacement.changes.single { it.name == "Damage: dash" }.after)
-        assertTrue(replacement.changes.single { it.name == "Damage: current mass" }.after > 0f)
-        assertEquals(RelicId.GHOST_VECTOR, state.equippedRelics[1].id)
+        // Losing Blink Drive loses its heat discount; the new pair harmonizes.
+        val dashHeat = replacement.changes.single { it.name == "Dash heat" }
+        assertTrue(dashHeat.lowerIsBetter)
+        assertTrue(dashHeat.after > dashHeat.before)
+        assertTrue(replacement.forecasts.any { it.kind == ForecastKind.HARMONY && it.relic == RelicId.GYRE_ENGINE })
+        assertEquals(RelicId.BLINK_DRIVE, state.equippedRelics[0].id)
     }
 
     @Test
-    fun relicRankForecastMatchesDashDamageAndMassArtifactUpdatesItsDependentRelic() {
+    fun relicRankForecastMatchesTheRankedRelicStats() {
         val state = engine().apply {
-            acquireRelic(RelicId.GHOST_VECTOR)
-            offer(ChoiceOption(ChoiceType.RELIC, "Ghost", "", "", relicId = RelicId.GHOST_VECTOR, relicAction = RelicChoiceAction.ACQUIRE))
+            acquireRelic(RelicId.NEUTRON_HEART)
+            offer(ChoiceOption(ChoiceType.RELIC, "Neutron", "", "", relicId = RelicId.NEUTRON_HEART, relicAction = RelicChoiceAction.ACQUIRE))
         }
-        val ghost = state.rewardPreviews().single()
-        assertEquals(24f, ghost.changes.single { it.name == "Damage: dash" }.before)
-        assertEquals(48f, ghost.changes.single { it.name == "Damage: dash" }.after)
-        assertEquals(100f, ghost.changes.single { it.name == "Radius: dash" }.after)
-        state.acquireRelic(RelicId.MASS_ECHO)
-        val item = state.content.items.first { it.primary.effect == ItemEffect.MASS }
-        state.offer(ChoiceOption(ChoiceType.ITEM, item.name, "", "", itemId = item.id))
-        val mass = state.rewardPreviews().single().changes.single { it.name == "Damage: current mass" }
-        assertTrue(mass.after > mass.before)
+        val preview = state.rewardPreviews().single()
+        val mass = preview.changes.single { it.name == "Mass" }
+        assertEquals(1.8f, mass.before, 0.0001f)
+        assertEquals(2.1f, mass.after, 0.0001f)
+        val selected = state.copyForReduction().apply { choose(0) }
+        assertEquals(2, selected.relicRank(RelicId.NEUTRON_HEART))
+        assertEquals(selected.buildStats().single { it.name == "Mass" }.value, mass.after)
+        assertEquals(1, state.relicRank(RelicId.NEUTRON_HEART))
     }
 
     @Test

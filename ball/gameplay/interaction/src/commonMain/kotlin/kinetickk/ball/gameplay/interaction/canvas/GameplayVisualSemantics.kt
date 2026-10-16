@@ -8,10 +8,13 @@ import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.DamageNumberTier
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
+import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.foundation.design.Kk
+import kinetickk.foundation.design.KkFillKind
 import kinetickk.foundation.design.KkIcon
 import kinetickk.foundation.design.KkRebirthTiers
 import kinetickk.foundation.design.KkRolePalette
+import kotlin.math.max
 import kotlin.math.sin
 
 /**
@@ -25,20 +28,115 @@ internal fun fxColor(colorIndex: Int, roles: KkRolePalette): Color = when (color
     else -> Kk.Bone
 }
 
-/** Damage number color tiers: bone, you, heat, threat (the threshold setting picks the tier). */
-internal fun damageNumberColor(tier: DamageNumberTier, roles: KkRolePalette): Color = when (tier) {
-    DamageNumberTier.STANDARD -> Kk.Bone
-    DamageNumberTier.STRONG -> roles.you
-    DamageNumberTier.POWERFUL -> roles.heat
-    DamageNumberTier.DEVASTATING -> roles.threat
-}
+/** Damage numbers take the hue of their element (the preset's volt for Kinetic); the tier shows only as size. */
+internal fun damageNumberColor(tone: Int, roles: KkRolePalette): Color = roles.tone(tone)
 
-/** Size of each tier relative to the standard number (22 / 30 / 36 / 44 px at the reference). */
+/** Size of each tier relative to the standard number (steps ×1, ×1.2, ×1.45, ×1.8). */
 internal fun damageNumberScale(tier: DamageNumberTier): Float = when (tier) {
     DamageNumberTier.STANDARD -> 1f
-    DamageNumberTier.STRONG -> 1.36f
-    DamageNumberTier.POWERFUL -> 1.64f
-    DamageNumberTier.DEVASTATING -> 2f
+    DamageNumberTier.STRONG -> 1.2f
+    DamageNumberTier.POWERFUL -> 1.45f
+    DamageNumberTier.DEVASTATING -> 1.8f
+}
+
+/** Status elements in StatusElement order (thermal, cryo, ion, gravitic, entropy). */
+internal const val STATUS_ELEMENT_COUNT = 5
+
+private val ElementFills = arrayOf(KkFillKind.SHIMMER, KkFillKind.LATTICE, KkFillKind.ZIGZAG, KkFillKind.RINGS, KkFillKind.PITTING)
+
+/** The pattern that carries an element's identity without its hue (color vision presets). */
+internal fun elementFill(element: Int): KkFillKind = ElementFills[element.coerceIn(0, STATUS_ELEMENT_COUNT - 1)]
+
+/** The element's glyph (`icons.json aspects.*`, Kinetic and Sovereign excluded). */
+internal fun elementIcon(element: Int): KkIcon = KkIcon.Elements[element.coerceIn(0, STATUS_ELEMENT_COUNT - 1)]
+
+/**
+ * Reader of [kinetickk.ball.gameplay.nucleus.render.EnemyProjection.statusBits]: five 4-bit stack
+ * counts in element order, then the Frozen, Brittle, Embrittled and primed flags. Pure bit work,
+ * no allocation.
+ */
+internal object EnemyStatusBits {
+    const val FROZEN = 1 shl 20
+    const val BRITTLE = 1 shl 21
+    const val EMBRITTLED = 1 shl 22
+
+    /** The five stack counts. */
+    const val STACK_BITS = (1 shl 20) - 1
+
+    /** Some element sits one stack short of its Break. */
+    const val PRIMED = 1 shl 23
+
+    fun stacks(bits: Int, element: Int): Int = (bits ushr (element * 4)) and 0xF
+
+    /** The element with the most stacks (ties go to element order), or -1 without stacks. */
+    fun dominant(bits: Int): Int {
+        var best = -1
+        var most = 0
+        for (element in 0 until STATUS_ELEMENT_COUNT) {
+            val count = stacks(bits, element)
+            if (count > most) {
+                most = count
+                best = element
+            }
+        }
+        return best
+    }
+
+    /**
+     * The other element with the most stacks when it holds at least two: the next hit of either
+     * element sets off their reaction. -1 otherwise.
+     */
+    fun reactionPartner(bits: Int, dominant: Int): Int {
+        var best = -1
+        var most = 1
+        for (element in 0 until STATUS_ELEMENT_COUNT) {
+            if (element == dominant) continue
+            val count = stacks(bits, element)
+            if (count > most) {
+                most = count
+                best = element
+            }
+        }
+        return best
+    }
+}
+
+/** The build's Break threshold for [element] (the content's base before the first build frame). */
+internal fun GameplayRenderModel.breakThresholdOf(element: Int): Int {
+    val built = build.breakThresholds.getOrElse(element) { 0 }
+    if (built > 0) return built
+    return content.build.elements.getOrNull(element)?.breakThreshold ?: 1
+}
+
+/** Cryo's Break comes this many stacks sooner on an Embrittled enemy (the nucleus's `breakThreshold`). */
+private const val EMBRITTLED_CRYO_CUT = 2
+private const val CRYO = 1
+
+/**
+ * The Break threshold of [element] on an enemy carrying [bits]: the build's threshold, cut for
+ * Cryo while the enemy is Embrittled, never below the element's floor (as the nucleus reads it).
+ */
+internal fun GameplayRenderModel.enemyBreakThresholdOf(element: Int, bits: Int): Int {
+    val threshold = breakThresholdOf(element)
+    if (element != CRYO || bits and EnemyStatusBits.EMBRITTLED == 0) return threshold
+    val floor = content.build.elements.getOrNull(element)?.breakFloor ?: 1
+    return max(floor, threshold - EMBRITTLED_CRYO_CUT).coerceAtMost(threshold)
+}
+
+/**
+ * The element one stack short of its Break on an enemy carrying [bits] (what its primed flag
+ * means): the dominant one when it is, otherwise the first in element order; -1 when not primed.
+ */
+internal fun GameplayRenderModel.primedElement(bits: Int, dominant: Int): Int {
+    if (bits and EnemyStatusBits.PRIMED == 0) return -1
+    if (dominant >= 0 && isOneShort(bits, dominant)) return dominant
+    for (element in 0 until STATUS_ELEMENT_COUNT) if (isOneShort(bits, element)) return element
+    return -1
+}
+
+private fun GameplayRenderModel.isOneShort(bits: Int, element: Int): Boolean {
+    val stacks = EnemyStatusBits.stacks(bits, element)
+    return stacks > 0 && stacks == enemyBreakThresholdOf(element, bits) - 1
 }
 
 internal fun rarityColor(rarity: ItemRarity): Color = Kk.rarity(rarity.rank)

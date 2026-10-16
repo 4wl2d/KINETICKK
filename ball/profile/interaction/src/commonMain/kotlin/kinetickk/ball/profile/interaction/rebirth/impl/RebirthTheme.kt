@@ -55,8 +55,17 @@ internal class RebirthTheme(val tier: Int, roles: KkRolePalette) {
     /** Increases of hostile modifiers read in the threat role (grayscale at the event horizon). */
     val threat: Color = tone(roles.threat)
 
-    /** The role palette for this screen: `you` becomes the tier accent (`--volt: acc`). */
+    /** The role palette for this screen: `you` becomes the tier accent (`--volt: acc`); Kinetic stays the player's volt. */
     val roles: KkRolePalette = roles.copy(you = accent, threat = threat)
+
+    /** Kinetic (no element) in the player's color-vision palette: their own volt, never the tier accent. */
+    val kinetic: Color = tone(this.roles.kinetic)
+
+    /** Gold means Rebirth: Reborn odds, gated content and Heirlooms (grayscale at the event horizon). */
+    val gold: Color = tone(Kk.Gold)
+
+    /** Status element [index] (thermal .. entropy) in the player's color-vision palette. */
+    fun element(index: Int): Color = tone(roles.element(index))
 
     /** Ladder color of [tier] under this theme's grayscale rule. */
     fun tierColor(tier: Int): Color = tone(KkRebirthTiers.color(tier))

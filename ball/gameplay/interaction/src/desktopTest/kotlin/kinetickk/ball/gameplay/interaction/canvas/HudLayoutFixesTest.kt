@@ -58,7 +58,8 @@ class HudLayoutFixesTest {
         for (language in AppLanguage.entries) for (boss in listOf(EnemyType.ELITE, EnemyType.ARCHITECT)) for (textScale in textScales) {
             val model = hudTestModel(390f, 844f).with(
                 "keys" to 2, "runMatter" to 9_876_543L, "combo" to 128, "comboTime" to 1f, "comboWindow" to 2.8f,
-                "enemies" to listOf(EnemyProjection(4, boss, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f, 0f, 0f, 0f, 0f, 0f, 0f, false))
+                "enemies" to listOf(EnemyProjection(4, boss, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f, 0f, 0f, 0f, 0f, 0f, 0f, false,
+                    affinityBits = bossAffinity(boss)))
                     .toImmutableList(),
             )
             draw(390, 844, language, textScale) { measurer -> drawHud(model, measurer, 1f) }
@@ -72,6 +73,32 @@ class HudLayoutFixesTest {
             assertTrue(bossRect.bottom <= (PORTRAIT_HUD_TOP_DP + PORTRAIT_BOSS_ROW_DP + PORTRAIT_BOSS_ROW_HEIGHT_DP) + 0.5f,
                 "$language $boss x$textScale: boss $bossRect leaves its row")
             assertTrue(HudTrialPanelLayout().update(390f, 844f, 1f, textScale).top >= bossRect.bottom)
+        }
+    }
+
+    /**
+     * An elite or the Architect carrying three elements, Brittle, Embrittled and a primed stack: its
+     * status rail stays inside the boss block's reserve (under the bar, or on the name's row on
+     * portrait phones) and on screen, so the feed and world labels that dock under it never meet it.
+     */
+    @Test
+    fun bossStatusRailStaysInsideTheBossReserve() {
+        val bits = 7 or (3 shl 8) or (2 shl 12) or (1 shl 21) or (1 shl 22) or (1 shl 23)
+        for (language in AppLanguage.entries) sizes.forEach { (w, h) ->
+            for (textScale in textScales) for (boss in listOf(EnemyType.ELITE, EnemyType.ARCHITECT)) {
+                val model = hudTestModel(w.toFloat(), h.toFloat()).with(
+                    "enemies" to listOf(EnemyProjection(4, boss, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f, 0f, 0f, 0f, 0f, 0f, 0f, false, statusBits = bits,
+                        affinityBits = bossAffinity(boss)))
+                        .toImmutableList(),
+                )
+                draw(w, h, language, textScale) { measurer -> drawHud(model, measurer, 1f) }
+                val where = "$language $w x $h x$textScale $boss"
+                val block = assertNotNull(HudLayoutProbe.rect(HudBlock.BOSS), where)
+                val frame = HudFrame().update(w.toFloat(), h.toFloat(), 1f)
+                val reserve = HudTopGeometry.bossBottom(frame, boss == EnemyType.ARCHITECT, textScale)
+                assertTrue(block.bottom <= reserve + 0.5f, "$where: the boss block $block reaches past its reserve $reserve")
+                assertTrue(block.left >= 0f && block.right <= w, "$where: $block off screen")
+            }
         }
     }
 
@@ -98,9 +125,10 @@ class HudLayoutFixesTest {
                     "keys" to 12, "runMatter" to 9_876_543L, "combo" to 128, "comboTime" to 1f, "comboWindow" to 2.8f,
                     "level" to 45, "weaponLevel" to 12, "hp" to 1_234f, "maxHp" to 1_500f, "velocityX" to 2_600f,
                     "message" to "ELITE SIGNAL", "messageTime" to 1.5f,
-                    "equippedRelics" to listOf(EquippedRelic(RelicId.KINETIC_FLYWHEEL, 1), EquippedRelic(RelicId.GHOST_VECTOR, 1))
+                    "equippedRelics" to listOf(EquippedRelic(RelicId.PERPETUAL_VECTOR, 1), EquippedRelic(RelicId.GYRE_ENGINE, 1))
                         .toImmutableList(),
-                    "enemies" to listOf(EnemyProjection(4, boss, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f, 0f, 0f, 0f, 0f, 0f, 0f, false))
+                    "enemies" to listOf(EnemyProjection(4, boss, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f, 0f, 0f, 0f, 0f, 0f, 0f, false,
+                        affinityBits = bossAffinity(boss)))
                         .toImmutableList(),
                     "pointsOfInterest" to (if (trial) listOf(orbit) else emptyList()).toImmutableList(),
                 )

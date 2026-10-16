@@ -16,6 +16,7 @@ import kinetickk.ball.profile.api.LabProfileSnapshot
 import kinetickk.ball.profile.api.LabProgressProjection
 import kinetickk.ball.profile.api.LoadoutProfileSnapshot
 import kinetickk.ball.profile.api.LoadoutProjection
+import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PlayerEconomy
@@ -369,16 +370,24 @@ object ProfileNucleus {
             architectVictories = saturatedAdd(previousAchievements.architectVictories, if (update.architectDefeatedWith != null) 1L else 0L),
             victoriousCharacters = (previousAchievements.victoriousCharacters + listOfNotNull(update.architectDefeatedWith)).toImmutableSet(),
         )
+        val collection = state.profile.collection
+        // A resolved Heirloom offer spends the remembered Relics before a victory in the same
+        // update records the Relics bound at that victory.
+        val heirlooms = update.victoryRelicIds
+            ?: if (update.heirloomResolved) immutableListOf() else collection.heirloomRelicIds
         val next = state.profile.copy(
             characterAchievements = achievements,
             economy = economy,
-            collection = state.profile.collection.copy(
+            collection = collection.copy(
                 discoveredItemIds = discoveries.toImmutableSet(),
-                newItemIds = (state.profile.collection.newItemIds +
-                    (update.discoveredItemIds - state.profile.collection.discoveredItemIds)).toImmutableSet(),
-                discoveredRelicIds = (state.profile.collection.discoveredRelicIds + update.discoveredRelicIds).toImmutableSet(),
-                newRelicIds = (state.profile.collection.newRelicIds +
-                    (update.discoveredRelicIds - state.profile.collection.discoveredRelicIds)).toImmutableSet(),
+                newItemIds = (collection.newItemIds +
+                    (update.discoveredItemIds - collection.discoveredItemIds)).toImmutableSet(),
+                discoveredRelicIds = (collection.discoveredRelicIds + update.discoveredRelicIds).toImmutableSet(),
+                newRelicIds = (collection.newRelicIds +
+                    (update.discoveredRelicIds - collection.discoveredRelicIds)).toImmutableSet(),
+                discoveredReactionIds = (collection.discoveredReactionIds + update.discoveredReactionIds).toImmutableSet(),
+                discoveredPairingIds = (collection.discoveredPairingIds + update.discoveredPairingIds).toImmutableSet(),
+                heirloomRelicIds = heirlooms,
             ),
             rebirthProgress = rebirth,
         )
@@ -466,6 +475,13 @@ object ProfileNucleus {
                 return ProfileGameplayProgressRejection.ClearedLevelAboveCurrent(level)
             }
         }
+        update.victoryRelicIds?.let { relics ->
+            if (update.clearedRebirthLevel == null) {
+                return ProfileGameplayProgressRejection.VictoryRelicsWithoutClear
+            }
+            if (relics.size > MAX_HEIRLOOM_RELICS) return ProfileGameplayProgressRejection.TooManyVictoryRelics
+            relics.firstDuplicateOrNull()?.let { return ProfileGameplayProgressRejection.DuplicateVictoryRelic(it) }
+        }
         return null
     }
 
@@ -538,6 +554,11 @@ private fun stepPercentage(
 ): Float {
     val nextPercent = (value * 100f).roundToInt() + direction.delta
     return (nextPercent / 100f).coerceIn(minimum, maximum)
+}
+
+private fun <T> List<T>.firstDuplicateOrNull(): T? {
+    val seen = HashSet<T>(size)
+    return firstOrNull { !seen.add(it) }
 }
 
 private fun saturatedAdd(left: Long, right: Long): Long =

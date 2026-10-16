@@ -149,6 +149,30 @@ internal fun OverlayProbeText(
     }
 }
 
+/** [OverlayProbeText] for styled text (spans of number tints and weights). */
+@Composable
+internal fun OverlayProbeText(measurer: TextMeasurer, text: AnnotatedString, style: TextStyle, modifier: Modifier) {
+    Layout(modifier) { _, constraints ->
+        val result = measurer.measure(text, style, TextOverflow.Clip, softWrap = true, constraints = constraints)
+        layout(result.size.width, result.size.height) {}
+    }
+}
+
+/**
+ * Styled body text (tinted numbers, emphasized values) that never breaks inside a word: when its
+ * longest word is wider than the line, the font shrinks until it fits.
+ */
+@Composable
+internal fun OverlayRichText(text: AnnotatedString, style: TextStyle, modifier: Modifier = Modifier) {
+    val measurer = rememberTextMeasurer(cacheSize = 16)
+    val probe = LocalOverlayTextProbe.current
+    BoxWithConstraints(modifier) {
+        val width = if (constraints.hasBoundedWidth) constraints.maxWidth.toFloat() else Float.POSITIVE_INFINITY
+        val fitted = remember(text.text, style, width) { fitTextStyle(measurer, text.text, style, width, Int.MAX_VALUE, 0.7f) }
+        if (probe != null) OverlayProbeText(probe, text, fitted, Modifier) else BasicText(text, style = fitted)
+    }
+}
+
 /** Plain text in a Kk role style; [uppercase] applies display casing for the current locale. */
 @Composable
 internal fun OverlayText(

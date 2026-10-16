@@ -3,6 +3,8 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
 
@@ -26,24 +28,40 @@ internal fun MutableGameState.resolveCollisions(delta: Float) {
     if (phase != GamePhase.RUNNING) return
     resolveProjectileHits()
     if (phase != GamePhase.RUNNING) return
+    // Kills resolve before pickups can open a choice, so an Architect falling in this step still wins.
+    sweepKills()
+    if (phase != GamePhase.RUNNING) return
     resolvePickupCollection()
+}
+
+/**
+ * Resolves every enemy at zero integrity. Only enemies resolved by [onEnemyKilled] (marked dead) are
+ * removed; anything a death effect, or a later pickup clause, brings to zero stays and resolves in the next
+ * running step's sweep, so no kill (and no Architect victory) is ever dropped. Bounded: each enemy resolves
+ * at most once.
+ */
+internal fun MutableGameState.sweepKills() {
     var killedCount = 0
     for (index in enemies.indices) {
         val enemy = enemies[index]
-        if (enemy.dead || enemy.hp <= 0f) killedCount++
+        if (!enemy.dead && enemy.hp <= 0f) killedCount++
     }
     if (killedCount == 0) return
     val killed = arrayOfNulls<Enemy>(killedCount)
     var killedIndex = 0
     for (index in enemies.indices) {
         val enemy = enemies[index]
-        if (enemy.dead || enemy.hp <= 0f) killed[killedIndex++] = enemy
+        if (!enemy.dead && enemy.hp <= 0f) killed[killedIndex++] = enemy
     }
-    for (index in killed.indices) onEnemyKilled(checkNotNull(killed[index]))
+    // The Architect resolves first, so a self-inflicted death later in the same sweep cannot undo a victory.
+    for (index in killed.indices) if (checkNotNull(killed[index]).type == EnemyType.ARCHITECT) onEnemyKilled(checkNotNull(killed[index]))
+    for (index in killed.indices) if (checkNotNull(killed[index]).type != EnemyType.ARCHITECT) onEnemyKilled(checkNotNull(killed[index]))
+    // Matter granted by kills resolved after the terminal bank in this sweep still counts.
+    if (phase != GamePhase.RUNNING) bankRunMatter()
     var retainedCount = 0
     for (index in enemies.indices) {
         val enemy = enemies[index]
-        if (!enemy.dead && !(enemy.hp <= 0f)) {
+        if (!enemy.dead) {
             if (retainedCount != index) enemies[retainedCount] = enemy
             retainedCount++
         }
@@ -74,6 +92,7 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
                 enemy.previousX, enemy.previousY, enemy.vx, enemy.vy,
                 previousCoreX, previousCoreY,
             )
+            val newDashContact = dashPhaseTime > 0f && enemy.lastCharacterDash != characterRuntime.dashSequence
             onCharacterDashContact(enemy)
             val relativeX = velocityX - enemy.vx
             val relativeY = velocityY - enemy.vy
@@ -82,31 +101,35 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
             val dy = coreY - enemy.y
             val distance = max(1f, length(dx, dy))
             val coreImpactSpeed = kotlin.math.abs(velocityX * dx / distance + velocityY * dy / distance)
-            val damage = max(
-                6f,
-                mass * softVelocity(coreImpactSpeed) * 0.115f * damageMultiplier *
-                    rebirthProfile.playerPowerMultiplier,
-            )
-            damageEnemy(enemy, damage, canCrit = true, relicKillProcsEligible = true)
+            val damage = impactPower(coreImpactSpeed)
+            dealHit(enemy, damage, HitSource.IMPACT, canCrit = true)
+            if (newDashContact) onDashHit(enemy, damage)
             if (dashPhaseTime <= 0f) onCharacterPrimaryHit(enemy)
             lastImpact = damage
             lastImpactTime = 0.72f
             enemy.contactCooldown = 0.26f
             screenShake = min(15f, 3f + softVelocity(impactSpeed) * 0.018f)
-            velocityX += dx / distance * min(220f, softVelocity(impactSpeed) * 0.28f)
-            velocityY += dy / distance * min(220f, softVelocity(impactSpeed) * 0.28f)
-            overdriveCharge = min(125f, overdriveCharge + min(12f, coreImpactSpeed / 100f) * overdriveGain)
+            val keepsMomentum = tagTier(BuildTag.RAM) >= 3 && speed >= 1_200f
+            if (!keepsMomentum) {
+                val recoil = min(220f, softVelocity(impactSpeed) * 0.28f) / max(1f, effectiveMass() / mass)
+                velocityX += dx / distance * recoil
+                velocityY += dy / distance * recoil
+            }
+            gainOverdrive(min(12f, coreImpactSpeed / 100f))
             shockwave(enemy.x, enemy.y, 0.26f, min(150f, 55f + damage * 0.9f), 3)
             directionalBurst(enemy.x, enemy.y, 8, 3, dx / distance, dy / distance)
             emitSound(GameplayAudioCue.IMPACT)
-            if (!parried && coreImpactSpeed < 190f && dashPhaseTime <= 0f) takeDamage(7f + enemy.radius * 0.18f)
+            if (!parried && coreImpactSpeed < 190f && dashPhaseTime <= 0f) {
+                val neutron = if (build.upside(RelicId.NEUTRON_HEART)) 0.5f else 1f
+                takeDamage((7f + enemy.radius * 0.18f) * neutron, kind = IncomingDamage.CONTACT)
+            }
         }
     }
 }
 
 internal fun MutableGameState.resolveWeaponDamage(delta: Float) {
     val power = effectiveWeaponPower()
-    val agonyRank = relicRank(RelicId.AGONY_SCEPTER)
+    val agonyRank = agonyPower()
     when (weapon) {
         WeaponId.FLUX_WAKE -> for (enemyIndex in enemies.indices) {
             val enemy = enemies[enemyIndex]
@@ -139,7 +162,12 @@ internal fun MutableGameState.resolveWeaponDamage(delta: Float) {
             val forbiddenHit = agonyRank > 0 && distanceSquared(mirrorX, mirrorY, enemy.x, enemy.y) < hitRadius * hitRadius
             if (enemy.weaponCooldown <= 0f && (primaryHit || forbiddenHit)) {
                 val forbiddenScale = if (!primaryHit && forbiddenHit) 0.55f + 0.08f * agonyRank else 1f
-                dealWeaponDamage(enemy, (38f + softVelocity(speed) * 0.1f) * mass * power * forbiddenScale, canCrit = true)
+                dealWeaponDamage(
+                    enemy,
+                    (38f + softVelocity(speed) * 0.1f) * effectiveMass() * power * forbiddenScale,
+                    canCrit = true,
+                    cadence = WeaponHitCadence.CONTACT,
+                )
                 enemy.weaponCooldown = 0.2f
                 screenShake = max(screenShake, 5f)
             }
@@ -168,7 +196,7 @@ internal fun MutableGameState.resolveWeaponDamage(delta: Float) {
                 }
             }
             if (orbitalHit) {
-                dealWeaponDamage(enemy, (31f + softVelocity(speed) * 0.025f) * power, canCrit = true)
+                dealWeaponDamage(enemy, (31f + softVelocity(speed) * 0.025f) * power, canCrit = true, cadence = WeaponHitCadence.CONTACT)
                 enemy.weaponCooldown = 0.17f
             }
         }
@@ -176,14 +204,16 @@ internal fun MutableGameState.resolveWeaponDamage(delta: Float) {
             val enemy = enemies[enemyIndex]
             val radius = 170f + weaponLevel * 5f + agonyRank * 18f
             if (distanceSquared(coreX, coreY, enemy.x, enemy.y) <= square(radius + enemy.radius)) {
-                val collapse = agonyRank > 0 && enemy.hp <= enemy.maxHp * (0.06f + agonyRank * 0.015f)
-                dealWeaponDamage(
-                    enemy,
-                    if (collapse) enemy.hp else 24f * delta * power * (1f + agonyRank * 0.08f),
-                    cadence = WeaponHitCadence.CONTINUOUS,
-                )
-                enemy.vx *= exp(-0.5f * delta)
-                enemy.vy *= exp(-0.5f * delta)
+                // Agony's collapse executes outright, past every multiplier; the Architect only takes the field.
+                val collapse = agonyRank > 0 && !enemy.isBoss && enemy.hp <= enemy.maxHp * (0.06f + agonyRank * 0.015f)
+                if (collapse) {
+                    damageEnemy(enemy, enemy.hp, killEligible = true, source = HitSource.WEAPON)
+                } else {
+                    dealWeaponDamage(enemy, 24f * delta * power * (1f + agonyRank * 0.08f), cadence = WeaponHitCadence.CONTINUOUS)
+                }
+                val drag = exp(-0.5f * delta * enemy.knockback)
+                enemy.vx *= drag
+                enemy.vy *= drag
             }
         }
         else -> Unit
@@ -231,7 +261,7 @@ internal fun MutableGameState.resolveProjectileHits() {
             ) {
                 burst(projectile.x, projectile.y, 6, 2)
             } else if (dashPhaseTime <= 0f) {
-                takeDamage(12f)
+                takeDamage(12f, kind = IncomingDamage.PROJECTILE)
                 screenShake = max(screenShake, 6f)
             } else {
                 grantMatter(1f)
@@ -273,7 +303,8 @@ internal fun MutableGameState.resolveProjectileHits() {
         var consumed = false
         for (enemyIndex in enemies.indices) {
             val enemy = enemies[enemyIndex]
-            if (enemy.dead || projectile.hasRecordedEnemyHit(enemy.id)) continue
+            // Shots pass through a shifting Architect without spending pierce.
+            if (enemy.dead || isShifting(enemy) || projectile.hasRecordedEnemyHit(enemy.id)) continue
             val hitRadius = projectile.radius + enemy.radius
             val hit = segmentCircleIntersects(
                 projectile.previousX - enemy.previousX,
@@ -290,7 +321,11 @@ internal fun MutableGameState.resolveProjectileHits() {
                 if (sourceWeapon != null) {
                     dealWeaponDamage(enemy, projectile.damage, canCrit = true, sourceWeapon = sourceWeapon)
                 } else {
-                    damageEnemy(enemy, projectile.damage, canCrit = true)
+                    // Relic shots deal element-less damage; a status element is a rider applied after it.
+                    dealProcDamage(enemy, projectile.damage)
+                    if (projectile.statusElement >= 0 && enemy.alive) {
+                        applyStatus(enemy, kinetickk.ball.content.api.StatusElement.entries[projectile.statusElement], 2, 1)
+                    }
                 }
                 burst(enemy.x, enemy.y, 4, projectile.colorIndex)
                 projectile.pierce--
@@ -318,7 +353,7 @@ internal fun MutableGameState.redirectPrismRelay(projectile: Projectile) {
     var targetDistanceSquared = maximumDistanceSquared
     for (enemyIndex in enemies.indices) {
         val enemy = enemies[enemyIndex]
-        if (enemy.dead || projectile.hasRecordedEnemyHit(enemy.id)) continue
+        if (enemy.dead || isShifting(enemy) || projectile.hasRecordedEnemyHit(enemy.id)) continue
         val distanceSquared = distanceSquared(projectile.x, projectile.y, enemy.x, enemy.y)
         if (
             distanceSquared < targetDistanceSquared ||
@@ -358,14 +393,17 @@ internal fun MutableGameState.resolvePickupCollection() {
             pickups.removeAt(pickupIndex)
             pickupsCollected++
             when (pickup.type) {
-                PickupType.DATA -> gainData(dataGain * content.tempo.dataPickupMultiplier)
+                PickupType.DATA -> {
+                    gainData(dataGain * content.tempo.dataPickupMultiplier)
+                    fireClauses(EffectTrigger.PICKUP)
+                }
                 PickupType.KEY -> {
                     keys++
                     keysCollected++
                     message = "ELITE KEY ACQUIRED"
                     messageTime = 1.4f
                 }
-                PickupType.REPAIR -> hp = min(maxHp, hp + 22f)
+                PickupType.REPAIR -> heal(22f, HealSource.REPAIR)
                 PickupType.RELIC -> {
                     pendingRelicChoices++
                     message = "RELIC RESONANCE"
@@ -381,7 +419,8 @@ internal fun MutableGameState.resolvePickupCollection() {
     }
 }
 
-internal fun MutableGameState.gainData(amount: Float) {
+internal fun MutableGameState.gainData(rawAmount: Float) {
+    val amount = rawAmount * dataGainLiability()
     dataFraction += amount
     val whole = floor(dataFraction).toInt()
     if (whole <= 0) return
@@ -392,6 +431,7 @@ internal fun MutableGameState.gainData(amount: Float) {
         data -= nextLevelData
         level++
         pendingLevelChoices++
+        onLevelUp()
         nextLevelData = content.tempo.dataRequiredForLevel(level)
         if (content.tempo.grantsWeaponAmplification(level) && weaponLevel < content.tempo.maximumAutomaticWeaponLevel) {
             val before = captureBuildChange()

@@ -241,41 +241,89 @@ enum class KkIcon(val key: String, val label: String, vararg layerData: KkIconLa
         KkIconLayer("M5 11h14v10h-14Z", KkIconStyle.STROKE),
         KkIconLayer("M8 11V7a4 4 0 0 1 8 0v4", KkIconStyle.STROKE),
     ),
-    ASPECT_VECTOR(
-        "aspect.vector",
-        "Vector",
-        KkIconLayer("M6 19 11 5M13 19 18 5", KkIconStyle.STROKE),
+    ASPECT_KINETIC(
+        "aspect.kinetic",
+        "Kinetic",
+        KkIconLayer("M12 3v4M12 17v4M3 12h4M17 12h4", KkIconStyle.STROKE),
+        KkIconLayer("M10 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0Z", KkIconStyle.FILL),
     ),
-    ASPECT_GRAVITIC(
-        "aspect.gravitic",
-        "Gravitic",
-        KkIconLayer("M3 5c4 4 14 4 18 0M5 10c3 3 11 3 14 0M8 15c2 2 6 2 8 0", KkIconStyle.STROKE),
+    ASPECT_THERMAL(
+        "aspect.thermal",
+        "Thermal",
+        KkIconLayer("M12 3c3 4 6 7 6 11a6 6 0 0 1 -12 0c0 -4 3 -7 6 -11Z", KkIconStyle.STROKE),
+        KkIconLayer("M12 13c1.2 1.4 2 2.4 2 3.5a2 2 0 0 1 -4 0c0 -1.1 .8 -2.1 2 -3.5Z", KkIconStyle.FILL),
+    ),
+    ASPECT_CRYO(
+        "aspect.cryo",
+        "Cryo",
+        KkIconLayer("M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6 -9", KkIconStyle.STROKE),
     ),
     ASPECT_ION(
         "aspect.ion",
         "Ion",
-        KkIconLayer("M13 2 5 13h6l-1 9 8-12h-6Z", KkIconStyle.STROKE),
+        KkIconLayer("M3 13l4 -7 5 12 5 -12 4 7", KkIconStyle.STROKE),
     ),
-    ASPECT_RIFT(
-        "aspect.rift",
-        "Rift",
-        KkIconLayer("M12 2 9 9l5 4-3 9", KkIconStyle.STROKE),
-    ),
-    ASPECT_PRISM(
-        "aspect.prism",
-        "Prism",
-        KkIconLayer("M12 3 21 20H3Z", KkIconStyle.STROKE),
-        KkIconLayer("M12 3v17", KkIconStyle.STROKE),
+    ASPECT_GRAVITIC(
+        "aspect.gravitic",
+        "Gravitic",
+        KkIconLayer("M4.21 16.5a9 4 -30 1 0 15.58 -9a9 4 -30 1 0 -15.58 9Z", KkIconStyle.STROKE),
+        KkIconLayer("M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z", KkIconStyle.FILL),
     ),
     ASPECT_ENTROPY(
         "aspect.entropy",
         "Entropy",
-        KkIconLayer("M12 12a2 2 0 1 1 2 2a4 4 0 1 1-4-4a6 6 0 1 1 6 6", KkIconStyle.STROKE),
+        KkIconLayer("M12 4a8 8 0 0 1 8 8M18 17.5a8 8 0 0 1 -9.5 2.5M4.6 15a8 8 0 0 1 2.4 -9.5", KkIconStyle.STROKE),
     ),
     ASPECT_SOVEREIGN(
         "aspect.sovereign",
         "Sovereign",
         KkIconLayer("M3 20h18M4 17 3 7l5 4 4-7 4 7 5-4-1 10Z", KkIconStyle.STROKE),
+    ),
+    TAG_RAM(
+        "tag.ram",
+        "Ram",
+        KkIconLayer("M5 6h7a6 6 0 0 1 0 12H5ZM2 12h3", KkIconStyle.STROKE),
+    ),
+    TAG_DRIVE(
+        "tag.drive",
+        "Drive",
+        KkIconLayer("M14 8a5 5 0 1 1 0 10a5 5 0 1 1 0 -10ZM2 10h7M2 14h6M4 18h5", KkIconStyle.STROKE),
+    ),
+    TAG_ANCHOR(
+        "tag.anchor",
+        "Anchor",
+        KkIconLayer("M12 4v16M8 8h8M5 14a7 7 0 0 0 14 0", KkIconStyle.STROKE),
+    ),
+    TAG_ARSENAL(
+        "tag.arsenal",
+        "Arsenal",
+        KkIconLayer("M5 20h14M8 17V11M12 17V7M16 17V11", KkIconStyle.STROKE),
+    ),
+    TAG_PRECISION(
+        "tag.precision",
+        "Precision",
+        KkIconLayer("M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5", KkIconStyle.STROKE),
+        KkIconLayer("M10.5 12a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0Z", KkIconStyle.FILL),
+    ),
+    TAG_BULWARK(
+        "tag.bulwark",
+        "Bulwark",
+        KkIconLayer("M12 3l8 3v6c0 5 -3.5 8 -8 9c-4.5 -1 -8 -4 -8 -9V6Z", KkIconStyle.STROKE),
+    ),
+    TAG_OVERCLOCK(
+        "tag.overclock",
+        "Overclock",
+        KkIconLayer("M4 16a8 8 0 1 1 16 0M12 16l4 -6", KkIconStyle.STROKE),
+    ),
+    TAG_CHAIN(
+        "tag.chain",
+        "Chain",
+        KkIconLayer("M9 9H7a3 3 0 0 0 0 6h3M15 9h2a3 3 0 0 1 0 6h-3M9 12h6", KkIconStyle.STROKE),
+    ),
+    TAG_FORTUNE(
+        "tag.fortune",
+        "Fortune",
+        KkIconLayer("M12 3l2.6 5.6 6.1 .7 -4.5 4.2 1.2 6L12 16.5l-5.4 3 1.2 -6 -4.5 -4.2 6.1 -.7Z", KkIconStyle.STROKE),
     ),
     UI_PLUS(
         "ui.plus",
@@ -298,8 +346,14 @@ enum class KkIcon(val key: String, val label: String, vararg layerData: KkIconLa
         /** Weapon icons in `icons.json` order. */
         val Weapons: List<KkIcon> = entries.filter { it.key.startsWith("weapons.") }
 
-        /** Aspect icons in relic-aspect order: vector, gravitic, ion, rift, prism, entropy, sovereign. */
+        /** Aspect icons in relic-aspect order: kinetic, thermal, cryo, ion, gravitic, entropy, sovereign. */
         val Aspects: List<KkIcon> = entries.filter { it.key.startsWith("aspect.") }
+
+        /** The five status element glyphs (thermal, cryo, ion, gravitic, entropy). */
+        val Elements: List<KkIcon> = Aspects.subList(1, 6)
+
+        /** Archetype tag glyphs in tag order: ram, drive, anchor, arsenal, precision, bulwark, overclock, chain, fortune. */
+        val Tags: List<KkIcon> = entries.filter { it.key.startsWith("tag.") }
 
         /** System icons in `icons.json` order. */
         val System: List<KkIcon> = entries.filter { it.key.startsWith("system.") }
@@ -354,8 +408,10 @@ private object KkIconStrokes {
     private val dashEffect: PathEffect by lazy { PathEffect.dashPathEffect(floatArrayOf(3f, 3f)) }
     private val dotEffect: PathEffect by lazy { PathEffect.dashPathEffect(floatArrayOf(1f, 4f)) }
     private val defaults: Array<Stroke> by lazy { create(2f) }
-    private var customWidth = Float.NaN
-    private var custom: Array<Stroke>? = null
+    // A few custom widths at once (band pips, card watermarks, thin glyphs) without thrashing.
+    private val customWidths = FloatArray(4) { Float.NaN }
+    private val customs = arrayOfNulls<Array<Stroke>>(4)
+    private var customNext = 0
 
     fun solid(w: Float): Stroke = set(w)[0]
     fun dashed(w: Float): Stroke = set(w)[1]
@@ -363,10 +419,11 @@ private object KkIconStrokes {
 
     private fun set(w: Float): Array<Stroke> {
         if (w == 2f) return defaults
-        custom?.let { if (w == customWidth) return it }
+        for (index in 0 until 4) if (customWidths[index] == w) return customs[index]!!
         return create(w).also {
-            custom = it
-            customWidth = w
+            customs[customNext] = it
+            customWidths[customNext] = w
+            customNext = (customNext + 1) % 4
         }
     }
 

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -18,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
@@ -46,12 +48,21 @@ import kinetickk.ball.profile.interaction.lab.impl.toRenderModel
 import kinetickk.ball.profile.interaction.localization.ProfileScreensRedesignText
 import kinetickk.ball.profile.interaction.localization.ProfileText
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthRenderModel
+import kinetickk.ball.profile.interaction.rebirth.impl.REBIRTH_BUILD_SECTION_ROLE
+import kinetickk.ball.profile.interaction.rebirth.impl.REBIRTH_UNLOCK_BLURB_ROLE
 import kinetickk.ball.profile.interaction.rebirth.impl.RebirthContent
+import kinetickk.ball.profile.interaction.rebirth.impl.RebirthLayout
 import kinetickk.ball.profile.interaction.rebirth.impl.RebirthLayoutHolder
+import kinetickk.ball.profile.interaction.rebirth.impl.actionState
+import kinetickk.ball.profile.interaction.rebirth.impl.rebirthBuildInfoText
+import kinetickk.ball.profile.interaction.rebirth.impl.rebirthInfoText
+import kinetickk.ball.profile.interaction.rebirth.impl.rebirthUnlockBlurb
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.LocalAppLanguage
+import kinetickk.foundation.design.measureKkTooltip
+import kinetickk.foundation.design.rememberKkCanvasMeasurer
 import kinetickk.foundation.design.kkBoxHeight
 import kinetickk.foundation.design.kkBoxTop
 import kotlin.math.abs
@@ -250,10 +261,14 @@ class ProfileTextFitTest {
         val targets = (1..10).toList() + 11
         for ((width, height) in sizes) {
             val holders = HashMap<Scene<Int>, RebirthLayoutHolder>()
+            // Odd targets carry four Heirlooms, even ones none (the board then keeps its right column free).
+            fun heirlooms(target: Int) = if (target % 2 == 1) CatalogHeirlooms else emptyList()
             fun model(target: Int) = if (target > 10) {
-                RebirthRenderModel(catalogRebirthProfile(10), catalogRebirthProfile(10), false, 1_924L, 0, 10)
+                RebirthRenderModel(catalogRebirthProfile(10), catalogRebirthProfile(10), false, 1_924L, 0, 10,
+                    catalogRebirthBuild(10, 10, heirlooms(target)))
             } else {
-                RebirthRenderModel(catalogRebirthProfile(target - 1), catalogRebirthProfile(target), true, 1_924L, 0, 10)
+                RebirthRenderModel(catalogRebirthProfile(target - 1), catalogRebirthProfile(target), true, 1_924L, 0, 10,
+                    catalogRebirthBuild(target - 1, target, heirlooms(target)))
             }
             render(width, height, scenes(targets), content = { scene ->
                 RebirthContent(model(scene.item), false, scene.setting, {}, timeSeconds = 7.3f,
@@ -270,6 +285,7 @@ class ProfileTextFitTest {
                 assertEquals(listOf(target.directive.displayName.localizedContent(language).uppercase()),
                     frame.of("rebirth.directive").map { assertNotNull(it.layout).layoutInput.text.text }.distinct(), context)
                 val layout = assertNotNull(holders[scene]?.layout, context)
+                assertRebirthBuildTexts(frame, layout, model(scene.item), language, context)
                 // Every ladder numeral lies inside its cell.
                 val numbers = frame.of("rebirth.ladder.number")
                 assertEquals(layout.cells.size, numbers.size, context)
@@ -290,6 +306,80 @@ class ProfileTextFitTest {
                 }
             }
         }
+    }
+
+    /**
+     * Both Rebirth (!) tooltips (Advance in every state, and the build table's) keep their whole
+     * text inside the tooltip's 12 lines in English and Russian at every text size, with the
+     * longest tier numeral.
+     */
+    @Test
+    fun rebirthTooltipsStayWholeAtEveryTextSize() {
+        val ready = RebirthRenderModel(catalogRebirthProfile(9), catalogRebirthProfile(10), true, 1_924L, 0, 10,
+            catalogRebirthBuild(9, 10))
+        val locked = ready.copy(canAdvance = false)
+        val maximum = RebirthRenderModel(catalogRebirthProfile(10), catalogRebirthProfile(10), false, 1_924L, 0, 10,
+            catalogRebirthBuild(10, 10))
+        val cases = listOf(ready to false, ready to true, locked to false, maximum to false)
+        val scenes = languages.flatMap { language -> listOf(1f, 1.25f, 1.5f, 1.75f).map { Scene(language, it, Unit) } }
+        val measured = HashMap<Scene<Unit>, List<Pair<String, TextLayoutResult>>>()
+        render(390, 844, scenes, content = { scene ->
+            val measurer = rememberKkCanvasMeasurer(profileTextScale(scene.setting))
+            val density = LocalDensity.current.density
+            val texts = cases.map { (model, armed) -> rebirthInfoText(model, model.actionState(armed), scene.language) } +
+                rebirthBuildInfoText(scene.language)
+            SideEffect { measured[scene] = texts.map { it to measureKkTooltip(measurer, it, density) } }
+        }) { scene, _ ->
+            val tooltips = assertNotNull(measured[scene], "$scene")
+            assertEquals(cases.size + 1, tooltips.size)
+            for ((text, layout) in tooltips) {
+                assertFalse(layout.multiParagraph.didExceedMaxLines || layout.hasVisualOverflow,
+                    "$scene tooltip cut at ${layout.lineCount} lines: $text")
+                assertTrue(layout.lineCount <= 11, "$scene tooltip fills ${layout.lineCount} of 12 lines: $text")
+            }
+        }
+    }
+
+    /**
+     * The build sections draw their titles, one row per unlock of the target tier (name left of its
+     * gold kind tag, inside its row) and one per Heirloom, and gold pips over the gated tiers.
+     */
+    private fun assertRebirthBuildTexts(frame: Frame, layout: RebirthLayout, model: RebirthRenderModel, language: AppLanguage,
+        context: String) {
+        val build = assertNotNull(model.build, context)
+        val titles = listOf(ProfileScreensRedesignText.BuildUnlocks) +
+            if (build.heirlooms.isEmpty()) emptyList() else listOf(ProfileScreensRedesignText.Heirlooms)
+        assertEquals(titles.map { language.text(it).uppercase() },
+            frame.of(REBIRTH_BUILD_SECTION_ROLE).map { assertNotNull(it.layout).layoutInput.text.text }, context)
+        val unlocks = frame.of("rebirth.build.unlock")
+        assertEquals(model.targetUnlocks.map { it.name }, unlocks.map { it.owner }, context)
+        val tags = frame.of("rebirth.build.tag")
+        val blurbs = frame.of(REBIRTH_UNLOCK_BLURB_ROLE)
+        unlocks.forEachIndexed { index, unlock ->
+            val row = layout.buildRows[index + 1]
+            val tag = tags.single { it.owner == unlock.owner }
+            // The featured row: the display name left of its gold kind tag, and what the content
+            // does under it, all inside the row.
+            assertEquals(model.targetUnlocks[index].name.localizedContent(language).uppercase(),
+                assertNotNull(unlock.layout).layoutInput.text.text)
+            assertTrue(unlock.box.left >= row.left && unlock.box.right <= tag.box.left, "$context ${unlock.owner} ${unlock.box} vs tag ${tag.box}")
+            assertTrue(tag.box.right <= row.right + 0.5f && tag.box.top >= row.top && tag.box.bottom <= row.bottom,
+                "$context tag ${tag.box} outside $row")
+            val blurb = blurbs.single { it.owner == unlock.owner }
+            assertEquals(rebirthUnlockBlurb(model.targetUnlocks[index], language), assertNotNull(blurb.layout).layoutInput.text.text, context)
+            assertTrue(blurb.box.left >= unlock.box.left - 0.5f && blurb.box.right <= row.right + 0.5f &&
+                blurb.box.top >= unlock.box.bottom - 0.5f && blurb.box.bottom <= row.bottom + 0.5f,
+                "$context ${unlock.owner} description ${blurb.box} outside $row under ${unlock.box}")
+            assertTrue(unlock.box.top >= row.top - 0.5f, "$context ${unlock.owner} name ${unlock.box} above $row")
+        }
+        assertEquals(build.heirlooms.map { it.id }, frame.of("rebirth.heirloom.name").map { it.owner }, context)
+        frame.of("rebirth.heirloom.name").forEachIndexed { index, name ->
+            val row = layout.heirloomRows[index]
+            assertTrue(name.box.left >= row.left && name.box.right <= row.right + 0.5f, "$context heirloom ${name.box} outside $row")
+        }
+        val reborn = frame.of("rebirth.build.row.value")
+        assertEquals(2, reborn.size, context)
+        assertEquals(setOf(1, 2, 3, 4, 5), frame.of("rebirth.ladder.unlock").map { it.owner }.toSet(), context)
     }
 
     /**

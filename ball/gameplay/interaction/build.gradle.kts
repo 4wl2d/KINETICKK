@@ -24,6 +24,8 @@ kotlin {
         desktopTest {
             dependencies {
                 implementation(libs.compose.ui.test.junit4)
+                // The shipped catalog for the reward card gallery and its style checks (tests only).
+                implementation(projects.ball.content.impl)
                 val os = when {
                     System.getProperty("os.name").startsWith("Mac") -> "macos"
                     System.getProperty("os.name").startsWith("Windows") -> "windows"

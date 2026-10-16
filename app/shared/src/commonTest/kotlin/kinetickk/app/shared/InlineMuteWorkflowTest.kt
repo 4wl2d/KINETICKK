@@ -161,7 +161,7 @@ private class MuteFixture {
     val persistence = MutePersistence()
     val profile = createProfileComponent(persistence, catalog.profilePolicy())
     val gameplay = DefaultGameplayFeature(catalog.gameplayContent(), profile, profile, MuteSilentAudio())
-    private lateinit var session: AppSessionPort
+    private val session: AppSessionPort
     private var observing = false
     private var expected = PlayerPreferences()
     private var observeAudio: (PlayerPreferences) -> Unit = {}

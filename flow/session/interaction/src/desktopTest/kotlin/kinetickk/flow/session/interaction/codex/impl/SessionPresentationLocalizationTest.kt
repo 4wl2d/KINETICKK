@@ -21,10 +21,12 @@ import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.profile.api.*
 import kinetickk.flow.session.interaction.codex.api.CodexRenderModel
 import kinetickk.flow.session.interaction.codex.api.CodexRunStacks
+import kinetickk.flow.session.interaction.localization.SessionText
 import kinetickk.flow.session.interaction.home.impl.DefaultHomeFeature
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.collections.immutableSetOf
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
@@ -39,6 +41,32 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalTestApi::class)
 class SessionPresentationLocalizationTest {
+    @Test
+    fun homeWaitsForBothViewportDimensionsBeforeRestoringKeyboardFocus() = runComposeUiTest {
+        mainClock.autoAdvance = false
+        var heightValue by mutableStateOf(0.dp)
+        val feature = DefaultHomeFeature(LocalizationProfilePort(), codexTestCatalog(), LocalizationSilentAudio)
+        setContent {
+            Box(Modifier.requiredSize(1000.dp, heightValue)) {
+                feature.Content(inputEnabled = true, onOutput = {})
+            }
+        }
+        mainClock.advanceTimeBy(100)
+        onNodeWithTag("kinetickk.home.start").assertDoesNotExist()
+        runOnIdle { heightValue = 700.dp }
+        mainClock.advanceTimeBy(100)
+        onNodeWithTag("kinetickk.home.start").assertIsFocused()
+        onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+        mainClock.advanceTimeByFrame()
+        onNodeWithTag("kinetickk.home.lab").assertIsFocused()
+        runOnIdle { heightValue = 0.dp }
+        mainClock.advanceTimeBy(100)
+        onNodeWithTag("kinetickk.home.lab").assertDoesNotExist()
+        runOnIdle { heightValue = 700.dp }
+        mainClock.advanceTimeBy(100)
+        onNodeWithTag("kinetickk.home.lab").assertIsFocused()
+    }
+
     @Test
     fun homePreviewDoesNotActivateRoutesAndArrowNavigationActivatesExactlyOnce() = runComposeUiTest {
         mainClock.autoAdvance = false
@@ -75,7 +103,7 @@ class SessionPresentationLocalizationTest {
                 }
             }
         }
-        onNodeWithTag("codex-tab-1").assertTextEquals("Коллекция")
+        onNodeWithTag("codex-tab-1").assertTextEquals("Каталог")
         onNodeWithTag("codex-category-3").performClick()
         onNodeWithTag("codex-search").performTextInput("крУг")
         onNodeWithTag("codex-slot-shape/ORB").performClick()
@@ -83,7 +111,7 @@ class SessionPresentationLocalizationTest {
         saveLocalizationCapture("codex-ru")
         onNodeWithTag("codex-search").performTextClearance()
         runOnIdle { languageValue = AppLanguage.English }
-        onNodeWithTag("codex-tab-1").assertTextEquals("Collection")
+        onNodeWithTag("codex-tab-1").assertTextEquals("Catalog")
         onNodeWithTag("codex-slot-shape/ORB").assertIsSelected()
         onNodeWithTag("codex-detail-title").assertTextEquals("Circle")
         onNodeWithTag("codex-search").performTextInput("CiRcLe")
@@ -92,7 +120,7 @@ class SessionPresentationLocalizationTest {
     }
 
     @Test
-    fun catalogAndSynergyTabsKeepLazyEntryTypesAligned() = runComposeUiTest {
+    fun catalogAndReactionTabsKeepLazyEntryTypesAligned() = runComposeUiTest {
         var languageValue by mutableStateOf(AppLanguage.Russian)
         val catalog = codexTestCatalog()
         setContent {
@@ -106,12 +134,23 @@ class SessionPresentationLocalizationTest {
             runOnIdle { languageValue = language }
             repeat(3) {
                 onNodeWithTag("codex-tab-1").performClick()
+                // The Items matrix under another sort: its anonymous cells open in the language too.
+                onNodeWithTag("codex-category-0").performClick()
+                onNodeWithTag("codex-sort-${(it + 1) % 3}").performClick().assertIsSelected()
+                onNodeWithTag("codex-slot-item/0").performClick()
+                onNodeWithTag("codex-detail-title").assertTextEquals(language.text(SessionText.UNKNOWN_DISCOVERY))
                 onNodeWithTag("codex-category-3").performClick()
                 onNodeWithTag("codex-slot-shape/ORB").performClick()
                 onNodeWithTag("codex-detail-title").assertTextEquals("Circle".localizedContent(language))
                 onNodeWithTag("codex-tab-2").performClick()
-                onNodeWithTag("codex-slot-synergy/VECTOR_MANEUVER").performClick()
-                onNodeWithTag("codex-detail-title").assertTextEquals(catalog.synergies.first().name.localizedContent(language))
+                onNodeWithTag("codex-slot-break/THERMAL").performClick()
+                onNodeWithTag("codex-detail-title").assertTextEquals("Ignite".localizedContent(language))
+                onNodeWithTag("codex-tab-3").performClick()
+                val harmony = codexPairingKey(kinetickk.ball.content.api.RelicId.BLINK_DRIVE, kinetickk.ball.content.api.RelicId.GYRE_ENGINE)
+                onNodeWithTag("codex-grid").performScrollToKey(harmony)
+                onNodeWithTag("codex-slot-$harmony").performClick()
+                // A harmony is named by the key the two relics share.
+                onNodeWithTag("codex-detail-title").assertTextEquals(kinetickk.ball.content.api.RelicKey.MOTION.displayLabel.localizedContent(language))
             }
         }
     }

@@ -297,7 +297,7 @@ class HudFeedTest {
         )
         val screens = sizes + listOf(780 to 360, 640 to 360, 360 to 780, 360 to 640)
         for (language in AppLanguage.entries) screens.forEach { (w, h) ->
-            for (textScale in TEXT_SCALES) for (message in listOf("", "GHOST VECTOR // SLOT 2 BOUND")) for (toast in toasts) {
+            for (textScale in TEXT_SCALES) for (message in listOf("", "GYRE ENGINE // SLOT 2 BOUND")) for (toast in toasts) {
                 val model = feedModel(w, h, message)
                 val fx = VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(toast))
                 drawFeed(w, h, language, textScale) { measurer -> drawHudFeed(model, fx, measurer, 1f, null) }
@@ -359,13 +359,13 @@ class HudFeedTest {
     @Test
     fun replacedRelicTailsShowNoSlotNumeral() {
         for (language in AppLanguage.entries) for (slot in 1..4) {
-            val (title, detail) = feedMessageParts("GHOST VECTOR // SLOT $slot BOUND", language)
+            val (title, detail) = feedMessageParts("GYRE ENGINE // SLOT $slot BOUND", language)
             assertTrue(detail != null && detail.none(Char::isDigit), "$language slot $slot: $detail")
             assertTrue(title.none(Char::isDigit), "$language slot $slot: $title")
         }
         // A replace reads like a fresh bind.
-        assertEquals(feedMessageParts("GHOST VECTOR // BOUND", AppLanguage.English), feedMessageParts("GHOST VECTOR // SLOT 2 BOUND", AppLanguage.English))
-        assertEquals(feedMessageParts("GHOST VECTOR // BOUND", AppLanguage.Russian), feedMessageParts("GHOST VECTOR // SLOT 2 BOUND", AppLanguage.Russian))
+        assertEquals(feedMessageParts("GYRE ENGINE // BOUND", AppLanguage.English), feedMessageParts("GYRE ENGINE // SLOT 2 BOUND", AppLanguage.English))
+        assertEquals(feedMessageParts("GYRE ENGINE // BOUND", AppLanguage.Russian), feedMessageParts("GYRE ENGINE // SLOT 2 BOUND", AppLanguage.Russian))
     }
 
     @Test

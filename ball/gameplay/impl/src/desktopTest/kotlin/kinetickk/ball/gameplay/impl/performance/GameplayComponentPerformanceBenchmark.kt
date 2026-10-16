@@ -527,7 +527,9 @@ internal fun canonicalChoiceFingerprint(choice: ChoiceOption): Long {
     signature = mix(signature, choice.relicId?.ordinal ?: -1)
     signature = mix(signature, choice.relicAction?.ordinal ?: -1)
     signature = mix(signature, choice.relicSlot ?: -1)
-    return mix(signature, choice.rewardFocus?.ordinal ?: -1)
+    signature = mix(signature, choice.rewardFocus?.ordinal ?: -1)
+    signature = mix(signature, choice.reborn.asInt())
+    return mix(signature, choice.heirloom.asInt())
 }
 
 internal fun canonicalCharacterAbilityFingerprint(ability: CharacterAbilityProjection): Long {

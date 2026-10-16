@@ -74,6 +74,22 @@ class RunTempoTest {
     }
 
     @Test
+    fun runGrowthCurvesComeFromTheTempoProfile() {
+        val state = buildTestState(rebirth = 2)
+        val tempo = state.content.tempo
+        val power = state.rebirthProfile.playerPowerMultiplier
+        // Progress, then run scale, impact, weapon and self-damage growth.
+        for ((progress, expected) in listOf(0.5f to listOf(1.8f, 1.3f, 1.15f, 1.8f), 1f to listOf(2.6f, 1.6f, 1.3f, 2.6f))) {
+            state.elapsed = tempo.bossAtSeconds * progress
+            assertEquals(tempo.runScaleGrowth(state.elapsed) * power, state.runScale(), "at $progress")
+            assertEquals(expected[0] * power, state.runScale(), 0.0001f, "run scale at $progress")
+            assertEquals(expected[1], state.impactRunGrowth(), 0.0001f, "impact at $progress")
+            assertEquals(expected[2], state.weaponRunGrowth(), 0.0001f, "weapon at $progress")
+            assertEquals(expected[3] * power, state.selfDamageScale(), 0.0001f, "self damage at $progress")
+        }
+    }
+
+    @Test
     fun earnedExperienceDevelopsWeaponWithoutPointsOfInterest() {
         val engine = MutableGameState(canonicalGameplayContent)
         engine.startRun()

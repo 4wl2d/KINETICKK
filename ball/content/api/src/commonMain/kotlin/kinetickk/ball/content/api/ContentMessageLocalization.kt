@@ -36,6 +36,8 @@ private val ContentMessageTemplates: List<Pair<Regex, ContentMessageRenderer>> =
         { g -> g[2].contentInRussian()?.let { "Освободить ячейку ${g[1]} и привязать «$it» с рангом 1." } },
     Regex("Collapse the offering into slot ([0-9]+) and advance rank ([0-9]+) to ([0-9]+)\\.") to
         { g -> "Слить дар с ячейкой ${g[1]} и повысить ранг с ${g[2]} до ${g[3]}." },
+    Regex("Slot ([0-9]+) cannot be melded further; salvage the excess resonance\\.") to
+        { g -> "Ячейку ${g[1]} больше нельзя слить; утилизировать избыточный резонанс." },
     Regex("Slot ([0-9]+) is already rank ([0-9]+); salvage the excess resonance\\.") to
         { g -> "Ячейка ${g[1]} уже имеет ранг ${g[2]}; утилизировать избыточный резонанс." },
     Regex("LEVEL ([0-9]+)") to { g -> "УРОВЕНЬ ${g[1]}" },
@@ -51,6 +53,8 @@ private val ContentMessageTemplates: List<Pair<Regex, ContentMessageRenderer>> =
     Regex("([12]) different (.+) relics?") to { g -> g[2].contentInRussian()?.let {
         "${g[1]} ${if (g[1] == "1") "новая реликвия" else "разные реликвии"} аспекта «$it»"
     } },
+    // Resonance and affinity tier lines ("+ Ram II"): Russian shows the tier as a digit.
+    Regex("([+−]) (.+) (I|II|III)") to { g -> g[2].contentInRussian()?.let { "${g[1]} $it ${g[3].length}" } },
     Regex("([+−]) (.+)") to { g -> g[2].contentInRussian()?.let { "${g[1]} $it" } },
     Regex("(.+) ([+−-]?[0-9]+(?:\\.[0-9]+)?)(%|×|/s|s)?") to { g ->
         g[1].contentInRussian()?.let {

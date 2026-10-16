@@ -165,7 +165,7 @@ internal class RecordingProfileResource(
 
 private fun profilePolicyFixture(): ProfilePolicySnapshot = ProfilePolicySnapshot(
     version = ContentVersion("test-content"),
-    itemCount = 400,
+    itemCount = 80,
     coreShapes = CoreShape.entries.map { CoreShapeDefinition(it) }.toImmutableList(),
     weapons = intArrayOf(0, 25, 55, 95, 145, 215, 305, 430, 610, 860, 1_200, 1_650)
         .mapIndexed { index, cost ->

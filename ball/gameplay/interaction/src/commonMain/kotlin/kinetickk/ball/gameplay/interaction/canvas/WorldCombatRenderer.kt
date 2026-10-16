@@ -7,7 +7,6 @@ import kinetickk.foundation.design.*
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
@@ -40,19 +39,13 @@ private const val DAMAGE_NUMBER_DRIFT = 52f
 private const val SHADOW_LINE_HEIGHT = 1.001f
 
 /**
- * Standard damage number size before the tier scale, the size setting and the text size: at the
- * default text size the four tiers render at about the board's 24/30/36/44 px.
+ * Standard damage number size before the tier scale (×1, ×1.2, ×1.45, ×1.8), the size setting and
+ * the text size: at the default text size the four tiers render at about 25/30/36/45 px.
  */
-private const val DAMAGE_NUMBER_BASE_SP = 18f
+private const val DAMAGE_NUMBER_BASE_SP = 20f
 
 /** The crit stamp next to a damage number: 12 px on the Feedback board at the default text size. */
 private val CRIT_STAMP_SP = worldLabelSp(12f)
-
-/**
- * Seconds a ram impact stays in `lastImpactTime` after contact (CollisionSystem). The world is
- * inverted while less than one impact frame ([KkTime.Impact]) of it has elapsed.
- */
-private const val RAM_IMPACT_HOLD_SECONDS = 0.72f
 
 internal fun DrawScope.drawWorld(
     engine: GameplayRenderModel,
@@ -78,16 +71,20 @@ internal fun DrawScope.drawWorld(
     drawWeapon(engine, core, shakeX, shakeY, roles)
     drawWeaponArcs(engine, visualFx, shakeX, shakeY, roles)
     drawParticles(engine, visualFx, shakeX, shakeY, roles)
-    // Telegraphs and threats remain readable over cosmetic trails and secondary effects.
+    // Telegraphs and threats remain readable over cosmetic trails and secondary effects. A crowded
+    // screen drops the status patterns of ordinary enemies for a flat tint.
+    val statusDetail = !crowdedForStatusPatterns(engine, shakeX, shakeY)
     for (index in engine.enemies.indices) {
-        drawEnemy(engine, engine.enemies[index], shakeX, shakeY, roles)
+        drawEnemy(engine, engine.enemies[index], shakeX, shakeY, roles, statusDetail)
     }
+    drawElementBursts(engine, visualFx, shakeX, shakeY, roles)
     drawProjectiles(engine, shakeX, shakeY, roles)
     drawImpactMarks(engine, visualFx, shakeX, shakeY)
     // The tether and the Core/cursor halos are HUD (screen-space) elements drawn by HudRenderer.
     if (engine.phase != GamePhase.GAME_OVER) drawCore(engine, core, roles)
     drawSingularity(pointer, engine.elapsed, engine.tetherDistance < 75f, roles)
     drawDamageNumbers(engine, visualFx, shakeX, shakeY, textMeasurer)
+    drawReactionStamps(engine, visualFx, shakeX, shakeY, textMeasurer)
     // Off-screen targets are placed together, so their markers never overlap each other.
     val markers = WorldOverlayScratch.markers.clear()
     collectPointOfInterestEdgeMarkers(engine, textMeasurer, markers)
@@ -96,7 +93,7 @@ internal fun DrawScope.drawWorld(
 }
 
 /**
- * Damage numbers (cond 900 italic, ink offset shadow): color by tier, pop to 1.25× in 90 ms,
+ * Damage numbers (cond 900 italic, ink offset shadow): the hue of their element, size by tier, pop to 1.25× in 90 ms,
  * settle in 180 ms and drift away from the Core over 600 ms (Out), then shrink out (In).
  * Critical hits get a stamp. Text layouts that differ only in color share one paragraph, and
  * repainting it in another color or alpha rebuilds it, so the shadow gets its own layout (a
@@ -125,7 +122,7 @@ private fun DrawScope.drawDamageNumbers(
         if (!isOnScreen(location, 80f)) continue
         val tier = damageNumberTier(number.amount, settings.damageNumberTierThreshold, number.critical)
         val fontSize = DAMAGE_NUMBER_BASE_SP * settings.damageNumberSize.scale * damageNumberScale(tier)
-        val color = damageNumberColor(tier, roles)
+        val color = damageNumberColor(number.tone, roles)
         val text = number.formattedAmount(settings.damageNumberFormat, textMeasurer.language)
         val face = measureKkText(textMeasurer, text, typography.condStyle(fontSize, tabular = true, lineHeightEm = 1f, color = color))
         val shadow = measureKkText(textMeasurer, text, typography.condStyle(fontSize, tabular = true, lineHeightEm = SHADOW_LINE_HEIGHT, color = Kk.Ink))
@@ -300,8 +297,8 @@ internal fun DrawScope.drawTrail(engine: GameplayRenderModel, shakeX: Float, sha
 
 /**
  * World-impact screen effects only (HUD state effects are HudRenderer's): a threat glow on every
- * edge while damage is fresh (the render model has no source direction) and one inverted frame
- * on a ram impact when screen shake is enabled.
+ * edge while damage is fresh (the render model has no source direction). Ram impacts read through
+ * their slash, ring and screen shake; they never flash the whole screen.
  */
 internal fun DrawScope.drawScreenFx(
     engine: GameplayRenderModel,
@@ -318,14 +315,7 @@ internal fun DrawScope.drawScreenFx(
         drawRect(glow.top, Offset.Zero, Size(size.width, depth), alpha)
         drawRect(glow.bottom, Offset(0f, size.height - depth), Size(size.width, depth), alpha)
     }
-    if (isRamImpactFrame(engine.lastImpactTime) && engine.settings.screenShake) {
-        drawRect(Kk.Bone, blendMode = BlendMode.Difference)
-    }
 }
-
-/** Whether a ram impact happened within the last impact frame (16 ms). */
-internal fun isRamImpactFrame(lastImpactTime: Float): Boolean =
-    lastImpactTime > RAM_IMPACT_HOLD_SECONDS - KkTime.Impact / 1_000f
 
 /** Weapons in the world read as the player's: bone bodies with you-color accents. */
 internal fun DrawScope.drawWeapon(engine: GameplayRenderModel, core: Offset, shakeX: Float, shakeY: Float, roles: KkRolePalette) {

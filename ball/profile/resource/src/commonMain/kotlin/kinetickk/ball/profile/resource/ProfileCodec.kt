@@ -4,10 +4,13 @@
 package kinetickk.ball.profile.resource
 
 import kinetickk.ball.content.api.ContentBounds
-import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.ball.profile.api.CharacterAchievementProgress
 import kinetickk.ball.profile.api.ColorVision
@@ -15,6 +18,7 @@ import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
 import kinetickk.ball.profile.api.LabProgress
+import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
@@ -188,10 +192,18 @@ private data class MetaUpgradeRankDto(
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
 private data class PlayerCollectionDto(
+    // Generation of the item and Relic catalog the ids below refer to. Every encode writes
+    // ContentBounds.COLLECTION_GENERATION; absence marks a save of the retired catalog, which keeps
+    // its exact canonical bytes and whose discoveries are discarded when mapped to the domain.
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val itemCatalogEpoch: Int? = null,
     val discoveredItemIds: List<Int>,
     @EncodeDefault(EncodeDefault.Mode.NEVER) val newItemIds: List<Int> = emptyList(),
     @EncodeDefault(EncodeDefault.Mode.NEVER) val discoveredRelicIds: List<String> = emptyList(),
     @EncodeDefault(EncodeDefault.Mode.NEVER) val newRelicIds: List<String> = emptyList(),
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val discoveredReactionIds: List<String> = emptyList(),
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val discoveredPairingIds: List<String> = emptyList(),
+    // Slot order at the Architect victory, so unique but deliberately not sorted.
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val heirloomRelicIds: List<String> = emptyList(),
 )
 
 @Serializable
@@ -255,10 +267,14 @@ private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
             ),
             labProgress = LabProgressDto(ranks),
             collection = PlayerCollectionDto(
-                profile.collection.discoveredItemIds.sorted(),
-                profile.collection.newItemIds.sorted(),
-                profile.collection.discoveredRelicIds.map(RelicId::wireId).sorted(),
-                profile.collection.newRelicIds.map(RelicId::wireId).sorted(),
+                itemCatalogEpoch = ContentBounds.COLLECTION_GENERATION,
+                discoveredItemIds = profile.collection.discoveredItemIds.sorted(),
+                newItemIds = profile.collection.newItemIds.sorted(),
+                discoveredRelicIds = profile.collection.discoveredRelicIds.map(RelicId::wireId).sorted(),
+                newRelicIds = profile.collection.newRelicIds.map(RelicId::wireId).sorted(),
+                discoveredReactionIds = profile.collection.discoveredReactionIds.map(ReactionId::wireId).sorted(),
+                discoveredPairingIds = profile.collection.discoveredPairingIds.map(RelicPairingId::wireId).sorted(),
+                heirloomRelicIds = profile.collection.heirloomRelicIds.map(RelicId::wireId),
             ),
             characterAchievements = CharacterAchievementProgressDto(
                 eliteKills = profile.characterAchievements.eliteKills.toString(),
@@ -277,6 +293,7 @@ private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
 
 private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
     val revisionValue = revision.parseCanonicalNonNegativeLong()
+    val retiredCatalog = profile.collection.isFromRetiredCatalog()
 
     val expectedRankIds = MetaUpgradeId.entries.map { it.wireId() }.sorted()
     val actualRankIds = profile.labProgress.ranks.map(MetaUpgradeRankDto::id)
@@ -301,7 +318,10 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
     rejectUnless(
         profile.collection.newItemIds.isStrictlySorted() &&
             profile.collection.discoveredRelicIds.isStrictlySorted() &&
-            profile.collection.newRelicIds.isStrictlySorted(),
+            profile.collection.newRelicIds.isStrictlySorted() &&
+            profile.collection.discoveredReactionIds.isStrictlySorted() &&
+            profile.collection.discoveredPairingIds.isStrictlySorted() &&
+            profile.collection.heirloomRelicIds.toSet().size == profile.collection.heirloomRelicIds.size,
         ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
     )
 
@@ -338,12 +358,7 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
             unlockedWeapons = profile.loadout.unlockedWeaponIds.mapTo(mutableSetOf()) { it.weaponId() },
         ),
         labProgress = LabProgress(metaRanks),
-        collection = PlayerCollection(
-            discoveredItemIds = profile.collection.discoveredItemIds.toSet(),
-            newItemIds = profile.collection.newItemIds.toSet(),
-            discoveredRelicIds = profile.collection.discoveredRelicIds.relicIds(),
-            newRelicIds = profile.collection.newRelicIds.relicIds(),
-        ),
+        collection = if (retiredCatalog) PlayerCollection() else profile.collection.toCollection(),
         characterAchievements = CharacterAchievementProgress(
             eliteKills = profile.characterAchievements.eliteKills.parseCanonicalNonNegativeLong(),
             dashHits = profile.characterAchievements.dashHits.parseCanonicalNonNegativeLong(),
@@ -366,6 +381,47 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
         profile = decoded,
     )
 }
+
+/**
+ * Validates the epoch and the raw list bounds of either catalog generation before any id is mapped.
+ * Returns true for a save of the retired catalog, whose discoveries are dropped unparsed: its Relic
+ * names no longer exist and its item indices point into a different catalog.
+ */
+private fun PlayerCollectionDto.isFromRetiredCatalog(): Boolean {
+    val epoch = itemCatalogEpoch
+    rejectUnless(
+        epoch == null || epoch in 0..ContentBounds.COLLECTION_GENERATION,
+        ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+    )
+    val retired = epoch == null || epoch < ContentBounds.COLLECTION_GENERATION
+    val maxItems = if (retired) ContentBounds.LEGACY_MAX_ITEMS else ContentBounds.MAX_ITEMS
+    val maxRelics = if (retired) ContentBounds.LEGACY_MAX_RELICS else ContentBounds.MAX_RELICS
+    rejectUnless(
+        discoveredItemIds.size <= maxItems && newItemIds.size <= maxItems &&
+            discoveredRelicIds.size <= maxRelics && newRelicIds.size <= maxRelics &&
+            discoveredReactionIds.size <= ReactionId.entries.size &&
+            discoveredPairingIds.size <= RelicPairingId.entries.size &&
+            heirloomRelicIds.size <= MAX_HEIRLOOM_RELICS,
+        ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+    )
+    // The retired codec never wrote these fields, so a save carrying them without an epoch was not
+    // produced by any version.
+    rejectUnless(
+        !retired || discoveredReactionIds.isEmpty() && discoveredPairingIds.isEmpty() && heirloomRelicIds.isEmpty(),
+        ProfileSnapshotRejection.INCONSISTENT_PROFILE,
+    )
+    return retired
+}
+
+private fun PlayerCollectionDto.toCollection(): PlayerCollection = PlayerCollection(
+    discoveredItemIds = discoveredItemIds.toImmutableSet(),
+    newItemIds = newItemIds.toImmutableSet(),
+    discoveredRelicIds = discoveredRelicIds.map { it.relicId() }.toImmutableSet(),
+    newRelicIds = newRelicIds.map { it.relicId() }.toImmutableSet(),
+    discoveredReactionIds = discoveredReactionIds.map { it.reactionId() }.toImmutableSet(),
+    discoveredPairingIds = discoveredPairingIds.map { it.relicPairingId() }.toImmutableSet(),
+    heirloomRelicIds = heirloomRelicIds.map { it.relicId() }.toImmutableList(),
+)
 
 private fun validateProfile(profile: PlayerProfile) {
     val achievements = profile.characterAchievements
@@ -419,6 +475,9 @@ private fun validateProfile(profile: PlayerProfile) {
             profile.collection.discoveredRelicIds.size <= ContentBounds.MAX_RELICS,
         ProfileSnapshotRejection.INCONSISTENT_PROFILE,
     )
+    val heirlooms = profile.collection.heirloomRelicIds
+    rejectUnless(heirlooms.size <= MAX_HEIRLOOM_RELICS, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+    rejectUnless(heirlooms.toSet().size == heirlooms.size, ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE)
     rejectUnless(
         profile.rebirthProgress.level in ContentBounds.MIN_REBIRTH_LEVEL..ContentBounds.MAX_REBIRTH_LEVEL &&
             profile.rebirthProgress.highestCleared in -1..profile.rebirthProgress.level,
@@ -432,9 +491,6 @@ private fun <T : Comparable<T>> List<T>.isStrictlySorted(): Boolean {
     }
     return true
 }
-
-private fun List<String>.relicIds(): Set<RelicId> =
-    if (isEmpty()) emptySet() else mapTo(mutableSetOf()) { it.relicId() }
 
 private fun Float.toPercent(): Int {
     rejectUnless(isFinite(), ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
@@ -526,90 +582,125 @@ private fun String.metaUpgradeId(): MetaUpgradeId = when (this) {
 }
 
 
+/** Wire ids of the current Relic catalog; retired names are never mapped (see isFromRetiredCatalog). */
 private fun RelicId.wireId(): String = when (this) {
-    RelicId.KINETIC_FLYWHEEL -> "KINETIC_FLYWHEEL"
-    RelicId.GHOST_VECTOR -> "GHOST_VECTOR"
-    RelicId.OVERTAKE_PROTOCOL -> "OVERTAKE_PROTOCOL"
-    RelicId.SLIPSTREAM_RELAY -> "SLIPSTREAM_RELAY"
-    RelicId.BRAKEPOINT_MEMORY -> "BRAKEPOINT_MEMORY"
-    RelicId.POLARITY_SLING -> "POLARITY_SLING"
-    RelicId.ORBITAL_NAIL -> "ORBITAL_NAIL"
-    RelicId.EVENTIDE_ANCHOR -> "EVENTIDE_ANCHOR"
-    RelicId.PERIAPSIS_HOOK -> "PERIAPSIS_HOOK"
-    RelicId.CRUSH_DEPTH -> "CRUSH_DEPTH"
-    RelicId.MASS_ECHO -> "MASS_ECHO"
-    RelicId.TIDAL_LOCK -> "TIDAL_LOCK"
-    RelicId.VOLTAIC_FILAMENT -> "VOLTAIC_FILAMENT"
-    RelicId.STATIC_CHORUS -> "STATIC_CHORUS"
-    RelicId.ION_DEBT -> "ION_DEBT"
-    RelicId.CIRCUIT_BREAKER -> "CIRCUIT_BREAKER"
-    RelicId.RETURN_CIRCUIT -> "RETURN_CIRCUIT"
-    RelicId.STORM_INDEX -> "STORM_INDEX"
+    RelicId.PERPETUAL_VECTOR -> "PERPETUAL_VECTOR"
+    RelicId.BLINK_DRIVE -> "BLINK_DRIVE"
+    RelicId.GYRE_ENGINE -> "GYRE_ENGINE"
+    RelicId.GLASS_COMET -> "GLASS_COMET"
+    RelicId.EXECUTIONERS_PRISM -> "EXECUTIONERS_PRISM"
     RelicId.ECHO_CHAMBER -> "ECHO_CHAMBER"
-    RelicId.PALIMPSEST_ROUND -> "PALIMPSEST_ROUND"
-    RelicId.SECOND_HAND -> "SECOND_HAND"
-    RelicId.FRACTURE_GATE -> "FRACTURE_GATE"
-    RelicId.SPLIT_HORIZON -> "SPLIT_HORIZON"
-    RelicId.BORROWED_MOMENT -> "BORROWED_MOMENT"
-    RelicId.GLASS_WITNESS -> "GLASS_WITNESS"
-    RelicId.FRACTURE_LENS -> "FRACTURE_LENS"
-    RelicId.SPECTRAL_FAN -> "SPECTRAL_FAN"
-    RelicId.HARDLIGHT_EDGE -> "HARDLIGHT_EDGE"
-    RelicId.CHROMA_FEEDBACK -> "CHROMA_FEEDBACK"
-    RelicId.MIRROR_CUT -> "MIRROR_CUT"
-    RelicId.HEAT_DEBT -> "HEAT_DEBT"
-    RelicId.SCAR_TISSUE -> "SCAR_TISSUE"
-    RelicId.QUIETUS_BLOOM -> "QUIETUS_BLOOM"
-    RelicId.DEVOURERS_TOLL -> "DEVOURERS_TOLL"
-    RelicId.DOOM_CLOCK -> "DOOM_CLOCK"
-    RelicId.LAST_LIGHT -> "LAST_LIGHT"
+    RelicId.FURNACE_COVENANT -> "FURNACE_COVENANT"
+    RelicId.CINDER_CROWN -> "CINDER_CROWN"
+    RelicId.OVERDRIVE_CASCADE -> "OVERDRIVE_CASCADE"
+    RelicId.ABSOLUTE_ZERO -> "ABSOLUTE_ZERO"
+    RelicId.STASIS_ANCHOR -> "STASIS_ANCHOR"
+    RelicId.STORMHEART_CAPACITOR -> "STORMHEART_CAPACITOR"
+    RelicId.AEGIS_INVERSION -> "AEGIS_INVERSION"
+    RelicId.NEUTRON_HEART -> "NEUTRON_HEART"
+    RelicId.EVENT_HORIZON -> "EVENT_HORIZON"
+    RelicId.VERDANT_ROT -> "VERDANT_ROT"
+    RelicId.PANDEMIC_CODEX -> "PANDEMIC_CODEX"
     RelicId.AGONY_SCEPTER -> "AGONY_SCEPTER"
-    RelicId.CROWN_OF_FOUR_WINDS -> "CROWN_OF_FOUR_WINDS"
-    RelicId.MIRROR_OF_THE_HUNT -> "MIRROR_OF_THE_HUNT"
-    RelicId.ENGINE_OF_PARADOX -> "ENGINE_OF_PARADOX"
+    RelicId.HOLLOW_CROWN -> "HOLLOW_CROWN"
+    RelicId.OUROBOROS_SEAL -> "OUROBOROS_SEAL"
 }
 
 private fun String.relicId(): RelicId = when (this) {
-    "KINETIC_FLYWHEEL" -> RelicId.KINETIC_FLYWHEEL
-    "GHOST_VECTOR" -> RelicId.GHOST_VECTOR
-    "OVERTAKE_PROTOCOL" -> RelicId.OVERTAKE_PROTOCOL
-    "SLIPSTREAM_RELAY" -> RelicId.SLIPSTREAM_RELAY
-    "BRAKEPOINT_MEMORY" -> RelicId.BRAKEPOINT_MEMORY
-    "POLARITY_SLING" -> RelicId.POLARITY_SLING
-    "ORBITAL_NAIL" -> RelicId.ORBITAL_NAIL
-    "EVENTIDE_ANCHOR" -> RelicId.EVENTIDE_ANCHOR
-    "PERIAPSIS_HOOK" -> RelicId.PERIAPSIS_HOOK
-    "CRUSH_DEPTH" -> RelicId.CRUSH_DEPTH
-    "MASS_ECHO" -> RelicId.MASS_ECHO
-    "TIDAL_LOCK" -> RelicId.TIDAL_LOCK
-    "VOLTAIC_FILAMENT" -> RelicId.VOLTAIC_FILAMENT
-    "STATIC_CHORUS" -> RelicId.STATIC_CHORUS
-    "ION_DEBT" -> RelicId.ION_DEBT
-    "CIRCUIT_BREAKER" -> RelicId.CIRCUIT_BREAKER
-    "RETURN_CIRCUIT" -> RelicId.RETURN_CIRCUIT
-    "STORM_INDEX" -> RelicId.STORM_INDEX
+    "PERPETUAL_VECTOR" -> RelicId.PERPETUAL_VECTOR
+    "BLINK_DRIVE" -> RelicId.BLINK_DRIVE
+    "GYRE_ENGINE" -> RelicId.GYRE_ENGINE
+    "GLASS_COMET" -> RelicId.GLASS_COMET
+    "EXECUTIONERS_PRISM" -> RelicId.EXECUTIONERS_PRISM
     "ECHO_CHAMBER" -> RelicId.ECHO_CHAMBER
-    "PALIMPSEST_ROUND" -> RelicId.PALIMPSEST_ROUND
-    "SECOND_HAND" -> RelicId.SECOND_HAND
-    "FRACTURE_GATE" -> RelicId.FRACTURE_GATE
-    "SPLIT_HORIZON" -> RelicId.SPLIT_HORIZON
-    "BORROWED_MOMENT" -> RelicId.BORROWED_MOMENT
-    "GLASS_WITNESS" -> RelicId.GLASS_WITNESS
-    "FRACTURE_LENS" -> RelicId.FRACTURE_LENS
-    "SPECTRAL_FAN" -> RelicId.SPECTRAL_FAN
-    "HARDLIGHT_EDGE" -> RelicId.HARDLIGHT_EDGE
-    "CHROMA_FEEDBACK" -> RelicId.CHROMA_FEEDBACK
-    "MIRROR_CUT" -> RelicId.MIRROR_CUT
-    "HEAT_DEBT" -> RelicId.HEAT_DEBT
-    "SCAR_TISSUE" -> RelicId.SCAR_TISSUE
-    "QUIETUS_BLOOM" -> RelicId.QUIETUS_BLOOM
-    "DEVOURERS_TOLL" -> RelicId.DEVOURERS_TOLL
-    "DOOM_CLOCK" -> RelicId.DOOM_CLOCK
-    "LAST_LIGHT" -> RelicId.LAST_LIGHT
+    "FURNACE_COVENANT" -> RelicId.FURNACE_COVENANT
+    "CINDER_CROWN" -> RelicId.CINDER_CROWN
+    "OVERDRIVE_CASCADE" -> RelicId.OVERDRIVE_CASCADE
+    "ABSOLUTE_ZERO" -> RelicId.ABSOLUTE_ZERO
+    "STASIS_ANCHOR" -> RelicId.STASIS_ANCHOR
+    "STORMHEART_CAPACITOR" -> RelicId.STORMHEART_CAPACITOR
+    "AEGIS_INVERSION" -> RelicId.AEGIS_INVERSION
+    "NEUTRON_HEART" -> RelicId.NEUTRON_HEART
+    "EVENT_HORIZON" -> RelicId.EVENT_HORIZON
+    "VERDANT_ROT" -> RelicId.VERDANT_ROT
+    "PANDEMIC_CODEX" -> RelicId.PANDEMIC_CODEX
     "AGONY_SCEPTER" -> RelicId.AGONY_SCEPTER
-    "CROWN_OF_FOUR_WINDS" -> RelicId.CROWN_OF_FOUR_WINDS
-    "MIRROR_OF_THE_HUNT" -> RelicId.MIRROR_OF_THE_HUNT
-    "ENGINE_OF_PARADOX" -> RelicId.ENGINE_OF_PARADOX
+    "HOLLOW_CROWN" -> RelicId.HOLLOW_CROWN
+    "OUROBOROS_SEAL" -> RelicId.OUROBOROS_SEAL
+    else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
+}
+
+private fun ReactionId.wireId(): String = when (this) {
+    ReactionId.THERMAL_SHOCK -> "THERMAL_SHOCK"
+    ReactionId.PLASMA_BURST -> "PLASMA_BURST"
+    ReactionId.FUSION -> "FUSION"
+    ReactionId.WILDFIRE -> "WILDFIRE"
+    ReactionId.SUPERCONDUCT -> "SUPERCONDUCT"
+    ReactionId.GLACIER_CRUSH -> "GLACIER_CRUSH"
+    ReactionId.EMBRITTLE -> "EMBRITTLE"
+    ReactionId.MAGNETIZE -> "MAGNETIZE"
+    ReactionId.FEEDBACK -> "FEEDBACK"
+    ReactionId.ROT_WELL -> "ROT_WELL"
+}
+
+private fun String.reactionId(): ReactionId = when (this) {
+    "THERMAL_SHOCK" -> ReactionId.THERMAL_SHOCK
+    "PLASMA_BURST" -> ReactionId.PLASMA_BURST
+    "FUSION" -> ReactionId.FUSION
+    "WILDFIRE" -> ReactionId.WILDFIRE
+    "SUPERCONDUCT" -> ReactionId.SUPERCONDUCT
+    "GLACIER_CRUSH" -> ReactionId.GLACIER_CRUSH
+    "EMBRITTLE" -> ReactionId.EMBRITTLE
+    "MAGNETIZE" -> ReactionId.MAGNETIZE
+    "FEEDBACK" -> ReactionId.FEEDBACK
+    "ROT_WELL" -> ReactionId.ROT_WELL
+    else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
+}
+
+private fun RelicPairingId.wireId(): String = when (this) {
+    RelicPairingId.ENDLESS_GYRE -> "ENDLESS_GYRE"
+    RelicPairingId.ASSASSINS_LINE -> "ASSASSINS_LINE"
+    RelicPairingId.MELTDOWN -> "MELTDOWN"
+    RelicPairingId.COLD_VERDICT -> "COLD_VERDICT"
+    RelicPairingId.LIGHTNING_ROD -> "LIGHTNING_ROD"
+    RelicPairingId.BLACK_STAR -> "BLACK_STAR"
+    RelicPairingId.BLIGHT_GARDEN -> "BLIGHT_GARDEN"
+    RelicPairingId.FIRESTORM -> "FIRESTORM"
+    RelicPairingId.FORBIDDEN_ECHO -> "FORBIDDEN_ECHO"
+    RelicPairingId.ROT_WARD -> "ROT_WARD"
+    RelicPairingId.STILL_WATERS -> "STILL_WATERS"
+    RelicPairingId.FOLD_VECTOR -> "FOLD_VECTOR"
+    RelicPairingId.HOLLOW_VOW -> "HOLLOW_VOW"
+    RelicPairingId.FARADAY_CAGE -> "FARADAY_CAGE"
+    RelicPairingId.THERMAL_PARADOX -> "THERMAL_PARADOX"
+    RelicPairingId.EXTINGUISHED -> "EXTINGUISHED"
+    RelicPairingId.SHATTERED_AEGIS -> "SHATTERED_AEGIS"
+    RelicPairingId.CONTRADICTION -> "CONTRADICTION"
+    RelicPairingId.HEAVY_BLINK -> "HEAVY_BLINK"
+    RelicPairingId.FRAGILE_REBIRTH -> "FRAGILE_REBIRTH"
+}
+
+private fun String.relicPairingId(): RelicPairingId = when (this) {
+    "ENDLESS_GYRE" -> RelicPairingId.ENDLESS_GYRE
+    "ASSASSINS_LINE" -> RelicPairingId.ASSASSINS_LINE
+    "MELTDOWN" -> RelicPairingId.MELTDOWN
+    "COLD_VERDICT" -> RelicPairingId.COLD_VERDICT
+    "LIGHTNING_ROD" -> RelicPairingId.LIGHTNING_ROD
+    "BLACK_STAR" -> RelicPairingId.BLACK_STAR
+    "BLIGHT_GARDEN" -> RelicPairingId.BLIGHT_GARDEN
+    "FIRESTORM" -> RelicPairingId.FIRESTORM
+    "FORBIDDEN_ECHO" -> RelicPairingId.FORBIDDEN_ECHO
+    "ROT_WARD" -> RelicPairingId.ROT_WARD
+    "STILL_WATERS" -> RelicPairingId.STILL_WATERS
+    "FOLD_VECTOR" -> RelicPairingId.FOLD_VECTOR
+    "HOLLOW_VOW" -> RelicPairingId.HOLLOW_VOW
+    "FARADAY_CAGE" -> RelicPairingId.FARADAY_CAGE
+    "THERMAL_PARADOX" -> RelicPairingId.THERMAL_PARADOX
+    "EXTINGUISHED" -> RelicPairingId.EXTINGUISHED
+    "SHATTERED_AEGIS" -> RelicPairingId.SHATTERED_AEGIS
+    "CONTRADICTION" -> RelicPairingId.CONTRADICTION
+    "HEAVY_BLINK" -> RelicPairingId.HEAVY_BLINK
+    "FRAGILE_REBIRTH" -> RelicPairingId.FRAGILE_REBIRTH
     else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
 }
 

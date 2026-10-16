@@ -16,6 +16,8 @@ data class RebirthRenderModel(
     /** The policy's tier range for the tier ladder. */
     val minimumTier: Int = 0,
     val maximumTier: Int = next.tier,
+    /** Build-system changes of the tiers; null hides the build sections. */
+    val build: RebirthBuildModel? = null,
 ) {
     val isMaximumTier: Boolean
         get() = next.tier <= current.tier
@@ -23,6 +25,10 @@ data class RebirthRenderModel(
     /** The tier this screen advances to (the current tier once the last one is reached). */
     val targetTier: Int
         get() = if (isMaximumTier) current.tier else next.tier
+
+    /** Gated build content the next tier unlocks (none once the last tier is reached). */
+    val targetUnlocks: List<RebirthUnlock> =
+        if (build == null || isMaximumTier) emptyList() else build.unlocksAt(next.tier)
 }
 
 sealed interface RebirthOutput {

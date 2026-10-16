@@ -417,20 +417,37 @@
     }
    ]
   },
-  "aspect.vector": {
-   "label": "Vector",
+  "aspect.kinetic": {
+   "label": "Kinetic",
    "layers": [
     {
-     "d": "M6 19 11 5M13 19 18 5",
+     "d": "M12 3v4M12 17v4M3 12h4M17 12h4",
      "style": "stroke"
+    },
+    {
+     "d": "M10 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0Z",
+     "style": "fill"
     }
    ]
   },
-  "aspect.gravitic": {
-   "label": "Gravitic",
+  "aspect.thermal": {
+   "label": "Thermal",
    "layers": [
     {
-     "d": "M3 5c4 4 14 4 18 0M5 10c3 3 11 3 14 0M8 15c2 2 6 2 8 0",
+     "d": "M12 3c3 4 6 7 6 11a6 6 0 0 1 -12 0c0 -4 3 -7 6 -11Z",
+     "style": "stroke"
+    },
+    {
+     "d": "M12 13c1.2 1.4 2 2.4 2 3.5a2 2 0 0 1 -4 0c0 -1.1 .8 -2.1 2 -3.5Z",
+     "style": "fill"
+    }
+   ]
+  },
+  "aspect.cryo": {
+   "label": "Cryo",
+   "layers": [
+    {
+     "d": "M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6 -9",
      "style": "stroke"
     }
    ]
@@ -439,30 +456,21 @@
    "label": "Ion",
    "layers": [
     {
-     "d": "M13 2 5 13h6l-1 9 8-12h-6Z",
+     "d": "M3 13l4 -7 5 12 5 -12 4 7",
      "style": "stroke"
     }
    ]
   },
-  "aspect.rift": {
-   "label": "Rift",
+  "aspect.gravitic": {
+   "label": "Gravitic",
    "layers": [
     {
-     "d": "M12 2 9 9l5 4-3 9",
-     "style": "stroke"
-    }
-   ]
-  },
-  "aspect.prism": {
-   "label": "Prism",
-   "layers": [
-    {
-     "d": "M12 3 21 20H3Z",
+     "d": "M4.21 16.5a9 4 -30 1 0 15.58 -9a9 4 -30 1 0 -15.58 9Z",
      "style": "stroke"
     },
     {
-     "d": "M12 3v17",
-     "style": "stroke"
+     "d": "M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z",
+     "style": "fill"
     }
    ]
   },
@@ -470,7 +478,7 @@
    "label": "Entropy",
    "layers": [
     {
-     "d": "M12 12a2 2 0 1 1 2 2a4 4 0 1 1-4-4a6 6 0 1 1 6 6",
+     "d": "M12 4a8 8 0 0 1 8 8M18 17.5a8 8 0 0 1 -9.5 2.5M4.6 15a8 8 0 0 1 2.4 -9.5",
      "style": "stroke"
     }
    ]
@@ -480,6 +488,91 @@
    "layers": [
     {
      "d": "M3 20h18M4 17 3 7l5 4 4-7 4 7 5-4-1 10Z",
+     "style": "stroke"
+    }
+   ]
+  },
+  "tag.ram": {
+   "label": "Ram",
+   "layers": [
+    {
+     "d": "M5 6h7a6 6 0 0 1 0 12H5ZM2 12h3",
+     "style": "stroke"
+    }
+   ]
+  },
+  "tag.drive": {
+   "label": "Drive",
+   "layers": [
+    {
+     "d": "M14 8a5 5 0 1 1 0 10a5 5 0 1 1 0 -10ZM2 10h7M2 14h6M4 18h5",
+     "style": "stroke"
+    }
+   ]
+  },
+  "tag.anchor": {
+   "label": "Anchor",
+   "layers": [
+    {
+     "d": "M12 4v16M8 8h8M5 14a7 7 0 0 0 14 0",
+     "style": "stroke"
+    }
+   ]
+  },
+  "tag.arsenal": {
+   "label": "Arsenal",
+   "layers": [
+    {
+     "d": "M5 20h14M8 17V11M12 17V7M16 17V11",
+     "style": "stroke"
+    }
+   ]
+  },
+  "tag.precision": {
+   "label": "Precision",
+   "layers": [
+    {
+     "d": "M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5",
+     "style": "stroke"
+    },
+    {
+     "d": "M10.5 12a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0Z",
+     "style": "fill"
+    }
+   ]
+  },
+  "tag.bulwark": {
+   "label": "Bulwark",
+   "layers": [
+    {
+     "d": "M12 3l8 3v6c0 5 -3.5 8 -8 9c-4.5 -1 -8 -4 -8 -9V6Z",
+     "style": "stroke"
+    }
+   ]
+  },
+  "tag.overclock": {
+   "label": "Overclock",
+   "layers": [
+    {
+     "d": "M4 16a8 8 0 1 1 16 0M12 16l4 -6",
+     "style": "stroke"
+    }
+   ]
+  },
+  "tag.chain": {
+   "label": "Chain",
+   "layers": [
+    {
+     "d": "M9 9H7a3 3 0 0 0 0 6h3M15 9h2a3 3 0 0 1 0 6h-3M9 12h6",
+     "style": "stroke"
+    }
+   ]
+  },
+  "tag.fortune": {
+   "label": "Fortune",
+   "layers": [
+    {
+     "d": "M12 3l2.6 5.6 6.1 .7 -4.5 4.2 1.2 6L12 16.5l-5.4 3 1.2 -6 -4.5 -4.2 6.1 -.7Z",
      "style": "stroke"
     }
    ]

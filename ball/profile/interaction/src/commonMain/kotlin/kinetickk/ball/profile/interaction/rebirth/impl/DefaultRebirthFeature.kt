@@ -12,7 +12,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kinetickk.ball.content.api.BuildPolicy
+import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.RebirthPolicySnapshot
+import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.profile.api.ProfilePort
 import kinetickk.ball.profile.api.ProfileQuery
@@ -20,17 +23,28 @@ import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.audio.ProfileAudioExecutor
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthFeature
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthOutput
+import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.LocalKkRolePalette
 import kinetickk.foundation.design.kkIntString
 import kinetickk.resource.audio.api.AudioService
 
+/**
+ * The Rebirth screen. [relics], [items] and [buildPolicy] come from the UI catalog (required, so
+ * a host cannot silently drop them): the screen shows the Rebirth-gated content the next tier
+ * unlocks, the Reborn card chance of both tiers and the stored Heirlooms, which resolve against
+ * [relics].
+ */
 class DefaultRebirthFeature(
     private val profilePort: ProfilePort,
     private val rebirthPolicy: RebirthPolicySnapshot,
     audioService: AudioService,
+    relics: ImmutableList<RelicDefinition>,
+    items: ImmutableList<ItemDefinition>,
+    buildPolicy: BuildPolicy,
 ) : RebirthFeature {
     private val audioExecutor = ProfileAudioExecutor(audioService)
+    private val buildContent = RebirthBuildContent(relics, items, buildPolicy)
 
     /** Counts accepted advances; each new value plays the advance sequence once. */
     private var acceptedAdvances by mutableIntStateOf(0)
@@ -76,7 +90,13 @@ class DefaultRebirthFeature(
         ) {
             profilePort
                 .query(ProfileQuery.GetRebirthProgress)
-                .toRenderModel(rebirthPolicy, eligible, profilePort.query(ProfileQuery.GetLoadout).snapshot.economy.matter)
+                .toRenderModel(
+                    rebirthPolicy = rebirthPolicy,
+                    eligible = eligible,
+                    matter = profilePort.query(ProfileQuery.GetLoadout).snapshot.economy.matter,
+                    build = buildContent,
+                    heirloomIds = profilePort.query(ProfileQuery.GetCollection).collection.heirloomRelicIds,
+                )
         }
         val textScale = remember(profilePort, routeToken) {
             profilePort.query(ProfileQuery.GetPreferences).preferences.textScale

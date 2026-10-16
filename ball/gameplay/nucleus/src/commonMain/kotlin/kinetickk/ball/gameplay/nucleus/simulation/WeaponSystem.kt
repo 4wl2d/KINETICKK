@@ -23,7 +23,7 @@ internal fun MutableGameState.updateWeapons(delta: Float) {
     weaponClock -= delta
     weaponSecondaryClock -= delta
     val power = effectiveWeaponPower()
-    val agonyRank = relicRank(RelicId.AGONY_SCEPTER)
+    val agonyRank = agonyPower()
     when (weapon) {
         WeaponId.FLUX_WAKE -> sampleFluxTrail()
         WeaponId.MORNINGSTAR -> {
@@ -38,6 +38,7 @@ internal fun MutableGameState.updateWeapons(delta: Float) {
         WeaponId.NULL_LANCE -> {
             if (weaponClock <= 0f) {
                 weaponClock = cooldown(1.15f)
+                onWeaponActivation()
                 val angle = movementAngle()
                 firePlayerProjectile(coreX, coreY, angle, 940f + softVelocity(speed) * 0.22f, 56f * power, 5, 6f, 0)
                 if (agonyRank > 0) {
@@ -50,6 +51,7 @@ internal fun MutableGameState.updateWeapons(delta: Float) {
         WeaponId.GRAVITY_MINES -> {
             if (weaponClock <= 0f && (braking || speed > 220f)) {
                 weaponClock = cooldown(if (braking) 0.72f else 1.15f)
+                onWeaponActivation()
                 val mineLife = 0.75f + agonyRank * 0.04f
                 if (tryAddWeaponNode(
                         WeaponNode(
@@ -73,6 +75,7 @@ internal fun MutableGameState.updateWeapons(delta: Float) {
             if (agonyRank > 0) agonyMutationCounts[WeaponId.ION_SWARM.ordinal]++
             if (weaponClock <= 0f && enemies.isNotEmpty()) {
                 weaponClock = cooldown(0.72f)
+                onWeaponActivation()
                 for (index in weaponOrbitals.indices) {
                     val orbital = weaponOrbitals[index]
                     nearestEnemy(orbital.x, orbital.y, 620f)?.let { enemy ->
@@ -91,6 +94,7 @@ internal fun MutableGameState.updateWeapons(delta: Float) {
         WeaponId.ARC_COIL -> {
             if (weaponClock <= 0f && enemies.isNotEmpty()) {
                 weaponClock = cooldown(0.88f)
+                onWeaponActivation()
                 fireArcCoil(35f * power)
                 emitSound(GameplayAudioCue.WEAPON_LIGHT)
             }
@@ -98,6 +102,7 @@ internal fun MutableGameState.updateWeapons(delta: Float) {
         WeaponId.QUASAR_CANNON -> {
             if (weaponClock <= 0f) {
                 weaponClock = cooldown(1.65f)
+                onWeaponActivation()
                 val angle = movementAngle()
                 firePlayerProjectile(coreX, coreY, angle, 690f, 135f * power, 10, 14f, 2)
                 if (agonyRank > 0) {
@@ -114,12 +119,14 @@ internal fun MutableGameState.updateWeapons(delta: Float) {
         WeaponId.SINGULARITY_SPEAR -> {
             if (weaponClock <= 0f) {
                 weaponClock = cooldown(if (overdriveTime > 0f) 0.9f else 3.2f)
+                onWeaponActivation()
                 fireSingularitySpear(185f * power)
             }
         }
         WeaponId.PRISM_RELAY -> {
             if (weaponClock <= 0f && enemies.isNotEmpty()) {
                 weaponClock = cooldown(0.92f)
+                onWeaponActivation()
                 firePrismRelay(power)
             }
         }
@@ -165,7 +172,7 @@ internal fun MutableGameState.sampleFluxTrail() {
     while (trail.size > MutableGameState.MAX_TRAIL_POINTS) trail.removeAt(0)
     trailLastX = coreX
     trailLastY = coreY
-    if (relicRank(RelicId.AGONY_SCEPTER) > 0) agonyMutationCounts[WeaponId.FLUX_WAKE.ordinal]++
+    if (agonyPower() > 0) agonyMutationCounts[WeaponId.FLUX_WAKE.ordinal]++
 }
 
 internal fun MutableGameState.ensureOrbitals(
@@ -226,7 +233,7 @@ internal fun MutableGameState.explodeMine(node: WeaponNode) {
         val distance = length(enemy.x - node.x, enemy.y - node.y)
         if (distance <= node.radius + enemy.radius) {
             dealWeaponDamage(enemy, 62f * power * (1f - distance / (node.radius * 1.7f)).coerceAtLeast(0.35f), canCrit = true)
-            val pull = (1f - distance / max(1f, node.radius)).coerceAtLeast(0f) * 170f
+            val pull = (1f - distance / max(1f, node.radius)).coerceAtLeast(0f) * 170f * enemy.knockback
             enemy.vx += (node.x - enemy.x) / max(1f, distance) * pull
             enemy.vy += (node.y - enemy.y) / max(1f, distance) * pull
         }
@@ -245,7 +252,7 @@ internal fun MutableGameState.fireArcCoil(baseDamage: Float) {
         var nearestDistanceSquared = ARC_COIL_RANGE_SQUARED
         for (enemyIndex in enemies.indices) {
             val candidate = enemies[enemyIndex]
-            if (candidate.dead || !(candidate.hp > 0f)) continue
+            if (candidate.dead || !(candidate.hp > 0f) || isShifting(candidate)) continue
             var alreadySelected = false
             for (selectedIndex in 0 until targetCount) {
                 if (targets[selectedIndex] === candidate) {
@@ -280,7 +287,7 @@ internal fun MutableGameState.fireArcCoil(baseDamage: Float) {
         fromX = enemy.x
         fromY = enemy.y
     }
-    val agonyRank = relicRank(RelicId.AGONY_SCEPTER)
+    val agonyRank = agonyPower()
     if (agonyRank > 0 && targetCount > 0) {
         val first = checkNotNull(targets[0])
         dealWeaponDamage(first, baseDamage * 0.18f * agonyRank, canCrit = true)
@@ -315,7 +322,7 @@ internal fun MutableGameState.fireSingularitySpear(damage: Float) {
             dealWeaponDamage(enemy, damage, canCrit = true)
         }
     }
-    val agonyRank = relicRank(RelicId.AGONY_SCEPTER)
+    val agonyRank = agonyPower()
     if (agonyRank > 0) {
         val crossAngle = angle + TAU * 0.25f
         val crossEndX = coreX + cos(crossAngle) * length * 0.72f
@@ -336,7 +343,7 @@ internal fun MutableGameState.fireSingularitySpear(damage: Float) {
 internal fun MutableGameState.firePrismRelay(power: Float) {
     val target = nearestEnemy(coreX, coreY, 820f) ?: return
     val baseAngle = atan2(target.y - coreY, target.x - coreX)
-    val agonyRank = relicRank(RelicId.AGONY_SCEPTER)
+    val agonyRank = agonyPower()
     val relayCount = prismRelayCount()
     val bounces = prismRelayBounces()
     repeat(relayCount) { index ->

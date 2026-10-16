@@ -662,6 +662,7 @@ internal fun canonicalStateFingerprint(state: MutableGameState): Long {
     signature = mix(signature, state.coreShape.ordinal)
     signature = mix(signature, state.characterRuntime.toString().hashCode())
     signature = mix(signature, state.nextEliteAt.toRawBits())
+    signature = mix(signature, state.elitesSpawned)
     signature = mix(signature, state.nextLevelData)
     signature = mix(signature, state.smoothedVelocityX.toRawBits())
     signature = mix(signature, state.smoothedVelocityY.toRawBits())
@@ -678,15 +679,40 @@ internal fun canonicalStateFingerprint(state: MutableGameState): Long {
     signature = mix(signature, state.pendingDirectedRewards.toString().hashCode())
     signature = mix(signature, state.directedReward?.ordinal ?: -1)
     signature = mix(signature, state.selectedRewardFocus?.ordinal ?: -1)
-    signature = mix(signature, state.synergyEffects.toString().hashCode())
-    state.synergyCooldowns.forEach { signature = mix(signature, it.toRawBits()) }
-    signature = mix(signature, state.synergyManeuverCharge.toRawBits())
-    signature = mix(signature, if (state.ghostDashPending) 1 else 0)
-    signature = mix(signature, state.ghostDashStartX.toRawBits())
-    signature = mix(signature, state.ghostDashStartY.toRawBits())
+    // Build runtime: the composable effect system's retained facts.
+    state.rebornItems.forEach { signature = mix(signature, it) }
+    signature = mix(signature, state.acquisitionOrder.hashCode())
+    signature = mix(signature, state.build.upsideMask)
+    signature = mix(signature, state.build.liabilityMask)
+    state.clauseReadyAt.forEach { signature = mix(signature, it.toRawBits()) }
+    state.clauseCounters.forEach { signature = mix(signature, it) }
+    state.statusAccumulators.forEach { signature = mix(signature, it.toRawBits()) }
+    signature = mix(signature, state.buffs.toString().hashCode())
+    signature = mix(signature, state.combatFields.toString().hashCode())
+    signature = mix(signature, state.echoHits.toString().hashCode())
+    signature = mix(signature, state.severedRelics.toString().hashCode())
+    signature = mix(signature, state.reactionTokens.toRawBits())
+    signature = mix(signature, state.breakTokens.toRawBits())
+    signature = mix(signature, state.discoveredReactionMask)
+    signature = mix(signature, state.discoveredPairingMask)
+    signature = mix(signature, state.stormCharge.toRawBits())
+    signature = mix(signature, state.stasisMeter.toRawBits())
+    signature = mix(signature, state.stasisBank)
+    signature = mix(signature, state.overdriveBurnoutUntil.toRawBits())
+    signature = mix(signature, state.invulnerableUntil.toRawBits())
+    signature = mix(signature, if (state.ouroborosSpent) 1 else 0)
+    signature = mix(signature, state.offerPity)
+    signature = mix(signature, state.rewardRandom.snapshot().hashCode())
     state.enemies.forEach {
         signature = mix(signature, it.characterMarkTime.toRawBits())
         signature = mix(signature, it.lastCharacterDash)
+        signature = mix(signature, it.aspect)
+        signature = mix(signature, if (it.aspectImmune) 1 else 0)
+        signature = mix(signature, it.phase)
+        signature = mix(signature, it.shiftUntil.toRawBits())
+        signature = mix(signature, it.escortsPending)
+        signature = mix(signature, it.lastDamagedAt.toRawBits())
+        it.status.forEach { cell -> signature = mix(signature, cell.toRawBits()) }
     }
     return mixLong(signature, fixtureFingerprint(state))
 }

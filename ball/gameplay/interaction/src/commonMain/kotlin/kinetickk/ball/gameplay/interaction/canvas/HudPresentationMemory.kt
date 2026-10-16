@@ -122,10 +122,20 @@ internal class BossTarget {
     var integrity: Float = 0f
         private set
 
+    /** The boss's packed statuses ([EnemyStatusBits]). */
+    var statusBits: Int = 0
+        private set
+
+    /** The boss's aspect, weakness and shift ([kinetickk.ball.gameplay.nucleus.render.EnemyAffinity]). */
+    var affinityBits: Int = 0
+        private set
+
     fun select(engine: GameplayRenderModel): BossTarget {
         id = -1
         type = null
         integrity = 0f
+        statusBits = 0
+        affinityBits = 0
         val enemies = engine.enemies
         for (index in enemies.indices) {
             val enemy = enemies[index]
@@ -134,6 +144,8 @@ internal class BossTarget {
                 id = enemy.id
                 type = enemy.type
                 integrity = (enemy.hp / enemy.maxHp.coerceAtLeast(1f)).coerceIn(0f, 1f)
+                statusBits = enemy.statusBits
+                affinityBits = enemy.affinityBits
                 if (enemy.type == EnemyType.ARCHITECT) break
             }
         }

@@ -145,7 +145,7 @@ internal val runtimeBehaviorEvidence = listOf(
     BehaviorEvidence(
         ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.characterization.GameplayArchitectureBoundsTest",
         setOf(
-            "delayedRelicHitBoundAcceptsNAndRejectsNPlusOneCandidate",
+            "echoHitBoundAcceptsNAndRejectsNPlusOneCandidate",
             "fixedStepWorkAcceptsFortyEightAndDefersFortyNinth",
             "simulationDeltaAndAccumulatorClampFirstNPlusOneToExactCaps",
         ),
@@ -159,8 +159,8 @@ internal val runtimeBehaviorEvidence = listOf(
     BehaviorEvidence(
         ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.characterization.RelicSystemTest",
         setOf(
-            "meldRelicAcceptsRankFiveAndSalvagesTheFirstRankSixCandidate",
-            "relicMatrixStopsAtFourSlotsAndDuplicateRanksStopAtFive",
+            "meldRaisesToRankTwoSalvagesBeyondItAndDuplicatesReachRankThree",
+            "relicMatrixStopsAtFourSlotsAndDuplicateRanksStopAtThree",
         ),
     ),
     BehaviorEvidence(
@@ -199,7 +199,7 @@ internal val runtimeBehaviorEvidence = listOf(
             "projectileHitHistoryAcceptsOneHundredTwentyRejectsNextThenReclaimsDeadEntry",
             "projectileHitHistoryMembershipIsCorrectAtLinearAndBinarySearchBoundaries",
             "projectileHitHistoryRetentionMergesSortedLiveIdsAndHonorsTheirLogicalCount",
-            "relicChainWorkAcceptsFiveAndRejectsSixthIteration",
+            "chainWorkAcceptsSixTargetsAndRejectsTheSeventh",
             "rewardChoiceGeneratorsAcceptThreeCandidatesAndDeferFirstNPlusOne",
             "soundCuesAcceptThirtyTwoAndRejectThirtyThird",
             "trailSamplerProcessesThirtyTwoAndDropsThirtyThirdSample",
@@ -258,7 +258,7 @@ internal val runtimeBehaviorEvidence = listOf(
     BehaviorEvidence(
         ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.SynergySystemTest",
         setOf(
-            "effectBoundAndDependencyRemovalPreserveIsolatedSnapshots",
+            "combatFieldBoundAndRelicRemovalPreserveIsolatedSnapshots",
         ),
     ),
     BehaviorEvidence(
@@ -371,7 +371,7 @@ internal val runtimeBehaviorEvidence = listOf(
     BehaviorEvidence(
         ":flow:session:interaction", "kinetickk.flow.session.interaction.codex.impl.CodexReducerTest",
         setOf(
-            "catalogAcceptsFourHundredAndRejectsFourHundredOne",
+            "catalogAcceptsTheContentBoundAndRejectsOneMore",
             "searchAccepts128AndClamps129",
         ),
     ),

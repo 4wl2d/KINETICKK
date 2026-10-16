@@ -5,11 +5,13 @@ package kinetickk.flow.session.interaction.codex.api
 
 import androidx.compose.runtime.Composable
 import kinetickk.ball.content.api.ItemDefinition
+import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.ImmutableSet
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.immutableSetOf
-import kinetickk.ball.content.api.RelicId
 
 data class CodexRunStacks(
     val itemStacks: ImmutableList<Int> = immutableListOf(),
@@ -23,10 +25,19 @@ data class CodexRenderModel(
     val newItemIds: ImmutableSet<Int> = immutableSetOf(),
     val discoveredRelicIds: ImmutableSet<RelicId> = immutableSetOf(),
     val newRelicIds: ImmutableSet<RelicId> = immutableSetOf(),
+    val discoveredReactionIds: ImmutableSet<ReactionId> = immutableSetOf(),
+    val discoveredPairingIds: ImmutableSet<RelicPairingId> = immutableSetOf(),
 ) {
     fun isDiscovered(itemId: Int): Boolean = itemId in discoveredItemIds || itemStack(itemId) > 0
     fun isRelicDiscovered(id: RelicId): Boolean = id in discoveredRelicIds || runStacks.build?.relics?.any { it.id == id } == true
     fun itemStack(itemId: Int): Int = runStacks.itemStacks.getOrElse(itemId) { 0 }
+
+    /** Reactions are revealed only once triggered (recorded by the Profile). */
+    fun isReactionDiscovered(id: ReactionId): Boolean = id in discoveredReactionIds
+
+    /** A named pairing is known once recorded, or while the current run has both relics bound together. */
+    fun isPairingDiscovered(id: RelicPairingId): Boolean =
+        id in discoveredPairingIds || runStacks.build?.relicLinks?.any { it.pairing == id && it.discovered } == true
 }
 
 sealed interface CodexOutput {

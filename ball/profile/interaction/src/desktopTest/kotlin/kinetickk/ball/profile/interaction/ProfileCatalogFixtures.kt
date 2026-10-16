@@ -3,20 +3,36 @@
 
 package kinetickk.ball.profile.interaction
 
+import kinetickk.ball.content.api.BuildPolicy
+import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemModifier
+import kinetickk.ball.content.api.ItemRarity
+import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.MetaUpgradeDefinition
 import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.RebirthProfile
+import kinetickk.ball.content.api.RelicAspect
+import kinetickk.ball.content.api.RelicDefinition
+import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RelicKey
+import kinetickk.ball.content.api.RelicValue
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.profile.interaction.rebirth.api.RebirthBuildModel
+import kinetickk.ball.profile.interaction.rebirth.impl.RebirthBuildContent
 import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 
 /*
  * The game's shipped copy for text-fit tests: mirrors `defaultWeapons()` and `defaultMetaUpgrades()`
- * in ball/content/impl DefaultCatalogData.kt and DefaultRebirthData.kt (the interaction module
+ * in ball/content/impl DefaultCatalogData.kt and DefaultRebirthData.kt, and the Rebirth-gated
+ * Relics and items with a few Heirloom candidates from DefaultRelicData.kt and DefaultItemData.kt
+ * (names, aspects, rarities, tags, elements and gates as shipped; the interaction module
  * cannot depend on the content implementation). Russian text comes from the content API's
  * phrase table through `localizedContent`, exactly as on screen.
  */
@@ -77,3 +93,81 @@ internal fun catalogRebirthProfile(tier: Int): RebirthProfile {
         minimumEliteIntervalSeconds = 24f,
     )
 }
+
+private fun catalogRelic(
+    id: RelicId,
+    name: String,
+    aspect: RelicAspect,
+    key: RelicKey,
+    gate: Int = 0,
+    upside: String = "$name upside",
+    values: List<RelicValue> = emptyList(),
+) = RelicDefinition(
+    id = id,
+    name = name,
+    aspect = aspect,
+    keys = immutableListOf(key),
+    attunedTags = immutableListOf(),
+    upside = upside,
+    liability = "$name liability",
+    values = values.toImmutableList(),
+    minimumRebirth = gate,
+)
+
+/**
+ * The three Rebirth-gated Sovereign relics (with their shipped rule rewrites, which the build table
+ * shows) and four Heirloom candidates (long names in both languages).
+ */
+internal val CatalogRebirthRelics: ImmutableList<RelicDefinition> = listOf(
+    catalogRelic(RelicId.EXECUTIONERS_PRISM, "Executioner's Prism", RelicAspect.KINETIC, RelicKey.CRITICAL),
+    catalogRelic(RelicId.FURNACE_COVENANT, "Furnace Covenant", RelicAspect.THERMAL, RelicKey.HEAT),
+    catalogRelic(RelicId.ABSOLUTE_ZERO, "Absolute Zero", RelicAspect.CRYO, RelicKey.COLD),
+    catalogRelic(RelicId.STORMHEART_CAPACITOR, "Stormheart Capacitor", RelicAspect.ION, RelicKey.CHARGE),
+    catalogRelic(RelicId.AGONY_SCEPTER, "Agony Scepter", RelicAspect.SOVEREIGN, RelicKey.ECHO, gate = 1,
+        upside = "Your weapon takes its Forbidden form. Every rank deepens the mutation."),
+    catalogRelic(RelicId.HOLLOW_CROWN, "Hollow Crown", RelicAspect.SOVEREIGN, RelicKey.VOID, gate = 3,
+        upside = "Each empty Relic slot grants {0} % damage and 8 % activation speed.", values = listOf(RelicValue(35f))),
+    catalogRelic(RelicId.OUROBOROS_SEAL, "Ouroboros Seal", RelicAspect.SOVEREIGN, RelicKey.LIFE, gate = 5,
+        upside = "Once per run, lethal damage instead restores your integrity, releases a nova for {0} damage and " +
+            "grants two seconds of invulnerability. Then the seal is spent but keeps its slot.",
+        values = listOf(RelicValue(120f, 60f))),
+).toImmutableList()
+
+private fun catalogItem(
+    id: Int,
+    name: String,
+    description: String,
+    tags: List<BuildTag>,
+    elements: List<StatusElement>,
+    rule: ItemRule,
+    gate: Int,
+) = ItemDefinition(
+    id = id,
+    name = name,
+    description = description,
+    rarity = ItemRarity.LEGENDARY,
+    tags = tags.toImmutableList(),
+    elements = elements.toImmutableList(),
+    rules = immutableListOf(rule),
+    maxStacks = 1,
+    unlockLevel = 16,
+    minimumRebirth = gate,
+)
+
+/** The three Rebirth-gated legendaries with their shipped descriptions. */
+internal val CatalogRebirthItems: ImmutableList<ItemDefinition> = listOf(
+    catalogItem(0, "Solar Choir", "When one fire sings, the others answer.", listOf(BuildTag.CHAIN), listOf(StatusElement.THERMAL),
+        ItemRule.BreakSpread(StatusElement.THERMAL, 3, 140f), gate = 2),
+    catalogItem(1, "Glacial Heart", "Collide with the frozen and the whole field cracks.", listOf(BuildTag.RAM),
+        listOf(StatusElement.CRYO), ItemRule.BreakPower(StatusElement.CRYO, 1f), gate = 2),
+    catalogItem(2, "Resonance Fork", "A reaction that rings on after it ends.", emptyList(), emptyList(),
+        ItemRule.ReactionResidue(2), gate = 4),
+).toImmutableList()
+
+/** Heirlooms of a victory with four bound relics, in slot order. */
+internal val CatalogHeirlooms: List<RelicId> =
+    listOf(RelicId.STORMHEART_CAPACITOR, RelicId.EXECUTIONERS_PRISM, RelicId.FURNACE_COVENANT, RelicId.ABSOLUTE_ZERO)
+
+/** The screen's build model between [current] and [target] with the shipped Reborn odds. */
+internal fun catalogRebirthBuild(current: Int, target: Int, heirlooms: List<RelicId> = CatalogHeirlooms): RebirthBuildModel =
+    RebirthBuildContent(CatalogRebirthRelics, CatalogRebirthItems, BuildPolicy()).model(current, target, heirlooms)

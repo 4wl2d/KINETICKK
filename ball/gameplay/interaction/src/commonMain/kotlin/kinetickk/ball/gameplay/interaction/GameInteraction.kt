@@ -580,7 +580,13 @@ fun GameplayContent(
             }
         }
         if (terminal) {
-            TerminalContent(renderModelValue, terminalElapsed, inputEnabled) { input ->
+            TerminalContent(
+                renderModelValue,
+                terminalElapsed,
+                inputEnabled,
+                reactionsThisRun = visualFxProjectionValue.runReactionMask,
+                discoveredThisRun = visualFxProjectionValue.runDiscoveryMask,
+            ) { input ->
                 dispatch(GameplayInteractionPulse.UserGestureObserved)
                 dispatchInput(input)
             }

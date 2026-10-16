@@ -5,6 +5,9 @@ package kinetickk.ball.profile.nucleus
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.profile.api.CollectionProjection
 import kinetickk.ball.profile.api.ColorVision
@@ -16,6 +19,7 @@ import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kinetickk.ball.profile.api.HomeProgressProjection
 import kinetickk.ball.profile.api.LabProgressProjection
 import kinetickk.ball.profile.api.LoadoutProjection
+import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
 import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
@@ -295,6 +299,18 @@ class ProfileNucleusTest {
                 ProfileGameplayProgressRejection.ClearedLevelBelowMinimum(-1),
             GameplayProgressUpdate(clearedRebirthLevel = 1) to
                 ProfileGameplayProgressRejection.ClearedLevelAboveCurrent(1),
+            GameplayProgressUpdate(discoveredItemIds = emptySet(), victoryRelicIds = listOf(RelicId.GLASS_COMET)) to
+                ProfileGameplayProgressRejection.VictoryRelicsWithoutClear,
+            GameplayProgressUpdate(
+                discoveredItemIds = emptySet(),
+                clearedRebirthLevel = 0,
+                victoryRelicIds = RelicId.entries.take(MAX_HEIRLOOM_RELICS + 1),
+            ) to ProfileGameplayProgressRejection.TooManyVictoryRelics,
+            GameplayProgressUpdate(
+                discoveredItemIds = emptySet(),
+                clearedRebirthLevel = 0,
+                victoryRelicIds = listOf(RelicId.GLASS_COMET, RelicId.BLINK_DRIVE, RelicId.GLASS_COMET),
+            ) to ProfileGameplayProgressRejection.DuplicateVictoryRelic(RelicId.GLASS_COMET),
         )
 
         cases.forEach { (update, expected) ->
@@ -303,6 +319,95 @@ class ProfileNucleusTest {
                 applyGameplayProgress(state, update).rejection(),
             )
         }
+    }
+
+    @Test
+    fun victoryRecordsHeirloomsInSlotOrderAndResolvingTheOfferSpendsThem() {
+        val state = readyState()
+        val slots = RelicId.entries.reversed().take(MAX_HEIRLOOM_RELICS)
+        val victory = GameplayProgressUpdate(
+            discoveredItemIds = emptySet(),
+            clearedRebirthLevel = 0,
+            architectDefeatedWith = CoreShape.ORB,
+            victoryRelicIds = slots,
+        )
+        val won = applyGameplayProgress(state, victory).acceptedFrame()
+        assertEquals(slots, won.nextState.profile.collection.heirloomRelicIds)
+        assertEquals(won.nextState.profile, assertIs<ProfileOutput.PersistSnapshot>(won.outputs[0]).snapshot.profile)
+        val bootstrap = assertIs<ProfileRunBootstrapResult.Ready>(
+            ProfileNucleus.query(won.nextState, ProfileQuery.GetRunBootstrap).result,
+        )
+        assertEquals(slots, bootstrap.snapshot.collection.heirloomRelicIds)
+        assertTrue(state.profile.collection.heirloomRelicIds.isEmpty())
+
+        // The next run resolves its Heirloom offer; spending is idempotent once nothing is left.
+        val resolved = applyGameplayProgress(won.persisted(), GameplayProgressUpdate(heirloomResolved = true)).acceptedFrame()
+        assertTrue(resolved.nextState.profile.collection.heirloomRelicIds.isEmpty())
+        assertEquals(won.nextState.profile.collection.copy(heirloomRelicIds = immutableListOf()), resolved.nextState.profile.collection)
+        assertEquals(
+            ProfileRejection.NoChange,
+            applyGameplayProgress(resolved.persisted(), GameplayProgressUpdate(heirloomResolved = true)).rejection(),
+        )
+
+        // Spending the old Heirlooms and winning again in one update keeps only the new victory.
+        val again = listOf(RelicId.HOLLOW_CROWN)
+        val replaced = applyGameplayProgress(won.persisted(), GameplayProgressUpdate(
+            discoveredItemIds = emptySet(),
+            clearedRebirthLevel = 0,
+            victoryRelicIds = again,
+            heirloomResolved = true,
+        )).acceptedFrame()
+        assertEquals(again, replaced.nextState.profile.collection.heirloomRelicIds)
+        // A victory without bound Relics leaves no Heirloom behind.
+        val bare = applyGameplayProgress(won.persisted(), GameplayProgressUpdate(
+            discoveredItemIds = emptySet(),
+            clearedRebirthLevel = 0,
+            victoryRelicIds = emptyList(),
+        )).acceptedFrame()
+        assertTrue(bare.nextState.profile.collection.heirloomRelicIds.isEmpty())
+        // Progress without a victory keeps the remembered Heirlooms untouched.
+        val banked = applyGameplayProgress(won.persisted(), GameplayProgressUpdate(bankedMatter = 5L)).acceptedFrame()
+        assertEquals(slots, banked.nextState.profile.collection.heirloomRelicIds)
+    }
+
+    @Test
+    fun reactionAndPairingDiscoveriesMergeIdempotentlyWithoutTouchingOtherFacts() {
+        val state = readyState()
+        val first = applyGameplayProgress(state, GameplayProgressUpdate(
+            discoveredItemIds = emptySet(),
+            discoveredReactionIds = setOf(ReactionId.FUSION, ReactionId.EMBRITTLE),
+            discoveredPairingIds = setOf(RelicPairingId.MELTDOWN),
+        )).acceptedFrame()
+        val second = applyGameplayProgress(first.persisted(), GameplayProgressUpdate(
+            discoveredItemIds = emptySet(),
+            discoveredReactionIds = setOf(ReactionId.EMBRITTLE, ReactionId.ROT_WELL),
+            discoveredPairingIds = setOf(RelicPairingId.CONTRADICTION),
+        )).acceptedFrame()
+        val collection = second.nextState.profile.collection
+        assertEquals(setOf(ReactionId.FUSION, ReactionId.EMBRITTLE, ReactionId.ROT_WELL), collection.discoveredReactionIds)
+        assertEquals(setOf(RelicPairingId.MELTDOWN, RelicPairingId.CONTRADICTION), collection.discoveredPairingIds)
+        assertEquals(
+            state.profile.copy(collection = state.profile.collection.copy(
+                discoveredReactionIds = collection.discoveredReactionIds,
+                discoveredPairingIds = collection.discoveredPairingIds,
+            )),
+            second.nextState.profile,
+        )
+        assertEquals(
+            ProfileRejection.NoChange,
+            applyGameplayProgress(second.persisted(), GameplayProgressUpdate(
+                discoveredItemIds = emptySet(),
+                discoveredReactionIds = setOf(ReactionId.FUSION),
+                discoveredPairingIds = setOf(RelicPairingId.MELTDOWN),
+            )).rejection(),
+        )
+        val everything = applyGameplayProgress(state, GameplayProgressUpdate(
+            discoveredItemIds = emptySet(),
+            discoveredReactionIds = ReactionId.entries.toSet(),
+            discoveredPairingIds = RelicPairingId.entries.toSet(),
+        )).acceptedFrame().nextState.profile.collection
+        assertEquals(ReactionId.entries.toSet(), everything.discoveredReactionIds)
+        assertEquals(RelicPairingId.entries.toSet(), everything.discoveredPairingIds)
     }
 
     @Test
@@ -362,7 +467,14 @@ class ProfileNucleusTest {
             Long.MAX_VALUE,
         ).map { revision -> constructedProfile(default, revision) }
 
-        (listOf(missing, rejected, incompatible) + exhausted).forEach { state ->
+        val heirlooms = listOf(
+            RelicId.entries.take(MAX_HEIRLOOM_RELICS + 1),
+            listOf(RelicId.GLASS_COMET, RelicId.GLASS_COMET),
+        ).map { relics ->
+            constructedProfile(default.copy(collection = PlayerCollection(emptySet(), heirloomRelicIds = relics)))
+        }
+
+        (listOf(missing, rejected, incompatible) + exhausted + heirlooms).forEach { state ->
             assertEquals(ProfileBootstrapStatus.Ready, state.bootstrap)
             assertEquals(default, state.profile)
             assertEquals(ProfilePersistenceStatus.NotAttempted, state.persistence)
@@ -382,6 +494,49 @@ class ProfileNucleusTest {
         assertEquals(profile, loaded.profile)
         assertEquals(ProfilePersistenceStatus.Persisted(ProfileRevision(17L)), loaded.persistence)
         assertEquals(ProfileBootstrapStatus.Ready, loaded.bootstrap)
+    }
+
+    @Test
+    fun bootstrapForgetsRetiredItemDiscoveriesWithoutResettingTheEconomy() {
+        val catalogEnd = TestProfilePolicy.itemCount
+        val profile = defaultPlayerProfile(TestProfilePolicy).copy(
+            economy = PlayerEconomy(matter = 640L, lifetimeMatter = 9_000L),
+            labProgress = kinetickk.ball.profile.api.LabProgress(MetaUpgradeId.entries.map { 2 }),
+            rebirthProgress = RebirthProgress(3, 2),
+            collection = PlayerCollection(
+                discoveredItemIds = setOf(1, catalogEnd - 1, catalogEnd, 399),
+                newItemIds = setOf(1, catalogEnd, 399),
+                discoveredRelicIds = setOf(RelicId.GYRE_ENGINE),
+                discoveredReactionIds = setOf(ReactionId.SUPERCONDUCT),
+                heirloomRelicIds = listOf(RelicId.GYRE_ENGINE),
+            ),
+        )
+
+        val loaded = constructedProfile(profile, revision = 41L)
+
+        assertEquals(ProfileRevision(42L), loaded.revision)
+        assertEquals(ProfilePersistenceStatus.Persisted(ProfileRevision(41L)), loaded.persistence)
+        assertEquals(
+            profile.copy(collection = profile.collection.copy(
+                discoveredItemIds = kinetickk.foundation.collections.immutableSetOf(1, catalogEnd - 1),
+                newItemIds = kinetickk.foundation.collections.immutableSetOf(1),
+            )),
+            loaded.profile,
+        )
+        // The filtered collection is what the next accepted write persists.
+        val written = ProfileNucleus.decide(
+            loaded,
+            ProfileNucleusPulse.Intent(ProfilePulse.AdjustPreference(ProfilePreferenceAdjustment.ToggleScreenShake)),
+        ).acceptedFrame()
+        assertEquals(
+            setOf(1, catalogEnd - 1),
+            assertIs<ProfileOutput.PersistSnapshot>(written.outputs.single()).snapshot.profile.collection.discoveredItemIds,
+        )
+        // An in-catalog unseen marker without its discovery is still an inconsistent save.
+        val inconsistent = constructedProfile(profile.copy(
+            collection = PlayerCollection(setOf(1), newItemIds = setOf(2)),
+        ))
+        assertEquals(defaultPlayerProfile(TestProfilePolicy), inconsistent.profile)
     }
 
     @Test
@@ -587,6 +742,15 @@ class ProfileNucleusTest {
         state,
         ProfileNucleusPulse.ApplyGameplayProgress(update),
     )
+}
+
+/** Completes the frame's write so the next decision starts from a settled State. */
+private fun ProfileAcceptedFrame.persisted(): ProfileState {
+    val persist = assertIs<ProfileOutput.PersistSnapshot>(outputs.first())
+    return ProfileNucleus.decide(
+        nextState,
+        ProfileNucleusPulse.WriteCompleted(persist.effectRef, ProfileWriteResult.Written(persist.snapshot.revision)),
+    ).acceptedFrame().nextState
 }
 
 private fun ProfileDecision.acceptedFrame(): ProfileAcceptedFrame =

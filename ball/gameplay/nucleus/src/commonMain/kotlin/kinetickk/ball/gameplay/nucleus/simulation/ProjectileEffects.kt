@@ -3,10 +3,6 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.content.api.ItemDefinition
-import kinetickk.ball.content.api.ItemModifier
-import kinetickk.ball.content.api.ModifierUnit
-import kinetickk.ball.content.api.RelicId
 
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.render.*
@@ -94,11 +90,18 @@ internal fun MutableGameState.fireProjectileWall(
     }
 }
 
-internal fun MutableGameState.fireRadial(x: Float, y: Float, count: Int, projectileSpeed: Float, rotation: Float) {
+internal fun MutableGameState.fireRadial(
+    x: Float,
+    y: Float,
+    count: Int,
+    projectileSpeed: Float,
+    rotation: Float,
+    life: Float = 8f,
+) {
     val scaledSpeed = projectileSpeed * rebirthProfile.enemySpeedMultiplier
     repeat(count) { index ->
         val angle = rotation + index * TAU / count
-        addProjectile(Projectile(x, y, cos(angle) * scaledSpeed, sin(angle) * scaledSpeed, 5f, 8f))
+        addProjectile(Projectile(x, y, cos(angle) * scaledSpeed, sin(angle) * scaledSpeed, 5f, life))
     }
 }
 
@@ -173,12 +176,13 @@ internal fun MutableGameState.addWeaponArc(
     )
 }
 
+/** Nearest live enemy within [range]; a shifting Architect is never a target. */
 internal fun MutableGameState.nearestEnemy(x: Float, y: Float, range: Float): Enemy? {
     var nearest: Enemy? = null
     var nearestDistanceSquared = range * range
     for (index in enemies.indices) {
         val candidate = enemies[index]
-        if (candidate.dead || !(candidate.hp > 0f)) continue
+        if (candidate.dead || !(candidate.hp > 0f) || isShifting(candidate)) continue
         val candidateDistanceSquared = distanceSquared(x, y, candidate.x, candidate.y)
         if (
             candidateDistanceSquared <= nearestDistanceSquared &&
@@ -203,38 +207,13 @@ internal fun MutableGameState.effectiveWeaponPower(): Float =
         rebirthProfile.playerPowerMultiplier *
         (1f + (weaponLevel - 1) * 0.08f) *
         (1f + currentWeaponMastery.damageBonus) *
+        weaponRunGrowth() *
         if (overdriveTime > 0f) 1.45f else 1f
 
 internal fun MutableGameState.cooldown(base: Float): Float =
     base / (
         attackSpeed *
             (1f + currentWeaponMastery.activationSpeedBonus) *
-            (1f + relicActivationSpeedBonus()) *
+            buildActivationBonus() *
             if (overdriveTime > 0f) 1.35f else 1f
         ).coerceAtLeast(0.2f)
-
-internal fun MutableGameState.relicActivationSpeedBonus(): Float {
-    var bonus = 0f
-    if (slipstreamRelayTime > 0f) bonus += 0.06f * relicRank(RelicId.SLIPSTREAM_RELAY)
-    if (borrowedMomentTime > 0f) bonus += 0.09f * relicRank(RelicId.BORROWED_MOMENT)
-    if (hp <= maxHp * 0.35f) bonus += 0.08f * relicRank(RelicId.LAST_LIGHT)
-    val crownRank = relicRank(RelicId.CROWN_OF_FOUR_WINDS)
-    if (crownRank > 0) bonus += 0.03f * crownRank * distinctRelicAspectCount()
-    if (overdriveTime > 0f) bonus += 0.10f * relicRank(RelicId.ENGINE_OF_PARADOX)
-    return bonus
-}
-
-internal fun MutableGameState.compactItemDescription(item: ItemDefinition): String =
-    formatModifier(item.primary) + "  //  " + formatModifier(item.secondary)
-
-internal fun MutableGameState.formatModifier(modifier: ItemModifier): String {
-    val amount = if (modifier.effect.unit == ModifierUnit.PERCENT) modifier.amount * 100f else modifier.amount
-    val rounded = (amount * 10f).toInt() / 10f
-    val suffix = when (modifier.effect.unit) {
-        ModifierUnit.PERCENT -> "%"
-        ModifierUnit.PER_SECOND -> "/s"
-        ModifierUnit.SECONDS -> "s"
-        ModifierUnit.FLAT -> ""
-    }
-    return "+" + rounded + suffix + " " + modifier.effect.displayLabel
-}

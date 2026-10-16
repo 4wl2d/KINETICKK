@@ -185,14 +185,14 @@ class ProfileComponentCharacterizationTest {
             ProfileTestOperation.ApplyGameplayProgress(
                 GameplayProgressUpdate(
                     bankedMatter = 7L,
-                    discoveredItemIds = setOf(1, 399),
+                    discoveredItemIds = setOf(1, 79),
                     clearedRebirthLevel = 2,
                 ),
             ),
         )
         val afterRun = queriedProfile(component)
         assertEquals(PlayerEconomy(12L, 27L), afterRun.economy)
-        assertEquals(setOf(0, 1, 200, 399), afterRun.collection.discoveredItemIds)
+        assertEquals(setOf(0, 1, 40, 79), afterRun.collection.discoveredItemIds)
         assertEquals(RebirthProgress(level = 2, highestCleared = 2), afterRun.rebirthProgress)
 
         assertAcceptedAndWritten(

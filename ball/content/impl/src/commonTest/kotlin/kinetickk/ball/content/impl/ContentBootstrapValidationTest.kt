@@ -3,12 +3,33 @@
 
 package kinetickk.ball.content.impl
 
+import kinetickk.ball.content.api.BuffStat
+import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.ContentVersion
+import kinetickk.ball.content.api.DamageBasis
+import kinetickk.ball.content.api.EffectAction
+import kinetickk.ball.content.api.EffectClause
+import kinetickk.ball.content.api.EffectCondition
+import kinetickk.ball.content.api.EffectTrigger
+import kinetickk.ball.content.api.ElementPick
+import kinetickk.ball.content.api.ItemDefinition
+import kinetickk.ball.content.api.ItemEffect
+import kinetickk.ball.content.api.ItemRarity
+import kinetickk.ball.content.api.ItemRule
+import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
 import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RelicKey
+import kinetickk.ball.content.api.RelicPairingId
+import kinetickk.ball.content.api.RelicPairingKind
+import kinetickk.ball.content.api.StatDelta
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.immutableListOf
+import kinetickk.foundation.collections.toImmutableList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -17,30 +38,29 @@ import kotlin.test.assertTrue
 class ContentBootstrapValidationTest {
     @Test
     fun exactCatalogBoundsAreAccepted() {
-        val content = createContentCatalogForTesting(defaultContentBootstrapData())
-        val gameplay = content.gameplayContent()
+        val data = defaultContentBootstrapData()
+        val gameplay = createContentCatalogForTesting(data).gameplayContent()
 
-        assertEquals(ContentBounds.MAX_ITEMS, gameplay.items.size)
+        assertEquals(80, gameplay.items.size)
         assertEquals(ContentBounds.MAX_WEAPONS, gameplay.weapons.size)
         assertEquals(ContentBounds.MAX_META_UPGRADES, gameplay.metaUpgrades.size)
-        assertEquals(ContentBounds.MAX_RELICS, gameplay.relics.size)
-        assertEquals(12, gameplay.synergies.size)
+        assertEquals(RelicId.entries.size, gameplay.relics.size)
+        assertEquals(20, gameplay.build.pairings.size)
         assertEquals(
             ContentBounds.MAX_REBIRTH_LEVEL - ContentBounds.MIN_REBIRTH_LEVEL + 1,
             gameplay.rebirth.profiles.size,
         )
+
+        val full = createContentCatalogForTesting(data.copy(items = data.items.paddedTo(ContentBounds.MAX_ITEMS)))
+        assertEquals(ContentBounds.MAX_ITEMS, full.gameplayContent().items.size)
+        assertEquals(ContentBounds.MAX_ITEMS, full.profilePolicy().itemCount)
     }
 
     @Test
     fun itemBoundRejectsNPlusOne() {
         val data = defaultContentBootstrapData()
-        val extra = data.items.last().copy(
-            id = ContentBounds.MAX_ITEMS,
-            name = "Overflow Item",
-            description = "Only used to exercise the bootstrap item bound.",
-        )
 
-        assertRejected(data.copy(items = data.items + extra), "items size 401")
+        assertRejected(data.copy(items = data.items.paddedTo(ContentBounds.MAX_ITEMS + 1)), "items size 97")
     }
 
     @Test
@@ -68,15 +88,54 @@ class ContentBootstrapValidationTest {
     @Test
     fun relicBoundRejectsNPlusOne() {
         val data = defaultContentBootstrapData()
-        val extra = data.relics.first().copy(id = RelicId.KINETIC_FLYWHEEL)
+        val filler = (data.relics.size until ContentBounds.MAX_RELICS).map { data.relics.first() }
 
-        assertRejected(data.copy(relics = data.relics + extra), "relics size 41")
+        // At the bound only the stable-id rule refuses the duplicates; one past it the bound refuses first.
+        assertRejected(data.copy(relics = data.relics + filler), "relic ids must be unique")
+        assertRejected(data.copy(relics = data.relics + filler + data.relics.first()), "relics size 25")
     }
 
     @Test
     fun synergyBoundRejectsNPlusOne() {
         val data = defaultContentBootstrapData()
-        assertRejected(data.copy(synergies = data.synergies + data.synergies.first()), "synergies size 13")
+        val pairings = data.build.pairings
+
+        // Synergies became named Relic pairings, exactly one per RelicPairingId. The bound sits above the
+        // id count, so a list of N entries is refused by the id-order rule; N + 1 is refused by the bound.
+        assertEquals(RelicPairingId.entries.size, pairings.size)
+        assertTrue(RelicPairingId.entries.size <= ContentBounds.MAX_RELIC_PAIRINGS)
+        val oversized = (pairings + List(ContentBounds.MAX_RELIC_PAIRINGS + 1 - pairings.size) { pairings.first() }).toImmutableList()
+        assertEquals(
+            "Relic pairings size ${ContentBounds.MAX_RELIC_PAIRINGS + 1} exceeds ${ContentBounds.MAX_RELIC_PAIRINGS}",
+            assertFailsWith<IllegalArgumentException> { data.build.copy(pairings = oversized) }.message,
+        )
+        assertEquals(
+            "Pairings follow RelicPairingId order",
+            assertFailsWith<IllegalArgumentException> { data.build.copy(pairings = oversized.dropLast(1).toImmutableList()) }.message,
+        )
+        assertFailsWith<IllegalArgumentException> { data.build.copy(pairings = (pairings + pairings.first()).toImmutableList()) }
+        assertFailsWith<IllegalArgumentException> { data.build.copy(pairings = pairings.dropLast(1).toImmutableList()) }
+    }
+
+    @Test
+    fun buildCatalogRejectsOutOfOrderVocabularyAndMalformedPolicy() {
+        val build = defaultContentBootstrapData().build
+
+        fun rejection(block: () -> Unit) = assertFailsWith<IllegalArgumentException> { block() }.message
+        assertEquals("StatusElement definitions follow StatusElement order", rejection { build.copy(elements = build.elements.swappedHead()) })
+        assertEquals("Reaction definitions follow ReactionId order", rejection { build.copy(reactions = build.reactions.swappedHead()) })
+        assertEquals("Resonance definitions follow BuildTag order", rejection { build.copy(resonances = build.resonances.swappedHead()) })
+        rejection { build.copy(affinityTiers = build.affinityTiers.dropLast(1).toImmutableList()) }
+
+        val policy = build.policy
+        rejection { policy.copy(resonanceThresholds = immutableListOf(3, 3, 7)) }
+        rejection { policy.copy(resonanceThresholds = immutableListOf(0, 5, 7)) }
+        rejection { policy.copy(resonanceThresholds = immutableListOf(3, 5)) }
+        rejection { policy.copy(affinityThresholds = immutableListOf(4, 2, 6)) }
+        rejection { policy.copy(stackMagnitudes = immutableListOf(1f, 1f, 2.2f)) }
+        rejection { policy.copy(rebornMagnitude = 0.99f) }
+        // The tightest legal thresholds and a neutral Reborn are still accepted.
+        policy.copy(resonanceThresholds = immutableListOf(1, 2, 3), affinityThresholds = immutableListOf(1, 2, 3), rebornMagnitude = 1f)
     }
 
     @Test
@@ -118,11 +177,7 @@ class ContentBootstrapValidationTest {
             "meta-upgrade ids must be unique",
         )
         assertRejected(
-            data.copy(
-                relics = data.relics.replaceLast(
-                    data.relics.last().copy(id = RelicId.KINETIC_FLYWHEEL),
-                ),
-            ),
+            data.copy(relics = data.relics.replaceLast(data.relics.last().copy(id = RelicId.PERPETUAL_VECTOR))),
             "relic ids must be unique",
         )
         assertRejected(
@@ -137,12 +192,175 @@ class ContentBootstrapValidationTest {
 
     @Test
     fun bootstrapRejectsAnyNonCanonicalContentVersion() {
-        val data = defaultContentBootstrapData().copy(
-            version = ContentVersion("kinetickk-content-2"),
-        )
+        val data = defaultContentBootstrapData().copy(version = ContentVersion("kinetickk-content-1"))
 
-        assertRejected(data, "kinetickk-content-1")
+        assertRejected(data, KINETICKK_CONTENT_VERSION.value)
     }
+
+    @Test
+    fun pairingsMustAgreeWithTheirRelicKeys() {
+        val data = defaultContentBootstrapData()
+        val pairings = data.build.pairings
+        val concord = pairings.indexOfFirst { it.kind == RelicPairingKind.CONCORD }
+        val discord = pairings.indexOfFirst { it.kind == RelicPairingKind.DISCORD }
+
+        val opposedConcord = pairings.withReplaced(concord, pairings[concord].copy(kind = RelicPairingKind.DISCORD))
+        assertRejected(data.copy(build = data.build.copy(pairings = opposedConcord)), "${pairings[concord].id} must join opposed keys")
+
+        val harmlessDiscord = pairings.withReplaced(discord, pairings[discord].copy(kind = RelicPairingKind.CONCORD))
+        assertRejected(data.copy(build = data.build.copy(pairings = harmlessDiscord)), "${pairings[discord].id} must join Relics that share a key")
+
+        // A concord needs a shared key too: Perpetual Vector (Motion) and Echo Chamber (Echo) share none.
+        val keyless = pairings.withReplaced(
+            concord,
+            pairings[concord].copy(first = RelicId.PERPETUAL_VECTOR, second = RelicId.ECHO_CHAMBER),
+        )
+        assertRejected(data.copy(build = data.build.copy(pairings = keyless)), "${pairings[concord].id} must join Relics that share a key")
+
+        // Faraday Cage holds only while Aegis Inversion carries Charge alongside Stormheart Capacitor.
+        val aegis = data.relics.indexOfFirst { it.id == RelicId.AEGIS_INVERSION }
+        val shieldAegis = data.relics.withReplaced(
+            aegis,
+            data.relics[aegis].copy(keys = immutableListOf(RelicKey.SHIELD, RelicKey.LIFE)),
+        )
+        assertRejected(data.copy(relics = shieldAegis), "FARADAY_CAGE must join Relics that share a key")
+
+        // A Glass Comet discord with a Relic that has no opposed key is unpredictable from the keys.
+        val unpredictable = pairings.withReplaced(
+            discord,
+            pairings[discord].copy(first = RelicId.GLASS_COMET, second = RelicId.ECHO_CHAMBER),
+        )
+        assertRejected(data.copy(build = data.build.copy(pairings = unpredictable)), "must join opposed keys")
+
+        assertFailsWith<IllegalArgumentException> {
+            data.build.copy(pairings = pairings.withReplaced(1, pairings[1].copy(first = pairings[0].first, second = pairings[0].second)))
+        }
+    }
+
+    @Test
+    fun itemsMustDeclareEveryElementTheyTouch() {
+        val data = defaultContentBootstrapData()
+        val base = data.items.first { it.elements.isEmpty() && it.clauses.isNotEmpty() }
+        val sneaky = base.copy(
+            clauses = immutableListOf(
+                EffectClause(EffectTrigger.IMPACT, actions = immutableListOf(EffectAction.ApplyStatus(ElementPick.CRYO, 2))),
+            ),
+        )
+        assertRejected(data.copy(items = data.items.withReplaced(base.id, sneaky)), "${base.name} touches undeclared elements")
+
+        val chained = base.copy(
+            clauses = immutableListOf(
+                EffectClause(
+                    EffectTrigger.WEAPON_HIT,
+                    actions = immutableListOf(EffectAction.Chain(2, 200f, DamageBasis.HIT, 0.3f, ElementPick.ION)),
+                    everyNth = 3,
+                ),
+            ),
+        )
+        assertRejected(data.copy(items = data.items.withReplaced(base.id, chained)), "touches undeclared elements")
+        val ruled = base.copy(rules = immutableListOf(ItemRule.BreakPower(StatusElement.GRAVITIC, 0.2f)))
+        assertRejected(data.copy(items = data.items.withReplaced(base.id, ruled)), "touches undeclared elements")
+
+        // Dominant and secondary picks name no element and stay legal on element-less items.
+        val dominant = base.copy(
+            clauses = immutableListOf(
+                EffectClause(EffectTrigger.WEAPON_HIT, actions = immutableListOf(EffectAction.ApplyStatus(ElementPick.DOMINANT, 1)), everyNth = 4),
+            ),
+        )
+        createContentCatalogForTesting(data.copy(items = data.items.withReplaced(base.id, dominant)))
+        createContentCatalogForTesting(
+            data.copy(items = data.items.withReplaced(base.id, sneaky.copy(elements = immutableListOf(StatusElement.CRYO)))),
+        )
+    }
+
+    @Test
+    fun thresholdCutsAcrossTheWholeCatalogCannotDropABreakBelowTwoStacks() {
+        val data = defaultContentBootstrapData()
+        val cryo = data.build.element(StatusElement.CRYO)
+        val existing = data.items.sumOf { item ->
+            item.rules.filterIsInstance<ItemRule.BreakThreshold>().filter { it.element == StatusElement.CRYO }.sumOf { it.reduction }
+        }
+        // threshold − every cut − one affinity step must stay at two or more.
+        val allowed = cryo.breakThreshold - 1 - 2 - existing
+        val atFloor = data.items + cutter(data.items.size, StatusElement.CRYO, allowed)
+        createContentCatalogForTesting(data.copy(items = atFloor))
+        val belowFloor = data.items + cutter(data.items.size, StatusElement.CRYO, allowed + 1)
+        assertRejected(data.copy(items = belowFloor), "CRYO break threshold can fall below two stacks")
+
+        assertFailsWith<IllegalArgumentException> { cryo.copy(breakFloor = 1) }
+        assertFailsWith<IllegalArgumentException> { cryo.copy(breakFloor = cryo.breakThreshold + 1) }
+        assertEquals(cryo.breakThreshold, cryo.copy(breakFloor = cryo.breakThreshold).breakFloor)
+        assertFailsWith<IllegalArgumentException> { ItemRule.BreakThreshold(StatusElement.CRYO, 5) }
+    }
+
+    @Test
+    fun sustainOnFrequentTriggersNeedsACooldownOrAnEveryNthGate() {
+        val heal = immutableListOf<EffectAction>(EffectAction.Heal(2f))
+
+        assertFailsWith<IllegalArgumentException> { EffectClause(EffectTrigger.IMPACT, actions = heal) }
+        assertFailsWith<IllegalArgumentException> { EffectClause(EffectTrigger.KILL, actions = heal, cooldownSeconds = 0.49f) }
+        assertFailsWith<IllegalArgumentException> {
+            EffectClause(EffectTrigger.WEAPON_HIT, actions = immutableListOf(EffectAction.RefreshWeapon(0.1f)))
+        }
+        EffectClause(EffectTrigger.KILL, actions = heal, cooldownSeconds = 0.5f)
+        EffectClause(EffectTrigger.IMPACT, actions = heal, everyNth = 2)
+        EffectClause(EffectTrigger.DASH, actions = heal)
+        EffectClause(EffectTrigger.IMPACT, actions = immutableListOf(EffectAction.ApplyStatus(ElementPick.THERMAL, 1)))
+    }
+
+    @Test
+    fun riskItemsMustDeclareALiability() {
+        assertFailsWith<IllegalArgumentException> {
+            riskItem(stats = immutableListOf(StatDelta(ItemEffect.WEAPON_POWER, 0.3f)))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            riskItem(rules = immutableListOf(ItemRule.WhileModifier(EffectCondition.Braking, BuffStat.DAMAGE_TAKEN, -0.2f)))
+        }
+        riskItem(stats = immutableListOf(StatDelta(ItemEffect.WEAPON_POWER, 0.3f), StatDelta(ItemEffect.COOLING, -0.2f)))
+        riskItem(rules = immutableListOf(ItemRule.WhileModifier(EffectCondition.SpeedBelow(400f), BuffStat.DAMAGE_TAKEN, 0.2f)))
+        riskItem(rules = immutableListOf(ItemRule.NonCriticalDamage(-0.1f)))
+        riskItem(rules = immutableListOf(ItemRule.ReactionPower(0.5f), ItemRule.ReactionRecoil(4f, 120f)))
+        assertFailsWith<IllegalArgumentException> { riskItem(rules = immutableListOf(ItemRule.NonCriticalDamage(0.1f))) }
+    }
+
+    @Test
+    fun itemCatalogValidationRefusesUndraftableArchetypesAndElements() {
+        val items = defaultContentBootstrapData().items
+        validateItems(items)
+
+        // Leave Fortune with exactly four items by retagging the rest.
+        val retagged = items.filter { BuildTag.FORTUNE in it.tags }.drop(4).map { it.id }.toSet()
+        val fourFortune = items.map { item ->
+            if (item.id !in retagged) item else item.copy(
+                tags = item.tags.map { tag ->
+                    if (tag != BuildTag.FORTUNE) tag else BuildTag.entries.first { it != BuildTag.FORTUNE && it !in item.tags }
+                }.toImmutableList(),
+            )
+        }
+        val failure = assertFailsWith<IllegalStateException> { validateItems(fourFortune) }
+        assertTrue(failure.message.orEmpty().contains("FORTUNE needs at least five items"), failure.message)
+
+        val earlyIon = items.filter { StatusElement.ION in it.elements && it.unlockLevel <= 2 }
+        val lateIon = items.map { item -> if (item in earlyIon) item.copy(unlockLevel = 3) else item }
+        assertFailsWith<IllegalStateException> { validateItems(lateIon) }
+
+        val renamed = items.mapIndexed { index, item -> if (index == 1) item.copy(name = items[0].name) else item }
+        assertFailsWith<IllegalStateException> { validateItems(renamed) }
+    }
+
+    private fun riskItem(
+        stats: ImmutableList<StatDelta> = immutableListOf(),
+        rules: ImmutableList<ItemRule> = immutableListOf(),
+    ) = ItemDefinition(
+        id = 0, name = "Risk", description = "Exercises the liability rule.", rarity = ItemRarity.EPIC,
+        tags = immutableListOf(BuildTag.ARSENAL), stats = stats, rules = rules, maxStacks = 1, unlockLevel = 1, risk = true,
+    )
+
+    private fun cutter(id: Int, element: StatusElement, reduction: Int) = ItemDefinition(
+        id = id, name = "Cutter $id", description = "Lowers a threshold for the floor test.", rarity = ItemRarity.RARE,
+        tags = immutableListOf(), elements = immutableListOf(element),
+        rules = immutableListOf(ItemRule.BreakThreshold(element, reduction)), maxStacks = 2, unlockLevel = 1,
+    )
 
     private fun assertRejected(data: ContentBootstrapData, expectedMessage: String) {
         val failure = assertFailsWith<IllegalArgumentException> {
@@ -155,5 +373,17 @@ class ContentBootstrapValidationTest {
     }
 }
 
+/** Pads the catalog with distinct copies of its last item so only the size changes. */
+private fun List<ItemDefinition>.paddedTo(size: Int): List<ItemDefinition> =
+    this + (this.size until size).map { id ->
+        last().copy(id = id, name = "Padding $id", description = "Bound padding $id.")
+    }
+
+private fun <Value> List<Value>.swappedHead(): ImmutableList<Value> =
+    (listOf(this[1], this[0]) + drop(2)).toImmutableList()
+
 private fun <Value> List<Value>.replaceLast(replacement: Value): List<Value> =
     dropLast(1) + replacement
+
+private fun <Value> List<Value>.withReplaced(index: Int, replacement: Value): ImmutableList<Value> =
+    mapIndexed { i, value -> if (i == index) replacement else value }.toImmutableList()

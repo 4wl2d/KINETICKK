@@ -45,6 +45,9 @@ class NoPoiPlaythroughTest {
                 }
                 state.enemies.filter { it.type == EnemyType.ELITE }.forEach { observedEliteIds += it.id }
                 if (state.bossSpawned && bossObservedAt == null) bossObservedAt = state.elapsed
+                if (!activePoiObserved && state.pointsOfInterest.any { it.active }) {
+                    report("POI ACTIVATED sec=${state.elapsed} core=${state.coreX.toInt()},${state.coreY.toInt()} speed=${state.speed.toInt()} points=${state.pointsOfInterest.map { "${it.kind}@${it.x.toInt()},${it.y.toInt()}" }} relics=${state.equippedRelics}")
+                }
                 activePoiObserved = activePoiObserved || state.pointsOfInterest.any { it.active }
                 poiRewardObserved = poiRewardObserved || state.directedReward != null || state.pendingDirectedRewards.isNotEmpty()
                 if (state.elapsed >= 180f && foundation == null) foundation = milestone(state, observedEliteIds.size)
@@ -75,6 +78,33 @@ class NoPoiPlaythroughTest {
             if (firstOutcome == null) firstOutcome = outcome else assertEquals(firstOutcome, outcome)
         }
     }
+
+    /** The reference win is not a single knife-edge seed: other fresh-profile seeds win the same way. */
+    @Test fun freshProfileAlsoWinsFurtherReferenceNoPoiSeeds() {
+        // The balance probe's first seeds after the reference (i * 7_919 + 13); about half of its seeds win this way.
+        for (seed in listOf(7_932, 15_851, 23_770)) {
+            val state = MutableGameState(canonicalGameplayContent, seed = seed)
+            state.applyPreferences(state.settings.copy(simulationSpeed = 1f))
+            state.startRun()
+            val bot = NoPoiBot()
+            var poiEngaged = false
+            while (state.elapsed < 900f && (state.phase == GamePhase.RUNNING || state.phase == GamePhase.CHOICE)) {
+                if (state.phase == GamePhase.CHOICE) bot.choose(state) else {
+                    bot.control(state)
+                    state.update(0.02f)
+                }
+                poiEngaged = poiEngaged || state.pointsOfInterest.any { it.active } ||
+                    state.directedReward != null || state.pendingDirectedRewards.isNotEmpty()
+                state.takeSoundCues()
+                state.takeVisualFxCues()
+            }
+            report("NOPOI SEED seed=$seed phase=${state.phase} sec=${state.elapsed} hp=${state.hp}/${state.maxHp} weapon=${state.weapon}/${state.weaponLevel} relics=${state.equippedRelics}")
+            assertEquals(GamePhase.VICTORY, state.phase, "seed=$seed ${state.message}")
+            assertTrue(state.elapsed in 720f..900f, "seed=$seed activeSeconds=${state.elapsed}")
+            assertTrue(!poiEngaged, "seed=$seed must skip every POI")
+            assertEquals(4, state.equippedRelics.size, "seed=$seed")
+        }
+    }
 }
 
 private data class RunOutcome(
@@ -98,9 +128,26 @@ private fun report(value: String) {
  * Steering uses a short approximate projectile forecast; all actual motion/damage goes through update().
  * Each 20 ms input is a normal pointer/Brake/Dash action, independent of the configured simulation speed.
  */
-private class NoPoiBot {
+private class NoPoiBot(
+    private val archetypeTag: BuildTag = BuildTag.RAM,
+    private val element: StatusElement? = StatusElement.ENTROPY,
+    private val weaponOrder: List<WeaponId> = listOf(WeaponId.ARC_COIL, WeaponId.ION_SWARM, WeaponId.ENTROPY_FIELD, WeaponId.PRISM_RELAY),
+    /** An impact-driven player avoids liabilities that cut impacts, healing, integrity or steering. */
+    private val relicTaste: Map<RelicId, Float> = mapOf(
+        RelicId.ECHO_CHAMBER to -40f,
+        RelicId.GLASS_COMET to -20f,
+        RelicId.VERDANT_ROT to -20f,
+        RelicId.PERPETUAL_VECTOR to -20f,
+        RelicId.AEGIS_INVERSION to -20f,
+        // Its arc weapons cannot crit, so the Prism would only cost 20 %.
+        RelicId.EXECUTIONERS_PRISM to -20f,
+        // It takes steady chip damage, which Stormheart turns into self-discharges.
+        RelicId.STORMHEART_CAPACITOR to -20f,
+    ),
+) {
     private var cursorAngle = 0f
     private var braking = false
+    private var decisions = 0
 
     fun control(s: MutableGameState) {
         val boss = s.enemies.firstOrNull { it.type == EnemyType.ARCHITECT }
@@ -141,12 +188,13 @@ private class NoPoiBot {
         }
         // Keep voluntarily skipped POI activation circles outside the intended path.
         for (point in s.pointsOfInterest) {
-            val px = s.coreX - point.x
-            val py = s.coreY - point.y
+            // Steer from where momentum carries the Core, so low-drag builds still clear the circle.
+            val px = s.coreX + s.velocityX * 0.35f - point.x
+            val py = s.coreY + s.velocityY * 0.35f - point.y
             val pd = max(1f, length(px, py))
-            if (pd < 220f) {
-                desiredX += px / pd * (220f - pd) * 7f
-                desiredY += py / pd * (220f - pd) * 7f
+            if (pd < 300f) {
+                desiredX += px / pd * (300f - pd) * 8f
+                desiredY += py / pd * (300f - pd) * 8f
             }
         }
         for (shot in s.projectiles) if (shot.hostile) {
@@ -203,7 +251,11 @@ private class NoPoiBot {
                 time in 0f..0.20f && length(px + vx * time, py + vy * time) < 32f
             }
         }
-        if (threat && s.dashReady && s.heat < 60f) s.requestDash()
+        // A Blink teleports along the cursor, so never Dash when the landing would touch a skipped POI.
+        val blinkLandsOnPoi = s.relicRank(RelicId.BLINK_DRIVE) > 0 && s.pointsOfInterest.any { point ->
+            segmentCircleIntersects(s.coreX, s.coreY, s.coreX + ux * 320f, s.coreY + uy * 320f, point.x, point.y, 150f)
+        }
+        if (threat && s.dashReady && s.heat < 60f && !blinkLandsOnPoi) s.requestDash()
     }
 
     private fun steeringScore(s: MutableGameState, angle: Float, force: Float, desiredX: Float, desiredY: Float, shots: List<Projectile>): Float {
@@ -233,33 +285,53 @@ private class NoPoiBot {
     }
 
     fun choose(s: MutableGameState) {
-        val index = s.choices.indices.maxByOrNull { score(s, s.choices[it]) } ?: return
+        val index = s.choices.indices.maxByOrNull { score(s, s.choices[it], it) } ?: return
+        decisions++
         s.choose(index)
     }
-    private fun score(s: MutableGameState, c: ChoiceOption): Float {
-        if (c.relicAction == RelicChoiceAction.MELD) return 500f
+
+    /**
+     * A committed Ram and Entropy build: archetype and element items first, survival stats second,
+     * then whatever already has points. Relics fill empty slots, then rank up through duplicates and
+     * Meld. A small deterministic spread stands in for a player's taste between equal cards.
+     */
+    private fun score(s: MutableGameState, c: ChoiceOption, index: Int): Float {
+        val full = s.equippedRelics.size >= s.content.relicPolicy.maxSlots
+        val spread = ((decisions * 31 + index * 7) % 7).toFloat()
+        if (c.relicAction == RelicChoiceAction.DECLINE) return -50f
+        if (c.relicAction == RelicChoiceAction.MELD) return if (full) 40f else -40f
         if (c.relicAction == RelicChoiceAction.MELD_TARGET) {
             val relic = s.equippedRelics[c.relicSlot ?: return -1000f]
-            return if (relic.rank >= s.content.relicPolicy.maxRank) -1000f else 500f - relic.rank * 100f
+            return if (s.canMeld(relic.id)) 60f - relic.rank * 10f + spread else -1000f
         }
-        if (c.totemAction == TotemAction.CHANGE_WEAPON) return if (s.weapon !in listOf(WeaponId.ARC_COIL, WeaponId.ION_SWARM, WeaponId.ENTROPY_FIELD, WeaponId.PRISM_RELAY)) 1_000f else -1f
+        if (c.relicAction == RelicChoiceAction.REPLACE) return -10f - (s.equippedRelics.getOrNull(c.relicSlot ?: 0)?.rank ?: 0)
+        if (c.totemAction == TotemAction.CHANGE_WEAPON) return if (s.weapon !in weaponOrder) 1_000f else -1f
         if (c.totemAction == TotemAction.AMPLIFY_CURRENT) return 100f
-        c.weaponId?.let { return when(it) { WeaponId.ARC_COIL -> 1000f; WeaponId.ION_SWARM -> 900f; WeaponId.ENTROPY_FIELD -> 800f; WeaponId.PRISM_RELAY -> 700f; else -> 10f } }
-        c.itemId?.let { id -> return s.content.item(id)?.let { value(it.primary) + value(it.secondary) } ?: 0f }
-        c.relicId?.let { id -> return when(id) {
-            RelicId.DEVOURERS_TOLL -> 100f; RelicId.CHROMA_FEEDBACK -> 90f; RelicId.STATIC_CHORUS -> 80f; RelicId.VOLTAIC_FILAMENT -> 75f; RelicId.ION_DEBT -> 70f; RelicId.ECHO_CHAMBER -> 65f; else -> 20f
-        } }
+        c.weaponId?.let { weapon ->
+            val rank = weaponOrder.indexOf(weapon)
+            return if (rank >= 0) 1_000f - rank * 100f else 10f
+        }
+        c.itemId?.let { id ->
+            val item = s.content.item(id) ?: return 0f
+            val archetype = (if (archetypeTag in item.tags) 50f else 0f) + (if (element != null && element in item.elements) 50f else 0f)
+            val survival = item.stats.sumOf { stat ->
+                when (stat.effect) {
+                    ItemEffect.REGEN -> stat.amount * 30f
+                    ItemEffect.SHIELD_CAPACITY -> stat.amount
+                    ItemEffect.MAX_INTEGRITY -> stat.amount * 0.6f
+                    else -> 0f
+                }.toDouble()
+            }.toFloat()
+            val committed = item.tags.sumOf { tag -> s.build.tagPoints(tag) * 2 }
+            return archetype + item.rarity.rank * 3f + spread + survival + committed
+        }
+        c.relicId?.let { id ->
+            return when {
+                s.relicRank(id) > 0 -> if (full) 50f else 15f + spread
+                full -> -20f
+                else -> 40f + spread + (relicTaste[id] ?: 0f)
+            }
+        }
         return 0f
-    }
-    private fun value(m: ItemModifier): Float = when(m.effect) {
-        ItemEffect.REGEN -> m.amount * 120f
-        ItemEffect.SHIELD_CAPACITY -> m.amount * 4f
-        ItemEffect.MAX_INTEGRITY -> m.amount * 2f
-        ItemEffect.DAMAGE_REDUCTION -> m.amount * 250f
-        ItemEffect.WEAPON_POWER -> m.amount * 150f
-        ItemEffect.ATTACK_SPEED -> m.amount * 140f
-        ItemEffect.PICKUP_RADIUS -> m.amount * 0.7f
-        ItemEffect.DATA_GAIN -> m.amount * 120f
-        else -> m.amount * 50f
     }
 }

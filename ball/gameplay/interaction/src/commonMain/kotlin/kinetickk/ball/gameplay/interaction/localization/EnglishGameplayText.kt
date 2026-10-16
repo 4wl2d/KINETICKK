@@ -25,7 +25,7 @@ internal fun englishGameplayText(key: GameplayText): String = when (key) {
     GameplayText.DamageAccountingHint -> "Damage counts integrity actually removed, excluding overkill."
     GameplayText.NoStatChange -> "Stats already at their limits"
     GameplayText.AffectedComponent -> "Improves"
-    GameplayText.FamilyResonance -> "Family resonance"
+    GameplayText.SharedTag -> "Shared tag"
     GameplayText.WeaponInteraction -> "Weapon effect"
     GameplayText.SynergyConnection -> "Synergy"
     GameplayText.Gameplay -> "KINETICKK gameplay"

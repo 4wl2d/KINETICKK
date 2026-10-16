@@ -22,7 +22,7 @@ import kotlin.math.abs
 import kotlin.math.sqrt
 
 // World-anchored HUD (halos, tether, dash afterimages, overheat stamp) and screen-space state
-// effects (critical vignette, polarity edge glow, overdrive border and streaks). World-anchored
+// effects (critical vignette, polarity edge glow, overdrive border). World-anchored
 // geometry uses world units like the Core it hugs; UI text and screen effects use dp.
 
 private const val CORE_HALO_RATIO = 2.2f
@@ -281,7 +281,7 @@ private fun DrawScope.drawOverheatStamp(measurer: TextMeasurer, core: Offset, ha
     }
 }
 
-/** Screen-space state effects: critical vignette, polarity edge glow, overdrive border and streaks. */
+/** Screen-space state effects: critical vignette, polarity edge glow, overdrive border. */
 internal fun DrawScope.drawHudScreenStates(
     engine: GameplayRenderModel,
     roles: KkRolePalette,
@@ -312,14 +312,17 @@ private fun DrawScope.drawCriticalVignette(roles: KkRolePalette, alpha: Float) {
     }
 }
 
-/** Threat edge glow on the side the cursor strains toward, pulsing (`edge-warn`, 0.9 s). */
+/**
+ * Threat edge glow on the side the cursor strains toward, pulsing (`edge-warn`, 0.9 s): a narrow
+ * band hugging the edge, as deep as the damage edge glow.
+ */
 private fun DrawScope.drawPolarityEdge(engine: GameplayRenderModel, roles: KkRolePalette, renderTime: Float) {
     val w = size.width
     val h = size.height
     if (w <= 0f || h <= 0f) return
     val reachX = engine.pointerX / w * 2f - 1f
     val reachY = engine.pointerY / h * 2f - 1f
-    val band = d(150f)
+    val band = d(60f)
     val alpha = 0.35f + 0.65f * (1f - kkPulse(renderTime, 0.9f, KkEase.Out))
     val threat = roles.threat.copy(alpha = 0.42f)
     val pol = roles.pol.copy(alpha = 0.12f)
@@ -349,7 +352,7 @@ private fun DrawScope.drawPolarityEdge(engine: GameplayRenderModel, roles: KkRol
 private val OverdriveGlowWidths = floatArrayOf(10f, 24f, 44f, 70f)
 private val OverdriveGlowAlphas = floatArrayOf(0.07f, 0.05f, 0.035f, 0.025f)
 
-/** Pulsing `you` screen border (inset 3 dp + soft inner glow as stacked strokes) and speed streaks. */
+/** Pulsing `you` screen border (inset 3 dp + soft inner glow as stacked strokes). */
 private fun DrawScope.drawOverdriveBorder(roles: KkRolePalette, renderTime: Float) {
     val w = size.width
     val h = size.height
@@ -361,13 +364,4 @@ private fun DrawScope.drawOverdriveBorder(roles: KkRolePalette, renderTime: Floa
     }
     val border = d(3f)
     drawRect(roles.you, Offset(border * 0.5f, border * 0.5f), Size(w - border, h - border), alpha, kkStroke(border))
-    drawSpeedStreak(roles, h * 180f / 810f, d(240f), kkLoop(renderTime, 0.9f))
-    drawSpeedStreak(roles, h * 590f / 810f, d(280f), kkLoop(renderTime, 1.1f, 0.45f))
-}
-
-/** `kk-streak`: a 2 dp line entering from the right edge and crossing 900 dp to the left. */
-private fun DrawScope.drawSpeedStreak(roles: KkRolePalette, y: Float, length: Float, progress: Float) {
-    val alpha = if (progress < 0.15f) progress / 0.15f else 1f - (progress - 0.15f) / 0.85f
-    val x = size.width + d(60f) - d(900f) * progress
-    drawRect(roles.you, Offset(x, y - d(1f)), Size(length, d(2f)), alpha.coerceIn(0f, 1f))
 }

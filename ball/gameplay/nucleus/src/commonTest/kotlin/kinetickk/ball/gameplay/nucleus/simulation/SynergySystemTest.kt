@@ -3,200 +3,251 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.content.api.*
-import kinetickk.ball.gameplay.nucleus.model.*
+import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RelicPairingId
+import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.gameplay.nucleus.model.CombatField
+import kinetickk.ball.gameplay.nucleus.model.CombatFieldKind
+import kinetickk.ball.gameplay.nucleus.model.EchoHit
+import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
+import kinetickk.ball.gameplay.nucleus.render.RelicLinkKind
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotSame
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
+/** Build-level synergy: tag resonance, element affinity and relic-to-relic interactions. */
 class SynergySystemTest {
     @Test
-    fun resonanceRequiresTwoDifferentOrdinaryRelicsAndIgnoresRanksAndSovereign() {
-        val engine = engine(RelicId.KINETIC_FLYWHEEL)
-        repeat(4) { engine.acquireRelic(RelicId.KINETIC_FLYWHEEL) }
-        engine.acquireRelic(RelicId.CROWN_OF_FOUR_WINDS)
-        assertFalse(engine.hasSynergy(SynergyId.VECTOR_MANEUVER))
-        engine.acquireRelic(RelicId.GHOST_VECTOR)
-        assertTrue(engine.hasSynergy(SynergyId.VECTOR_MANEUVER))
-        val summary = engine.buildSynergySummaries().first { it.id == SynergyId.VECTOR_MANEUVER.name }
-        assertTrue(summary.active)
-        assertTrue(summary.missingComponents.isEmpty())
-        engine.replaceRelic(0, RelicId.ORBITAL_NAIL)
-        assertFalse(engine.hasSynergy(SynergyId.VECTOR_MANEUVER))
-        assertEquals(12, engine.buildSynergySummaries().size)
+    fun tagPointsCountRebornTwiceMasteredOnceAndTheCharacterLean() {
+        val state = engine()
+        assertEquals(1, state.build.tagPoints(BuildTag.DRIVE), "ORB leans toward Drive")
+        val ballast = state.item("Ballast Core")
+        state.acquireItem(ballast.id)
+        assertEquals(1, state.build.tagPoints(BuildTag.RAM))
+        repeat(ballast.maxStacks - 1) { state.acquireItem(ballast.id) }
+        // Mastered (max stacks) without an element adds one point to the first tag.
+        assertEquals(2, state.build.tagPoints(BuildTag.RAM))
+
+        val reborn = engine()
+        reborn.acquireItem(reborn.item("Shock Plate").id, reborn = true)
+        assertEquals(2, reborn.build.tagPoints(BuildTag.RAM))
+        assertEquals(2, reborn.build.tagPoints(BuildTag.ANCHOR))
+
+        val ring = engine(shape = CoreShape.RING)
+        assertEquals(1, ring.build.tagPoints(BuildTag.BULWARK))
+        assertEquals(0, ring.build.tagPoints(BuildTag.DRIVE))
     }
 
     @Test
-    fun allSixSystemResonancesHaveObservableCombatBehavior() {
-        val vector = engine(RelicId.KINETIC_FLYWHEEL, RelicId.GHOST_VECTOR)
-        vector.onSynergyTurn()
-        assertTrue(vector.synergyManeuverCharge > 0f)
-        val target = vector.addEnemyForTesting(100f, 0f)
-        vector.dealWeaponDamage(target, 20f)
-        assertEquals(0f, vector.synergyManeuverCharge)
-        val grouping = engine(RelicId.ORBITAL_NAIL, RelicId.MASS_ECHO)
-        val origin = grouping.addEnemyForTesting(100f, 0f)
-        val neighbor = grouping.addEnemyForTesting(200f, 0f)
-        grouping.onSynergyPrimaryHit(origin, DamageResult(20f, false), 0f)
-        assertTrue(neighbor.vx < 0f)
-        for ((first, second, synergy) in listOf(
-            Triple(RelicId.VOLTAIC_FILAMENT, RelicId.ION_DEBT, SynergyId.ION_DISCHARGE),
-            Triple(RelicId.GLASS_WITNESS, RelicId.MIRROR_CUT, SynergyId.PRISM_REFRACTION),
-        )) {
-            val state = engine(first, second)
-            val hit = state.addEnemyForTesting(100f, 0f)
-            val other = state.addEnemyForTesting(150f, 0f)
-            state.onSynergyPrimaryHit(hit, DamageResult(20f, false), 0f)
-            assertTrue(other.hp < 1_000f, synergy.name)
+    fun resonanceTiersUnlockAtThreeFiveAndSevenPoints() {
+        val state = engine(shape = CoreShape.SHARD)
+        // Multi-stack items, so a single copy is never Mastered.
+        val ram = state.content.items.filter { BuildTag.RAM in it.tags && it.elements.isEmpty() && it.maxStacks > 1 }
+        val tiers = mutableListOf<Int>()
+        ram.take(7).forEach { item ->
+            state.acquireItem(item.id)
+            tiers += state.tagTier(BuildTag.RAM)
         }
-        for ((first, second, synergy) in listOf(
-            Triple(RelicId.ECHO_CHAMBER, RelicId.SECOND_HAND, SynergyId.RIFT_ECHO),
-            Triple(RelicId.SCAR_TISSUE, RelicId.QUIETUS_BLOOM, SynergyId.ENTROPY_DECAY),
-        )) {
-            val state = engine(first, second)
-            val hit = state.addEnemyForTesting(100f, 0f)
-            state.onSynergyPrimaryHit(hit, DamageResult(20f, false), 0f)
-            assertEquals(1_000f, hit.hp)
-            state.updateSynergyRuntime(0.5f)
-            assertTrue(hit.hp < 1_000f, synergy.name)
+        assertEquals(listOf(0, 0, 1, 1, 2, 2, 3), tiers)
+        assertEquals(3, state.content.build.policy.tier(7, state.content.build.policy.resonanceThresholds))
+    }
+
+    @Test
+    fun elementAffinityCountsItemsMasteryAndElementalRelicAspect() {
+        val state = engine()
+        val igniter = state.item("Igniter")
+        repeat(igniter.maxStacks) { state.acquireItem(igniter.id) }
+        // One owned Thermal item plus its Mastered point.
+        assertEquals(2, state.build.affinity(StatusElement.THERMAL))
+        assertEquals(1, state.affinityTier(StatusElement.THERMAL))
+        assertEquals(1.25f, state.build.potency(StatusElement.THERMAL), 0.0001f)
+
+        state.acquireRelic(RelicId.CINDER_CROWN)
+        assertEquals(3, state.build.affinity(StatusElement.THERMAL))
+        repeat(2) { state.acquireRelic(RelicId.CINDER_CROWN) }
+        assertEquals(3, state.relicRank(RelicId.CINDER_CROWN))
+        // A rank-three elemental relic adds two.
+        assertEquals(4, state.build.affinity(StatusElement.THERMAL))
+        assertEquals(2, state.affinityTier(StatusElement.THERMAL))
+        assertEquals(1, state.build.thresholdCut(StatusElement.THERMAL))
+        assertEquals(1.4f, state.build.breakPower(StatusElement.THERMAL), 0.0001f)
+        assertEquals(StatusElement.THERMAL, state.build.dominant)
+    }
+
+    @Test
+    fun dominantElementTieGoesToTheMostRecentGain() {
+        val state = engine()
+        state.acquireItem(state.item("Igniter").id)
+        state.acquireItem(state.item("Frost Plating").id)
+        assertEquals(StatusElement.CRYO, state.build.dominant)
+        assertEquals(StatusElement.THERMAL, state.build.secondary)
+
+        val reversed = engine()
+        reversed.acquireItem(reversed.item("Frost Plating").id)
+        reversed.acquireItem(reversed.item("Igniter").id)
+        assertEquals(StatusElement.THERMAL, reversed.build.dominant)
+        assertEquals(StatusElement.CRYO, reversed.build.secondary)
+
+        // A strictly higher affinity wins regardless of recency.
+        reversed.acquireItem(reversed.item("Rime Rounds").id)
+        assertEquals(StatusElement.CRYO, reversed.build.dominant)
+    }
+
+    @Test
+    fun anElementalRelicBindOrRankThreeIsTheMostRecentGainInATie() {
+        // A Thermal item, then a Cryo relic: the bind is newer, so Cryo leads the tie.
+        val bound = engine()
+        bound.acquireItem(bound.item("Igniter").id)
+        bound.acquireRelic(RelicId.ABSOLUTE_ZERO)
+        assertEquals(1, bound.build.affinity(StatusElement.THERMAL))
+        assertEquals(1, bound.build.affinity(StatusElement.CRYO))
+        assertEquals(StatusElement.CRYO, bound.build.dominant)
+        assertEquals(StatusElement.THERMAL, bound.build.secondary)
+
+        // The relic first, then the item: the item is newer.
+        val itemLast = engine(RelicId.ABSOLUTE_ZERO)
+        itemLast.acquireItem(itemLast.item("Igniter").id)
+        assertEquals(StatusElement.THERMAL, itemLast.build.dominant)
+
+        // Rank three adds the relic's second point; reaching a tie that way is again the newest gain.
+        itemLast.acquireItem(itemLast.item("Incendiary Rounds").id)
+        assertEquals(2, itemLast.build.affinity(StatusElement.THERMAL))
+        itemLast.acquireRelic(RelicId.ABSOLUTE_ZERO)
+        assertEquals(StatusElement.THERMAL, itemLast.build.dominant, "Rank two adds no affinity")
+        itemLast.acquireRelic(RelicId.ABSOLUTE_ZERO)
+        assertEquals(3, itemLast.relicRank(RelicId.ABSOLUTE_ZERO))
+        assertEquals(2, itemLast.build.affinity(StatusElement.CRYO))
+        assertEquals(StatusElement.CRYO, itemLast.build.dominant)
+
+        // A replacement bind counts from the moment of the swap.
+        val swapped = engine(RelicId.GYRE_ENGINE, RelicId.BLINK_DRIVE, RelicId.GLASS_COMET, RelicId.PERPETUAL_VECTOR)
+        swapped.acquireItem(swapped.item("Igniter").id)
+        assertEquals(StatusElement.THERMAL, swapped.build.dominant)
+        swapped.replaceRelic(0, RelicId.ABSOLUTE_ZERO)
+        assertEquals(1, swapped.build.affinity(StatusElement.CRYO))
+        assertEquals(StatusElement.CRYO, swapped.build.dominant)
+    }
+
+    @Test
+    fun harmonyAndDissonanceScaleUpsidesWhileHollowCrownWeakensTheRest() {
+        val harmony = engine(RelicId.GYRE_ENGINE, RelicId.STORMHEART_CAPACITOR, RelicId.BLINK_DRIVE)
+        // Gyre shares Motion with both partners.
+        assertEquals(1.21f, harmony.build.relicUpside(RelicId.GYRE_ENGINE), 0.0001f)
+        assertTrue(harmony.build.links.all { it.kind == RelicLinkKind.HARMONY })
+
+        val dissonance = engine(RelicId.GYRE_ENGINE, RelicId.STASIS_ANCHOR)
+        assertEquals(0.85f, dissonance.build.relicUpside(RelicId.GYRE_ENGINE), 0.0001f)
+        assertEquals(0.85f, dissonance.build.relicUpside(RelicId.STASIS_ANCHOR), 0.0001f)
+        assertEquals(RelicLinkKind.DISSONANCE, dissonance.build.links.single().kind)
+
+        // A named pairing replaces the generic key rule for its pair.
+        val named = engine(RelicId.PERPETUAL_VECTOR, RelicId.GYRE_ENGINE)
+        assertEquals(1f, named.build.relicUpside(RelicId.GYRE_ENGINE), 0.0001f)
+        assertEquals(RelicLinkKind.CONCORD, named.build.links.single().kind)
+        assertEquals(RelicPairingId.ENDLESS_GYRE, named.build.links.single().pairing)
+
+        val crowned = engine(RelicId.HOLLOW_CROWN, RelicId.ECHO_CHAMBER, rebirth = 3)
+        assertEquals(0.75f, crowned.build.relicUpside(RelicId.ECHO_CHAMBER), 0.0001f)
+        assertEquals(1f, crowned.build.relicUpside(RelicId.HOLLOW_CROWN), 0.0001f)
+    }
+
+    @Test
+    fun namedPairingsAreDetectedAndDiscoveredOnceWithASignedCue() {
+        val state = engine()
+        state.takeVisualFxCues()
+        state.acquireRelic(RelicId.FURNACE_COVENANT)
+        state.acquireRelic(RelicId.ABSOLUTE_ZERO)
+        assertTrue(state.build.pairing(RelicPairingId.THERMAL_PARADOX))
+        val discord = state.takeVisualFxCues().filterIsInstance<VisualFxCue.BuildChanged>()
+            .single { it.title == "PAIRING DISCOVERED" }
+        assertEquals(listOf("− Thermal Paradox"), discord.details.toList())
+
+        state.acquireRelic(RelicId.OVERDRIVE_CASCADE)
+        assertTrue(state.build.pairing(RelicPairingId.MELTDOWN))
+        val concord = state.takeVisualFxCues().filterIsInstance<VisualFxCue.BuildChanged>()
+            .single { it.title == "PAIRING DISCOVERED" }
+        assertEquals(listOf("+ Meltdown"), concord.details.toList())
+
+        val update = state.takeProgressUpdate()
+        assertEquals(setOf(RelicPairingId.THERMAL_PARADOX, RelicPairingId.MELTDOWN), update?.discoveredPairingIds?.toSet())
+
+        // Binding the same pair again in a later run announces nothing new.
+        state.startRun()
+        state.takeVisualFxCues()
+        state.acquireRelic(RelicId.FURNACE_COVENANT)
+        state.acquireRelic(RelicId.OVERDRIVE_CASCADE)
+        assertTrue(state.takeVisualFxCues().none { it is VisualFxCue.BuildChanged && it.title == "PAIRING DISCOVERED" })
+        assertTrue(state.takeProgressUpdate()?.discoveredPairingIds.isNullOrEmpty())
+    }
+
+    @Test
+    fun concordPairingsChangeTheirRelicsRules() {
+        // Meltdown: Overdrive starts at full heat.
+        val meltdown = engine(RelicId.FURNACE_COVENANT, RelicId.OVERDRIVE_CASCADE)
+        meltdown.overdriveCharge = 100f
+        meltdown.updateOverdrive(0f)
+        assertEquals(MutableGameState.MAX_HEAT, meltdown.heat)
+
+        // Fold Vector: Blinks keep 55 % of speed but lose the heat discount.
+        val fold = engine(RelicId.BLINK_DRIVE, RelicId.PERPETUAL_VECTOR)
+        assertEquals(fold.dashHeatCost, fold.effectiveDashHeatCost(), 0.0001f)
+        val blinkOnly = engine(RelicId.BLINK_DRIVE)
+        assertEquals(blinkOnly.dashHeatCost * 0.65f, blinkOnly.effectiveDashHeatCost(), 0.0001f)
+    }
+
+    @Test
+    fun combatFieldBoundAndRelicRemovalPreserveIsolatedSnapshots() {
+        val state = engine(RelicId.ECHO_CHAMBER, RelicId.CINDER_CROWN)
+        val bound = state.content.build.policy.maximumFields
+        repeat(bound + 1) { index ->
+            state.addField(CombatField(CombatFieldKind.ROT_WELL, remaining = 1f, x = index.toFloat(), y = 0f,
+                radius = 50f, damagePerSecond = 1f))
         }
-    }
+        assertEquals(bound, state.combatFields.size)
+        assertEquals((bound - 1).toFloat(), state.combatFields.last().x)
+        val enemy = state.addEnemyForTesting(x = 400f, y = 400f)
+        enemy.status[kinetickk.ball.gameplay.nucleus.model.StatusCell.CINDER_BANK] = 12f
+        state.echoHits += EchoHit(enemy.id, delay = 0.3f, damage = 4f, appliesDominant = false)
+        val sourceFields = state.combatFields
+        val sourceEchoes = state.echoHits.toList()
 
-    @Test
-    fun brakeCompressionRequiresActualDecelerationAndConsumesOneCharge() {
-        val state = engine(RelicId.BRAKEPOINT_MEMORY, RelicId.MASS_ECHO).apply {
-            braking = true
-            magnetStrength = 0f
-        }
-        repeat(120) { state.updateCore(1f / 120f) }
-        assertEquals(0f, state.brakepointCharge)
-        state.velocityX = 800f
-        state.updateCore(0.1f)
-        assertTrue(state.brakepointCharge > 0f)
-        val origin = state.addEnemyForTesting(state.coreX + 50f, state.coreY)
-        val nearby = state.addEnemyForTesting(state.coreX + 90f, state.coreY)
-        state.dealWeaponDamage(origin, 20f)
-        assertTrue(nearby.hp < 1_000f)
-        assertEquals(0f, state.brakepointCharge)
-    }
-
-    @Test
-    fun linkedEchoUsesSavedTargetInsteadOfNewNearestTarget() {
-        val state = engine(RelicId.VOLTAIC_FILAMENT, RelicId.ECHO_CHAMBER)
-        val origin = state.addEnemyForTesting(100f, 0f)
-        val linked = state.addEnemyForTesting(150f, 0f)
-        state.onQualifiedWeaponHit(origin, DamageResult(20f, false), WeaponId.FLUX_WAKE)
-        assertEquals(linked.id, state.delayedRelicHits.single().linkedEnemyId)
-        val linkedHealth = linked.hp
-        val newer = state.addEnemyForTesting(101f, 0f)
-        state.updateRelicRuntime(0.5f)
-        assertTrue(linked.hp < linkedHealth)
-        assertEquals(1_000f, newer.hp)
-        assertTrue(state.delayedRelicHits.isEmpty())
-    }
-
-    @Test
-    fun markedDeathTransfersDecayOnceWithoutRecursiveKillProcs() {
-        val state = engine(RelicId.GLASS_WITNESS, RelicId.SCAR_TISSUE)
-        val origin = state.addEnemyForTesting(100f, 0f).apply {
-            hp = 0f
-            relicKillProcsEligible = true
-            relicTimers[RelicId.GLASS_WITNESS.ordinal] = 3f
-            relicTimers[RelicId.SCAR_TISSUE.ordinal] = 3f
-            relicCounters[RelicId.SCAR_TISSUE.ordinal] = 5
-        }
-        val next = state.addEnemyForTesting(150f, 0f, hp = 2f)
-        state.onEnemyKilled(origin)
-        state.onEnemyKilled(origin)
-        assertEquals(1, state.synergyEffects.size)
-        state.updateSynergyRuntime(0.5f)
-        assertTrue(next.hp <= 0f)
-        assertFalse(next.relicKillProcsEligible)
-        state.onEnemyKilled(next)
-        assertEquals(1, state.synergyEffects.size, "Secondary decay must not transfer again")
-    }
-
-    @Test
-    fun ghostMirrorNeedsRealDashDisplacementAndConsumesItsEdge() {
-        val state = engine(RelicId.GHOST_VECTOR, RelicId.MIRROR_CUT)
-        state.performDash()
-        state.updateSynergyRuntime(0.01f)
-        assertTrue(state.synergyEffects.isEmpty())
-        state.velocityX = 1_400f
-        state.updateCore(0.1f)
-        state.updateSynergyRuntime(0.01f)
-        assertEquals(SynergyEffectKind.GHOST_EDGE, state.synergyEffects.single().kind)
-        val origin = state.addEnemyForTesting(state.coreX + 20f, 0f)
-        val next = state.addEnemyForTesting(state.coreX + 60f, 0f)
-        state.onSynergyPrimaryHit(origin, DamageResult(20f, false), 0f)
-        assertTrue(next.hp < 1_000f)
-        assertTrue(state.synergyEffects.none { it.kind == SynergyEffectKind.GHOST_EDGE })
-    }
-
-    @Test
-    fun anchorPreservesChargeUntilCollapseAndRemovalCancelsIt() {
-        val state = engine(RelicId.EVENTIDE_ANCHOR, RelicId.ION_DEBT)
-        val origin = state.addEnemyForTesting(100f, 0f).apply {
-            hp = 0f
-            relicKillProcsEligible = true
-            relicCounters[RelicId.ION_DEBT.ordinal] = 4
-        }
-        val next = state.addEnemyForTesting(150f, 0f)
-        state.onEnemyKilled(origin)
-        assertEquals(1_000f, next.hp)
-        state.updateSynergyRuntime(0.2f)
-        assertEquals(1_000f, next.hp)
-        assertTrue(next.vx < 0f)
+        // Replacing a relic removes the runtime it owned, only in the candidate.
         val copy = state.copyForReduction()
-        copy.replaceRelic(1, RelicId.KINETIC_FLYWHEEL)
-        assertTrue(copy.synergyEffects.isEmpty())
-        state.updateSynergyRuntime(0.5f)
-        assertTrue(next.hp < 1_000f)
-        assertTrue(state.synergyEffects.isEmpty())
-    }
+        copy.replaceRelic(0, RelicId.GYRE_ENGINE)
+        copy.replaceRelic(1, RelicId.BLINK_DRIVE)
+        assertTrue(copy.echoHits.isEmpty())
+        assertEquals(0f, copy.enemies.single().status[kinetickk.ball.gameplay.nucleus.model.StatusCell.CINDER_BANK])
+        copy.updateCombatFields(2f)
+        assertTrue(copy.combatFields.isEmpty())
+        assertNotSame(sourceFields, copy.combatFields)
 
-    @Test
-    fun fracturedTargetLeavesSlowingTrailAndWorldRebasePreservesGeometry() {
-        val state = engine(RelicId.FRACTURE_GATE, RelicId.QUIETUS_BLOOM)
-        val origin = state.addEnemyForTesting(100f, 0f)
-        repeat(6) { state.onQualifiedWeaponHit(origin, DamageResult(20f, false), WeaponId.FLUX_WAKE) }
-        assertEquals(-100f, origin.x)
-        val effect = state.synergyEffects.single()
-        assertEquals(100f, effect.x)
-        assertEquals(-100f, effect.endX)
-        val neighbor = state.addEnemyForTesting(30f, 0f).apply { vx = 200f }
-        state.updateSynergyRuntime(0.1f)
-        assertTrue(neighbor.vx < 200f)
-        assertTrue(neighbor.hp < 1_000f)
-        state.rebaseSynergyEffects(40f, 20f)
-        assertEquals(60f, state.synergyEffects.single().x)
-        assertEquals(-140f, state.synergyEffects.single().endX)
-    }
-
-    @Test
-    fun effectBoundAndDependencyRemovalPreserveIsolatedSnapshots() {
-        val state = engine(RelicId.ECHO_CHAMBER, RelicId.SECOND_HAND)
-        repeat(MAX_SYNERGY_EFFECTS + 1) { id ->
-            state.addSynergyEffect(SynergyEffect(SynergyId.RIFT_ECHO, SynergyEffectKind.ECHO, 0.5f, 1f, id))
-        }
-        assertEquals(MAX_SYNERGY_EFFECTS, state.synergyEffects.size)
-        val sourceEffects = state.synergyEffects
-        val copy = state.copyForReduction()
-        copy.replaceRelic(1, RelicId.KINETIC_FLYWHEEL)
-        assertTrue(copy.synergyEffects.isEmpty())
-        assertEquals(sourceEffects, state.synergyEffects)
-        assertEquals(MAX_SYNERGY_EFFECTS, state.synergyEffects.size)
+        assertEquals(sourceEchoes, state.echoHits.toList())
+        assertEquals(12f, state.enemies.single().status[kinetickk.ball.gameplay.nucleus.model.StatusCell.CINDER_BANK])
+        assertEquals(sourceFields, state.combatFields)
+        assertEquals(bound, state.combatFields.size)
         copy.startRun()
-        assertTrue(copy.synergyEffects.isEmpty())
+        assertTrue(copy.combatFields.isEmpty())
+        assertTrue(copy.echoHits.isEmpty())
+        assertNull(copy.severedRelics.firstOrNull())
+        assertFalse(state.combatFields.isEmpty())
     }
 
-    private fun engine(vararg relics: RelicId) = MutableGameState(canonicalGameplayContent).apply {
+    private fun engine(
+        vararg relics: RelicId,
+        shape: CoreShape = CoreShape.ORB,
+        rebirth: Int = 0,
+    ): MutableGameState = MutableGameState(canonicalGameplayContent, seed = 4_242, initialRebirthLevel = rebirth).apply {
+        coreShape = shape
         startRun()
-        runGrace = 10_000f
         enemies.clear()
-        critChance = 0f
         relics.forEach(::acquireRelic)
     }
+
+    private fun MutableGameState.item(name: String) = content.items.single { it.name == name }
 }

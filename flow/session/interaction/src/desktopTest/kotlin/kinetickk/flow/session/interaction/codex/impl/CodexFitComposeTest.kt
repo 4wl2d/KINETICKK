@@ -20,10 +20,11 @@ import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.ItemEffect
-import kinetickk.ball.content.api.ItemModifier
 import kinetickk.ball.content.api.ItemRarity
+import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.api.*
@@ -52,22 +53,22 @@ class CodexFitComposeTest {
     /** Items as the game has them: stacking, with the collision / critical damage pair of the finding. */
     private val catalog = codexTestCatalog().let { base ->
         base.copy(items = base.items.map {
-            it.copy(rarity = ItemRarity.COMMON, primary = ItemModifier(ItemEffect.IMPACT_DAMAGE, 0.0556f),
-                secondary = ItemModifier(ItemEffect.CRIT_DAMAGE, 0.0391f), maxStacks = 8)
+            it.copy(rarity = ItemRarity.COMMON, tags = immutableListOf(BuildTag.RAM), elements = immutableListOf(),
+                stats = immutableListOf(StatDelta(ItemEffect.IMPACT_DAMAGE, 0.0556f), StatDelta(ItemEffect.CRIT_DAMAGE, 0.0391f)), maxStacks = 3)
         }.toImmutableList())
     }
-    private val stacks = List(400) { if (it == 0 || it == 1) 3 else 0 }.toImmutableList()
+    private val stacks = List(80) { if (it == 0 || it == 1) 3 else 0 }.toImmutableList()
     private val build = GameplayBuildSummaryProjection(
         GameplayInstanceId(RunId(1)), GameplayRevision.ZERO, stacks,
         character = CoreShape.ORB, weapon = WeaponId.FLUX_WAKE, weaponLevel = 7,
-        relics = immutableListOf(kinetickk.ball.content.api.EquippedRelic(kinetickk.ball.content.api.RelicId.KINETIC_FLYWHEEL, 2)),
+        relics = immutableListOf(kinetickk.ball.content.api.EquippedRelic(kinetickk.ball.content.api.RelicId.PERPETUAL_VECTOR, 2)),
         stats = immutableListOf(
             BuildStatSummary("Impact damage", 38f, "%", immutableListOf(BuildStatContribution(BuildStatSource.ITEMS, 30f), BuildStatContribution(BuildStatSource.LAB, 8f))),
             BuildStatSummary("Critical damage", 12.5f, "%", immutableListOf(BuildStatContribution(BuildStatSource.ITEMS, 12.5f))),
         ),
     )
     /** Item 0: NEW with a stack badge; item 1: badge only; item 2: NEW only; item 3: neither. */
-    private val model = CodexRenderModel((0 until 400).toImmutableSet(), CodexRunStacks(stacks, build), catalog.items, newItemIds = immutableSetOf(0, 2))
+    private val model = CodexRenderModel((0 until 80).toImmutableSet(), CodexRunStacks(stacks, build), catalog.items, newItemIds = immutableSetOf(0, 2))
     private val sizes = listOf(1440 to 810, 844 to 390, 390 to 844)
     private val scales = listOf(1f, 1.25f, 1.75f)
 
@@ -111,12 +112,15 @@ class CodexFitComposeTest {
                 onNodeWithTag("codex-grid").performScrollToKey("stat/${stat.name}")
                 assertWrapsOnlyBetweenWords(stat.name.localizedContent(language), "build stats $where")
             }
-            // The item's stat panels (side panel on wide screens, sheet on phones).
+            // The item's rule lines (side panel on wide screens, sheet on phones).
             onNodeWithTag("codex-tab-1").performSemanticsAction(SemanticsActions.OnClick)
             onNodeWithTag("codex-grid").performScrollToKey("item/0")
             onNodeWithTag("codex-slot-item/0").performSemanticsAction(SemanticsActions.OnClick)
-            listOf(ItemEffect.IMPACT_DAMAGE, ItemEffect.CRIT_DAMAGE).forEach { effect ->
-                assertWrapsOnlyBetweenWords(effect.displayLabel.localizedContent(language), "stat panel $where")
+            val lines = (codexItemEntry(catalog.items[0], model, 0L, language, catalog).detail as CodexDetail.Item).lines
+            assertEquals(2, lines.size)
+            lines.forEach { line ->
+                onNodeWithTag("codex-details-scroll").performScrollToNode(hasText(line.text))
+                assertWrapsOnlyBetweenWords(line.text, "rule line $where")
             }
         }
     }
@@ -211,18 +215,24 @@ class CodexFitComposeTest {
         }
     }
 
-    /** Box of the glyph's ink (its halo included) in [cell], ignoring [marks], relative to the cell's top-left. */
-    private fun PixelMap.glyphBox(cell: Rect, marks: List<Rect>): Rect {
-        val face = this[(cell.left + 2f).toInt(), (cell.bottom - 2f).toInt()]
+    /**
+     * Box of the glyph's ink (its halo included) in [cell], ignoring what [skip] marks (local px) and the
+     * cell's rarity frame (within [CODEX_FRAME_PX] of its edge), relative to the cell's top-left. The
+     * cell's plain face is read at [face] (local px).
+     */
+    private fun PixelMap.glyphBox(cell: Rect, face: androidx.compose.ui.geometry.Offset, skip: (Float, Float) -> Boolean): Rect {
+        val plain = this[(cell.left + face.x).toInt(), (cell.top + face.y).toInt()]
         var left = Float.MAX_VALUE
         var top = Float.MAX_VALUE
         var right = -Float.MAX_VALUE
         var bottom = -Float.MAX_VALUE
-        for (y in (cell.top + 1f).toInt() until (cell.bottom - 1f).toInt()) for (x in (cell.left + 1f).toInt() until (cell.right - 1f).toInt()) {
-            if (marks.any { x >= it.left - 2f && x <= it.right + 4f && y >= it.top - 2f && y <= it.bottom + 4f }) continue
-            val pixel: Color = this[x, y]
-            if (maxOf(abs(pixel.red - face.red), abs(pixel.green - face.green), abs(pixel.blue - face.blue)) > 0.03f) {
-                left = minOf(left, x.toFloat()); right = maxOf(right, x + 1f); top = minOf(top, y.toFloat()); bottom = maxOf(bottom, y + 1f)
+        for (y in (cell.top + CODEX_FRAME_PX).toInt() until (cell.bottom - CODEX_FRAME_PX).toInt()) {
+            for (x in (cell.left + CODEX_FRAME_PX).toInt() until (cell.right - CODEX_FRAME_PX).toInt()) {
+                if (skip(x - cell.left, y - cell.top)) continue
+                val pixel: Color = this[x, y]
+                if (maxOf(abs(pixel.red - plain.red), abs(pixel.green - plain.green), abs(pixel.blue - plain.blue)) > 0.03f) {
+                    left = minOf(left, x.toFloat()); right = maxOf(right, x + 1f); top = minOf(top, y.toFloat()); bottom = maxOf(bottom, y + 1f)
+                }
             }
         }
         return Rect(left - cell.left, top - cell.top, right - cell.left, bottom - cell.top)
@@ -231,8 +241,9 @@ class CodexFitComposeTest {
     @Test fun everyDiscoveredCellOfAGridDrawsItsGlyphAtOneSizeAndCentre() {
         for (language in AppLanguage.entries) for ((width, height) in sizes) for (scale in scales) codex(width, height, language, scale) {
             val where = "${width}x$height ${language.code} @$scale"
-            // The Build tab (items 0 and 1), then the collection (items 0 to 3).
-            listOf(0 to listOf(0, 1), 1 to listOf(0, 1, 2, 3)).forEach { (tab, items) ->
+            // The Build tab (items 0 and 1), then the Items matrix (items 0 to 3 and the unmarked twins of 0 to 2, see below).
+            listOf(0 to listOf(0, 1), 1 to listOf(0, 1, 2, 3, 20, 10, 11)).forEach { (tab, items) ->
+                val matrix = tab == 1
                 onNodeWithTag("codex-tab-$tab").performSemanticsAction(SemanticsActions.OnClick)
                 val boxes = items.map { id ->
                     val key = "item/$id"
@@ -243,14 +254,48 @@ class CodexFitComposeTest {
                         onAllNodesWithTag("codex-badge-$key", useUnmergedTree = true).fetchSemanticsNodes()).map { it.boundsInRoot }
                     assertEquals(id == 0 || id == 2, onAllNodesWithTag("codex-new-$key", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty(), where)
                     assertEquals(id == 0 || id == 1, onAllNodesWithTag("codex-badge-$key", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty(), where)
-                    key to onRoot().captureToImage().toPixelMap().glyphBox(cell, marks)
+                    val pixels = onRoot().captureToImage().toPixelMap()
+                    key to if (matrix) {
+                        // A matrix cell's solid fill, read beside the glyph; its notch is the top-left half of its box, its
+                        // element strip the right edge and its bar the bottom line.
+                        val cellMarks = codexItemCellMarks(cell.width, 1f)
+                        pixels.glyphBox(cell, androidx.compose.ui.geometry.Offset(cellMarks.inset + 1f, cell.height * 0.4f)) { x, y ->
+                            x + y <= cellMarks.notch.right + cellMarks.notch.top + 2f || y >= cellMarks.bar.top - 2f || x >= cellMarks.strip.left - 2f
+                        }
+                    } else {
+                        pixels.glyphBox(cell, androidx.compose.ui.geometry.Offset(CODEX_FRAME_PX, cell.height - CODEX_FRAME_PX)) { x, y ->
+                            marks.any { x + cell.left >= it.left - 2f && x + cell.left <= it.right + 4f && y + cell.top >= it.top - 2f && y + cell.top <= it.bottom + 4f }
+                        }
+                    }
                 }
-                val (plainKey, plain) = boxes.last()
-                assertTrue(plain.width > 40f, "$plainKey glyph ${plain.width} px ($where)")
-                boxes.forEach { (key, box) ->
+                fun assertSameBox(key: String, box: Rect, plainKey: String, plain: Rect) {
                     listOf(box.left - plain.left, box.top - plain.top, box.right - plain.right, box.bottom - plain.bottom).forEach { delta ->
                         assertTrue(abs(delta) <= 1.5f, "$key glyph $box differs from $plainKey $plain (tab $tab, $where)")
                     }
+                }
+                if (matrix) {
+                    // A matrix cell draws its item's primary mark alone, so each marked cell is measured against an unmarked
+                    // cell of the same mark: item 0 (NEW and held, Thermal) against 20, 1 (held, Drive) against 10 and 2
+                    // (NEW, Anchor) against 11. Every mark keeps within the glyph's reach round the one centre.
+                    val byKey = boxes.toMap()
+                    listOf(0 to 20, 1 to 10, 2 to 11).forEach { (marked, twin) ->
+                        assertSameBox("item/$marked", byKey.getValue("item/$marked"), "item/$twin", byKey.getValue("item/$twin"))
+                    }
+                    onNodeWithTag("codex-grid").performScrollToKey("item/3")
+                    val cellWidth = onNodeWithTag("codex-slot-item/3").fetchSemanticsNode().boundsInRoot.width
+                    val glyph = codexItemCellMarks(cellWidth, 1f)
+                    val reach = glyph.glyphRadius * CODEX_GLYPH_REACH + 1f
+                    boxes.forEach { (key, box) ->
+                        assertTrue(box.left >= glyph.glyphCenter.x - reach && box.right <= glyph.glyphCenter.x + reach &&
+                            box.top >= glyph.glyphCenter.y - reach && box.bottom <= glyph.glyphCenter.y + reach,
+                            "$key glyph $box leaves its reach $reach round ${glyph.glyphCenter} ($where)")
+                    }
+                    val plain = byKey.getValue("item/3")
+                    assertTrue(plain.width >= cellWidth * 0.4f, "item/3 glyph ${plain.width} px in a $cellWidth px cell ($where)")
+                } else {
+                    val (plainKey, plain) = boxes.last()
+                    assertTrue(plain.width > 40f, "$plainKey glyph ${plain.width} px ($where)")
+                    boxes.forEach { (key, box) -> assertSameBox(key, box, plainKey, plain) }
                 }
             }
         }

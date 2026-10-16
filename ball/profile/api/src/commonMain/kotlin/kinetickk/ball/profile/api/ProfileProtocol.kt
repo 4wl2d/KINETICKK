@@ -5,10 +5,14 @@ package kinetickk.ball.profile.api
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MetaUpgradeId
-import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RelicPairingId
+import kinetickk.ball.content.api.WeaponId
+import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.ImmutableSet
 import kinetickk.foundation.collections.immutableSetOf
+import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.common.localization.AppLanguage
 
@@ -58,6 +62,15 @@ data class GameplayProgressUpdate(
     val completedOrbits: Int = 0,
     val architectDefeatedWith: CoreShape? = null,
     val discoveredRelicIds: ImmutableSet<RelicId> = immutableSetOf(),
+    val discoveredReactionIds: ImmutableSet<ReactionId> = immutableSetOf(),
+    val discoveredPairingIds: ImmutableSet<RelicPairingId> = immutableSetOf(),
+    /**
+     * Relics bound at the Architect victory in slot order. Profile accepts it only together with
+     * [clearedRebirthLevel] and replaces the remembered Heirlooms with it.
+     */
+    val victoryRelicIds: ImmutableList<RelicId>? = null,
+    /** The run resolved its Heirloom offer (taken or declined), so the remembered Heirlooms are spent. */
+    val heirloomResolved: Boolean = false,
 ) {
     constructor(
         bankedMatter: Long = 0L,
@@ -68,10 +81,23 @@ data class GameplayProgressUpdate(
         completedOrbits: Int = 0,
         architectDefeatedWith: CoreShape? = null,
         discoveredRelicIds: Set<RelicId> = emptySet(),
+        discoveredReactionIds: Set<ReactionId> = emptySet(),
+        discoveredPairingIds: Set<RelicPairingId> = emptySet(),
+        victoryRelicIds: List<RelicId>? = null,
+        heirloomResolved: Boolean = false,
     ) : this(
         bankedMatter, discoveredItemIds.toImmutableSet(), clearedRebirthLevel,
         eliteKills, dashHits, completedOrbits, architectDefeatedWith, discoveredRelicIds.toImmutableSet(),
+        discoveredReactionIds.toImmutableSet(), discoveredPairingIds.toImmutableSet(),
+        victoryRelicIds?.toImmutableList(), heirloomResolved,
     )
+
+    /** True when the update carries no fact for Profile to apply, so no command needs to be sent. */
+    val isEmpty: Boolean
+        get() = bankedMatter == 0L && discoveredItemIds.isEmpty() && clearedRebirthLevel == null &&
+            eliteKills == 0 && dashHits == 0 && completedOrbits == 0 && architectDefeatedWith == null &&
+            discoveredRelicIds.isEmpty() && discoveredReactionIds.isEmpty() && discoveredPairingIds.isEmpty() &&
+            victoryRelicIds == null && !heirloomResolved
 }
 
 sealed interface CollectionEntry {
@@ -111,6 +137,10 @@ sealed interface ProfileGameplayProgressRejection {
     data object TooManyDiscoveries : ProfileGameplayProgressRejection
     data class ClearedLevelBelowMinimum(val level: Int) : ProfileGameplayProgressRejection
     data class ClearedLevelAboveCurrent(val level: Int) : ProfileGameplayProgressRejection
+    /** Victory Relics describe an Architect victory, so they require a cleared Rebirth level. */
+    data object VictoryRelicsWithoutClear : ProfileGameplayProgressRejection
+    data object TooManyVictoryRelics : ProfileGameplayProgressRejection
+    data class DuplicateVictoryRelic(val relicId: RelicId) : ProfileGameplayProgressRejection
 }
 
 sealed interface ProfileRejection {

@@ -132,21 +132,33 @@ class KkComponentRenderingTest {
         }
         val cards = (1..5).map { card(it) }
         assertEquals(5, cards.map { it.argb().toList() }.toSet().size)
-        // Echo offsets: rare 4, epic 6, legendary 8 (striped); common/uncommon none. Sample just
-        // outside the face's slanted right edge (x = 260 - 22 * (y - 50) / 250).
-        fun echoRows(image: androidx.compose.ui.graphics.ImageBitmap, color: Color, tolerance: Int) = (120 until 290).count { y ->
+        // Echo offsets: rare 4 (chrome), epic 6 (spectrum), legendary 8 (striped gold); common/uncommon
+        // none. Sample just outside the face's slanted right edge (x = 260 - 22 * (y - 50) / 250).
+        fun echoRows(image: androidx.compose.ui.graphics.ImageBitmap, matches: (Color) -> Boolean) = (120 until 290).count { y ->
             val edge = 260f - 22f * (y - 50f) / 250f
-            colorDistance(image.at((edge + 2.5f).toInt(), y), color.toArgb()) <= tolerance
+            matches(Color(image.at((edge + 2.5f).toInt(), y)))
         }
-        assertEquals(0, echoRows(cards[0], Kk.RCommon, 12), "common has no echo")
-        assertTrue(echoRows(cards[2], Kk.RRare, 12) > 120, "rare echo")
-        assertTrue(echoRows(cards[4], Kk.RLegend, 40) + echoRows(cards[4], Color(0xFFFFE59A), 40) > 120, "legendary echo")
-        // Legendary rays reach outside the card.
-        fun warmOutside(image: androidx.compose.ui.graphics.ImageBitmap) = (0 until 360).sumOf { y ->
-            (0 until 36).count { x -> image.at(x, y).let { ((it shr 16) and 0xFF) - (it and 0xFF) > 10 } }
+        val lit = { color: Color -> colorDistance(color.toArgb(), Kk.Ink.toArgb()) > 12 }
+        val chrome = { color: Color -> kkLuminance(color) > 0.2f && maxOf(color.red, color.green, color.blue) - minOf(color.red, color.green, color.blue) < 0.1f }
+        assertEquals(0, echoRows(cards[0], lit), "common has no echo")
+        assertEquals(0, echoRows(cards[1], lit), "uncommon has no echo")
+        assertTrue(echoRows(cards[2], chrome) > 120, "rare chrome echo")
+        assertTrue(echoRows(cards[4]) { colorDistance(it.toArgb(), Kk.RLegend.toArgb()) <= 40 || colorDistance(it.toArgb(), 0xFFFFE59A.toInt()) <= 40 } > 120,
+            "legendary echo")
+        // Legendary rays reach far outside the card, past the halos and echoes: below legendary that far
+        // field stays ink, and a legendary without its rays differs from one with them there.
+        fun far(image: androidx.compose.ui.graphics.ImageBitmap): List<Int> {
+            val argb = image.argb()
+            return (0 until 360).flatMap { y -> (0 until 320).filter { x -> x < 26 || x > 276 || y < 36 || y > 316 }.map { x -> argb[y * 320 + x] } }
         }
-        assertTrue(warmOutside(cards[4]) > 30, "legendary rays behind the card")
-        assertEquals(0, warmOutside(cards[3]), "no rays below legendary")
+        val ink = Kk.Ink.toArgb()
+        for (rank in 1..4) assertTrue(far(cards[rank - 1]).all { colorDistance(it, ink) <= 4 }, "no rays below legendary (rank $rank)")
+        val rayless = image(320, 360) {
+            drawKkCard(measurer, Rect(40f, 50f, 260f, 300f), 5, 1.9f, 0f, "Rarity", "New", 32f,
+                style = KkCardStyle(KkCardMaterial.GOLD, Kk.RLegend, raysAlpha = 0f))
+        }
+        val rays = far(cards[4]).zip(far(rayless)).count { (a, b) -> colorDistance(a, b) > 3 }
+        assertTrue(rays > 300, "legendary rays behind the card ($rays px)")
         // Epic sparks and halftone animate; common is flat and static.
         assertNotEquals(card(4, 0.4f).argb().toList(), card(4, 1.4f).argb().toList())
         assertContentEquals(card(1, 0.4f).argb(), card(1, 1.4f).argb())
@@ -154,11 +166,11 @@ class KkComponentRenderingTest {
 
     @Test
     fun slotsShowAspectCooldownReadinessAndEmptiness() {
-        val relic = image { drawKkRelicSlot(Offset(60f, 60f), Kk.ARift, KkIcon.ASPECT_RIFT) }
-        assertTrue(relic.countNear(Kk.ARift) > 100)
+        val relic = image { drawKkRelicSlot(Offset(60f, 60f), Kk.AGravitic, KkIcon.ASPECT_GRAVITIC) }
+        assertTrue(relic.countNear(Kk.AGravitic) > 100)
         assertEquals(Kk.Ink2.toArgb(), relic.at(52, 60))
         val empty = image { drawKkRelicSlot(Offset(60f, 60f), Color.Unspecified) }
-        assertEquals(0, empty.countNear(Kk.ARift))
+        assertEquals(0, empty.countNear(Kk.AGravitic))
         assertTrue(empty.countNear(Kk.Line2, 3) > 60)
         val slot = Rect(40f, 30f, 102f, 92f)
         val ready = image { drawKkWeaponSlot(measurer, slot, KkIcon.WEAPONS_ARC_COIL, "Lvl 3", ready = true) }

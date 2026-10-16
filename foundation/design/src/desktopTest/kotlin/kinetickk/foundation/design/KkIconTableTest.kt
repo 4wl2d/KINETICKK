@@ -87,10 +87,47 @@ class KkIconTableTest {
         val dashed = render { drawKkIcon(KkIcon.WEAPONS_GRAVITY_MINES, Offset(24f, 24f), 48f, Color.White) }
         val solid = render { drawKkIcon(KkIcon.FORMS_RING, Offset(24f, 24f), 48f, Color.White) }
         assertNotEquals(dashed.toList(), solid.toList())
-        assertEquals(listOf(KkIcon.ASPECT_VECTOR, KkIcon.ASPECT_GRAVITIC, KkIcon.ASPECT_ION, KkIcon.ASPECT_RIFT,
-            KkIcon.ASPECT_PRISM, KkIcon.ASPECT_ENTROPY, KkIcon.ASPECT_SOVEREIGN), KkIcon.Aspects)
         assertEquals(6, KkIcon.Forms.size)
         assertEquals(KkIcon.WEAPONS_FLUX_WAKE, KkIcon.byKey("weapons.flux_wake"))
+    }
+
+    @Test
+    fun aspectElementAndTagGroupsFollowTheirColorTokensAndIconsJsonOrder() {
+        assertEquals(listOf(KkIcon.ASPECT_KINETIC, KkIcon.ASPECT_THERMAL, KkIcon.ASPECT_CRYO, KkIcon.ASPECT_ION,
+            KkIcon.ASPECT_GRAVITIC, KkIcon.ASPECT_ENTROPY, KkIcon.ASPECT_SOVEREIGN), KkIcon.Aspects)
+        assertEquals(Kk.Aspects.size, KkIcon.Aspects.size, "one glyph per aspect color")
+        assertEquals(listOf(KkIcon.ASPECT_THERMAL, KkIcon.ASPECT_CRYO, KkIcon.ASPECT_ION, KkIcon.ASPECT_GRAVITIC,
+            KkIcon.ASPECT_ENTROPY), KkIcon.Elements)
+        assertEquals(Kk.Elements.size, KkIcon.Elements.size, "one glyph per element color")
+        assertEquals(listOf(KkIcon.TAG_RAM, KkIcon.TAG_DRIVE, KkIcon.TAG_ANCHOR, KkIcon.TAG_ARSENAL, KkIcon.TAG_PRECISION,
+            KkIcon.TAG_BULWARK, KkIcon.TAG_OVERCLOCK, KkIcon.TAG_CHAIN, KkIcon.TAG_FORTUNE), KkIcon.Tags)
+        val icons = json.getValue("icons").jsonObject.keys
+        assertEquals(icons.filter { it.startsWith("aspect.") }, KkIcon.Aspects.map { it.key })
+        assertEquals(icons.filter { it.startsWith("tag.") }, KkIcon.Tags.map { it.key })
+        (KkIcon.Aspects + KkIcon.Tags).forEach { assertEquals(it, KkIcon.byKey(it.key), it.key) }
+        assertEquals(KkIcon.Aspects.size + KkIcon.Tags.size, (KkIcon.Aspects + KkIcon.Tags).map { it.label }.toSet().size, "labels are distinct")
+    }
+
+    @Test
+    fun elementAndTagGlyphsAreDistinguishableWithoutColor() {
+        // Color-vision ramps and monochrome tags rely on shape alone: every aspect and tag glyph
+        // differs from every other glyph in the set (aspects, tags, forms, weapons, system) in a
+        // clear number of pixels when drawn in one color.
+        val shapes = KkIcon.entries.associateWith { icon -> render { drawKkIcon(icon, Offset(24f, 24f), 48f, Color.White) } }
+        val checked = KkIcon.Aspects + KkIcon.Tags
+        val alike = mutableMapOf<String, Int>()
+        checked.forEachIndexed { index, icon ->
+            KkIcon.entries.filter { it != icon && checked.indexOf(it) !in 0 until index }.forEach { other ->
+                val pixels = shapes.getValue(icon)
+                val otherPixels = shapes.getValue(other)
+                val differing = pixels.indices.count { colorDistance(pixels[it], otherPixels[it]) > 96 }
+                if (differing <= 120) alike[listOf(icon.key, other.key).sorted().joinToString(" and ")] = differing
+            }
+        }
+        val fresh = alike - PendingGlyphRedraws
+        assertTrue(fresh.isEmpty(), "glyphs too alike (differing px): $fresh")
+        val resolved = PendingGlyphRedraws - alike.keys
+        assertTrue(resolved.isEmpty(), "redrawn in icons.json, remove from PendingGlyphRedraws: $resolved")
     }
 
     private fun render(draw: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit): IntArray {
@@ -114,5 +151,12 @@ class KkIconTableTest {
         val NoArrowheadOverrides = mapOf(
             "weapons.null_lance" to ("hard rule 3: the pointed lance head reads as an arrowhead" to "M14 10l1-5 4 4-5 1Z"),
         )
+
+        /**
+         * Near-duplicate glyph pairs in icons.json awaiting a redraw by the glyph owner (icons.json
+         * and KkIcons in lockstep). The test fails when one is redrawn, so the entry is removed and
+         * the rule then holds.
+         */
+        val PendingGlyphRedraws = emptySet<String>()
     }
 }
