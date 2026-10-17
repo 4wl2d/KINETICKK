@@ -57,18 +57,23 @@ import kotlin.test.Test
 
 private const val FocusDescription = "Choose a direction, then one of three matching offers."
 
-/** Local visual QA harness (not committed): renders every overlay state for board comparison. */
+/**
+ * Local visual QA harness (gated by `KK_SHOTS=1`): renders every overlay state for board comparison. Writes PNGs to
+ * `KK_SHOTS_OUT` (default `build/redesign-shots/overlays`).
+ */
 @OptIn(ExperimentalTestApi::class)
 class RedesignShotsOverlaysTest {
     private val sizes = listOf(1440 to 810, 844 to 390, 390 to 844)
     private val languages = listOf(AppLanguage.English to "en", AppLanguage.Russian to "ru")
-    private val output = File(System.getenv("KK_SHOTS_OUT") ?: "build/redesign-shots/overlays").apply { mkdirs() }
+    private val output = File(System.getenv("KK_SHOTS_OUT") ?: "build/redesign-shots/overlays")
     // The game's default text size (125 %) and the setting's maximum.
     private val textScales = listOf(1.25f to "", 1.75f to "-t175") + (if (System.getenv("KK_SHOTS_T100") != null) listOf(1f to "-t100") else emptyList())
     private val only = System.getenv("KK_SHOTS_ONLY")?.split(',')?.toSet()
 
     @Test
     fun rendersOverlays() {
+        if (System.getenv("KK_SHOTS") != "1") return
+        output.mkdirs()
         for ((width, height) in sizes) for ((language, tag) in languages) for ((textScale, suffix) in textScales) {
             runDesktopComposeUiTest(width, height) {
                 val scene = mutableStateOf<Scene?>(null)
