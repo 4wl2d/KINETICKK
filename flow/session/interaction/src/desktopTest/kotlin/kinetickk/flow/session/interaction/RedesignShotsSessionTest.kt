@@ -45,18 +45,34 @@ import kinetickk.resource.audio.api.*
 import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
+import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertTrue
 
 /**
  * Local visual QA harness: renders session screens to build/redesign-shots/session.
  *
  * With `KK_SHOTS=1` every state renders at every size and in both languages and is written as a PNG. Otherwise
- * the run is a smoke: each screen state renders once (at the first size and language it is requested in) with
- * its interactions and nothing is written, so a state that fails to compose, lay out or draw still fails.
+ * the run is a smoke and nothing is written: within each test method a request renders only when its state, its
+ * viewport (size and density) or its language is new for that screen, so every state, every viewport and both
+ * languages each render at least once, with their interactions, and a state or viewport that fails to compose, lay
+ * out or draw still fails.
  */
 @OptIn(ExperimentalTestApi::class)
 class RedesignShotsSessionTest {
     private val sizes = listOf(1440 to 810, 844 to 390, 390 to 844)
+
+    // What this method's smoke has rendered. JUnit creates an instance per test method, so a method never skips a
+    // request because another method rendered the same state name at a different viewport.
+    private val smokeStates = HashSet<String>()
+    private val smokeViewports = HashSet<String>()
+    private val smokeLanguages = HashSet<String>()
+    private var rendered = 0
+
+    @AfterTest fun everyMethodRenders() {
+        assertTrue(rendered > 0, "a screenshot harness method rendered nothing")
+    }
+
     @Test fun home() {
         val targets = listOf("start", "lab", "armory", "rebirth", "codex", "settings", "hangar")
         for ((w, h) in sizes) for (language in AppLanguage.entries) {
@@ -250,10 +266,11 @@ class RedesignShotsSessionTest {
             for (state in listOf("default", "selected")) shotCodex("$state-text100", 1440, 810, language, scale = 1f) { codexState(state) }
             shotCodex("default-text175", 1280, 720, language, scale = 1.75f) { codexState("default") }
         }
-        codexItemsShots()
+        // The smoke renders the Items matrix once, in [codexItems].
+        if (FullShots) codexItemsShots()
     }
 
-    /** The Items matrix alone (also part of [codex]). */
+    /** The Items matrix alone (also part of [codex] with `KK_SHOTS=1`). */
     @Test fun codexItems() = codexItemsShots()
 
     /** The Items matrix: each sort, a previewed cell's row and column, and a fresh profile's hatches. */
@@ -419,7 +436,13 @@ class RedesignShotsSessionTest {
         density: Float = 1f,
         content: @Composable () -> Unit,
     ) {
-        if (!FullShots && !SmokeStates.add("$screen/$state")) return
+        if (!FullShots) {
+            val newState = smokeStates.add("$screen/$state")
+            val newViewport = smokeViewports.add("$screen/${w}x$h@$density")
+            val newLanguage = smokeLanguages.add("$screen/${language.code}")
+            if (!newState && !newViewport && !newLanguage) return
+        }
+        rendered++
         androidx.compose.ui.test.v2.runDesktopComposeUiTest((w * density).toInt(), (h * density).toInt()) {
             mainClock.autoAdvance = false
             setContent {
@@ -442,9 +465,6 @@ class RedesignShotsSessionTest {
 
     private companion object {
         val FullShots = System.getenv("KK_SHOTS") == "1"
-
-        /** The states the smoke has rendered in this run (each once across the class). */
-        val SmokeStates = HashSet<String>()
     }
 }
 
