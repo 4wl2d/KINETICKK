@@ -48,6 +48,7 @@ import kinetickk.ball.profile.interaction.armory.impl.ArmoryViewState
 import kinetickk.ball.profile.interaction.armory.impl.armoryLadderCellsTop
 import kinetickk.ball.profile.interaction.armory.impl.refusal
 import kinetickk.ball.profile.interaction.armory.impl.status
+import kinetickk.ball.profile.interaction.matrix.api.MatrixNodeStatus
 import kinetickk.ball.profile.interaction.matrix.impl.MatrixContent
 import kinetickk.ball.profile.interaction.matrix.impl.MatrixLayoutHolder
 import kinetickk.ball.profile.interaction.matrix.impl.MatrixState
@@ -70,6 +71,7 @@ import kinetickk.ball.profile.interaction.rebirth.impl.featuredRows
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
+import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.measureKkTooltip
 import kinetickk.foundation.design.rememberKkCanvasMeasurer
@@ -280,6 +282,11 @@ class ProfileTextFitTest {
             }) { scene, frame ->
                 val context = "${width}x$height $scene"
                 assertWhole(frame, context)
+                // An inspected locked tile keeps its dark face: its unlock progress reads in light ink on it.
+                if (scene.item != CoreShape.ORB && scene.item != CoreShape.HEXAGON) {
+                    val status = frame.of("hangar.tile.status").last { it.owner == scene.item }
+                    assertTrue(contrast(status.color, Kk.Ink4) >= 3f, "$context locked status contrast ${contrast(status.color, Kk.Ink4)}")
+                }
                 val probe = assertNotNull(probes[scene], context)
                 val viewport = assertNotNull(probe.viewport, context)
                 val signature = assertNotNull(probe.signature, context)
@@ -323,6 +330,10 @@ class ProfileTextFitTest {
                 assertWhole(frame, context)
                 assertTrue(frame.of("header.title").isNotEmpty(), "$context header title")
                 val layout = assertNotNull(holders[scene]?.layout, context)
+                // A tile is a slab whose right edge leans in by its cut toward the bottom; its status stays within the
+                // padding inside that edge (the selection echo shows past it).
+                val cut = (if (layout.frame.regular) 12f else 9f) * layout.frame.unit
+                val pad = layout.frame.d(if (layout.frame.regular) 10f else 7f)
                 // Every tile name and status line stays inside its own tile.
                 frame.of("matrix.tile").forEach { tile ->
                     val names = frame.of("matrix.tile.name").filter { it.owner == tile.owner }
@@ -337,7 +348,17 @@ class ProfileTextFitTest {
                     assertTrue(names.single().box.bottom <= pips.box.top + 0.5f,
                         "$context ${tile.owner} name ${names.single().box} runs into its pips ${pips.box}")
                     assertTrue(pips.box.bottom <= statuses.single().box.top + 0.5f, "$context ${tile.owner} pips run into the status")
+                    val status = statuses.single().box
+                    val edge = tile.box.right - pad - cut * (status.bottom - tile.box.top) / tile.box.height
+                    assertTrue(status.right <= edge + 0.5f, "$context ${tile.owner} status $status runs past $edge into the cut corner")
                 }
+                // A Rebirth gate stays above the half-size fit floor (a prerequisite lock reads at full size on the same grid).
+                fun statusSizes(status: MatrixNodeStatus) =
+                    frame.of("matrix.tile.status").filter { model.node(it.owner as MatrixNodeId)?.status == status }.map(::fontSize)
+                val rebornSizes = statusSizes(MatrixNodeStatus.REBIRTH_LOCKED)
+                val lockSizes = statusSizes(MatrixNodeStatus.PREREQUISITE_MISSING)
+                assertTrue(rebornSizes.isNotEmpty() && lockSizes.isNotEmpty(), context)
+                assertTrue(rebornSizes.min() >= 0.55f * lockSizes.max(), "$context Rebirth gates $rebornSizes crushed to the fit floor against locks $lockSizes")
                 // The description slot is the wrapped text and the status sits under the rank line.
                 val description = frame.of("matrix.detail.description").single()
                 assertEquals(assertNotNull(description.layout).kkBoxHeight, layout.description.height, 0.5f, context)

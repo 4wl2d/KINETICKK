@@ -323,7 +323,7 @@ internal fun matrixTileNameLayout(measurer: CanvasTextMeasurer, size: Float, nam
 /** The short lock reason or price a tile shows under its pips. */
 internal fun matrixTileStatus(node: MatrixNodeRenderModel, language: AppLanguage): String = when (node.status) {
     MatrixNodeStatus.MAXED -> language.text(ProfileText.MaximumSynchrony)
-    MatrixNodeStatus.REBIRTH_LOCKED -> language.text(ProfileScreensRedesignText.RebornLock, node.minimumRebirth)
+    MatrixNodeStatus.REBIRTH_LOCKED -> language.text(ProfileScreensRedesignText.TileRebornLock, node.minimumRebirth)
     MatrixNodeStatus.PREREQUISITE_MISSING -> language.text(ProfileScreensRedesignText.PrerequisiteLock)
     MatrixNodeStatus.SHORT_OF_MATTER, MatrixNodeStatus.AVAILABLE ->
         language.text(ProfileScreensRedesignText.CostMatter, formatMatter(node.nextCost, language))
@@ -383,12 +383,13 @@ private fun DrawScope.drawMatrixTile(
     val locked = node.status == MatrixNodeStatus.REBIRTH_LOCKED || node.status == MatrixNodeStatus.PREREQUISITE_MISSING
     val inverted = flash >= 0f && flash < 0.08f
     val on = selection > 0.5f
+    val cutDp = (if (frame.regular) 12f else 9f) * k
     translate(matrixFlashNudge(flash, frame.d(6f)), 0f) {
         val bounds = Rect(Offset.Zero, size)
         // The selected tile keeps its row so the prerequisite lines stay attached; the echo still slides out.
         translate(0f, d(8f) * selection.coerceIn(0f, 1.2f)) {
             drawKkTile(measurer, bounds, selected = if (inverted) 1f else selection, hovered = hovered, locked = locked,
-                cutDp = (if (frame.regular) 12f else 9f) * k, focused = focused)
+                cutDp = cutDp, focused = focused)
         }
         val fg = when {
             locked && on -> Kk.Bone
@@ -397,14 +398,21 @@ private fun DrawScope.drawMatrixTile(
             else -> Kk.Bone
         }
         val pad = frame.d(if (frame.regular) 10f else 7f)
+        // Branch marks invert to ink on a selected light face; a locked tile keeps its dark face, so they keep the branch colour.
+        val markInk = if (on && !locked) Kk.Ink else accent
         // Owned nodes carry a branch-coloured bar; keystones add a diamond.
-        if (node.owned) drawRect(if (on) Kk.Ink else accent, Offset(pad, frame.d(4f)), Size(size.width - pad * 2f, frame.d(3f)))
+        if (node.owned) drawRect(markInk, Offset(pad, frame.d(4f)), Size(size.width - pad * 2f, frame.d(3f)))
         if (node.keystone) {
             val gem = frame.d(if (frame.regular) 9f else 7f)
-            drawKkGem(Offset(size.width - pad - gem * 0.5f, pad + gem * 0.6f), if (on) Kk.Ink else accent, gem / density)
+            drawKkGem(Offset(size.width - pad - gem * 0.5f, pad + gem * 0.6f), markInk, gem / density)
         }
         val nameRight = size.width - pad - if (node.keystone) frame.d(14f) else 0f
-        val statusLayout = fitKkText(measurer, status, type.tileStatus * k, size.width - pad * 2f - frame.d(14f), minFactor = 0.5f) {
+        val iconSize = frame.d(if (frame.regular) 12f else 10f)
+        val statusX = if (node.status == MatrixNodeStatus.MAXED) pad else pad + iconSize + frame.d(5f)
+        // The status fits where it is drawn: from after its icon to the padding inside the slab's slanted right edge,
+        // which leans in by the cut toward the bottom.
+        val statusWidth = size.width - statusX - pad - d(cutDp) * (1f - pad / size.height)
+        val statusLayout = fitKkText(measurer, status, type.tileStatus * k, statusWidth, minFactor = 0.5f) {
             measurer.typography.monoStyle(it)
         }
         val statusY = size.height - pad - statusLayout.kkBoxHeight
@@ -420,7 +428,6 @@ private fun DrawScope.drawMatrixTile(
             MatrixNodeStatus.SHORT_OF_MATTER -> if (on) Kk.Ink else Kk.Mute
             else -> fg
         }
-        val iconSize = frame.d(if (frame.regular) 12f else 10f)
         when (node.status) {
             MatrixNodeStatus.REBIRTH_LOCKED, MatrixNodeStatus.PREREQUISITE_MISSING ->
                 drawKkIcon(KkIcon.SYSTEM_LOCKED, Offset(pad + iconSize * 0.5f, statusY + statusLayout.kkBoxHeight * 0.5f), iconSize, statusColor)
@@ -428,11 +435,10 @@ private fun DrawScope.drawMatrixTile(
                 drawKkGem(Offset(pad + iconSize * 0.5f, statusY + statusLayout.kkBoxHeight * 0.5f), statusColor, iconSize / density)
             MatrixNodeStatus.MAXED -> Unit
         }
-        val statusX = if (node.status == MatrixNodeStatus.MAXED) pad else pad + iconSize + frame.d(5f)
         drawProfileText(statusLayout, statusX, statusY, statusColor, "matrix.tile.status", node.id)
         val pipsWidth = drawKkPips(
             Offset(pad, pipsTop), node.maxRanks, node.rank,
-            if (on) Kk.Ink else accent,
+            markInk,
             sizeDp = pipHeight / density, widthDp = pipWidth / density, gapDp = 3f,
             emptyColor = if (on) Color(0xFF9C9B92) else Kk.Line2, nextOutlined = node.canBuy, emptyOutlined = true,
         )

@@ -357,7 +357,9 @@ private fun DrawScope.drawHangarTile(
     if (!shape.unlocked) drawKkIcon(KkIcon.SYSTEM_LOCKED, center, radius * 0.9f, fg)
     val nameTop = size.height - pad - textHeight
     drawProfileText(nameLayout, size.width * 0.5f, nameTop, fg, "hangar.tile.name", shape.shape, align = KkAlign.CENTER)
+    // A locked tile keeps its dark face when inspected, so its unlock progress reads in light ink then.
     val statusColor = when {
+        !shape.unlocked -> if (on) Kk.Bone2 else Kk.Mute
         selected -> if (on) Kk.Ink else roles.you
         else -> if (on) Kk.Ink else Kk.Mute
     }

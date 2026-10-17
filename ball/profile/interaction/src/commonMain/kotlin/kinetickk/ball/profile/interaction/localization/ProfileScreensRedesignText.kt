@@ -108,6 +108,8 @@ internal enum class ProfileScreensRedesignText(
     HangarUnlockedBy("Unlocked: {0}", "Открыт: {0}"),
     HangarProgress("{0}: {1}/{2}", "{0}: {1}/{2}"),
     RebornLock("Reborn {0}", "Перерождение {0}"),
+    /** The short Rebirth gate a Matrix tile shows under its pips (the detail panel keeps [RebornLock]). */
+    TileRebornLock("Reborn {0}", "Перерожд. {0}"),
     RebornLockDetail("Reach Rebirth rank {0} to open this node.", "Узел откроется на ранге перерождения {0}."),
     PrerequisiteLock("Locked", "Закрыто"),
     RequiresNode("Requires {0}.", "Нужен узел «{0}»."),
