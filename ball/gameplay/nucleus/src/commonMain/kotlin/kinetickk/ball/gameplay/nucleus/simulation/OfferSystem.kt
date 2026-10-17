@@ -25,12 +25,18 @@ internal const val PITY_OFFERS: Int = 6
 internal fun MutableGameState.offerableItems(): List<ItemDefinition> {
     val catalogLevel = max(level, lifetimeMatterOfferLevel(lifetimeMatter))
     return content.items.filter { item ->
-        item.unlockLevel <= catalogLevel && item.minimumRebirth <= rebirthLevel &&
-            itemStacks[item.id] < item.maxStacks && itemSuppressedShare(item) < 1f
+        item.unlockLevel <= catalogLevel && item.minimumRebirth <= rebirthLevel && hasUsefulItemEffect(item)
     }
 }
 
-/** Number of item cards in an offer (Gambler's Ledger adds one, never above the choice bound). */
+/**
+ * One card-adding item per run: offers grow by one card however many such items the build holds, so once one is
+ * owned another (or another copy) would add nothing, and it is no longer offered. The card says so.
+ */
+internal fun MutableGameState.offerCardsAlreadyAdded(item: ItemDefinition): Boolean =
+    build.offerCards > 0 && item.rules.any { it is ItemRule.OfferCards }
+
+/** Number of item cards in an offer (a card-adding item adds one, never above the choice bound). */
 internal fun MutableGameState.itemOfferSize(): Int =
     min(MAX_GENERATED_REWARD_CHOICES, 3 + (if (build.offerCards > 0) 1 else 0) + (if (matrixWidensItemOffer()) 1 else 0))
 

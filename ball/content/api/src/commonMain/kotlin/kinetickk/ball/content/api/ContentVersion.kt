@@ -20,7 +20,7 @@ val KINETICKK_CONTENT_VERSION: ContentVersion = ContentVersion("kinetickk-conten
 
 /** Bootstrap limits. Runtime decisions use the corresponding captured snapshot fields. */
 object ContentBounds {
-    const val MAX_ITEMS: Int = 96
+    const val MAX_ITEMS: Int = 192
     const val MAX_COMBAT_FIELDS: Int = 16
     const val MAX_WEAPONS: Int = 12
     const val MAX_MATRIX_NODES: Int = 40

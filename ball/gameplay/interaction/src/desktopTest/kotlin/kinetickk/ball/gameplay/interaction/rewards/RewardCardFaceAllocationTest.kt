@@ -36,10 +36,12 @@ class RewardCardFaceAllocationTest {
     @Test
     fun epicAndLegendaryFacesAllocateNothingPerFrame() {
         val content = shippedRewardContent
-        val epics = content.items.filter { it.rarity == ItemRarity.EPIC }
-        val legendaries = content.items.filter { it.rarity == ItemRarity.LEGENDARY }
+        // One card per scene: items that borrow a family scene draw the very same code as its owner.
+        val epics = content.items.filter { it.rarity == ItemRarity.EPIC }.distinctBy { rewardCardArt(it) }
+        val legendaries = content.items.filter { it.rarity == ItemRarity.LEGENDARY }.distinctBy { rewardCardArt(it) }
+        assertTrue(epics.size + legendaries.size == RewardCardArt.entries.size, "Every scene is drawn")
         for (palette in listOf(KkRolePalette.Default, KkRolePalette.Mono)) for ((width, height, phone) in listOf(Triple(300, 450, false), Triple(195, 254, true))) {
-            // Every epic and legendary once, side by side in rows, as their own cards (own caches).
+            // Every scene once, side by side in rows, as its own card (own caches).
             val items = epics + legendaries
             val choices = items.map { ChoiceOption(ChoiceType.ITEM, it.name, it.description, it.rarity.displayLabel, itemId = it.id) }
             val model = rewardFixtureModel(content = content, choices = choices)

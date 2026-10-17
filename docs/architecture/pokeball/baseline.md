@@ -75,7 +75,7 @@ and counter-thrust remain available at exhaustion. Gameplay owns twelve characte
 abilities, optional world-fixed trials and bounded relic synergies. Codex reads
 one coherent immutable build summary and preserves pause/reward selection.
 
-The catalog has 90 hand-authored items, 12 weapons, 32 Core Matrix nodes, 22 Relics,
+The catalog has 173 hand-authored items, 12 weapons, 32 Core Matrix nodes, 22 Relics,
 19 enemy types, twelve characters, and Rebirth levels `0..10` (see the build-system
 and 0.4.0 intentional deltas below). Existing stable declaration order is captured as
 explicit stable IDs during the migration; consumers receive immutable versioned
@@ -228,7 +228,7 @@ rate 1 and keeps spawns clear of offered anomalies. The no-POI probe counts
 only victories that skip every POI; the reference seed and at least five of
 the fixed probe seeds win.
 
-The second wave adds world obstacles, a minimap and a wider Data magnet.
+The second wave adds world obstacles, a minimap, a wider Data magnet and 83 items.
 
 - **Obstacles.** Each run generates asteroids, bumpers and, under Fractured
   Space, unstable asteroids in a five-by-five window of 1200-unit chunks around
@@ -266,6 +266,32 @@ The second wave adds world obstacles, a minimap and a wider Data magnet.
   choice latch every on-screen Data. Keys and Relic resonances never expire,
   and at the cap they evict the oldest Data. Event Horizon's liability now removes the latch and the level-up
   vacuum instead of halving the radius; Magnet Lens gives +90.
+- **Items.** The item catalog grows to 173 (bound 192). Items `90..172` are
+  appended: six Sonic and six Void items, ten that answer ricochets and slams
+  (five each, every clause rate-limited), twelve weapon-support items (the first
+  attack-speed stats, an infusion for each of the five original elements, a kill
+  refund and a detonating legendary), one item for each Sonic and Void reaction,
+  six Fortune items, four for each archetype and four high-risk Epics. Commons
+  and Uncommons are open from the start; each Rebirth tier opens four more (the
+  Rares, the Epics, six new legendaries and one Uncommon at tier 10). A reaction
+  clause naming two elements fires only for the reaction between them, and one
+  named element now matches every reaction involving it instead of only the
+  reaction's first element. ARSENAL III adds one stack of the weapon's element
+  (the dominant element while weapons carry none) on every fourth weapon hit,
+  counted rather than rolled, and Breaks deal 25 % more damage; it no longer
+  repeats the dominant infusion on every third hit, and without an element it
+  adds nothing. Only one card-adding item (Gambler's Ledger, Cornucopia Core) is
+  offered per run. Data from a level-up clause joins the level loop that fired
+  it, and overheat locks the Dash at full heat before its clauses vent. A
+  desktop test flies every item through scripted encounters and requires a 5 %
+  change in its favor at one stack (a fallen Core keeps no integrity and still
+  meets the scripted hits it missed; a liability alone scores nothing); the
+  items it caught were retuned (Rime Rounds, Cold Snap, Null Rounds, Graviton
+  Seed, Permafrost, Flashpoint, Killstreak Engine, Deadeye Reticle, Weakpoint
+  Scanner, Detonator Spur, Quiet Engine, Hollow Point and Resonance Fork).
+  Expansion Epics and legendaries borrow a family scene for their card. The no-
+  POI bot skips ricochet and slam items, passes on the Furnace Covenant and
+  keeps wider of skipped POIs; the reference seed and eight probe seeds win.
 
 The compact exit workflow removes the old causal-depth assertion that failed
 when a busy Profile refused progress before acceptance. An injected

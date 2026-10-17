@@ -84,7 +84,9 @@ class NoPoiPlaythroughTest {
     @Test fun freshProfileAlsoWinsFurtherReferenceNoPoiSeeds() {
         // The fixed balance probe after the reference (i * 7_919 + 13, i = 1..10). Seeds are never picked by
         // their outcome; the floor catches a drop in robustness. After wave A (roster and director, Sonic and
-        // Void, frame pacing, Core Matrix) and its integration fixes, 6 of the 10 win, all without a POI.
+        // Void, frame pacing, Core Matrix) and its integration fixes, 6 of the 10 win, all without a POI. With the
+        // 173-item catalog (the bot skips ricochet and slam items, passes on the Furnace Covenant and keeps wider of
+        // skipped POIs) 8 win, all without a POI.
         val minimumWins = 5
         var wins = 0
         for (seed in (1..10).map { it * 7_919 + 13 }) {
@@ -135,6 +137,9 @@ private fun report(value: String) {
  * Steering uses a short approximate projectile forecast; all actual motion/damage goes through update().
  * Each 20 ms input is a normal pointer/Brake/Dash action, independent of the configured simulation speed.
  */
+/** How far the bot keeps the momentum-projected Core from a skipped POI's center. */
+private const val POI_CLEARANCE = 360f
+
 private class NoPoiBot(
     private val archetypeTag: BuildTag = BuildTag.RAM,
     private val element: StatusElement? = StatusElement.ENTROPY,
@@ -150,6 +155,8 @@ private class NoPoiBot(
         RelicId.EXECUTIONERS_PRISM to -20f,
         // It takes steady chip damage, which Stormheart turns into self-discharges.
         RelicId.STORMHEART_CAPACITOR to -20f,
+        // It never manages heat, so the Covenant's cooling cut keeps it above 80 heat, bleeding integrity.
+        RelicId.FURNACE_COVENANT to -20f,
     ),
 ) {
     private var cursorAngle = 0f
@@ -199,9 +206,9 @@ private class NoPoiBot(
             val px = s.coreX + s.velocityX * 0.35f - point.x
             val py = s.coreY + s.velocityY * 0.35f - point.y
             val pd = max(1f, length(px, py))
-            if (pd < 300f) {
-                desiredX += px / pd * (300f - pd) * 8f
-                desiredY += py / pd * (300f - pd) * 8f
+            if (pd < POI_CLEARANCE) {
+                desiredX += px / pd * (POI_CLEARANCE - pd) * 8f
+                desiredY += py / pd * (POI_CLEARANCE - pd) * 8f
             }
         }
         // Steer around obstacles ahead, from where momentum carries the Core (a player reading the minimap).
@@ -331,11 +338,15 @@ private class NoPoiBot(
         }
         c.itemId?.let { id ->
             val item = s.content.item(id) ?: return 0f
+            // The reference flight never bounces off obstacles or throws enemies into them: ricochet and slam
+            // items would sit idle in this build.
+            if (item.clauses.any { it.trigger == EffectTrigger.RICOCHET || it.trigger == EffectTrigger.SLAM }) return -100f
             val archetype = (if (archetypeTag in item.tags) 50f else 0f) + (if (element != null && element in item.elements) 50f else 0f)
             val survival = item.stats.sumOf { stat ->
                 when (stat.effect) {
                     ItemEffect.REGEN -> stat.amount * 30f
-                    ItemEffect.SHIELD_CAPACITY -> stat.amount
+                    // A first shield matters most; the larger pool offers fewer of them.
+                    ItemEffect.SHIELD_CAPACITY -> stat.amount * if (s.shieldCapacity() <= 0f) 2f else 1f
                     ItemEffect.MAX_INTEGRITY -> stat.amount * 0.6f
                     else -> 0f
                 }.toDouble()

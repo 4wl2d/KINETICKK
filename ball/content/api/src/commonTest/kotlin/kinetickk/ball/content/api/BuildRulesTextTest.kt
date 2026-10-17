@@ -4,6 +4,7 @@
 package kinetickk.ball.content.api
 
 import kinetickk.foundation.collections.immutableListOf
+import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -114,6 +115,27 @@ class BuildRulesTextTest {
             listOf("При пробое Термо, не чаще раза в 0,5 с", "Восстанавливает 3 прочности и даёт 5 щита"),
             thermalBreak.ruleLines(AppLanguage.Russian).plain().map { it.text },
         )
+
+        // Two elements on a reaction name the one reaction between them; one element reads as "involving".
+        fun reaction(language: AppLanguage, every: Int, vararg elements: StatusElement) = item(
+            elements = immutableListOf(StatusElement.THERMAL, StatusElement.SONIC),
+            clauses = immutableListOf(
+                EffectClause(
+                    EffectTrigger.REACTION,
+                    elements.map { EffectCondition.ElementIs(it) }.toImmutableList(),
+                    immutableListOf(EffectAction.Burst(160f, DamageBasis.FLAT, 14f)),
+                    everyNth = every,
+                ),
+            ),
+        ).ruleLines(language).first()
+        assertEquals(
+            RuleLine(RuleLineKind.TRIGGER, "On a reaction between Thermal and Sonic", StatusElement.THERMAL),
+            reaction(AppLanguage.English, 1, StatusElement.THERMAL, StatusElement.SONIC),
+        )
+        assertEquals("При реакции Термо и Звука", reaction(AppLanguage.Russian, 1, StatusElement.THERMAL, StatusElement.SONIC).text)
+        assertEquals("Every 2nd reaction between Thermal and Sonic", reaction(AppLanguage.English, 2, StatusElement.THERMAL, StatusElement.SONIC).text)
+        assertEquals("Каждая 2-я реакция Термо и Звука", reaction(AppLanguage.Russian, 2, StatusElement.THERMAL, StatusElement.SONIC).text)
+        assertEquals("On a reaction involving Sonic", reaction(AppLanguage.English, 1, StatusElement.SONIC).text)
 
         fun head(trigger: EffectTrigger, condition: EffectCondition, language: AppLanguage) = item(
             elements = immutableListOf(StatusElement.ENTROPY),

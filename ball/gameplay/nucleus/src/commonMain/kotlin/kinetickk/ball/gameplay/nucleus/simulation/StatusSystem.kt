@@ -261,7 +261,8 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
     val definition = content.build.element(element)
     val power = definition.breakPower * build.breakPower(element)
     val potency = build.potency(element)
-    val scale = runScale()
+    // Damage dealt by the Break itself; the Freeze's duration and the spread stacks are not damage.
+    val scale = runScale() * breakDamageScale()
     val outputGeneration = generation + 1
     when (element) {
         StatusElement.THERMAL -> {
@@ -357,7 +358,7 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
         StatusElement.ENTROPY -> {
             if (enemy.status[StatusCell.MAX_HP_PROC_READY_AT] <= elapsed) {
                 enemy.status[StatusCell.MAX_HP_PROC_READY_AT] = elapsed + maxHpProcCooldown(enemy)
-                dealStatusDamage(enemy, enemy.maxHp * victimFactor(enemy) * definition.breakPower, element)
+                dealStatusDamage(enemy, enemy.maxHp * victimFactor(enemy) * definition.breakPower * breakDamageScale(), element)
             }
             if (build.pairing(RelicPairingId.BLIGHT_GARDEN) && relicCooldowns[RelicId.VERDANT_ROT.ordinal] <= 0f &&
                 distanceSquared(enemy.x, enemy.y, coreX, coreY) <= square(VERDANT_RADIUS)
@@ -382,7 +383,7 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
         StatusElement.VOID -> {
             var remembered = enemy.status[StatusCell.HOLLOW_MEMORY]
             enemy.status[StatusCell.HOLLOW_MEMORY] = 0f
-            remembered *= power
+            remembered *= power * breakDamageScale()
             val cap = enemy.maxHp * UNMAKE_INTEGRITY_CAP * if (enemy.isBossClass) victimFactor(enemy) else 1f
             val damage = min(remembered, cap)
             if (damage > 0f) {

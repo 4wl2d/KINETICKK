@@ -143,8 +143,8 @@ internal val BuildPhrasesInRussian: List<Pair<String, String>> = listOf(
     "The weapon system and its cadence." to "Оружейная система и её ритм.",
     "Activation speed +10 %." to "Скорость активации +10 %.",
     "Weapon power +20 %." to "Мощность оружия +20 %.",
-    "Every third weapon hit applies 1 stack of your dominant element." to
-        "Каждое третье попадание оружия накладывает 1 слой вашей основной стихии.",
+    "Every fourth weapon hit adds 1 stack of the weapon's element or your dominant element, and Breaks deal 25 % more damage." to
+        "Каждое четвёртое попадание оружия добавляет 1 слой стихии оружия или вашей основной стихии, а пробои наносят на 25 % больше урона.",
     "Critical hits and weak points." to "Критические удары и слабые места.",
     "Critical chance +6 %." to "Шанс критического удара +6 %.",
     "Critical hits deepen every status on the target by 1 stack." to "Критические удары добавляют по 1 слою каждой стихии на цели.",

@@ -160,7 +160,7 @@ private val DefaultBuildCatalog = BuildCatalog(
         TagResonanceDefinition(BuildTag.ARSENAL, "The weapon system and its cadence.", immutableListOf(
             "Activation speed +10 %.",
             "Weapon power +20 %.",
-            "Every third weapon hit applies 1 stack of your dominant element.",
+            "Every fourth weapon hit adds 1 stack of the weapon's element or your dominant element, and Breaks deal 25 % more damage.",
         )),
         TagResonanceDefinition(BuildTag.PRECISION, "Critical hits and weak points.", immutableListOf(
             "Critical chance +6 %.",

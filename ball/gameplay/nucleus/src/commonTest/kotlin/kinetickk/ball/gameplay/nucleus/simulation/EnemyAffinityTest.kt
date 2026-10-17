@@ -322,7 +322,7 @@ class EnemyAffinityTest {
     }
 
     @Test
-    fun arsenalAndRamFollowUpsMeasureTheHitBeforeTheTargetsFrame() {
+    fun ramFollowUpsMeasureTheHitBeforeTheTargetsFrame() {
         fun tagged(tag: BuildTag, tier: Int): MutableGameState {
             // Items carrying the tag reduced to a pickup-radius stat, so only the resonance follow-up deals damage.
             val content = canonicalGameplayContent.copy(items = canonicalGameplayContent.items.map { item ->
@@ -339,15 +339,6 @@ class EnemyAffinityTest {
             assertNull(state.build.dominant)
             return state
         }
-        // ARSENAL III without a dominant element: every third weapon hit adds 20 % of the hit as a proc.
-        val arsenal = tagged(BuildTag.ARSENAL, 3)
-        val light = arsenal.dummy(hp = 10_000f, type = EnemyType.INTERCEPTOR)
-        arsenal.arsenalCounter = 2
-        val shot = arsenal.dealHit(light, 100f, HitSource.WEAPON, canCrit = false)
-        assertEquals(shot.unmitigated * 0.85f, shot.amount, 0.01f)
-        assertEquals(shot.unmitigated * 0.2f * 0.85f, light.maxHp - light.hp - shot.amount, 0.01f,
-            "The proc measures the hit before the light frame, then meets it once")
-
         // RAM II above 900 u/s: impacts splash 35 % of the hit around the target.
         val ram = tagged(BuildTag.RAM, 2)
         ram.setVelocityForTesting(1_000f, 0f)

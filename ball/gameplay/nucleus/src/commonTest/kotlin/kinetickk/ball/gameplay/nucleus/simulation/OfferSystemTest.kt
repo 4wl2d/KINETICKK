@@ -79,9 +79,14 @@ class OfferSystemTest {
     fun rebirthGatedItemsAndRelicsStayOutOfOffersBelowTheirTier() {
         fun gatedItems(rebirth: Int): Set<String> = buildTestState(rebirth = rebirth).apply { lifetimeMatter = 4_000L }
             .offerableItems().filter { it.minimumRebirth > 0 }.map { it.name }.toSet()
+        fun gatedUpTo(rebirth: Int): Set<String> =
+            canonicalGameplayContent.items.filter { it.minimumRebirth in 1..rebirth }.map { it.name }.toSet()
         assertTrue(gatedItems(0).isEmpty())
-        assertEquals(setOf("Solar Choir", "Glacial Heart"), gatedItems(2))
-        assertEquals(setOf("Solar Choir", "Glacial Heart", "Resonance Fork"), gatedItems(4))
+        // Each tier opens exactly what its gates name, and every lower tier's items stay open.
+        for (rebirth in 1..10) assertEquals(gatedUpTo(rebirth), gatedItems(rebirth), "Reborn $rebirth")
+        assertTrue("Glacial Heart" in gatedItems(2) && "Resonance Fork" !in gatedItems(3) && "Resonance Fork" in gatedItems(4))
+        assertTrue("Last Word" !in gatedItems(9) && "Last Word" in gatedItems(10))
+        assertEquals(43, gatedItems(10).size, "Three original legendaries and forty gated expansion items")
 
         fun sovereigns(rebirth: Int): Set<RelicId> = buildTestState(rebirth = rebirth).offerableRelics()
             .filter { it.minimumRebirth > 0 }.map { it.id }.toSet()
@@ -89,6 +94,31 @@ class OfferSystemTest {
         assertEquals(setOf(RelicId.AGONY_SCEPTER), sovereigns(1))
         assertEquals(setOf(RelicId.AGONY_SCEPTER, RelicId.HOLLOW_CROWN), sovereigns(3))
         assertEquals(setOf(RelicId.AGONY_SCEPTER, RelicId.HOLLOW_CROWN, RelicId.OUROBOROS_SEAL), sovereigns(5))
+    }
+
+    @Test
+    fun everyItemIsOfferedFromItsOwnTierAndLevelAndIsDiscoveredWhenTaken() {
+        val items = canonicalGameplayContent.items
+        assertEquals(173, items.size)
+        // A fresh profile per tier: no lifetime Matter, so the run level alone opens the catalog.
+        val tiers = (0..10).map { buildTestState(rebirth = it) }
+        for (item in items) {
+            val own = tiers[item.minimumRebirth].apply { level = item.unlockLevel }
+            assertTrue(item in own.offerableItems(), "${item.name} is offered at Reborn ${item.minimumRebirth}, level ${item.unlockLevel}")
+            if (item.unlockLevel > 1) {
+                own.level = item.unlockLevel - 1
+                assertFalse(item in own.offerableItems(), "${item.name} waits for level ${item.unlockLevel}")
+            }
+            if (item.minimumRebirth > 0) {
+                val below = tiers[item.minimumRebirth - 1].apply { level = 99 }
+                assertFalse(item in below.offerableItems(), "${item.name} waits for Reborn ${item.minimumRebirth}")
+            }
+        }
+
+        // Taking an item records its discovery for the Codex, whichever item it is.
+        val collector = buildTestState(rebirth = 10)
+        items.forEach { collector.acquireItem(it.id) }
+        assertEquals(items.map { it.id }.toSet(), collector.takeProgressUpdate()?.discoveredItemIds?.toSet())
     }
 
     @Test

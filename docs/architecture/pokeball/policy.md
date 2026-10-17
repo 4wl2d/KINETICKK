@@ -125,7 +125,7 @@ remain independently enforced.
 | authoritative Gameplay viewport dp / density | `1..32768` / `0.5..8` | target-owned Gameplay API factory validates both dimensions and density before the Nucleus can receive the Pulse; the simulation, the viewport and the pointer are dp |
 | authoritative Gameplay pointer | `0..current viewport` | Gameplay Nucleus validates both pointer coordinates against committed viewport state |
 | Gameplay / Home / Armory presentation delta seconds | `0.1` / `0.1` / `0.1` | Interaction-owned presentation clocks clamp the first larger representable delta |
-| Codex catalog entries / search characters | 96 / 128 | Interaction rejects catalog overflow; bounded local name search feeds a lazy grid in original catalog order |
+| Codex catalog entries / search characters | 192 / 128 | Interaction rejects catalog overflow; bounded local name search feeds a lazy grid in original catalog order |
 | Armory visible page slice | 3 | deployed draw path selects only the bounded current-page slice |
 | accepted caller effect ToneRequests per advance | 32 | Audio Resource rejects an oversized caller batch atomically |
 | caller effect ToneRequests selected per advance | 3 | Audio Resource preserves caller order/deduplication within the accepted batch |
@@ -135,16 +135,16 @@ remain independently enforced.
 | Desktop synthesis samples / PCM bytes per tone | 22050 / 44100 | validated one-second maximum buffer shape |
 | Android audio workers / queued tasks | 1 / 24 | fixed executor and discard-oldest queue policy |
 | Android synthesis samples / PCM bytes per tone | 22050 / 44100 | validated one-second maximum PCM16 buffer shape |
-| items / weapons / Matrix nodes / Relics / named pairings / reactions | 96 / 12 / 40 / 24 / 32 / 21 (current catalog 90 / 12 / 32 / 22 / 20 / 21) | Content bootstrap validation, including key-consistent pairings, declared elements, Break floors and Matrix prerequisites within their branch, each node one row below its deepest prerequisite; reactions are exactly one per pair of the 7 status elements |
+| items / weapons / Matrix nodes / Relics / named pairings / reactions | 192 / 12 / 40 / 24 / 32 / 21 (current catalog 173 / 12 / 32 / 22 / 20 / 21) | Content bootstrap validation, including key-consistent pairings, declared elements, Break floors and Matrix prerequisites within their branch, each node one row below its deepest prerequisite; reactions are exactly one per pair of the 7 status elements |
 | Matrix node ranks / rows / effects per node | 5 / 8 / 4 | Content definition construction; every node lists one price per rank |
 | Rebirth level | `0..10` | Content typed policy plus Profile/Gameplay validation |
 | equipped Relic slots / rank | 4 / `1..3` (generic Meld reaches 2) | captured Content Relic policy plus Gameplay retention/saturation |
 | Profile retained Matrix node ranks / each rank | one slot per stable MatrixNodeId (at most 40) / `0..5` on the wire, clamped to the captured `maxRanks` on load with the excess refunded | Profile bootstrap compatibility plus policy-free Resource schema validation; prerequisites and Rebirth gates apply only at purchase |
 | Profile character achievement totals (including total kills, ricochets and Data pickups) / distinct winners | non-negative saturating `Long` / twelve stable character IDs | Profile validates deltas, persists cumulative progress and owns unlock evaluation |
-| Profile retained discoveries | items: captured `itemCount` (at most 96); Relics 24; reactions 21; pairings 32; heirloom Relics 4 | Profile bootstrap compatibility plus policy-free Resource schema validation; legacy (pre-epoch) lists up to 400 items / 40 Relics are discarded at decode |
+| Profile retained discoveries | items: captured `itemCount` (at most 192); Relics 24; reactions 21; pairings 32; heirloom Relics 4 | Profile bootstrap compatibility plus policy-free Resource schema validation; legacy (pre-epoch) lists up to 400 items / 40 Relics are discarded at decode |
 | Profile master volume / text scale | `0..1` / `1..1.75` | Profile and Gameplay normalized compatibility plus Resource ingress validation |
 | Profile simulation speed / damage-tier threshold | exact declared option sets | API declarations consumed by Profile Nucleus, Gameplay Nucleus, and Resource validation |
-| Profile Gameplay discoveries per Pulse | captured `itemCount` (at most 96) | Profile validates count and every stable item ID before acceptance |
+| Profile Gameplay discoveries per Pulse | captured `itemCount` (at most 192) | Profile validates count and every stable item ID before acceptance |
 | Profile snapshot UTF-8 payload | 65536 bytes | Profile Resource before decode and after encode |
 | Desktop Preferences value length | 8192 UTF-16 code units | exact platform broker refuses 8193 before provider execution |
 | Desktop Preferences key names admitted per exact node read | 64 | exact platform broker refuses 65 before project-owned membership iteration |
@@ -165,7 +165,7 @@ copying modes or source-body expectations is a policy requirement.
 
 | Derived ID | Effective bound | Mechanical derivation |
 |---|---:|---|
-| `gameplay.item-indexed-state` | item arrays, Reborn flags, status accumulators and discoveries <=96; clause timers/counters <= 96 x 2 | validated contiguous Item IDs; pending is a subset; cardinality-stable COW |
+| `gameplay.item-indexed-state` | item arrays, Reborn flags, status accumulators and discoveries <=192; clause timers/counters <= 192 x 2 | validated contiguous Item IDs; pending is a subset; cardinality-stable COW |
 | `gameplay.weapon-indexed-state` | unlocked weapons/mutation counters <=12 | closed WeaponId bootstrap; invariant-preserving COW |
 | `gameplay.matrix-indexed-state` | rank slots <=40; folded run modifiers fixed-size | validated closed MatrixNodeId catalog sizes the array; one immutable fold per run start |
 | `gameplay.relic-indexed-state` | state arrays <=24; enemy status cells <=120 x 71 | validated RelicId catalog; per-enemy status layout driven by the element count (four 7-wide element blocks, 21 reaction-pair slots, Void memory, Unmake and Blackfire cells) times the enemy cap |
@@ -173,10 +173,10 @@ copying modes or source-body expectations is a policy requirement.
 | `gameplay.reducer-copy-collections` | equal to bounded committed source cardinality | isolated candidate storage; immutable sharing or owned copies; bounded pending outputs |
 | `gameplay.render-projection-collections` | equal to bounded source cardinality | verified predecessor provenance; identity/storage reuse or exact ordered fallback |
 | `gameplay.stable-compaction` | retained cardinality <= bounded source; stable survivor order | forward survivor compaction/reverse-tail deletion or index-stable removal |
-| `profile.codec-temporary-collections` | unlocked <=12; Matrix ranks <=40; retired Lab ranks =8; discoveries <=400 legacy / <=96 current | materialized after schema validation |
+| `profile.codec-temporary-collections` | unlocked <=12; Matrix ranks <=40; retired Lab ranks =8; discoveries <=400 legacy / <=192 current | materialized after schema validation |
 | `session.shell-entries` | 1..2 | one base plus one nullable overlay |
 | `content.closed-ui-catalogs` | CoreShape 12 / WeaponMastery 4 / EnemyType 19 | bootstrap requires exact stable order |
-| `ui.catalog-backed-sources` | Codex items <=96; Codex enemies <=24; Armory weapons <=12; Matrix nodes <=40; mastery closed | validated immutable Content plus bounded Profile state |
+| `ui.catalog-backed-sources` | Codex items <=192; Codex enemies <=24; Armory weapons <=12; Matrix nodes <=40; mastery closed | validated immutable Content plus bounded Profile state |
 | `audio.music-notes` | 8 | fixed literal array with modulo-only indexing |
 | `foundation.immutable-set-copy` | list = input cardinality; set <= input cardinality | safe immutable reuse or owned copy; stable first-occurrence set semantics |
 
