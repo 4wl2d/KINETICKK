@@ -105,7 +105,8 @@ class RewardPreviewTest {
     fun weaponCountPreviewsMatchSpawnedDronesAndPrismProjectilesAtUpgradeThresholds() {
         val drones = engine().apply {
             weapon = WeaponId.ION_SWARM
-            weaponLevel = 3
+            // Amplifying to level 3 opens Ion Swarm's first form: one more orbital.
+            weaponLevel = 2
             offer(ChoiceOption(ChoiceType.TOTEM, "Amplify", "", "", weaponId = weapon, totemAction = TotemAction.AMPLIFY_CURRENT))
         }
         val droneCount = drones.rewardPreviews().single().changes.single { it.name == "Drones" }
@@ -124,7 +125,20 @@ class RewardPreviewTest {
         prism.addEnemyForTesting(prism.coreX + 100f, prism.coreY)
         prism.firePrismRelay(1f)
         assertEquals(prism.projectiles.size.toFloat(), preview.changes.single { it.name == "Projectiles" }.after)
-        assertEquals(prism.projectiles.first().pierce.toFloat(), preview.changes.single { it.name == "Ricochets" }.after)
+        // The second form twins the relay without another bounce, so the preview lists no ricochet change.
+        assertTrue(preview.changes.none { it.name == "Ricochets" })
+
+        val ascended = engine().apply {
+            weapon = WeaponId.PRISM_RELAY
+            weaponLevel = 9
+            offer(ChoiceOption(ChoiceType.TOTEM, "Amplify", "", "", weaponId = weapon, totemAction = TotemAction.AMPLIFY_CURRENT))
+        }
+        val ricochets = ascended.rewardPreviews().single().changes.single { it.name == "Ricochets" }
+        ascended.choose(0)
+        ascended.addEnemyForTesting(ascended.coreX + 100f, ascended.coreY)
+        ascended.firePrismRelay(1f)
+        assertEquals(ascended.projectiles.first().pierce.toFloat(), ricochets.after)
+        assertTrue(ricochets.after > ricochets.before)
     }
 
     @Test

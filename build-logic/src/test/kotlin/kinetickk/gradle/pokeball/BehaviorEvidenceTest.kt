@@ -40,7 +40,7 @@ class BehaviorEvidenceTest {
         val byClass = runtimeBehaviorEvidence.associateBy(BehaviorEvidence::className)
         assertEquals(runtimeBehaviorEvidence.size, byClass.size)
         assertTrue(byClass.getValue("kinetickk.ball.gameplay.nucleus.simulation.GameplayCollectionBoundsTest")
-            .methods.contains("arcCoilTargetsSixNearestAndLeavesSeventhUntouched"))
+            .methods.contains("arcCoilChainsAtMostFourTargetsAndLeavesFifthUntouched"))
         assertTrue(byClass.getValue("kinetickk.ball.gameplay.nucleus.simulation.GameplayReductionIsolationTest")
             .methods.isNotEmpty())
         assertTrue(byClass.getValue("kinetickk.foundation.dispatch.InlineReplyTest")

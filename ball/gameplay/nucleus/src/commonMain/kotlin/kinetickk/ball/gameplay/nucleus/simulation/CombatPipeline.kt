@@ -109,6 +109,8 @@ internal fun MutableGameState.shieldCapacity(): Float {
     if (build.liability(RelicId.GLASS_COMET)) return 0f
     var capacity = maxShield
     if (tagTier(BuildTag.BULWARK) >= 1) capacity += 18f
+    // Aegis Shards add shield capacity while equipped.
+    if (weapon == WeaponId.AEGIS_SHARDS) capacity += AEGIS_SHIELD_CAPACITY
     if (build.upside(RelicId.AEGIS_INVERSION)) {
         capacity += maxHp * 0.6f * (if (build.pairing(RelicPairingId.ROT_WARD)) 1.3f else 1f)
     }
@@ -273,10 +275,16 @@ internal fun MutableGameState.vulnerability(enemy: Enemy, source: HitSource): Fl
 
 private class CritOutcome(val critical: Boolean, val multiplier: Float)
 
-private fun MutableGameState.resolveCrit(enemy: Enemy, source: HitSource, canCrit: Boolean, forceCrit: Boolean): CritOutcome {
+private fun MutableGameState.resolveCrit(
+    enemy: Enemy,
+    source: HitSource,
+    canCrit: Boolean,
+    forceCrit: Boolean,
+    critChanceBonus: Float = 0f,
+): CritOutcome {
     if (!canCrit && !forceCrit) return CritOutcome(false, 1f)
     val executioner = build.upside(RelicId.EXECUTIONERS_PRISM)
-    val chance = effectiveCritChance()
+    val chance = (effectiveCritChance() + critChanceBonus).coerceIn(0f, 0.75f)
     var multiplier = critMultiplier
     var forced = forceCrit
     val always = build.alwaysCrit
@@ -324,6 +332,8 @@ internal fun MutableGameState.dealHit(
     sourceWeapon: WeaponId? = null,
     /** The Diamond's full Edge: this hit is critical whatever the roll. */
     forceCrit: Boolean = false,
+    /** Extra crit chance for this hit (a CRIT-scaling weapon's own hits). */
+    critChanceBonus: Float = 0f,
 ): DamageResult {
     if (base <= 0f || !enemy.alive) return DamageResult(0f, false)
     // A shifting Architect takes nothing, so no roll, Brittle or Freeze is spent on it.
@@ -334,7 +344,7 @@ internal fun MutableGameState.dealHit(
         if (echo.amount > 0f && qualified) onDirectHit(enemy, echo, source, sourceWeapon)
         return echo
     }
-    val crit = resolveCrit(enemy, source, canCrit, forceCrit)
+    val crit = resolveCrit(enemy, source, canCrit, forceCrit, critChanceBonus)
     var amount = base * (1f + itemAmplification(enemy, source)) * relicSurge() * crit.multiplier *
         (1f + vulnerability(enemy, source)) * damageLiability(source, crit.critical) * matrix.damageMultiplier *
         characterDamageMultiplier()
@@ -363,23 +373,57 @@ internal fun MutableGameState.dealHit(
     return result
 }
 
-/** Weapon systems keep their call shape; continuous weapons gain activation at 60 % efficiency. */
+/**
+ * The equipped weapon's hits. CONTINUOUS and CONTACT hits scale with [continuousWeaponRate]; DISCRETE
+ * ones already gained their rate through [cooldown]. The proc rule: only a hit whose [procKey] still
+ * qualifies (the first enemy of a discrete activation, or a persistent source at most once per
+ * [WeaponRuntime.SOURCE_INTERVAL]) fires WEAPON_HIT clauses, Echo Chamber, the ARSENAL counter and relic
+ * on-hit rules, and counts toward a kinetic weapon's adopted element; every other hit deals damage only
+ * (its element is applied by the weapon itself). The default key qualifies discrete hits always and a
+ * continuous or contact weapon's main source on its interval.
+ */
 internal fun MutableGameState.dealWeaponDamage(
     enemy: Enemy,
     baseAmount: Float,
     canCrit: Boolean = false,
     cadence: WeaponHitCadence = WeaponHitCadence.DISCRETE,
     sourceWeapon: WeaponId = weapon,
+    procKey: Int = if (cadence == WeaponHitCadence.DISCRETE) WeaponRuntime.PROC_ALWAYS else WeaponRuntime.sourceKey(0),
+    forceCrit: Boolean = false,
 ): DamageResult {
     if (baseAmount <= 0f || !enemy.alive) return DamageResult(0f, false)
-    val qualified = cadence != WeaponHitCadence.CONTINUOUS || enemy.hitQualificationCooldown <= 0f
-    // Weapons without an activation cadence (beams, orbiting contact) take activation at 60 % efficiency.
-    val base = if (cadence == WeaponHitCadence.DISCRETE) baseAmount
-    else baseAmount * (1f + 0.6f * (buildActivationBonus() - 1f))
-    val result = dealHit(enemy, base, HitSource.WEAPON, canCrit = canCrit, qualified = qualified, sourceWeapon = sourceWeapon)
-    if (qualified && result.amount > 0f && cadence == WeaponHitCadence.CONTINUOUS) enemy.hitQualificationCooldown = 0.22f
+    val definition = content.weapon(sourceWeapon)
+    var base = if (cadence == WeaponHitCadence.DISCRETE) baseAmount else baseAmount * continuousWeaponRate()
+    if (definition.scaling == kinetickk.ball.content.api.WeaponScaling.STATUS && totalStacks(enemy) > 0) base *= STATUS_SCALING_BONUS
+    val critBonus = if (definition.scaling == kinetickk.ball.content.api.WeaponScaling.CRIT) CRIT_SCALING_CHANCE else 0f
+    val runtime = weaponRuntime
+    val qualified = runtime.canQualify(procKey, elapsed)
+    val result = dealHit(enemy, base, HitSource.WEAPON, canCrit = canCrit, qualified = qualified, sourceWeapon = sourceWeapon,
+        forceCrit = forceCrit, critChanceBonus = critBonus)
+    // Character hooks (Orbit release, Puncture) are no on-hit build effect: a contact hit always reaches them, and a
+    // continuous weapon reaches them once per enemy every CONTINUOUS_HOOK_SECONDS, as every weapon hit used to qualify.
+    if (!qualified && result.amount > 0f && enemy.alive) {
+        when (cadence) {
+            WeaponHitCadence.CONTACT -> onCharacterPrimaryHit(enemy)
+            WeaponHitCadence.CONTINUOUS -> if (enemy.weaponCooldown <= 0f) {
+                enemy.weaponCooldown = CONTINUOUS_HOOK_SECONDS
+                onCharacterPrimaryHit(enemy)
+            }
+            WeaponHitCadence.DISCRETE -> Unit
+        }
+    }
+    if (qualified && result.amount > 0f) {
+        runtime.spendQualification(procKey, elapsed)
+        if (definition.element == null) {
+            runtime.infusionHits = (runtime.infusionHits + 1) % KINETIC_INFUSION_EVERY
+            if (runtime.infusionHits == 0 && enemy.alive) weaponInfusionElement(definition)?.let { applyStatus(enemy, it, 1, 0) }
+        }
+    }
     return result
 }
+
+/** A continuous weapon's per-enemy interval for character hooks (Orbit release, Puncture). */
+internal const val CONTINUOUS_HOOK_SECONDS: Float = 0.22f
 
 /**
  * Item and relic proc damage. [amount] is already measured against its basis; [rescale] adds target

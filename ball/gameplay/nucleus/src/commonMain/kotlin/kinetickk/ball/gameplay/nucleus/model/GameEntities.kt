@@ -208,6 +208,8 @@ internal class Projectile(
     val statusElement: Int = -1,
     /** Hostile shots are bolts; a Minelayer's mine sits still, arms and detonates near the Core. */
     val kind: ProjectileKind = ProjectileKind.BOLT,
+    /** Which weapon activation or persistent source a player shot belongs to (see [WeaponRuntime]). */
+    val procKey: Int = WeaponRuntime.PROC_ALWAYS,
 ) {
     init {
         require((recordedHitEnemyIds?.size ?: 0) <= MAX_HIT_ENEMY_IDS) {
@@ -297,6 +299,7 @@ internal class Projectile(
         recordedHitEnemyCount = recordedHitEnemyCount,
         statusElement = statusElement,
         kind = kind,
+        procKey = procKey,
     )
 
     private fun findRecordedEnemyHit(enemyId: Int): Int {
@@ -344,7 +347,21 @@ internal data class Pickup(
     var attracted: Boolean = false,
 )
 
-internal data class TrailPoint(var x: Float, var y: Float, var age: Float = 0f)
+/**
+ * A Flux Wake trail sample: it burns for [life] seconds of [age] and deals [scale] times the trail's
+ * damage (a signature trail laid while turning lasts longer and burns harder).
+ */
+internal data class TrailPoint(
+    var x: Float,
+    var y: Float,
+    var age: Float = 0f,
+    val life: Float = TRAIL_LIFE_SECONDS,
+    val scale: Float = 1f,
+)
+
+/** A Flux Wake trail point burns this long; render fades it over [TRAIL_FADE_SECONDS] more. */
+internal const val TRAIL_LIFE_SECONDS: Float = 1.8f
+internal const val TRAIL_FADE_SECONDS: Float = 0.45f
 
 internal data class Totem(var x: Float, var y: Float, var pulse: Float = 0f)
 
@@ -355,6 +372,10 @@ internal data class WeaponNode(
     var life: Float,
     val maxLife: Float,
     var radius: Float,
+    /** The activation that dropped it; only its first explosion hit fires on-hit effects. */
+    val procKey: Int = WeaponRuntime.PROC_ALWAYS,
+    /** Damage multiplier of a special mine (a parry mine detonates at double strength). */
+    val scale: Float = 1f,
 )
 
 internal data class WeaponOrbital(

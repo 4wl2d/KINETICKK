@@ -61,7 +61,10 @@ import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
 import kinetickk.ball.gameplay.nucleus.render.ProjectileProjection
 import kinetickk.ball.gameplay.nucleus.render.TotemProjection
 import kinetickk.ball.gameplay.nucleus.render.TrailPointProjection
+import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
+import kinetickk.ball.gameplay.nucleus.render.WeaponEntityProjection
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeProjection
+import kinetickk.ball.gameplay.nucleus.render.WeaponOrbitalProjection
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.foundation.collections.immutableListOf
@@ -101,6 +104,14 @@ class WorldHotPathAllocationTest {
     }
 
     @Test
+    fun everyWeaponDrawsItsWorldVisualsAndEntitiesWithoutAllocating() {
+        // Each weapon's Core marks and orbitals at its third form, over every kind of weapon entity at once.
+        for (weapon in WeaponId.entries) {
+            assertFrameIsAllocationFree(KkRolePalette.Default, weapon, warmFrames = 60, measuredFrames = 60, level = 10)
+        }
+    }
+
+    @Test
     fun worldColorsFollowTheRolePalette() {
         val model = busyModel(WeaponId.ARC_COIL)
         val fx = busyFx()
@@ -125,14 +136,15 @@ class WorldHotPathAllocationTest {
         shape: CoreShape = CoreShape.TESSERACT,
         warmFrames: Int = 200,
         measuredFrames: Int = MEASURED_FRAMES,
+        level: Int = 3,
     ) {
         // The off-screen totem and sealed-anomaly offer move every frame, so their edge-marker
         // distances change every frame: they must be drawn from cached digit layouts, never
         // measured as text. Warm-up frames draw distances from a range the measured frames never
         // use, and every measured frame draws two distances no earlier frame drew (more distinct
         // values than the layout memo holds), so measuring a distance string would allocate.
-        val warm = Array(37) { frame -> busyModel(weapon, drift = WARM_DRIFT + frame * 23f, shape = shape) }
-        val measured = Array(measuredFrames) { frame -> busyModel(weapon, drift = frame * 20f, shape = shape) }
+        val warm = Array(37) { frame -> busyModel(weapon, drift = WARM_DRIFT + frame * 23f, shape = shape, level = level) }
+        val measured = Array(measuredFrames) { frame -> busyModel(weapon, drift = frame * 20f, shape = shape, level = level) }
         check(measured.map { roundedDistance(edgeDistance(it)) }.toSet().size == measuredFrames)
         check(measured.maxOf(::edgeDistance) < warm.minOf(::edgeDistance))
         val fx = busyFx()
@@ -290,7 +302,7 @@ class WorldHotPathAllocationTest {
         previousGhostX = CORE - 165f + drift * 0.01f, previousGhostY = CORE + 28f,
     )
 
-    private fun busyModel(weapon: WeaponId, drift: Float = 0f, shape: CoreShape = CoreShape.TESSERACT): GameplayRenderModel {
+    private fun busyModel(weapon: WeaponId, drift: Float = 0f, shape: CoreShape = CoreShape.TESSERACT, level: Int = 3): GameplayRenderModel {
         val enemies = EnemyType.entries.mapIndexed { index, type ->
             val angle = index * 0.7f
             val distance = if (type == EnemyType.ARCHITECT) 260f else 180f + index * 12f
@@ -324,7 +336,7 @@ class WorldHotPathAllocationTest {
             weaponPower = 1f, coolingRate = 1f, magnetStrength = 1f, dashImpulse = 1f, dashHeatCost = 20f, regenPerSecond = 0f,
             critChance = 0f, critMultiplier = 2f, pickupRadius = 150f, luck = 0f, dataGain = 1f, matterGain = 1f, attackSpeed = 1f,
             damageReduction = 0f, comboWindow = 2f, overdriveGain = 1f, dragCoefficient = 1f, polarityStability = 0.8f,
-            weapon = weapon, weaponLevel = 3, overdriveCharge = 10f, overdriveTime = 0f, rerollsRemaining = 1, acquiredItemCount = 0,
+            weapon = weapon, weaponLevel = level, overdriveCharge = 10f, overdriveTime = 0f, rerollsRemaining = 1, acquiredItemCount = 0,
             recentItem = null, equippedRelics = immutableListOf(), morningstarAngle = 0.3f, morningstarX = CORE + 60f,
             morningstarY = CORE + 40f, weaponBeamTime = 0f, weaponBeamStartX = 0f, weaponBeamStartY = 0f, weaponBeamEndX = 0f,
             weaponBeamEndY = 0f, totem = TotemProjection(CORE - 1_600f - drift, CORE + 100f + drift * 0.3f, 1f), coreShape = shape,
@@ -342,9 +354,17 @@ class WorldHotPathAllocationTest {
             pickups = PickupType.entries.mapIndexed { index, type ->
                 PickupProjection(type, CORE - 150f + index * 30f, CORE - 60f, 0f, 0f, 3f, CORE - 155f + index * 30f, CORE - 57f)
             }.toImmutableList(),
-            trail = (0 until 24).map { index -> TrailPointProjection(CORE - index * 15f, CORE + index * 8f, index * 0.08f) }.toImmutableList(),
+            trail = (0 until 24).map { index ->
+                TrailPointProjection(CORE - index * 15f, CORE + index * 8f, index * 0.08f, life = if (index % 3 == 0) 2.7f else 1.8f,
+                    scale = if (index % 3 == 0) 1.5f else 1f)
+            }.toImmutableList(),
             weaponNodes = immutableListOf(WeaponNodeProjection(WeaponNodeType.GRAVITY_MINE, CORE - 250f, CORE - 200f, 2f, 3f, 55f)),
-            weaponOrbitals = immutableListOf(), choices = immutableListOf(), choiceType = ChoiceType.ITEM, pendingRelicChoiceCount = 0,
+            weaponOrbitals = (0 until 3).map { index ->
+                WeaponOrbitalProjection(index, CORE + kotlin.math.cos(index * 2.1f) * 140f, CORE + kotlin.math.sin(index * 2.1f) * 140f, 10f,
+                    CORE + kotlin.math.cos(index * 2.1f - 0.03f) * 140f, CORE + kotlin.math.sin(index * 2.1f - 0.03f) * 140f)
+            }.toImmutableList(),
+            weaponEntities = BusyWeaponEntities,
+            choices = immutableListOf(), choiceType = ChoiceType.ITEM, pendingRelicChoiceCount = 0,
             itemStacks = immutableListOf(), discoveredItemIds = immutableSetOf(), relicRanks = immutableListOf(),
             pointsOfInterest = immutableListOf(
                 // The orbit's seconds in the ring change every frame (drawn from cached digits).
@@ -392,6 +412,44 @@ class WorldHotPathAllocationTest {
             (5 shl 20) or (3 shl 24),
             0,
         )
+        /** Every weapon entity kind, with each rift, ring, disc and tether phase. */
+        val BusyWeaponEntities = listOf(
+            weaponEntity(WeaponEntityKind.DISC, CORE + 90f, CORE - 40f, radius = 16f),
+            weaponEntity(WeaponEntityKind.DISC, CORE - 90f, CORE - 60f, radius = 16f, phase = 1),
+            weaponEntity(WeaponEntityKind.SENTRY, CORE - 140f, CORE + 90f, radius = 12f, life = 6f, maxLife = 10f),
+            weaponEntity(WeaponEntityKind.SENTRY, CORE + 140f, CORE + 100f, radius = 12f, life = 0.6f, maxLife = 10f),
+            weaponEntity(WeaponEntityKind.LENS, CORE + 60f, CORE - 120f, radius = 14f),
+            weaponEntity(WeaponEntityKind.WELL, CORE - 200f, CORE - 120f, radius = 170f, life = 1.1f, maxLife = 1.6f),
+            weaponEntity(WeaponEntityKind.RIFT, CORE - 240f, CORE + 10f, endX = CORE - 80f, endY = CORE + 60f, radius = 40f, phase = 0),
+            weaponEntity(WeaponEntityKind.RIFT, CORE + 40f, CORE + 160f, endX = CORE + 220f, endY = CORE + 120f, radius = 40f, phase = 1),
+            weaponEntity(WeaponEntityKind.RIFT, CORE - 60f, CORE - 200f, endX = CORE + 100f, endY = CORE - 220f, radius = 28f, life = 0.2f, phase = 4),
+            weaponEntity(WeaponEntityKind.SHARD, CORE + 30f, CORE + 70f, radius = 9f),
+            weaponEntity(WeaponEntityKind.MISSILE, CORE - 30f, CORE + 110f, radius = 7f),
+            weaponEntity(WeaponEntityKind.RING, CORE, CORE, radius = 240f, life = 0.2f, maxLife = 0.35f, phase = 0),
+            weaponEntity(WeaponEntityKind.RING, CORE + 50f, CORE, radius = 210f, life = 0.1f, maxLife = 0.35f, phase = 1),
+            weaponEntity(WeaponEntityKind.RING, CORE - 50f, CORE, radius = 160f, life = 0.3f, maxLife = 0.35f, phase = 2),
+            weaponEntity(WeaponEntityKind.RING, CORE, CORE + 50f, radius = 170f, life = 0.25f, maxLife = 0.35f, phase = 3),
+            weaponEntity(WeaponEntityKind.TETHER, CORE + 200f, CORE - 30f, endX = CORE, endY = CORE, phase = 0),
+            weaponEntity(WeaponEntityKind.TETHER, CORE - 180f, CORE + 40f, endX = CORE, endY = CORE, phase = 1),
+            weaponEntity(WeaponEntityKind.BEAM, CORE, CORE, radius = 0f, extent = 240f, angle = 0.4f),
+            weaponEntity(WeaponEntityKind.BEAM, CORE, CORE, radius = 55f, extent = 240f, angle = 0.4f + 3.14159f, phase = 1),
+        ).toImmutableList()
+
+        fun weaponEntity(
+            kind: WeaponEntityKind,
+            x: Float,
+            y: Float,
+            endX: Float = x,
+            endY: Float = y,
+            radius: Float = 0f,
+            extent: Float = 0f,
+            angle: Float = 0f,
+            life: Float = 0.5f,
+            maxLife: Float = 1f,
+            phase: Int = 0,
+        ) = WeaponEntityProjection(kind, x, y, x - 4f, y + 2f, endX, endY, endX - 3f, endY, angle, angle - 0.03f, radius, extent, life, maxLife,
+            phase)
+
         const val MEASURED_FRAMES = 300
         const val HUD_FRAMES = 400
 

@@ -10,6 +10,7 @@ import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.immutableListOf
@@ -29,13 +30,14 @@ import kotlin.test.assertTrue
  */
 class ExpansionItemsTest {
     /** A run at ARSENAL III whose Arsenal items only carry their tag, so nothing else touches the targets. */
-    private fun arsenalThree(): MutableGameState {
+    /** ARSENAL III with element-free Arsenal items; the kinetic Morningstar by default. */
+    private fun arsenalThree(weapon: WeaponId = WeaponId.MORNINGSTAR): MutableGameState {
         val content = canonicalGameplayContent.copy(items = canonicalGameplayContent.items.map { item ->
             if (BuildTag.ARSENAL !in item.tags) item
             else item.copy(elements = immutableListOf(), stats = immutableListOf(StatDelta(ItemEffect.PICKUP_RADIUS, 1f)),
                 clauses = immutableListOf(), rules = immutableListOf(), risk = false)
         }.toImmutableList())
-        val state = buildTestState(content = content)
+        val state = buildTestState(content = content, weapon = weapon)
         for (item in content.items.filter { BuildTag.ARSENAL in it.tags }) {
             if (state.tagTier(BuildTag.ARSENAL) >= 3) break
             state.acquireItem(item.id)
@@ -74,6 +76,18 @@ class ExpansionItemsTest {
             assertEquals(result.amount, before - target.hp, 0.001f, "Weapon hit ${shot + 1} deals only itself")
         }
         assertTrue(StatusElement.entries.all { target.stacksOf(it) == 0 })
+    }
+
+    @Test
+    fun arsenalThreeAddsAnElementalWeaponsOwnElementWithoutADominantOne() {
+        val state = arsenalThree(WeaponId.SINGULARITY_SPEAR)
+        assertNull(state.build.dominant)
+        val target = state.dummy()
+        val stacksAfterEachHit = (1..8).map {
+            state.dealHit(target, 10f, HitSource.WEAPON, canCrit = false)
+            target.stacksOf(StatusElement.VOID)
+        }
+        assertEquals(listOf(0, 0, 0, 1, 1, 1, 1, 2), stacksAfterEachHit)
     }
 
     @Test

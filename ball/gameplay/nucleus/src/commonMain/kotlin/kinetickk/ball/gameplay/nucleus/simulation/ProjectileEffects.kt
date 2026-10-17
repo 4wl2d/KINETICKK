@@ -38,6 +38,8 @@ internal fun MutableGameState.firePlayerProjectile(
     pierce: Int,
     radius: Float,
     colorIndex: Int,
+    procKey: Int = WeaponRuntime.PROC_ALWAYS,
+    life: Float = 4f,
 ) {
     addProjectile(Projectile(
         x = x,
@@ -45,12 +47,13 @@ internal fun MutableGameState.firePlayerProjectile(
         vx = cos(angle) * projectileSpeed,
         vy = sin(angle) * projectileSpeed,
         radius = radius,
-        life = 4f,
+        life = life,
         hostile = false,
         damage = damage,
         pierce = pierce,
         colorIndex = colorIndex,
         sourceWeapon = weapon,
+        procKey = procKey,
     ))
 }
 
@@ -221,13 +224,20 @@ internal fun MutableGameState.movementAngle(): Float {
     return atan2(targetY - coreY, targetX - coreX)
 }
 
+/**
+ * Power of the equipped weapon's own hits: item weapon power, Rebirth, level, generic mastery, run growth
+ * (1 + 1.6p plus the Matrix bonus), Overdrive and the synergies ([weaponSynergyPower]: tag resonance,
+ * signature, Relic key harmony, scaling stat). An OVERDRIVE-scaling weapon takes Overdrive through its
+ * scaling only, so no input counts twice.
+ */
 internal fun MutableGameState.effectiveWeaponPower(): Float =
     weaponPower *
         rebirthProfile.playerPowerMultiplier *
         (1f + (weaponLevel - 1) * 0.08f) *
         (1f + currentWeaponMastery.damageBonus) *
         weaponRunGrowth() *
-        if (overdriveTime > 0f) 1.45f else 1f
+        weaponSynergyPower() *
+        weaponOverdriveFactor()
 
 /**
  * Power of character abilities and weapon-based item effects. It shares the weapon's level, mastery and

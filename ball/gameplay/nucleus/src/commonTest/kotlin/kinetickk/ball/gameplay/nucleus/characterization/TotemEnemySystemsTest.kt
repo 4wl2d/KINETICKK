@@ -76,6 +76,8 @@ class TotemEnemySystemsTest {
     fun totemAmplifyAndChangeFormATwoStageChoiceThatPreservesWeaponLevel() {
         val engine = runningEngine(seed = 201)
         val startingWeapon = engine.weapon
+        // The Orb starts its signature Flux Wake one level up.
+        val amplified = engine.weaponLevel + 1
 
         openTotemChoice(engine)
 
@@ -103,7 +105,7 @@ class TotemEnemySystemsTest {
 
         assertEquals(GamePhase.RUNNING, engine.phase)
         assertEquals(startingWeapon, engine.weapon)
-        assertEquals(2, engine.weaponLevel)
+        assertEquals(amplified, engine.weaponLevel)
         assertTrue(engine.choices.isEmpty())
 
         openTotemChoice(engine)
@@ -115,7 +117,7 @@ class TotemEnemySystemsTest {
         assertEquals(GamePhase.CHOICE, engine.phase)
         assertEquals(ChoiceType.WEAPON, engine.choiceType)
         assertEquals(startingWeapon, engine.weapon)
-        assertEquals(2, engine.weaponLevel)
+        assertEquals(amplified, engine.weaponLevel)
         assertEquals(3, engine.choices.size)
         assertEquals(3, engine.choices.mapNotNull(ChoiceOption::weaponId).toSet().size)
         assertTrue(engine.choices.all { it.weaponId != startingWeapon })
@@ -131,7 +133,7 @@ class TotemEnemySystemsTest {
         assertEquals(GamePhase.RUNNING, engine.phase)
         assertEquals(selectedWeapon, engine.weapon)
         assertNotEquals(startingWeapon, engine.weapon)
-        assertEquals(2, engine.weaponLevel)
+        assertEquals(amplified, engine.weaponLevel)
         assertTrue(engine.choices.isEmpty())
     }
 

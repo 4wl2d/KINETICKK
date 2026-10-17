@@ -195,7 +195,7 @@ internal val runtimeBehaviorEvidence = listOf(
     BehaviorEvidence(
         ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.GameplayCollectionBoundsTest",
         setOf(
-            "arcCoilTargetsSixNearestAndLeavesSeventhUntouched",
+            "arcCoilChainsAtMostFourTargetsAndLeavesFifthUntouched",
             "choiceIndexThreeIsAcceptedAndFourIsRejected",
             "choiceInventoryAcceptsFourAndRejectsFifthAtomically",
             "collisionCompactionRetainsOrderAcrossConsecutiveProjectileAndPickupHits",

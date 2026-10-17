@@ -75,11 +75,12 @@ class CharacterPoiRegressionTest {
         game.pendingRelicChoices = 1
         game.pendingDirectedRewards = listOf(DirectedReward.ITEM_AND_REPAIR)
         game.hp = 50f
+        val startLevel = game.weaponLevel
         game.activateTotemForTesting()
         game.updateTotem(0.01f)
         assertEquals(ChoiceType.TOTEM, game.choiceType)
         game.choose(0)
-        assertEquals(2, game.weaponLevel)
+        assertEquals(startLevel + 1, game.weaponLevel)
         assertEquals(ChoiceType.ITEM, game.choiceType)
         game.choose(0)
         assertEquals(DirectedReward.ITEM_AND_REPAIR, game.directedReward)

@@ -46,7 +46,9 @@ import kotlin.test.assertTrue
  * [aLiabilityOrAnInertStatAloneScoresNoGain] holds the measure to that. Both runs hold the same supporting items (the
  * sources of the item's elements, a crit source for crit items, a shield for shield items) at full stacks.
  * Encounters run in dp at simulation speed 1, so each is reproducible; [JUSTIFIED_EXCEPTIONS] would list an
- * item no encounter can show, with the reason, and is empty.
+ * item no encounter can show, with the reason, and is empty. Armed encounters are flown with an Ion Swarm and
+ * with a Sentry Grid: under the weapon proc rule (one on-hit trigger per activation, or per persistent source
+ * every 0.25 s) a weapon's cadence decides how often WEAPON_HIT effects fire.
  *
  * Ricochets and slams are dispatched directly every 0.6 s; the collisions that fire them belong to the
  * obstacle field, which the scripted paths never reach (they stay inside the run origin's safe area).
@@ -67,9 +69,11 @@ class PerceptibleItemImpactTest {
             }.toImmutableList())
             // Every combat encounter: an owned card only leaves the offer pool, which says nothing about the measure.
             for (arena in Arena.entries.filter { it != Arena.OFFERS }) {
-                val setup = Setup(arena, emptyList(), elite = false)
-                val (output, share) = bestGain(arena, run(setup, null, content), run(setup, control, content))
-                assertTrue(share < MIN_GAIN, "$label scores $arena $output ${"%+.1f".format(share * 100f)} %")
+                for (weapon in arena.weapons()) {
+                    val setup = Setup(arena, emptyList(), elite = false, weapon = weapon)
+                    val (output, share) = bestGain(arena, run(setup, null, content), run(setup, control, content))
+                    assertTrue(share < MIN_GAIN, "$label scores $arena/$weapon $output ${"%+.1f".format(share * 100f)} %")
+                }
             }
         }
     }
@@ -88,22 +92,28 @@ class PerceptibleItemImpactTest {
                 if (best == null || share > best.third) best = Triple(setup, output, share)
             }
             val (setup, output, share) = requireNotNull(best)
-            val line = "${item.id} ${item.name}: ${setup.arena} ${setup.support} $output ${"%+.1f".format(share * 100f)} %"
+            val line = "${item.id} ${item.name}: ${setup.arena}/${setup.weapon} ${setup.support} $output ${"%+.1f".format(share * 100f)} %"
             report += line
             if (share < MIN_GAIN && item.name !in JUSTIFIED_EXCEPTIONS) misses += line
         }
         report.forEach { println("IMPACT $it") }
-        baselines.forEach { (setup, outcome) -> println("BASELINE ${setup.arena} ${setup.support} $outcome") }
+        baselines.forEach { (setup, outcome) -> println("BASELINE ${setup.arena}/${setup.weapon} ${setup.support} $outcome") }
         assertTrue(JUSTIFIED_EXCEPTIONS.keys.all { name -> canonicalGameplayContent.items.any { it.name == name } }, "Every exception names an item")
         assertTrue(misses.isEmpty(), "Items that move no measured output by 5 %:\n" + misses.joinToString("\n"))
     }
 
-    /** One scripted encounter and the items held in it with and without the item under test. */
-    private data class Setup(val arena: Arena, val support: List<String>, val elite: Boolean)
+    /**
+     * One scripted encounter and the items held in it with and without the item under test. An armed arena is
+     * flown with each of [ARENA_WEAPONS]: the proc rule lets one hit per activation fire WEAPON_HIT effects, so how
+     * often they fire depends on the weapon's cadence (a discrete volley or a persistent source).
+     */
+    private data class Setup(val arena: Arena, val support: List<String>, val elite: Boolean, val weapon: WeaponId?)
+
+    private fun Arena.weapons(): List<WeaponId?> = if (armed) ARENA_WEAPONS else listOf(null)
 
     private enum class Arena(
-        /** The weapon, or null to silence it so only impacts and procs deal damage. */
-        val weapon: WeaponId?,
+        /** False silences the weapon so only impacts and procs deal damage. */
+        val armed: Boolean,
         val motion: Motion,
         val targets: Int,
         val integrity: Float,
@@ -120,54 +130,54 @@ class PerceptibleItemImpactTest {
         val pressure: Boolean = false,
     ) {
         /** Impacts only: the weapon is silenced; the Core orbits through a ring and dashes into it. */
-        IMPACT(null, Motion.ORBIT, 10, 600f, dashEvery = 0.8f),
+        IMPACT(false, Motion.ORBIT, 10, 600f, dashEvery = 0.8f),
         /** Impacts at high speed: straight passes through a column, dashing as often as heat allows. */
-        FAST(null, Motion.PASS, 8, 600f, dashEvery = 0.5f),
+        FAST(false, Motion.PASS, 8, 600f, dashEvery = 0.5f),
         /** The weapon only: the Core circles slowly outside a cluster it never touches. */
-        WEAPON(WeaponId.ARC_COIL, Motion.HOVER, 8, 900f),
+        WEAPON(true, Motion.HOVER, 8, 900f),
         /** Weapon hits and impacts together on sturdy targets: statuses, Breaks and reactions. */
-        STATUS(WeaponId.ARC_COIL, Motion.ORBIT, 10, 1_500f, dashEvery = 2f),
+        STATUS(true, Motion.ORBIT, 10, 1_500f, dashEvery = 2f),
         /**
          * The status ring with weapon hits and impacts reduced to taps: they still apply statuses, but the damage is
          * almost all statuses, Breaks and reactions.
          */
-        ALCHEMY(WeaponId.ARC_COIL, Motion.ORBIT, 10, 1_500f, dashEvery = 2f),
+        ALCHEMY(true, Motion.ORBIT, 10, 1_500f, dashEvery = 2f),
         /** Fragile targets that keep coming back: kills, Data, Matter and combos. */
-        CROWD(WeaponId.ARC_COIL, Motion.ORBIT, 12, 260f, dashEvery = 2f),
+        CROWD(true, Motion.ORBIT, 12, 260f, dashEvery = 2f),
         /**
          * Fragile targets felled by the weapon alone while the Core circles outside them, every other one a sturdy
          * neighbor that outlives them: kills without collisions, and something left standing to spread onto.
          */
-        CULL(WeaponId.ARC_COIL, Motion.HOVER, 8, 140f),
+        CULL(true, Motion.HOVER, 8, 140f),
         /** The crowd with levels counting: level-ups (and the weapon amplifications they bring) happen. */
-        LEVELS(WeaponId.ARC_COIL, Motion.ORBIT, 12, 260f, dashEvery = 2f),
+        LEVELS(true, Motion.ORBIT, 12, 260f, dashEvery = 2f),
         /** Sturdier targets that fall seconds apart. */
-        SPARSE(WeaponId.ARC_COIL, Motion.ORBIT, 10, 600f, dashEvery = 2f),
+        SPARSE(true, Motion.ORBIT, 10, 600f, dashEvery = 2f),
         /** The weapon circle while a straggler falls every 3 s: the combo window decides whether the chain survives. */
-        COMBO(WeaponId.ARC_COIL, Motion.HOVER, 8, 900f),
+        COMBO(true, Motion.HOVER, 8, 900f),
         /** A slow circle close around a cluster while bursts of hits land every 6 s (shields recharge between). */
-        DEFENSE(WeaponId.ARC_COIL, Motion.CLOSE_HOVER, 8, 1_500f, hits = 4.5f),
+        DEFENSE(true, Motion.CLOSE_HOVER, 8, 1_500f, hits = 4.5f),
         /** The defense circle with a held Brake most of the time. */
-        BRACE(WeaponId.ARC_COIL, Motion.CLOSE_HOVER, 8, 1_500f, brake = true, hits = 4.5f),
+        BRACE(true, Motion.CLOSE_HOVER, 8, 1_500f, brake = true, hits = 4.5f),
         /**
          * A ring of attackers around the Core circling slowly inside it: each presses a steady attack, which Chill
          * slows, a Freeze stops, Silence mutes and Hollow weakens, so their statuses show as damage not taken.
          */
-        SIEGE(WeaponId.ARC_COIL, Motion.INNER_HOVER, 10, 1_500f, pressure = true),
+        SIEGE(true, Motion.INNER_HOVER, 10, 1_500f, pressure = true),
         /** The status ring with a held Brake every 1.8 s. */
-        BRAKE(WeaponId.ARC_COIL, Motion.ORBIT, 10, 1_500f, brake = true),
+        BRAKE(true, Motion.ORBIT, 10, 1_500f, brake = true),
         /** A Dash every 0.7 s whenever one is ready: heat outruns cooling, so the Core overheats again and again. */
-        HEAT(WeaponId.ARC_COIL, Motion.ORBIT, 10, 1_500f, dashEvery = 0.7f),
+        HEAT(true, Motion.ORBIT, 10, 1_500f, dashEvery = 0.7f),
         /** The status ring with Overdrive forced every 10 s. */
-        OVERDRIVE(WeaponId.ARC_COIL, Motion.ORBIT, 10, 1_500f, dashEvery = 2f, forcedOverdrive = true),
+        OVERDRIVE(true, Motion.ORBIT, 10, 1_500f, dashEvery = 2f, forcedOverdrive = true),
         /** The status ring with a ricochet and a slam every 0.6 s and Dashes. */
-        OBSTACLE(WeaponId.ARC_COIL, Motion.ORBIT, 10, 1_500f, dashEvery = 0.6f, obstacles = true),
+        OBSTACLE(true, Motion.ORBIT, 10, 1_500f, dashEvery = 0.6f, obstacles = true),
         /** Ricochets and slams while bursts of hits land, circling close outside a cluster. */
-        SHELTER(WeaponId.ARC_COIL, Motion.CLOSE_HOVER, 8, 1_500f, hits = 4.5f, obstacles = true),
+        SHELTER(true, Motion.CLOSE_HOVER, 8, 1_500f, hits = 4.5f, obstacles = true),
         /** Loose Data just beyond the build's own pickup radius: only a wider reach collects it. */
-        REACH(WeaponId.ARC_COIL, Motion.HOVER, 8, 900f),
+        REACH(true, Motion.HOVER, 8, 900f),
         /** No combat: thirty item offers at Reborn 10. */
-        OFFERS(null, Motion.HOVER, 0, 0f),
+        OFFERS(false, Motion.HOVER, 0, 0f),
         ;
 
         /** Only these arenas count integrity: elsewhere glancing contacts are topped up and integrity is ignored. */
@@ -262,7 +272,8 @@ class PerceptibleItemImpactTest {
         val phase = variant * 0.7f
         val game = MutableGameState(content, seed = SEED + variant, initialMatter = 0).apply {
             coreShape = CoreShape.ORB
-            startingWeapon = arena.weapon ?: WeaponId.FLUX_WAKE
+            startingWeapon = setup.weapon ?: WeaponId.FLUX_WAKE
+            unlockWeaponsForTesting(listOf(startingWeapon))
             resize(1_280f, 720f)
             startRun()
             settings = settings.copy(simulationSpeed = 1f)
@@ -330,7 +341,7 @@ class PerceptibleItemImpactTest {
                 target.vy = 0f
                 target.disabledUntil = Float.MAX_VALUE
             }
-            if (arena.weapon == null) game.weaponPower = 0f
+            if (setup.weapon == null) game.weaponPower = 0f
             if (arena == Arena.ALCHEMY) {
                 game.weaponPower = TAP
                 game.damageMultiplier = TAP
@@ -569,12 +580,14 @@ class PerceptibleItemImpactTest {
         // the attackers at the status it adds.
         val applied = item.clauses.flatMap { it.actions }.mapNotNull { (it as? EffectAction.ApplyStatus)?.pick?.element }.toSet()
         val siegeSupport = support.filter { name -> applied.none { element -> name in ElementSources.getValue(element) } }
-        return arenas.map { arena ->
-            Setup(arena, when (arena) {
-                Arena.OFFERS -> emptyList()
-                Arena.SIEGE -> siegeSupport
-                else -> support
-            }, elite)
+        return arenas.flatMap { arena ->
+            arena.weapons().map { weapon ->
+                Setup(arena, when (arena) {
+                    Arena.OFFERS -> emptyList()
+                    Arena.SIEGE -> siegeSupport
+                    else -> support
+                }, elite, weapon)
+            }
         }
     }
 
@@ -704,3 +717,6 @@ class PerceptibleItemImpactTest {
         val JUSTIFIED_EXCEPTIONS: Map<String, String> = emptyMap()
     }
 }
+
+/** The weapons each armed arena is flown with: an Ion Swarm volley and a Sentry Grid (a persistent source). */
+private val ARENA_WEAPONS: List<WeaponId?> = listOf(WeaponId.ION_SWARM, WeaponId.SENTRY_GRID)

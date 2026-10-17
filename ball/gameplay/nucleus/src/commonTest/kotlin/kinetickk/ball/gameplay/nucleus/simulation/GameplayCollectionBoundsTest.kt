@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
@@ -13,7 +14,9 @@ import kinetickk.ball.gameplay.api.GameplayRejection
 import kinetickk.ball.gameplay.nucleus.model.EchoHit
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.Projectile
+import kinetickk.ball.gameplay.nucleus.model.WeaponEntity
 import kinetickk.ball.gameplay.nucleus.model.WeaponNode
+import kinetickk.ball.gameplay.nucleus.model.WeaponRuntime
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.protocol.SimulationOutput
 import kinetickk.ball.gameplay.nucleus.protocol.SimulationOutputs
@@ -23,9 +26,11 @@ import kinetickk.ball.gameplay.nucleus.reducer.GameReducer
 import kinetickk.ball.gameplay.nucleus.reducer.GameReductionResult
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
+import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
+import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.ball.profile.api.GameplayProgressUpdate
@@ -192,15 +197,24 @@ class GameplayCollectionBoundsTest {
     @Test
     fun weaponNodesAcceptEightAndRejectNinth() {
         val state = newState(seed = 902)
-        repeat(MutableGameState.MAX_WEAPON_NODES) { index ->
+        assertTrue(state.weaponLevel < 6)
+        repeat(BASE_MINE_LIMIT) { index ->
             assertTrue(state.tryAddWeaponNode(weaponNode(index)))
         }
 
-        assertFalse(state.tryAddWeaponNode(weaponNode(MutableGameState.MAX_WEAPON_NODES)))
+        assertFalse(state.tryAddWeaponNode(weaponNode(BASE_MINE_LIMIT)))
 
-        assertEquals(MutableGameState.MAX_WEAPON_NODES, state.weaponNodes.size)
+        assertEquals(BASE_MINE_LIMIT, state.weaponNodes.size)
         assertEquals(0f, state.weaponNodes.first().x)
-        assertEquals((MutableGameState.MAX_WEAPON_NODES - 1).toFloat(), state.weaponNodes.last().x)
+        assertEquals((BASE_MINE_LIMIT - 1).toFloat(), state.weaponNodes.last().x)
+
+        // Gravity Mines' second form (level 6) holds twelve, never a thirteenth.
+        state.weaponLevel = 6
+        repeat(MutableGameState.MAX_WEAPON_NODES - BASE_MINE_LIMIT) { index ->
+            assertTrue(state.tryAddWeaponNode(weaponNode(BASE_MINE_LIMIT + index)))
+        }
+        assertFalse(state.tryAddWeaponNode(weaponNode(MutableGameState.MAX_WEAPON_NODES)))
+        assertEquals(MutableGameState.MAX_WEAPON_NODES, state.weaponNodes.size)
     }
 
     @Test
@@ -227,6 +241,64 @@ class GameplayCollectionBoundsTest {
             )
         }
         assertEquals(MutableGameState.MAX_WEAPON_ORBITALS, state.weaponOrbitals.size)
+    }
+
+    @Test
+    fun weaponEntitiesAcceptThirtyTwoAndMakeRoomForTheThirtyThirdWithoutATetherOrBeam() {
+        val state = newState(seed = 910)
+        val entities = state.weaponRuntime.entities
+        state.addWeaponEntity(weaponEntity(WeaponEntityKind.TETHER, 0))
+        state.addWeaponEntity(weaponEntity(WeaponEntityKind.BEAM, 1))
+        repeat(WeaponRuntime.MAX_WEAPON_ENTITIES - 2) { index -> state.addWeaponEntity(weaponEntity(WeaponEntityKind.RING, index + 2)) }
+        assertEquals(WeaponRuntime.MAX_WEAPON_ENTITIES, entities.size)
+
+        // The thirty-third takes the place of the oldest entity other than the tether and the beam.
+        state.addWeaponEntity(weaponEntity(WeaponEntityKind.RING, 100))
+        assertEquals(WeaponRuntime.MAX_WEAPON_ENTITIES, entities.size)
+        assertEquals(listOf(0f, 1f, 3f), entities.take(3).map { it.x })
+        assertEquals(100f, entities.last().x)
+
+        // A finished entity gives way before any live one.
+        entities.single { it.x == 20f }.life = 0f
+        state.addWeaponEntity(weaponEntity(WeaponEntityKind.RING, 101))
+        assertEquals(WeaponRuntime.MAX_WEAPON_ENTITIES, entities.size)
+        assertTrue(entities.none { it.x == 20f })
+        assertTrue(entities.any { it.x == 3f })
+
+        // A list of tethers and beams only drops the newcomer.
+        entities.clear()
+        repeat(WeaponRuntime.MAX_WEAPON_ENTITIES) { index ->
+            state.addWeaponEntity(weaponEntity(if (index % 2 == 0) WeaponEntityKind.TETHER else WeaponEntityKind.BEAM, index))
+        }
+        state.addWeaponEntity(weaponEntity(WeaponEntityKind.RING, 200))
+        assertEquals(WeaponRuntime.MAX_WEAPON_ENTITIES, entities.size)
+        assertTrue(entities.none { it.kind == WeaponEntityKind.RING })
+    }
+
+    @Test
+    fun anEntityCreatedInsideAnEntityPassShiftsNoIndexAndKeepsTheBound() {
+        val state = buildTestState(seed = 911, weapon = WeaponId.HUNTER_SALVO)
+        // The third form splits a missile that kills into two.
+        state.weaponLevel = 10
+        val entities = state.weaponRuntime.entities
+        entities.clear()
+        val doomed = state.addEnemyForTesting(x = state.coreX + 300f, y = state.coreY, hp = 1f)
+        val sturdy = state.addEnemyForTesting(x = state.coreX - 300f, y = state.coreY, hp = 1_000_000f)
+        repeat(2) { index -> entities += weaponEntity(WeaponEntityKind.RING, index) }
+        entities += missileAt(doomed.x, doomed.y)
+        entities += missileAt(sturdy.x, sturdy.y)
+        repeat(WeaponRuntime.MAX_WEAPON_ENTITIES - entities.size) { index -> entities += weaponEntity(WeaponEntityKind.RING, index + 10) }
+        assertEquals(WeaponRuntime.MAX_WEAPON_ENTITIES, entities.size)
+
+        state.resolveWeaponEntityHits(MutableGameState.FIXED_STEP)
+
+        assertFalse(doomed.alive)
+        // The split made room by finishing the two oldest rings, so the second missile kept its turn in the pass.
+        assertTrue(sturdy.hp < sturdy.maxHp, "the missile after the split still struck")
+        assertTrue(entities.none { it.kind == WeaponEntityKind.RING && it.x < 2f })
+        assertEquals(2, entities.count { it.kind == WeaponEntityKind.MISSILE })
+        assertTrue(entities.all { it.life > 0f })
+        assertTrue(entities.size <= WeaponRuntime.MAX_WEAPON_ENTITIES)
     }
 
     @Test
@@ -454,22 +526,28 @@ class GameplayCollectionBoundsTest {
     }
 
     @Test
-    fun arcCoilTargetsSixNearestAndLeavesSeventhUntouched() {
+    fun arcCoilChainsAtMostFourTargetsAndLeavesFifthUntouched() {
+        // Level 18 opens all three forms: four targets and the wider hop.
         val state = newState(seed = 909).apply {
             weaponLevel = 18
         }
+        state.equipWeaponForTesting(WeaponId.ARC_COIL)
+        // Ion-immune Elites take the coil's (elementless) damage but no Charge, so no Overload chains on.
         val candidates = List(7) { index ->
-            state.addEnemyForTesting(x = (index + 1) * 50f, y = 0f)
+            state.addEnemyForTesting(x = (index + 1) * 50f, y = 0f, type = EnemyType.ELITE)
+                .also { assignAspect(it, StatusElement.ION.ordinal, immune = true) }
         }
+        state.takeVisualFxCues()
 
         state.fireArcCoil(baseDamage = 25f)
 
-        candidates.take(6).forEach { enemy ->
+        assertEquals(4, state.arcCoilTargetCount())
+        candidates.take(4).forEach { enemy ->
             assertTrue(enemy.hp < enemy.maxHp)
         }
-        assertEquals(candidates.last().maxHp, candidates.last().hp)
+        candidates.drop(4).forEach { enemy -> assertEquals(enemy.maxHp, enemy.hp) }
         assertEquals(
-            6,
+            4,
             state.takeVisualFxCues().count { cue -> cue is VisualFxCue.WeaponArcAdded },
         )
     }
@@ -723,6 +801,13 @@ class GameplayCollectionBoundsTest {
         maxLife = 1f,
         radius = 1f,
     )
+
+    /** A live weapon entity told apart by its x. */
+    private fun weaponEntity(kind: WeaponEntityKind, index: Int) = WeaponEntity(kind, x = index.toFloat(), y = 0f, radius = 1f, life = 1f, maxLife = 1f)
+
+    /** A Hunter missile standing on (x, y): it strikes whatever stands there in the hit pass. */
+    private fun missileAt(x: Float, y: Float) =
+        WeaponEntity(WeaponEntityKind.MISSILE, x, y, HUNTER_MISSILE_RADIUS, HUNTER_MISSILE_LIFE, HUNTER_MISSILE_LIFE, vx = 1f, damage = 1_000f)
 
     private fun choice(index: Int) = ChoiceOption(
         type = ChoiceType.ITEM,

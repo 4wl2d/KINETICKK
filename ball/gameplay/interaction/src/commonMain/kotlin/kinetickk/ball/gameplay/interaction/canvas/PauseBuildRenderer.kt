@@ -80,6 +80,12 @@ internal class PauseElementEntry(val element: Int, val label: String, val affini
 /** A reaction both of whose elements the build sources: its name once met, "?" before. */
 internal class PauseReactionEntry(val id: ReactionId, val name: String, val discovered: Boolean)
 
+/** One active weapon synergy (SPEC 10.2) as a chip: its text and the hue of its accent edge. */
+internal class PauseSynergyChip(val text: String, val accent: PauseSynergyAccent)
+
+/** What a synergy chip's edge shows: the player's color, an element's hue or a Relic's aspect. */
+internal enum class PauseSynergyAccent { YOU, ELEMENT, RELIC }
+
 /** An owned item: stacks as the icon's arc, hatched when bound relics disable it, a gold rim when Reborn. */
 internal class PauseItemEntry(val item: ItemDefinition, val stacks: Int, val suppressed: Boolean, val reborn: Boolean)
 
@@ -122,6 +128,12 @@ internal class PauseBuildOverview(
     val stats: List<OverlayStat>,
     val runLabel: String,
     val run: List<PauseRunStat>,
+    val synergyLabel: String = "",
+    val synergies: List<PauseSynergyChip> = emptyList(),
+    val noSynergy: String = "",
+    /** The element of an [PauseSynergyAccent.ELEMENT] chip and the Relic of a [PauseSynergyAccent.RELIC] one. */
+    val synergyElement: StatusElement? = null,
+    val synergyRelic: RelicDefinition? = null,
 ) {
     /** The names the brackets carry, in bracket order. */
     val synergyNames: List<String> = brackets.map { it.name }
@@ -174,6 +186,8 @@ internal fun GameplayRenderModel.pauseBuildOverview(language: AppLanguage): Paus
     }
     val stats = runStatistics
     val buildPolicy = content.build.policy
+    val synergy = weaponSynergy
+    val synergies = pauseSynergyChips(language)
     return PauseBuildOverview(
         heading = language.text(OverlayRedesignText.Build),
         weaponIcon = weapon.overlayIcon(),
@@ -219,8 +233,48 @@ internal fun GameplayRenderModel.pauseBuildOverview(language: AppLanguage): Paus
             PauseRunStat(language.text(OverlayRedesignText.ChainShort), "×" + stats.bestCombo, PauseValueTone.YOU),
             PauseRunStat(language.text(OverlayRedesignText.DamageShort), overlayCompact(stats.damageDealt.roundToLong(), language), PauseValueTone.BONE),
         ),
+        synergyLabel = language.text(HudRedesignText.WeaponSynergy),
+        synergies = synergies,
+        noSynergy = language.text(HudRedesignText.NoSynergy),
+        synergyElement = synergy.infusionElement,
+        synergyRelic = synergy.harmonizingRelic?.let { content.relic(it) },
     )
 }
+
+/**
+ * The weapon's active synergies: tag resonance, the signature character, the harmonizing Relic, the element
+ * its hits carry, its scaling stat when it adds power, and its open mastery forms.
+ */
+private fun GameplayRenderModel.pauseSynergyChips(language: AppLanguage): List<PauseSynergyChip> {
+    val synergy = weaponSynergy
+    val chips = ArrayList<PauseSynergyChip>(6)
+    if (synergy.tagBonus > 0.0005f) {
+        chips += PauseSynergyChip(language.text(HudRedesignText.SynergyTags, (synergy.tagBonus * 100f).roundToLong()), PauseSynergyAccent.YOU)
+    }
+    if (synergy.signatureActive) {
+        chips += PauseSynergyChip(language.text(HudRedesignText.SynergySignature, overlayMultiplier(SIGNATURE_POWER, language)), PauseSynergyAccent.YOU)
+    }
+    synergy.harmonizingRelic?.let { relic ->
+        chips += PauseSynergyChip(language.text(HudRedesignText.SynergyHarmony, content.relic(relic).name.localizedContent(language)),
+            PauseSynergyAccent.RELIC)
+    }
+    synergy.infusionElement?.let { element ->
+        chips += PauseSynergyChip(language.text(HudRedesignText.SynergyElement, element.displayLabel.localizedContent(language)),
+            PauseSynergyAccent.ELEMENT)
+    }
+    if (synergy.scalingMultiplier > 1.005f) {
+        chips += PauseSynergyChip(language.text(HudRedesignText.SynergyScaling,
+            currentWeaponDefinition.scaling.displayLabel.localizedContent(language), overlayMultiplier(synergy.scalingMultiplier, language)),
+            PauseSynergyAccent.YOU)
+    }
+    if (synergy.masteryForms > 0) {
+        chips += PauseSynergyChip(language.text(HudRedesignText.SynergyForms, synergy.masteryForms), PauseSynergyAccent.YOU)
+    }
+    return chips
+}
+
+/** The signature character's weapon power, as the synergy chip shows it (the nucleus holds the rule). */
+private const val SIGNATURE_POWER = 1.2f
 
 /** Cost lines the view keeps: four bound relics and up to two lingering ones. */
 private const val MAX_COST_LINES = 6
@@ -274,6 +328,7 @@ private object PauseBuildMemo {
             equippedRelics == other.equippedRelics && build == other.build && runStatistics == other.runStatistics &&
             damageMultiplier == other.damageMultiplier && effectiveWeaponPower == other.effectiveWeaponPower &&
             critChance == other.critChance && maxShield == other.maxShield && itemStacksSnapshot == other.itemStacksSnapshot &&
+            weaponSynergy == other.weaponSynergy &&
             reactionDiscoveries() == other.reactionDiscoveries() && pairingDiscoveries() == other.pairingDiscoveries()
 
     private fun GameplayRenderModel.reactionDiscoveries(): Int {
@@ -329,7 +384,7 @@ internal object PauseMeasurers {
 /** What a pause text is, for the layout probe. */
 internal enum class PauseTextKind {
     TITLE, TIMER, HEADING, TAG, LABEL, SYNERGY_NAME, MULTIPLIER, COST, TAG_NAME, ELEMENT_NAME, REACTION, EMPTY,
-    STAT_LABEL, STAT_VALUE, RUN_LABEL, RUN_VALUE, MORE,
+    STAT_LABEL, STAT_VALUE, RUN_LABEL, RUN_VALUE, MORE, SYNERGY,
 }
 
 /** One laid-out pause text: where it was drawn ([rect], px) and the width it had to fit ([box]). */
@@ -407,7 +462,7 @@ private fun DrawScope.drawRegularBuild(
     val reactionsHeight = pauseLabelHeight(overview.reactionsLabel, ui, 15f * k, column * unit) + 6f * unit + 26f * unit * 2f + 6f * unit
     val costBottom = drawPauseCosts(overview, ui, x(0f), top, column * unit, columnBottom - gap - reactionsHeight, 12f * k, k)
     top = drawPauseLabel(overview.reactionsLabel, ui, 15f * k, x(0f), costBottom + gap, column * unit) + 6f * unit
-    drawPauseReactions(overview, ui, x(0f), top, column * unit, columnBottom, 26f * unit, 13f * k, k)
+    val reactionsTop = top
     // Right column: resonance and element meters, the four derived stats at the foot, the items between.
     top = drawPauseLabel(overview.resonanceLabel, ui, 15f * k, x(right), y(58f), rightWidth * unit) + 6f * unit
     top = drawPauseTags(overview, ui, x(right), top, rightWidth * unit, 24f * unit * maxOf(1f, ui.scale * 0.85f), 1, 15f * k, k) + gap
@@ -415,6 +470,29 @@ private fun DrawScope.drawRegularBuild(
     top = drawPauseElements(overview, ui, x(right), top, rightWidth * unit, 58f * unit * maxOf(1f, ui.scale * 0.85f), k, names = true) + gap
     val statRow = 27f * unit * maxOf(1f, ui.scale * 0.9f)
     val statsTop = columnBottom - pauseLabelHeight(overview.statsLabel, ui, 15f * k, rightWidth * unit) - overview.stats.size * statRow
+    // The weapon's synergies: up to two rows of chips in the right column where they leave the items a label
+    // and a row of icons, else one row under the reactions where those leave room (neither ever gives way).
+    val synergyChip = 24f * unit * maxOf(1f, ui.scale * 0.85f)
+    val synergyLabel = pauseLabelHeight(overview.synergyLabel, ui, 15f * k, rightWidth * unit) + 6f * unit
+    val itemsNeed = pauseLabelHeight(overview.itemsLabel, ui, 15f * k, rightWidth * unit) + 6f * unit + 44f * unit * 0.6f
+    val synergyRoom = statsTop - gap - itemsNeed - gap - top - synergyLabel
+    val synergyRows = floor((synergyRoom + 6f * unit) / (synergyChip + 6f * unit) + 0.001f).toInt().coerceIn(0, 2)
+    var reactionsBottom = columnBottom
+    if (synergyRows > 0) {
+        top = drawPauseLabel(overview.synergyLabel, ui, 15f * k, x(right), top, rightWidth * unit) + 6f * unit
+        val bottom = top + synergyRows * synergyChip + (synergyRows - 1) * 6f * unit
+        top = drawPauseSynergies(overview, ui, x(right), top, rightWidth * unit, bottom, synergyChip, 13f * k, k) + gap
+    } else {
+        val needed = pauseReactionsBottom(overview, ui, x(0f), reactionsTop, column * unit, columnBottom, 26f * unit, 13f * k, k)
+        val leftChip = 24f * unit
+        val leftLabel = pauseLabelHeight(overview.synergyLabel, ui, 15f * k, column * unit) + 6f * unit
+        if (needed + gap + leftLabel + leftChip <= columnBottom + 0.5f) {
+            reactionsBottom = needed
+            val chipsTop = drawPauseLabel(overview.synergyLabel, ui, 15f * k, x(0f), needed + gap, column * unit) + 6f * unit
+            drawPauseSynergies(overview, ui, x(0f), chipsTop, column * unit, chipsTop + leftChip, leftChip, 13f * k, k)
+        }
+    }
+    drawPauseReactions(overview, ui, x(0f), reactionsTop, column * unit, reactionsBottom, 26f * unit, 13f * k, k)
     top = drawPauseLabel(overview.itemsLabel, ui, 15f * k, x(right), top, rightWidth * unit) + 6f * unit
     drawPauseItems(overview, ui, x(right), top, rightWidth * unit, statsTop - gap - top, 44f * unit, k)
     val rowsTop = drawPauseLabel(overview.statsLabel, ui, 15f * k, x(right), statsTop, rightWidth * unit)
@@ -465,8 +543,20 @@ private fun DrawScope.drawCompactBuild(
     if (!portrait) {
         val relicsBottom = drawPauseRelics(overview, ui, x(0f), top, 196f * unit, 30f * unit, 46f * unit, 9f * unit, k, names = false, time = time)
         val chipsTop = drawPauseLabel(overview.reactionsLabel, ui, 11f * k, x(206f), top, (width - 206f) * unit) + 4f * unit
-        drawPauseReactions(overview, ui, x(206f), chipsTop, (width - 206f) * unit, maxOf(relicsBottom, chipsTop + 50f * unit), 22f * unit, 11f * k, k)
-        top = maxOf(relicsBottom, chipsTop + 50f * unit) + gap
+        val besideBottom = maxOf(relicsBottom, chipsTop + 50f * unit)
+        // One row of synergy chips under the reactions, beside the relics, where the reactions leave room (they never give way).
+        val reactionsBottom = pauseReactionsBottom(overview, ui, x(206f), chipsTop, (width - 206f) * unit, besideBottom, 22f * unit, 11f * k, k)
+        val synergyChip = 18f * unit * grow
+        val synergyTop = reactionsBottom + gap
+        val synergyFits = synergyTop + pauseLabelHeight(overview.synergyLabel, ui, 11f * k, (width - 206f) * unit) + 4f * unit + synergyChip <=
+            besideBottom + 0.5f
+        drawPauseReactions(overview, ui, x(206f), chipsTop, (width - 206f) * unit, if (synergyFits) reactionsBottom else besideBottom, 22f * unit,
+            11f * k, k)
+        if (synergyFits) {
+            val synergyChipsTop = drawPauseLabel(overview.synergyLabel, ui, 11f * k, x(206f), synergyTop, (width - 206f) * unit) + 4f * unit
+            drawPauseSynergies(overview, ui, x(206f), synergyChipsTop, (width - 206f) * unit, synergyChipsTop + synergyChip, synergyChip, 10.5f * k, k)
+        }
+        top = besideBottom + gap
         val statRow = 22f * unit * grow
         val elementRow = 12f * unit * grow
         // The seven element meters sit in two columns, so they stand no taller than the three tag rows.
@@ -480,9 +570,21 @@ private fun DrawScope.drawCompactBuild(
         val statsTop = if (showStats) area.bottom - 2f * statRow else area.bottom + gap
         top = drawPauseCosts(overview, ui, x(0f), top, width * unit, statsTop - gap - resonanceHeight - gap, 9.5f * k, k, maxEntries = bound) + gap
         val rowsTop = drawPauseLabel(overview.resonanceLabel, ui, 11f * k, x(0f), top, 236f * unit) + 4f * unit
-        drawPauseTags(overview, ui, x(0f), rowsTop, 236f * unit, tagRow, 2, 10.5f * k, k, maxRows = 3)
+        val tagsBottom = drawPauseTags(overview, ui, x(0f), rowsTop, 236f * unit, tagRow, 2, 10.5f * k, k, maxRows = 3)
         val meterTop = drawPauseLabel(overview.elementsLabel, ui, 11f * k, x(248f), top, (width - 248f) * unit) + 4f * unit
         drawPauseElementRows(overview, ui.roles, x(248f), meterTop, (width - 248f) * unit, elementRow, k, columns = COMPACT_ELEMENT_COLUMNS)
+        // Without room beside the relics, the synergy chips take one row of the space the costs leave above the
+        // stats, if any: the section label, then the chips that fit after it.
+        val resonanceBottom = maxOf(tagsBottom, meterTop + elementRows * elementRow)
+        val synergyLimit = if (showStats) statsTop - gap else area.bottom
+        val lowerTop = resonanceBottom + gap
+        if (!synergyFits && lowerTop + synergyChip <= synergyLimit + 0.5f) {
+            val labelBox = width * unit * 0.4f
+            val label = fitOverlayText(ui, overview.synergyLabel, KkTextRole.LABEL, 11f * k, labelBox, uppercase = true)
+            drawPauseText(PauseTextKind.LABEL, label, x(0f), lowerTop + synergyChip * 0.5f, Kk.Mute, labelBox, valign = KkVAlign.CENTER)
+            val chipsLeft = x(0f) + label.size.width + 10f * unit
+            drawPauseSynergies(overview, ui, chipsLeft, lowerTop, x(width) - chipsLeft, lowerTop + synergyChip, synergyChip, 10.5f * k, k)
+        }
         if (showStats) {
             drawStatRows(overview.stats, ui, display, area, unit, 0f, (statsTop - area.top) / unit, statRow / unit, 2, (width - 20f) / 2f, 8f,
                 15f * k, 12f * k)
@@ -503,7 +605,16 @@ private fun DrawScope.drawCompactBuild(
     top = drawPauseLabel(overview.elementsLabel, ui, 11f * k, x(0f), top, width * unit) + 4f * unit
     top = drawPauseElements(overview, ui, x(0f), top, width * unit, 20f * unit * grow, k, names = false) + gap
     top = drawPauseLabel(overview.reactionsLabel, ui, 11f * k, x(0f), top, width * unit) + 4f * unit
-    drawPauseReactions(overview, ui, x(0f), top, width * unit, area.bottom, 20f * unit, 10.5f * k, k)
+    // One row of synergy chips under the reactions where the reactions leave room for it (they never give way).
+    val reactionsBottom = pauseReactionsBottom(overview, ui, x(0f), top, width * unit, area.bottom, 20f * unit, 10.5f * k, k)
+    val synergyChip = 18f * unit * grow
+    val synergyTop = reactionsBottom + gap
+    val synergyFits = synergyTop + pauseLabelHeight(overview.synergyLabel, ui, 11f * k, width * unit) + 4f * unit + synergyChip <= area.bottom + 0.5f
+    drawPauseReactions(overview, ui, x(0f), top, width * unit, if (synergyFits) reactionsBottom else area.bottom, 20f * unit, 10.5f * k, k)
+    if (synergyFits) {
+        val chipsTop = drawPauseLabel(overview.synergyLabel, ui, 11f * k, x(0f), synergyTop, width * unit) + 4f * unit
+        drawPauseSynergies(overview, ui, x(0f), chipsTop, width * unit, chipsTop + synergyChip, synergyChip, 10.5f * k, k)
+    }
 }
 
 /**
@@ -975,6 +1086,81 @@ private fun DrawScope.drawPauseReactions(
     if (more != null) drawPauseText(PauseTextKind.MORE, more, moreX + 6f * k * density, moreY + chip * 0.5f, Kk.Bone2, maxText, valign = KkVAlign.CENTER)
 }
 
+/**
+ * The weapon's synergy chips flowing from [top] while they fit above [bottom]: a plate with the chip's text
+ * and an accent edge (the player's color, the infused element's hue, the harmonizing Relic's aspect).
+ * Without any, a muted line says so. Returns the bottom of what it drew.
+ */
+private fun DrawScope.drawPauseSynergies(
+    overview: PauseBuildOverview,
+    ui: CanvasTextMeasurer,
+    left: Float,
+    top: Float,
+    width: Float,
+    bottom: Float,
+    chip: Float,
+    size: Float,
+    k: Float,
+): Float {
+    val roles = ui.roles
+    val chips = overview.synergies
+    if (chips.isEmpty()) {
+        val text = fitOverlayText(ui, overview.noSynergy, KkTextRole.MONO, size * 0.8f, width, uppercase = true)
+        drawPauseText(PauseTextKind.EMPTY, text, left, top + chip * 0.5f, Kk.Mute, width, valign = KkVAlign.CENTER)
+        return top + chip
+    }
+    val gap = 6f * k * density
+    val pad = 10f * k * density
+    val maxText = width - pad * 2f
+    var x = left
+    var y = top
+    var drawnBottom = top
+    for (index in chips.indices) {
+        val entry = chips[index]
+        val text = fitOverlayText(ui, entry.text, KkTextRole.COND, size, maxText, uppercase = true)
+        val chipWidth = text.size.width + pad * 2f
+        if (x > left && x + chipWidth > left + width + 0.5f) {
+            x = left
+            y += chip + gap
+        }
+        if (y + chip > bottom + 0.5f) break
+        val accent = when (entry.accent) {
+            PauseSynergyAccent.YOU -> roles.you
+            PauseSynergyAccent.ELEMENT -> overview.synergyElement?.let { roles.element(it.ordinal) } ?: roles.you
+            PauseSynergyAccent.RELIC -> overview.synergyRelic?.let { relicHue(it, roles) } ?: roles.you
+        }
+        val plate = PauseShapes.synergySlab(index, x, y, x + chipWidth, y + chip, 6f * k * density)
+        drawPath(plate, Kk.Ink2)
+        drawRect(accent, Offset(x + 6f * k * density, y + chip - 2f * k * density), Size(chipWidth - 12f * k * density, 2f * k * density))
+        drawPauseText(PauseTextKind.SYNERGY, text, x + pad, y + chip * 0.5f, Kk.Bone, maxText, valign = KkVAlign.CENTER)
+        drawnBottom = y + chip
+        x += chipWidth + gap
+    }
+    return drawnBottom
+}
+
+/** The bottom of the reaction chips [drawPauseReactions] would draw from [top]: all of [bottom] when some find no room. */
+private fun DrawScope.pauseReactionsBottom(
+    overview: PauseBuildOverview,
+    ui: CanvasTextMeasurer,
+    left: Float,
+    top: Float,
+    width: Float,
+    bottom: Float,
+    chip: Float,
+    size: Float,
+    k: Float,
+): Float {
+    val reactions = overview.reactions
+    if (reactions.isEmpty()) return top + chip
+    val gap = 6f * k * density
+    val lead = chip * 0.5f * 2f + 10f * k * density
+    val maxText = width - lead - 10f * k * density
+    val count = minOf(reactions.size, ReactionChips.CAPACITY)
+    val shown = ReactionChips.place(reactions, count, ui, left, top, width, bottom, chip, gap, lead, maxText, size, k, density)
+    return if (shown < count || shown == 0) bottom else ReactionChips.y(shown - 1) + chip
+}
+
 /** Where the reaction chips of the last drawn list sit (draw-thread scratch, no allocation). */
 private object ReactionChips {
     val CAPACITY = ReactionId.entries.size
@@ -1083,11 +1269,15 @@ internal fun relicHue(definition: RelicDefinition, roles: KkRolePalette): Color 
 private object PauseShapes {
     private val diamonds = KkPathCache(8)
     private val slabs = KkPathCache(16)
+    private val synergySlabs = KkPathCache(6)
 
     fun diamond(slot: Int, cx: Float, cy: Float, r: Float) = diamonds.diamond(slot.coerceIn(0, 7), cx, cy, r)
 
     fun slab(slot: Int, left: Float, top: Float, right: Float, bottom: Float, cut: Float) =
         slabs.slab(slot.coerceIn(0, 15), left, top, right, bottom, cut)
+
+    fun synergySlab(slot: Int, left: Float, top: Float, right: Float, bottom: Float, cut: Float) =
+        synergySlabs.slab(slot.coerceIn(0, 5), left, top, right, bottom, cut)
 }
 
 /**

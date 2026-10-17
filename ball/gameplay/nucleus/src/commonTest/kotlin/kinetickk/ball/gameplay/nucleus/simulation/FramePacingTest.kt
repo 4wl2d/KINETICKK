@@ -10,12 +10,14 @@ import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.PointOfInterestState
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.TrailPoint
+import kinetickk.ball.gameplay.nucleus.model.WeaponEntity
 import kinetickk.ball.gameplay.nucleus.model.WeaponOrbital
 import kinetickk.ball.gameplay.nucleus.reducer.EngineState
 import kinetickk.ball.gameplay.nucleus.reducer.GameReducer
 import kinetickk.ball.gameplay.nucleus.reducer.GameReductionResult
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.PickupType
+import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -156,6 +158,11 @@ class FramePacingTest {
             pickups += Pickup(PickupType.DATA, 260_050f, 5f).apply { previousX = 260_040f; previousY = 4f }
             projectiles += Projectile(x = 260_020f, y = 0f, vx = 0f, vy = 0f, radius = 2f, life = 1f).apply { previousX = 260_010f }
             weaponOrbitals += WeaponOrbital(index = 0, x = 260_030f, y = 1f, radius = 4f).apply { previousX = 260_025f }
+            weaponRuntime.entities += WeaponEntity(WeaponEntityKind.RIFT, x = 260_060f, y = 2f, radius = 4f, life = 1f, maxLife = 1f,
+                endX = 260_080f, endY = 3f).apply {
+                previousX = 260_055f
+                previousEndX = 260_075f
+            }
         }
 
         state.rebaseWorldIfNeeded()
@@ -168,6 +175,12 @@ class FramePacingTest {
         assertEquals(14f, state.pickups.single().previousY)
         assertEquals(10f, state.projectiles.single().previousX)
         assertEquals(25f, state.weaponOrbitals.single().previousX)
+        state.weaponRuntime.entities.single().let { rift ->
+            assertEquals(60f to 12f, rift.x to rift.y)
+            assertEquals(55f to 12f, rift.previousX to rift.previousY)
+            assertEquals(80f to 13f, rift.endX to rift.endY)
+            assertEquals(75f to 13f, rift.previousEndX to rift.previousEndY)
+        }
     }
 
     @Test

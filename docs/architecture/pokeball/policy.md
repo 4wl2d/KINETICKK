@@ -99,8 +99,8 @@ remain independently enforced.
 | Echo Chamber echo hits | 256 | Gameplay checks capacity before enqueue; echoes never echo |
 | chain work / visited IDs | 6 / 7 | `MAX_CHAIN_TARGETS`; candidate-private scratch identity buffer; the chain stops at the bound |
 | projectile hit-history IDs | 120 | projectile-local sorted bounded identity array, merge-reclaimed against sorted live enemies |
-| Gameplay sound cues / weapon nodes / orbitals / choices | 32 / 8 / 8 / 4 | Gameplay-owned bounded insertion or atomic validation |
-| Arc Coil targets / generated item, weapon, or Relic reward choices | 6 / 4 | deployed weapon; item offers 3 (4 with an offer-card rule), Relic offers 3 plus Meld or Decline |
+| Gameplay sound cues / weapon nodes / weapon entities / orbitals / choices | 32 / 12 (8 before Gravity Mines' second form) / 32 / 8 / 4 | Gameplay-owned bounded insertion or atomic validation; a full mine field drops the newest mine (a parry mine then detonates at once); a full entity list gives up a finished entity, else its oldest one other than a tether or beam (inside an entity pass that one finishes and leaves after the pass, so no index shifts) |
+| Arc Coil targets / generated item, weapon, or Relic reward choices | 4 (6 on a Pentagon beat) / 4 | deployed weapon: two targets, a third at the first form and a fourth at the third, each hop within reach of the last; item offers 3 (4 with an offer-card rule), Relic offers 3 plus Meld or Decline |
 | POI offered / active / defenders | 2 / 1 / 3 inside the existing enemy cap | closed two-point construction, activation replaces the offer pair, defender pre-reservation |
 | enemy roster / spawn budget / event members / live mines / Aegis links / Heralds per run | 19 (Content bound 24) / 14 / 10 / 10 / 3 per Aegis / 2 | bootstrap requires the exact EnemyType order; the director clamps its bank, plans sizes up to 10 (a pack 6 plus the Pack Hunters bonus) and never exceeds the hard enemy cap; Minelayers stop at ten live mines; an Aegis renews its three nearest allies; Heralds are scheduled at 360 s and 540 s |
 | world obstacles held / destroyed unstable asteroids / obstacles per chunk | 128 (a 5 × 5 chunk window × 5) / 256 / 5 | Content validates the window against `MAX_OBSTACLES`; Gameplay regenerates the window only when the Core changes chunk and keeps destroyed ids as a bounded FIFO |
@@ -114,7 +114,7 @@ remain independently enforced.
 | status and reaction visual cues per fixed step | 6 | Gameplay-owned per-step cue budget before the bounded accumulator |
 | clause dispatch depth / item status applications | 2 / 6 per s per item at one stack | clause engine depth guard; per-item rate gate scaled by stack magnitude |
 | Build notifications | 3 latest groups | Interaction-only six-second presentation queue replaces the oldest visible group |
-| Gameplay trail samples per update | 32 | bounded per-update sampling loop |
+| Gameplay trail samples per update | 32 | bounded per-update sampling loop; samples spread with speed so the 110 points hold the longest live point's life and fade |
 | visual-FX cues per projection | 2048 | Gameplay bounded accumulator |
 | Interaction particles / motion echoes / shockwaves | 700 / 36 / 48 | Interaction-ephemeral bounded reducers |
 | Interaction damage numbers / weapon arcs | 140 / 128 | Interaction-ephemeral bounded reducers |

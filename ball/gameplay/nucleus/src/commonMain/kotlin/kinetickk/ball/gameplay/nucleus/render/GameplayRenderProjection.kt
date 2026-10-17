@@ -28,6 +28,11 @@ enum class ChoiceType { ITEM, TOTEM, WEAPON, RELIC, RELIC_BIND }
 enum class TotemAction { AMPLIFY_CURRENT, CHANGE_WEAPON }
 enum class RelicChoiceAction { ACQUIRE, MELD, REPLACE, MELD_TARGET, DECLINE }
 enum class WeaponNodeType { GRAVITY_MINE }
+/**
+ * Weapon-owned world objects ([WeaponEntityProjection]): Gyre discs, sentries, lenses and their wells,
+ * rifts, Aegis shards, missiles, toll and pulse rings, tethers and solar beams.
+ */
+enum class WeaponEntityKind { DISC, SENTRY, LENS, WELL, RIFT, SHARD, MISSILE, RING, TETHER, BEAM }
 /** World obstacles: an [ASTEROID] hurts at speed, a [BUMPER] throws the Core back, an [UNSTABLE] asteroid explodes. */
 enum class ObstacleKind { ASTEROID, BUMPER, UNSTABLE }
 
@@ -208,7 +213,8 @@ data class ObstacleProjection(
     val shapeSeed: Int,
 )
 
-data class TrailPointProjection(val x: Float, val y: Float, val age: Float)
+/** A trail sample [age] seconds old that burns for [life] seconds (render fades it out after) at [scale] strength. */
+data class TrailPointProjection(val x: Float, val y: Float, val age: Float, val life: Float = 1.8f, val scale: Float = 1f)
 data class TotemProjection(val x: Float, val y: Float, val pulse: Float)
 
 data class WeaponNodeProjection(
@@ -227,6 +233,47 @@ data class WeaponOrbitalProjection(
     val radius: Float,
     val previousX: Float = x,
     val previousY: Float = y,
+)
+
+/**
+ * A weapon entity at its current and previous fixed-step positions. [endX]/[endY] is a segment's second
+ * point (rift, tether anchor); [angle] a beam's or disc's heading; [extent] a beam's length; [phase] the
+ * kind's step (a returning disc, a launched shard, a ring's variant).
+ */
+data class WeaponEntityProjection(
+    val kind: WeaponEntityKind,
+    val x: Float,
+    val y: Float,
+    val previousX: Float,
+    val previousY: Float,
+    val endX: Float,
+    val endY: Float,
+    val previousEndX: Float,
+    val previousEndY: Float,
+    val angle: Float,
+    val previousAngle: Float,
+    val radius: Float,
+    val extent: Float,
+    val life: Float,
+    val maxLife: Float,
+    val phase: Int,
+)
+
+/**
+ * What links the equipped weapon to the build right now (SPEC 10.2): points in its two tags and the
+ * power they add, whether the character is its signature, the bound Relic carrying its key, the element
+ * its hits apply or adopt, its scaling multiplier and how many of its three mastery forms are open
+ * ([activeMasteryForm] is the latest one's content text).
+ */
+data class WeaponSynergyProjection(
+    val tagPoints: Int = 0,
+    val tagBonus: Float = 0f,
+    val signatureActive: Boolean = false,
+    val harmonizingRelic: RelicId? = null,
+    val infusionElement: kinetickk.ball.content.api.StatusElement? = null,
+    val scalingMultiplier: Float = 1f,
+    val masteryForms: Int = 0,
+    val activeMasteryForm: String? = null,
 )
 
 /** Immutable, API-owned projection of a committed GameplayRun frame. */
@@ -361,6 +408,10 @@ class GameplayRenderModel(
     val obstacles: ImmutableList<ObstacleProjection> = kinetickk.foundation.collections.immutableListOf(),
     /** World distance from the Core to the minimap's edge (dp). */
     val minimapRange: Float = DEFAULT_MINIMAP_RANGE,
+    /** Weapon-owned world objects with their previous fixed-step positions. */
+    val weaponEntities: ImmutableList<WeaponEntityProjection> = kinetickk.foundation.collections.immutableListOf(),
+    /** The equipped weapon's live synergies; the pause build screen reads them. */
+    val weaponSynergy: WeaponSynergyProjection = WeaponSynergyProjection(),
 ) {
     val speed: Float get() = vectorLength(velocityX, velocityY)
     val runProgress: Float get() = content.tempo.progress(elapsed)

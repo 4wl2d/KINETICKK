@@ -11,6 +11,7 @@ import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.ElementPick
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.WeaponCadence
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.*
 import kotlin.math.cos
@@ -269,16 +270,24 @@ internal fun MutableGameState.expireBuffs() {
     if (anyExpired) buffs = buffs.filter { it.expiresAt > elapsed }
 }
 
-/** A refund returns at most 40 % of the remaining cooldown; continuous weapons get a short surge instead. */
+/**
+ * A refund returns at most 40 % of each remaining cooldown: the weapon clocks and the weapon's own timers (Scatter
+ * Bloom's volley, Glacier Bell's toll and pulse, Hollow Rift's passive rift, Concussion Engine's shockwave).
+ * Continuous and contact weapons have no cooldown to advance: they get a short surge instead.
+ */
 private fun MutableGameState.refreshWeapon(seconds: Float, itemId: Int) {
-    if (weapon.isContinuous()) {
+    if (weapon.isContinuous() || currentWeaponDefinition.cadence == WeaponCadence.CONTACT) {
         addBuff(itemId, kinetickk.ball.content.api.BuffStat.WEAPON, 0.4f, max(0.18f, seconds), 1)
         return
     }
-    val refund = min(seconds, max(0f, weaponClock) * 0.4f)
-    weaponClock -= refund
-    weaponSecondaryClock -= min(seconds, max(0f, weaponSecondaryClock) * 0.4f)
+    weaponClock -= cooldownRefund(seconds, weaponClock)
+    weaponSecondaryClock -= cooldownRefund(seconds, weaponSecondaryClock)
+    val runtime = weaponRuntime
+    runtime.passiveClock -= cooldownRefund(seconds, runtime.passiveClock)
+    runtime.readyAt -= cooldownRefund(seconds, runtime.readyAt - elapsed)
 }
+
+private fun cooldownRefund(seconds: Float, remaining: Float): Float = min(seconds, max(0f, remaining) * 0.4f)
 
 /** True for the CONTINUOUS cadence of the weapon roster (damage per second instead of activations). */
 internal fun WeaponId.isContinuous(): Boolean = when (this) {
@@ -339,11 +348,8 @@ internal const val ARSENAL_INFUSION_EVERY: Int = 4
 /** ARSENAL III: every Break deals this share more damage. */
 internal const val ARSENAL_BREAK_BONUS: Float = 0.25f
 
-/**
- * The element ARSENAL III adds: the weapon's own element when it has one, else the dominant element.
- * The shipped weapons deal elementless Kinetic damage, so today this is the dominant element.
- */
-internal fun MutableGameState.arsenalInfusion(): StatusElement? = build.dominant
+/** The element ARSENAL III adds: the weapon's own element when it has one, else the dominant element. */
+internal fun MutableGameState.arsenalInfusion(): StatusElement? = currentWeaponDefinition.element ?: build.dominant
 
 /** Damage scale of every Break: ARSENAL III raises it, nothing else does. */
 internal fun MutableGameState.breakDamageScale(): Float =
@@ -372,6 +378,7 @@ internal fun MutableGameState.onBuildKill(enemy: Enemy) {
 
 internal fun MutableGameState.onBreak(enemy: Enemy, element: StatusElement) {
     fireClauses(EffectTrigger.BREAK, enemy, 0f, HitSource.STATUS, element)
+    onWeaponBreak(enemy, element)
 }
 
 internal fun MutableGameState.onReaction(enemy: Enemy, reaction: ReactionId) {

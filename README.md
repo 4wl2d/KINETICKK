@@ -40,7 +40,9 @@ once you pass near them and every level-up pulls in the Data on screen.
 
 Twelve characters, chosen in the Hangar, each play a mechanic of their own
 (facets, an echo ghost, polarity, a beat, Blink and more), share permanent
-upgrades and can use all twelve weapons.
+upgrades and can use all twenty-four weapons. Each weapon resonates with two
+build tags, harmonizes with Relics carrying its key, scales with one stat, opens
+three mastery forms and twists for its signature character.
 Builds combine 173 items, twenty-two Relics and optional anomaly trials. Items are
 rules, not stat sticks: triggers, conditions and effects over nine archetype
 tags and seven elements (Thermal, Cryo, Ion, Gravitic, Entropy, Sonic, Void)

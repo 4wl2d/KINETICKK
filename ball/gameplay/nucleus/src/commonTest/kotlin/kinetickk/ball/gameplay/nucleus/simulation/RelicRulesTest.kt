@@ -25,10 +25,13 @@ class RelicRulesTest {
     @Test
     fun perpetualVectorTurnsCappedSpeedIntoDamageButWeakensSlowImpacts() {
         val state = buildTestState(RelicId.PERPETUAL_VECTOR)
+        // Flux Wake carries Motion, so the bound Perpetual Vector harmonizes with the weapon.
+        val upside = state.build.relicUpside(RelicId.PERPETUAL_VECTOR)
+        assertEquals(HARMONY_MAGNITUDE, upside, 0.0001f)
         state.setVelocityForTesting(1_400f, 0f)
-        assertEquals(surge(0.24f), state.relicSurge(), 0.0001f)
+        assertEquals(surge(0.24f * upside), state.relicSurge(), 0.0001f)
         state.setVelocityForTesting(3_000f, 0f)
-        assertEquals(surge(0.48f), state.relicSurge(), 0.0001f, "Speed counts only up to 2,200")
+        assertEquals(surge(0.48f * upside), state.relicSurge(), 0.0001f, "Speed counts only up to 2,200")
 
         state.setVelocityForTesting(0f, 0f)
         val slow = state.dealHit(state.dummy(), 100f, HitSource.IMPACT, canCrit = false).amount
@@ -37,7 +40,8 @@ class RelicRulesTest {
 
     @Test
     fun blinkDriveStrikesTheLineOnceAndNeverCrossesTheSingularity() {
-        val state = buildTestState(RelicId.BLINK_DRIVE, RelicId.VERDANT_ROT)
+        // Morningstar (Gravity key) keeps weapon harmony out of the Blink's numbers.
+        val state = buildTestState(RelicId.BLINK_DRIVE, RelicId.VERDANT_ROT, weapon = WeaponId.MORNINGSTAR)
         assertEquals(state.dashHeatCost * 0.65f, state.effectiveDashHeatCost(), 0.0001f)
         val onLine = state.dummy(x = 130f)
         val offLine = state.dummy(x = 130f, y = 200f)
@@ -52,12 +56,12 @@ class RelicRulesTest {
         // Relic on-hit rules apply once per Blink strike: Verdant Rot's two Entropy, not four.
         assertEquals(2, onLine.stacksOf(StatusElement.ENTROPY))
 
-        val short = buildTestState(RelicId.BLINK_DRIVE)
+        val short = buildTestState(RelicId.BLINK_DRIVE, weapon = WeaponId.MORNINGSTAR)
         short.updatePointer(640f + 100f, 360f)
         assertTrue(short.relicOnDash(1f, 0f))
         assertEquals(40f, short.coreX, 0.01f, "The Blink stops 60 u short of the singularity")
 
-        val blocked = buildTestState(RelicId.BLINK_DRIVE)
+        val blocked = buildTestState(RelicId.BLINK_DRIVE, weapon = WeaponId.MORNINGSTAR)
         blocked.updatePointer(640f + 80f, 360f)
         assertFalse(blocked.relicOnDash(1f, 0f), "Too close to the singularity: an ordinary Dash")
         assertEquals(0f, blocked.coreX)

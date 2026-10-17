@@ -77,7 +77,7 @@ class RunTempoTest {
         val tempo = state.content.tempo
         val power = state.rebirthProfile.playerPowerMultiplier
         // Progress, then run scale, impact, weapon, self-damage and ability growth.
-        for ((progress, expected) in listOf(0.5f to listOf(1.8f, 1.6f, 1.15f, 1.8f, 1.5f), 1f to listOf(2.6f, 2.2f, 1.3f, 2.6f, 2f))) {
+        for ((progress, expected) in listOf(0.5f to listOf(1.8f, 1.6f, 1.8f, 1.8f, 1.5f), 1f to listOf(2.6f, 2.2f, 2.6f, 2.6f, 2f))) {
             state.elapsed = tempo.bossAtSeconds * progress
             assertEquals(tempo.runScaleGrowth(state.elapsed) * power, state.runScale(), "at $progress")
             assertEquals(expected[0] * power, state.runScale(), 0.0001f, "run scale at $progress")
@@ -97,14 +97,16 @@ class RunTempoTest {
             engine.gainData(engine.nextLevelData.toFloat())
         }
         assertEquals(18, engine.level)
-        assertEquals(10, engine.weaponLevel)
+        // The Orb's signature Flux Wake starts a level up and its automatic ceiling is one higher.
+        val ceiling = engine.content.tempo.maximumAutomaticWeaponLevel + engine.signatureLevelBonus()
+        assertEquals(ceiling, engine.weaponLevel)
         assertTrue(engine.equippedRelics.isEmpty())
         assertEquals(0, engine.keys)
         repeat(8) {
             engine.phase = GamePhase.RUNNING
             engine.gainData(engine.nextLevelData.toFloat())
         }
-        assertEquals(10, engine.weaponLevel, "Automatic amplification stops at the profile bound")
+        assertEquals(ceiling, engine.weaponLevel, "Automatic amplification stops at the profile bound")
     }
 
     @Test

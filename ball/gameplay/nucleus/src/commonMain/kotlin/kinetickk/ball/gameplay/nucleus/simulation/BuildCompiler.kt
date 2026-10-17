@@ -86,7 +86,12 @@ internal class CompiledBuild private constructor(
     /** Bits over ReactionId ordinals whose two elements both have a source in the build. */
     val reachableReactionMask: Int,
     val ownedItemCount: Int,
+    /** By RelicKey ordinal: the first bound Relic carrying that key (a weapon with the key harmonizes with it). */
+    private val keyHarmonies: Array<RelicId?> = arrayOfNulls(kinetickk.ball.content.api.RelicKey.entries.size),
 ) {
+    /** The first bound Relic carrying [key], or null: a weapon with that key harmonizes with it. */
+    fun harmonizing(key: kinetickk.ball.content.api.RelicKey): RelicId? = keyHarmonies[key.ordinal]
+
     fun tagPoints(tag: BuildTag): Int = tagPointValues[tag.ordinal]
     fun affinity(element: StatusElement): Int = affinityValues[element.ordinal]
     fun clauses(trigger: EffectTrigger): IntArray = clauseLists[trigger.ordinal]
@@ -134,6 +139,8 @@ internal class CompiledBuild private constructor(
             spentOuroboros: Boolean,
             statusPotencyBonus: Float = 0f,
             reactionPowerBonus: Float = 0f,
+            /** The equipped weapon's Relic key: a bound Relic carrying it harmonizes with the weapon. */
+            weaponKey: kinetickk.ball.content.api.RelicKey? = null,
         ): CompiledBuild {
             val policy = content.build.policy
             val itemCount = content.items.size
@@ -328,6 +335,7 @@ internal class CompiledBuild private constructor(
                     }
                 }
                 if (crownBound && relic.id != RelicId.HOLLOW_CROWN) multiplier *= 0.75f
+                if (weaponKey != null && weaponKey in relic.keys) multiplier *= HARMONY_MAGNITUDE
                 upsides[relic.id.ordinal] = multiplier
             }
 
@@ -377,6 +385,11 @@ internal class CompiledBuild private constructor(
                 links = links.toImmutableList(),
                 reachableReactionMask = reachable,
                 ownedItemCount = order.size,
+                keyHarmonies = arrayOfNulls<RelicId>(kinetickk.ball.content.api.RelicKey.entries.size).also { harmonies ->
+                    for (relic in equipped) for (key in content.relic(relic.id).keys) {
+                        if (harmonies[key.ordinal] == null) harmonies[key.ordinal] = relic.id
+                    }
+                },
             )
         }
     }
@@ -424,6 +437,7 @@ internal fun MutableGameState.recompileBuild() {
         spentOuroboros = ouroborosSpent,
         statusPotencyBonus = matrix.statusPotencyBonus,
         reactionPowerBonus = matrix.reactionPowerBonus,
+        weaponKey = currentWeaponDefinition.key,
     )
     reconcileIntegrityLiability()
 }

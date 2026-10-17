@@ -68,7 +68,7 @@ internal class MutableGameState(
         const val SPAWN_SEED_SALT = 0x5A_A4_D1_E7
         const val MAX_SEVERED_RELICS = 4
         const val MAX_GAMEPLAY_SOUND_CUES = 32
-        const val MAX_WEAPON_NODES = 8
+        const val MAX_WEAPON_NODES = 12
         const val MAX_WEAPON_ORBITALS = 8
         const val MAX_CHOICES = 4
         const val MAX_TRAIL_SAMPLES_PER_UPDATE = 32
@@ -238,6 +238,13 @@ internal class MutableGameState(
     internal var characterRuntime: CharacterRuntime = reductionSource?.characterRuntime?.let { source ->
         if (shareStableReductionStorage) source else source.fork()
     } ?: CharacterRuntime()
+    /**
+     * Owned state of the equipped weapon (entities, proc gates, element cadences, scaling inputs); a full
+     * reduction forks it, a scalar-input reduction shares it.
+     */
+    internal var weaponRuntime: WeaponRuntime = reductionSource?.weaponRuntime?.let { source ->
+        if (shareStableReductionStorage) source else source.fork()
+    } ?: WeaponRuntime()
     internal var pendingEliteKills: Int = reductionSource?.pendingEliteKills ?: 0
     internal var pendingDashHits: Int = reductionSource?.pendingDashHits ?: 0
     internal var pendingCompletedOrbits: Int = reductionSource?.pendingCompletedOrbits ?: 0

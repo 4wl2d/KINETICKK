@@ -32,6 +32,10 @@ import kotlin.math.sin
 
 private const val RADIANS_TO_DEGREES = 57.29578f
 
+/** Flux Wake's burning half-width and the fade after a trail point's life (mirrors of the simulation's). */
+private const val FLUX_WAKE_WIDTH = 20f
+private const val TRAIL_FADE_SECONDS = 0.45f
+
 /** How far a damage number drifts away from the Core over its life (world units). */
 private const val DAMAGE_NUMBER_DRIFT = 52f
 
@@ -95,8 +99,10 @@ private fun DrawScope.drawWorldLayer(
     drawMotionEchoes(engine, visualFx, shakeX, shakeY, roles)
     drawTrail(engine, shakeX, shakeY, roles)
     drawWeaponNodes(engine, shakeX, shakeY, roles)
+    drawWeaponEntities(engine, shakeX, shakeY, roles, airborne = false)
     drawPickups(engine, shakeX, shakeY, roles)
     drawWeapon(engine, core, shakeX, shakeY, roles)
+    drawWeaponEntities(engine, shakeX, shakeY, roles, airborne = true)
     drawWeaponArcs(engine, visualFx, shakeX, shakeY, roles)
     drawParticles(engine, visualFx, shakeX, shakeY, roles)
     // Telegraphs and threats remain readable over cosmetic trails and secondary effects. A crowded
@@ -278,6 +284,8 @@ private fun DrawScope.drawImpactMarks(engine: GameplayRenderModel, visualFx: Vis
 internal fun DrawScope.drawTrail(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, roles: KkRolePalette) {
     val you = roles.you
     val wake = engine.weapon == WeaponId.FLUX_WAKE
+    // The Flux Wake band is as wide as the strip it burns: twice as wide from the first form, wider with Agony.
+    val band = 2f * (FLUX_WAKE_WIDTH * (if (engine.weaponLevel >= 3) 2f else 1f) + 4f * engine.relicRank(RelicId.AGONY_SCEPTER))
     val lowParticles = engine.settings.particleDensity == ParticleDensity.LOW
     var hasPrevious = false
     var previous = Offset.Zero
@@ -285,12 +293,13 @@ internal fun DrawScope.drawTrail(engine: GameplayRenderModel, shakeX: Float, sha
     for (index in engine.trail.indices) {
         val point = engine.trail[index]
         val location = world(engine, point.x, point.y, shakeX, shakeY)
-        val life = clamp(1f - point.age / 2.25f, 0f, 1f)
+        // A point burns for its life, then fades out over TRAIL_FADE_SECONDS.
+        val life = clamp(1f - point.age / (point.life + TRAIL_FADE_SECONDS), 0f, 1f)
         if (hasPrevious) {
             val segmentLife = min(previousLife, life)
             if (segmentLife > 0f && (isOnScreen(previous, 50f) || isOnScreen(location, 50f))) {
                 if (wake) {
-                    drawLine(you.copy(alpha = segmentLife * 0.12f), previous, location, 34f)
+                    drawLine(you.copy(alpha = segmentLife * 0.12f), previous, location, band * point.scale)
                 } else if (!lowParticles) {
                     drawLine(you.copy(alpha = segmentLife * 0.05f), previous, location, 10f)
                 }
@@ -355,6 +364,7 @@ internal fun DrawScope.drawWeapon(engine: GameplayRenderModel, core: Offset, sha
             drawLine(you.copy(alpha = 0.16f), core, ball, 6f)
             drawLine(Kk.Bone.copy(alpha = 0.6f), core, ball, 1.5f, pathEffect = WorldStrokes.dashEffect)
             drawMorningstarBall(ball, 20f, engine.morningstarAngle, you)
+            drawSecondMorningstar(engine, core, ball, roles)
             val agonyRank = engine.relicRank(RelicId.AGONY_SCEPTER)
             if (agonyRank > 0) {
                 val agony = world(engine, engine.renderCoreX * 2f - ballX, engine.renderCoreY * 2f - ballY, shakeX, shakeY)
@@ -363,12 +373,7 @@ internal fun DrawScope.drawWeapon(engine: GameplayRenderModel, core: Offset, sha
                 drawMorningstarBall(agony, 17f + agonyRank, -engine.morningstarAngle, Kk.ASovereign)
             }
         }
-        WeaponId.PHASE_LATTICE -> {
-            val pulse = (sin(engine.renderElapsed * 4f) + 1f) * 0.5f
-            drawCircle(you.copy(alpha = 0.04f), 132f, core)
-            drawCircle(you.copy(alpha = 0.4f), 105f + pulse * 18f, core, style = kkStroke(1.5f))
-            drawCircle(Kk.Bone.copy(alpha = 0.22f), 132f - pulse * 18f, core, style = WorldStrokes.dashedHair)
-        }
+        WeaponId.PHASE_LATTICE -> drawPhaseLattice(engine, core, roles)
         WeaponId.NULL_LANCE -> {
             // A lance with a square block end aligned to its shaft (a turned square would read as a head).
             val tip = polar(core, 48f, motionAngle)
@@ -408,11 +413,7 @@ internal fun DrawScope.drawWeapon(engine: GameplayRenderModel, core: Offset, sha
             drawLine(Kk.Bone, core, tip, 3f)
             drawCircle(you, 7f, tip)
         }
-        WeaponId.ENTROPY_FIELD -> {
-            val radius = 170f + engine.weaponLevel * 5f
-            drawCircle(you.copy(alpha = 0.035f), radius, core)
-            drawCircle(you.copy(alpha = 0.3f), radius, core, style = WorldStrokes.dashedThin)
-        }
+        WeaponId.ENTROPY_FIELD -> drawEntropyField(engine, core, roles)
         WeaponId.SINGULARITY_SPEAR -> {
             drawCircle(Kk.Bone.copy(alpha = 0.25f), 36f, core, style = kkStroke(2f))
             if (engine.weaponBeamTime > 0f) {
@@ -434,10 +435,11 @@ internal fun DrawScope.drawWeapon(engine: GameplayRenderModel, core: Offset, sha
                 drawRect(Kk.Bone.copy(alpha = 0.8f), Offset(core.x - 10f, core.y - 10f), Size(20f, 20f), style = kkStroke(1.5f))
             }
         }
-        // The twelve additions idle until their behavior and world projections land.
+        // The 0.4.0 additions (WorldWeaponRenderer).
         WeaponId.GYRE_DISC, WeaponId.SCATTER_BLOOM, WeaponId.TETHER_ARC, WeaponId.SENTRY_GRID,
         WeaponId.HUNTER_SALVO, WeaponId.CONCUSSION_ENGINE, WeaponId.GLACIER_BELL, WeaponId.EVENT_LENS,
-        WeaponId.SOLAR_SWEEP, WeaponId.AEGIS_SHARDS, WeaponId.HOLLOW_RIFT, WeaponId.RESONANCE_DRUM -> Unit
+        WeaponId.SOLAR_SWEEP, WeaponId.AEGIS_SHARDS, WeaponId.HOLLOW_RIFT, WeaponId.RESONANCE_DRUM ->
+            drawAddedWeapon(engine, core, motionAngle, shakeX, shakeY, roles)
     }
 }
 

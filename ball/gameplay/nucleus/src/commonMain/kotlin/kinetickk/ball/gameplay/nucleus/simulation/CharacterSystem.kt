@@ -436,6 +436,25 @@ internal fun MutableGameState.consumeMark(enemy: Enemy): Boolean {
     return true
 }
 
+/** Opens a Shard mark on [enemy] (a Scatter Bloom pellet's Puncture mark); nothing for other characters. */
+internal fun MutableGameState.markForPuncture(enemy: Enemy) {
+    if (coreShape == CoreShape.SHARD && enemy.alive) enemy.characterMarkTime = MARK_SECONDS
+}
+
+/**
+ * Spends an open Shard mark on [enemy] for a Puncture of [multiplier] times its damage when Puncture is
+ * ready (the Null Lance signature's double Puncture); true when it struck.
+ */
+internal fun MutableGameState.tryPuncture(enemy: Enemy, multiplier: Float): Boolean {
+    val ability = characterRuntime
+    if (elapsed < ability.punctureReadyAt || !consumeMark(enemy)) return false
+    ability.punctureReadyAt = elapsed + PUNCTURE_INTERVAL
+    dealCharacterDamage(enemy, PUNCTURE_DAMAGE * multiplier * abilityPower())
+    heat = max(0f, heat - PUNCTURE_HEAT_REFUND)
+    shockwave(enemy.x, enemy.y, 0.3f, 65f, 2)
+    return true
+}
+
 /** True from a parry until the end of the next fixed step, so weapon updates of that step can react. */
 internal val MutableGameState.parriedThisStep: Boolean get() = characterRuntime.parryFlagSteps > 0
 
