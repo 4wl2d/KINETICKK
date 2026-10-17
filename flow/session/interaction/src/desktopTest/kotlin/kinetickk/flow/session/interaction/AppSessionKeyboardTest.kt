@@ -20,6 +20,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -137,7 +138,7 @@ class AppSessionKeyboardTest {
     }
 
     @Test
-    fun enterAfterHoveringAHangarTileSelectsItAndKeepsTheHangarOpen() = runComposeUiTest {
+    fun enterAfterInspectingAHangarTileSelectsItAndKeepsTheHangarOpen() = runComposeUiTest {
         val port = KeyboardSessionPort().apply { overlay = AppDestination.Hangar }
         val profile = KeyboardHangarProfilePort()
         val noCodex = object : CodexFeature {
@@ -148,8 +149,11 @@ class AppSessionKeyboardTest {
                 KeyboardShell(port, noCodex, DefaultHangarFeature(profile, defaultCoreShapeDefinitions(), KeyboardSilentAudio))
             }
         }
-        // Hover inspects a tile without focusing it; keyboard focus stays on the Hangar panel.
-        onNodeWithTag("profile-hangar-tile-${CoreShape.PRISM}").performMouseInput { moveTo(center) }
+        // A press inspects a tile; hovering another one on the way only highlights it, so Enter selects the inspected one.
+        onNodeWithTag("profile-hangar-tile-${CoreShape.PRISM}").performMouseInput { click() }
+        waitForIdle()
+        assertTrue(profile.pulses.isEmpty(), "the first press only inspects")
+        onNodeWithTag("profile-hangar-tile-${CoreShape.SPIRAL}").performMouseInput { moveTo(center) }
         waitForIdle()
         onRoot().performKeyInput { pressKey(Key.Enter) }
         runOnIdle {
