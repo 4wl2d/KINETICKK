@@ -39,6 +39,9 @@ internal const val LANCER_SPEED: Float = 1_100f
 internal const val LANCER_DAMAGE: Float = 16f
 internal const val LANCER_RECOVERY_SECONDS: Float = 1.2f
 internal const val LANCER_STUN_SECONDS: Float = 1f
+/** Pause after a recovery before the next telegraph, at the base attack rate. */
+internal const val LANCER_COOLDOWN_SECONDS: Float = 2.6f
+internal const val LANCER_ENGAGE_RANGE: Float = 650f
 internal const val SNIPER_MIN_RANGE: Float = 600f
 internal const val SNIPER_MAX_RANGE: Float = 820f
 internal const val SNIPER_AIM_SECONDS: Float = 1.1f
@@ -52,6 +55,10 @@ internal const val MINE_LIFE_SECONDS: Float = 8f
 internal const val MINE_TRIGGER_RADIUS: Float = 60f
 internal const val MINE_BLAST_RADIUS: Float = 70f
 internal const val MINE_RADIUS: Float = 9f
+internal const val MINE_DROP_SECONDS: Float = 3f
+/** Minelayers never drop a mine closer than this to the Core, and stop while this many mines are live. */
+internal const val MINE_MINIMUM_CORE_DISTANCE: Float = 260f
+internal const val MAX_LIVE_MINES: Int = 10
 internal const val PHANTOM_PHASE_SECONDS: Float = 1.4f
 internal const val PHANTOM_REAPPEAR_DISTANCE: Float = 260f
 internal const val PHANTOM_WINDUP_SECONDS: Float = 0.35f
@@ -222,7 +229,7 @@ internal fun MutableGameState.updateLancer(enemy: Enemy, dx: Float, dy: Float, d
             enemy.damp(5f, delta)
             if (elapsed >= enemy.modeUntil) {
                 enemy.mode = EnemyBehavior.IDLE
-                enemy.abilityAt = elapsed + 1.6f / hostileAttackRate()
+                enemy.abilityAt = elapsed + LANCER_COOLDOWN_SECONDS / hostileAttackRate()
             }
         }
         else -> {
@@ -236,7 +243,7 @@ internal fun MutableGameState.updateLancer(enemy: Enemy, dx: Float, dy: Float, d
                 delta,
             )
             enemy.facing = atan2(dy, dx)
-            if (elapsed >= enemy.abilityAt && distance < 700f && canAttack(enemy)) {
+            if (elapsed >= enemy.abilityAt && distance < LANCER_ENGAGE_RANGE && canAttack(enemy)) {
                 enemy.mode = EnemyBehavior.TELEGRAPH
                 enemy.modeUntil = elapsed + LANCER_TELEGRAPH_SECONDS
             }
@@ -354,8 +361,8 @@ internal fun MutableGameState.updateMinelayer(enemy: Enemy, dx: Float, dy: Float
     )
     enemy.actionTimer -= cadence
     if (enemy.actionTimer <= 0f) {
-        enemy.actionTimer = 2.2f
-        if (canAttack(enemy) && distance < 900f) {
+        enemy.actionTimer = MINE_DROP_SECONDS
+        if (canAttack(enemy) && distance in MINE_MINIMUM_CORE_DISTANCE..900f && liveMines() < MAX_LIVE_MINES) {
             addProjectile(Projectile(
                 x = enemy.x,
                 y = enemy.y,
@@ -368,6 +375,12 @@ internal fun MutableGameState.updateMinelayer(enemy: Enemy, dx: Float, dy: Float
             ))
         }
     }
+}
+
+private fun MutableGameState.liveMines(): Int {
+    var count = 0
+    for (index in projectiles.indices) if (projectiles[index].kind == ProjectileKind.MINE) count++
+    return count
 }
 
 /** True once a mine has armed; it lives [MINE_LIFE_SECONDS] and arms after [MINE_ARM_SECONDS]. */
@@ -583,7 +596,7 @@ internal fun MutableGameState.shielded(enemy: Enemy): Boolean = enemy.shieldUnti
 internal fun MutableGameState.initializeBehavior(enemy: Enemy) {
     enemy.facing = atan2(coreY - enemy.y, coreX - enemy.x)
     when (enemy.type) {
-        EnemyType.LANCER -> enemy.abilityAt = elapsed + 1.2f
+        EnemyType.LANCER -> enemy.abilityAt = elapsed + 2f
         EnemyType.SNIPER -> enemy.abilityAt = elapsed + 1.5f
         EnemyType.PHANTOM -> enemy.abilityAt = elapsed + 2f
         EnemyType.HERALD -> enemy.abilityAt = elapsed + HERALD_FIRST_SHIELD_SECONDS

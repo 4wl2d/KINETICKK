@@ -49,6 +49,11 @@ internal const val ENCIRCLE_COOLDOWN_SECONDS: Float = 40f
 internal const val WALL_COOLDOWN_SECONDS: Float = 30f
 internal const val CAP_OVERFLOW_COOLDOWN_SECONDS: Float = 20f
 internal const val DIRECTOR_CHECK_SECONDS: Float = 0.4f
+/**
+ * Overall budget scale. Packs, flanks and relocated stragglers keep more enemies engaged than single
+ * spawns did, so the director banks a little less than one enemy per tempo interval at rate 1.
+ */
+internal const val DIRECTOR_RATE_SCALE: Float = 0.85f
 /** An event never fires below this share of its planned size. */
 internal const val MINIMUM_EVENT_SHARE: Float = 0.6f
 /** A Swarmling fills this share of an ordinary cap slot and of the spawn budget. */
@@ -111,7 +116,7 @@ internal fun MutableGameState.spawnWave(delta: Float) {
     advanceDirectorPhase()
     if (speed > OBSTACLE_DAMAGE_START_SPEED * AMBUSH_SPEED_FRACTION) ambushSpeedSeconds += delta else ambushSpeedSeconds = 0f
     val phase = SpawnDirectorPhase.entries[directorPhase]
-    var rate = phase.rate * rebirthProfile.spawnRateMultiplier / content.tempo.spawnIntervalSeconds(elapsed)
+    var rate = phase.rate * DIRECTOR_RATE_SCALE * rebirthProfile.spawnRateMultiplier / content.tempo.spawnIntervalSeconds(elapsed)
     if (bossFight) rate /= ARCHITECT_ADD_INTERVAL_SCALE
     spawnBudget = min(MAX_SPAWN_BUDGET, spawnBudget + delta * rate)
     spawnClock -= delta
@@ -340,8 +345,9 @@ private fun MutableGameState.spawnEvent(kind: SpawnEventKind, count: Int): Int {
     return when (kind) {
         SpawnEventKind.SINGLE, SpawnEventKind.PACK, SpawnEventKind.SWARM -> {
             val type = fixedType ?: pickEnemyType()
-            val angle = heading + sectorOffset()
-            val distance = viewportEdgeDistance(angle) + 80f + spawnRandom.nextFloat() * 180f
+            val rolled = heading + sectorOffset()
+            val distance = viewportEdgeDistance(rolled) + 80f + spawnRandom.nextFloat() * 180f
+            val angle = clearOfAnomalies(rolled, distance)
             spawnCluster(type, count, coreX + cos(angle) * distance, coreY + sin(angle) * distance)
             typeBit(type)
         }
@@ -358,8 +364,9 @@ private fun MutableGameState.spawnEvent(kind: SpawnEventKind, count: Int): Int {
             for (side in 0 until 2) {
                 val type = pickEnemyType()
                 val sign = if (side == 0) 1f else -1f
-                val angle = heading + sign * (70f + spawnRandom.nextFloat() * 40f) * DEGREES
-                val distance = viewportEdgeDistance(angle) + 80f + spawnRandom.nextFloat() * 180f
+                val rolled = heading + sign * (70f + spawnRandom.nextFloat() * 40f) * DEGREES
+                val distance = viewportEdgeDistance(rolled) + 80f + spawnRandom.nextFloat() * 180f
+                val angle = clearOfAnomalies(rolled, distance)
                 spawnCluster(type, if (side == 0) first else count - first, coreX + cos(angle) * distance, coreY + sin(angle) * distance)
                 mask = mask or typeBit(type)
             }
@@ -458,6 +465,33 @@ internal fun MutableGameState.sectorOffset(allowBehind: Boolean = true): Float {
     }
 }
 
+/**
+ * Turns a spawn direction away from offered anomalies: an anchor never lands within
+ * [POI_SPAWN_CLEARANCE] of a point the player has not entered, so packs do not gather on its circle.
+ */
+internal fun MutableGameState.clearOfAnomalies(angle: Float, distance: Float): Float {
+    if (pointsOfInterest.isEmpty()) return angle
+    var candidate = angle
+    for (attempt in 0 until 4) {
+        val x = coreX + cos(candidate) * distance
+        val y = coreY + sin(candidate) * distance
+        var blocked = false
+        for (index in pointsOfInterest.indices) {
+            val point = pointsOfInterest[index]
+            if (point.active) continue
+            val dx = x - point.x
+            val dy = y - point.y
+            if (dx * dx + dy * dy < POI_SPAWN_CLEARANCE * POI_SPAWN_CLEARANCE) blocked = true
+        }
+        if (!blocked) return candidate
+        candidate = angle + ANOMALY_TURN * (if (attempt % 2 == 0) (attempt / 2 + 1) else -(attempt / 2 + 1))
+    }
+    return candidate
+}
+
+internal const val POI_SPAWN_CLEARANCE: Float = 420f
+private const val ANOMALY_TURN: Float = 45f * DEGREES
+
 /** Distance from the Core to the viewport edge along [angle]. */
 internal fun MutableGameState.viewportEdgeDistance(angle: Float): Float {
     val toVertical = screenWidth * 0.5f / max(0.001f, abs(cos(angle)))
@@ -524,8 +558,9 @@ private fun MutableGameState.countLive(type: EnemyType): Int {
 /** Spawns a scheduled enemy (Elite, Herald, Architect, escorts of the Architect) at spawn distance. */
 internal fun MutableGameState.spawnScheduled(type: EnemyType): Boolean {
     if (enemies.size >= content.rebirth.maxActiveEnemies) return false
-    val angle = movementAngle() + sectorOffset(allowBehind = type != EnemyType.HERALD)
-    val distance = viewportEdgeDistance(angle) + 80f + spawnRandom.nextFloat() * 180f
+    val rolled = movementAngle() + sectorOffset(allowBehind = type != EnemyType.HERALD)
+    val distance = viewportEdgeDistance(rolled) + 80f + spawnRandom.nextFloat() * 180f
+    val angle = clearOfAnomalies(rolled, distance)
     spawnMember(type, coreX + cos(angle) * distance, coreY + sin(angle) * distance)
     return true
 }
@@ -592,8 +627,9 @@ internal fun MutableGameState.rollAspect(): Int = spawnRandom.nextInt(StatusElem
  * move is a teleport, so its previous position follows.
  */
 internal fun MutableGameState.relocateLeashedEnemy(enemy: Enemy) {
-    val angle = movementAngle() + sectorOffset(allowBehind = false)
-    val distance = viewportEdgeDistance(angle) + 80f + spawnRandom.nextFloat() * 180f
+    val rolled = movementAngle() + sectorOffset(allowBehind = false)
+    val distance = viewportEdgeDistance(rolled) + 80f + spawnRandom.nextFloat() * 180f
+    val angle = clearOfAnomalies(rolled, distance)
     var x = coreX + cos(angle) * distance
     var y = coreY + sin(angle) * distance
     var attempts = 0
