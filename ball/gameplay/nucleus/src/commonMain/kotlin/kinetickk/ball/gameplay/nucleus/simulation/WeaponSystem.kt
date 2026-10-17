@@ -418,10 +418,10 @@ internal fun MutableGameState.explodeMine(node: WeaponNode) {
             if (distanceSquared(other.x, other.y, node.x, node.y) <= square(node.radius * MINE_CHAIN_REACH)) other.life = min(other.life, MINE_CHAIN_FUSE)
         }
     }
-    // Third form: the mine collapses into a short well.
+    // Third form: the mine collapses into a short well, which grows with weapon power like the blast.
     if (hasMasteryForm(3)) {
         addWeaponEntity(WeaponEntity(WeaponEntityKind.WELL, node.x, node.y, node.radius * MINE_WELL_REACH, MINE_WELL_SECONDS, MINE_WELL_SECONDS,
-            damage = MINE_WELL_DPS, procKey = node.procKey, phase = 1))
+            damage = MINE_WELL_DPS * power, procKey = node.procKey, phase = 1))
     }
     burst(node.x, node.y, 18, 2)
     screenShake = max(screenShake, 5f)

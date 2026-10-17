@@ -7,8 +7,10 @@ import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.Enemy
 import kinetickk.ball.gameplay.nucleus.model.WeaponEntity
+import kinetickk.ball.gameplay.nucleus.model.WeaponNode
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
+import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -92,6 +94,28 @@ class WeaponEntityRulesTest {
         val base = wave(0)
         assertTrue(base > 0f)
         assertEquals(power, wave(10) / base, 1e-3f)
+    }
+
+    @Test
+    fun aGravityMineWellGrowsWithWeaponPower() {
+        /** One tick of the third-form well a mine leaves 200 from the Core, at item weapon power [power]. */
+        fun wellTick(power: Float): Float {
+            val state = buildTestState(weapon = WeaponId.GRAVITY_MINES, shape = CoreShape.HEXAGON)
+            state.weaponLevel = 10
+            state.weaponPower = power
+            state.weaponRuntime.entities.clear()
+            state.explodeMine(WeaponNode(WeaponNodeType.GRAVITY_MINE, state.coreX + 200f, state.coreY, 1f, 1f, 40f))
+            val well = state.weaponRuntime.entities.single { it.kind == WeaponEntityKind.WELL }
+            val target = state.spawn(EnemyType.DRIFTER, 200f, 0f)
+            // Low enough integrity that one tick reads exactly in Float.
+            target.hp = 1_000f
+            state.resolveWeaponEntityHits(STEP)
+            assertEquals(MINE_WELL_DPS * state.effectiveWeaponPower(), well.damage, 1e-3f)
+            return 1_000f - target.hp
+        }
+        val base = wellTick(1f)
+        assertTrue(base > 0f)
+        assertEquals(3f, wellTick(3f) / base, 1e-3f)
     }
 
     /** A sturdy [type] at ([x], [y]) from the Core. */
