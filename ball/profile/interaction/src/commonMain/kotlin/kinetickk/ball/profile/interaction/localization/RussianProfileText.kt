@@ -51,6 +51,7 @@ internal object RussianProfileText {
         ProfileText.EnemySpeed -> "Скорость врагов"
         ProfileText.IncomingDamage -> "Входящий урон"
         ProfileText.CycleCompensation -> "Бонусы цикла"
+        ProfileText.EliteRate -> "Частота элиты"
         ProfileText.ThreatAdvance -> "Опережение угрозы"
         ProfileText.PlayerPower -> "Мощь игрока"
         ProfileText.CoreIntegrity -> "Прочность ядра"

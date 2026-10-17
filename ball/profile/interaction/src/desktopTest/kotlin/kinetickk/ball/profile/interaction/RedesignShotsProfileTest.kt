@@ -180,8 +180,9 @@ class RedesignShotsProfileTest {
 
     private fun rebirth(target: Int, canAdvance: Boolean = true) = RebirthRenderModel(
         current = rebirthProfile((target - 1).coerceAtLeast(0)),
-        next = rebirthProfile(target.coerceAtMost(10)),
-        canAdvance = canAdvance,
+        focus = rebirthProfile(target.coerceAtMost(10)),
+        highestCleared = target - 1,
+        eligible = canAdvance,
         matter = 1_924L,
         minimumTier = 0,
         maximumTier = 10,
@@ -196,7 +197,7 @@ class RedesignShotsProfileTest {
             }
         }
         shoot("rebirth", "max") {
-            val max = RebirthRenderModel(rebirthProfile(10), rebirthProfile(10), false, 1_924L, 0, 10, catalogRebirthBuild(10, 10))
+            val max = RebirthRenderModel(rebirthProfile(10), rebirthProfile(10), 10, true, 1_924L, 0, 10, catalogRebirthBuild(10, 10))
             RebirthContent(max, false, 1.25f, {}, timeSeconds = 7.3f)
         }
         for (tier in listOf(3, 4, 5, 8, 9, 10)) {

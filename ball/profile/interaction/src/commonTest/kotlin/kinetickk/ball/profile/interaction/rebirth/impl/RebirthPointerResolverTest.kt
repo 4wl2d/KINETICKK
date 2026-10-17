@@ -33,7 +33,7 @@ class RebirthPointerResolverTest {
             assertTrue(action.top >= layout.frame.headerHeight && action.bottom <= layout.frame.height,
                 "$context scroll $scroll: Advance $action outside ${layout.frame.headerHeight}..${layout.frame.height}")
             for (point in listOf(action.center, Offset(action.left + 4f, action.top + 4f), Offset(action.right - 4f, action.bottom - 4f))) {
-                assertEquals(RebirthAction.AdvanceRequested, resolveRebirthPress(layout, scroll, point.x, point.y), "$context $scroll $point")
+                assertEquals(RebirthAction.SelectRequested, resolveRebirthPress(layout, scroll, point.x, point.y), "$context $scroll $point")
             }
         }
     }
@@ -56,14 +56,25 @@ class RebirthPointerResolverTest {
     }
 
     @Test
-    fun advanceAndBackAreTheOnlyTargets() {
+    fun selectBackAndTheLadderCellsAreTheTargets() {
         val layout = layout(1440f, 810f)
         val action = layout.action.center
-        assertEquals(RebirthAction.AdvanceRequested, resolveRebirthPress(layout, 0f, action.x, action.y))
+        assertEquals(RebirthAction.SelectRequested, resolveRebirthPress(layout, 0f, action.x, action.y))
         assertEquals(RebirthAction.Back, resolveRebirthPress(layout, 0f, layout.back.center.x, layout.back.center.y))
         assertNull(resolveRebirthPress(layout, 0f, layout.info.center.x, layout.info.center.y))
-        assertNull(resolveRebirthPress(layout, 0f, layout.cells[3].center.x, layout.cells[3].center.y))
+        // Every ladder cell focuses its own tier (the first cell is the policy minimum).
+        layout.cells.forEachIndexed { index, cell ->
+            assertEquals(RebirthAction.FocusTier(index), resolveRebirthPress(layout, 0f, cell.center.x, cell.center.y))
+            assertEquals(RebirthAction.FocusTier(index + 2), resolveRebirthPress(layout, 0f, cell.center.x, cell.center.y, minimumTier = 2))
+        }
         assertNull(resolveRebirthPress(layout, 0f, action.x, layout.action.bottom + 20f))
+        // A scrolled phone ladder moves with the content.
+        val phone = layout(390f, 844f, textScale = 1.75f, buildRows = 8, unlockLines = List(7) { 3 })
+        val scroll = phone.scrollMax * 0.5f
+        val cell = phone.cells[2]
+        if (!phone.heroFixed && scroll > 0f && cell.center.y - scroll > phone.viewport.top) {
+            assertEquals(RebirthAction.FocusTier(2), resolveRebirthPress(phone, scroll, cell.center.x, cell.center.y - scroll))
+        }
     }
 
     @Test

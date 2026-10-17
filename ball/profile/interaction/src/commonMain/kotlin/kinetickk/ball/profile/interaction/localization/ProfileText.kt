@@ -48,6 +48,7 @@ internal enum class ProfileText : TextResource {
     OpeningHostiles,
     EnemyCap,
     SpawnRate,
+    EliteRate,
     EnemyIntegrity,
     EnemySpeed,
     IncomingDamage,

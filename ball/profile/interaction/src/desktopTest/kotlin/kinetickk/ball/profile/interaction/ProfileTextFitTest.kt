@@ -57,6 +57,8 @@ import kinetickk.ball.profile.interaction.rebirth.impl.actionState
 import kinetickk.ball.profile.interaction.rebirth.impl.rebirthBuildInfoText
 import kinetickk.ball.profile.interaction.rebirth.impl.rebirthInfoText
 import kinetickk.ball.profile.interaction.rebirth.impl.rebirthUnlockBlurb
+import kinetickk.ball.profile.interaction.rebirth.impl.rebirthFeaturedBlurb
+import kinetickk.ball.profile.interaction.rebirth.impl.featuredRows
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
@@ -268,11 +270,9 @@ class ProfileTextFitTest {
             // Odd targets carry four Heirlooms, even ones none (the board then keeps its right column free).
             fun heirlooms(target: Int) = if (target % 2 == 1) CatalogHeirlooms else emptyList()
             fun model(target: Int) = if (target > 10) {
-                RebirthRenderModel(catalogRebirthProfile(10), catalogRebirthProfile(10), false, 1_924L, 0, 10,
-                    catalogRebirthBuild(10, 10, heirlooms(target)))
+                catalogRebirthModel(10, 10, heirlooms = heirlooms(target))
             } else {
-                RebirthRenderModel(catalogRebirthProfile(target - 1), catalogRebirthProfile(target), true, 1_924L, 0, 10,
-                    catalogRebirthBuild(target - 1, target, heirlooms(target)))
+                catalogRebirthModel(target - 1, target, heirlooms = heirlooms(target))
             }
             render(width, height, scenes(targets), content = { scene ->
                 RebirthContent(model(scene.item), false, scene.setting, {}, timeSeconds = 7.3f,
@@ -285,7 +285,7 @@ class ProfileTextFitTest {
                 val language = scene.language
                 assertEquals(listOf(ProfileText.HostileEscalation, ProfileText.CycleCompensation).map { language.text(it).uppercase() },
                     frame.of("rebirth.section").map { assertNotNull(it.layout).layoutInput.text.text }.distinct(), context)
-                val target = model(scene.item).let { if (it.isMaximumTier) it.current else it.next }
+                val target = model(scene.item).focus
                 assertEquals(listOf(target.displayName.localizedContent(language).uppercase()),
                     frame.of("rebirth.directive").map { assertNotNull(it.layout).layoutInput.text.text }.distinct(), context)
                 val layout = assertNotNull(holders[scene]?.layout, context)
@@ -319,12 +319,12 @@ class ProfileTextFitTest {
      */
     @Test
     fun rebirthTooltipsStayWholeAtEveryTextSize() {
-        val ready = RebirthRenderModel(catalogRebirthProfile(9), catalogRebirthProfile(10), true, 1_924L, 0, 10,
-            catalogRebirthBuild(9, 10))
-        val locked = ready.copy(canAdvance = false)
-        val maximum = RebirthRenderModel(catalogRebirthProfile(10), catalogRebirthProfile(10), false, 1_924L, 0, 10,
-            catalogRebirthBuild(10, 10))
-        val cases = listOf(ready to false, ready to true, locked to false, maximum to false)
+        val ready = catalogRebirthModel(9, 10)
+        val locked = catalogRebirthModel(5, 10)
+        val closed = ready.copy(eligible = false)
+        val maximum = catalogRebirthModel(10, 10)
+        val replay = catalogRebirthModel(10, 10).copy(focus = catalogRebirthProfile(3))
+        val cases = listOf(ready to false, ready to true, locked to false, closed to false, maximum to false, replay to false)
         val scenes = languages.flatMap { language -> listOf(1f, 1.25f, 1.5f, 1.75f).map { Scene(language, it, Unit) } }
         val measured = HashMap<Scene<Unit>, List<Pair<String, TextLayoutResult>>>()
         render(390, 844, scenes, content = { scene ->
@@ -356,7 +356,8 @@ class ProfileTextFitTest {
         assertEquals(titles.map { language.text(it).uppercase() },
             frame.of(REBIRTH_BUILD_SECTION_ROLE).map { assertNotNull(it.layout).layoutInput.text.text }, context)
         val unlocks = frame.of("rebirth.build.unlock")
-        assertEquals(model.targetUnlocks.map { it.name }, unlocks.map { it.owner }, context)
+        val rows = model.featuredRows()
+        assertEquals(rows.map { it.name }, unlocks.map { it.owner }, context)
         val tags = frame.of("rebirth.build.tag")
         val blurbs = frame.of(REBIRTH_UNLOCK_BLURB_ROLE)
         unlocks.forEachIndexed { index, unlock ->
@@ -364,13 +365,13 @@ class ProfileTextFitTest {
             val tag = tags.single { it.owner == unlock.owner }
             // The featured row: the display name left of its gold kind tag, and what the content
             // does under it, all inside the row.
-            assertEquals(model.targetUnlocks[index].name.localizedContent(language).uppercase(),
+            assertEquals(rows[index].name.localizedContent(language).uppercase(),
                 assertNotNull(unlock.layout).layoutInput.text.text)
             assertTrue(unlock.box.left >= row.left && unlock.box.right <= tag.box.left, "$context ${unlock.owner} ${unlock.box} vs tag ${tag.box}")
             assertTrue(tag.box.right <= row.right + 0.5f && tag.box.top >= row.top && tag.box.bottom <= row.bottom,
                 "$context tag ${tag.box} outside $row")
             val blurb = blurbs.single { it.owner == unlock.owner }
-            assertEquals(rebirthUnlockBlurb(model.targetUnlocks[index], language), assertNotNull(blurb.layout).layoutInput.text.text, context)
+            assertEquals(rebirthFeaturedBlurb(rows[index], language), assertNotNull(blurb.layout).layoutInput.text.text, context)
             assertTrue(blurb.box.left >= unlock.box.left - 0.5f && blurb.box.right <= row.right + 0.5f &&
                 blurb.box.top >= unlock.box.bottom - 0.5f && blurb.box.bottom <= row.bottom + 0.5f,
                 "$context ${unlock.owner} description ${blurb.box} outside $row under ${unlock.box}")
@@ -383,7 +384,7 @@ class ProfileTextFitTest {
         }
         val reborn = frame.of("rebirth.build.row.value")
         assertEquals(2, reborn.size, context)
-        assertEquals(setOf(1, 2, 3, 4, 5), frame.of("rebirth.ladder.unlock").map { it.owner }.toSet(), context)
+        assertEquals(CatalogRebirthContent.unlocks.map { it.tier }.toSet(), frame.of("rebirth.ladder.unlock").map { it.owner }.toSet(), context)
     }
 
     /**

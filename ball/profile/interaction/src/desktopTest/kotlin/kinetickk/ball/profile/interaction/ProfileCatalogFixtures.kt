@@ -351,6 +351,29 @@ internal val CatalogRebirthItems: ImmutableList<ItemDefinition> = listOf(
 internal val CatalogHeirlooms: List<RelicId> =
     listOf(RelicId.STORMHEART_CAPACITOR, RelicId.EXECUTIONERS_PRISM, RelicId.FURNACE_COVENANT, RelicId.ABSOLUTE_ZERO)
 
-/** The screen's build model between [current] and [target] with the shipped Reborn odds. */
+/** The ladder's catalog content: the gated Relics and items plus the shipped weapons, characters, Matrix and roster. */
+internal val CatalogRebirthContent: RebirthBuildContent = RebirthBuildContent(CatalogRebirthRelics, CatalogRebirthItems, BuildPolicy(),
+    CatalogWeapons, kinetickk.ball.content.api.defaultCoreShapeDefinitions(), CatalogMatrixNodes,
+    kinetickk.ball.content.api.defaultEnemyDefinitions())
+
+/** The screen's build model between the selected [current] and the focused [target] tier with the shipped Reborn odds. */
 internal fun catalogRebirthBuild(current: Int, target: Int, heirlooms: List<RelicId> = CatalogHeirlooms): RebirthBuildModel =
-    RebirthBuildContent(CatalogRebirthRelics, CatalogRebirthItems, BuildPolicy()).model(current, target, heirlooms)
+    CatalogRebirthContent.model(current, target, heirlooms)
+
+/** The ladder selected at [current] (after clearing [highestCleared]) and focused on [focus], with catalog content. */
+internal fun catalogRebirthModel(
+    current: Int,
+    focus: Int,
+    highestCleared: Int = current,
+    eligible: Boolean = true,
+    heirlooms: List<RelicId> = CatalogHeirlooms,
+): kinetickk.ball.profile.interaction.rebirth.api.RebirthRenderModel = kinetickk.ball.profile.interaction.rebirth.api.RebirthRenderModel(
+    current = catalogRebirthProfile(current),
+    focus = catalogRebirthProfile(focus),
+    highestCleared = highestCleared,
+    eligible = eligible,
+    matter = 1_924L,
+    minimumTier = 0,
+    maximumTier = 10,
+    build = catalogRebirthBuild(current, focus, heirlooms),
+)

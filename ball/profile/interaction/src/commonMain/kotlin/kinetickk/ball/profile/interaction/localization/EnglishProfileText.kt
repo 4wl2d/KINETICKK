@@ -51,6 +51,7 @@ internal object EnglishProfileText {
         ProfileText.EnemySpeed -> "Enemy speed"
         ProfileText.IncomingDamage -> "Incoming damage"
         ProfileText.CycleCompensation -> "Cycle compensation"
+        ProfileText.EliteRate -> "Elite rate"
         ProfileText.ThreatAdvance -> "Threat advance"
         ProfileText.PlayerPower -> "Player power"
         ProfileText.CoreIntegrity -> "Core integrity"

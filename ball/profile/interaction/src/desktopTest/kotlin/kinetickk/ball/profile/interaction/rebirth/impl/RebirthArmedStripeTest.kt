@@ -20,7 +20,7 @@ import kotlin.test.assertTrue
  * when Advance is pinned on its band at the bottom (large text, small phones).
  */
 class RebirthArmedStripeTest {
-    private val model = RebirthRenderModel(catalogRebirthProfile(3), catalogRebirthProfile(4), true, 1_924L, 0, 10)
+    private val model = RebirthRenderModel(catalogRebirthProfile(3), catalogRebirthProfile(4), 3, true, 1_924L, 0, 10)
     private val accent = RebirthTheme(4, KkRolePalette.Default).accent
 
     @Test

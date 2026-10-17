@@ -16,6 +16,7 @@ import kinetickk.ball.content.api.RelicValue
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthRenderModel
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthUnlock
+import kinetickk.ball.profile.interaction.rebirth.api.RebirthTierStatus
 import kinetickk.ball.profile.interaction.TestItems
 import kinetickk.ball.profile.interaction.TestRelics
 import kinetickk.ball.profile.interaction.localization.ProfileScreensRedesignText
@@ -38,30 +39,37 @@ import kotlin.test.assertTrue
 class RebirthPresentationTest {
     private val policy = testRebirthPolicy()
 
-    private fun model(level: Int, canAdvance: Boolean = true) = RebirthRenderModel(
+    /** The selected tier [level] after clearing tier [level], focused on the earned tier above it. */
+    private fun model(level: Int, eligible: Boolean = true, focus: Int = (level + 1).coerceAtMost(policy.maximumLevel)) = RebirthRenderModel(
         current = policy.profile(level),
-        next = policy.profile(level + 1),
-        canAdvance = canAdvance,
+        focus = policy.profile(focus),
+        highestCleared = level,
+        eligible = eligible,
         minimumTier = policy.minimumLevel,
         maximumTier = policy.maximumLevel,
     )
 
     @Test
-    fun ladderAndActionStatesFollowTheTierAndTheTwoPressConfirm() {
+    fun ladderAndActionStatesFollowTheRecordAndTheTwoPressConfirm() {
         val model = model(3)
         assertEquals(4, model.targetTier)
-        assertEquals(RebirthTierCell.CLEARED, model.tierCell(2))
-        assertEquals(RebirthTierCell.CURRENT, model.tierCell(3))
-        assertEquals(RebirthTierCell.NEXT, model.tierCell(4))
-        assertEquals(RebirthTierCell.LATER, model.tierCell(5))
+        assertEquals(RebirthTierStatus.CLEARED, model.status(2))
+        assertEquals(RebirthTierStatus.CLEARED, model.status(3))
+        assertEquals(RebirthTierStatus.EARNED, model.status(4))
+        assertEquals(RebirthTierStatus.LOCKED, model.status(5))
         assertEquals(RebirthActionState.READY, model.actionState(confirmationArmed = false))
         assertEquals(RebirthActionState.ARMED, model.actionState(confirmationArmed = true))
-        assertEquals(RebirthActionState.LOCKED, model(3, canAdvance = false).actionState(confirmationArmed = true))
+        assertEquals(RebirthActionState.UNAVAILABLE, model(3, eligible = false).actionState(confirmationArmed = true))
+        assertEquals(RebirthActionState.LOCKED, model(3, focus = 6).actionState(confirmationArmed = true))
+        assertEquals(RebirthActionState.READY, model(3, focus = 1).actionState(confirmationArmed = true))
         val maximum = model(10)
-        assertTrue(maximum.isMaximumTier)
+        assertTrue(maximum.ascendant)
         assertEquals(10, maximum.targetTier)
-        assertEquals(RebirthActionState.MAXIMUM, maximum.actionState(confirmationArmed = false))
-        assertEquals(RebirthTierCell.CURRENT, maximum.tierCell(10))
+        assertEquals(RebirthActionState.READY, maximum.actionState(confirmationArmed = false))
+        assertEquals(RebirthTierStatus.CLEARED, maximum.status(10))
+        // Read aloud: the tier, its status and the selected mark.
+        assertEquals("Tier 3, Cleared, Selected", rebirthTierDescription(model, 3, AppLanguage.English))
+        assertEquals("Ступень 5, Закрыта", rebirthTierDescription(model, 5, AppLanguage.Russian))
     }
 
     @Test
@@ -94,28 +102,28 @@ class RebirthPresentationTest {
         val current = profile(tier = 3, speed = 1.08f, rerolls = 1)
         val next = profile(tier = 4, speed = 1.16f, rerolls = 1)
         val hostile = rebirthHostileRows(current, next, AppLanguage.English)
-        assertEquals(7, hostile.size)
-        val speed = hostile[4]
+        assertEquals(REBIRTH_HOSTILE_ROWS, hostile.size)
+        val speed = hostile[5]
         assertEquals("×1.08", speed.current)
         assertEquals("×1.16", speed.next)
         assertEquals(RebirthChange.UP, speed.change)
         assertEquals(RebirthChange.SAME, hostile[0].change)
         val compensation = rebirthCompensationRows(current, next, AppLanguage.Russian)
-        assertEquals(4, compensation.size)
-        assertEquals(RebirthChange.SAME, compensation[3].change)
+        assertEquals(REBIRTH_COMPENSATION_ROWS, compensation.size)
+        assertEquals(RebirthChange.SAME, compensation[2].change)
         assertEquals("×1,00", rebirthMultiplier(1f, AppLanguage.Russian))
         assertEquals("×1.05", rebirthMultiplier(1.05f, AppLanguage.English))
     }
 
     @Test
-    fun buildRowsShowTheRebornOddsTheTargetUnlocksAndTheHeirlooms() {
+    fun buildRowsShowTheRebornOddsTheMutatorsTheFocusedUnlocksAndTheHeirlooms() {
         val content = RebirthBuildContent(TestRelics, TestItems, BuildPolicy())
         fun withBuild(level: Int, heirlooms: List<RelicId> = emptyList()) =
             model(level).copy(build = content.model(level, (level + 1).coerceAtMost(policy.maximumLevel), heirlooms))
 
-        // Tier 1 to 2: Reborn odds, then both legendaries; two stored Heirlooms.
+        // Tier 1 to 2: Reborn odds, the tier's mutator, then both legendaries; two stored Heirlooms.
         val two = withBuild(1, listOf(RelicId.FURNACE_COVENANT, RelicId.PERPETUAL_VECTOR))
-        assertEquals(3, two.buildRowCount())
+        assertEquals(1 + two.focus.mutators.size + 2, two.buildRowCount())
         assertEquals(2, two.heirloomRowCount())
         val reborn = assertNotNull(rebirthRebornRow(two, AppLanguage.English))
         assertEquals("5%", reborn.current)
@@ -142,9 +150,13 @@ class RebirthPresentationTest {
                 assertTrue(language.text(ProfileScreensRedesignText.RebirthKeeps) in advanceInfo, "$language $state")
                 assertEquals(rebirthInfoText(plain, state, language), advanceInfo)
             }
+            assertTrue(language.text(ProfileScreensRedesignText.RebirthNewTier) in rebirthInfoText(two, RebirthActionState.READY, language))
+            assertTrue(language.text(ProfileScreensRedesignText.RebirthAnyTier) in
+                rebirthInfoText(model(3, focus = 1), RebirthActionState.READY, language))
+            assertTrue(language.text(ProfileScreensRedesignText.RebirthLocked, 4) in rebirthInfoText(two.copy(highestCleared = 3), RebirthActionState.LOCKED, language))
         }
 
-        // The read-aloud summary names the odds, every unlock with what it does and every Heirloom.
+        // The read-aloud summary names the odds, every mutator and unlock with what it does and every Heirloom.
         val description = assertNotNull(rebirthBuildDescription(two, AppLanguage.English))
         listOf("10%", "Test item 1", "Injected item 1", "Test item 3", "Test FURNACE_COVENANT", "Test PERPETUAL_VECTOR").forEach {
             assertTrue(it in description, "$it in $description")
@@ -167,6 +179,21 @@ class RebirthPresentationTest {
             values = immutableListOf(RelicValue(35f, 5f)))
         assertEquals("Each empty Relic slot grants 35 % damage.", rebirthUnlockBlurb(RebirthUnlock.Relic(crown), AppLanguage.English))
         assertEquals("Injected item 2", rebirthUnlockBlurb(RebirthUnlock.Item(TestItems[2]), AppLanguage.English))
+        // Weapons, characters, Matrix nodes and enemies show their own description lines.
+        val spiral = kinetickk.ball.content.api.defaultCoreShapeDefinitions().first { it.id == kinetickk.ball.content.api.CoreShape.SPIRAL }
+        assertEquals(spiral.mechanicDescription, rebirthUnlockBlurb(RebirthUnlock.Character(spiral), AppLanguage.English))
+        val phantom = kinetickk.ball.content.api.defaultEnemyDefinitions().first { it.minimumRebirth == 2 && !it.isScheduled }
+        assertEquals(phantom.description, rebirthUnlockBlurb(RebirthUnlock.Enemy(phantom), AppLanguage.English))
+        val node = kinetickk.ball.profile.interaction.TestMatrixNodes.first { it.minimumRebirth == 1 }
+        assertEquals(node.description, rebirthUnlockBlurb(RebirthUnlock.MatrixNode(node), AppLanguage.English))
+        // A mutator row shows its rule, tagged New for the tier's own mutator and Active for earlier ones.
+        val tierThree = model(2).copy(focus = kinetickk.ball.content.api.defaultRebirthProfile(3))
+        val rows = tierThree.featuredRows().filterIsInstance<RebirthFeaturedRow.Mutator>()
+        assertEquals(listOf(kinetickk.ball.content.api.RebirthMutator.HUNTER_PROTOCOL, kinetickk.ball.content.api.RebirthMutator.HARDENED_ELITES,
+            kinetickk.ball.content.api.RebirthMutator.PACK_HUNTERS), rows.map { it.mutator })
+        assertEquals("New", featuredKind(rows[0], AppLanguage.English))
+        assertEquals("Действует", featuredKind(rows[1], AppLanguage.Russian))
+        assertEquals("Ranged hunters arrive earlier in the run.", rebirthFeaturedBlurb(rows[0], AppLanguage.English))
     }
 
     @Test

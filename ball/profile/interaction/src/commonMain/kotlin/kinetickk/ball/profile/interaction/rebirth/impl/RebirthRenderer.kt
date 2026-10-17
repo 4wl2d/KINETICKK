@@ -32,6 +32,9 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import kinetickk.ball.content.api.RebirthProfile
@@ -49,6 +52,7 @@ import kinetickk.ball.profile.interaction.ProfileTextProbe
 import kinetickk.ball.profile.interaction.drawProfileText
 import kinetickk.ball.profile.interaction.profileTextScale
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthRenderModel
+import kinetickk.ball.profile.interaction.rebirth.api.RebirthTierStatus
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.*
@@ -116,7 +120,7 @@ internal fun RebirthContent(
             val backWidth = profileHeaderBackWidth(measurer, frame, language.text(ProfileScreensRedesignText.Back))
             // Featured unlock rows size to their descriptions: the first pass gives the build
             // table's edges, the descriptions measured there give each row's line count.
-            val blurbs = remember(model, language) { model.targetUnlocks.map { rebirthUnlockBlurb(it, language) } }
+            val blurbs = remember(model, language) { model.featuredRows().map { rebirthFeaturedBlurb(it, language) } }
             val probe = rebirthLayout(frame, model.minimumTier, model.maximumTier, model.targetTier, scale, backWidth,
                 model.buildRowCount(), model.heirloomRowCount())
             val unlockLines = rebirthUnlockLines(measurer, frame, type, probe.buildRows.firstOrNull(), blurbs)
@@ -133,7 +137,7 @@ internal fun RebirthContent(
                     drawRebirthSection(measurer, numeralMeasurer, frame, type, layout, model, theme, language)
                     drawRebirthLadderUnlocks(frame, layout, model, theme)
                 }) {
-                    RebirthLadderNode(frame, layout, model, language, Offset.Zero)
+                    RebirthLadderNode(frame, layout, model, language, Offset.Zero, onAction)
                     RebirthActionRow(frame, type, layout, model, state, scale, language, Offset.Zero, onAction)
                 }
             }
@@ -158,7 +162,7 @@ internal fun RebirthContent(
                         },
                 ) {
                     val origin = Offset(viewport.left, viewport.top)
-                    if (!layout.heroFixed) RebirthLadderNode(frame, layout, model, language, origin)
+                    if (!layout.heroFixed) RebirthLadderNode(frame, layout, model, language, origin, onAction)
                     val buildHeader = layout.buildHeader
                     val buildDescription = rebirthBuildDescription(model, language)
                     if (buildHeader != null && buildDescription != null) {
@@ -202,16 +206,25 @@ internal fun RebirthContent(
         }
         if (advanceProgress > 0f && advanceProgress < 1f) {
             val tier = kkIntString(model.targetTier)
-            val direction = (if (model.isMaximumTier) model.current else model.next).displayName.localizedContent(language)
-            RebirthAdvanceOverlay(advanceProgress, theme, tier, direction)
+            RebirthAdvanceOverlay(advanceProgress, theme, tier, model.focus.displayName.localizedContent(language))
         }
       }
     }
 }
 
-/** The ladder's semantics node (its tiers read aloud); [origin] is the parent's screen position. */
+/**
+ * The ladder's semantics node (its tiers read aloud) and one focusable, clickable target per tier
+ * cell: a press or keyboard focus shows that tier. [origin] is the parent's screen position.
+ */
 @Composable
-private fun RebirthLadderNode(frame: ProfileFrame, layout: RebirthLayout, model: RebirthRenderModel, language: AppLanguage, origin: Offset) {
+private fun RebirthLadderNode(
+    frame: ProfileFrame,
+    layout: RebirthLayout,
+    model: RebirthRenderModel,
+    language: AppLanguage,
+    origin: Offset,
+    onAction: (RebirthAction) -> Unit,
+) {
     val ladder = layout.ladder
     Box(
         Modifier.offset { IntOffset((ladder.left - origin.x).roundToInt(), (ladder.top - origin.y).roundToInt()) }
@@ -222,7 +235,38 @@ private fun RebirthLadderNode(frame: ProfileFrame, layout: RebirthLayout, model:
                     model.maximumTier, model.current.tier)
             },
     )
+    layout.cells.forEachIndexed { index, cell ->
+        val tier = model.minimumTier + index
+        val description = rebirthTierDescription(model, tier, language)
+        Box(
+            Modifier.offset { IntOffset((cell.left - origin.x).roundToInt(), (cell.top - origin.y).roundToInt()) }
+                .size(frame.dp(cell.width), frame.dp(cell.height))
+                .testTag("profile-rebirth-tier-$tier")
+                .onFocusChanged { if (it.isFocused && model.focus.tier != tier) onAction(RebirthAction.FocusTier(tier)) }
+                .clickable(onClickLabel = description) { onAction(RebirthAction.FocusTier(tier)) }
+                .semantics {
+                    contentDescription = description
+                    selected = model.focus.tier == tier
+                },
+        )
+    }
 }
+
+/** A ladder cell read aloud: "Tier 3, Cleared, Selected". */
+internal fun rebirthTierDescription(model: RebirthRenderModel, tier: Int, language: AppLanguage): String = buildString {
+    append(language.text(ProfileScreensRedesignText.TierTag, tier)).append(", ")
+    append(rebirthStatusLabel(model.status(tier), language))
+    if (tier == model.current.tier) append(", ").append(language.text(ProfileScreensRedesignText.TierSelected))
+}
+
+/** The status word of a tier: cleared, earned or locked. */
+internal fun rebirthStatusLabel(status: RebirthTierStatus, language: AppLanguage): String = language.text(
+    when (status) {
+        RebirthTierStatus.CLEARED -> ProfileScreensRedesignText.TierCleared
+        RebirthTierStatus.EARNED -> ProfileScreensRedesignText.TierEarned
+        RebirthTierStatus.LOCKED -> ProfileScreensRedesignText.TierLocked
+    },
+)
 
 /** Advance (or Confirm/Locked/Max) with its (!) info; [origin] is the parent's screen position. */
 @Composable
@@ -239,14 +283,13 @@ private fun RebirthActionRow(
 ) {
     val action = layout.action
     val label = when (state) {
-        RebirthActionState.READY -> language.text(ProfileScreensRedesignText.Advance)
+        RebirthActionState.READY -> language.text(ProfileScreensRedesignText.Enter)
         RebirthActionState.ARMED -> language.text(ProfileScreensRedesignText.Confirm)
-        RebirthActionState.LOCKED -> language.text(ProfileScreensRedesignText.Locked)
-        RebirthActionState.MAXIMUM -> language.text(ProfileScreensRedesignText.MaxTier)
+        RebirthActionState.LOCKED, RebirthActionState.UNAVAILABLE -> language.text(ProfileScreensRedesignText.Locked)
     }
     ProfileSlabButton(
         label = label,
-        onClick = { onAction(RebirthAction.AdvanceRequested) },
+        onClick = { onAction(RebirthAction.SelectRequested) },
         frame = frame,
         tag = "profile-rebirth-advance",
         size = if (frame.regular) KkButtonSize.LG else KkButtonSize.MD,
@@ -255,11 +298,7 @@ private fun RebirthActionRow(
         locked = state == RebirthActionState.LOCKED,
         armed = state == RebirthActionState.ARMED,
         textScale = scale,
-        contentDescription = if (state == RebirthActionState.READY || state == RebirthActionState.ARMED) {
-            "$label ${language.text(ProfileScreensRedesignText.TierTag, model.next.tier)}"
-        } else {
-            label
-        },
+        contentDescription = "$label ${language.text(ProfileScreensRedesignText.TierTag, model.focus.tier)}",
         modifier = Modifier.offset { IntOffset((action.left - origin.x).roundToInt(), (action.top - origin.y).roundToInt()) }
             .size(frame.dp(action.width), frame.dp(action.height)),
     )
@@ -289,16 +328,18 @@ internal fun RebirthAdvanceOverlay(progress: Float, theme: RebirthTheme, tier: S
 internal fun rebirthStrikeThickness(numeralBoxHeight: Float): Float = numeralBoxHeight * (8f / 52.2f)
 
 /**
- * The Advance (!) text: what the game keeps, preceded by why Advance is unavailable. How Reborn
- * cards and Heirlooms work sits behind the build table's own (!) ([rebirthBuildInfoText]), so
- * each tooltip stays whole at the largest text size.
+ * The select (!) text: what the game keeps, preceded by why the tier cannot start (the tier to clear
+ * first, or where tiers are chosen) or by the two-press rule of a new tier. How Reborn cards and
+ * Heirlooms work sits behind the build table's own (!) ([rebirthBuildInfoText]), so each tooltip stays
+ * whole at the largest text size.
  */
 internal fun rebirthInfoText(model: RebirthRenderModel, state: RebirthActionState, language: AppLanguage): String {
     val keeps = language.text(ProfileScreensRedesignText.RebirthKeeps)
     return when (state) {
-        RebirthActionState.LOCKED -> language.text(ProfileScreensRedesignText.RebirthLocked, model.current.tier) + " " + keeps
-        RebirthActionState.MAXIMUM -> language.text(ProfileScreensRedesignText.RebirthMaximum) + " " + keeps
-        else -> keeps
+        RebirthActionState.LOCKED -> language.text(ProfileScreensRedesignText.RebirthLocked, model.rank) + " " + keeps
+        RebirthActionState.UNAVAILABLE -> language.text(ProfileScreensRedesignText.RebirthUnavailable) + " " + keeps
+        else -> if (model.needsConfirmation) language.text(ProfileScreensRedesignText.RebirthNewTier) + " " + keeps
+        else language.text(ProfileScreensRedesignText.RebirthAnyTier) + " " + keeps
     }
 }
 
@@ -314,7 +355,8 @@ private fun DrawScope.drawRebirthSection(
 ) {
     val k = frame.k
     val accent = theme.accent
-    if (!model.isMaximumTier) {
+    if (model.focus.tier != model.current.tier) {
+        // The selected tier, struck through: the focused one replaces it when it starts.
         val fromLayout = measureKkText(measurer, kkIntString(model.current.tier),
             measurer.typography.wideStyle(type.fromNumeral * k, tabular = true))
         val from = layout.from
@@ -354,22 +396,34 @@ private fun DrawScope.drawRebirthSection(
     val tipY = top + height * 0.545f
     drawPath(NumeralPaths.wedge(0f, tipY + frame.d(3f), tipX, tipY, frame.d(6f)), Kk.Bone)
 
-    val target = if (model.isMaximumTier) model.current else model.next
-    // The direction name clears the measured numeral (board: 250 px for one digit, 400 for two).
+    val target = model.focus
+    // The tier's name clears the measured numeral (board: 250 px for one digit, 400 for two).
     val nameLeft = maxOf(layout.name.left, left + width + dx + frame.d(8f))
     val nameLayout = rebirthDirectiveLayout(measurer, frame, type, target.displayName.localizedContent(language),
         (layout.name.right - nameLeft).coerceAtLeast(frame.d(40f)))
     drawProfileText(nameLayout, nameLeft, layout.name.top, Kk.Bone, "rebirth.directive")
+    val tagTop = layout.name.top + nameLayout.kkBoxHeight + frame.d(12f)
     val tierTag = drawKkTag(measurer, language.text(ProfileScreensRedesignText.TierTag, model.targetTier),
-        Offset(nameLeft, layout.name.top + nameLayout.kkBoxHeight + frame.d(12f)), heightDp = 22f * k,
-        fontSize = type.tag * k, background = accent, foreground = Kk.Ink)
+        Offset(nameLeft, tagTop), heightDp = 22f * k, fontSize = type.tag * k, background = accent, foreground = Kk.Ink)
     ProfileTextProbe.record("rebirth.tier.tag", null, null, tierTag)
+    // The focused tier's status (cleared, earned, locked) and whether it is the selected tier.
+    val statusLabel = rebirthStatusLabel(model.focusStatus, language) +
+        if (model.focus.tier == model.current.tier) ", " + language.text(ProfileScreensRedesignText.TierSelected) else ""
+    val statusColor = when (model.focusStatus) {
+        RebirthTierStatus.CLEARED -> theme.gold
+        RebirthTierStatus.EARNED -> Kk.Bone
+        RebirthTierStatus.LOCKED -> Kk.Mute
+    }
+    val statusTag = drawKkTag(measurer, statusLabel, Offset(tierTag.right + frame.d(8f), tagTop), heightDp = 22f * k,
+        fontSize = type.tag * k, background = statusColor, foreground = Kk.Ink)
+    ProfileTextProbe.record("rebirth.status.tag", null, null, statusTag)
 
     layout.cells.forEachIndexed { index, cell ->
         val tier = model.minimumTier + index
         val tierColor = theme.tierColor(tier)
         // The board's ladder cells render upright (their entrance animation holds `transform: none`).
-        val state = model.tierCell(tier)
+        val status = model.status(tier)
+        val selectedTier = tier == model.current.tier
         val striped = tier >= KkRebirthTiers.MaxTier
         var fg: Color
         when {
@@ -377,18 +431,18 @@ private fun DrawScope.drawRebirthSection(
                 drawKkStripes(cell, Color.White, Color.Black, kind = KkFillKind.BADGE_STRIPES)
                 fg = Color.Black
             }
-            state == RebirthTierCell.CLEARED -> { drawRect(tierColor, cell.topLeft, cell.size); fg = Kk.Ink }
-            state == RebirthTierCell.CURRENT -> { drawRect(Kk.Bone, cell.topLeft, cell.size); fg = Kk.Ink }
-            state == RebirthTierCell.NEXT -> { drawRect(Kk.Ink2, cell.topLeft, cell.size); fg = tierColor }
+            selectedTier -> { drawRect(Kk.Bone, cell.topLeft, cell.size); fg = Kk.Ink }
+            status == RebirthTierStatus.CLEARED -> { drawRect(tierColor, cell.topLeft, cell.size); fg = Kk.Ink }
+            status == RebirthTierStatus.EARNED -> { drawRect(Kk.Ink2, cell.topLeft, cell.size); fg = tierColor }
             else -> { drawRect(Kk.Ink2, cell.topLeft, cell.size); fg = Kk.Mute2 }
         }
         val ring = when {
-            state == RebirthTierCell.NEXT -> tierColor
-            state == RebirthTierCell.CURRENT && striped -> Kk.Bone
-            state == RebirthTierCell.LATER && !striped -> tierColor.copy(alpha = 0.33f)
+            status == RebirthTierStatus.EARNED && !selectedTier -> tierColor
+            selectedTier && striped -> Kk.Bone
+            status == RebirthTierStatus.LOCKED && !striped -> tierColor.copy(alpha = 0.33f)
             else -> Color.Unspecified
         }
-        val ringWidth = if (ring == Color.Unspecified) 0f else frame.d(if (state == RebirthTierCell.LATER) 1.5f else 3f)
+        val ringWidth = if (ring == Color.Unspecified) 0f else frame.d(if (status == RebirthTierStatus.LOCKED) 1.5f else 3f)
         if (ring != Color.Unspecified) {
             val inner = cell.deflate(ringWidth * 0.5f)
             drawRect(ring, inner.topLeft, inner.size, style = kkStroke(ringWidth))
@@ -409,6 +463,13 @@ private fun DrawScope.drawRebirthSection(
         }
         drawProfileText(number, cell.center.x, cell.center.y, fg, "rebirth.ladder.number", tier, align = KkAlign.CENTER,
             valign = KkVAlign.CENTER)
+        if (tier == model.focus.tier) {
+            // The focused tier: an accent bracket under the cell.
+            val bar = frame.d(4f)
+            drawRect(accent, Offset(cell.left, cell.bottom + frame.d(4f)), Size(cell.width, bar))
+            ProfileTextProbe.record("rebirth.ladder.focus", tier, null, Rect(cell.left, cell.bottom + frame.d(4f), cell.right,
+                cell.bottom + frame.d(4f) + bar), accent)
+        }
     }
 }
 
@@ -459,7 +520,7 @@ private fun DrawScope.drawRebirthTable(
     drawLine(Kk.Line2, Offset(header.left, header.bottom), Offset(header.right, header.bottom), frame.density)
 
     val current = model.current
-    val next = if (model.isMaximumTier) model.current else model.next
+    val next = model.focus
     val hostile = rebirthHostileRows(current, next, language)
     hostile.forEachIndexed { index, row ->
         drawRebirthRow(measurer, frame, type, layout.hostileRows[index], column, row, if (row.change == RebirthChange.UP) theme.threat else Kk.Mute)
@@ -511,6 +572,7 @@ internal fun rebirthHostileRows(current: RebirthProfile, next: RebirthProfile, l
         rebirthChange(current.openingEnemyCount.toFloat(), next.openingEnemyCount.toFloat())),
     multiplierRow(language.text(ProfileText.EnemyCap), current.enemyCapMultiplier, next.enemyCapMultiplier, language),
     multiplierRow(language.text(ProfileText.SpawnRate), current.spawnRateMultiplier, next.spawnRateMultiplier, language),
+    multiplierRow(language.text(ProfileText.EliteRate), current.eliteRateMultiplier, next.eliteRateMultiplier, language),
     multiplierRow(language.text(ProfileText.EnemyIntegrity), current.enemyHealthMultiplier, next.enemyHealthMultiplier, language),
     multiplierRow(language.text(ProfileText.EnemySpeed), current.enemySpeedMultiplier, next.enemySpeedMultiplier, language),
     multiplierRow(language.text(ProfileText.IncomingDamage), current.incomingDamageMultiplier, next.incomingDamageMultiplier, language),
@@ -523,8 +585,6 @@ internal fun rebirthHostileRows(current: RebirthProfile, next: RebirthProfile, l
 /** Compensation for the player for the current and next tier. */
 internal fun rebirthCompensationRows(current: RebirthProfile, next: RebirthProfile, language: AppLanguage): List<RebirthRow> = listOf(
     multiplierRow(language.text(ProfileText.PlayerPower), current.playerPowerMultiplier, next.playerPowerMultiplier, language),
-    RebirthRow(language.text(ProfileText.CoreIntegrity), "+${current.playerIntegrityBonus.roundToInt()}",
-        "+${next.playerIntegrityBonus.roundToInt()}", rebirthChange(current.playerIntegrityBonus, next.playerIntegrityBonus)),
     multiplierRow(language.text(ProfileText.KineticMatter), current.matterGainMultiplier, next.matterGainMultiplier, language),
     RebirthRow(language.text(ProfileText.BonusRerolls), "+${current.bonusRerolls}", "+${next.bonusRerolls}",
         rebirthChange(current.bonusRerolls.toFloat(), next.bonusRerolls.toFloat())),

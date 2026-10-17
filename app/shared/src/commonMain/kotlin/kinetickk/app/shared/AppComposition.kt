@@ -125,6 +125,10 @@ internal class AppCompositionOwner(
         relics = uiCatalog.relics,
         items = uiCatalog.items,
         buildPolicy = uiCatalog.build.policy,
+        weapons = uiCatalog.weapons,
+        coreShapes = uiCatalog.coreShapes,
+        matrixNodes = uiCatalog.matrixNodes,
+        enemies = uiCatalog.enemies,
     )
     private val codexFeature: CodexFeature = codexFeature ?: DefaultCodexFeature(
         profilePort = this.profilePort,
