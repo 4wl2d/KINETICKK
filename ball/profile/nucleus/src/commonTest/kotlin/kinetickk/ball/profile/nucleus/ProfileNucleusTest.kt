@@ -353,7 +353,7 @@ class ProfileNucleusTest {
             GameplayProgressUpdate(clearedRebirthLevel = -1) to
                 ProfileGameplayProgressRejection.ClearedLevelBelowMinimum(-1),
             GameplayProgressUpdate(clearedRebirthLevel = 1) to
-                ProfileGameplayProgressRejection.ClearedLevelAboveCurrent(1),
+                ProfileGameplayProgressRejection.ClearedLevelAboveRank(1),
             GameplayProgressUpdate(discoveredItemIds = emptySet(), victoryRelicIds = listOf(RelicId.GLASS_COMET)) to
                 ProfileGameplayProgressRejection.VictoryRelicsWithoutClear,
             GameplayProgressUpdate(
@@ -845,6 +845,30 @@ class ProfileNucleusTest {
         assertEquals(Long.MAX_VALUE, first.nextState.profile.characterAchievements.ricochets)
         assertEquals(Long.MAX_VALUE, first.nextState.profile.characterAchievements.dataPickups)
         assertEquals(Long.MAX_VALUE - 1, state.profile.characterAchievements.eliteKills)
+    }
+
+    @Test
+    fun aLoweredTierSurvivesConstructionAndAClearIsCheckedAgainstTheRank() {
+        val lowered = PlayerProfile(rebirthProgress = RebirthProgress(level = 0, highestCleared = 4))
+        val constructed = constructedProfile(lowered, revision = 7L)
+        assertEquals(lowered.rebirthProgress, constructed.profile.rebirthProgress)
+        // A tier above the rank is not a valid save and resets at construction.
+        val aboveRank = constructedProfile(PlayerProfile(rebirthProgress = RebirthProgress(level = 6, highestCleared = 4)), revision = 7L)
+        assertEquals(RebirthProgress(), aboveRank.profile.rebirthProgress)
+
+        // The run's tier may differ from the live selection: a clear up to the rank is accepted
+        // whatever `level` is now, and the first tier above the rank is rejected.
+        val atRank = assertIs<ProfileDecision.Accepted>(applyGameplayProgress(constructed, GameplayProgressUpdate(clearedRebirthLevel = 5)))
+        assertEquals(RebirthProgress(level = 0, highestCleared = 5), atRank.frame.nextState.profile.rebirthProgress)
+        assertEquals(
+            ProfileRejection.InvalidGameplayProgress(ProfileGameplayProgressRejection.ClearedLevelAboveRank(6)),
+            assertIs<ProfileDecision.Rejected>(applyGameplayProgress(constructed, GameplayProgressUpdate(clearedRebirthLevel = 6))).reason,
+        )
+        // A lower clear never lowers the record.
+        val lower = assertIs<ProfileDecision.Accepted>(
+            applyGameplayProgress(constructed, GameplayProgressUpdate(bankedMatter = 1L, clearedRebirthLevel = 2)),
+        )
+        assertEquals(4, lower.frame.nextState.profile.rebirthProgress.highestCleared)
     }
 
     private fun readyState(

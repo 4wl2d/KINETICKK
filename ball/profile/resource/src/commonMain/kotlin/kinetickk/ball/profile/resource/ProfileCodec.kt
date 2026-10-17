@@ -29,6 +29,7 @@ import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileSnapshot
 import kinetickk.ball.profile.api.ProfileSnapshotRejection
 import kinetickk.ball.profile.api.RebirthProgress
+import kinetickk.ball.profile.api.isWithinRebirthBounds
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kinetickk.foundation.common.localization.AppLanguage
 import kotlinx.serialization.EncodeDefault
@@ -513,8 +514,7 @@ private fun validateProfile(profile: PlayerProfile) {
     rejectUnless(heirlooms.size <= MAX_HEIRLOOM_RELICS, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
     rejectUnless(heirlooms.toSet().size == heirlooms.size, ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE)
     rejectUnless(
-        profile.rebirthProgress.level in ContentBounds.MIN_REBIRTH_LEVEL..ContentBounds.MAX_REBIRTH_LEVEL &&
-            profile.rebirthProgress.highestCleared in -1..profile.rebirthProgress.level,
+        profile.rebirthProgress.isWithinRebirthBounds(ContentBounds.MIN_REBIRTH_LEVEL, ContentBounds.MAX_REBIRTH_LEVEL),
         ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
     )
 }

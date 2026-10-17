@@ -49,6 +49,7 @@ import kinetickk.ball.profile.api.ProfileProgressApplied
 import kinetickk.ball.profile.api.RunBootstrapProjection
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kinetickk.ball.profile.api.rank
+import kinetickk.ball.profile.api.rankWithin
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
@@ -542,8 +543,10 @@ object ProfileNucleus {
             if (level < state.policy.rebirth.minimumLevel) {
                 return ProfileGameplayProgressRejection.ClearedLevelBelowMinimum(level)
             }
-            if (level > state.profile.rebirthProgress.level) {
-                return ProfileGameplayProgressRejection.ClearedLevelAboveCurrent(level)
+            // The run's tier was selected under the rank at its start; the live selection may have
+            // moved since, so the clear is checked against the rank, never against `level`.
+            if (level > state.profile.rebirthProgress.rankWithin(state.policy.rebirth.minimumLevel, state.policy.rebirth.maximumLevel)) {
+                return ProfileGameplayProgressRejection.ClearedLevelAboveRank(level)
             }
         }
         update.victoryRelicIds?.let { relics ->

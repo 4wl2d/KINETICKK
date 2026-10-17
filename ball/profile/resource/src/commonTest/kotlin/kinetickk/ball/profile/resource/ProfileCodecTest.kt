@@ -562,6 +562,26 @@ class ProfileCodecTest {
     }
 
     @Test
+    fun aLoweredRebirthTierRoundTripsByteExactAndATierAboveTheRankIsRejected() {
+        val representative = "\"rebirthProgress\":{\"level\":4,\"highestCleared\":3}"
+        assertTrue(REPRESENTATIVE_GOLDEN.contains(representative))
+        val lowered = REPRESENTATIVE_GOLDEN.replace(representative, "\"rebirthProgress\":{\"level\":0,\"highestCleared\":4}")
+        val decoded = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(lowered)).snapshot
+        assertEquals(RebirthProgress(level = 0, highestCleared = 4), decoded.profile.rebirthProgress)
+        assertEquals(lowered, requireEncoded(decoded))
+        val atRank = REPRESENTATIVE_GOLDEN.replace(representative, "\"rebirthProgress\":{\"level\":5,\"highestCleared\":4}")
+        assertEquals(atRank, requireEncoded(assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(atRank)).snapshot))
+
+        val aboveRank = REPRESENTATIVE_GOLDEN.replace(representative, "\"rebirthProgress\":{\"level\":6,\"highestCleared\":4}")
+        assertEquals(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE, decodeRejection(aboveRank))
+        val clearedPastMaximum = REPRESENTATIVE_GOLDEN.replace(representative, "\"rebirthProgress\":{\"level\":10,\"highestCleared\":11}")
+        assertEquals(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE, decodeRejection(clearedPastMaximum))
+        assertIs<ProfileEncodeResult.Rejected>(
+            ProfileCodec.encode(decoded.copy(profile = decoded.profile.copy(rebirthProgress = RebirthProgress(level = 6, highestCleared = 4)))),
+        )
+    }
+
+    @Test
     fun byteLimitAndUtf8AreCheckedBeforeJsonDecode() {
         assertEquals(
             ProfileSnapshotRejection.MALFORMED_JSON,

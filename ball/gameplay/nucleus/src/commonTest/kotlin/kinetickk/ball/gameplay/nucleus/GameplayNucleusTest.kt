@@ -101,6 +101,24 @@ class GameplayNucleusTest {
     }
 
     @Test
+    fun aPlayerWhoSelectsALowerTierThanTheirHighestClearStartsARunAtThatTier() {
+        val valid = validStartInputs()
+        val lowered = valid.copy(profile = valid.profile.copy(rebirthProgress = RebirthProgress(level = 0, highestCleared = 4)))
+        assertNull(GameplayNucleus.validateStartInputs(lowered))
+        val frame = accepted(
+            GameplayNucleus.decide(initial(4), GameplayNucleusPulse.StartRun,
+                GameplayContext(start = GameplayStartContext.Ready(lowered))),
+        )
+        assertEquals(GameplayRunPhase.RUNNING, frame.nextState.phase)
+        assertEquals(0, frame.nextState.engine!!.model.rebirthLevel)
+        // The rank (one above the highest clear) is the highest selectable tier; above it is rejected.
+        val atRank = valid.copy(profile = valid.profile.copy(rebirthProgress = RebirthProgress(level = 5, highestCleared = 4)))
+        assertNull(GameplayNucleus.validateStartInputs(atRank))
+        val aboveRank = valid.copy(profile = valid.profile.copy(rebirthProgress = RebirthProgress(level = 6, highestCleared = 4)))
+        assertEquals(GameplayConfigurationRejection.REBIRTH_LEVEL_OUT_OF_RANGE, GameplayNucleus.validateStartInputs(aboveRank))
+    }
+
+    @Test
     fun startRequiresAlreadyValidatedTrustedInputs() {
         val state = initial(3)
 
