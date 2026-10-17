@@ -19,8 +19,8 @@ internal enum class ProfileScreensRedesignText(
     PageStep("Page {0} of {1}", "Страница {0} из {1}"),
 
     ArmoryInfo(
-        "Unlock a weapon with Matter to start runs with it. Every Core can use every weapon.",
-        "Откройте оружие за материю, чтобы начинать с ним забеги. Любое ядро может использовать любое оружие.",
+        "Unlock a weapon with Matter to start runs with it and to meet it in run offers. Every character can use every weapon; its signature character, a Relic with its key and points in its tags make it stronger.",
+        "Откройте оружие за материю, чтобы начинать с ним забеги и встречать его в предложениях забега. Любой персонаж может использовать любое оружие; его усиливают фирменный персонаж, реликвия с его ключом и очки его тегов.",
     ),
     WeaponsList("Weapons", "Оружие"),
     Starter("Starter", "Стартовое"),

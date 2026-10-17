@@ -334,6 +334,28 @@ none, offers Amplify alone. The no-POI runs own the original
 twelve weapons, so their recalibration offers match the earlier ones; the seeded
 trace and the probe results are unchanged.
 
+The weapon screens read that contract. The Armory lays all 24 weapons on a
+scrolling grid that brings the inspected weapon into view when it opens and
+whenever the selection moves, keeps rows at least 84 px tall on narrow phones,
+tints each icon with its element, names a Rebirth-gated weapon's rank on its
+tile and marks the selected character's two signature weapons with its form.
+Its detail panel adds the three mastery forms by level, a synergy block read
+from content and the Profile alone (the signature character and its twist, the
+heirloom candidates whose keys harmonize, the tag resonance) and the typed facts
+(family, element, Relic key, scaling, cadence); the board frame pins the action
+under the scrolling sheet. A locked unlock stays pressable and names why (Matter
+short or Rebirth rank) in a polite live region, as does a purchase the Profile
+refuses; neither reaches the Profile unless the screen believes it can succeed.
+The Hangar's signature row lists the shown character's two weapons with their
+owned, starter, Rebirth or price state and any heirloom harmony. Codex weapons
+are always named, an unowned one keeping the locked look, with their facts, cost
+and Rebirth rank; the detail reads the run's character, bound Relics and tag
+points, or outside a run the next character and the heirloom candidates. Weapon
+offer cards and Totem weapon rows name the family, element and tags and mark the
+run character's signature weapon. The synergy figures these screens quote
+(+20 % for the signature and for harmony, +5 % per tag point up to +50 %) are
+presentation copy; Gameplay owns the arithmetic.
+
 The compact exit workflow removes the old causal-depth assertion that failed
 when a busy Profile refused progress before acceptance. An injected
 persistence callback reproduced that failure on the original source snapshot;
