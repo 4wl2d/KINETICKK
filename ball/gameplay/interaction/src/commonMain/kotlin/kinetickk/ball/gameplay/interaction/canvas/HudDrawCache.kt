@@ -445,8 +445,6 @@ internal fun relicFrameSides(aspect: kinetickk.ball.content.api.RelicAspect): In
     kinetickk.ball.content.api.RelicAspect.ENTROPY -> 7
     kinetickk.ball.content.api.RelicAspect.SONIC -> 9
     kinetickk.ball.content.api.RelicAspect.VOID -> 12
-    kinetickk.ball.content.api.RelicAspect.SONIC -> 9
-    kinetickk.ball.content.api.RelicAspect.VOID -> 12
     kinetickk.ball.content.api.RelicAspect.SOVEREIGN -> 10
 }
 

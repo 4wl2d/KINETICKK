@@ -716,6 +716,38 @@ private fun DrawScope.drawBreakBurst(element: Int, center: Offset, reach: Float,
             drawCircle(color, reach * (0.12f + 0.12f * out), center, alpha = fade * 0.22f)
             drawCircle(color, reach * (0.04f + 0.07f * out), center, alpha = fade * 0.95f)
         }
+        // Shatter: three sound rings race outward one after another, split by the gaps of a
+        // shockwave, and short throw strokes fly off the outermost.
+        5 -> {
+            for (ring in 0 until 3) {
+                val lag = ring * 0.16f
+                val t = ((progress - lag) / (1f - lag)).coerceIn(0f, 1f)
+                if (t <= 0f) continue
+                val radius = reach * KkEase.Out.transform(t)
+                val alpha = (1f - t) * bright
+                for (arc in 0 until 4) {
+                    drawArc(color, arc * 90f + 12f + ring * 30f, 66f, false, Offset(center.x - radius, center.y - radius),
+                        Size(radius * 2f, radius * 2f), alpha = alpha, style = kkStroke(3f - ring * 0.6f))
+                }
+            }
+            val outer = reach * out
+            for (stroke in 0 until 8) {
+                val a = stroke * TAU / 8f + 0.2f
+                drawLine(color.copy(alpha = fade * bright), polar(center, outer * 0.86f, a), polar(center, outer * 1.12f, a), 2f)
+            }
+        }
+        // Unmake: a dashed hollow ring closes on the target while its core goes dark, then the
+        // remembered damage punches back out as a thin bright ring.
+        6 -> {
+            val closing = reach * (1f - 0.7f * out)
+            drawCircle(color, closing, center, alpha = fade * bright, style = WorldStrokes.dashedThin)
+            drawCircle(Kk.Ink, reach * 0.22f * out, center, alpha = fade * 0.7f)
+            drawCircle(color, reach * 0.22f * out, center, alpha = fade * bright, style = kkStroke(2f))
+            if (progress > 0.45f) {
+                val t = (progress - 0.45f) / 0.55f
+                drawCircle(color, reach * (0.3f + 0.7f * KkEase.Out.transform(t)), center, alpha = (1f - t) * bright, style = kkStroke(1.5f))
+            }
+        }
         // Rupture: a broken ring tears open and pits scatter.
         else -> {
             val radius = reach * out

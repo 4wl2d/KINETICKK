@@ -793,7 +793,7 @@ private fun DrawScope.drawPauseTags(
 }
 
 /**
- * Five element cells across [width] from [top]: the glyph (ringed on the dominant element), then
+ * One cell per element across [width] from [top]: the glyph (ringed on the dominant element), then
  * (with [names]) the element's name under it across the cell, and a meter of one pip per affinity
  * point notched at the affinity tiers. The names share one size, the size the longest of them
  * needs, and sit clear of the ring.

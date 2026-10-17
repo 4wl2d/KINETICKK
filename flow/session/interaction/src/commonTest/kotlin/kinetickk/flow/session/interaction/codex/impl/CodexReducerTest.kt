@@ -3,6 +3,7 @@
 
 package kinetickk.flow.session.interaction.codex.impl
 
+import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.*
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.profile.api.*
@@ -181,6 +182,19 @@ class CodexReducerTest {
         val catalog = codexTestCatalog()
         val entries = codexReactionEntries(CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items), catalog)
         assertEquals(cells.map { it.key }, entries.map { it.key })
+    }
+
+    @Test fun reactionMatrixFitsOneColumnPerElementAcrossPhoneAndDesktopWidths() {
+        assertEquals(StatusElement.entries.size, CODEX_MATRIX_COLUMNS)
+        for (width in listOf(320, 360, 412, 600, 900, 1280)) {
+            for (height in listOf(480, 720, 1080)) {
+                val cell = codexMatrixCell(width.dp, height.dp)
+                assertTrue(cell.value > 0f)
+                assertTrue(codexMatrixWidth(cell).value <= width + 0.01f, "the matrix fits $width dp (cell ${cell.value} dp)")
+            }
+        }
+        // A wide, tall window still caps the cells.
+        assertEquals(132f, codexMatrixCell(4_000.dp, 4_000.dp).value)
     }
 
     @Test fun aResidueFeedsEveryReactionThatTakesItsElement() {

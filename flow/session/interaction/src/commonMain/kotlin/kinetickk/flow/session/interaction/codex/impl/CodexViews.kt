@@ -376,10 +376,31 @@ internal fun CodexCostBlock(build: GameplayBuildSummaryProjection, catalog: UiCa
     }
 }
 
+/** Cells across (and rows down) the reaction matrix: one per status element. */
+internal val CODEX_MATRIX_COLUMNS: Int = StatusElement.entries.size
+
+/** Space between the reaction matrix's cells and headers. */
+internal val CODEX_MATRIX_GAP: Dp = 6.dp
+
 /**
- * The reaction matrix: element glyph headers over the columns and beside the rows, the five Breaks
- * on the diagonal and the ten reactions below it. A selected residue outlines the reactions it can
- * feed and fades the rest.
+ * The reaction matrix's cell edge for [width] and [viewportHeight]: [CODEX_MATRIX_COLUMNS] cells and a
+ * header column 0.6 cells wide across, as many rows and a header row down. The width always fits; the
+ * height fit never shrinks a cell below 44 dp (the list scrolls instead) and no cell grows past 132 dp.
+ */
+internal fun codexMatrixCell(width: Dp, viewportHeight: Dp): Dp {
+    val columns = CODEX_MATRIX_COLUMNS
+    val byWidth = (width - CODEX_MATRIX_GAP * columns) / (columns + 0.6f)
+    val byHeight = (viewportHeight - 40.dp - CODEX_MATRIX_GAP * columns) / (columns + 0.6f)
+    return min(min(byWidth, max(byHeight.value, 44f).dp), 132.dp)
+}
+
+/** Width of the reaction matrix with [cell]-sized cells: the header column, then every cell and its gap. */
+internal fun codexMatrixWidth(cell: Dp): Dp = cell * 0.6f + (cell + CODEX_MATRIX_GAP) * CODEX_MATRIX_COLUMNS
+
+/**
+ * The reaction matrix: element glyph headers over the columns and beside the rows, one Break per
+ * element on the diagonal and every reaction below it. A selected residue outlines the reactions it
+ * can feed and fades the rest.
  */
 @Composable
 internal fun CodexReactionMatrix(
@@ -400,14 +421,11 @@ internal fun CodexReactionMatrix(
     val feeds = residue?.let(::codexResidueFeeds).orEmpty()
     BoxWithConstraints(Modifier.fillMaxWidth().testTag("codex-matrix"), contentAlignment = Alignment.TopCenter) {
         val available = maxWidth
-        val gap = 6.dp
-        // Five cells and a narrower header column across, five rows and a header row down.
-        val byWidth = (maxWidth - gap * 5) / 5.6f
-        val byHeight = (viewportHeight - 40.dp - gap * 5) / 5.6f
-        val cell = min(min(byWidth, max(byHeight.value, 44f).dp), 132.dp)
+        val gap = CODEX_MATRIX_GAP
+        val cell = codexMatrixCell(maxWidth, viewportHeight)
         val header = cell * 0.6f
         val labels = cell >= 76.dp
-        val matrixWidth = header + (cell + gap) * 5
+        val matrixWidth = codexMatrixWidth(cell)
         // Cells too small for names list them beside the matrix where there is room, else below it.
         val sideLegend = !labels && available - matrixWidth >= 240.dp
         val matrix: @Composable () -> Unit = {

@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.DirectedReward
+import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RewardFocus
@@ -433,6 +434,75 @@ class SonicVoidElementTest {
             assertEquals(relic, state.choices.first().relicId, "$focus leads with its aspect Relic")
         }
     }
+
+    @Test
+    fun everySonicAndVoidItemDoesWhatItsCardSays() {
+        fun fresh(item: String) = buildTestState().apply { own(item) }
+
+        // Clauses on a struck enemy apply their element to it, every-Nth ones on the Nth event only.
+        for ((item, trigger, element, stacks, every) in listOf(
+            ItemCase("Tuning Spike", EffectTrigger.IMPACT, StatusElement.SONIC, 2, 1),
+            ItemCase("Subwoofer Rounds", EffectTrigger.WEAPON_HIT, StatusElement.SONIC, 1, 2),
+            ItemCase("Hollow Point", EffectTrigger.CRIT, StatusElement.VOID, 2, 1),
+            ItemCase("Null Rounds", EffectTrigger.WEAPON_HIT, StatusElement.VOID, 1, 3),
+        )) {
+            val state = fresh(item)
+            val target = state.dummy()
+            repeat(every - 1) { state.fireClauses(trigger, target, hit = 20f, source = HitSource.WEAPON) }
+            assertEquals(0, target.stacksOf(element), "$item waits for event $every")
+            state.fireClauses(trigger, target, hit = 20f, source = HitSource.WEAPON)
+            assertEquals(stacks, target.stacksOf(element), "$item applies $stacks $element")
+        }
+
+        // Clauses the Core sets off spread their element around the Core.
+        for ((item, trigger, element, stacks) in listOf(
+            ItemCase("Shockwave Hull", EffectTrigger.HURT, StatusElement.SONIC, 2, 1),
+            ItemCase("Sonic Wake", EffectTrigger.DASH, StatusElement.SONIC, 2, 1),
+            ItemCase("Event Veil", EffectTrigger.SHIELD_BREAK, StatusElement.VOID, 3, 1),
+        )) {
+            val state = fresh(item)
+            val near = state.dummy(x = state.coreX + 120f, y = state.coreY)
+            val far = state.dummy(x = state.coreX + 900f, y = state.coreY)
+            state.fireClauses(trigger)
+            assertEquals(stacks, near.stacksOf(element), "$item reaches an enemy beside the Core")
+            assertEquals(0, far.stacksOf(element), "$item stays within its radius")
+            if (item == "Shockwave Hull") assertTrue(near.vx > 0f, "Shockwave Hull pushes enemies away from the Core")
+        }
+
+        // Echo Hammer answers Shatter, and only Shatter, with a burst around the broken enemy.
+        val hammer = fresh("Echo Hammer")
+        val broken = hammer.dummy()
+        val bystander = hammer.dummy(x = broken.x + 90f)
+        hammer.fireClauses(EffectTrigger.BREAK, broken, element = StatusElement.THERMAL)
+        assertEquals(bystander.maxHp, bystander.hp, "Echo Hammer ignores other Breaks")
+        hammer.fireClauses(EffectTrigger.BREAK, broken, element = StatusElement.SONIC)
+        assertTrue(bystander.hp < bystander.maxHp, "Echo Hammer rings a Shatter out again")
+
+        // Quiet Engine spreads Hollow from a fallen Hollow enemy, never from a clean kill.
+        val engine = fresh("Quiet Engine")
+        val clean = engine.dummy()
+        val witness = engine.dummy(x = clean.x + 80f)
+        engine.fireClauses(EffectTrigger.KILL, clean)
+        assertEquals(0, witness.stacksOf(StatusElement.VOID))
+        val hollow = engine.dummy(x = 1_400f).apply { status[StatusCell.STACKS + StatusElement.VOID.ordinal] = 1f }
+        val neighbor = engine.dummy(x = hollow.x + 80f)
+        engine.fireClauses(EffectTrigger.KILL, hollow)
+        assertEquals(3, neighbor.stacksOf(StatusElement.VOID), "Quiet Engine spreads three Hollow")
+
+        // Abyssal Lens: +15 % damage against an enemy with at least three Hollow.
+        val lens = fresh("Abyssal Lens")
+        val plain = lens.dummy()
+        val deep = lens.dummy(x = 900f).apply { status[StatusCell.STACKS + StatusElement.VOID.ordinal] = 3f }
+        val shallow = lens.dummy(x = 1_400f).apply { status[StatusCell.STACKS + StatusElement.VOID.ordinal] = 2f }
+        lens.dealHit(plain, 100f, HitSource.WEAPON, canCrit = false)
+        lens.dealHit(deep, 100f, HitSource.WEAPON, canCrit = false)
+        lens.dealHit(shallow, 100f, HitSource.WEAPON, canCrit = false)
+        val base = plain.maxHp - plain.hp
+        assertEquals(base * 1.15f, deep.maxHp - deep.hp, base * 0.001f)
+        assertEquals(base, shallow.maxHp - shallow.hp, base * 0.001f)
+    }
+
+    private data class ItemCase(val item: String, val trigger: EffectTrigger, val element: StatusElement, val stacks: Int, val every: Int)
 
     private fun Enemy.resonant(): Enemy = apply { status[StatusCell.STACKS + StatusElement.SONIC.ordinal] = 1f }
 }

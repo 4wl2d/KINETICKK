@@ -9,6 +9,7 @@ import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.foundation.collections.immutableListOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /** Break and reaction flashes, first-discovery stamps, the run's reaction record and toast priority. */
@@ -37,6 +38,24 @@ class ElementFxReducerTest {
         val apart = InteractionFxReducer(seed = 3)
         apart.apply(listOf(VisualFxCue.StatusBroken(0f, 0f, 2), VisualFxCue.StatusBroken(81f, 0f, 2)))
         assertEquals(2, apart.snapshot().elementBursts.size)
+    }
+
+    @Test
+    fun everyElementsFirstBreakFlashesInItsOwnReachAndLeavesItsNote() {
+        assertEquals(StatusElement.entries.size, BreakBurstRadii.size, "one Break reach per element")
+        StatusElement.entries.forEach { element ->
+            val reducer = InteractionFxReducer(seed = 12)
+            reducer.apply(listOf(VisualFxCue.StatusBroken(0f, 0f, element.ordinal)))
+            val snapshot = reducer.snapshot()
+            val burst = assertNotNull(snapshot.elementBursts.singleOrNull(), "$element Break flashes")
+            assertEquals(element.ordinal, burst.primary)
+            assertTrue(burst.secondary < 0, "$element flashes as a Break, not a reaction")
+            assertEquals(BreakBurstRadii[element.ordinal], burst.radius)
+            assertEquals(listOf("+ " + element.breakLabel), snapshot.buildNotifications.single().details, "$element first Break note")
+        }
+        val shatter = InteractionFxReducer(seed = 12)
+        shatter.apply(listOf(VisualFxCue.StatusBroken(0f, 0f, StatusElement.SONIC.ordinal)))
+        assertEquals(160f, shatter.snapshot().elementBursts.single().radius, "Shatter's flash spans its shockwave")
     }
 
     @Test

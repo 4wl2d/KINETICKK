@@ -94,7 +94,7 @@ data class EnemyProjection(
     val previousX: Float,
     val previousY: Float,
     val dead: Boolean,
-    /** Five 4-bit stack counts in StatusElement order, then frozen, brittle, embrittled and primed flags. */
+    /** Seven 4-bit stack counts in StatusElement order (bits 0..27), then frozen, brittle, embrittled and primed flags. */
     val statusBits: Int = 0,
     /** Aspect, weakness, frame and Architect shift state; decode with [EnemyAffinity]. */
     val affinityBits: Int = 0,
