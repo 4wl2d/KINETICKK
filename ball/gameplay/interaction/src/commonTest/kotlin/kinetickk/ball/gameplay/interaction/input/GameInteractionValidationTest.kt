@@ -49,6 +49,19 @@ class GameInteractionValidationTest {
         assertEquals(InteractionIngressLimits.MIN_VIEWPORT_DIMENSION_PX, tiny.width)
         assertOutOfRange(validator.pointerMoved(1f, 1f, density = 0f), InteractionInputField.DENSITY)
         assertNonFinite(validator.pointerMoved(1f, 1f, density = Float.NaN), InteractionInputField.DENSITY)
+        // The pointer density shares the viewport bounds: both ends accepted, the next values rejected.
+        val minimum = InteractionIngressLimits.MIN_DENSITY
+        val maximum = InteractionIngressLimits.MAX_DENSITY
+        assertEquals(4f / minimum, valid<GameplayInteractionPulse.PointerMoved>(validator.pointerMoved(4f, 4f, density = minimum)).x)
+        assertEquals(4f / maximum, valid<GameplayInteractionPulse.PointerMoved>(validator.pointerMoved(4f, 4f, density = maximum)).x)
+        assertOutOfRange(
+            validator.pointerMoved(4f, 4f, density = Float.fromBits(minimum.toBits() - 1)),
+            InteractionInputField.DENSITY,
+        )
+        assertOutOfRange(
+            validator.pointerMoved(4f, 4f, density = Float.fromBits(maximum.toBits() + 1)),
+            InteractionInputField.DENSITY,
+        )
     }
 
     @Test
