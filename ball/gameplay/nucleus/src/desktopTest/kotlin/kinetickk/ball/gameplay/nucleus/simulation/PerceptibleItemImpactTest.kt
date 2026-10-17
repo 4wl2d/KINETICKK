@@ -11,9 +11,11 @@ import kinetickk.ball.content.api.EffectCondition
 import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.ElementPick
 import kinetickk.ball.content.api.EnemyType
+import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRule
+import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.Enemy
@@ -24,6 +26,8 @@ import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
+import kinetickk.foundation.collections.immutableListOf
+import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -35,8 +39,10 @@ import kotlin.test.assertTrue
 /**
  * Every item matters at one stack: in scripted encounters chosen by its triggers, conditions, stats and
  * rules (fixed seeds, 40 s each), owning one copy moves at least one measured output (damage dealt, damage
- * taken, integrity left, kills, Data, Matter, Overdrive time, Dashes or offer quality) by at least 5 % in
- * the item's favor, against the same encounter without it. Both runs hold the same supporting items (the
+ * taken, integrity left, time survived, kills, Data, Matter, Overdrive time, Dashes or offer quality) by at
+ * least 5 % in the item's favor, against the same encounter without it. A Core that falls keeps no integrity
+ * and still takes the scripted hits it would have met, so falling sooner or by less never reads as a gain;
+ * [aLiabilityOrAnInertStatAloneScoresNoGain] holds the measure to that. Both runs hold the same supporting items (the
  * sources of the item's elements, a crit source for crit items, a shield for shield items) at full stacks.
  * Encounters run in dp at simulation speed 1, so each is reproducible; [JUSTIFIED_EXCEPTIONS] would list an
  * item no encounter can show, with the reason, and is empty.
@@ -45,6 +51,28 @@ import kotlin.test.assertTrue
  * obstacle field.
  */
 class PerceptibleItemImpactTest {
+    @Test
+    fun aLiabilityOrAnInertStatAloneScoresNoGain() {
+        val ledger = canonicalGameplayContent.items.single { it.name == "Gambler's Ledger" }
+        val controls = listOf(
+            "Gambler's Ledger's liability alone" to ledger.copy(rules = immutableListOf(), risk = false),
+            // MAX_INTEGRITY +0.001: a stat no encounter can feel.
+            "an inert stat" to ledger.copy(stats = immutableListOf(StatDelta(ItemEffect.MAX_INTEGRITY, 0.001f)), rules = immutableListOf(),
+                risk = false),
+        )
+        for ((label, control) in controls) {
+            val content = canonicalGameplayContent.copy(items = canonicalGameplayContent.items.map { item ->
+                if (item.id == control.id) control else item
+            }.toImmutableList())
+            // Every combat encounter: an owned card only leaves the offer pool, which says nothing about the measure.
+            for (arena in Arena.entries.filter { it != Arena.OFFERS }) {
+                val setup = Setup(arena, emptyList(), elite = false)
+                val (output, share) = bestGain(arena, run(setup, null, content), run(setup, control, content))
+                assertTrue(share < MIN_GAIN, "$label scores $arena $output ${"%+.1f".format(share * 100f)} %")
+            }
+        }
+    }
+
     @Test
     fun everyItemAtOneStackMovesAMeasuredOutputByAtLeastFivePercent() {
         val baselines = HashMap<Setup, Outcome>()
@@ -148,7 +176,9 @@ class PerceptibleItemImpactTest {
     private enum class Motion { ORBIT, PASS, HOVER, CLOSE_HOVER, INNER_HOVER }
 
     /** The measured outputs; each arena reads the ones it is built to show. */
-    private enum class Output { DAMAGE, TAKEN, INTEGRITY, KILLS, DATA, MATTER, DATA_PER_KILL, MATTER_PER_KILL, OVERDRIVE, DASHES, OFFERS }
+    private enum class Output {
+        DAMAGE, TAKEN, INTEGRITY, SURVIVAL, KILLS, DATA, MATTER, DATA_PER_KILL, MATTER_PER_KILL, OVERDRIVE, DASHES, OFFERS,
+    }
 
     private fun Arena.outputs(): List<Output> = when (this) {
         Arena.IMPACT, Arena.FAST, Arena.HEAT -> listOf(Output.DAMAGE, Output.DASHES)
@@ -156,10 +186,10 @@ class PerceptibleItemImpactTest {
         Arena.CROWD, Arena.SPARSE, Arena.LEVELS, Arena.CULL, Arena.COMBO -> listOf(
             Output.DAMAGE, Output.KILLS, Output.DATA, Output.MATTER, Output.DATA_PER_KILL, Output.MATTER_PER_KILL, Output.OVERDRIVE,
         )
-        Arena.DEFENSE, Arena.BRACE -> listOf(Output.DAMAGE, Output.TAKEN, Output.INTEGRITY)
+        Arena.DEFENSE, Arena.BRACE -> listOf(Output.DAMAGE, Output.TAKEN, Output.INTEGRITY, Output.SURVIVAL)
         Arena.SIEGE -> listOf(Output.DAMAGE, Output.TAKEN)
         Arena.OBSTACLE -> listOf(Output.DAMAGE, Output.DASHES, Output.OVERDRIVE, Output.DATA)
-        Arena.SHELTER -> listOf(Output.DAMAGE, Output.TAKEN, Output.INTEGRITY, Output.OVERDRIVE)
+        Arena.SHELTER -> listOf(Output.DAMAGE, Output.TAKEN, Output.INTEGRITY, Output.SURVIVAL, Output.OVERDRIVE)
         Arena.REACH -> listOf(Output.DATA)
         Arena.OFFERS -> listOf(Output.OFFERS)
     }
@@ -169,6 +199,8 @@ class PerceptibleItemImpactTest {
         val damage: Double,
         val taken: Double,
         val integrity: Float,
+        /** Seconds the Core stayed in the fight. */
+        val survival: Float,
         val kills: Int,
         val data: Long,
         val matter: Long,
@@ -180,6 +212,7 @@ class PerceptibleItemImpactTest {
             Output.DAMAGE -> damage
             Output.TAKEN -> -taken
             Output.INTEGRITY -> integrity.toDouble()
+            Output.SURVIVAL -> survival.toDouble()
             Output.KILLS -> kills.toDouble()
             Output.DATA -> data.toDouble()
             Output.MATTER -> matter.toDouble()
@@ -199,16 +232,16 @@ class PerceptibleItemImpactTest {
     }.maxBy { it.second }
 
     /** Fights are flown [VARIANTS] times from different seeds and orbit phases and summed, which damps the chaos. */
-    private fun run(setup: Setup, item: ItemDefinition?): Outcome =
-        if (setup.arena == Arena.OFFERS) offers(setup, item)
-        else (0 until VARIANTS).map { variant -> fight(setup, item, variant) }.reduce { a, b ->
-            Outcome(a.damage + b.damage, a.taken + b.taken, a.integrity + b.integrity, a.kills + b.kills, a.data + b.data,
-                a.matter + b.matter, a.overdrive + b.overdrive, a.dashes + b.dashes, a.offers + b.offers)
+    private fun run(setup: Setup, item: ItemDefinition?, content: GameplayContentSnapshot = canonicalGameplayContent): Outcome =
+        if (setup.arena == Arena.OFFERS) offers(setup, item, content)
+        else (0 until VARIANTS).map { variant -> fight(setup, item, variant, content) }.reduce { a, b ->
+            Outcome(a.damage + b.damage, a.taken + b.taken, a.integrity + b.integrity, a.survival + b.survival, a.kills + b.kills,
+                a.data + b.data, a.matter + b.matter, a.overdrive + b.overdrive, a.dashes + b.dashes, a.offers + b.offers)
         }
 
     /** Thirty consecutive item offers at Reborn 10 with every item unlocked: the summed rarity of the cards. */
-    private fun offers(setup: Setup, item: ItemDefinition?): Outcome {
-        val game = MutableGameState(canonicalGameplayContent, seed = SEED, initialMatter = 0, initialRebirthLevel = 10).apply {
+    private fun offers(setup: Setup, item: ItemDefinition?, content: GameplayContentSnapshot): Outcome {
+        val game = MutableGameState(content, seed = SEED, initialMatter = 0, initialRebirthLevel = 10).apply {
             startRun()
             lifetimeMatter = 4_000L
             level = 20
@@ -218,15 +251,15 @@ class PerceptibleItemImpactTest {
         var ranks = 0
         repeat(OFFER_COUNT) {
             game.buildItemChoices()
-            ranks += game.choices.sumOf { choice -> canonicalGameplayContent.items[requireNotNull(choice.itemId)].rarity.rank }
+            ranks += game.choices.sumOf { choice -> content.items[requireNotNull(choice.itemId)].rarity.rank }
         }
-        return Outcome(0.0, 0.0, 0f, 0, 0L, 0L, 0f, 0, ranks.toFloat() / OFFER_COUNT + game.rerollsRemaining)
+        return Outcome(0.0, 0.0, 0f, 0f, 0, 0L, 0L, 0f, 0, ranks.toFloat() / OFFER_COUNT + game.rerollsRemaining)
     }
 
-    private fun fight(setup: Setup, item: ItemDefinition?, variant: Int): Outcome {
+    private fun fight(setup: Setup, item: ItemDefinition?, variant: Int, content: GameplayContentSnapshot): Outcome {
         val arena = setup.arena
         val phase = variant * 0.7f
-        val game = MutableGameState(canonicalGameplayContent, seed = SEED + variant, initialMatter = 0).apply {
+        val game = MutableGameState(content, seed = SEED + variant, initialMatter = 0).apply {
             coreShape = CoreShape.ORB
             startingWeapon = arena.weapon ?: WeaponId.FLUX_WAKE
             resize(1_280f, 720f)
@@ -266,9 +299,14 @@ class PerceptibleItemImpactTest {
         var dashes = 0
         var overdrive = 0f
         val frames = (SECONDS * FPS).toInt()
+        // The frame the Core fell on, or [frames] while it stands.
+        var fellAt = frames
         for (frame in 0 until frames) {
             if (game.phase == GamePhase.CHOICE) dismissChoice(game)
-            if (game.phase != GamePhase.RUNNING) break
+            if (game.phase != GamePhase.RUNNING) {
+                fellAt = frame
+                break
+            }
             val t = frame / FPS + phase
             // Anchored, idle targets that come back the moment they fall.
             for (index in slots.indices) {
@@ -347,8 +385,6 @@ class PerceptibleItemImpactTest {
                 val angle = frame * 2.399f
                 game.addPickup(Pickup(PickupType.DATA, game.coreX + cos(angle) * reach, game.coreY + sin(angle) * reach))
             }
-            // Four hits 0.4 s apart every 6 s: shields recharge between the bursts.
-            val burstFrame = frame % (6 * FPS).toInt()
             if (arena.pressure && frame % 30 == 15) {
                 var pressed = 0f
                 for (enemy in game.enemies) {
@@ -357,7 +393,7 @@ class PerceptibleItemImpactTest {
                 }
                 if (pressed > 0f) game.takeDamage(pressed)
             }
-            if (arena.hits > 0f && burstFrame >= 90 && burstFrame <= 90 + 72 && (burstFrame - 90) % 24 == 0) game.takeDamage(arena.hits)
+            if (arena.hits > 0f && burstHit(frame)) game.takeDamage(arena.hits)
             if (arena.forcedOverdrive && frame % (10 * FPS).toInt() == 60 && game.overdriveTime <= 0f) game.overdriveCharge = 100f
             if (arena.obstacles && frame % 36 == 0) {
                 game.fireClauses(EffectTrigger.RICOCHET)
@@ -372,9 +408,18 @@ class PerceptibleItemImpactTest {
             game.takeProgressUpdate()
             if (game.overdriveTime > 0f) overdrive += 1f / FPS
         }
-        val integrity = if (arena.defended) game.hp + game.shield else 0f
-        val taken = if (arena.defended) game.damageTaken else 0.0
-        return Outcome(game.damageDealt, taken, integrity, game.kills, game.dataCollected, game.runMatter, overdrive, dashes, 0f)
+        // A fallen Core keeps nothing and still meets every scripted hit it did not live to take.
+        val integrity = if (arena.defended) max(0f, game.hp + game.shield) else 0f
+        var taken = if (arena.defended) game.damageTaken else 0.0
+        if (arena.hits > 0f) for (frame in fellAt until frames) if (burstHit(frame)) taken += arena.hits
+        return Outcome(game.damageDealt, taken, integrity, fellAt / FPS, game.kills, game.dataCollected, game.runMatter, overdrive,
+            dashes, 0f)
+    }
+
+    /** Four hits 0.4 s apart every 6 s: shields recharge between the bursts. */
+    private fun burstHit(frame: Int): Boolean {
+        val burstFrame = frame % (6 * FPS).toInt()
+        return burstFrame in 90..90 + 72 && (burstFrame - 90) % 24 == 0
     }
 
     /** Where the Core starts and the circle it flies: through the ring, or slowly around a cluster. */
@@ -626,7 +671,8 @@ class PerceptibleItemImpactTest {
 
         /** The smallest baseline a gain is measured against, so a handful of kills is never "+200 %". */
         val FLOORS: Map<Output, Double> = mapOf(
-            Output.DAMAGE to 200.0, Output.TAKEN to 10.0, Output.INTEGRITY to 10.0, Output.KILLS to 10.0, Output.DATA to 30.0,
+            Output.DAMAGE to 200.0, Output.TAKEN to 10.0, Output.INTEGRITY to 10.0, Output.SURVIVAL to 10.0, Output.KILLS to 10.0,
+            Output.DATA to 30.0,
             Output.MATTER to 30.0, Output.DATA_PER_KILL to 1.0, Output.MATTER_PER_KILL to 1.0, Output.OVERDRIVE to 3.0,
             Output.DASHES to 10.0, Output.OFFERS to 1.0,
         )
