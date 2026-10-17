@@ -171,6 +171,9 @@ private data class PlayerPreferencesDto(
     // predates the setting (and every default profile) keeps its exact canonical bytes.
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val colorVisionId: String? = null,
+    // Written only when the minimap is off: absence means on, so older saves keep their canonical bytes.
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val minimapEnabled: Boolean? = null,
 )
 
 @Serializable
@@ -274,6 +277,7 @@ private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
                 languageCode = preferences.language.code,
                 runStatisticsOnLeft = preferences.runStatisticsOnLeft,
                 colorVisionId = preferences.colorVision.wireIdOrNull(),
+                minimapEnabled = if (preferences.minimapEnabled) null else false,
             ),
             economy = PlayerEconomyDto(
                 matter = profile.economy.matter.toString(),
@@ -370,6 +374,12 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
             language = profile.preferences.languageCode?.appLanguage() ?: AppLanguage.Russian,
             runStatisticsOnLeft = profile.preferences.runStatisticsOnLeft ?: false,
             colorVision = profile.preferences.colorVisionId?.colorVision() ?: ColorVision.DEFAULT,
+            // Only "off" is ever written; an explicit default is not a value this codec produces.
+            minimapEnabled = when (profile.preferences.minimapEnabled) {
+                null -> true
+                false -> false
+                true -> reject(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+            },
         ),
         economy = PlayerEconomy(matter = matter, lifetimeMatter = lifetimeMatter),
         loadout = PlayerLoadout(

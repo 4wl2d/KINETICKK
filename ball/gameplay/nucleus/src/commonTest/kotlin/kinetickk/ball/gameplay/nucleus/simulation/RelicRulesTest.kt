@@ -412,7 +412,9 @@ class RelicRulesTest {
         assertEquals(0.04f + 0.4f, state.vulnerability(pulled, HitSource.IMPACT), 0.0001f)
         assertEquals(0f, state.vulnerability(pulled, HitSource.WEAPON), 0.0001f)
 
-        assertEquals(state.pickupRadius * 0.5f, state.effectivePickupRadius(), 0.001f)
+        // The liability removes the latched and level-up vacuums; the radius itself is unchanged.
+        assertEquals(state.pickupRadius, state.effectivePickupRadius(), 0.001f)
+        assertFalse(state.latchedVacuumActive())
         state.takeDamage(10f, kind = IncomingDamage.CONTACT)
         assertEquals(state.maxHp - 15f, state.hp, 0.001f)
     }

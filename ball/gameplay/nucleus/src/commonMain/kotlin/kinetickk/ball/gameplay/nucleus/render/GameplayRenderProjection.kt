@@ -28,6 +28,8 @@ enum class ChoiceType { ITEM, TOTEM, WEAPON, RELIC, RELIC_BIND }
 enum class TotemAction { AMPLIFY_CURRENT, CHANGE_WEAPON }
 enum class RelicChoiceAction { ACQUIRE, MELD, REPLACE, MELD_TARGET, DECLINE }
 enum class WeaponNodeType { GRAVITY_MINE }
+/** World obstacles: an [ASTEROID] hurts at speed, a [BUMPER] throws the Core back, an [UNSTABLE] asteroid explodes. */
+enum class ObstacleKind { ASTEROID, BUMPER, UNSTABLE }
 
 data class ChoiceOption(
     val type: ChoiceType,
@@ -144,6 +146,16 @@ data class PickupProjection(
     val life: Float,
     val previousX: Float,
     val previousY: Float,
+)
+
+/** A static world obstacle; [id] is stable across rebases, [shapeSeed] picks its outline. */
+data class ObstacleProjection(
+    val id: Long,
+    val kind: ObstacleKind,
+    val x: Float,
+    val y: Float,
+    val radius: Float,
+    val shapeSeed: Int,
 )
 
 data class TrailPointProjection(val x: Float, val y: Float, val age: Float)
@@ -295,6 +307,10 @@ class GameplayRenderModel(
      * viewport and pointer) are dp; the world layer is drawn scaled by this density.
      */
     val viewportDensity: Float = 1f,
+    /** World obstacles of the generated window around the Core (static; rebases move them). */
+    val obstacles: ImmutableList<ObstacleProjection> = kinetickk.foundation.collections.immutableListOf(),
+    /** World distance from the Core to the minimap's edge (dp). */
+    val minimapRange: Float = DEFAULT_MINIMAP_RANGE,
 ) {
     val speed: Float get() = vectorLength(velocityX, velocityY)
     val runProgress: Float get() = content.tempo.progress(elapsed)
@@ -343,6 +359,7 @@ class GameplayRenderModel(
         const val MAX_HEAT = 100f
         const val CORE_RADIUS = 16f
         const val FIXED_STEP = 1f / 120f
+        const val DEFAULT_MINIMAP_RANGE = 2_200f
     }
 }
 

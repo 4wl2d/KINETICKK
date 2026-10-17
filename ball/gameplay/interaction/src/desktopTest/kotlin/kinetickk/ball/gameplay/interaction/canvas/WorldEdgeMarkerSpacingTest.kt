@@ -280,7 +280,8 @@ class WorldEdgeMarkerSpacingTest {
         // marker follows in a frame): its marker is where a lone marker for that target goes, not
         // dragged toward the spot it held before the gap. Without the gap it is dragged, so the
         // memory is what the gap clears.
-        val turns = mapOf((1_440f to 810f) to -100f, (844f to 390f) to 185f, (390f to 844f) to -85f)
+        // On the landscape phone the minimap holds the upper left edge, so its clear stretch is the lower one.
+        val turns = mapOf((1_440f to 810f) to -100f, (844f to 390f) to 170f, (390f to 844f) to -85f)
         for ((dpWidth, dpHeight) in sizes) {
             val from = turns.getValue(dpWidth to dpHeight)
             val before = totemAt(from)

@@ -117,7 +117,8 @@ internal fun MutableGameState.buildStats(includeTemporary: Boolean = true): Immu
         ).filter { it.amount != 0f }.toImmutableList())
     }
     // Matrix contributions come from the folded content effects, never from duplicated numbers.
-    fun matrixShare(effect: ItemEffect, base: Float): Float = matrix.statValue(effect, base) - base
+    fun matrixShare(effect: ItemEffect, base: Float): Float =
+        matrix.statValue(effect, base, content.pickups.minimumMagnetRadius) - base
     stat("Impact power", damageMultiplier, 1f, matrixShare(ItemEffect.IMPACT_DAMAGE, 1f), unit = "×")
     val globalPower = rebirthProfile.playerPowerMultiplier
     // Run growth reports with mastery: both are progression the run grants, not items.
@@ -161,7 +162,8 @@ internal fun MutableGameState.buildStats(includeTemporary: Boolean = true): Immu
     stat("Critical chance", effectiveCritChance() * 100f, 5f, matrixShare(ItemEffect.CRIT_CHANCE, 0.05f) * 100f,
         relics = (effectiveCritChance() - critChance) * 100f, unit = "%")
     stat("Critical power", critMultiplier, 1.5f, matrixShare(ItemEffect.CRIT_DAMAGE, 1.5f), unit = "×")
-    stat("Pickup radius", effectivePickupRadius(), 150f, matrixShare(ItemEffect.PICKUP_RADIUS, 150f),
+    val pickupBase = content.pickups.magnetRadius
+    stat("Pickup radius", effectivePickupRadius(), pickupBase, matrixShare(ItemEffect.PICKUP_RADIUS, pickupBase),
         relics = effectivePickupRadius() - pickupRadius)
     stat("Luck", effectiveLuck(), 0f, matrixShare(ItemEffect.LUCK, 0f), relics = effectiveLuck() - luck)
     stat("Data gain", dataGain, 1f, matrixShare(ItemEffect.DATA_GAIN, 1f), unit = "×")

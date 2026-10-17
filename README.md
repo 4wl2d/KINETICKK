@@ -19,6 +19,10 @@ survive twelve minutes to face **The Architect**.
 Pull the cursor away from the Core to gain speed. Staying at the screen edges
 drains Magnetic Polarity; return inward, turn, or brake to recover. Fresh
 profiles start at 1× speed. Pauses and reward choices stop the run clock.
+Space is full of asteroids: brushing one is harmless, hitting one fast hurts,
+and ramming one at full speed shatters the Core. Bumpers throw you back, and
+the minimap (Settings can hide it) shows what lies ahead. Data pickups latch on
+once you pass near them and every level-up pulls in the Data on screen.
 
 | Input | Action |
 |---|---|

@@ -354,10 +354,14 @@ private fun MutableGameState.gyreRing(radius: Float, damage: Float) {
     shockwave(coreX, coreY, 0.3f, radius, 0)
 }
 
-/** Ouroboros only answers integrity deaths; the singularity still ends the run directly. */
-internal fun MutableGameState.resolveLethal() {
+/**
+ * Ouroboros only answers integrity deaths; the singularity still ends the run directly. [reason] is the
+ * run end message when nothing answers.
+ */
+internal fun MutableGameState.resolveLethal(reason: String = "CORE FRACTURED") {
     if (hp > 0f) return
     if (trySecondWind()) {
+        reviveInvulnerableUntil = invulnerableUntil
         emitSound(GameplayAudioCue.RECOVERED)
         return
     }
@@ -373,6 +377,7 @@ internal fun MutableGameState.resolveLethal() {
         val nova = relicValue(RelicId.OUROBOROS_SEAL, 0) * runScale() * if (fragile) 2f else 1f
         areaDamage(coreX, coreY, 400f, nova, rescale = false)
         invulnerableUntil = elapsed + 2f * build.relicUpside(RelicId.OUROBOROS_SEAL)
+        reviveInvulnerableUntil = invulnerableUntil
         runGrace = max(runGrace, 2f)
         message = "OUROBOROS // REBORN"
         messageTime = 2.4f
@@ -380,7 +385,7 @@ internal fun MutableGameState.resolveLethal() {
         recompileBuild()
         return
     }
-    endRun("CORE FRACTURED")
+    endRun(reason)
 }
 
 internal fun MutableGameState.relicOnShieldBreak(absorbed: Float) {

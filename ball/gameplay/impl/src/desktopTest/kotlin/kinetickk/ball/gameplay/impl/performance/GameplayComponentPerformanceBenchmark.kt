@@ -488,6 +488,16 @@ private fun canonicalRenderFingerprint(render: GameplayRenderModel): Long {
     signature = mix(signature, render.previousMorningstarX.toRawBits())
     signature = mix(signature, render.previousMorningstarY.toRawBits())
     signature = mix(signature, render.viewportDensity.toRawBits())
+    signature = mix(signature, render.minimapRange.toRawBits())
+    signature = mix(signature, render.obstacles.size)
+    render.obstacles.forEach { obstacle ->
+        signature = mixLong(signature, obstacle.id)
+        signature = mix(signature, obstacle.kind.ordinal)
+        signature = mix(signature, obstacle.x.toRawBits())
+        signature = mix(signature, obstacle.y.toRawBits())
+        signature = mix(signature, obstacle.radius.toRawBits())
+        signature = mix(signature, obstacle.shapeSeed)
+    }
     signature = mixLong(signature, canonicalCharacterAbilityFingerprint(render.characterAbility))
     signature = mix(signature, render.pointsOfInterest.size)
     render.pointsOfInterest.forEach { point ->
@@ -520,7 +530,8 @@ internal fun canonicalPreferencesFingerprint(preferences: PlayerPreferences): Lo
     signature = mix(signature, preferences.damageNumbers.asInt())
     signature = mix(signature, preferences.damageNumberSize.ordinal)
     signature = mix(signature, preferences.damageNumberFormat.ordinal)
-    return mix(signature, preferences.damageNumberTierThreshold)
+    signature = mix(signature, preferences.damageNumberTierThreshold)
+    return mix(signature, preferences.minimapEnabled.asInt())
 }
 
 internal fun canonicalRelicFingerprint(relic: EquippedRelic): Long =

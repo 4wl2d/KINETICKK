@@ -205,6 +205,8 @@ object ProfileNucleus {
                 current.copy(screenShake = !current.screenShake)
             ProfilePreferenceAdjustment.ToggleRunStatisticsSide ->
                 current.copy(runStatisticsOnLeft = !current.runStatisticsOnLeft)
+            ProfilePreferenceAdjustment.ToggleMinimap ->
+                current.copy(minimapEnabled = !current.minimapEnabled)
             is ProfilePreferenceAdjustment.StepParticleDensity -> current.copy(
                 particleDensity = ParticleDensity.entries[
                     (current.particleDensity.ordinal + adjustment.direction.delta)

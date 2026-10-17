@@ -82,6 +82,8 @@ data class PlayerPreferences(
     val language: AppLanguage = AppLanguage.Russian,
     val runStatisticsOnLeft: Boolean = false,
     val colorVision: ColorVision = ColorVision.DEFAULT,
+    /** Shows the run minimap; absent from saves while it is on. */
+    val minimapEnabled: Boolean = true,
 ) {
     fun normalized(): PlayerPreferences = copy(
         masterVolume = masterVolume.coerceIn(0f, 1f),

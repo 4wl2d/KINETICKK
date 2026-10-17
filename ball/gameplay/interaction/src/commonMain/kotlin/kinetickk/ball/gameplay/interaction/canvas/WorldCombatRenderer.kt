@@ -86,6 +86,8 @@ private fun DrawScope.drawWorldLayer(
     // The pointer is current input, never interpolated: the singularity sits exactly under it.
     val pointer = Offset(engine.pointerX + shakeX * 0.18f, engine.pointerY + shakeY * 0.18f)
 
+    // Obstacles lie on the backdrop, under everything that moves.
+    drawObstacles(engine, shakeX, shakeY, roles)
     drawPointsOfInterest(engine, shakeX, shakeY, textMeasurer)
     drawCharacterField(engine, shakeX, shakeY, roles)
     drawTotem(engine, shakeX, shakeY, textMeasurer)

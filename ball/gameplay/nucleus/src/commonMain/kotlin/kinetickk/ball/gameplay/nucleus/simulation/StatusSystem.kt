@@ -340,6 +340,7 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
                         val distance = max(1f, length(dx, dy))
                         target.vx += dx / distance * 520f * knockback
                         target.vy += dy / distance * 520f * knockback
+                        markThrown(target)
                     }
                 }
             }
@@ -413,6 +414,7 @@ private fun MutableGameState.throwFrom(center: Enemy, target: Enemy) {
     val distance = max(1f, length(dx, dy))
     target.vx += dx / distance * SHATTER_THROW_SPEED * knockback
     target.vy += dy / distance * SHATTER_THROW_SPEED * knockback
+    markThrown(target)
 }
 
 /**

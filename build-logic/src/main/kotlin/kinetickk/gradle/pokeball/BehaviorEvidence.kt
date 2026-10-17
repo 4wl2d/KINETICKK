@@ -49,6 +49,12 @@ internal val runtimeBehaviorEvidence = listOf(
         ),
     ),
     BehaviorEvidence(
+        ":ball:content:api", "kinetickk.ball.content.api.WorldContentTest",
+        setOf(
+            "obstacleTuningRejectsAWindowPastTheBoundAndInvertedReaches",
+        ),
+    ),
+    BehaviorEvidence(
         ":ball:content:impl", "kinetickk.ball.content.impl.ContentBootstrapValidationTest",
         setOf(
             "exactCatalogBoundsAreAccepted",
@@ -231,6 +237,20 @@ internal val runtimeBehaviorEvidence = listOf(
             "identityMatchedScalarSourceReusesEveryProjectionWithoutReadingStableLists",
             "identityMismatchFallsBackToRawFloatBitsRatherThanNumericEquality",
             "mismatchedIdentitySourceUsesExactFallbackAndCannotReuseChangedStorage",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.ObstacleSystemTest",
+        setOf(
+            "destroyedObstaclesNeverRegenerateAndTheMemoryIsBounded",
+            "theWindowIsDeterministicPerSeedBoundedGappedAndClearOfTheOrigin",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.PickupVacuumTest",
+        setOf(
+            "keysAndRelicsNeverExpireWhileDataFades",
+            "theCapDropsNewDataButEvictsTheOldestDataForKeysAndRelics",
         ),
     ),
     BehaviorEvidence(

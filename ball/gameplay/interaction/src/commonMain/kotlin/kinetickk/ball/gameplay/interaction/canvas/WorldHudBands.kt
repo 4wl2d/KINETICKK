@@ -44,10 +44,20 @@ internal class WorldHudKeepOut {
     private var keyTextScale = Float.NaN
     private var keyTrial = false
     private var keyBoss = false
+    private var keyMinimap = false
+    private val minimap = FloatArray(4)
 
-    fun update(width: Float, height: Float, density: Float, textScale: Float, trialActive: Boolean, bossPresent: Boolean): WorldHudKeepOut {
+    fun update(
+        width: Float,
+        height: Float,
+        density: Float,
+        textScale: Float,
+        trialActive: Boolean,
+        bossPresent: Boolean,
+        minimapShown: Boolean = true,
+    ): WorldHudKeepOut {
         if (width == keyWidth && height == keyHeight && density == keyDensity && textScale == keyTextScale &&
-            trialActive == keyTrial && bossPresent == keyBoss
+            trialActive == keyTrial && bossPresent == keyBoss && minimapShown == keyMinimap
         ) return this
         keyWidth = width
         keyHeight = height
@@ -55,6 +65,7 @@ internal class WorldHudKeepOut {
         keyTextScale = textScale
         keyTrial = trialActive
         keyBoss = bossPresent
+        keyMinimap = minimapShown
         revision++
         count = 0
         val scale = density.coerceAtLeast(1f)
@@ -113,6 +124,9 @@ internal class WorldHudKeepOut {
         if (trialActive) {
             val panel = trialPanel.update(width, height, scale, textScale)
             add(panel.left - pad, panel.top - pad, panel.right + pad, panel.bottom + pad)
+        }
+        if (minimapShown && HudMinimapGeometry.place(frame, if (trialActive) trialPanel else null, minimap)) {
+            add(minimap[0] - pad, minimap[1] - pad, minimap[2] + pad, minimap[3] + pad)
         }
         if (controlsLeft.isFinite()) add(controlsLeft - pad, controlsTop - pad, width, height)
         return this

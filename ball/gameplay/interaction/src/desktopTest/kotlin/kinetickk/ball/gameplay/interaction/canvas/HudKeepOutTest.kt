@@ -60,8 +60,8 @@ class HudKeepOutTest {
                 val keepOut = WorldHudKeepOut().update(width, height, density, textScale, trial, bossPresent = true)
                 val rects = keepOut.rects()
                 val where = "$language ${dpWidth}x$dpHeight @$density x$textScale $boss trial=$trial"
-                val blocks = listOf(HudBlock.CLOCK, HudBlock.MATTER_CHIP, HudBlock.KEY_CHIP, HudBlock.CHAIN, HudBlock.BOSS, HudBlock.BADGE) +
-                    if (trial) listOf(HudBlock.TRIAL_PANEL) else emptyList()
+                val blocks = listOf(HudBlock.CLOCK, HudBlock.MATTER_CHIP, HudBlock.KEY_CHIP, HudBlock.CHAIN, HudBlock.BOSS, HudBlock.BADGE,
+                    HudBlock.MINIMAP) + if (trial) listOf(HudBlock.TRIAL_PANEL) else emptyList()
                 blocks.forEach { block ->
                     val drawn = assertNotNull(HudLayoutProbe.rect(block), "$where: $block not drawn")
                     assertTrue(covered(drawn, rects), "$where: $block $drawn is outside the keep-out $rects")

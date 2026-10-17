@@ -355,6 +355,21 @@ class ProfileCodecTest {
     }
 
     @Test
+    fun theMinimapIsWrittenOnlyWhenOffAndOlderSavesShowIt() {
+        val base = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(REPRESENTATIVE_GOLDEN)).snapshot
+        assertTrue(base.profile.preferences.minimapEnabled, "saves without the field show the minimap")
+        assertEquals(REPRESENTATIVE_GOLDEN, requireEncoded(base))
+        val hidden = base.copy(profile = base.profile.copy(preferences = base.profile.preferences.copy(minimapEnabled = false)))
+        val encoded = requireEncoded(hidden)
+        assertTrue(encoded.contains("\"runStatisticsOnLeft\":true,\"minimapEnabled\":false},\"economy\""), encoded)
+        assertEquals(hidden, assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(encoded)).snapshot)
+        assertEquals(REPRESENTATIVE_GOLDEN, encoded.replace(",\"minimapEnabled\":false", ""))
+        // The default is never written, so an explicit "on" is not canonical.
+        val explicitOn = encoded.replace("\"minimapEnabled\":false", "\"minimapEnabled\":true")
+        assertEquals(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE, decodeRejection(explicitOn))
+    }
+
+    @Test
     fun unknownExplicitDefaultAndNullColorVisionIdsAreRejected() {
         val mono = requireEncoded(testSnapshot(PlayerProfile(preferences = PlayerPreferences(colorVision = ColorVision.MONO))))
         listOf("DEFAULT", "default", "mono", "Mono", "", "SEPIA", "PROTANOPIA").forEach { invalid ->

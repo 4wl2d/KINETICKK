@@ -19,6 +19,8 @@ import kinetickk.ball.gameplay.nucleus.model.ActiveBuff
 import kinetickk.ball.gameplay.nucleus.model.CombatField
 import kinetickk.ball.gameplay.nucleus.model.CombatFieldKind
 import kinetickk.ball.gameplay.nucleus.model.EchoHit
+import kinetickk.ball.gameplay.nucleus.model.Obstacle
+import kinetickk.ball.gameplay.nucleus.model.ObstacleField
 import kinetickk.ball.gameplay.nucleus.model.SeveredRelic
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
 import kinetickk.ball.gameplay.nucleus.model.CharacterRuntime
@@ -35,6 +37,7 @@ import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.reducer.EngineState
 import kinetickk.ball.gameplay.nucleus.reducer.GameReducer
 import kinetickk.ball.gameplay.nucleus.reducer.GameReductionResult
+import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
@@ -912,6 +915,16 @@ class GameplayReductionIsolationTest {
         lastSpawnEventSpawned = 4
         spawnRandom.nextInt()
         coreRadius = 17.5f
+        worldOriginX = 2_400.5
+        worldOriginY = -1_200.25
+        obstacleField = ObstacleField.of(1, -1, 1, listOf(listOf(
+            Obstacle(id = 7L, kind = ObstacleKind.BUMPER, x = 30f, y = -40f, radius = 34f, shapeSeed = 9, ricochetReadyAt = 1.5f),
+        )))
+        destroyedObstacleIds = listOf(3L, 4L)
+        obstacleHitReadyAt = 0.6f
+        nearMissReadyAt = 0.7f
+        reviveInvulnerableUntil = 0.8f
+        pickups.firstOrNull()?.attracted = true
         enemies.firstOrNull()?.apply {
             characterMarkTime = 0.75f
             lastCharacterDash = 2
@@ -931,6 +944,8 @@ class GameplayReductionIsolationTest {
             linkedUntil = 0.65f
             shieldUntil = 0.7f
             abilityAt = 0.85f
+            thrownUntil = 0.9f
+            slamReadyAt = 0.95f
             status[StatusCell.STACKS + StatusElement.THERMAL.ordinal] = 2f
             status[StatusCell.DECAY_AT + StatusElement.THERMAL.ordinal] = 0.5f
             status[StatusCell.FREEZE_IMMUNE_UNTIL] = 0.6f
@@ -1193,6 +1208,29 @@ class GameplayReductionIsolationTest {
             value("lastSpawnEventKind", lastSpawnEventKind)
             value("lastSpawnEventPlanned", lastSpawnEventPlanned)
             value("lastSpawnEventSpawned", lastSpawnEventSpawned)
+            value("runSeed", runSeed)
+            value("worldOriginX", worldOriginX.toRawBits())
+            value("worldOriginY", worldOriginY.toRawBits())
+            value("obstacleField.center", obstacleField.centerChunkX to obstacleField.centerChunkY)
+            value("obstacleField.span", obstacleField.span)
+            value("obstacleField.size", obstacleField.size)
+            obstacleField.obstacles.forEachIndexed { index, obstacle ->
+                val prefix = "obstacles[$index]"
+                value("$prefix.id", obstacle.id)
+                value("$prefix.kind", obstacle.kind)
+                float("$prefix.x", obstacle.x)
+                float("$prefix.y", obstacle.y)
+                float("$prefix.radius", obstacle.radius)
+                value("$prefix.shapeSeed", obstacle.shapeSeed)
+                float("$prefix.ricochetReadyAt", obstacle.ricochetReadyAt)
+            }
+            for (cell in 0 until obstacleField.span * obstacleField.span) {
+                value("obstacleField.cell[$cell]", obstacleField.cellBegin(cell) to obstacleField.cellEnd(cell))
+            }
+            value("destroyedObstacleIds", destroyedObstacleIds.toList())
+            float("obstacleHitReadyAt", obstacleHitReadyAt)
+            float("nearMissReadyAt", nearMissReadyAt)
+            float("reviveInvulnerableUntil", reviveInvulnerableUntil)
             float("dashBufferTime", dashBufferTime)
             value("bossSpawned", bossSpawned)
             value("keyboardBrakeActive", keyboardBrakeActive)
@@ -1254,6 +1292,7 @@ class GameplayReductionIsolationTest {
             value("settings.damageNumberTierThreshold", settings.damageNumberTierThreshold)
             value("settings.language", settings.language)
             value("settings.runStatisticsOnLeft", settings.runStatisticsOnLeft)
+            value("settings.minimapEnabled", settings.minimapEnabled)
             value("rebirthLevel", rebirthLevel)
             float("screenWidth", screenWidth)
             float("screenHeight", screenHeight)
@@ -1393,6 +1432,8 @@ class GameplayReductionIsolationTest {
                 float("$prefix.linkedUntil", enemy.linkedUntil)
                 float("$prefix.shieldUntil", enemy.shieldUntil)
                 float("$prefix.abilityAt", enemy.abilityAt)
+                float("$prefix.thrownUntil", enemy.thrownUntil)
+                float("$prefix.slamReadyAt", enemy.slamReadyAt)
                 floats("$prefix.status", enemy.status)
             }
 
@@ -1431,6 +1472,7 @@ class GameplayReductionIsolationTest {
                 float("$prefix.life", pickup.life)
                 float("$prefix.previousX", pickup.previousX)
                 float("$prefix.previousY", pickup.previousY)
+                value("$prefix.attracted", pickup.attracted)
             }
 
             value("trail.size", trail.size)

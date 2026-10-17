@@ -78,6 +78,7 @@ internal fun DrawScope.drawHud(
     drawCoreStatus(engine, textMeasurer, frame, renderTime, memory, critical)
     drawKineticGauge(engine, textMeasurer, frame, renderTime, memory)
     drawLoadout(engine, textMeasurer, frame)
+    drawMinimap(engine, textMeasurer, frame)
     drawTrialPanel(engine, textMeasurer, renderTime, trialInfoOpen)
     drawControls(engine, textMeasurer)
 }

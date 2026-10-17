@@ -48,6 +48,11 @@ internal enum class SettingsRedesignText(override val english: String, override 
         "Damage numbers change color at this value, at four times it and at twenty times it.",
         "Числа урона меняют цвет на этом значении, на вчетверо большем и на вдвадцатеро большем.",
     ),
+    Minimap("Minimap", "Миникарта"),
+    AboutMinimap(
+        "Shows nearby obstacles, enemies and anomalies in a corner of the run.",
+        "Показывает в углу экрана ближайшие препятствия, врагов и аномалии.",
+    ),
     AboutRunStatisticsSide(
         "Where the run statistics sit on the run report.",
         "С какой стороны отчёта о забеге стоит статистика.",

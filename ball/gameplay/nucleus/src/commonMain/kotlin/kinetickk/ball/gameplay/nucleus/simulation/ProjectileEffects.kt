@@ -121,8 +121,15 @@ internal fun MutableGameState.addProjectile(projectile: Projectile) {
     if (projectiles.size < MutableGameState.MAX_PROJECTILES) projectiles += projectile
 }
 
+/** At the cap a new Data or repair is dropped; a Key or Relic resonance evicts the oldest Data instead. */
 internal fun MutableGameState.addPickup(pickup: Pickup) {
-    if (pickups.size < MutableGameState.MAX_PICKUPS) pickups += pickup
+    if (pickups.size >= MutableGameState.MAX_PICKUPS) {
+        if (pickup.expires) return
+        val oldest = oldestEvictablePickup()
+        if (oldest < 0) return
+        pickups.removeAt(oldest)
+    }
+    pickups += pickup
 }
 
 internal fun MutableGameState.burst(x: Float, y: Float, requestedCount: Int, colorIndex: Int) {

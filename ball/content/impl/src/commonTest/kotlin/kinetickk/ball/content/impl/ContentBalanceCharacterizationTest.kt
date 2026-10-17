@@ -31,7 +31,7 @@ class ContentBalanceCharacterizationTest {
         assertEquals(90, items.size)
         assertEquals((0 until items.size).toList(), items.map(ItemDefinition::id))
         assertEquals(
-            "a1f3dc274648db7d",
+            "dd0951c96f0abf2d",
             goldenFingerprint {
                 add("item-effects")
                 ItemEffect.entries.forEach { effect ->
@@ -241,7 +241,7 @@ class ContentBalanceCharacterizationTest {
         assertEquals(3, ui.relicPolicy.maxRank)
         assertEquals(RelicId.entries.toList(), relics.map(RelicDefinition::id))
         assertEquals(
-            "a702047801b99cd7",
+            "c8c02a43bec87968",
             goldenFingerprint {
                 add(relics.size)
                 relics.forEach { relic ->

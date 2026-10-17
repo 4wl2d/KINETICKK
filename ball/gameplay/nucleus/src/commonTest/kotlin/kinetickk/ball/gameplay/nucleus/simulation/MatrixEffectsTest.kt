@@ -58,7 +58,7 @@ class MatrixEffectsTest {
         assertEquals(1.45f, game.damageMultiplier, 1e-5f)
         assertEquals(19f * 1.4f, game.coolingRate, 1e-4f)
         assertEquals(36f * 0.8f, game.dashHeatCost, 1e-4f)
-        assertEquals(220f, game.pickupRadius)
+        assertEquals(canonicalGameplayContent.pickups.magnetRadius + 70f, game.pickupRadius)
         assertEquals(1.45f, game.dataGain, 1e-5f)
 
         val fresh = MutableGameState(canonicalGameplayContent, seed = 5).apply { startRun() }

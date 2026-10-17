@@ -204,6 +204,17 @@ private class NoPoiBot(
                 desiredY += py / pd * (300f - pd) * 8f
             }
         }
+        // Steer around obstacles ahead, from where momentum carries the Core (a player reading the minimap).
+        for (obstacle in s.obstacleField.obstacles) {
+            val px = s.coreX + s.velocityX * 0.3f - obstacle.x
+            val py = s.coreY + s.velocityY * 0.3f - obstacle.y
+            val clearance = obstacle.radius + s.coreRadius + 110f
+            val pd = max(1f, length(px, py))
+            if (pd < clearance) {
+                desiredX += px / pd * (clearance - pd) * 6f
+                desiredY += py / pd * (clearance - pd) * 6f
+            }
+        }
         for (shot in s.projectiles) if (shot.hostile) {
             val px = shot.x - s.coreX
             val py = shot.y - s.coreY

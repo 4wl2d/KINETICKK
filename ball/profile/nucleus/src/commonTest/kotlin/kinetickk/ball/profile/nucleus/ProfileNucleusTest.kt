@@ -76,6 +76,21 @@ class ProfileNucleusTest {
     }
 
     @Test
+    fun theMinimapToggleIsOwnedByProfileAndPersisted() {
+        val state = readyState()
+        assertTrue(state.profile.preferences.minimapEnabled)
+        val pulse = ProfileNucleusPulse.Intent(ProfilePulse.AdjustPreference(ProfilePreferenceAdjustment.ToggleMinimap))
+        val frame = ProfileNucleus.decide(state, pulse).acceptedFrame()
+        assertFalse(frame.nextState.profile.preferences.minimapEnabled)
+        assertTrue(state.profile.preferences.minimapEnabled, "the committed state is untouched")
+        assertEquals(
+            frame.nextState.profile.copy(),
+            assertIs<ProfileOutput.PersistSnapshot>(frame.outputs.single()).snapshot.profile,
+        )
+        assertEquals(state.profile.preferences.copy(minimapEnabled = false), frame.nextState.profile.preferences)
+    }
+
+    @Test
     fun exactVolumePreservesOtherPreferencesAndPersistsEveryAllowedPercent() {
         val state = readyState()
         for (percent in 0..100) {

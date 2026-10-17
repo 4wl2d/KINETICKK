@@ -136,7 +136,7 @@ internal fun MutableGameState.applyMatrixStats() {
  * [base] after one application of the Matrix total for [effect], mirroring [applyStatDelta] for a
  * single scalar; the build summary reports the difference as the Matrix contribution.
  */
-internal fun MatrixModifiers.statValue(effect: ItemEffect, base: Float): Float {
+internal fun MatrixModifiers.statValue(effect: ItemEffect, base: Float, pickupRadiusFloor: Float): Float {
     val amount = statTotal(effect)
     if (amount == 0f) return base
     return when (effect) {
@@ -145,7 +145,7 @@ internal fun MatrixModifiers.statValue(effect: ItemEffect, base: Float): Float {
         ItemEffect.CRIT_CHANCE -> (base + amount * (1f - base / 0.75f)).coerceIn(0f, 0.75f)
         ItemEffect.DAMAGE_REDUCTION -> (base + amount * (1f - base / 0.65f)).coerceIn(0f, 0.65f)
         ItemEffect.CRIT_DAMAGE -> max(1f, base + amount)
-        ItemEffect.PICKUP_RADIUS -> max(40f, base + amount)
+        ItemEffect.PICKUP_RADIUS -> max(pickupRadiusFloor, base + amount)
         ItemEffect.MAX_INTEGRITY -> max(10f, base + amount)
         else -> base + amount
     }

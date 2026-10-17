@@ -139,6 +139,7 @@ private fun MutableGameState.resolveReaction(
                 val knockback = knockbackTaken(target)
                 target.vx += dx / distance * 640f * knockback
                 target.vy += dy / distance * 640f * knockback
+                markThrown(target)
                 dealStatusDamage(target, magnitude, StatusElement.GRAVITIC, ignoresAffinity = true)
                 if (residueGeneration < 2 && target.alive) applyStatus(target, StatusElement.GRAVITIC, definition.residueStacks, residueGeneration)
             }
@@ -330,6 +331,7 @@ private fun MutableGameState.hurl(x: Float, y: Float, target: Enemy, speed: Floa
     val distance = max(1f, length(dx, dy))
     target.vx += dx / distance * speed * knockback
     target.vy += dy / distance * speed * knockback
+    markThrown(target)
 }
 
 /** The other living enemy with the most integrity within [range] of [origin] (ties by id), or null. */

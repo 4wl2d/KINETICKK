@@ -182,6 +182,7 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
         enemy.x += enemy.vx * delta * motion
         enemy.y += enemy.vy * delta * motion
     }
+    resolveEnemyObstacles()
     // Detonated Bombers leave without a kill.
     enemies.removeMatchingStable { enemy -> enemy.dead }
     val leashDistance = max(screenWidth, screenHeight) * 1.15f + 360f
@@ -226,28 +227,84 @@ internal fun MutableGameState.updateProjectiles(delta: Float) {
     while (projectiles.size > MutableGameState.MAX_PROJECTILES) projectiles.removeAt(0)
 }
 
+/**
+ * Pickups drift from where they dropped until they enter the magnet radius; there they latch and home on
+ * the Core at `max(vacuumSpeed, coreSpeed × factor)` with no damping until collected. Event Horizon's
+ * liability turns the latch off: pickups are then only pulled while inside the radius, weaker at its rim.
+ * Keys and Relic resonances never expire, and a latched pickup does not age while it homes.
+ */
 internal fun MutableGameState.updatePickups(delta: Float) {
+    val radius = effectivePickupRadius()
+    val latching = latchedVacuumActive()
+    val tuning = content.pickups
+    val homingSpeed = max(tuning.vacuumSpeed, speed * tuning.vacuumCoreSpeedFactor)
+    val drag = exp(-1.8f * delta)
     for (pickupIndex in pickups.indices) {
         val pickup = pickups[pickupIndex]
         pickup.previousX = pickup.x
         pickup.previousY = pickup.y
-        pickup.life -= delta
         val dx = coreX - pickup.x
         val dy = coreY - pickup.y
         val distance = max(1f, length(dx, dy))
-        val radius = effectivePickupRadius()
-        if (distance < radius) {
-            val pull = (radius - distance) * 4.8f
-            pickup.vx += dx / distance * pull * delta
-            pickup.vy += dy / distance * pull * delta
+        if (latching && !pickup.attracted && distance < radius) pickup.attracted = true
+        val homing = latching && pickup.attracted
+        // A latched pickup is on its way in and never fades before it arrives.
+        if (pickup.expires && !homing) pickup.life -= delta
+        if (homing) {
+            pickup.vx = dx / distance * homingSpeed
+            pickup.vy = dy / distance * homingSpeed
+        } else {
+            if (!latching && distance < radius) {
+                val pull = (radius - distance) * 4.8f
+                pickup.vx += dx / distance * pull * delta
+                pickup.vy += dy / distance * pull * delta
+            }
+            pickup.vx *= drag
+            pickup.vy *= drag
         }
-        pickup.vx *= exp(-1.8f * delta)
-        pickup.vy *= exp(-1.8f * delta)
         pickup.x += pickup.vx * delta
         pickup.y += pickup.vy * delta
     }
-    pickups.removeMatchingStable { pickup -> pickup.life <= 0f }
-    while (pickups.size > MutableGameState.MAX_PICKUPS) pickups.removeAt(0)
+    pickups.removeMatchingStable { pickup -> pickup.expires && pickup.life <= 0f }
+    while (pickups.size > MutableGameState.MAX_PICKUPS) {
+        val oldest = oldestEvictablePickup()
+        pickups.removeAt(if (oldest >= 0) oldest else 0)
+    }
+}
+
+/** Data and repairs fade; Keys and Relic resonances wait until they are collected. */
+internal val Pickup.expires: Boolean get() = type == PickupType.DATA || type == PickupType.REPAIR
+
+/** Index of the oldest pickup the cap may evict (Data first, then repairs), or -1. */
+internal fun MutableGameState.oldestEvictablePickup(): Int {
+    var repair = -1
+    for (index in pickups.indices) {
+        val type = pickups[index].type
+        if (type == PickupType.DATA) return index
+        if (repair < 0 && type == PickupType.REPAIR) repair = index
+    }
+    return repair
+}
+
+/** Event Horizon's liability disables the latched vacuum and the level-up vacuum. */
+internal fun MutableGameState.latchedVacuumActive(): Boolean =
+    !build.liability(kinetickk.ball.content.api.RelicId.EVENT_HORIZON)
+
+/**
+ * A level-up, and the end of a choice, latch every Data pickup inside the viewport onto the Core
+ * (unless Event Horizon's liability holds).
+ */
+internal fun MutableGameState.vacuumOnScreenData() {
+    if (!latchedVacuumActive() || pickups.isEmpty()) return
+    val halfWidth = screenWidth * 0.5f
+    val halfHeight = screenHeight * 0.5f
+    for (index in pickups.indices) {
+        val pickup = pickups[index]
+        if (pickup.type != PickupType.DATA || pickup.attracted) continue
+        if (kotlin.math.abs(pickup.x - cameraX) <= halfWidth && kotlin.math.abs(pickup.y - cameraY) <= halfHeight) {
+            pickup.attracted = true
+        }
+    }
 }
 
 /** Stable one-pass compaction without iterator or stdlib predicate-wrapper allocation. */
@@ -282,11 +339,15 @@ internal fun MutableGameState.updateTotem(delta: Float) {
     } else if (keys > 0 && phase == GamePhase.RUNNING) {
         val angle = gameplayRandom.nextFloat() * TAU
         val distance = 520f + gameplayRandom.nextFloat() * 180f
-        totem = Totem(coreX + cos(angle) * distance, coreY + sin(angle) * distance)
+        val (totemX, totemY) = nudgedClearOfObstacles(coreX + cos(angle) * distance, coreY + sin(angle) * distance, TOTEM_CLEARANCE)
+        totem = Totem(totemX, totemY)
         message = "TOTEM DETECTED"
         messageTime = 1.5f
     }
 }
+
+/** Room a Totem keeps from obstacles, so the Core can always reach it. */
+private const val TOTEM_CLEARANCE: Float = 70f
 
 /** Spawns a scheduled or escort enemy of [type] at spawn distance; false at the hard cap. */
 internal fun MutableGameState.spawnEnemy(type: EnemyType): Boolean = spawnScheduled(type)

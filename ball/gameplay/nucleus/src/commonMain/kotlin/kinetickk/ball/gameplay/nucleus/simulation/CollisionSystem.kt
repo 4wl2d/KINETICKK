@@ -28,6 +28,8 @@ internal fun MutableGameState.resolveCollisions(delta: Float) {
 }
 
 private fun MutableGameState.resolveCollisionPasses(delta: Float) {
+    // Shots stopped by an asteroid are spent before they can hit anything beyond it.
+    blockProjectilesAtObstacles()
     resolveEnemyCoreCollisions()
     if (phase != GamePhase.RUNNING) return
     resolveWeaponDamage(delta)
@@ -423,7 +425,7 @@ internal fun MutableGameState.resolvePickupCollection() {
                 coreY - pickup.y,
                 0f,
                 0f,
-                34f,
+                content.pickups.collectionRadius,
             )
         ) {
             pickups.removeAt(pickupIndex)
@@ -464,6 +466,7 @@ internal fun MutableGameState.gainData(rawAmount: Float) {
     dataFraction -= whole
     data += whole
     dataCollected += whole.toLong()
+    val levelBefore = level
     while (data >= nextLevelData) {
         data -= nextLevelData
         level++
@@ -478,5 +481,6 @@ internal fun MutableGameState.gainData(rawAmount: Float) {
             emitBuildChange(before, currentWeaponDefinition.name + " mastery advanced")
         }
     }
+    if (level > levelBefore) vacuumOnScreenData()
     openNextPendingChoice()
 }

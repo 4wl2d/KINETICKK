@@ -343,8 +343,35 @@ internal fun MutableGameState.toRenderModel(
         previousMorningstarX = previousMorningstarX,
         previousMorningstarY = previousMorningstarY,
         viewportDensity = viewportDensity,
+        obstacles = obstacleProjection(reusableCollections?.obstacles, identitySource?.obstacleField),
+        minimapRange = minimapRange(),
     )
 }
+
+/** The window changes only when the Core changes chunk (or a rock shatters); otherwise it is reused. */
+private fun MutableGameState.obstacleProjection(
+    reusable: ImmutableList<ObstacleProjection>?,
+    identityField: ObstacleField?,
+): ImmutableList<ObstacleProjection> {
+    val field = obstacleField
+    if (reusable != null) {
+        if (field === identityField) return reusable
+        if (field.obstacles.reuseProjectionIfContentEqual(reusable) { value, previous -> previous.matches(value) } != null) {
+            return reusable
+        }
+    }
+    return field.obstacles.mapToImmutableList { value ->
+        ObstacleProjection(value.id, value.kind, value.x, value.y, value.radius, value.shapeSeed)
+    }
+}
+
+private fun ObstacleProjection.matches(obstacle: Obstacle): Boolean =
+    id == obstacle.id &&
+        kind == obstacle.kind &&
+        x.sameBitsAs(obstacle.x) &&
+        y.sameBitsAs(obstacle.y) &&
+        radius.sameBitsAs(obstacle.radius) &&
+        shapeSeed == obstacle.shapeSeed
 
 /**
  * How far the accumulated real time has advanced past the last simulated state, in fixed steps.

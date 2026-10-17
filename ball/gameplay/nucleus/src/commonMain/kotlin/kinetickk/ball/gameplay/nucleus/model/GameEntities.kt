@@ -62,6 +62,10 @@ internal data class Enemy private constructor(
     var shieldUntil: Float = 0f,
     /** Absolute run time at which the type's next ability (lance, shot, phase, brood, shield, reflection) is ready. */
     var abilityAt: Float = 0f,
+    /** Absolute run time until which a player knockback counts as a throw (enemy-enemy slams). */
+    var thrownUntil: Float = 0f,
+    /** Absolute run time before which the enemy cannot slam again. */
+    var slamReadyAt: Float = 0f,
     /** Elemental status cells; see [StatusCell]. Copy-on-write so reduction siblings stay isolated. */
     val status: CopyOnWriteFloatArray,
 ) {
@@ -336,6 +340,8 @@ internal data class Pickup(
     var life: Float = 20f,
     var previousX: Float = x,
     var previousY: Float = y,
+    /** Latched by the magnet: homes on the Core until collected and is never lost. */
+    var attracted: Boolean = false,
 )
 
 internal data class TrailPoint(var x: Float, var y: Float, var age: Float = 0f)

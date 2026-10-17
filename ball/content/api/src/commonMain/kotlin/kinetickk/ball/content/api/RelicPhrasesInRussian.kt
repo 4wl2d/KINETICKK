@@ -112,7 +112,8 @@ internal val RelicPhrasesInRussian: List<Pair<String, String>> = listOf(
         "your Collapses implode toward you." to
         "Врагов в пределах 280 ед затягивает к вам. Столкновения с врагами под действием Гравитации наносят " +
         "на {0} % больше урона, а ваши Коллапсы схлопываются в вашу сторону.",
-    "Contact damage taken ×1.5 and pickup radius halved." to "Урон от контакта с врагами ×1,5, радиус сбора уменьшен вдвое.",
+    "Contact damage taken ×1.5. Data no longer latches onto you, and level-ups no longer pull it in." to
+        "Урон от контакта с врагами ×1,5. Данные больше не прилипают к вам, а повышение уровня их не притягивает.",
 
     "Verdant Rot" to "Цветущая гниль",
     "Impacts apply 2 Entropy. Every Entropy stack within 320 u heals you {0} per second, up to 3.5." to
