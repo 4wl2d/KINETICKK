@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.content.api.rebirthRankUnlocks
 import kinetickk.ball.gameplay.interaction.localization.OverlayRedesignText
@@ -38,14 +39,17 @@ import kinetickk.foundation.design.rememberInterfaceTypography
 internal data class ReportRebirthLines(val headline: String, val unlocks: String?, val ascendant: Boolean)
 
 /**
- * The Rebirth lines of a Victory, or null: a replayed cleared tier earns nothing new. The run started
- * at rank [GameplayRenderModel.rebirthRank]; clearing the tier at that rank earns the next one.
+ * The Rebirth lines of a Victory, or null: a replayed cleared tier earns nothing new, nor does the last
+ * tier of a shorter policy. The run started at rank [GameplayRenderModel.rebirthRank]; clearing the tier
+ * at that rank earns the next one. Clearing the final tier ([ContentBounds.MAX_REBIRTH_LEVEL]) is the
+ * Ascendant clear, every time.
  */
 internal fun GameplayRenderModel.reportRebirthLines(language: AppLanguage): ReportRebirthLines? {
     if (phase != GamePhase.VICTORY) return null
-    val maximum = content.rebirth.maximumLevel
-    if (rebirthLevel >= maximum) return ReportRebirthLines(language.text(OverlayRedesignText.AscendantCleared), null, ascendant = true)
-    if (rebirthLevel < rebirthRank) return null
+    if (rebirthLevel >= ContentBounds.MAX_REBIRTH_LEVEL) {
+        return ReportRebirthLines(language.text(OverlayRedesignText.AscendantCleared), null, ascendant = true)
+    }
+    if (rebirthLevel >= content.rebirth.maximumLevel || rebirthLevel < rebirthRank) return null
     val earned = rebirthLevel + 1
     val unlocks = rebirthRankUnlocks(earned, content.weapons, content.coreShapes, content.relics, content.items,
         content.matrixNodes, content.enemies)
