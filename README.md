@@ -137,6 +137,11 @@ sessions continue on their selected release; reopen the game to update.
 CHROME_BIN=/path/to/chrome ./gradlew wasmJsBrowserTest wasmJsBrowserDistribution --max-workers=1
 ```
 
+`desktopTest` renders each screenshot-harness state once without writing files and
+samples the longest allocation and layout sweeps. `KK_SHOTS=1` renders the full
+size and language matrix to PNGs under each module's `build/redesign-shots/`;
+`KK_FULL_SWEEPS=1` runs every sweep in full.
+
 Architecture checks require a clean Pokeball checkout at
 `b4a8219ecb70ae5e81214edd6b509b61d9db0637`:
 
