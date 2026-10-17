@@ -339,10 +339,10 @@ class EnemyAffinityTest {
             assertNull(state.build.dominant)
             return state
         }
-        // ARSENAL III without a dominant element: every third weapon hit adds 20 % of the hit as a proc.
+        // ARSENAL III without a dominant element: every fourth weapon hit adds 20 % of the hit as a proc.
         val arsenal = tagged(BuildTag.ARSENAL, 3)
         val light = arsenal.dummy(hp = 10_000f, type = EnemyType.INTERCEPTOR)
-        arsenal.arsenalCounter = 2
+        arsenal.arsenalCounter = ARSENAL_INFUSION_EVERY - 1
         val shot = arsenal.dealHit(light, 100f, HitSource.WEAPON, canCrit = false)
         assertEquals(shot.unmitigated * 0.85f, shot.amount, 0.01f)
         assertEquals(shot.unmitigated * 0.2f * 0.85f, light.maxHp - light.hp - shot.amount, 0.01f,

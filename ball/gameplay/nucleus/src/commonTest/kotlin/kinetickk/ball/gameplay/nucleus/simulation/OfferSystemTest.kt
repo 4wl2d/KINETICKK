@@ -79,9 +79,14 @@ class OfferSystemTest {
     fun rebirthGatedItemsAndRelicsStayOutOfOffersBelowTheirTier() {
         fun gatedItems(rebirth: Int): Set<String> = buildTestState(rebirth = rebirth).apply { lifetimeMatter = 4_000L }
             .offerableItems().filter { it.minimumRebirth > 0 }.map { it.name }.toSet()
+        fun gatedUpTo(rebirth: Int): Set<String> =
+            canonicalGameplayContent.items.filter { it.minimumRebirth in 1..rebirth }.map { it.name }.toSet()
         assertTrue(gatedItems(0).isEmpty())
-        assertEquals(setOf("Solar Choir", "Glacial Heart"), gatedItems(2))
-        assertEquals(setOf("Solar Choir", "Glacial Heart", "Resonance Fork"), gatedItems(4))
+        // Each tier opens exactly what its gates name, and every lower tier's items stay open.
+        for (rebirth in 1..10) assertEquals(gatedUpTo(rebirth), gatedItems(rebirth), "Reborn $rebirth")
+        assertTrue("Glacial Heart" in gatedItems(2) && "Resonance Fork" !in gatedItems(3) && "Resonance Fork" in gatedItems(4))
+        assertTrue("Last Word" !in gatedItems(9) && "Last Word" in gatedItems(10))
+        assertEquals(43, gatedItems(10).size, "Three original legendaries and forty gated expansion items")
 
         fun sovereigns(rebirth: Int): Set<RelicId> = buildTestState(rebirth = rebirth).offerableRelics()
             .filter { it.minimumRebirth > 0 }.map { it.id }.toSet()
