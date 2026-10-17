@@ -11,6 +11,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -33,6 +34,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -92,74 +98,85 @@ internal fun HangarContent(
     val language = LocalAppLanguage.current
     val model = state.model
     val time = profileLoopTime(HANGAR_SPIN_SECONDS)
-    ProfilePanel(
-        title = language.text(ProfileText.HangarTitle),
-        count = language.text(ProfileScreensRedesignText.CountOf, model.unlockedCount, model.shapes.size),
-        info = language.text(ProfileScreensRedesignText.HangarInfo),
-        matter = model.matter,
-        scale = scale,
-        tag = "profile-hangar",
-        onBack = { onAction(HangarAction.Back) },
-        background = { frame -> drawHangarBackground(frame, holder.layout) },
-    ) { frame ->
-        val measurer = rememberKkCanvasMeasurer(scale)
-        val type = hangarType(frame.mode)
-        val backWidth = profileHeaderBackWidth(measurer, frame, language.text(ProfileScreensRedesignText.Back))
-        val inspected = state.inspectedShape
-        val layout = hangarLayout(frame, scale, backWidth) { width ->
-            if (inspected == null) 0f else hangarDescriptionLayout(measurer, frame, type, inspected, language, width).kkBoxHeight
-        }
-        SideEffect { holder.layout = layout }
-        Box(
-            Modifier.semantics { contentDescription = language.text(ProfileScreensRedesignText.HangarRoster) }
-                .testTag("profile-hangar-roster"),
-        ) {
-            model.shapes.forEachIndexed { index, shape ->
-                val tile = layout.tiles.getOrNull(index) ?: return@forEachIndexed
-                HangarTile(frame, type, tile, shape, shape.shape == state.inspected, shape.shape == model.selected, time, scale,
-                    language, onAction)
+    // Enter selects the inspected character even while focus rests on the panel itself (after
+    // opening, or when hover inspected a tile): a focused tile or button consumes Enter first, and
+    // an unconsumed Enter must not reach the Session, which would close the Hangar.
+    Box(
+        Modifier.fillMaxSize().onKeyEvent { event ->
+            if (event.key != Key.Enter && event.key != Key.NumPadEnter) return@onKeyEvent false
+            if (event.type == KeyEventType.KeyDown) onAction(HangarAction.SelectInspected)
+            true
+        },
+    ) {
+        ProfilePanel(
+            title = language.text(ProfileText.HangarTitle),
+            count = language.text(ProfileScreensRedesignText.CountOf, model.unlockedCount, model.shapes.size),
+            info = language.text(ProfileScreensRedesignText.HangarInfo),
+            matter = model.matter,
+            scale = scale,
+            tag = "profile-hangar",
+            onBack = { onAction(HangarAction.Back) },
+            background = { frame -> drawHangarBackground(frame, holder.layout) },
+        ) { frame ->
+            val measurer = rememberKkCanvasMeasurer(scale)
+            val type = hangarType(frame.mode)
+            val backWidth = profileHeaderBackWidth(measurer, frame, language.text(ProfileScreensRedesignText.Back))
+            val inspected = state.inspectedShape
+            val layout = hangarLayout(frame, scale, backWidth) { width ->
+                if (inspected == null) 0f else hangarDescriptionLayout(measurer, frame, type, inspected, language, width).kkBoxHeight
             }
-        }
-        if (inspected != null) {
-            val detail = layout.detailViewport
-            LaunchedEffect(inspected.shape) { detailScroll.scrollTo(0) }
+            SideEffect { holder.layout = layout }
             Box(
-                Modifier.offset { IntOffset(detail.left.roundToInt(), detail.top.roundToInt()) }
-                    .size(frame.dp(detail.width), frame.dp(detail.height))
-                    .profileScrollCue(detailScroll, Kk.Ink1, frame.d(24f))
-                    .verticalScroll(detailScroll)
-                    .testTag("profile-hangar-detail"),
+                Modifier.semantics { contentDescription = language.text(ProfileScreensRedesignText.HangarRoster) }
+                    .testTag("profile-hangar-roster"),
             ) {
+                model.shapes.forEachIndexed { index, shape ->
+                    val tile = layout.tiles.getOrNull(index) ?: return@forEachIndexed
+                    HangarTile(frame, type, tile, shape, shape.shape == state.inspected, shape.shape == model.selected, time, scale,
+                        language, onAction)
+                }
+            }
+            if (inspected != null) {
+                val detail = layout.detailViewport
+                LaunchedEffect(inspected.shape) { detailScroll.scrollTo(0) }
                 Box(
-                    Modifier.fillMaxWidth().height(frame.dp(layout.detailContentHeight))
-                        .semantics {
-                            contentDescription = hangarDetailDescription(inspected, model, language)
-                        }
-                        .drawBehind { drawHangarDetail(measurer, frame, type, layout, inspected, model, time, language) },
+                    Modifier.offset { IntOffset(detail.left.roundToInt(), detail.top.roundToInt()) }
+                        .size(frame.dp(detail.width), frame.dp(detail.height))
+                        .profileScrollCue(detailScroll, Kk.Ink1, frame.d(24f))
+                        .verticalScroll(detailScroll)
+                        .testTag("profile-hangar-detail"),
+                ) {
+                    Box(
+                        Modifier.fillMaxWidth().height(frame.dp(layout.detailContentHeight))
+                            .semantics {
+                                contentDescription = hangarDetailDescription(inspected, model, language)
+                            }
+                            .drawBehind { drawHangarDetail(measurer, frame, type, layout, inspected, model, time, language) },
+                    )
+                }
+                val select = layout.select
+                val selected = inspected.shape == model.selected
+                val label = when {
+                    selected -> language.text(ProfileScreensRedesignText.HangarSelected)
+                    inspected.unlocked -> language.text(ProfileScreensRedesignText.HangarSelect)
+                    else -> language.text(ProfileScreensRedesignText.HangarLocked)
+                }
+                ProfileSlabButton(
+                    label = label,
+                    onClick = { onAction(HangarAction.SelectInspected) },
+                    frame = frame,
+                    tag = "profile-hangar-select",
+                    size = if (frame.regular) KkButtonSize.LG else KkButtonSize.MD,
+                    fontSize = type.select,
+                    enabled = state.canSelect,
+                    locked = !inspected.unlocked,
+                    textScale = scale,
+                    contentDescription = label + " " + inspected.definition.displayName.localizedContent(language),
+                    stateDescription = hangarUnlockText(inspected, language),
+                    modifier = Modifier.offset { IntOffset(select.left.roundToInt(), select.top.roundToInt()) }
+                        .size(frame.dp(select.width), frame.dp(select.height)),
                 )
             }
-            val select = layout.select
-            val selected = inspected.shape == model.selected
-            val label = when {
-                selected -> language.text(ProfileScreensRedesignText.HangarSelected)
-                inspected.unlocked -> language.text(ProfileScreensRedesignText.HangarSelect)
-                else -> language.text(ProfileScreensRedesignText.HangarLocked)
-            }
-            ProfileSlabButton(
-                label = label,
-                onClick = { onAction(HangarAction.SelectInspected) },
-                frame = frame,
-                tag = "profile-hangar-select",
-                size = if (frame.regular) KkButtonSize.LG else KkButtonSize.MD,
-                fontSize = type.select,
-                enabled = state.canSelect,
-                locked = !inspected.unlocked,
-                textScale = scale,
-                contentDescription = label + " " + inspected.definition.displayName.localizedContent(language),
-                stateDescription = hangarUnlockText(inspected, language),
-                modifier = Modifier.offset { IntOffset(select.left.roundToInt(), select.top.roundToInt()) }
-                    .size(frame.dp(select.width), frame.dp(select.height)),
-            )
         }
     }
 }
