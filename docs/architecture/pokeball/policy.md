@@ -93,6 +93,7 @@ remain independently enforced.
 | active GameplayRun instances | 1 | Session allocation/lifecycle invariant |
 | Gameplay fixed steps per render frame | 48 | Gameplay simulation loop |
 | Gameplay simulation raw-delta / accumulator cap seconds | `0.1` / `0.3` | production GameLoop clamps before and during accumulator admission |
+| Gameplay fixed-step admission rounding tolerance | 2 ulps of `1/120` s | GameLoop treats an accumulator within two Float ulps of a whole step as that step, so an input on a nominal step boundary lands on the same step at every frame rate; a frame below one step runs no step on a scalar copy |
 | enemies / projectiles / pickups / trail | 120 / 650 / 420 / 110 | captured Content enemy policy plus explicit Gameplay insertion/rollover limits |
 | Echo Chamber echo hits | 256 | Gameplay checks capacity before enqueue; echoes never echo |
 | chain work / visited IDs | 6 / 7 | `MAX_CHAIN_TARGETS`; candidate-private scratch identity buffer; the chain stops at the bound |
@@ -113,10 +114,10 @@ remain independently enforced.
 | Interaction particles / motion echoes / shockwaves | 700 / 36 / 48 | Interaction-ephemeral bounded reducers |
 | Interaction damage numbers / weapon arcs | 140 / 128 | Interaction-ephemeral bounded reducers |
 | Interaction frame delta seconds | `0..1` | Interaction ingress quarantine before Gameplay Pulse construction |
-| Interaction viewport pixels / density | `1..32768` / `0.5..8` | Interaction ingress quarantine before Gameplay Pulse construction |
-| Interaction pointer representation / choice index | finite / `0..3` | Interaction rejects non-finite pointer coordinates; target-owned Gameplay API factories close choice admission |
+| Interaction viewport pixels / density | `1..32768` / `0.5..8` | Interaction ingress quarantine before Gameplay Pulse construction; device pixels are then divided by the density into dp, clamped to `1..32768` |
+| Interaction pointer representation / choice index | finite / `0..3` | Interaction rejects non-finite pointer coordinates and a density outside `0.5..8`, then divides the pointer by the accepted viewport density; target-owned Gameplay API factories close choice admission |
 | authoritative Gameplay frame delta seconds | `0..1` | target-owned Gameplay API factory validates the fixed range before the Nucleus can receive the Pulse |
-| authoritative Gameplay viewport pixels / density | `1..32768` / `0.5..8` | target-owned Gameplay API factory validates both dimensions and density before the Nucleus can receive the Pulse |
+| authoritative Gameplay viewport dp / density | `1..32768` / `0.5..8` | target-owned Gameplay API factory validates both dimensions and density before the Nucleus can receive the Pulse; the simulation, the viewport and the pointer are dp |
 | authoritative Gameplay pointer | `0..current viewport` | Gameplay Nucleus validates both pointer coordinates against committed viewport state |
 | Gameplay / Home / Armory presentation delta seconds | `0.1` / `0.1` / `0.1` | Interaction-owned presentation clocks clamp the first larger representable delta |
 | Codex catalog entries / search characters | 96 / 128 | Interaction rejects catalog overflow; bounded local name search feeds a lazy grid in original catalog order |

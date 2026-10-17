@@ -480,6 +480,14 @@ private fun canonicalRenderFingerprint(render: GameplayRenderModel): Long {
     signature = mix(signature, render.coreShape.ordinal)
     signature = mix(signature, render.coreRadius.toRawBits())
     signature = mix(signature, render.abilityPower.toRawBits())
+    signature = mix(signature, render.interpolationAlpha.toRawBits())
+    signature = mix(signature, render.previousCoreX.toRawBits())
+    signature = mix(signature, render.previousCoreY.toRawBits())
+    signature = mix(signature, render.previousCameraX.toRawBits())
+    signature = mix(signature, render.previousCameraY.toRawBits())
+    signature = mix(signature, render.previousMorningstarX.toRawBits())
+    signature = mix(signature, render.previousMorningstarY.toRawBits())
+    signature = mix(signature, render.viewportDensity.toRawBits())
     signature = mixLong(signature, canonicalCharacterAbilityFingerprint(render.characterAbility))
     signature = mix(signature, render.pointsOfInterest.size)
     render.pointsOfInterest.forEach { point ->
@@ -643,6 +651,8 @@ private fun appendRenderCollections(initial: Long, render: GameplayRenderModel):
         signature = mix(signature, orbital.x.toRawBits())
         signature = mix(signature, orbital.y.toRawBits())
         signature = mix(signature, orbital.radius.toRawBits())
+        signature = mix(signature, orbital.previousX.toRawBits())
+        signature = mix(signature, orbital.previousY.toRawBits())
     }
     val totem = render.totem
     signature = mix(signature, if (totem == null) 0 else 1)

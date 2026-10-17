@@ -17,6 +17,8 @@ internal fun MutableGameState.rebaseWorldIfNeeded() {
     previousSingularityY -= shiftY
     cameraX -= shiftX
     cameraY -= shiftY
+    previousCameraX -= shiftX
+    previousCameraY -= shiftY
     trailLastX -= shiftX
     trailLastY -= shiftY
     for (index in enemies.indices) {
@@ -37,6 +39,8 @@ internal fun MutableGameState.rebaseWorldIfNeeded() {
         val pickup = pickups[index]
         pickup.x -= shiftX
         pickup.y -= shiftY
+        pickup.previousX -= shiftX
+        pickup.previousY -= shiftY
     }
     for (index in trail.indices) {
         val point = trail[index]
@@ -53,6 +57,8 @@ internal fun MutableGameState.rebaseWorldIfNeeded() {
         val orbital = weaponOrbitals[index]
         orbital.x -= shiftX
         orbital.y -= shiftY
+        orbital.previousX -= shiftX
+        orbital.previousY -= shiftY
     }
     characterRuntime = characterRuntime.copy(
         dashOrigin = characterRuntime.dashOrigin?.let { it.copy(x = it.x - shiftX, y = it.y - shiftY) },
@@ -63,6 +69,8 @@ internal fun MutableGameState.rebaseWorldIfNeeded() {
     totem?.let { it.x -= shiftX; it.y -= shiftY }
     morningstarX -= shiftX
     morningstarY -= shiftY
+    previousMorningstarX -= shiftX
+    previousMorningstarY -= shiftY
     weaponBeamStartX -= shiftX
     weaponBeamStartY -= shiftY
     weaponBeamEndX -= shiftX

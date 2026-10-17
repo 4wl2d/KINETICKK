@@ -253,11 +253,12 @@ class GameplayReductionIsolationTest {
         assertSame(source.projectiles, pointerBranch.model.projectiles)
         assertSame(source.enemies, siblingBranch.model.enemies)
 
-        // FrameElapsed is a production full-reduction path. A zero delta isolates copy ownership.
+        // A reroll outside a choice is a production full reduction that simulates nothing, so it
+        // isolates copy ownership alone. (A sub-step frame deliberately shares storage instead.)
         val isolated = assertIs<GameReductionResult.Accepted>(
             reducer.reduce(
                 pointerBranch,
-                GameplayInteractionPulse.FrameElapsed.fromValidated(0f),
+                GameplayInteractionPulse.ChoicesRerolled,
             ),
         ).state.model
 
@@ -459,6 +460,60 @@ class GameplayReductionIsolationTest {
             assertNull(repeated.outputs.progressUpdate, "$name must not be delivered twice")
             assertEquals(retainedFingerprint, source.exactSimulationFingerprint(), name)
         }
+    }
+
+    @Test
+    fun subStepFrameRunsNoStepSharesStableStorageAndLeavesTheCommittedStateUntouched() {
+        val source = MutableGameState(canonicalGameplayContent, seed = 7_331).apply {
+            startRun()
+            spawnClock = 1_000f
+            setVelocityForTesting(640f, -120f)
+            addEnemyForTesting(x = 320f, y = 40f).apply { vx = -90f; vy = 12f }
+            projectiles += Projectile(x = 30f, y = 0f, vx = 500f, vy = 0f, radius = 3f, life = 1f, hostile = false)
+            pickups += Pickup(PickupType.DATA, 60f, 10f, vx = 40f)
+            weaponOrbitals += WeaponOrbital(index = 0, x = 15f, y = 25f, radius = 4f)
+            takeSoundCues()
+            takeVisualFxCues()
+        }
+        val reducer = GameReducer()
+        // One full frame first, so the committed source reports executed steps.
+        val committed = assertIs<GameReductionResult.Accepted>(
+            reducer.reduce(EngineState(source), GameplayInteractionPulse.FrameElapsed.fromValidated(MutableGameState.FIXED_STEP * 1.5f)),
+        ).state.model
+        committed.takeSoundCues()
+        committed.takeVisualFxCues()
+        assertTrue(committed.lastTransitionSteps > 0)
+        val retained = committed.exactSimulationFingerprint()
+        val randomBefore = committed.gameplayRandom.copy().nextInt()
+
+        val subStep = assertIs<GameReductionResult.Accepted>(
+            reducer.reduce(EngineState(committed), GameplayInteractionPulse.FrameElapsed.fromValidated(MutableGameState.FIXED_STEP * 0.25f)),
+        )
+        val candidate = subStep.state.model
+
+        assertEquals(0, candidate.lastTransitionSteps)
+        assertEquals(committed.elapsed, candidate.elapsed)
+        assertTrue(candidate.accumulator > committed.accumulator && candidate.accumulator < MutableGameState.FIXED_STEP)
+        assertNull(subStep.outputs.visualFxCuesOrNull)
+        assertNull(subStep.outputs.progressUpdate)
+        assertEquals(MutableGameState.FIXED_STEP * 0.25f, subStep.outputs.audioRealDeltaSeconds)
+        assertSame(committed.enemies, candidate.enemies)
+        assertSame(committed.projectiles, candidate.projectiles)
+        assertSame(committed.pickups, candidate.pickups)
+        assertSame(committed.weaponOrbitals, candidate.weaponOrbitals)
+        assertSame(committed.gameplayRandom, candidate.gameplayRandom)
+        assertEquals(retained, committed.exactSimulationFingerprint())
+        assertEquals(randomBefore, committed.gameplayRandom.copy().nextInt())
+
+        // The next frame that completes the step runs it on an isolated copy; both retained states stay intact.
+        val retainedCandidate = candidate.exactSimulationFingerprint()
+        val stepped = assertIs<GameReductionResult.Accepted>(
+            reducer.reduce(subStep.state, GameplayInteractionPulse.FrameElapsed.fromValidated(MutableGameState.FIXED_STEP)),
+        ).state.model
+        assertEquals(1, stepped.lastTransitionSteps)
+        assertNotSame(candidate.enemies, stepped.enemies)
+        assertEquals(retained, committed.exactSimulationFingerprint())
+        assertEquals(retainedCandidate, candidate.exactSimulationFingerprint())
     }
 
     @Test
@@ -1102,12 +1157,15 @@ class GameplayReductionIsolationTest {
             value("secondaryBrakeActive", secondaryBrakeActive)
             value("touchBrakeActive", touchBrakeActive)
             float("uiScale", uiScale)
+            float("viewportDensity", viewportDensity)
             float("accumulator", accumulator)
             value("lastTransitionSteps", lastTransitionSteps)
             float("previousCoreX", previousCoreX)
             float("previousCoreY", previousCoreY)
             float("previousSingularityX", previousSingularityX)
             float("previousSingularityY", previousSingularityY)
+            float("previousCameraX", previousCameraX)
+            float("previousCameraY", previousCameraY)
             float("trailLastX", trailLastX)
             float("trailLastY", trailLastY)
             float("trailDistanceCarry", trailDistanceCarry)
@@ -1235,6 +1293,9 @@ class GameplayReductionIsolationTest {
             float("morningstarAngle", morningstarAngle)
             float("morningstarX", morningstarX)
             float("morningstarY", morningstarY)
+            float("previousMorningstarX", previousMorningstarX)
+            float("previousMorningstarY", previousMorningstarY)
+            value("interpolationPrimed", interpolationPrimed)
             float("weaponBeamTime", weaponBeamTime)
             float("weaponBeamStartX", weaponBeamStartX)
             float("weaponBeamStartY", weaponBeamStartY)
@@ -1355,6 +1416,8 @@ class GameplayReductionIsolationTest {
                 float("$prefix.x", orbital.x)
                 float("$prefix.y", orbital.y)
                 float("$prefix.radius", orbital.radius)
+                float("$prefix.previousX", orbital.previousX)
+                float("$prefix.previousY", orbital.previousY)
             }
 
             value("totem.present", totem != null)

@@ -81,6 +81,33 @@ internal class GameReducer {
             )
         }
 
+        // A running frame admits its real time into the accumulator exactly once.
+        val admittedAccumulator = if (
+            intent is GameplayInteractionPulse.FrameElapsed &&
+            state.model.phase == GamePhase.RUNNING
+        ) {
+            nextSimulationAccumulator(
+                currentAccumulator = state.model.accumulator,
+                rawDeltaSeconds = intent.realDeltaSeconds,
+                simulationSpeed = state.model.settings.simulationSpeed,
+            )
+        } else {
+            null
+        }
+        if (
+            admittedAccumulator != null &&
+            !fixedStepIsDue(admittedAccumulator) &&
+            !state.model.hasPendingReductionOutputs()
+        ) {
+            return GameReductionResult.Accepted(
+                state = EngineState(state.model.accumulateWithoutStep(admittedAccumulator)),
+                outputs = SimulationOutputs.create(
+                    advanceAudio = true,
+                    audioRealDeltaSeconds = (intent as GameplayInteractionPulse.FrameElapsed).realDeltaSeconds,
+                ),
+            )
+        }
+
         if (
             intent.leavesStateUnchanged(state.model) &&
             !state.model.hasPendingReductionOutputs()
@@ -96,7 +123,11 @@ internal class GameReducer {
         } else {
             state.model.copyForReduction()
         }
-        applyIntent(candidate, intent)
+        if (admittedAccumulator != null) {
+            candidate.runAdmittedFrame(admittedAccumulator)
+        } else {
+            applyIntent(candidate, intent)
+        }
         val visualFxCues = candidate.takeVisualFxCues()
         val progressUpdate = candidate.takeProgressUpdate()
         val soundCues = candidate.takeSoundCues()
@@ -134,6 +165,21 @@ internal class GameReducer {
         }
     }
 
+    /**
+     * A frame shorter than the remaining fixed step only advances the accumulator (and with it the
+     * render interpolation): the candidate shares every stable collection and random stream with
+     * the committed state, runs no step and so cannot write into the shared storage.
+     */
+    private fun MutableGameState.accumulateWithoutStep(admittedAccumulator: Float): MutableGameState {
+        val candidate = copyForScalarInputReduction()
+        candidate.accumulator = admittedAccumulator
+        candidate.lastTransitionSteps = 0
+        check(candidate.lastTransitionSteps == 0 && !fixedStepIsDue(candidate.accumulator)) {
+            "A sub-step frame cannot execute a fixed step"
+        }
+        return candidate
+    }
+
     private fun validate(state: EngineState, intent: GameplayInteractionPulse): GameplayRejection? =
         when (intent) {
             is GameplayInteractionPulse.PointerMoved -> when {
@@ -168,7 +214,8 @@ internal class GameReducer {
                 val nextUiScale = max(1f, density)
                 nextWidth.sameBitsAs(state.screenWidth) &&
                     nextHeight.sameBitsAs(state.screenHeight) &&
-                    nextUiScale.sameBitsAs(state.uiScale)
+                    nextUiScale.sameBitsAs(state.uiScale) &&
+                    density.sameBitsAs(state.viewportDensity)
             }
             is GameplayInteractionPulse.PointerMoved -> state.pointerInputIsUnchanged(this)
             is GameplayInteractionPulse.BrakeChanged -> state.brakeInputIsUnchanged(this)

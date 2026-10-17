@@ -30,6 +30,8 @@ internal fun MutableGameState.updateWeapons(delta: Float) {
             val angularSpeed = 3.2f + softVelocity(speed) / 135f + agonyRank * 0.12f
             morningstarAngle = (morningstarAngle + angularSpeed * delta) % TAU
             val radius = 104f + min(70f, softVelocity(speed) * 0.055f) + agonyRank * 4f
+            previousMorningstarX = morningstarX
+            previousMorningstarY = morningstarY
             morningstarX = coreX + cos(morningstarAngle) * radius
             morningstarY = coreY + sin(morningstarAngle) * radius
             if (agonyRank > 0) agonyMutationCounts[WeaponId.MORNINGSTAR.ordinal]++
@@ -201,8 +203,15 @@ internal fun MutableGameState.ensureOrbitals(
     for (index in weaponOrbitals.indices) {
         val orbital = weaponOrbitals[index]
         val angle = elapsed * angularSpeed + orbital.index * TAU / max(1, count)
+        orbital.previousX = orbital.x
+        orbital.previousY = orbital.y
         orbital.x = coreX + cos(angle) * orbitRadius
         orbital.y = coreY + sin(angle) * orbitRadius
+        // A freshly formed orbital appears on its orbit instead of sweeping out from the Core.
+        if (!orbitalsMatch) {
+            orbital.previousX = orbital.x
+            orbital.previousY = orbital.y
+        }
     }
 }
 

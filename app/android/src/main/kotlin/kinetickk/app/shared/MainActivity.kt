@@ -4,6 +4,7 @@
 package kinetickk.app.shared
 
 import android.graphics.Color as AndroidColor
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -31,6 +32,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        preferHighestRefreshRate()
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
@@ -62,4 +64,27 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+}
+
+/**
+ * Asks for the display mode with the highest refresh rate at the current resolution, so a 90,
+ * 120 or 144 Hz panel is not left at 60 Hz. The fixed-step simulation and render interpolation
+ * keep the game identical at any rate.
+ */
+private fun ComponentActivity.preferHighestRefreshRate() {
+    val display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        display
+    } else {
+        @Suppress("DEPRECATION")
+        windowManager.defaultDisplay
+    } ?: return
+    val current = display.mode
+    val best = display.supportedModes
+        .filter { it.physicalWidth == current.physicalWidth && it.physicalHeight == current.physicalHeight }
+        .maxByOrNull { it.refreshRate }
+        ?: return
+    val attributes = window.attributes
+    if (attributes.preferredDisplayModeId == best.modeId) return
+    attributes.preferredDisplayModeId = best.modeId
+    window.attributes = attributes
 }

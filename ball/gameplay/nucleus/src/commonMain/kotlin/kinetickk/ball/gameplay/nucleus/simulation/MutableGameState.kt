@@ -274,6 +274,8 @@ internal class MutableGameState(
     internal var secondaryBrakeActive: Boolean = reductionSource?.secondaryBrakeActive ?: false
     internal var touchBrakeActive: Boolean = reductionSource?.touchBrakeActive ?: false
     internal var uiScale: Float = reductionSource?.uiScale ?: 1f
+    /** Device px per dp of the accepted viewport; the simulation itself runs in dp. */
+    internal var viewportDensity: Float = reductionSource?.viewportDensity ?: 1f
     internal var accumulator: Float = reductionSource?.accumulator ?: 0f
     internal var lastTransitionSteps: Int = reductionSource?.lastTransitionSteps ?: 0
         internal set
@@ -281,6 +283,17 @@ internal class MutableGameState(
     internal var previousCoreY: Float = reductionSource?.previousCoreY ?: 0f
     internal var previousSingularityX: Float = reductionSource?.previousSingularityX ?: 0f
     internal var previousSingularityY: Float = reductionSource?.previousSingularityY ?: 0f
+    /** Camera at the start of the last fixed step; renderers interpolate toward [cameraX]. */
+    internal var previousCameraX: Float = reductionSource?.previousCameraX ?: 0f
+    internal var previousCameraY: Float = reductionSource?.previousCameraY ?: 0f
+    /** Morningstar position at the start of the last fixed step (render interpolation only). */
+    internal var previousMorningstarX: Float = reductionSource?.previousMorningstarX ?: 0f
+    internal var previousMorningstarY: Float = reductionSource?.previousMorningstarY ?: 0f
+    /**
+     * Whether a fixed step has run since the simulation last entered RUNNING, so every previous
+     * position is that step's start. Until then renderers present the exact state (render only).
+     */
+    internal var interpolationPrimed: Boolean = reductionSource?.interpolationPrimed ?: false
     internal var trailLastX: Float = reductionSource?.trailLastX ?: 0f
     internal var trailLastY: Float = reductionSource?.trailLastY ?: 0f
     internal var trailDistanceCarry: Float = reductionSource?.trailDistanceCarry ?: 0f
@@ -623,6 +636,7 @@ internal class MutableGameState(
             previousSingularityY = cameraY + pointerY - screenHeight * 0.5f
         }
         uiScale = max(1f, density)
+        viewportDensity = density
     }
 
 }

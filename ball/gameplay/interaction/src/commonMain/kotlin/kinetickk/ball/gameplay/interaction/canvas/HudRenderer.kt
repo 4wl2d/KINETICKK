@@ -437,7 +437,7 @@ private fun DrawScope.drawBossBar(
         val track = if (part == active && aspect >= 0) roles.element(aspect).copy(alpha = 0.22f) else roles.threat.copy(alpha = 0.18f)
         val stripes = part == active && shifting
         drawKkMeter(bar, fill, roles.threat, roles, background = track, ghost = partGhost, ghostColor = Kk.Bone,
-            stripes = if (stripes) KkMeterStripes.THREAT else KkMeterStripes.NONE, time = engine.elapsed, edge = stripes, threat = true)
+            stripes = if (stripes) KkMeterStripes.THREAT else KkMeterStripes.NONE, time = engine.renderElapsed, edge = stripes, threat = true)
     }
 }
 
@@ -499,7 +499,7 @@ private fun DrawScope.drawBossStatusRail(
     val segmentHeight = glyph * 0.62f
     val segmentTop = middle - segmentHeight * 0.5f
     val primed = engine.primedElement(bits, EnemyStatusBits.dominant(bits))
-    val pulse = 0.35f + 0.65f * (kotlin.math.sin(engine.elapsed * RAIL_PRIMED_PULSE) + 1f) * 0.5f
+    val pulse = 0.35f + 0.65f * (kotlin.math.sin(engine.renderElapsed * RAIL_PRIMED_PULSE) + 1f) * 0.5f
     var first = true
     for (element in 0 until STATUS_ELEMENT_COUNT) {
         val stacks = EnemyStatusBits.stacks(bits, element)
@@ -1233,7 +1233,7 @@ private fun DrawScope.drawRelicGauge(
             val stroke = kkStroke(frame.u(2f))
             drawCircle(color, radius, center, alpha = 0.18f, style = stroke)
             if (charge > 0f) {
-                val alpha = if (charge >= 1f) 0.6f + 0.4f * kotlin.math.sin(engine.elapsed * 12f) else 0.95f
+                val alpha = if (charge >= 1f) 0.6f + 0.4f * kotlin.math.sin(engine.renderElapsed * 12f) else 0.95f
                 drawArc(color, -90f, 360f * charge, false, Offset(center.x - radius, center.y - radius), Size(radius * 2f, radius * 2f),
                     alpha = alpha, style = stroke)
             }
@@ -1250,7 +1250,7 @@ private fun DrawScope.drawRelicGauge(
         }
         RelicId.GLASS_COMET -> if (build.invulnerable) {
             drawPath(HudDrawCache.paths.diamond(HudPath.INVULNERABLE.ordinal, center.x, center.y, half + frame.u(5f)), Kk.Bone,
-                alpha = 0.55f + 0.45f * kotlin.math.sin(engine.elapsed * 18f), style = kkStroke(frame.u(1.5f)))
+                alpha = 0.55f + 0.45f * kotlin.math.sin(engine.renderElapsed * 18f), style = kkStroke(frame.u(1.5f)))
         }
         RelicId.OUROBOROS_SEAL -> if (build.ouroborosSpent) {
             drawLine(roles.threat, Offset(center.x - half * 0.7f, center.y + half * 0.7f), Offset(center.x + half * 0.7f, center.y - half * 0.7f),

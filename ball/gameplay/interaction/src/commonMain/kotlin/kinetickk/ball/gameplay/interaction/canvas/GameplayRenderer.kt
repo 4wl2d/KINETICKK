@@ -34,7 +34,7 @@ internal fun DrawScope.drawGameplay(
 ) {
     drawRect(Kk.Ink)
     val shake = if (engine.settings.screenShake && engine.phase == GamePhase.RUNNING) {
-        screenShakeOffset(engine.screenShake, engine.elapsed, d(MAX_SCREEN_SHAKE_DP))
+        screenShakeOffset(engine.screenShake, engine.renderElapsed, d(MAX_SCREEN_SHAKE_DP))
     } else {
         Offset.Zero
     }
@@ -43,8 +43,11 @@ internal fun DrawScope.drawGameplay(
     drawBackdrop(engine, shakeX, shakeY, renderTime, textMeasurer.roles)
 
     drawWorld(engine, visualFx, shakeX, shakeY, textMeasurer)
-    if (engine.phase == GamePhase.GAME_OVER) drawCoreDeath(engine, terminalElapsed, textMeasurer.roles)
-    else drawScreenFx(engine, renderTime, textMeasurer.roles)
+    if (engine.phase == GamePhase.GAME_OVER) {
+        withWorldUnits(engine.worldScale) { drawCoreDeath(engine, terminalElapsed, textMeasurer.roles) }
+    } else {
+        drawScreenFx(engine, renderTime, textMeasurer.roles)
+    }
     if (shouldDrawRunningPresentation(engine.phase)) {
         drawHud(engine, textMeasurer, renderTime, shakeX, shakeY, hudMemory, trialInfoOpen)
         drawHudFeed(engine, visualFx, textMeasurer, renderTime, hudMemory)

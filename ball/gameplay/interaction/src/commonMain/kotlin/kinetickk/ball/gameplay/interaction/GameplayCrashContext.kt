@@ -21,7 +21,7 @@ internal fun GameplayRenderSnapshot.crashContext(): String = buildString {
     with(model) {
         appendLine("phase=$phase elapsed=$elapsed speed=${settings.simulationSpeed} fixedStep=${kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel.FIXED_STEP}")
         appendLine("settings=$settings")
-        appendLine("screen=${screenWidth}x$screenHeight uiScale=$uiScale")
+        appendLine("screen=${screenWidth}x${screenHeight}dp density=$viewportDensity uiScale=$uiScale alpha=$interpolationAlpha")
         appendLine("core=$coreShape position=($coreX,$coreY) velocity=($velocityX,$velocityY) camera=($cameraX,$cameraY)")
         appendLine("pointer=($pointerX,$pointerY) active=$pointerActive braking=$braking")
         appendLine("hp=$hp/$maxHp shield=$shield/$maxShield heat=$heat overheated=$overheated dashPhase=$dashPhaseTime polarity=$polarityStability")

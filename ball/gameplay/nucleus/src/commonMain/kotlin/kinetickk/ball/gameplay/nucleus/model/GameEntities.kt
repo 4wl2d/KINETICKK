@@ -356,6 +356,9 @@ internal data class WeaponOrbital(
     var x: Float,
     var y: Float,
     val radius: Float,
+    /** Position at the start of the last fixed step (render interpolation only). */
+    var previousX: Float = x,
+    var previousY: Float = y,
 )
 
 /**

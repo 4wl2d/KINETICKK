@@ -42,18 +42,25 @@ internal fun DrawScope.drawHudWorldAnchors(
 ) {
     if (engine.phase == GamePhase.GAME_OVER) return
     val roles = measurer.roles
-    val core = world(engine, engine.coreX, engine.coreY, shakeX, shakeY)
-    val cursor = Offset(engine.pointerX + shakeX * 0.18f, engine.pointerY + shakeY * 0.18f)
+    // Anchored like the world they hug: the same world-unit layer, at the drawn (interpolated) Core.
+    val scale = engine.worldScale
+    val core = worldOnScreen(engine, engine.renderCoreX, engine.renderCoreY, shakeX, shakeY)
+    val cursor = Offset(engine.pointerX * scale + shakeX * 0.18f, engine.pointerY * scale + shakeY * 0.18f)
     val draining = memory != null && memory.polarityDraining(renderTime)
     val haloRadius = engine.coreRadius * CORE_HALO_RATIO
 
-    drawTether(engine, roles, core, cursor, renderTime, critical, draining)
-    if (engine.overdriveTime > 0f) drawOverdriveCore(roles, core, renderTime)
-    if (engine.dashPhaseTime > 0f) drawDashAfterimages(engine, roles, core)
-    drawCoreHalo(engine, roles, core, haloRadius)
-    if (critical) drawCriticalRing(roles, core, renderTime)
-    drawCursorHalo(engine, measurer, cursor, renderTime, draining)
-    if (engine.overheated) drawOverheatStamp(measurer, core, haloRadius, renderTime)
+    withWorldUnits(scale) {
+        val worldCore = Offset(core.x / scale, core.y / scale)
+        val worldCursor = Offset(cursor.x / scale, cursor.y / scale)
+        drawTether(engine, roles, worldCore, worldCursor, renderTime, critical, draining)
+        if (engine.overdriveTime > 0f) drawOverdriveCore(roles, worldCore, renderTime)
+        if (engine.dashPhaseTime > 0f) drawDashAfterimages(engine, roles, worldCore)
+        drawCoreHalo(engine, roles, worldCore, haloRadius)
+        if (critical) drawCriticalRing(roles, worldCore, renderTime)
+        drawCursorHaloArc(engine, roles, worldCursor, renderTime, draining)
+    }
+    drawPolarityLabel(engine, measurer, cursor, CURSOR_HALO_RADIUS * scale, draining)
+    if (engine.overheated) drawOverheatStamp(measurer, core, haloRadius * scale, renderTime)
 }
 
 /** Dashed Core-to-cursor line: heavier with more pull, solid threat when contact is close. */
@@ -120,15 +127,14 @@ private fun DrawScope.drawCoreHalo(engine: GameplayRenderModel, roles: KkRolePal
     }
 }
 
-/** Cursor halo: polarity arc, threat under 25 %, pulsing while polarity drains. */
-private fun DrawScope.drawCursorHalo(
+/** Cursor halo: polarity arc, threat under 25 %, pulsing while polarity drains (world units). */
+private fun DrawScope.drawCursorHaloArc(
     engine: GameplayRenderModel,
-    measurer: TextMeasurer,
+    roles: KkRolePalette,
     cursor: Offset,
     renderTime: Float,
     draining: Boolean,
 ) {
-    val roles = measurer.roles
     val stability = engine.polarityStability.coerceIn(0f, 1f)
     val low = stability <= 0.25f
     val alpha = if (draining) 0.35f + 0.65f * (1f - kkPulse(renderTime, 1.1f, KkEase.Out)) else 1f
@@ -141,6 +147,19 @@ private fun DrawScope.drawCursorHalo(
         drawArc(if (low) roles.threat else roles.pol, 120f, CURSOR_ARC_DEGREES * stability, false, topLeft, arcSize,
             alpha = alpha, style = stroke)
     }
+}
+
+/** The draining polarity % beside the cursor halo of screen radius [radius] (device pixels, UI text). */
+private fun DrawScope.drawPolarityLabel(
+    engine: GameplayRenderModel,
+    measurer: TextMeasurer,
+    cursor: Offset,
+    radius: Float,
+    draining: Boolean,
+) {
+    val roles = measurer.roles
+    val stability = engine.polarityStability.coerceIn(0f, 1f)
+    val low = stability <= 0.25f
     if (draining && low) {
         // Changes every frame while draining: cached digit layouts, placed clear of the controls.
         // UI text (it follows the text size), in a style of its own: see [polarityLabelStyle].
@@ -320,8 +339,9 @@ private fun DrawScope.drawPolarityEdge(engine: GameplayRenderModel, roles: KkRol
     val w = size.width
     val h = size.height
     if (w <= 0f || h <= 0f) return
-    val reachX = engine.pointerX / w * 2f - 1f
-    val reachY = engine.pointerY / h * 2f - 1f
+    // The pointer is dp; this band is drawn in device pixels.
+    val reachX = engine.pointerX * engine.worldScale / w * 2f - 1f
+    val reachY = engine.pointerY * engine.worldScale / h * 2f - 1f
     val band = d(60f)
     val alpha = 0.35f + 0.65f * (1f - kkPulse(renderTime, 0.9f, KkEase.Out))
     val threat = roles.threat.copy(alpha = 0.42f)

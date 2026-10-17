@@ -56,6 +56,25 @@ On Windows, replace `./gradlew` with `gradlew.bat`.
 ./gradlew :app:android:assembleDebug
 ```
 
+### Frame rate
+
+The simulation runs at a fixed 120 steps per second in density-independent
+units, and frames between steps draw interpolated positions, so the game is the
+same at any frame rate and any display density. With V-Sync the desktop frame
+rate follows the monitor (a 144 or 240 Hz display already renders above
+120 fps); Android asks for the panel's highest refresh rate. To lift the desktop
+cap, turn V-Sync off with the uncapped mode:
+
+```bash
+./gradlew :app:desktop:run -Pkinetickk.uncapped=true
+KINETICKK_UNCAPPED_FPS=1 ./gradlew :app:desktop:run
+```
+
+A packaged desktop build takes `-Dkinetickk.uncapped=true` or the same
+environment variable. Below 10 fps a frame advances at most 0.1 s of game time,
+so the game slows down instead of skipping physics (a spiral-of-death guard).
+`F3` shows the measured frame rate.
+
 The Android debug APK is in `app/android/build/outputs/apk/debug/` and uses a
 separate package from the release. Build the production web bundle with
 `./gradlew :app:web:wasmJsBrowserDistribution`; its output is
@@ -115,7 +134,7 @@ is uploaded. See the [privacy note](docs/project/PRIVACY.md).
 
 ## Status
 
-Version **0.3.0** is a playable prototype. Before 1.0.0, only the current
+Version **0.4.0** is a playable prototype. Before 1.0.0, only the current
 profile schema is supported: incompatible profiles start from defaults, and
 older save locations remain untouched. Balance, content, and save formats may
 change during development.

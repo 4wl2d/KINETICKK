@@ -158,7 +158,14 @@ data class WeaponNodeProjection(
     val radius: Float,
 )
 
-data class WeaponOrbitalProjection(val index: Int, val x: Float, val y: Float, val radius: Float)
+data class WeaponOrbitalProjection(
+    val index: Int,
+    val x: Float,
+    val y: Float,
+    val radius: Float,
+    val previousX: Float = x,
+    val previousY: Float = y,
+)
 
 /** Immutable, API-owned projection of a committed GameplayRun frame. */
 class GameplayRenderModel(
@@ -267,6 +274,27 @@ class GameplayRenderModel(
     val coreRadius: Float = CORE_RADIUS,
     /** Power of character abilities and weapon-based item effects; reward cards price weapon units with it. */
     val abilityPower: Float = effectiveWeaponPower,
+    /**
+     * Accumulated real time past the last simulated state as a fraction of [FIXED_STEP] (0..1).
+     * Renderers draw moving things at `previous + (current - previous) * alpha`; it is 1 whenever
+     * the run is not running, so paused and terminal frames show the exact state, and until the
+     * first step after a run starts or resumes (its previous positions are older than one step).
+     */
+    val interpolationAlpha: Float = 1f,
+    /** Core position at the start of the last fixed step. */
+    val previousCoreX: Float = coreX,
+    val previousCoreY: Float = coreY,
+    /** Camera position at the start of the last fixed step. */
+    val previousCameraX: Float = cameraX,
+    val previousCameraY: Float = cameraY,
+    /** Morningstar position at the start of the last fixed step. */
+    val previousMorningstarX: Float = morningstarX,
+    val previousMorningstarY: Float = morningstarY,
+    /**
+     * Device pixels per dp of the viewport the simulation accepted. Simulation coordinates (world,
+     * viewport and pointer) are dp; the world layer is drawn scaled by this density.
+     */
+    val viewportDensity: Float = 1f,
 ) {
     val speed: Float get() = vectorLength(velocityX, velocityY)
     val runProgress: Float get() = content.tempo.progress(elapsed)
