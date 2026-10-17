@@ -12,6 +12,7 @@ import kinetickk.app.shared.KinetickkApp
 import kinetickk.app.shared.enableKinetickkComposeRuntimeOptimizations
 import kinetickk.app.shared.DesktopCrashHandler
 import kinetickk.app.shared.DesktopCrashBoundary
+import kinetickk.app.shared.DesktopFramePacing
 import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.delay
 
@@ -34,6 +35,8 @@ fun main(args: Array<String>) {
         if (crashTest == "main") error("KINETICKK deliberate main crash")
         if (crashTest == "worker") Thread({ error("KINETICKK deliberate worker crash") }, "crash-test-worker").start()
         enableKinetickkComposeRuntimeOptimizations()
+        // Before the first window: Skiko reads the V-Sync setting when it creates the redrawer.
+        if (DesktopFramePacing.apply()) println("KINETICKK uncapped frame rate (V-Sync off)")
         application(exitProcessOnExit = false) {
             DesktopCrashBoundary(crashes) {
                 Window(

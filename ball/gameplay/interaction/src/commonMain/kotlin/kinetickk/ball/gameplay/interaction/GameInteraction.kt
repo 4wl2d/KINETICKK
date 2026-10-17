@@ -30,12 +30,14 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.NonRestartableComposable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -240,7 +242,21 @@ fun GameplayContent(
         }
     }
 
-    SideEffect(component, inputEnabled, renderModelValue.phase) {
+    // The composition reads only these facts; the Canvas draws the full model every frame, so a
+    // running frame invalidates the draw without recomposing the gameplay host.
+    val compositionFacts by remember(component) {
+        derivedStateOf(structuralEqualityPolicy()) { renderModelValue.compositionFacts() }
+    }
+    val trialDescription by remember(component, language) {
+        derivedStateOf(structuralEqualityPolicy()) {
+            val model = renderModelValue
+            model.activeTrial()?.takeIf { model.phase == GamePhase.RUNNING }?.let { model.trialRules(it, language) }
+        }
+    }
+    val facts = compositionFacts
+    val phase = facts.phase
+
+    SideEffect(component, inputEnabled, phase) {
         if (inputEnabled) focusRequester.requestFocus()
     }
 
@@ -275,7 +291,7 @@ fun GameplayContent(
         }
     }
 
-    val textScale = renderModelValue.settings.textScale
+    val textScale = facts.textScale
     val typography = kinetickk.foundation.design.rememberInterfaceTypography()
     val roles = LocalKkRolePalette.current
     val textMeasurer = remember(composeTextMeasurer, textScale, language, typography, roles) {
@@ -287,16 +303,14 @@ fun GameplayContent(
             roles = roles,
         )
     }
-    val hudWidth = renderModelValue.hudWidth
-    val hudHeight = renderModelValue.hudHeight
-    val layoutDimensions = remember(hudWidth, hudHeight, renderModelValue.uiScale) {
+    val layoutDimensions = remember(facts.hudWidth, facts.hudHeight, facts.uiScale) {
         GameplayLayoutDimensions(
-            width = hudWidth,
-            height = hudHeight,
-            scale = renderModelValue.uiScale,
+            width = facts.hudWidth,
+            height = facts.hudHeight,
+            scale = facts.uiScale,
         )
     }
-    val pauseLayout = if (renderModelValue.phase == GamePhase.PAUSED) {
+    val pauseLayout = if (phase == GamePhase.PAUSED) {
         remember(layoutDimensions) {
             pauseLayoutGeometry(
                 layoutDimensions.width,
@@ -307,24 +321,24 @@ fun GameplayContent(
     } else {
         null
     }
-    val choiceLayout = if (renderModelValue.phase == GamePhase.CHOICE) {
+    val choiceLayout = if (phase == GamePhase.CHOICE) {
         remember(
             layoutDimensions,
-            renderModelValue.choices.size,
-            renderModelValue.choicesCanReroll,
+            facts.choiceCount,
+            facts.choicesCanReroll,
         ) {
             choiceLayoutGeometry(
                 layoutDimensions.width,
                 layoutDimensions.height,
                 layoutDimensions.scale,
-                renderModelValue.choices.size,
-                renderModelValue.choicesCanReroll,
+                facts.choiceCount,
+                facts.choicesCanReroll,
             )
         }
     } else {
         null
     }
-    val trialActive = renderModelValue.phase == GamePhase.RUNNING && renderModelValue.activeTrial() != null
+    val trialActive = trialDescription != null
     // Read in the composition that ends the trial, before its (!) node leaves: removing a focused
     // node clears focus from the whole hierarchy, so keyboard focus goes back to the gameplay root.
     val trialInfoHadFocus = trialInfoFocusedValue
@@ -336,10 +350,10 @@ fun GameplayContent(
         }
     }
     val trialInfoShown = trialActive && (trialInfoFocusedValue || trialInfoOpenValue || trialInfoHoveredValue)
-    val terminal = renderModelValue.phase == GamePhase.GAME_OVER || renderModelValue.phase == GamePhase.VICTORY
-    val terminalStartedAt = remember(component, renderModelValue.phase) { renderTimeSecondsValue }
+    val terminal = phase == GamePhase.GAME_OVER || phase == GamePhase.VICTORY
+    val terminalStartedAt = remember(component, phase) { renderTimeSecondsValue }
     val terminalElapsed = if (terminal) (renderTimeSecondsValue - terminalStartedAt).coerceAtLeast(0f) else 0f
-    val terminalReady = terminalActionsReady(terminalElapsed, renderModelValue.phase == GamePhase.VICTORY)
+    val terminalReady = terminalActionsReady(terminalElapsed, phase == GamePhase.VICTORY)
     val performanceHudProjection = if (performanceEnabledValue) {
         remember(performanceSnapshotValue, language) {
             performanceSnapshotValue.toPerformanceHudProjection(language)
@@ -592,7 +606,7 @@ fun GameplayContent(
                 dispatchInput(input)
             }
         }
-        if (renderModelValue.phase == GamePhase.CHOICE) {
+        if (phase == GamePhase.CHOICE) {
             RewardContent(
                 engine = renderModelValue,
                 layout = requireNotNull(choiceLayout),
@@ -610,7 +624,7 @@ fun GameplayContent(
             )
         }
         // Pause and reward overlays present Codex as their own menu item and button.
-        if (inputEnabled && renderModelValue.phase == GamePhase.RUNNING) {
+        if (inputEnabled && phase == GamePhase.RUNNING) {
             val buildBounds = remember(layoutDimensions) {
                 runningBuildButtonBounds(layoutDimensions.width, layoutDimensions.height, layoutDimensions.scale)
             }
@@ -628,7 +642,8 @@ fun GameplayContent(
         }
         if (inputEnabled) {
             GameplaySemanticControls(
-                engine = renderModelValue,
+                facts = facts,
+                trialDescription = trialDescription,
                 density = localDensity,
                 performanceEnabled = performanceEnabledValue,
                 pauseLayout = pauseLayout,
@@ -654,7 +669,8 @@ fun GameplayContent(
 
 @Composable
 private fun GameplaySemanticControls(
-    engine: GameplayRenderModel,
+    facts: GameplayCompositionFacts,
+    trialDescription: String?,
     density: Density,
     performanceEnabled: Boolean,
     pauseLayout: PauseLayoutGeometry?,
@@ -664,30 +680,27 @@ private fun GameplaySemanticControls(
     onBrakeChanged: (Boolean) -> Unit,
 ) {
     val language = LocalAppLanguage.current
-    if (engine.phase == GamePhase.RUNNING) {
-        val trial = engine.activeTrial()
-        if (trial != null) {
-            TrialInfoSemanticNode(
-                engine = engine,
-                density = density,
-                description = engine.trialRules(trial, language),
-                onFocusChanged = onTrialInfoFocusChanged,
-                onToggle = onTrialInfoToggle,
-            )
-        }
+    if (facts.phase == GamePhase.RUNNING && trialDescription != null) {
+        TrialInfoSemanticNode(
+            facts = facts,
+            density = density,
+            description = trialDescription,
+            onFocusChanged = onTrialInfoFocusChanged,
+            onToggle = onTrialInfoToggle,
+        )
     }
-    when (engine.phase) {
+    when (facts.phase) {
         GamePhase.RUNNING -> forEachRunningControlBounds(
-            width = engine.hudWidth,
-            height = engine.hudHeight,
-            scale = engine.uiScale,
+            width = facts.hudWidth,
+            height = facts.hudHeight,
+            scale = facts.uiScale,
         ) { target, left, top, right, bottom ->
             val bounds = Rect(left, top, right, bottom)
             when (target) {
                 RunningControlTarget.BRAKE -> BrakeSemanticControl(
                     bounds = bounds,
                     density = density,
-                    active = engine.braking,
+                    active = facts.braking,
                     onPressedChange = onBrakeChanged,
                 )
                 RunningControlTarget.DASH -> GameplaySemanticAction(
@@ -696,8 +709,8 @@ private fun GameplaySemanticControls(
                     tag = "kinetickk.gameplay.dash",
                     description = language.text(GameplayText.DashDescription),
                     state = when {
-                        engine.overheated -> language.text(GameplayText.OfflineState)
-                        engine.dashReady -> language.text(GameplayText.ReadyState)
+                        facts.overheated -> language.text(GameplayText.OfflineState)
+                        facts.dashReady -> language.text(GameplayText.ReadyState)
                         else -> language.text(GameplayText.CoolingState)
                     },
                     onClick = {
@@ -773,16 +786,16 @@ private fun GameplaySemanticControls(
  */
 @Composable
 private fun TrialInfoSemanticNode(
-    engine: GameplayRenderModel,
+    facts: GameplayCompositionFacts,
     density: Density,
     description: String,
     onFocusChanged: (Boolean) -> Unit,
     onToggle: () -> Unit,
 ) {
-    val bounds = remember(engine.hudWidth, engine.hudHeight, engine.uiScale, engine.settings.textScale) {
+    val bounds = remember(facts.hudWidth, facts.hudHeight, facts.uiScale, facts.textScale) {
         HudTrialPanelLayout()
-            .update(engine.hudWidth, engine.hudHeight, engine.uiScale, engine.settings.textScale)
-            .infoTarget(engine.uiScale)
+            .update(facts.hudWidth, facts.hudHeight, facts.uiScale, facts.textScale)
+            .infoTarget(facts.uiScale)
     }
     val currentOnFocusChanged = rememberUpdatedState(onFocusChanged)
     DisposableEffect(Unit) {
@@ -904,6 +917,36 @@ internal fun gameplayBrakeStateDescription(active: Boolean, language: AppLanguag
 
 /** Accessibility activation is a latch: only another explicit action releases it. */
 internal fun gameplayBrakeSemanticToggleState(active: Boolean): Boolean = !active
+
+/**
+ * What the composed gameplay host depends on. A running frame changes positions every frame but
+ * these facts rarely, so the host recomposes only when one of them changes.
+ */
+private data class GameplayCompositionFacts(
+    val phase: GamePhase,
+    val hudWidth: Float,
+    val hudHeight: Float,
+    val uiScale: Float,
+    val textScale: Float,
+    val choiceCount: Int,
+    val choicesCanReroll: Boolean,
+    val braking: Boolean,
+    val overheated: Boolean,
+    val dashReady: Boolean,
+)
+
+private fun GameplayRenderModel.compositionFacts() = GameplayCompositionFacts(
+    phase = phase,
+    hudWidth = hudWidth,
+    hudHeight = hudHeight,
+    uiScale = uiScale,
+    textScale = settings.textScale,
+    choiceCount = choices.size,
+    choicesCanReroll = choicesCanReroll,
+    braking = braking,
+    overheated = overheated,
+    dashReady = dashReady,
+)
 
 private class GameplayLayoutDimensions(
     val width: Float,

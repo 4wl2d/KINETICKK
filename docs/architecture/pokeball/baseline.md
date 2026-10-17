@@ -119,6 +119,22 @@ gameplay reads or fires them yet. The seeded baseline trace is unchanged. The
 no-POI probe now runs its fixed ten seeds and requires at least five wins;
 six win, and seed `23770` no longer does.
 
+The 0.4.0 frame-pacing step makes the simulation density independent: the
+interaction boundary divides the viewport and the pointer by the display
+density, so world units, speeds and spawn distances are dp on every display,
+and the world layer is drawn magnified by the density (the HUD keeps device
+pixels and `uiScale`). Tests run at density 1 and are unchanged. The render
+model publishes an interpolation alpha (accumulator over the fixed step, `1`
+outside a running phase) and previous positions, and renderers draw moving
+things between the last two simulated states. A running frame whose admitted
+time stays below one step only advances the accumulator on a scalar copy and
+reuses every projection. Step admission tolerates two Float ulps, so an input on
+a nominal step boundary lands on the same step at 30, 60, 144 and 240 Hz; at
+50 Hz input the step timing and the seeded traces are unchanged. World rebases
+also shift pickup, camera, Morningstar and orbital previous positions. The
+120 Hz step, the 48-step cap and the `0.1` / `0.3` s clamps are unchanged; the
+version is `0.4.0`.
+
 The compact exit workflow removes the old causal-depth assertion that failed
 when a busy Profile refused progress before acceptance. An injected
 persistence callback reproduced that failure on the original source snapshot;

@@ -40,6 +40,8 @@ sourceSets.main { resources.srcDir(buildInfo) }
 
 tasks.withType<JavaExec>().matching { it.name == "run" }.configureEach {
     providers.gradleProperty("crashDir").orNull?.let { systemProperty("kinetickk.crashDir", it) }
+    // ./gradlew :app:desktop:run -Pkinetickk.uncapped=true turns V-Sync off (see DesktopFramePacing).
+    providers.gradleProperty("kinetickk.uncapped").orNull?.let { systemProperty("kinetickk.uncapped", it) }
     doFirst(IsolateDesktopRuntimeAction(objects.fileCollection()))
     doLast(DeleteSuccessfulDesktopRuntimeAction())
 }
