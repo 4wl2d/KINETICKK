@@ -155,6 +155,11 @@ sealed interface MatrixEffect {
     /** Each Elite kill queues an extra item offer. */
     data object EliteBounty : MatrixEffect
 
+    /**
+     * Extra Heirloom cards per rank. An extra the offer cannot show (every carried Relic is already
+     * offered, or the cards fill the choice bound beside the decline card) raises the taken Heirloom a
+     * rank instead.
+     */
     data class HeirloomOffers(val extra: Int) : MatrixEffect {
         init { require(extra in 1..MAX_EXTRA_HEIRLOOM_OFFERS) { "Extra Heirloom offers must be 1..$MAX_EXTRA_HEIRLOOM_OFFERS" } }
     }

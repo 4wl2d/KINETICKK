@@ -221,7 +221,8 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "+0.5 luck per rank. A Rare or better card is guaranteed after 4 offers instead of 6." to
         "+0,5 к удаче за ранг. Редкая или лучшая карта гарантирована после 4 предложений вместо 6.",
     "Each Elite kill grants an extra item offer." to "Каждое убийство элитного врага даёт дополнительное предложение предметов.",
-    "+1 Heirloom offer and +5% Reborn card chance." to "+1 предложение наследия и +5% к шансу перерождённой карты.",
+    "+1 Heirloom offer. When no card can be added, the Heirloom you take starts at rank 2. +5% Reborn card chance." to
+        "+1 предложение наследия. Если карту добавить нельзя, взятое наследие начинает с ранга 2. +5% к шансу перерождённой карты.",
     "Matter +50%. Enemies have 12% more integrity." to "Материя +50%. У врагов на 12% больше прочности.",
     "Motion" to "Движение",
     "Control" to "Контроль",

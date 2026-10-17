@@ -330,6 +330,8 @@ internal fun MutableGameState.choose(index: Int) {
             }
             RelicChoiceAction.ACQUIRE -> {
                 val relicId = option.relicId ?: return
+                // Measured while the offer is still open: Heirloom Vault extras it could not show become ranks.
+                val heirloomRanks = if (option.heirloom) heirloomRankBonus() else 0
                 if (option.heirloom) {
                     pendingHeirloomResolved = true
                     heirloomCandidates = emptyList()
@@ -337,6 +339,8 @@ internal fun MutableGameState.choose(index: Int) {
                 }
                 if (relicRank(relicId) > 0 || equippedRelics.size < content.relicPolicy.maxSlots) {
                     acquireRelic(relicId)
+                    // Each extra rank arrives as if the Relic were offered again (a maxed one is salvaged).
+                    repeat(heirloomRanks) { acquireRelic(relicId) }
                     GameplayAudioCue.WEAPON_ACQUIRED
                 } else {
                     pendingBindingRelic = relicId

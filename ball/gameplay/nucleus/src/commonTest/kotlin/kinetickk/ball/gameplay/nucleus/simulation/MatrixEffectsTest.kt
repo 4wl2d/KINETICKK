@@ -265,18 +265,29 @@ class MatrixEffectsTest {
     }
 
     @Test
-    fun heirloomOffersAddACardWithinTheChoiceBound() {
-        fun heirloomCards(withMatrix: Boolean, tier: Int): Int = isolated(MatrixEffect.HeirloomOffers(1), withMatrix, rebirth = tier) {
-            heirloomCandidates = RelicId.entries.filter { content.relic(it).minimumRebirth == 0 }.take(4)
-        }.run {
-            openNextPendingChoice()
-            choices.count { it.relicId != null }
-        }
-        assertEquals(2, heirloomCards(false, 1))
-        assertEquals(3, heirloomCards(true, 1))
-        // Three offers plus the decline card already fill the four choices.
-        assertEquals(3, heirloomCards(false, 5))
-        assertEquals(3, heirloomCards(true, 5))
+    fun heirloomOffersAddACardOrRaiseTheTakenHeirloomWhenNoCardFits() {
+        /** Heirloom cards shown and the rank of the Heirloom taken from the first card. */
+        fun heirloomOffer(withMatrix: Boolean, tier: Int, carried: Int): Pair<Int, Int> =
+            isolated(MatrixEffect.HeirloomOffers(1), withMatrix, rebirth = tier) {
+                heirloomCandidates = RelicId.entries.filter {
+                    it != RelicId.HOLLOW_CROWN && content.relic(it).minimumRebirth == 0
+                }.take(carried)
+            }.run {
+                openNextPendingChoice()
+                val cards = choices.count { it.relicId != null }
+                val taken = assertNotNull(choices.first().relicId)
+                choose(0)
+                cards to relicRank(taken)
+            }
+        // Below Rebirth 5 the extra is a third card.
+        assertEquals(2 to 1, heirloomOffer(false, 1, carried = 4))
+        assertEquals(3 to 1, heirloomOffer(true, 1, carried = 4))
+        // From Rebirth 5 three cards and the decline card fill the choices: the taken Heirloom starts at rank 2.
+        assertEquals(3 to 1, heirloomOffer(false, 5, carried = 4))
+        assertEquals(3 to 2, heirloomOffer(true, 5, carried = 4))
+        // Every carried Relic is already offered: the extra also becomes a rank.
+        assertEquals(2 to 1, heirloomOffer(false, 1, carried = 2))
+        assertEquals(2 to 2, heirloomOffer(true, 1, carried = 2))
     }
 
     @Test

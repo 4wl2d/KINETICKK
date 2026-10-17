@@ -240,16 +240,36 @@ internal fun MutableGameState.canMeld(id: RelicId): Boolean =
     content.relic(id).meldable && relicRank(id) < min(2, content.relicPolicy.maxRank) &&
         !(id == RelicId.OUROBOROS_SEAL && ouroborosSpent)
 
+/** Carried Relics the Heirloom offer may still show: known to content and not bound this run. */
+private fun MutableGameState.openHeirloomCandidates(): List<RelicId> =
+    heirloomCandidates.filter { id -> content.relics.any { it.id == id } && relicRank(id) == 0 }
+
+/**
+ * Heirloom cards for [candidates] carried Relics: the policy count plus [extra], never more than the
+ * carried Relics or the choice bound, where the decline card keeps one slot.
+ */
+private fun MutableGameState.heirloomCardCount(candidates: Int, extra: Int): Int =
+    min(content.relicPolicy.heirloomOffers(rebirthLevel) + extra, min(candidates, MutableGameState.MAX_CHOICES - 1))
+
+/**
+ * Matrix extra Heirloom cards the open offer cannot show (it already shows every carried Relic or fills
+ * the bound). Each one raises the taken Heirloom a rank instead, so the extra is never lost.
+ */
+internal fun MutableGameState.heirloomRankBonus(): Int {
+    val candidates = openHeirloomCandidates().size
+    val extra = matrix.extraHeirloomOffers
+    return extra - (heirloomCardCount(candidates, extra) - heirloomCardCount(candidates, 0))
+}
+
 /** The Heirloom offer opens a Reborn run with relics carried over from the last victory. */
 internal fun MutableGameState.openHeirloomChoice() {
-    val candidates = heirloomCandidates.filter { id -> content.relics.any { it.id == id } && relicRank(id) == 0 }
+    val candidates = openHeirloomCandidates()
     heirloomPending = false
     if (candidates.isEmpty() || rebirthLevel < 1) {
         if (heirloomCandidates.isNotEmpty()) pendingHeirloomResolved = true
         return
     }
-    // The decline card keeps one choice slot.
-    val count = min(content.relicPolicy.heirloomOffers(rebirthLevel) + matrix.extraHeirloomOffers, MutableGameState.MAX_CHOICES - 1)
+    val count = heirloomCardCount(candidates.size, matrix.extraHeirloomOffers)
     val offered = candidates.shuffled(rewardRandom).take(count)
     activeChoiceType = ChoiceType.RELIC
     heirloomOfferActive = true
