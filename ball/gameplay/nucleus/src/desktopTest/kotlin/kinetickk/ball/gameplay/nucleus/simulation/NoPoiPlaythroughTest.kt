@@ -143,7 +143,7 @@ private fun report(value: String) {
 /** How far the bot keeps the momentum-projected Core from a skipped POI's center. */
 private const val POI_CLEARANCE = 360f
 
-private class NoPoiBot(
+internal class NoPoiBot(
     private val archetypeTag: BuildTag = BuildTag.RAM,
     private val element: StatusElement? = StatusElement.ENTROPY,
     private val weaponOrder: List<WeaponId> = listOf(WeaponId.ARC_COIL, WeaponId.ION_SWARM, WeaponId.ENTROPY_FIELD, WeaponId.PRISM_RELAY),
@@ -373,4 +373,4 @@ private class NoPoiBot(
  * offers they did before weapon offers were limited to owned weapons (a profile that owns only the
  * starter can amplify but never recalibrate).
  */
-private val ReferenceArmory: List<WeaponId> = WeaponId.entries.take(12)
+internal val ReferenceArmory: List<WeaponId> = WeaponId.entries.take(12)
