@@ -406,6 +406,8 @@ internal fun MutableGameState.resetWeaponRuntime() {
     morningstarAngle = 0f
     morningstarX = coreX + 105f
     morningstarY = coreY
+    previousMorningstarX = morningstarX
+    previousMorningstarY = morningstarY
     weaponClock = 0f
     weaponSecondaryClock = 0f
     weaponBeamTime = 0f

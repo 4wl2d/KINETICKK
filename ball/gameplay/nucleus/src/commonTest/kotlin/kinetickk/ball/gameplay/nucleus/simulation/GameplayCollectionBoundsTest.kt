@@ -343,7 +343,7 @@ class GameplayCollectionBoundsTest {
         val engine = EngineState(state)
         val reducer = GameReducer()
         val unchangedInputs = listOf(
-            GameplayInteractionPulse.ViewportChanged.fromValidated(1_280f, 720f, 0.5f),
+            GameplayInteractionPulse.ViewportChanged.fromValidated(1_280f, 720f, 1f),
             GameplayInteractionPulse.PointerMoved.fromValidated(900f, 360f, active = true),
             GameplayInteractionPulse.BrakeChanged(
                 BrakeSource.KEYBOARD,

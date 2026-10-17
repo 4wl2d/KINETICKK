@@ -18,6 +18,7 @@ import kotlin.math.atan2
 import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.ulp
 
 
 internal fun MutableGameState.update(rawDelta: Float) {
@@ -30,11 +31,20 @@ internal fun MutableGameState.update(rawDelta: Float) {
         accumulator = 0f
         return
     }
-    accumulator = nextSimulationAccumulator(
-        currentAccumulator = accumulator,
-        rawDeltaSeconds = rawDelta,
-        simulationSpeed = settings.simulationSpeed,
+    runAdmittedFrame(
+        nextSimulationAccumulator(
+            currentAccumulator = accumulator,
+            rawDeltaSeconds = rawDelta,
+            simulationSpeed = settings.simulationSpeed,
+        ),
     )
+}
+
+/** Runs a running frame whose real time [nextAccumulator] was already admitted ([nextSimulationAccumulator]). */
+internal fun MutableGameState.runAdmittedFrame(nextAccumulator: Float) {
+    check(phase == GamePhase.RUNNING) { "Only a running simulation admits frame time" }
+    lastTransitionSteps = 0
+    accumulator = nextAccumulator
     consumeFixedStepBudget()
 }
 
@@ -52,7 +62,7 @@ internal fun nextSimulationAccumulator(
 internal fun MutableGameState.consumeFixedStepBudget() {
     var steps = 0
     while (
-        accumulator >= MutableGameState.FIXED_STEP &&
+        fixedStepIsDue(accumulator) &&
         phase == GamePhase.RUNNING &&
         steps < MAX_FIXED_STEPS_PER_FRAME
     ) {
@@ -63,11 +73,26 @@ internal fun MutableGameState.consumeFixedStepBudget() {
     lastTransitionSteps = steps
 }
 
+/**
+ * Whether [accumulator] holds a whole fixed step. Adding frame deltas such as 1/144 s and
+ * subtracting steps rounds in Float, so a sum that is nominally on a step boundary can sit an ulp
+ * below it; within [FIXED_STEP_ROUNDING_TOLERANCE] the step is due. That keeps the step at which an
+ * input lands independent of the frame rate, while a delta that is genuinely shorter (0.02f is
+ * below 20 ms) still waits for the next frame.
+ */
+internal fun fixedStepIsDue(accumulator: Float): Boolean =
+    accumulator >= MutableGameState.FIXED_STEP - FIXED_STEP_ROUNDING_TOLERANCE
+
+/** Two ulps of the fixed step: Float rounding of the accumulator, never real time. */
+internal val FIXED_STEP_ROUNDING_TOLERANCE: Float = MutableGameState.FIXED_STEP.ulp * 2f
+
 internal const val MAX_FIXED_STEPS_PER_FRAME: Int = 48
 internal const val MAX_SIMULATION_RAW_DELTA_SECONDS: Float = 0.1f
 internal const val MAX_SIMULATION_ACCUMULATOR_SECONDS: Float = 0.3f
 
 internal fun MutableGameState.simulateStep(delta: Float) {
+    previousCameraX = cameraX
+    previousCameraY = cameraY
     elapsed += delta
     // One cue budget covers every Break and reaction source in the step.
     statusCuesThisStep = 0

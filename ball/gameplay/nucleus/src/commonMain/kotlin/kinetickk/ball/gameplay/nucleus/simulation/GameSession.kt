@@ -99,6 +99,8 @@ internal fun MutableGameState.startRun() {
     velocityY = 0f
     cameraX = 0f
     cameraY = 0f
+    previousCameraX = 0f
+    previousCameraY = 0f
     pointerX = screenWidth * 0.76f
     pointerY = screenHeight * 0.5f
     previousSingularityX = pointerX - screenWidth * 0.5f

@@ -698,6 +698,13 @@ internal fun canonicalStateFingerprint(state: MutableGameState): Long {
     signature = mix(signature, state.discoveredPairingMask)
     signature = mix(signature, state.stormCharge.toRawBits())
     signature = mix(signature, state.stasisMeter.toRawBits())
+    // 0.4.0 frame pacing: render interpolation sources and the accepted viewport density.
+    signature = mix(signature, state.accumulator.toRawBits())
+    signature = mix(signature, state.previousCameraX.toRawBits())
+    signature = mix(signature, state.previousCameraY.toRawBits())
+    signature = mix(signature, state.previousMorningstarX.toRawBits())
+    signature = mix(signature, state.previousMorningstarY.toRawBits())
+    signature = mix(signature, state.viewportDensity.toRawBits())
     signature = mix(signature, state.stasisBank)
     signature = mix(signature, state.overdriveBurnoutUntil.toRawBits())
     signature = mix(signature, state.invulnerableUntil.toRawBits())
@@ -770,6 +777,14 @@ private fun canonicalRenderFingerprint(state: MutableGameState): Long {
     signature = mix(signature, render.effectiveWeaponPower.toRawBits())
     signature = mix(signature, render.abilityPower.toRawBits())
     signature = mix(signature, render.runProgress.toRawBits())
+    signature = mix(signature, render.interpolationAlpha.toRawBits())
+    signature = mix(signature, render.previousCoreX.toRawBits())
+    signature = mix(signature, render.previousCoreY.toRawBits())
+    signature = mix(signature, render.previousCameraX.toRawBits())
+    signature = mix(signature, render.previousCameraY.toRawBits())
+    signature = mix(signature, render.previousMorningstarX.toRawBits())
+    signature = mix(signature, render.previousMorningstarY.toRawBits())
+    signature = mix(signature, render.viewportDensity.toRawBits())
     render.itemStacksSnapshot.forEach { stack -> signature = mix(signature, stack) }
     return mixLong(signature, fixtureFingerprint(state))
 }
@@ -898,6 +913,8 @@ private fun fixtureFingerprint(state: MutableGameState): Long {
         signature = mix(signature, orbital.x.toRawBits())
         signature = mix(signature, orbital.y.toRawBits())
         signature = mix(signature, orbital.radius.toRawBits())
+        signature = mix(signature, orbital.previousX.toRawBits())
+        signature = mix(signature, orbital.previousY.toRawBits())
     }
     render.totem?.let { totem ->
         signature = mix(signature, totem.x.toRawBits())
