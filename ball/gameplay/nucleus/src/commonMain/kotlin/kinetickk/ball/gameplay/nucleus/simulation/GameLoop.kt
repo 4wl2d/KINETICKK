@@ -18,7 +18,6 @@ import kotlin.math.atan2
 import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.ulp
 
 
 internal fun MutableGameState.update(rawDelta: Float) {
@@ -83,8 +82,12 @@ internal fun MutableGameState.consumeFixedStepBudget() {
 internal fun fixedStepIsDue(accumulator: Float): Boolean =
     accumulator >= MutableGameState.FIXED_STEP - FIXED_STEP_ROUNDING_TOLERANCE
 
-/** Two ulps of the fixed step: Float rounding of the accumulator, never real time. */
-internal val FIXED_STEP_ROUNDING_TOLERANCE: Float = MutableGameState.FIXED_STEP.ulp * 2f
+/**
+ * Two ulps of the fixed step: Float rounding of the accumulator, never real time. `Float.ulp` is
+ * not common Kotlin (no Wasm), so the ulp is the exact gap to the next representable Float.
+ */
+internal val FIXED_STEP_ROUNDING_TOLERANCE: Float =
+    (Float.fromBits(MutableGameState.FIXED_STEP.toRawBits() + 1) - MutableGameState.FIXED_STEP) * 2f
 
 internal const val MAX_FIXED_STEPS_PER_FRAME: Int = 48
 internal const val MAX_SIMULATION_RAW_DELTA_SECONDS: Float = 0.1f

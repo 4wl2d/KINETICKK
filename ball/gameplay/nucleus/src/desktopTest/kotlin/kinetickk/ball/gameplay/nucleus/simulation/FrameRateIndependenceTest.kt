@@ -35,6 +35,15 @@ class FrameRateIndependenceTest {
     }
 
     @Test
+    fun stepAdmissionToleratesExactlyTwoUlpsOfTheFixedStep() {
+        // The portable (Wasm) definition equals the JVM ulp, so every target admits the same steps.
+        assertEquals(Math.ulp(MutableGameState.FIXED_STEP) * 2f, FIXED_STEP_ROUNDING_TOLERANCE)
+        val threshold = Float.fromBits(MutableGameState.FIXED_STEP.toRawBits() - 2)
+        assertTrue(fixedStepIsDue(threshold))
+        assertTrue(!fixedStepIsDue(Float.fromBits(threshold.toRawBits() - 1)))
+    }
+
+    @Test
     fun aSlowFrameOnlyDefersStepsWithinTheAccumulatorClamp() {
         // 10 fps stays real time: each 0.1 s frame runs exactly twelve steps.
         val reducer = GameReducer()
