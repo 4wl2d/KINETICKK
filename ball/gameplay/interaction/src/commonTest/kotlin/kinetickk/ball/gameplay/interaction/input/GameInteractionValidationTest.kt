@@ -33,6 +33,25 @@ class GameInteractionValidationTest {
     }
 
     @Test
+    fun viewportAndPointerReachTheNucleusInDp() {
+        val validator = GameInteractionValidator()
+        val viewport = valid<GameplayInteractionPulse.ViewportChanged>(validator.viewportChanged(2_560f, 1_600f, 2f))
+        assertEquals(1_280f, viewport.width)
+        assertEquals(800f, viewport.height)
+        assertEquals(2f, viewport.density)
+        val pointer = valid<GameplayInteractionPulse.PointerMoved>(validator.pointerMoved(1_000f, 600f, density = 2f))
+        assertEquals(500f, pointer.x)
+        assertEquals(300f, pointer.y)
+        // A tiny viewport at a high density stays a representable dp viewport.
+        val tiny = valid<GameplayInteractionPulse.ViewportChanged>(
+            validator.viewportChanged(1f, 1f, InteractionIngressLimits.MAX_DENSITY),
+        )
+        assertEquals(InteractionIngressLimits.MIN_VIEWPORT_DIMENSION_PX, tiny.width)
+        assertOutOfRange(validator.pointerMoved(1f, 1f, density = 0f), InteractionInputField.DENSITY)
+        assertNonFinite(validator.pointerMoved(1f, 1f, density = Float.NaN), InteractionInputField.DENSITY)
+    }
+
+    @Test
     fun frameDeltaAcceptsExactBoundsAndRejectsTheNextRepresentableValues() {
         val validator = GameInteractionValidator()
 
@@ -78,8 +97,9 @@ class GameInteractionValidationTest {
                 rawDensity = InteractionIngressLimits.MAX_DENSITY,
             ),
         )
-        assertEquals(maximum, accepted.width)
-        assertEquals(maximum, accepted.height)
+        // The Nucleus simulates the dp viewport: device pixels are divided by the density here.
+        assertEquals(maximum / InteractionIngressLimits.MAX_DENSITY, accepted.width)
+        assertEquals(maximum / InteractionIngressLimits.MAX_DENSITY, accepted.height)
         assertEquals(InteractionIngressLimits.MAX_DENSITY, accepted.density)
 
         assertOutOfRange(

@@ -68,7 +68,7 @@ internal fun DrawScope.drawEnemy(
     roles: KkRolePalette,
     statusDetail: Boolean = true,
 ) {
-    val center = world(engine, enemy.x, enemy.y, shakeX, shakeY)
+    val center = world(engine, engine.interpolated(enemy.previousX, enemy.x), engine.interpolated(enemy.previousY, enemy.y), shakeX, shakeY)
     val renderMargin = if (enemy.type == EnemyType.WARDEN) 460f else if (enemy.type == EnemyType.ARCHITECT) 220f else 120f
     if (center.x < -renderMargin || center.y < -renderMargin || center.x > size.width + renderMargin || center.y > size.height + renderMargin) return
     val threat = roles.threat
@@ -186,7 +186,8 @@ internal fun DrawScope.crowdedForStatusPatterns(engine: GameplayRenderModel, sha
     var shown = 0
     for (index in engine.enemies.indices) {
         val enemy = engine.enemies[index]
-        if (!isOnScreen(world(engine, enemy.x, enemy.y, shakeX, shakeY), enemy.radius)) continue
+        val center = world(engine, engine.interpolated(enemy.previousX, enemy.x), engine.interpolated(enemy.previousY, enemy.y), shakeX, shakeY)
+        if (!isOnScreen(center, enemy.radius)) continue
         shown++
         if (shown > STATUS_PATTERN_ENEMY_LIMIT) return true
     }
@@ -344,13 +345,13 @@ private fun DrawScope.drawEnemyTelegraph(
 ) {
     when (enemy.type) {
         EnemyType.SHOOTER -> if (enemy.actionTimer in 0f..0.42f) {
-            val core = world(engine, engine.coreX, engine.coreY, shakeX, shakeY)
+            val core = world(engine, engine.renderCoreX, engine.renderCoreY, shakeX, shakeY)
             val charge = 1f - enemy.actionTimer / 0.42f
             drawLine(threat.copy(alpha = 0.12f + charge * 0.42f), center, core, 1f + charge * 1.2f, pathEffect = WorldStrokes.dashEffect)
             drawCircle(threat.copy(alpha = 0.5f), enemy.radius + 15f * (1f - charge), center, style = kkStroke(1.5f))
         }
         EnemyType.CHARGER -> if (enemy.actionTimer < 0f) {
-            val core = world(engine, engine.coreX, engine.coreY, shakeX, shakeY)
+            val core = world(engine, engine.renderCoreX, engine.renderCoreY, shakeX, shakeY)
             val charge = clamp(-enemy.actionTimer / 0.45f, 0f, 1f)
             drawLine(threat.copy(alpha = 0.2f + charge * 0.62f), center, core, 2f + charge * 2f)
             drawCircle(threat.copy(alpha = 0.72f), enemy.radius + 28f * (1f - charge), center, style = WorldStrokes.dashedMedium)
@@ -358,8 +359,8 @@ private fun DrawScope.drawEnemyTelegraph(
         EnemyType.INTERCEPTOR -> {
             val predicted = world(
                 engine,
-                engine.coreX + engine.velocityX * 0.45f,
-                engine.coreY + engine.velocityY * 0.45f,
+                engine.renderCoreX + engine.velocityX * 0.45f,
+                engine.renderCoreY + engine.velocityY * 0.45f,
                 shakeX,
                 shakeY,
             )
@@ -447,9 +448,12 @@ private const val SHIELD_PULSE = (2.0 * PI * 2.0).toFloat()
 internal fun DrawScope.drawProjectiles(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, roles: KkRolePalette) {
     for (index in engine.projectiles.indices) {
         val projectile = engine.projectiles[index]
-        val center = world(engine, projectile.x, projectile.y, shakeX, shakeY)
+        // Drawn between its last two simulated positions, with a one-step streak behind it.
+        val x = engine.interpolated(projectile.previousX, projectile.x)
+        val y = engine.interpolated(projectile.previousY, projectile.y)
+        val center = world(engine, x, y, shakeX, shakeY)
         if (!isOnScreen(center, projectile.radius + 28f)) continue
-        val previous = world(engine, projectile.previousX, projectile.previousY, shakeX, shakeY)
+        val previous = world(engine, x - (projectile.x - projectile.previousX), y - (projectile.y - projectile.previousY), shakeX, shakeY)
         if (projectile.hostile) {
             val threat = roles.threat
             drawLine(threat.copy(alpha = 0.22f), previous, center, projectile.radius * 1.1f)
@@ -472,9 +476,11 @@ internal fun DrawScope.drawProjectiles(engine: GameplayRenderModel, shakeX: Floa
 internal fun DrawScope.drawPickups(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, roles: KkRolePalette) {
     for (index in engine.pickups.indices) {
         val pickup = engine.pickups[index]
-        val center = world(engine, pickup.x, pickup.y, shakeX, shakeY)
+        val x = engine.interpolated(pickup.previousX, pickup.x)
+        val y = engine.interpolated(pickup.previousY, pickup.y)
+        val center = world(engine, x, y, shakeX, shakeY)
         if (!isOnScreen(center, 28f)) continue
-        val previous = world(engine, pickup.previousX, pickup.previousY, shakeX, shakeY)
+        val previous = world(engine, x - (pickup.x - pickup.previousX), y - (pickup.y - pickup.previousY), shakeX, shakeY)
         when (pickup.type) {
             PickupType.DATA -> {
                 drawLine(Kk.Bone.copy(alpha = 0.22f), previous, center, 2f)
@@ -575,7 +581,7 @@ internal fun DrawScope.drawTotem(engine: GameplayRenderModel, shakeX: Float, sha
 /**
  * Adds the off-screen totem to [batch]; [drawEdgeMarkers] draws it with the frame's other markers.
  * Whether it is off screen, and where its marker points, is decided in the unshaken view, as
- * [drawTotem] decides whether to draw it.
+ * [drawTotem] decides whether to draw it (both in world units; [batch] receives device pixels).
  */
 internal fun DrawScope.collectTotemEdgeMarker(engine: GameplayRenderModel, batch: EdgeMarkerBatch) {
     val totem = engine.totem ?: return
@@ -583,7 +589,8 @@ internal fun DrawScope.collectTotemEdgeMarker(engine: GameplayRenderModel, batch
     if (isOnScreen(location, 60f)) return
     val dx = totem.x - engine.coreX
     val dy = totem.y - engine.coreY
-    batch.add(location.x, location.y, sqrt(dx * dx + dy * dy), EdgeMarkerIcon.TOTEM)
+    val scale = engine.worldScale
+    batch.add(location.x * scale, location.y * scale, sqrt(dx * dx + dy * dy), EdgeMarkerIcon.TOTEM)
 }
 
 /**
@@ -795,7 +802,7 @@ internal fun DrawScope.drawReactionStamps(
     for (index in stamps.indices) {
         val stamp = stamps[index]
         val definition = reactions.getOrNull(stamp.reaction) ?: continue
-        val center = world(engine, stamp.x, stamp.y, shakeX, shakeY)
+        val center = worldOnScreen(engine, stamp.x, stamp.y, shakeX, shakeY)
         if (!isOnScreen(center, 160f)) continue
         val elapsed = stamp.maxLife - stamp.life
         val slam = (elapsed * 1000f / KkSlam.DURATION_MS).coerceIn(0f, 1f)

@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.rewards
 
+import kinetickk.ball.gameplay.interaction.input.hudWidth
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -178,7 +179,7 @@ internal fun RewardContent(
 ) {
     val language = LocalAppLanguage.current
     val presentation = remember(engine, language) { engine.rewardPresentation(language) }
-    RewardContent(presentation, layout, engine.screenWidth, engine.uiScale, engine.settings.textScale, renderTime, enabled, onSelect, onReroll, onBuild)
+    RewardContent(presentation, layout, engine.hudWidth, engine.uiScale, engine.settings.textScale, renderTime, enabled, onSelect, onReroll, onBuild)
 }
 
 /**

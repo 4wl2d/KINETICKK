@@ -25,8 +25,9 @@ private val CoreHalftoneRect = Rect(
 )
 
 /**
- * Ink ground with a world-anchored 40 px grid and a faint halftone disc around the Core. The
- * run's rebirth tier tints the grid and halftone only. [roles] is the Color vision palette.
+ * Ink ground with a world-anchored 40-unit grid and a faint halftone disc around the Core, drawn
+ * in world units ([withWorldUnits]); [shakeX]/[shakeY] are device pixels. The run's rebirth tier
+ * tints the grid and halftone only. [roles] is the Color vision palette.
  */
 internal fun DrawScope.drawBackdrop(
     engine: GameplayRenderModel,
@@ -35,10 +36,15 @@ internal fun DrawScope.drawBackdrop(
     @Suppress("UNUSED_PARAMETER") renderTime: Float,
     @Suppress("UNUSED_PARAMETER") roles: KkRolePalette,
 ) {
+    val scale = engine.worldScale
+    withWorldUnits(scale) { drawBackdropLayer(engine, shakeX / scale, shakeY / scale) }
+}
+
+private fun DrawScope.drawBackdropLayer(engine: GameplayRenderModel, shakeX: Float, shakeY: Float) {
     val theme = arenaTheme(engine.rebirthLevel)
     val origin = Offset(
-        worldGridOffset(engine.cameraX, size.width, shakeX),
-        worldGridOffset(engine.cameraY, size.height, shakeY),
+        worldGridOffset(engine.renderCameraX, size.width, shakeX),
+        worldGridOffset(engine.renderCameraY, size.height, shakeY),
     )
     var x = origin.x - WORLD_GRID_SPACING
     while (x <= size.width) {
@@ -50,7 +56,7 @@ internal fun DrawScope.drawBackdrop(
         if (y >= 0f) drawLine(theme.grid, Offset(0f, y), Offset(size.width, y), 1f)
         y += WORLD_GRID_SPACING
     }
-    val core = world(engine, engine.coreX, engine.coreY, shakeX, shakeY)
+    val core = world(engine, engine.renderCoreX, engine.renderCoreY, shakeX, shakeY)
     // Dots are anchored to the Core, like the board's halftone element, and fade out radially.
     translate(core.x, core.y) {
         drawKkRadialFade(CoreHalftoneRect) {

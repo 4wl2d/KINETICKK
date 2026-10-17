@@ -43,8 +43,11 @@ internal fun DrawScope.drawGameplay(
     drawBackdrop(engine, shakeX, shakeY, renderTime, textMeasurer.roles)
 
     drawWorld(engine, visualFx, shakeX, shakeY, textMeasurer)
-    if (engine.phase == GamePhase.GAME_OVER) drawCoreDeath(engine, terminalElapsed, textMeasurer.roles)
-    else drawScreenFx(engine, renderTime, textMeasurer.roles)
+    if (engine.phase == GamePhase.GAME_OVER) {
+        withWorldUnits(engine.worldScale) { drawCoreDeath(engine, terminalElapsed, textMeasurer.roles) }
+    } else {
+        drawScreenFx(engine, renderTime, textMeasurer.roles)
+    }
     if (shouldDrawRunningPresentation(engine.phase)) {
         drawHud(engine, textMeasurer, renderTime, shakeX, shakeY, hudMemory, trialInfoOpen)
         drawHudFeed(engine, visualFx, textMeasurer, renderTime, hudMemory)

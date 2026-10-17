@@ -84,6 +84,8 @@ import kinetickk.ball.gameplay.interaction.input.GameInteractionValidator
 import kinetickk.ball.gameplay.interaction.input.GameplayInput
 import kinetickk.ball.gameplay.interaction.input.InteractionValidationResult
 import kinetickk.ball.gameplay.interaction.input.ValidationFailure
+import kinetickk.ball.gameplay.interaction.input.hudHeight
+import kinetickk.ball.gameplay.interaction.input.hudWidth
 import kinetickk.ball.gameplay.interaction.input.isHudControlPosition
 import kinetickk.ball.gameplay.interaction.input.isTrialInfoPosition
 import kinetickk.ball.gameplay.interaction.input.resolveGameplayPress
@@ -285,14 +287,12 @@ fun GameplayContent(
             roles = roles,
         )
     }
-    val layoutDimensions = remember(
-        renderModelValue.screenWidth,
-        renderModelValue.screenHeight,
-        renderModelValue.uiScale,
-    ) {
+    val hudWidth = renderModelValue.hudWidth
+    val hudHeight = renderModelValue.hudHeight
+    val layoutDimensions = remember(hudWidth, hudHeight, renderModelValue.uiScale) {
         GameplayLayoutDimensions(
-            width = renderModelValue.screenWidth,
-            height = renderModelValue.screenHeight,
+            width = hudWidth,
+            height = hudHeight,
             scale = renderModelValue.uiScale,
         )
     }
@@ -489,11 +489,13 @@ fun GameplayContent(
                                 hudGestureActiveValue = false
                                 continue
                             }
+                            // HUD hit tests use the device position; the Nucleus receives dp.
                             val validatedMove = position?.let { pointerPosition ->
                                 when (
                                     val result = interactionValidator.pointerMoved(
                                         pointerPosition.x,
                                         pointerPosition.y,
+                                        density = currentRenderModel.viewportDensity,
                                     )
                                 ) {
                                     is InteractionValidationResult.Valid -> result.intent
@@ -503,14 +505,13 @@ fun GameplayContent(
                                     }
                                 }
                             }
+                            val pressX = position?.x ?: 0f
+                            val pressY = position?.y ?: 0f
                             val isHudControlPosition = validatedMove != null &&
                                 currentRenderModel.phase == GamePhase.RUNNING &&
-                                currentRenderModel.isHudControlPosition(
-                                    validatedMove.x,
-                                    validatedMove.y,
-                                )
+                                currentRenderModel.isHudControlPosition(pressX, pressY)
                             val onTrialInfo = validatedMove != null &&
-                                currentRenderModel.isTrialInfoPosition(validatedMove.x, validatedMove.y)
+                                currentRenderModel.isTrialInfoPosition(pressX, pressY)
                             if (!pressed) {
                                 // Only a mouse hovers; a lifted finger must not keep the rules open.
                                 trialInfoHoveredValue = onTrialInfo && event.type != PointerEventType.Exit &&
@@ -531,7 +532,7 @@ fun GameplayContent(
                             }
                             if (pressed && !wasPressedValue && validatedMove != null) {
                                 dispatch(GameplayInteractionPulse.UserGestureObserved, collectPerformance)
-                                currentRenderModel.resolveGameplayPress(validatedMove.x, validatedMove.y)
+                                currentRenderModel.resolveGameplayPress(pressX, pressY)
                                     ?.let { dispatchInput(it, collectPerformance) }
                             }
                             if (!pressed && wasPressedValue) {
@@ -677,8 +678,8 @@ private fun GameplaySemanticControls(
     }
     when (engine.phase) {
         GamePhase.RUNNING -> forEachRunningControlBounds(
-            width = engine.screenWidth,
-            height = engine.screenHeight,
+            width = engine.hudWidth,
+            height = engine.hudHeight,
             scale = engine.uiScale,
         ) { target, left, top, right, bottom ->
             val bounds = Rect(left, top, right, bottom)
@@ -778,9 +779,9 @@ private fun TrialInfoSemanticNode(
     onFocusChanged: (Boolean) -> Unit,
     onToggle: () -> Unit,
 ) {
-    val bounds = remember(engine.screenWidth, engine.screenHeight, engine.uiScale, engine.settings.textScale) {
+    val bounds = remember(engine.hudWidth, engine.hudHeight, engine.uiScale, engine.settings.textScale) {
         HudTrialPanelLayout()
-            .update(engine.screenWidth, engine.screenHeight, engine.uiScale, engine.settings.textScale)
+            .update(engine.hudWidth, engine.hudHeight, engine.uiScale, engine.settings.textScale)
             .infoTarget(engine.uiScale)
     }
     val currentOnFocusChanged = rememberUpdatedState(onFocusChanged)

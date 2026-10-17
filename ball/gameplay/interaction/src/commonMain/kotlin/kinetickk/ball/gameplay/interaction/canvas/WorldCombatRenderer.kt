@@ -47,6 +47,11 @@ private const val DAMAGE_NUMBER_BASE_SP = 20f
 /** The crit stamp next to a damage number: 12 px on the Feedback board at the default text size. */
 private val CRIT_STAMP_SP = worldLabelSp(12f)
 
+/**
+ * The world layer in world units ([withWorldUnits]: entities, combat, POI marks, the singularity),
+ * then its screen-space overlay in device pixels (damage numbers, reaction stamps, edge markers).
+ * [shakeX]/[shakeY] are device pixels.
+ */
 internal fun DrawScope.drawWorld(
     engine: GameplayRenderModel,
     visualFx: VisualFxProjection,
@@ -54,12 +59,33 @@ internal fun DrawScope.drawWorld(
     shakeY: Float,
     textMeasurer: TextMeasurer,
 ) {
+    WorldDrawProbe.begin()
+    // The HUD keep-out is screen space: update it before the world layer changes the scope's units.
+    worldHudKeepOut(engine, textMeasurer)
+    val markers = WorldOverlayScratch.markers.clear()
+    val scale = engine.worldScale
+    withWorldUnits(scale) {
+        drawWorldLayer(engine, visualFx, shakeX / scale, shakeY / scale, textMeasurer, markers)
+    }
+    drawDamageNumbers(engine, visualFx, shakeX, shakeY, textMeasurer)
+    drawReactionStamps(engine, visualFx, shakeX, shakeY, textMeasurer)
+    // Off-screen targets are placed together, so their markers never overlap each other.
+    drawEdgeMarkers(markers, textMeasurer)
+}
+
+private fun DrawScope.drawWorldLayer(
+    engine: GameplayRenderModel,
+    visualFx: VisualFxProjection,
+    shakeX: Float,
+    shakeY: Float,
+    textMeasurer: TextMeasurer,
+    markers: EdgeMarkerBatch,
+) {
     val roles = textMeasurer.roles
-    val core = world(engine, engine.coreX, engine.coreY, shakeX, shakeY)
+    val core = world(engine, engine.renderCoreX, engine.renderCoreY, shakeX, shakeY)
+    // The pointer is current input, never interpolated: the singularity sits exactly under it.
     val pointer = Offset(engine.pointerX + shakeX * 0.18f, engine.pointerY + shakeY * 0.18f)
 
-    WorldDrawProbe.begin()
-    worldHudKeepOut(engine, textMeasurer)
     drawPointsOfInterest(engine, shakeX, shakeY, textMeasurer)
     drawCharacterField(engine, shakeX, shakeY, roles)
     drawTotem(engine, shakeX, shakeY, textMeasurer)
@@ -82,14 +108,10 @@ internal fun DrawScope.drawWorld(
     drawImpactMarks(engine, visualFx, shakeX, shakeY)
     // The tether and the Core/cursor halos are HUD (screen-space) elements drawn by HudRenderer.
     if (engine.phase != GamePhase.GAME_OVER) drawCore(engine, core, roles)
-    drawSingularity(pointer, engine.elapsed, engine.tetherDistance < 75f, roles)
-    drawDamageNumbers(engine, visualFx, shakeX, shakeY, textMeasurer)
-    drawReactionStamps(engine, visualFx, shakeX, shakeY, textMeasurer)
-    // Off-screen targets are placed together, so their markers never overlap each other.
-    val markers = WorldOverlayScratch.markers.clear()
+    drawSingularity(pointer, engine.renderElapsed, engine.tetherDistance < 75f, roles)
+    // Decided in world units, like the marks they stand in for.
     collectPointOfInterestEdgeMarkers(engine, textMeasurer, markers)
     collectTotemEdgeMarker(engine, markers)
-    drawEdgeMarkers(markers, textMeasurer)
 }
 
 /**
@@ -118,7 +140,7 @@ private fun DrawScope.drawDamageNumbers(
         val pop = damageNumberPop(elapsedMs, progress)
         if (pop <= 0.02f) continue
         val drift = KkEase.Out.transform(progress) * DAMAGE_NUMBER_DRIFT
-        val location = world(engine, number.x + number.driftX * drift, number.y + number.driftY * drift, shakeX, shakeY)
+        val location = worldOnScreen(engine, number.x + number.driftX * drift, number.y + number.driftY * drift, shakeX, shakeY)
         if (!isOnScreen(location, 80f)) continue
         val tier = damageNumberTier(number.amount, settings.damageNumberTierThreshold, number.critical)
         val fontSize = DAMAGE_NUMBER_BASE_SP * settings.damageNumberSize.scale * damageNumberScale(tier)
@@ -277,7 +299,7 @@ internal fun DrawScope.drawTrail(engine: GameplayRenderModel, shakeX: Float, sha
         previousLife = life
     }
     if (engine.phase == GamePhase.GAME_OVER || engine.speed <= 25f) return
-    val core = world(engine, engine.coreX, engine.coreY, shakeX, shakeY)
+    val core = world(engine, engine.renderCoreX, engine.renderCoreY, shakeX, shakeY)
     val ratio = min(1f, engine.speed / 920f)
     val bright = engine.overdriveTime > 0f || engine.dashPhaseTime > 0f
     val degrees = atan2(-engine.velocityY, -engine.velocityX) * RADIANS_TO_DEGREES
@@ -324,20 +346,22 @@ internal fun DrawScope.drawWeapon(engine: GameplayRenderModel, core: Offset, sha
     when (engine.weapon) {
         WeaponId.FLUX_WAKE -> Unit
         WeaponId.MORNINGSTAR -> {
-            val ball = world(engine, engine.morningstarX, engine.morningstarY, shakeX, shakeY)
+            val ballX = engine.interpolated(engine.previousMorningstarX, engine.morningstarX)
+            val ballY = engine.interpolated(engine.previousMorningstarY, engine.morningstarY)
+            val ball = world(engine, ballX, ballY, shakeX, shakeY)
             drawLine(you.copy(alpha = 0.16f), core, ball, 6f)
             drawLine(Kk.Bone.copy(alpha = 0.6f), core, ball, 1.5f, pathEffect = WorldStrokes.dashEffect)
             drawMorningstarBall(ball, 20f, engine.morningstarAngle, you)
             val agonyRank = engine.relicRank(RelicId.AGONY_SCEPTER)
             if (agonyRank > 0) {
-                val agony = world(engine, engine.coreX * 2f - engine.morningstarX, engine.coreY * 2f - engine.morningstarY, shakeX, shakeY)
+                val agony = world(engine, engine.renderCoreX * 2f - ballX, engine.renderCoreY * 2f - ballY, shakeX, shakeY)
                 drawLine(Kk.ASovereign.copy(alpha = 0.16f), core, agony, 6f)
                 drawLine(Kk.Bone.copy(alpha = 0.6f), core, agony, 1.5f, pathEffect = WorldStrokes.dashEffect)
                 drawMorningstarBall(agony, 17f + agonyRank, -engine.morningstarAngle, Kk.ASovereign)
             }
         }
         WeaponId.PHASE_LATTICE -> {
-            val pulse = (sin(engine.elapsed * 4f) + 1f) * 0.5f
+            val pulse = (sin(engine.renderElapsed * 4f) + 1f) * 0.5f
             drawCircle(you.copy(alpha = 0.04f), 132f, core)
             drawCircle(you.copy(alpha = 0.4f), 105f + pulse * 18f, core, style = kkStroke(1.5f))
             drawCircle(Kk.Bone.copy(alpha = 0.22f), 132f - pulse * 18f, core, style = WorldStrokes.dashedHair)
@@ -354,23 +378,23 @@ internal fun DrawScope.drawWeapon(engine: GameplayRenderModel, core: Offset, sha
         WeaponId.GRAVITY_MINES -> drawCircle(you.copy(alpha = 0.3f), 29f, core, style = WorldStrokes.dashedThin)
         WeaponId.ION_SWARM -> for (index in engine.weaponOrbitals.indices) {
             val orbital = engine.weaponOrbitals[index]
-            val point = world(engine, orbital.x, orbital.y, shakeX, shakeY)
+            val point = world(engine, engine.interpolated(orbital.previousX, orbital.x), engine.interpolated(orbital.previousY, orbital.y), shakeX, shakeY)
             drawCircle(you.copy(alpha = 0.14f), 12f, point)
-            rotate(engine.elapsed * 115f + orbital.index * 30f, point) {
+            rotate(engine.renderElapsed * 115f + orbital.index * 30f, point) {
                 drawRect(you, Offset(point.x - 5f, point.y - 5f), Size(10f, 10f))
             }
         }
         WeaponId.RIFT_BLADES -> for (index in engine.weaponOrbitals.indices) {
             val orbital = engine.weaponOrbitals[index]
-            val point = world(engine, orbital.x, orbital.y, shakeX, shakeY)
+            val point = world(engine, engine.interpolated(orbital.previousX, orbital.x), engine.interpolated(orbital.previousY, orbital.y), shakeX, shakeY)
             drawLine(Kk.Bone.copy(alpha = 0.2f), core, point, 1f, pathEffect = WorldStrokes.dashEffect)
-            rotate(engine.elapsed * 240f + orbital.index * 45f, point) {
+            rotate(engine.renderElapsed * 240f + orbital.index * 45f, point) {
                 drawRect(Kk.Bone, Offset(point.x - 11f, point.y - 11f), Size(22f, 22f))
                 drawRect(you, Offset(point.x - 11f, point.y - 11f), Size(22f, 22f), style = kkStroke(2f))
             }
         }
         WeaponId.ARC_COIL -> {
-            val pulse = (sin(engine.elapsed * 9f) + 1f) * 0.5f
+            val pulse = (sin(engine.renderElapsed * 9f) + 1f) * 0.5f
             drawCircle(you.copy(alpha = 0.3f), 31f + pulse * 7f, core, style = kkStroke(2f))
             drawCircle(Kk.Bone.copy(alpha = 0.4f), 22f - pulse * 4f, core, style = WorldStrokes.dashedHair)
         }
@@ -398,12 +422,12 @@ internal fun DrawScope.drawWeapon(engine: GameplayRenderModel, core: Offset, sha
             }
         }
         WeaponId.PRISM_RELAY -> {
-            val pulse = (sin(engine.elapsed * 7f) + 1f) * 0.5f
+            val pulse = (sin(engine.renderElapsed * 7f) + 1f) * 0.5f
             val outer = 19f + pulse * 3f
-            rotate(engine.elapsed * 46f, core) {
+            rotate(engine.renderElapsed * 46f, core) {
                 drawRect(you, Offset(core.x - outer, core.y - outer), Size(outer * 2f, outer * 2f), style = kkStroke(2f))
             }
-            rotate(-engine.elapsed * 69f, core) {
+            rotate(-engine.renderElapsed * 69f, core) {
                 drawRect(Kk.Bone.copy(alpha = 0.8f), Offset(core.x - 10f, core.y - 10f), Size(20f, 20f), style = kkStroke(1.5f))
             }
         }
@@ -472,7 +496,7 @@ internal fun DrawScope.drawWeaponArcs(
         var previous = start
         for (segment in 0 until 6) {
             val t = (segment + 1f) / 6f
-            val jitter = if (segment == 5) 0f else sin(index * 7f + segment * 4.1f + engine.elapsed * 40f) * 8f
+            val jitter = if (segment == 5) 0f else sin(index * 7f + segment * 4.1f + engine.renderElapsed * 40f) * 8f
             val next = Offset(start.x + dx * t + nx * jitter, start.y + dy * t + ny * jitter)
             drawLine(roles.you.copy(alpha = alpha * 0.25f), previous, next, 6f)
             drawLine(Kk.Bone.copy(alpha = alpha), previous, next, 2f)
@@ -503,7 +527,7 @@ internal fun DrawScope.drawCore(engine: GameplayRenderModel, center: Offset, rol
     drawCircle(glow.copy(alpha = glowAlpha * 0.5f), 32f, center)
     if (overdrive) drawCircle(glow.copy(alpha = 0.1f), 44f, center)
     if (engine.braking) {
-        val compression = (sin(engine.elapsed * 15f) + 1f) * 0.5f
+        val compression = (sin(engine.renderElapsed * 15f) + 1f) * 0.5f
         drawCircle(Kk.Bone.copy(alpha = 0.6f), 30f - compression * 5f, center, style = WorldStrokes.dashedMedium)
     }
     val radius = engine.coreRadius
@@ -535,7 +559,7 @@ internal fun DrawScope.drawCore(engine: GameplayRenderModel, center: Offset, rol
                 drawRect(fill, Offset(center.x - half, center.y - half), Size(half * 2f, half * 2f))
             }
         }
-        CoreShape.TESSERACT -> drawTesseractCore(center, engine.elapsed, fill, radius)
+        CoreShape.TESSERACT -> drawTesseractCore(center, engine.renderElapsed, fill, radius)
     }
     val ability = engine.characterAbility
     if (ability.charge > 0f && engine.coreShape != CoreShape.RING) {
@@ -561,7 +585,7 @@ private fun DrawScope.drawCharacterField(engine: GameplayRenderModel, shakeX: Fl
     val ability = engine.characterAbility
     val you = roles.you
     if (engine.coreShape == CoreShape.RING) {
-        val core = world(engine, engine.coreX, engine.coreY, shakeX, shakeY)
+        val core = world(engine, engine.renderCoreX, engine.renderCoreY, shakeX, shakeY)
         val active = engine.speed >= 40f
         val radius = ability.ringRadius
         drawCircle(you.copy(alpha = if (active) 0.07f else 0.02f), radius, core, style = kkStroke(36f))

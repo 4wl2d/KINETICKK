@@ -112,7 +112,11 @@ internal fun GameplayRenderModel.rewardPresentation(language: AppLanguage = AppL
         rerollsRemaining = rerollsRemaining,
         kind = kind,
         level = level.takeIf { choiceType == ChoiceType.ITEM && !directedChoice && choices.none { it.rewardFocus != null } },
-        dealOrigin = Offset(coreX - cameraX + screenWidth * 0.5f, coreY - cameraY + screenHeight * 0.5f),
+        // The Core on screen in device pixels (the simulation viewport is dp).
+        dealOrigin = Offset(
+            (coreX - cameraX + screenWidth * 0.5f) * viewportDensity,
+            (coreY - cameraY + screenHeight * 0.5f) * viewportDensity,
+        ),
         relicMatrix = if (relicChoice) rewardRelicMatrix(language) else null,
         totem = if (kind == RewardLayoutKind.TOTEM) RewardTotemHeader(
             title = language.text(GameplayText.WeaponTotem),

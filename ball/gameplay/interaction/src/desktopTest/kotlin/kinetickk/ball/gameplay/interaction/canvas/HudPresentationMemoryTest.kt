@@ -176,10 +176,15 @@ internal fun GameplayRenderModel.with(vararg overrides: Pair<String, Any?>): Gam
 
 /** A started run's render model at [width] × [height] (density 1) for HUD tests. */
 internal fun hudTestModel(width: Float = 1_440f, height: Float = 810f): GameplayRenderModel =
-    requireNotNull(hudTestSnapshot(width, height).renderModel)
+    // Tests override positions without their previous-step values: present the exact state.
+    requireNotNull(hudTestSnapshot(width, height).renderModel).with("interpolationAlpha" to 1f)
 
 /** The render snapshot of a started run at [width] × [height] (density 1). */
-internal fun hudTestSnapshot(width: Float = 1_440f, height: Float = 810f): kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot {
+internal fun hudTestSnapshot(width: Float = 1_440f, height: Float = 810f): kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot =
+    GameplayNucleus.renderSnapshot(hudTestState(width, height))
+
+/** A started run's committed state at [width] × [height] (density 1). */
+internal fun hudTestState(width: Float = 1_440f, height: Float = 810f): GameplayState {
     val content = memoryFixtureContent()
     val profile = PlayerProfile(preferences = PlayerPreferences(language = AppLanguage.English))
     val started = (GameplayNucleus.decide(
@@ -191,11 +196,10 @@ internal fun hudTestSnapshot(width: Float = 1_440f, height: Float = 810f): kinet
             seed = 731_991,
         ))),
     ) as GameplayDecision.Accepted).frame.nextState
-    val resized = (GameplayNucleus.decide(
+    return (GameplayNucleus.decide(
         started,
         GameplayNucleusPulse.Intent(GameplayInteractionPulse.ViewportChanged.fromValidated(width, height, 1f)),
     ) as GameplayDecision.Accepted).frame.nextState
-    return GameplayNucleus.renderSnapshot(resized)
 }
 
 private fun memoryFixtureContent() = GameplayContentSnapshot(

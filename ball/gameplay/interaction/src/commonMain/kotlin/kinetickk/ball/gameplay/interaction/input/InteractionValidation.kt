@@ -64,7 +64,21 @@ sealed interface InteractionValidationResult<out Intent : GameplayInteractionPul
     ) : InteractionValidationResult<Nothing>
 }
 
-/** Raw platform numbers are quarantined here before a trusted Intent can be constructed. */
+/**
+ * The simulation's dp length for [px] device pixels at [density], kept inside the viewport
+ * representation bounds (a 1 px viewport at density 8 is still a valid 1 dp viewport).
+ */
+fun gameplayViewportDp(px: Float, density: Float): Float =
+    (px / density).coerceIn(
+        InteractionIngressLimits.MIN_VIEWPORT_DIMENSION_PX,
+        InteractionIngressLimits.MAX_VIEWPORT_DIMENSION_PX,
+    )
+
+/**
+ * Raw platform numbers are quarantined here before a trusted Intent can be constructed. This is
+ * also the one place where device pixels become the simulation's density-independent units: the
+ * viewport and the pointer reach the Nucleus in dp.
+ */
 class GameInteractionValidator {
     fun frameElapsed(
         rawDeltaSeconds: Float,
@@ -102,8 +116,8 @@ class GameInteractionValidator {
         return if (failure == null) {
             InteractionValidationResult.Valid(
                 GameplayInteractionPulse.ViewportChanged.fromValidated(
-                    rawWidthPx,
-                    rawHeightPx,
+                    gameplayViewportDp(rawWidthPx, rawDensity),
+                    gameplayViewportDp(rawHeightPx, rawDensity),
                     rawDensity,
                 ),
             )
@@ -112,17 +126,28 @@ class GameInteractionValidator {
         }
     }
 
-    /** Only finite representation is fixed; viewport membership remains Nucleus business policy. */
+    /**
+     * Only finite representation is fixed; viewport membership remains Nucleus business policy.
+     * [density] is the one the accepted viewport was converted with, so the dp pointer and the dp
+     * viewport share units.
+     */
     fun pointerMoved(
         rawXpx: Float,
         rawYpx: Float,
         active: Boolean = true,
+        density: Float = 1f,
     ): InteractionValidationResult<GameplayInteractionPulse.PointerMoved> {
         val failure = finiteFailure(rawXpx, InteractionInputField.POINTER_X_PX)
             ?: finiteFailure(rawYpx, InteractionInputField.POINTER_Y_PX)
+            ?: boundedFailure(
+                value = density,
+                field = InteractionInputField.DENSITY,
+                minimum = InteractionIngressLimits.MIN_DENSITY,
+                maximum = InteractionIngressLimits.MAX_DENSITY,
+            )
         return if (failure == null) {
             InteractionValidationResult.Valid(
-                GameplayInteractionPulse.PointerMoved.fromValidated(rawXpx, rawYpx, active),
+                GameplayInteractionPulse.PointerMoved.fromValidated(rawXpx / density, rawYpx / density, active),
             )
         } else {
             InteractionValidationResult.Invalid(failure)
