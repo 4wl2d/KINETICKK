@@ -142,8 +142,11 @@ internal fun MutableGameState.onCharacterDashContact(enemy: Enemy) {
     if (coreShape == CoreShape.SHARD) enemy.characterMarkTime = MARK_SECONDS
 }
 
-/** A non-dash impact or a qualifying weapon hit on [enemy]: releases Orbit and opens Shard marks. */
-internal fun MutableGameState.onCharacterPrimaryHit(enemy: Enemy) {
+/**
+ * An impact or a qualifying weapon hit on [enemy]: releases Orbit, and opens Shard marks unless the
+ * hit is a [dash] impact.
+ */
+internal fun MutableGameState.onCharacterPrimaryHit(enemy: Enemy, dash: Boolean = false) {
     val ability = characterRuntime
     when (coreShape) {
         CoreShape.ORB -> if (ability.charge >= 1f) {
@@ -161,7 +164,7 @@ internal fun MutableGameState.onCharacterPrimaryHit(enemy: Enemy) {
             if (dominant != null && enemy.alive) applyStatus(enemy, dominant, ORBIT_STACKS, 0)
             shockwave(coreX, coreY, 0.35f, ORBIT_RADIUS, 2)
         }
-        CoreShape.SHARD -> if (elapsed >= ability.punctureReadyAt && consumeMark(enemy)) {
+        CoreShape.SHARD -> if (!dash && elapsed >= ability.punctureReadyAt && consumeMark(enemy)) {
             ability.punctureReadyAt = elapsed + PUNCTURE_INTERVAL
             dealCharacterDamage(enemy, PUNCTURE_DAMAGE * abilityPower())
             heat = max(0f, heat - PUNCTURE_HEAT_REFUND)
@@ -209,11 +212,24 @@ internal fun MutableGameState.onCharacterImpact(enemy: Enemy, result: DamageResu
     when (coreShape) {
         CoreShape.PRISM -> if (heavy) cutFacetTimer()
         CoreShape.STAR -> {
-            if (multiplier > 1f) ability.abilityDamage += result.amount * (1f - 1f / multiplier)
+            if (multiplier > 1f) ability.abilityDamage += impactShare(enemy, result, multiplier)
             if (heavy && enemy.alive) gainStellarMass(2)
         }
+        CoreShape.DIPOLE -> if (ability.polarity == Polarity.REPEL && enemy.alive) {
+            // REPEL throws what the Core strikes away from it at the impact speed.
+            val knockback = knockbackTaken(enemy)
+            val dx = enemy.x - coreX
+            val dy = enemy.y - coreY
+            val distance = length(dx, dy)
+            if (knockback > 0f && distance >= 1f) {
+                val throwSpeed = impactSpeed * REPEL_THROW_SHARE * knockback
+                enemy.vx += dx / distance * throwSpeed
+                enemy.vy += dy / distance * throwSpeed
+                enemy.characterMarkTime = THROW_SECONDS
+            }
+        }
         CoreShape.PENTAGON -> {
-            if (multiplier > 1f) ability.abilityDamage += result.amount * (1f - 1f / multiplier)
+            if (multiplier > 1f) ability.abilityDamage += impactShare(enemy, result, multiplier)
             if (isOnBeat()) {
                 onBeatAction()
                 val beat = currentBeatIndex()
@@ -232,6 +248,12 @@ internal fun MutableGameState.onCharacterImpact(enemy: Enemy, result: DamageResu
         }
         else -> Unit
     }
+}
+
+/** The share of an impact the character's [multiplier] added, up to the integrity the hit removed. */
+private fun impactShare(enemy: Enemy, result: DamageResult, multiplier: Float): Double {
+    val removed = min(result.amount, result.amount + enemy.hp.coerceAtMost(0f))
+    return (removed * (1f - 1f / multiplier)).toDouble().coerceAtLeast(0.0)
 }
 
 /** A resolved kill: Elite kills restore a facet, kills gather Stellar Mass. */
@@ -436,6 +458,10 @@ internal fun MutableGameState.latticeNodeY(index: Int): Float = characterRuntime
 /** Dipole polarity. */
 internal val MutableGameState.polarity: Polarity get() = characterRuntime.polarity
 
+/** True while the polarity field throws [enemy]: it flies on its momentum instead of steering. */
+internal fun MutableGameState.isThrownByPolarity(enemy: Enemy): Boolean =
+    coreShape == CoreShape.DIPOLE && enemy.characterMarkTime > 0f
+
 /** True when Orbit is fully charged and the next impact or weapon hit releases it. */
 internal val MutableGameState.orbitCharged: Boolean get() = coreShape == CoreShape.ORB && characterRuntime.charge >= 1f
 
@@ -559,7 +585,7 @@ private fun MutableGameState.collapseLattice(count: Int) {
         for (index in 0 until count) {
             val next = (index + 1) % count
             if (segmentCircleIntersects(ability.latticeX(index), ability.latticeY(index), ability.latticeX(next), ability.latticeY(next),
-                    enemy.x, enemy.y, enemy.radius + LATTICE_EDGE_REACH)
+                    enemy.x, enemy.y, enemy.radius)
             ) {
                 touches = true
                 break
@@ -661,8 +687,8 @@ private fun MutableGameState.updateEcho(ability: CharacterRuntime, delta: Float)
                 reach + enemy.radius)
         ) {
             enemy.characterMarkTime = GHOST_HIT_INTERVAL
-            val result = dealProcDamage(enemy, damage)
-            ability.abilityDamage += result.amount.toDouble()
+            val integrity = enemy.hp
+            recordAbilityDamage(integrity, dealProcDamage(enemy, damage))
             directionalBurst(enemy.x, enemy.y, 5, 2, x - fromX, y - fromY)
         }
     }
@@ -683,8 +709,9 @@ private fun MutableGameState.updatePolarity(ability: CharacterRuntime, delta: Fl
         if (knockback <= 0f) continue
         enemy.vx += dx / distance * acceleration * knockback
         enemy.vy += dy / distance * acceleration * knockback
-        // A repelled enemy counts as thrown for a moment: what it strikes meanwhile is a slam.
-        if (!attract) enemy.characterMarkTime = THROW_SECONDS
+        // The field throws what it moves: the enemy flies on its momentum for a moment, and what it
+        // strikes meanwhile is a slam.
+        enemy.characterMarkTime = THROW_SECONDS
     }
     ability.charge = if (elapsed >= ability.polarityFlipReadyAt) 1f else
         1f - ((ability.polarityFlipReadyAt - elapsed) / POLARITY_FLIP_INTERVAL).coerceIn(0f, 1f)
@@ -713,6 +740,12 @@ private fun MutableGameState.updatePolarity(ability: CharacterRuntime, delta: Fl
             val closing = ((thrown.vx - other.vx) * dx + (thrown.vy - other.vy) * dy) / distance
             if (closing < SLAM_MIN_SPEED) continue
             thrown.characterMarkTime = 0f
+            // The pair shares the closing momentum, so one contact slams once.
+            val share = closing * 0.5f
+            thrown.vx -= dx / distance * share
+            thrown.vy -= dy / distance * share
+            other.vx += dx / distance * share
+            other.vy += dy / distance * share
             dipoleSlam(thrown, closing)
             dipoleSlam(other, closing)
             slams++
@@ -901,8 +934,8 @@ private fun MutableGameState.updateHive(ability: CharacterRuntime, delta: Float)
                 drones[base + DRONE_TARGET_X] = target.x
                 drones[base + DRONE_TARGET_Y] = target.y
                 dart = DRONE_DART_SECONDS
-                val result = dealProcDamage(target, DRONE_DAMAGE * abilityPower())
-                ability.abilityDamage += result.amount.toDouble()
+                val integrity = target.hp
+                recordAbilityDamage(integrity, dealProcDamage(target, DRONE_DAMAGE * abilityPower()))
                 if (!target.alive && elapsed >= ability.droneHealReadyAt) {
                     ability.droneHealReadyAt = elapsed + DRONE_HEAL_INTERVAL
                     heal(DRONE_KILL_HEAL, HealSource.ITEM)
@@ -967,11 +1000,15 @@ private fun characterHash(value: Long): Long {
 internal const val DASH_PHASE_SECONDS: Float = 0.24f
 private const val FLASH_DECAY: Float = 2.5f
 
+// Ability damage is calibrated by CharacterBalanceTest: in its fixed 90 s script every character's
+// ability output stays within 40 % of the roster median (Orbit 100, Puncture 80, Halo 24/s and 32,
+// Lattice 12 + 6 per node, slams 30 + 0.08 per u/s from 100 u/s, scars 32, drones 11).
+
 private const val ORBIT_ARC: Float = 0.698f
 private const val ORBIT_MIN_DISTANCE: Float = 100f
 private const val ORBIT_MIN_SPEED: Float = 200f
 internal const val ORBIT_RADIUS: Float = 210f
-internal const val ORBIT_DAMAGE: Float = 70f
+internal const val ORBIT_DAMAGE: Float = 100f
 private const val ORBIT_STACKS: Int = 2
 
 internal const val FACET_REGEN_SECONDS: Float = 6f
@@ -985,19 +1022,19 @@ private const val HEAVY_IMPACT_SHARE: Float = 0.25f
 private const val HEAVY_IMPACT_SPEED: Float = 450f
 
 private const val MARK_SECONDS: Float = 3f
-internal const val PUNCTURE_DAMAGE: Float = 60f
+internal const val PUNCTURE_DAMAGE: Float = 80f
 internal const val PUNCTURE_HEAT_REFUND: Float = 12f
 private const val PUNCTURE_INTERVAL: Float = 0.25f
 
 private const val HALO_SPEED_SPAN: Float = 1_200f
 internal const val HALO_EXTRA_RADIUS: Float = 110f
 private const val HALO_BAND: Float = 18f
-internal const val HALO_BAND_DPS: Float = 30f
+internal const val HALO_BAND_DPS: Float = 24f
 private const val HALO_MIN_SPEED: Float = 40f
 private const val HALO_EASE: Float = 6f
 internal const val HALO_BURST_SPEED: Float = 1_200f
 internal const val HALO_BURST_RADIUS: Float = 260f
-internal const val HALO_BURST_DAMAGE: Float = 40f
+internal const val HALO_BURST_DAMAGE: Float = 32f
 private const val HALO_BURST_COOLDOWN: Float = 1.2f
 
 private const val PARRY_MIN_SPEED: Float = 200f
@@ -1012,9 +1049,8 @@ private const val LATTICE_RECORD_DISTANCE: Float = 120f
 private const val LATTICE_CLOSE_DISTANCE: Float = 130f
 private const val LATTICE_SPACING: Float = 150f
 private const val LATTICE_LIFE_SECONDS: Float = 7f
-internal const val LATTICE_BASE_DAMAGE: Float = 35f
-internal const val LATTICE_NODE_DAMAGE: Float = 17f
-private const val LATTICE_EDGE_REACH: Float = 48f
+internal const val LATTICE_BASE_DAMAGE: Float = 12f
+internal const val LATTICE_NODE_DAMAGE: Float = 6f
 internal const val LATTICE_INSIDE_MULTIPLIER: Float = 1.5f
 
 private const val STAR_IMPACT_PER_STACK: Float = 0.03f
@@ -1039,9 +1075,10 @@ private const val ATTRACT_ACCELERATION: Float = 260f
 internal const val REPEL_RADIUS: Float = 220f
 private const val REPEL_ACCELERATION: Float = 420f
 private const val THROW_SECONDS: Float = 0.6f
-internal const val SLAM_MIN_SPEED: Float = 260f
-internal const val SLAM_BASE_DAMAGE: Float = 18f
-internal const val SLAM_DAMAGE_PER_SPEED: Float = 0.05f
+private const val REPEL_THROW_SHARE: Float = 1f
+internal const val SLAM_MIN_SPEED: Float = 100f
+internal const val SLAM_BASE_DAMAGE: Float = 30f
+internal const val SLAM_DAMAGE_PER_SPEED: Float = 0.08f
 private const val MAX_SLAMS_PER_STEP: Int = 8
 
 internal const val BEAT_PERIOD: Float = 0.75f
@@ -1063,7 +1100,7 @@ internal const val BLINK_RECHARGE_SECONDS: Float = 2.2f
 private const val BLINK_DRIVE_RANGE_MULTIPLIER: Float = 1.4f
 internal const val SCAR_FUSE_SECONDS: Float = 0.4f
 private const val SCAR_FADE_SECONDS: Float = 0.3f
-internal const val SCAR_DAMAGE: Float = 45f
+internal const val SCAR_DAMAGE: Float = 32f
 private const val SCAR_REACH: Float = 40f
 
 private const val DRONE_CHANCE: Float = 0.25f
@@ -1074,7 +1111,7 @@ private const val DRONE_FIRST_DART_SECONDS: Float = 0.3f
 internal const val DRONE_ORBIT_RADIUS: Float = 70f
 private const val DRONE_ORBIT_SPEED: Float = 2.4f
 private const val DRONE_RANGE: Float = 260f
-internal const val DRONE_DAMAGE: Float = 9f
+internal const val DRONE_DAMAGE: Float = 11f
 private const val DRONE_INTERVAL: Float = 1f
 private const val DRONE_DART_SECONDS: Float = 0.2f
 private const val DRONE_KILL_HEAL: Float = 0.5f

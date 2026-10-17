@@ -430,9 +430,15 @@ internal fun MutableGameState.dealStatusDamage(
 internal fun MutableGameState.dealCharacterDamage(enemy: Enemy, amount: Float): DamageResult {
     if (amount <= 0f || !enemy.alive) return DamageResult(0f, false)
     val scaled = amount * matrix.damageMultiplier * characterDamageMultiplier()
+    val integrity = enemy.hp
     val result = damageEnemy(enemy, scaled * enemy.weaponTaken, unmitigated = scaled)
-    characterRuntime.abilityDamage += result.amount.toDouble()
+    recordAbilityDamage(integrity, result)
     return result
+}
+
+/** Counts a character ability's damage as run output, up to the integrity the target had left. */
+internal fun MutableGameState.recordAbilityDamage(integrityBefore: Float, result: DamageResult) {
+    characterRuntime.abilityDamage += min(result.amount, integrityBefore.coerceAtLeast(0f)).toDouble()
 }
 
 /** Final share of a victim's weighted integrity a kill proc may take from any one other enemy. */

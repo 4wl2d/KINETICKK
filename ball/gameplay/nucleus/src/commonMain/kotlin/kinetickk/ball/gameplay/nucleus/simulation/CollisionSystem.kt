@@ -125,7 +125,7 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
                 executeEnemy(enemy, HitSource.IMPACT)
             }
             if (newDashContact) onDashHit(enemy, damage)
-            if (dashPhaseTime <= 0f) onCharacterPrimaryHit(enemy)
+            onCharacterPrimaryHit(enemy, dash = dashPhaseTime > 0f)
             lastImpact = damage
             lastImpactTime = 0.72f
             enemy.contactCooldown = 0.26f

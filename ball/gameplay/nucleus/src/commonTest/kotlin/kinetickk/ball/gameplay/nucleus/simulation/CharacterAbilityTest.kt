@@ -124,6 +124,12 @@ class CharacterAbilityTest {
         game.characterRuntime.charge = 1f
         game.dealWeaponDamage(near, 1f)
         assertEquals(after - 1f - ORBIT_DAMAGE * power, near.hp, 0.05f)
+        // So does a Dash impact.
+        game.characterRuntime.charge = 1f
+        val beforeDash = near.hp
+        game.onCharacterPrimaryHit(near, dash = true)
+        assertEquals(beforeDash - ORBIT_DAMAGE * power, near.hp, 0.05f)
+        assertFalse(game.orbitCharged)
     }
 
     @Test fun facetsNegateOneHitPerHurtWindowRegenerateAndBreakOutward() {
@@ -202,9 +208,12 @@ class CharacterAbilityTest {
         assertEquals(enemy.maxHp - 1f - PUNCTURE_DAMAGE, enemy.hp, 0.05f)
         assertEquals(50f - PUNCTURE_HEAT_REFUND, game.heat)
         assertFalse(game.isMarked(enemy))
-        // A second mark inside 0.25 s waits.
+        // A second mark inside 0.25 s waits, and a Dash impact never opens one.
         enemy.characterMarkTime = 3f
         game.onCharacterPrimaryHit(enemy)
+        assertTrue(game.isMarked(enemy))
+        game.elapsed += 0.3f
+        game.onCharacterPrimaryHit(enemy, dash = true)
         assertTrue(game.isMarked(enemy))
         game.elapsed += 0.3f
         game.onCharacterPrimaryHit(enemy)
@@ -272,7 +281,9 @@ class CharacterAbilityTest {
         val game = game(CoreShape.TESSERACT)
         val corners = listOf(0f to 0f, 400f to 0f, 400f to 400f, 0f to 400f)
         val inside = game.addEnemyForTesting(200f, 200f)
-        val edge = game.addEnemyForTesting(200f, -40f)
+        // Edges strike what touches them: radius 17, 12 outside the first edge.
+        val edge = game.addEnemyForTesting(200f, -12f)
+        val clear = game.addEnemyForTesting(200f, -30f)
         corners.forEachIndexed { index, (x, y) ->
             game.coreX = x; game.coreY = y
             game.beginCharacterDash()
@@ -290,6 +301,7 @@ class CharacterAbilityTest {
         assertEquals(0, game.latticeNodeCount)
         val damage = LATTICE_BASE_DAMAGE + 4 * LATTICE_NODE_DAMAGE
         assertEquals(edge.maxHp - damage, edge.hp, 0.05f)
+        assertEquals(clear.maxHp, clear.hp)
         assertEquals(inside.maxHp - damage * LATTICE_INSIDE_MULTIPLIER, inside.hp, 0.05f)
     }
 
@@ -360,6 +372,11 @@ class CharacterAbilityTest {
         val pulled = game.addEnemyForTesting(game.coreX + 200f, game.coreY)
         game.step()
         assertTrue(pulled.vx < 0f, "attract pulls toward the Core")
+        // What the field moves flies on its momentum: steering leaves it alone while it is thrown.
+        assertTrue(game.isThrownByPolarity(pulled))
+        val pulledVelocity = pulled.vx
+        game.steerEnemy(pulled, 78f, 0f, 2.1f, MutableGameState.FIXED_STEP)
+        assertEquals(pulledVelocity, pulled.vx)
         game.onCharacterTurn()
         assertEquals(Polarity.REPEL, game.polarity)
         game.onCharacterTurn()
@@ -377,8 +394,18 @@ class CharacterAbilityTest {
         assertTrue(thrown.characterMarkTime > 0f)
         thrown.vx = 500f; struck.vx = 0f
         game.step()
-        assertTrue(thrown.hp < thrown.maxHp)
-        assertTrue(struck.hp < struck.maxHp)
+        val slam = (SLAM_BASE_DAMAGE + SLAM_DAMAGE_PER_SPEED * 500f) * game.abilityPower()
+        assertEquals(thrown.maxHp - slam, thrown.hp, 0.5f)
+        assertEquals(struck.maxHp - slam, struck.hp, 0.5f)
+        // The pair shared the closing momentum, so the contact does not slam again.
+        game.step()
+        assertEquals(thrown.maxHp - slam, thrown.hp, 0.5f)
+        // Repel throws what the Core strikes, at the impact speed.
+        game.enemies.clear()
+        val rammed = game.addEnemyForTesting(game.coreX + 30f, game.coreY)
+        game.onCharacterImpact(rammed, DamageResult(10f, false), impactSpeed = 600f, multiplier = 1f)
+        assertEquals(600f * game.knockbackTaken(rammed), rammed.vx, 0.01f)
+        assertTrue(game.isThrownByPolarity(rammed))
     }
 
     @Test fun pentagonRewardsOnBeatDashesImpactsAndActivations() {
