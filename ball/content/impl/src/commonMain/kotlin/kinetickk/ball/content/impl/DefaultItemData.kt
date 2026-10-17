@@ -362,7 +362,7 @@ private val Drafts: List<ItemDraft> = listOf(
         unlock = 5),
     ItemDraft("Harmonic Lens", "Resonating hulls flinch in the same place every time.", UNCOMMON, listOf(PRECISION),
         listOf(StatusElement.SONIC),
-        rules = listOf(ItemRule.CritDamageVersus(EffectCondition.TargetHas(StatusElement.SONIC), 1.25f)), unlock = 8),
+        rules = listOf(ItemRule.CritDamageVersus(EffectCondition.TargetHas(StatusElement.SONIC), 1.4f)), unlock = 8),
     ItemDraft("Resonant Turn", "Every hard turn drags a sonic boom around with it.", UNCOMMON, listOf(DRIVE), listOf(StatusElement.SONIC),
         clauses = listOf(on(EffectTrigger.TURN, apply(StatusElement.SONIC, 2, 190f))), unlock = 10),
     ItemDraft("Shatter Coil", "Wound so tight that the first crack brings the rest.", RARE, listOf(RAM), listOf(StatusElement.SONIC),

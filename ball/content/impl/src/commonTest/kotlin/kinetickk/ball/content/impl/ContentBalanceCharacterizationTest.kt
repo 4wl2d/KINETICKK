@@ -31,7 +31,7 @@ class ContentBalanceCharacterizationTest {
         assertEquals(173, items.size)
         assertEquals((0 until items.size).toList(), items.map(ItemDefinition::id))
         assertEquals(
-            "353a71756621879d",
+            "90e79f6e50b84973",
             goldenFingerprint {
                 add("item-effects")
                 ItemEffect.entries.forEach { effect ->
@@ -190,7 +190,7 @@ class ContentBalanceCharacterizationTest {
             ui.matrixNodes.map { node -> node.id to node.costs.toList() },
         )
         assertEquals(
-            "c48c2a6b65f342b4",
+            "047fe31440482621",
             goldenFingerprint {
                 add("weapons")
                 ui.weapons.forEach { weapon ->
