@@ -263,8 +263,8 @@ private fun MatrixTile(
             flashProgress.animateTo(1f, tween(MATRIX_PURCHASE_FLASH_MS, easing = LinearEasing))
         }
     }
-    // Hover moves the selection (a click then confirms); touch has no hover, so its first tap selects.
-    LaunchedEffect(hovered) { if (hovered) onAction(MatrixAction.Select(node.id)) }
+    // Hover only highlights: the selection (which Buy rank acts on) moves on a press, a tap or keyboard focus, so
+    // crossing other tiles on the way to the detail panel leaves it alone.
     val measurer = rememberKkCanvasMeasurer(textScale)
     val name = node.name.localizedContent(language)
     val rank = language.text(ProfileScreensRedesignText.RankOf, node.rank, node.maxRanks)

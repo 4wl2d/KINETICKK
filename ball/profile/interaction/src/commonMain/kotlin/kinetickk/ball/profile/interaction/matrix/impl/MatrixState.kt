@@ -19,7 +19,7 @@ internal sealed interface MatrixAction {
     /** The detail panel's Buy rank button for [id]. */
     data class PurchaseRequested(val id: MatrixNodeId) : MatrixAction
 
-    /** Hover, keyboard focus or a first tap moves the selection. */
+    /** Keyboard focus moves the selection (hover only highlights a tile). */
     data class Select(val id: MatrixNodeId) : MatrixAction
 
     /** Tile activation (click, tap, Enter): a press on the selected tile buys its next rank, otherwise it selects. */

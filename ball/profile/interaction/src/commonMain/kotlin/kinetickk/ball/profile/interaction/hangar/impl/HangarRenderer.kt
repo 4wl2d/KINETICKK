@@ -219,8 +219,8 @@ private fun HangarTile(
     val focused by source.collectIsFocusedAsState()
     var pointerPress by remember { mutableStateOf(false) }
     val selection by animateFloatAsState(if (inspected) 1f else 0f, tween(200, easing = KkEase.Pull), label = "hangarTile")
-    // Hover inspects (a click then selects); touch has no hover, so its first tap inspects.
-    LaunchedEffect(hovered) { if (hovered) onAction(HangarAction.Inspect(shape.shape)) }
+    // Hover only highlights: the inspected character (which Select acts on) changes on a press, a tap or keyboard
+    // focus, so crossing other tiles on the way to the detail panel leaves it alone.
     val measurer = rememberKkCanvasMeasurer(textScale)
     val name = shape.definition.displayName.localizedContent(language)
     val status = hangarTileStatus(shape, selected, language)

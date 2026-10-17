@@ -16,10 +16,12 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.test.v2.runSkikoComposeUiTest
@@ -109,6 +111,25 @@ class HangarComposeTest {
             onNodeWithTag("profile-hangar-select").assert(SemanticsMatcher("names the selection") { node ->
                 node.config.getOrElseNullable(SemanticsProperties.ContentDescription) { null }?.joinToString()?.startsWith("Selected") == true
             })
+        }
+    }
+
+    @Test
+    fun selectActsOnTheClickedCharacterNotOnTilesThePointerCrossed() {
+        val port = HangarTestPort()
+        run(port) {
+            onNodeWithTag(tag(CoreShape.PRISM)).performMouseInput { click() }
+            waitForIdle()
+            assertTrue(port.pulses.isEmpty(), "the first press only inspects")
+            // On the way to the detail panel the pointer crosses another unlocked character.
+            onNodeWithTag(tag(CoreShape.SPIRAL)).performMouseInput { moveTo(center) }
+            waitForIdle()
+            onNodeWithTag("profile-hangar-select").performMouseInput {
+                moveTo(center)
+                click()
+            }
+            waitForIdle()
+            assertEquals(listOf<ProfilePulse.Business>(ProfilePulse.SelectCoreShape(CoreShape.PRISM)), port.pulses)
         }
     }
 

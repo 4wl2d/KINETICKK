@@ -16,10 +16,12 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.test.v2.runSkikoComposeUiTest
@@ -84,7 +86,7 @@ class MatrixComposeTest {
     fun aPressOnTheSelectedTileBuysTheNextRank() {
         val port = MatrixTestPort(matter = 10_000L)
         run(port) {
-            // Keyboard focus (like hover) selects without buying.
+            // Keyboard focus selects without buying.
             onNodeWithTag(tag(MatrixNodeId.WEAPON_CALIBRATION)).requestFocus()
             waitForIdle()
             onNodeWithTag(tag(MatrixNodeId.WEAPON_CALIBRATION)).assertIsSelected()
@@ -110,6 +112,27 @@ class MatrixComposeTest {
             onNodeWithTag(tag(MatrixNodeId.REINFORCED_HULL)).requestFocus()
             waitForIdle()
             onNodeWithTag("profile-matrix-purchase").assertIsEnabled().performClick()
+            waitForIdle()
+            assertEquals(listOf<ProfilePulse.Business>(ProfilePulse.PurchaseMatrixNode(MatrixNodeId.REINFORCED_HULL)), port.pulses)
+        }
+    }
+
+    @Test
+    fun buyRankActsOnTheClickedTileNotOnTilesThePointerCrossed() {
+        val port = MatrixTestPort(matter = 10_000L)
+        run(port) {
+            onNodeWithTag(tag(MatrixNodeId.REINFORCED_HULL)).performMouseInput { click() }
+            waitForIdle()
+            onNodeWithTag(tag(MatrixNodeId.REINFORCED_HULL)).assertIsSelected()
+            assertTrue(port.pulses.isEmpty(), "the first press only selects")
+            // On the way to the detail panel the pointer crosses a buyable tile in another column.
+            onNodeWithTag(tag(MatrixNodeId.WEAPON_CALIBRATION)).performMouseInput { moveTo(center) }
+            waitForIdle()
+            onNodeWithTag(tag(MatrixNodeId.REINFORCED_HULL)).assertIsSelected()
+            onNodeWithTag("profile-matrix-purchase").performMouseInput {
+                moveTo(center)
+                click()
+            }
             waitForIdle()
             assertEquals(listOf<ProfilePulse.Business>(ProfilePulse.PurchaseMatrixNode(MatrixNodeId.REINFORCED_HULL)), port.pulses)
         }

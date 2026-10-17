@@ -19,7 +19,7 @@ import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.toImmutableList
 
 internal sealed interface HangarAction {
-    /** Hover or keyboard focus inspects a character. */
+    /** Keyboard focus inspects a character (hover only highlights a tile). */
     data class Inspect(val shape: CoreShape) : HangarAction
 
     /** A tile press or Enter: a press on the inspected tile selects it, any other press inspects. */
