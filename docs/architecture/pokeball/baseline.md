@@ -389,7 +389,13 @@ level (the level is in the power): two, one more at Ion Swarm's and Rift
 Blades' first form, more with Agony. Mines and lenses space their Gravitic Mass
 per enemy (1.5 s and 2.5 s) and wells add none, so Collapse cannot cascade.
 Null Lance, Quasar Cannon and Singularity Spear aim at an enemy within 0.5 rad
-and 700 of the heading. The perceptible-impact arenas that carry a weapon fly
+and 700 of the heading. Weapon cooldown refunds (Hair Trigger, Autoloader) also
+advance a weapon's own timers (Scatter Bloom's volley, Glacier Bell's toll and
+pulse, Hollow Rift's passive rift, Concussion Engine's shockwave); contact
+weapons surge like continuous ones. The Spiral's ghost shockwaves keep the
+Core's 0.35 s cadence as a second source, orbitals accumulate their phase (a
+speed change never jumps them), and a returning Gyre disc with the third form
+glances around a rock. The perceptible-impact arenas that carry a weapon fly
 both Ion Swarm (a volley) and Sentry Grid (a persistent source) and keep the
 better result, so `WEAPON_HIT` items are measured under the proc rule; the
 comparative scenario keeps three viable directions for every form.
