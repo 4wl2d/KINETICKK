@@ -352,7 +352,8 @@ private val Drafts: List<ItemDraft> = listOf(
     ItemDraft("Abyssal Lens", "Aim for the hole the void left behind.", UNCOMMON, listOf(PRECISION), listOf(StatusElement.VOID),
         rules = listOf(ItemRule.DamageVersus(EffectCondition.TargetHas(StatusElement.VOID, 3), 0.15f)), unlock = 10),
 
-    // Ids 90-172: the 0.4.0 expansion. Ungated Commons and Uncommons, then four Rebirth-gated items per tier.
+    // Ids 90-172: the 0.4.0 expansion, grouped by theme. Commons and Uncommons are ungated; Rares, Epics, the six
+    // legendaries and Fault Line each wait for a Rebirth tier, four items per tier.
     // SONIC (ids 90-95).
     ItemDraft("Ringing Debris", "The fallen keep ringing long after they break.", COMMON, listOf(CHAIN), listOf(StatusElement.SONIC),
         clauses = listOf(on(EffectTrigger.KILL, apply(StatusElement.SONIC, 2, 150f))), unlock = 3),

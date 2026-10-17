@@ -97,6 +97,31 @@ class OfferSystemTest {
     }
 
     @Test
+    fun everyItemIsOfferedFromItsOwnTierAndLevelAndIsDiscoveredWhenTaken() {
+        val items = canonicalGameplayContent.items
+        assertEquals(173, items.size)
+        // A fresh profile per tier: no lifetime Matter, so the run level alone opens the catalog.
+        val tiers = (0..10).map { buildTestState(rebirth = it) }
+        for (item in items) {
+            val own = tiers[item.minimumRebirth].apply { level = item.unlockLevel }
+            assertTrue(item in own.offerableItems(), "${item.name} is offered at Reborn ${item.minimumRebirth}, level ${item.unlockLevel}")
+            if (item.unlockLevel > 1) {
+                own.level = item.unlockLevel - 1
+                assertFalse(item in own.offerableItems(), "${item.name} waits for level ${item.unlockLevel}")
+            }
+            if (item.minimumRebirth > 0) {
+                val below = tiers[item.minimumRebirth - 1].apply { level = 99 }
+                assertFalse(item in below.offerableItems(), "${item.name} waits for Reborn ${item.minimumRebirth}")
+            }
+        }
+
+        // Taking an item records its discovery for the Codex, whichever item it is.
+        val collector = buildTestState(rebirth = 10)
+        items.forEach { collector.acquireItem(it.id) }
+        assertEquals(items.map { it.id }.toSet(), collector.takeProgressUpdate()?.discoveredItemIds?.toSet())
+    }
+
+    @Test
     fun rebornChanceGrowsWithRebirthTierAndFortuneThree() {
         assertEquals(0f, buildTestState(rebirth = 0).rebornChance())
         assertEquals(0.15f, buildTestState(rebirth = 3).rebornChance(), 0.0001f)
