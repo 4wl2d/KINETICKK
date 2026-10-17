@@ -657,7 +657,8 @@ internal fun MutableGameState.weaponShotHit(projectile: Projectile, sourceWeapon
 
 /**
  * A sentry shot bursts where it strikes: every other enemy within [SENTRY_SPLASH_RADIUS] of the struck one takes
- * [SENTRY_SPLASH_SHARE] of the shot (it may crit, but fires no on-hit effects). A crowd feeds the grid; a lone target takes only the shot.
+ * [SENTRY_SPLASH_SHARE] of the shot (it may crit, but fires no on-hit effects). A crowd feeds the grid; a lone
+ * target takes only the shot.
  */
 private fun MutableGameState.sentrySplash(projectile: Projectile, struck: Enemy) {
     val damage = projectile.damage * SENTRY_SPLASH_SHARE
