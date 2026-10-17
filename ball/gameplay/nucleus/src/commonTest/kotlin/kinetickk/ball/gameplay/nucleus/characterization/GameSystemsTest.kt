@@ -191,7 +191,8 @@ class GameSystemsTest {
 
         val relays = engine.projectiles.filter { !it.hostile && it.sourceWeapon == WeaponId.PRISM_RELAY }
         assertEquals(2, relays.size, "Resonant Prism Relay must fire a twin volley")
-        assertTrue(relays.all { it.pierce == 4 }, "Resonant Prism Relay must gain additional ricochets")
+        // The first form's extra bounce carries into the twin volley (the next one arrives with the third form).
+        assertTrue(relays.all { it.pierce == 3 }, "Resonant Prism Relay must keep the first form's extra bounce")
     }
 
     @Test
@@ -485,7 +486,7 @@ class GameSystemsTest {
             WeaponId.SCATTER_BLOOM -> {
                 observedEnemy = engine.addEnemyForTesting(150f, 0f)
                 engine.update(GameScenario.FIXED_STEP)
-                assertEquals(3, engine.projectiles.count { !it.hostile && it.sourceWeapon == id })
+                assertEquals(SCATTER_PASSIVE_PELLETS, engine.projectiles.count { !it.hostile && it.sourceWeapon == id })
             }
             WeaponId.TETHER_ARC -> {
                 observedEnemy = engine.addEnemyForTesting(200f, 0f)
