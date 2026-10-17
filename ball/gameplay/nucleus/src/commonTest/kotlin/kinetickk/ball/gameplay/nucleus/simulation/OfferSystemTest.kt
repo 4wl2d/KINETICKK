@@ -42,6 +42,21 @@ private const val PITY_SWEEP_SEEDS = 500
 /** An unlock level no run reaches, which keeps an item out of every ordinary offer. */
 private const val NEVER_UNLOCKED = Int.MAX_VALUE
 
+/**
+ * The full-catalog veteran's offers over the odds seeds. Several odds checks compare against this same immutable
+ * sample, so it is built once per run, which keeps each check well inside the browser runner's per-test timeout.
+ */
+private val veteranOffers: List<List<ItemDefinition>> by lazy { buildTestState().apply { lifetimeMatter = 4_000L }.sampleOffers() }
+
+/** Builds one offer per seed from a fresh reward stream with the given pity counter and returns its cards. */
+private fun MutableGameState.sampleOffers(seeds: IntRange = 1..OFFER_SAMPLES, pity: Int = 0): List<List<ItemDefinition>> =
+    seeds.map { seed ->
+        rewardRandom = CloneableXorWowRandom(seed)
+        offerPity = pity
+        buildItemChoices()
+        choices.map { content.items[requireNotNull(it.itemId)] }
+    }
+
 class OfferSystemTest {
     @Test
     fun offersAreSeededByTheRewardStreamAndNeverShiftCombatRandomness() {
@@ -217,7 +232,7 @@ class OfferSystemTest {
 
     @Test
     fun aFullCatalogVeteranSeesAboutOneEpicCardEveryThreeOffers() {
-        val offers = buildTestState().apply { lifetimeMatter = 4_000L }.sampleOffers()
+        val offers = veteranOffers
         assertTrue(offers.all { it.size == 3 })
         assertTrue(offers.all { offer -> offer.map { it.id }.toSet().size == offer.size }, "An offer never repeats a card")
         // Cards 0 and 1 are Epic 7% of the time (Legendary falls back to Epic before Rebirth 2), the volatile card 19%.
@@ -257,19 +272,23 @@ class OfferSystemTest {
         assertTrue(offers.cardsPerOffer { it.rarity == ItemRarity.EPIC } <= 0.33, "Epic cards per offer")
     }
 
+    // The two fallback checks below compare a catalog with the full-catalog veteran on the same seeds and odds, so they
+    // hold under any base odds, while an open draw or an upward fallback moves the shares far apart.
+
     @Test
     fun aRolledTierWithNoAvailableItemFallsToTheNearestLowerTier() {
-        // Each catalog below is compared with the full-catalog veteran on the same seeds and odds, so the checks hold
-        // under any base odds, while an open draw or an upward fallback moves the shares far apart.
-        val veteran = buildTestState().apply { lifetimeMatter = 4_000L }.sampleOffers()
-
+        val veteran = veteranOffers
         // No Epic is unlocked at level 9, so Epic and Legendary rolls become Rare cards instead of open draws.
         val midRun = buildTestState().apply {
             level = 9
             lifetimeMatter = 0L
         }.sampleOffers()
         assertClose(veteran.cardShare(rareOrBetter), midRun.cardShare { it.rarity == ItemRarity.RARE }, "Rare share of cards at level 9")
+    }
 
+    @Test
+    fun aRolledTierFallsBelowAnEmptyTierEvenWithItemsAboveIt() {
+        val veteran = veteranOffers
         // With no Uncommon offerable, Uncommon rolls fall to Common even though Rare items are available above them.
         val noUncommons = buildTestState(content = contentOffering { it.rarity != ItemRarity.UNCOMMON })
             .apply { lifetimeMatter = 4_000L }
@@ -302,7 +321,7 @@ class OfferSystemTest {
 
     @Test
     fun luckRaisesRarityOddsWithinBounds() {
-        val unlucky = buildTestState().apply { lifetimeMatter = 4_000L }.sampleOffers()
+        val unlucky = veteranOffers
         val lucky = buildTestState().apply {
             lifetimeMatter = 4_000L
             luck = 1f
@@ -403,15 +422,6 @@ class OfferSystemTest {
                 .map { item -> if (offerable(item)) item else item.copy(unlockLevel = NEVER_UNLOCKED) }
                 .toImmutableList(),
         )
-
-    /** Builds one offer per seed from a fresh reward stream with the given pity counter and returns its cards. */
-    private fun MutableGameState.sampleOffers(seeds: IntRange = 1..OFFER_SAMPLES, pity: Int = 0): List<List<ItemDefinition>> =
-        seeds.map { seed ->
-            rewardRandom = CloneableXorWowRandom(seed)
-            offerPity = pity
-            buildItemChoices()
-            choices.map { itemOf(it.itemId) }
-        }
 
     private fun List<List<ItemDefinition>>.cardsPerOffer(predicate: (ItemDefinition) -> Boolean): Double =
         sumOf { offer -> offer.count(predicate) }.toDouble() / size
