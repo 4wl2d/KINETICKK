@@ -65,6 +65,7 @@ import kinetickk.ball.profile.interaction.hangar.api.HangarRenderModel
 import kinetickk.ball.profile.interaction.hangar.api.HangarShapeRenderModel
 import kinetickk.ball.profile.interaction.hangar.api.HangarWeaponRenderModel
 import kinetickk.ball.profile.interaction.formatMatter
+import kinetickk.ball.profile.interaction.armory.impl.armoryWeaponIcon
 import kinetickk.ball.profile.interaction.localization.ProfileScreensRedesignText
 import kinetickk.ball.profile.interaction.localization.ProfileText
 import kinetickk.ball.profile.interaction.profileHeaderBackWidth
@@ -294,8 +295,8 @@ internal fun hangarHarmonyText(weapon: HangarWeaponRenderModel, language: AppLan
         language.text(ProfileScreensRedesignText.HangarHarmony, relics.joinToString(", ") { it.name.localizedContent(language) })
     }
 
-/** The weapon icon of the signature row ([KkIcon] key `weapons.<id>`). */
-private fun hangarWeaponIcon(weapon: HangarWeaponRenderModel): KkIcon? = KkIcon.byKey("weapons." + weapon.definition.id.name.lowercase())
+/** The weapon icon of the signature row (the Armory's cached `weapons.<id>` icon). */
+private fun hangarWeaponIcon(weapon: HangarWeaponRenderModel): KkIcon? = armoryWeaponIcon(weapon.definition.id)
 
 internal fun DrawScope.drawHangarForm(index: Int, center: Offset, radius: Float, fill: Color, rim: Color, spin: Float) {
     val path = KkFormPaths.of(index, radius)

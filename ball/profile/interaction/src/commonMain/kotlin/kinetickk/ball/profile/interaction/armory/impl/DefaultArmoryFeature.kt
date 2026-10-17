@@ -81,8 +81,13 @@ class DefaultArmoryFeature(
                         loadoutProjectionValue = profilePort.query(ProfileQuery.GetLoadout)
                         // A refusal (a screen older than the Profile) is named beside the action, never silent.
                         val rejection = (acceptance as? ProfileAcceptance.Rejected)?.reason
-                        noticeValue = reducer.answered(reduction.state, effect.id, rejection).notice
-                        audioExecutor.play(if (rejection == null) ProfileAudioCue.PURCHASE else ProfileAudioCue.REFUSED)
+                        val notice = reducer.answered(reduction.state, effect.id, rejection).notice
+                        noticeValue = notice
+                        audioExecutor.play(when {
+                            rejection == null -> ProfileAudioCue.PURCHASE
+                            notice != null -> ProfileAudioCue.REFUSED
+                            else -> ProfileAudioCue.UI_CLICK
+                        })
                     }
                     is ArmoryEffect.PlayAudio -> audioExecutor.play(effect.cue)
                     is ArmoryEffect.Emit -> onOutput(effect.output)
