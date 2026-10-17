@@ -462,9 +462,8 @@ class CharacterAbilityTest {
         val thrown = game.addEnemyForTesting(game.coreX + 100f, game.coreY)
         val struck = game.addEnemyForTesting(game.coreX + 120f, game.coreY)
         game.step()
-        assertFalse(game.isThrownByPolarity(thrown), "the push alone does not throw a resting enemy")
-        assertEquals(thrown.maxHp, thrown.hp)
-        // Flying outward through the field, it is thrown, and what it strikes is a slam.
+        assertTrue(game.isThrownByPolarity(thrown), "REPEL throws what it pushes")
+        assertEquals(thrown.maxHp, thrown.hp, "a slow throw does not slam")
         thrown.vx = 500f; struck.vx = 0f
         game.step()
         val slam = (SLAM_BASE_DAMAGE + SLAM_DAMAGE_PER_SPEED * 500f) * game.abilityPower()
@@ -509,6 +508,33 @@ class CharacterAbilityTest {
         assertTrue(length(drifter.x - game.coreX, drifter.y - game.coreY) > ATTRACT_RADIUS + drifter.radius)
         assertEquals(-chase, drifter.vx, 5f)
         assertEquals(0f, drifter.vy, 5f)
+    }
+
+    @Test fun repelThrowsWhatItPushesOutOfTheFieldAndTheEnemySteersAgainAfterward() {
+        val game = game(CoreShape.DIPOLE)
+        game.characterRuntime.polarity = Polarity.REPEL
+        val drifter = game.addEnemyForTesting(game.coreX + 60f, game.coreY)
+        drifter.vx = -78f
+        fun inField() = length(drifter.x - game.coreX, drifter.y - game.coreY) <= REPEL_RADIUS + drifter.radius
+        var inside = 0
+        while (inField()) {
+            game.step()
+            game.updateEnemies(MutableGameState.FIXED_STEP)
+            assertTrue(game.isThrownByPolarity(drifter), "thrown while the field pushes it")
+            inside++
+            assertTrue(inside * MutableGameState.FIXED_STEP < 1.5f, "the field cannot hold a pushed enemy")
+        }
+        // THROW_SECONDS after the push carried it out, it steers back toward the Core again.
+        repeat((THROW_SECONDS / MutableGameState.FIXED_STEP).toInt() + 2) {
+            game.step()
+            game.updateEnemies(MutableGameState.FIXED_STEP)
+        }
+        assertFalse(inField())
+        assertFalse(game.isThrownByPolarity(drifter))
+        val outward = drifter.vx
+        game.step()
+        game.updateEnemies(MutableGameState.FIXED_STEP)
+        assertTrue(drifter.vx < outward, "the enemy steers again")
     }
 
     @Test fun pentagonRewardsOnBeatDashesImpactsAndActivations() {

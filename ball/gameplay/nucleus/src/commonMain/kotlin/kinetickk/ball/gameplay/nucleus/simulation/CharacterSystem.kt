@@ -719,14 +719,10 @@ private fun MutableGameState.updatePolarity(ability: CharacterRuntime, delta: Fl
         if (knockback <= 0f) continue
         enemy.vx += dx / distance * acceleration * knockback
         enemy.vy += dy / distance * acceleration * knockback
-        // ATTRACT only adds its pull to the enemy's own steering. REPEL throws: once its push leaves an
-        // enemy flying outward at THROW_MIN_SPEED or faster, the enemy flies on its momentum for a
-        // moment, and what it strikes meanwhile is a slam. Bosses and mini-bosses are never thrown.
-        if (!attract && !enemy.isBossClass && enemy.characterMarkTime <= 0f &&
-            (enemy.vx * dx + enemy.vy * dy) / distance >= THROW_MIN_SPEED
-        ) {
-            enemy.characterMarkTime = THROW_SECONDS
-        }
+        // ATTRACT only adds its pull to the enemy's own steering. REPEL throws what it pushes: the
+        // enemy flies on its momentum (no steering) until THROW_SECONDS after the push carries it out
+        // of the field, and what it strikes meanwhile is a slam. Bosses and mini-bosses are never thrown.
+        if (!attract && !enemy.isBossClass) enemy.characterMarkTime = THROW_SECONDS
     }
     ability.charge = if (elapsed >= ability.polarityFlipReadyAt) 1f else
         1f - ((ability.polarityFlipReadyAt - elapsed) / POLARITY_FLIP_INTERVAL).coerceIn(0f, 1f)
@@ -755,12 +751,14 @@ private fun MutableGameState.updatePolarity(ability: CharacterRuntime, delta: Fl
             val closing = ((thrown.vx - other.vx) * dx + (thrown.vy - other.vy) * dy) / distance
             if (closing < SLAM_MIN_SPEED) continue
             thrown.characterMarkTime = 0f
-            // The pair shares the closing momentum, so one contact slams once.
+            // The pair shares the closing momentum, so one contact slams once. An enemy struck hard
+            // enough flies on as a throw of its own and may slam the next one (never a boss).
             val share = closing * 0.5f
             thrown.vx -= dx / distance * share
             thrown.vy -= dy / distance * share
             other.vx += dx / distance * share
             other.vy += dy / distance * share
+            if (share >= THROW_MIN_SPEED && !other.isBossClass) other.characterMarkTime = THROW_SECONDS
             dipoleSlam(thrown, closing)
             dipoleSlam(other, closing)
             slams++
@@ -1022,15 +1020,16 @@ private fun characterHash(value: Long): Long {
 internal const val DASH_PHASE_SECONDS: Float = 0.24f
 private const val FLASH_DECAY: Float = 2.5f
 
-// Ability damage is calibrated by CharacterBalanceTest: in its fixed 90 s script every character's
-// ability output stays within 40 % of the roster median (Orbit 100, Puncture 80, Halo 24/s and 32,
-// Lattice 12 + 6 per node, slams 30 + 0.08 per u/s from 100 u/s, scars 32, drones 11).
+// Ability damage is calibrated by CharacterBalanceTest: averaged over its seeded 90 s fights (packs at
+// random bearings, content bolt damage, exact and jittered timing) every offensive character's ability
+// output stays within 40 % of their median (Orbit 56, Puncture 180, Halo 12/s and 16, Lattice 7 + 3.5
+// per node, slams 120 + 0.25 per u/s from 100 u/s, Pulse burst 40, scars 45, drones 9).
 
 private const val ORBIT_ARC: Float = 0.698f
 private const val ORBIT_MIN_DISTANCE: Float = 100f
 private const val ORBIT_MIN_SPEED: Float = 200f
 internal const val ORBIT_RADIUS: Float = 210f
-internal const val ORBIT_DAMAGE: Float = 100f
+internal const val ORBIT_DAMAGE: Float = 70f
 private const val ORBIT_STACKS: Int = 2
 
 internal const val FACET_REGEN_SECONDS: Float = 6f
@@ -1044,19 +1043,19 @@ private const val HEAVY_IMPACT_SHARE: Float = 0.25f
 private const val HEAVY_IMPACT_SPEED: Float = 450f
 
 private const val MARK_SECONDS: Float = 3f
-internal const val PUNCTURE_DAMAGE: Float = 80f
+internal const val PUNCTURE_DAMAGE: Float = 180f
 internal const val PUNCTURE_HEAT_REFUND: Float = 12f
 private const val PUNCTURE_INTERVAL: Float = 0.25f
 
 private const val HALO_SPEED_SPAN: Float = 1_200f
 internal const val HALO_EXTRA_RADIUS: Float = 110f
 private const val HALO_BAND: Float = 18f
-internal const val HALO_BAND_DPS: Float = 24f
+internal const val HALO_BAND_DPS: Float = 12f
 private const val HALO_MIN_SPEED: Float = 40f
 private const val HALO_EASE: Float = 6f
 internal const val HALO_BURST_SPEED: Float = 1_200f
 internal const val HALO_BURST_RADIUS: Float = 260f
-internal const val HALO_BURST_DAMAGE: Float = 32f
+internal const val HALO_BURST_DAMAGE: Float = 16f
 private const val HALO_BURST_COOLDOWN: Float = 1.2f
 
 private const val PARRY_MIN_SPEED: Float = 200f
@@ -1071,8 +1070,8 @@ private const val LATTICE_RECORD_DISTANCE: Float = 120f
 private const val LATTICE_CLOSE_DISTANCE: Float = 130f
 private const val LATTICE_SPACING: Float = 150f
 private const val LATTICE_LIFE_SECONDS: Float = 7f
-internal const val LATTICE_BASE_DAMAGE: Float = 12f
-internal const val LATTICE_NODE_DAMAGE: Float = 6f
+internal const val LATTICE_BASE_DAMAGE: Float = 7f
+internal const val LATTICE_NODE_DAMAGE: Float = 3.5f
 internal const val LATTICE_INSIDE_MULTIPLIER: Float = 1.5f
 
 private const val STAR_IMPACT_PER_STACK: Float = 0.03f
@@ -1087,7 +1086,7 @@ private const val SUPERNOVA_STACKS_PER_ELEMENT: Int = 4
 private const val SUPERNOVA_COOLDOWN: Float = 2f
 
 private const val GHOST_MIN_SPEED: Float = 300f
-internal const val GHOST_IMPACT_SHARE: Float = 0.55f
+internal const val GHOST_IMPACT_SHARE: Float = 0.32f
 private const val GHOST_HIT_INTERVAL: Float = 0.4f
 private const val GHOST_ABSORB_INTERVAL: Float = 1.5f
 
@@ -1096,13 +1095,13 @@ internal const val ATTRACT_RADIUS: Float = 300f
 private const val ATTRACT_ACCELERATION: Float = 260f
 internal const val REPEL_RADIUS: Float = 220f
 private const val REPEL_ACCELERATION: Float = 420f
-private const val THROW_SECONDS: Float = 0.6f
-/** Outward speed at which the REPEL push throws an enemy (a Drifter steering against it alone never reaches it). */
-internal const val THROW_MIN_SPEED: Float = 160f
+internal const val THROW_SECONDS: Float = 0.6f
 private const val REPEL_THROW_SHARE: Float = 1f
 internal const val SLAM_MIN_SPEED: Float = 100f
-internal const val SLAM_BASE_DAMAGE: Float = 30f
-internal const val SLAM_DAMAGE_PER_SPEED: Float = 0.08f
+/** A struck enemy that gains this speed from a slam is thrown on (as fast as a slam needs). */
+internal const val THROW_MIN_SPEED: Float = SLAM_MIN_SPEED
+internal const val SLAM_BASE_DAMAGE: Float = 120f
+internal const val SLAM_DAMAGE_PER_SPEED: Float = 0.25f
 private const val MAX_SLAMS_PER_STEP: Int = 8
 
 internal const val BEAT_PERIOD: Float = 0.75f
@@ -1112,7 +1111,7 @@ internal const val BEAT_DASH_HEAT: Float = 0.6f
 internal const val BEAT_DASH_IMPULSE: Float = 1.2f
 private const val BEAT_IMPACT_MULTIPLIER: Float = 1.6f
 private const val BEAT_BURST_RADIUS: Float = 80f
-internal const val BEAT_BURST_DAMAGE: Float = 20f
+internal const val BEAT_BURST_DAMAGE: Float = 40f
 internal const val BEAT_ACTIVATION_MULTIPLIER: Float = 1.4f
 private const val STREAK_IMPACT_PER_STACK: Float = 0.06f
 
@@ -1124,7 +1123,7 @@ internal const val BLINK_RECHARGE_SECONDS: Float = 2.2f
 private const val BLINK_DRIVE_RANGE_MULTIPLIER: Float = 1.4f
 internal const val SCAR_FUSE_SECONDS: Float = 0.4f
 private const val SCAR_FADE_SECONDS: Float = 0.3f
-internal const val SCAR_DAMAGE: Float = 32f
+internal const val SCAR_DAMAGE: Float = 45f
 private const val SCAR_REACH: Float = 40f
 
 private const val DRONE_CHANCE: Float = 0.25f
@@ -1135,7 +1134,7 @@ private const val DRONE_FIRST_DART_SECONDS: Float = 0.3f
 internal const val DRONE_ORBIT_RADIUS: Float = 70f
 private const val DRONE_ORBIT_SPEED: Float = 2.4f
 private const val DRONE_RANGE: Float = 260f
-internal const val DRONE_DAMAGE: Float = 11f
+internal const val DRONE_DAMAGE: Float = 9f
 private const val DRONE_INTERVAL: Float = 1f
 private const val DRONE_DART_SECONDS: Float = 0.2f
 private const val DRONE_KILL_HEAL: Float = 0.5f

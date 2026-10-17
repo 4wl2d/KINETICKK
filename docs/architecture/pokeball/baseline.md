@@ -202,9 +202,15 @@ together.
   facets each negate one hurt window, regenerate on a paused six-second timer and never
   cancel damage kinds marked non-cancellable (obstacle collisions). Orbit, Puncture,
   Halo, Parry (with Edge) and Lattice are reworked (Brake no longer collapses the
-  lattice). Ability magnitudes are calibrated by a scripted 90-second balance run
-  that keeps every character's ability-only output (damage prevented for the Prism
-  and the Diamond) within 40 % of the roster median. Character state is
+  lattice). Dipole's ATTRACT only adds a pull to enemy steering; REPEL throws what it
+  pushes (and what the Core strikes) for 0.6 s after the push ends. Ability
+  magnitudes are calibrated by seeded 90-second balance fights (Drifter packs at
+  random bearings, content bolt and contact damage, exact and 0.05-0.15 s jittered
+  Dash and brake timing) that keep every offensive character's averaged ability
+  output within 40 % of their median; the Prism and the Diamond must keep off a large
+  share of the damage the Orb takes. At content damage their prevented totals stay
+  near a fifth of the offensive median, so SPEC 8.2's damage-prevented band is not
+  met and is left to a spec decision. Character state is
   copy-on-write: a reduction forks scalars and shares the echo ghost path, lattice,
   drones and scars until its first write. The echo path is paged, so a fixed step
   copies at most the small page its sample lands on (and the page table once per
