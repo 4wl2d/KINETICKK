@@ -34,7 +34,7 @@ profiles start at 1× speed. Pauses and reward choices stop the run clock.
 | `R` | Restart after a completed run |
 
 Six characters share permanent upgrades and can use all twelve weapons.
-Builds combine 90 items, twenty-two Relics and optional anomaly trials. Items are
+Builds combine 173 items, twenty-two Relics and optional anomaly trials. Items are
 rules, not stat sticks: triggers, conditions and effects over nine archetype
 tags and seven elements (Thermal, Cryo, Ion, Gravitic, Entropy, Sonic, Void)
 whose statuses Break at a threshold and react with each other: every pair of
@@ -45,7 +45,8 @@ Nineteen enemy kinds, from Swarmling packs and Bombers to the Herald mini-boss,
 arrive through a spawn director that shapes every run's waves differently;
 later Rebirth tiers bring the toughest ones. Spend Kinetic Matter on the 32
 nodes of the Core Matrix and in the Armory between runs. Defeat The Architect
-to unlock the next Rebirth tier while keeping permanent progression.
+to unlock the next Rebirth tier while keeping permanent progression; every tier
+also opens four more items, the rarest of them legendary.
 
 ## Build and run
 
