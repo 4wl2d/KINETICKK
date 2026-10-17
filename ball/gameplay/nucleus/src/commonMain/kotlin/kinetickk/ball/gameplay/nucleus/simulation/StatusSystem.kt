@@ -100,16 +100,10 @@ internal fun MutableGameState.statusNearBreak(enemy: Enemy, fraction: Float): Bo
     return false
 }
 
-/** Movement scale applied to the enemy's integration and attack cadence. */
-internal fun MutableGameState.enemySpeedScale(enemy: Enemy): Float {
-    // A stunned or stopped enemy neither moves by itself nor counts down an attack.
-    if (!canAct(enemy)) return 0f
-    return enemyMotionScale(enemy)
-}
-
 /**
- * How fast [enemy]'s own momentum carries it: zero while Frozen, slowed by Chill and stasis. A stunned or
- * stopped enemy still drifts at this scale while its momentum bleeds off.
+ * Scale of [enemy]'s integration and attack cadence: zero while Frozen, slowed by Chill and stasis. A
+ * stunned or stopped enemy neither steers nor counts down an attack, but still drifts at this scale while
+ * its momentum bleeds off.
  */
 internal fun MutableGameState.enemyMotionScale(enemy: Enemy): Float {
     if (isFrozen(enemy)) return 0f

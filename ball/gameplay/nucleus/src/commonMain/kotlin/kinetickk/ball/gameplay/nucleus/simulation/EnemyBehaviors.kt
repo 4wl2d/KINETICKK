@@ -76,12 +76,12 @@ internal const val HERALD_SHIELD_INTERVAL_SECONDS: Float = 12f
 internal const val HERALD_FIRST_SHIELD_SECONDS: Float = 6f
 
 /**
- * Contact damage of an attack that hurts at any Core speed (strikes, lances, the Herald), or 0. A stunned
- * or silenced enemy strikes nothing (its contact is ordinary again); a strike ends with its window even
- * while a stun holds its mode.
+ * Contact damage of an attack that hurts at any Core speed (strikes, lances, the Herald), or 0. A frozen,
+ * stunned or silenced enemy strikes nothing (its contact is ordinary again); a strike ends with its window
+ * even while a stun holds its mode.
  */
 internal fun MutableGameState.strikeDamage(enemy: Enemy): Float {
-    if (!canAttack(enemy)) return 0f
+    if (!canAttack(enemy) || isFrozen(enemy)) return 0f
     val striking = enemy.mode == EnemyBehavior.STRIKE && elapsed < enemy.modeUntil
     return when (enemy.type) {
         EnemyType.CHARGER -> if (striking) contactDamage(enemy) else 0f
@@ -217,7 +217,11 @@ internal fun MutableGameState.updateLancer(enemy: Enemy, dx: Float, dy: Float, d
                 }
             }
         }
-        EnemyBehavior.STRIKE -> {
+        EnemyBehavior.STRIKE -> if (elapsed >= enemy.modeUntil) {
+            // The window can close during a stun or stop; the lance is over, so it never restarts the run.
+            enemy.mode = EnemyBehavior.RECOVERY
+            enemy.modeUntil = elapsed + LANCER_RECOVERY_SECONDS
+        } else {
             val lanceSpeed = LANCER_SPEED * rebirthProfile.enemySpeedMultiplier
             enemy.vx = cos(enemy.facing) * lanceSpeed
             enemy.vy = sin(enemy.facing) * lanceSpeed
@@ -231,9 +235,6 @@ internal fun MutableGameState.updateLancer(enemy: Enemy, dx: Float, dy: Float, d
                 enemy.mode = EnemyBehavior.RECOVERY
                 enemy.modeUntil = elapsed + LANCER_RECOVERY_SECONDS
                 shockwave(enemy.x, enemy.y, 0.3f, enemy.radius * 2.4f, 3)
-            } else if (elapsed >= enemy.modeUntil) {
-                enemy.mode = EnemyBehavior.RECOVERY
-                enemy.modeUntil = elapsed + LANCER_RECOVERY_SECONDS
             }
         }
         EnemyBehavior.RECOVERY -> {

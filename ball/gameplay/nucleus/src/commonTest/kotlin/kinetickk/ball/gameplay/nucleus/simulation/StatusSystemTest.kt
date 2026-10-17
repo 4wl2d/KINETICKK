@@ -103,7 +103,7 @@ class StatusSystemTest {
 
         assertTrue(state.isFrozen(enemy))
         assertEquals(11.4f, enemy.status[StatusCell.FROZEN_UNTIL], 0.0001f)
-        assertEquals(0f, state.enemySpeedScale(enemy))
+        assertEquals(0f, state.enemyMotionScale(enemy))
         assertEquals(1f, enemy.status[StatusCell.BRITTLE])
 
         // A shatter thaws the target early; immunity and re-arm count from the thaw.

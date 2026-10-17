@@ -274,7 +274,7 @@ class RelicRulesTest {
         assertEquals(STASIS_MAX_BANK, state.stasisBank)
         assertEquals(30 - STASIS_MAX_BANK, state.projectiles.count { it.hostile })
         val slowed = state.dummy(x = 100f)
-        assertEquals(1f - 0.45f, state.enemySpeedScale(slowed), 0.0001f)
+        assertEquals(1f - 0.45f, state.enemyMotionScale(slowed), 0.0001f)
 
         state.setBrake(false)
         assertEquals(0.7f, state.buildActivationBonus(), 0.0001f, "Activation −30 % while not braking")
@@ -447,7 +447,7 @@ class RelicRulesTest {
         val first = state.dummy(x = 50f)
         val second = state.dummy(x = 100f)
         val third = state.dummy(x = 150f)
-        assertEquals(1.2f, state.enemySpeedScale(carrier), 0.0001f)
+        assertEquals(1.2f, state.enemyMotionScale(carrier), 0.0001f)
 
         carrier.hp = 0f
         state.sweepKills()

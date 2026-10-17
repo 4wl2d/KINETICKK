@@ -197,7 +197,7 @@ private fun MutableGameState.resolveReaction(
         ReactionId.SEISMIC -> {
             for (index in enemies.indices) {
                 val target = enemies[index]
-                if (!target.alive || distanceSquared(x, y, target.x, target.y) > square(definition.radius + target.radius)) continue
+                if (!target.alive || isShifting(target) || distanceSquared(x, y, target.x, target.y) > square(definition.radius + target.radius)) continue
                 dealStatusDamage(target, magnitude, StatusElement.GRAVITIC, ignoresAffinity = true)
                 if (target.alive && isOrdinary(target)) target.disabledUntil = max(target.disabledUntil, elapsed + SEISMIC_STUN_SECONDS)
             }
@@ -211,7 +211,7 @@ private fun MutableGameState.resolveReaction(
         }
         ReactionId.SILENCE -> for (index in enemies.indices) {
             val target = enemies[index]
-            if (!target.alive || distanceSquared(x, y, target.x, target.y) > square(definition.radius + target.radius)) continue
+            if (!target.alive || isShifting(target) || distanceSquared(x, y, target.x, target.y) > square(definition.radius + target.radius)) continue
             dealStatusDamage(target, magnitude, StatusElement.VOID, ignoresAffinity = true)
             if (target.alive) silence(target)
         }
@@ -222,7 +222,7 @@ private fun MutableGameState.resolveReaction(
         ReactionId.STASIS -> {
             for (index in enemies.indices) {
                 val target = enemies[index]
-                if (!target.alive || distanceSquared(x, y, target.x, target.y) > square(definition.radius + target.radius)) continue
+                if (!target.alive || isShifting(target) || distanceSquared(x, y, target.x, target.y) > square(definition.radius + target.radius)) continue
                 dealStatusDamage(target, magnitude, StatusElement.CRYO, ignoresAffinity = true)
                 if (target.alive && isOrdinary(target)) {
                     target.disabledUntil = max(target.disabledUntil, elapsed + STASIS_STOP_SECONDS)

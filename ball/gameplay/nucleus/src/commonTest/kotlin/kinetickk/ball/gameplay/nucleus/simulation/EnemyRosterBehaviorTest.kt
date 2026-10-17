@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.EffectCondition
+import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponId
@@ -99,6 +100,44 @@ class EnemyRosterBehaviorTest {
         state.setVelocityForTesting(900f, 0f)
         state.resolveEnemyCoreCollisions()
         assertEquals(state.maxHp, state.hp)
+    }
+
+    @Test
+    fun frozenStrikersLoseTheirAnySpeedHit() {
+        for (type in listOf(EnemyType.CHARGER, EnemyType.LANCER)) {
+            val state = quietState()
+            val striker = state.spawn(type, 30f, 0f, hp = 10_000f)
+            state.applyStatus(striker, StatusElement.CRYO, 6, generation = 0)
+            assertTrue(state.isFrozen(striker), "$type is frozen")
+            // Frozen inside its strike window; ramming the stationary block is the Cryo play.
+            striker.mode = EnemyBehavior.STRIKE
+            striker.modeUntil = state.elapsed + 0.3f
+            state.previousCoreX = -10f
+            state.setVelocityForTesting(900f, 0f)
+            state.resolveEnemyCoreCollisions()
+            assertEquals(state.maxHp, state.hp, "A fast Core ramming a frozen $type takes no damage")
+        }
+    }
+
+    @Test
+    fun aStasisStopEndsALanceInsteadOfRestartingIt() {
+        val state = quietState()
+        val lancer = state.spawn(EnemyType.LANCER, 400f, 0f, hp = 10_000f)
+        lancer.facing = PI.toFloat()
+        lancer.mode = EnemyBehavior.STRIKE
+        lancer.modeUntil = state.elapsed + LANCER_DISTANCE / LANCER_SPEED
+        lancer.vx = -LANCER_SPEED
+        state.runEnemiesFor(0.1f)
+        state.applyStatus(lancer, StatusElement.CRYO, 3, generation = 0)
+        state.applyStatus(lancer, StatusElement.VOID, 1, generation = 0)
+        assertFalse(state.canAct(lancer), "Stasis stops the Lancer mid-lance")
+        val stoppedX = lancer.x
+
+        state.runEnemiesFor(STASIS_STOP_SECONDS + 0.1f)
+        assertTrue(state.canAct(lancer), "The stop is over")
+        assertEquals(EnemyBehavior.RECOVERY, lancer.mode, "The lance window closed during the stop")
+        assertTrue(sqrt(lancer.vx * lancer.vx + lancer.vy * lancer.vy) < 1f, "A stopped lance stays stopped")
+        assertEquals(stoppedX, lancer.x, 1f)
     }
 
     @Test
@@ -296,6 +335,27 @@ class EnemyRosterBehaviorTest {
         state.runEnemiesFor(PHANTOM_WINDUP_SECONDS + FIXED)
         assertEquals(EnemyBehavior.STRIKE, phantom.mode)
         assertEquals(state.hostileDamage(phantom, PHANTOM_STRIKE_DAMAGE), state.strikeDamage(phantom))
+    }
+
+    @Test
+    fun reactionsNeitherStunStopNorSilenceAPhasedPhantom() {
+        for (reaction in listOf(ReactionId.SEISMIC, ReactionId.STASIS, ReactionId.SILENCE)) {
+            val state = quietState()
+            val phantom = state.spawn(EnemyType.PHANTOM, 500f, 0f, hp = 1_000f).apply { abilityAt = 0f }
+            state.updateEnemies(FIXED)
+            assertTrue(state.isShifting(phantom))
+            val reactor = state.addEnemyForTesting(phantom.x + 20f, phantom.y, hp = 1_000_000f)
+            state.applyStatus(reactor, reaction.first, 3, generation = 0)
+            state.applyStatus(reactor, reaction.second, 1, generation = 0)
+            assertFalse(state.canAttack(reactor), "$reaction fired")
+            assertTrue(state.canAttack(phantom), "$reaction cannot reach a phased Phantom")
+
+            state.runEnemiesFor(PHANTOM_PHASE_SECONDS)
+            assertEquals(EnemyBehavior.TELEGRAPH, phantom.mode, "$reaction: it re-materializes on schedule")
+            assertFalse(state.isShifting(phantom))
+            val distance = sqrt((phantom.x - state.coreX) * (phantom.x - state.coreX) + (phantom.y - state.coreY) * (phantom.y - state.coreY))
+            assertEquals(PHANTOM_REAPPEAR_DISTANCE, distance, 10f)
+        }
     }
 
     @Test

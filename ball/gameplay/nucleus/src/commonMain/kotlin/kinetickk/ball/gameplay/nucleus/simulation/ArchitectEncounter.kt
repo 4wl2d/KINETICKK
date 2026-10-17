@@ -90,9 +90,7 @@ private fun architectEscort(aspect: Int, index: Int): EnemyType = when (aspect) 
     StatusElement.ION.ordinal -> EnemyType.SHOOTER
     StatusElement.GRAVITIC.ordinal -> if (index == 0) EnemyType.WARDEN else EnemyType.DRIFTER
     StatusElement.ENTROPY.ordinal -> EnemyType.SPLITTER
-    StatusElement.SONIC.ordinal -> EnemyType.CHARGER
-    StatusElement.VOID.ordinal -> EnemyType.WEAVER
-    else -> EnemyType.DRIFTER
+    else -> aspectStandIn(aspect) ?: EnemyType.DRIFTER
 }
 
 /** True while the fight is live: the Architect is shifting or took damage within [ARCHITECT_ADD_ENGAGEMENT_SECONDS]. */

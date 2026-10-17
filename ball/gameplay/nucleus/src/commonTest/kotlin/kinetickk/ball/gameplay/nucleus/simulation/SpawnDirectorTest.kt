@@ -305,6 +305,23 @@ class SpawnDirectorTest {
     }
 
     @Test
+    fun everyAspectCallsRealEscortsOnceItsKinOrStandInIsEligible() {
+        val state = directorState(seed = 37, tier = 6)
+        state.elapsed = 700f
+        for (element in kinetickk.ball.content.api.StatusElement.entries) {
+            repeat(HARDENED_ELITE_ESCORTS) { index ->
+                val type = state.aspectEscortType(element.ordinal, index)
+                assertNotEquals(EnemyType.DRIFTER, type, "$element escort $index degrades to a Drifter")
+                assertFalse(type.profile.aspectImmune, "$element escort $index")
+            }
+        }
+        // Before any kin or stand-in is eligible, the escorts are still Drifters.
+        val early = directorState(seed = 37, tier = 2)
+        early.elapsed = 60f - early.rebirthProfile.threatTimeOffsetSeconds
+        assertEquals(EnemyType.DRIFTER, early.aspectEscortType(kinetickk.ball.content.api.StatusElement.SONIC.ordinal, 0))
+    }
+
+    @Test
     fun hunterProtocolOpensSniperAndLancerGatesEarlierAndOverclockedSwarmAttacksFaster() {
         val tierTwo = directorState(seed = 41, tier = 2)
         val tierThree = directorState(seed = 41, tier = 3)

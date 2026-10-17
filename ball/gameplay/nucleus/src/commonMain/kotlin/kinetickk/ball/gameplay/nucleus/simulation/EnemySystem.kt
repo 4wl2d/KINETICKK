@@ -47,11 +47,10 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
             enemy.y += enemy.vy * delta * motion
             continue
         }
-        val scale = enemySpeedScale(enemy)
         val dx = coreX - enemy.x
         val dy = coreY - enemy.y
         val distance = max(1f, length(dx, dy))
-        val cadence = delta * scale * attackRate
+        val cadence = delta * motion * attackRate
         when (enemy.type) {
             EnemyType.DRIFTER -> steerEnemy(enemy, dx / distance * 78f, dy / distance * 78f, 2.1f, delta)
             EnemyType.SHOOTER -> {
@@ -168,7 +167,7 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
                     if (canAttack(enemy)) fireRadial(enemy.x, enemy.y, 10, 165f, elapsed * 0.2f, shotDamage(enemy))
                 }
             }
-            EnemyType.ARCHITECT -> updateArchitect(enemy, dx, dy, distance, delta * scale)
+            EnemyType.ARCHITECT -> updateArchitect(enemy, dx, dy, distance, delta * motion)
             EnemyType.SWARMLING -> updateSwarmling(enemy, dx, dy, distance, delta)
             EnemyType.BOMBER -> updateBomber(enemy, dx, dy, distance, delta)
             EnemyType.LANCER -> updateLancer(enemy, dx, dy, distance, delta)
@@ -180,8 +179,8 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
             EnemyType.REFLECTOR -> updateReflector(enemy, dx, dy, distance, delta)
             EnemyType.HERALD -> updateHerald(enemy, dx, dy, distance, cadence, delta)
         }
-        enemy.x += enemy.vx * delta * scale
-        enemy.y += enemy.vy * delta * scale
+        enemy.x += enemy.vx * delta * motion
+        enemy.y += enemy.vy * delta * motion
     }
     // Detonated Bombers leave without a kill.
     enemies.removeMatchingStable { enemy -> enemy.dead }

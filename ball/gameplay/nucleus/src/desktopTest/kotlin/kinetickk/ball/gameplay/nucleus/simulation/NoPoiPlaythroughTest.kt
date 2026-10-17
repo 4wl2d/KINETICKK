@@ -83,8 +83,8 @@ class NoPoiPlaythroughTest {
     /** The reference win is not a single knife-edge seed: other fresh-profile seeds win the same way. */
     @Test fun freshProfileAlsoWinsFurtherReferenceNoPoiSeeds() {
         // The fixed balance probe after the reference (i * 7_919 + 13, i = 1..10). Seeds are never picked by
-        // their outcome; the floor catches a drop in robustness. After the 0.4.0 impact and ability growth
-        // change and the Sonic and Void elements, 8 of the 10 win and 6 of those skip every POI.
+        // their outcome; the floor catches a drop in robustness. After wave A (roster and director, Sonic and
+        // Void, frame pacing, Core Matrix) and its integration fixes, 6 of the 10 win, all without a POI.
         val minimumWins = 5
         var wins = 0
         for (seed in (1..10).map { it * 7_919 + 13 }) {

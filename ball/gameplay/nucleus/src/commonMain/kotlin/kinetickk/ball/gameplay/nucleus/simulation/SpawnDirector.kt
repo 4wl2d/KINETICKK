@@ -621,7 +621,10 @@ internal fun MutableGameState.spawnPendingEscorts() {
     }
 }
 
-/** The [index]th eligible ordinary type sharing [aspect] without immunity, in roster order; Drifters otherwise. */
+/**
+ * The [index]th eligible ordinary type sharing [aspect] without immunity, in roster order. An aspect no
+ * ordinary type carries takes its eligible [aspectStandIn]; Drifters otherwise.
+ */
 internal fun MutableGameState.aspectEscortType(aspect: Int, index: Int): EnemyType {
     val roster = content.enemies
     var matches = 0
@@ -631,7 +634,10 @@ internal fun MutableGameState.aspectEscortType(aspect: Int, index: Int): EnemyTy
         if (profile.aspect != aspect || aspect < 0 || profile.aspectImmune) continue
         if (typeWeight(definition, weakOnly = false, recency = false) > 0f) matches++
     }
-    if (matches == 0) return EnemyType.DRIFTER
+    if (matches == 0) {
+        val standIn = aspectStandIn(aspect) ?: return EnemyType.DRIFTER
+        return if (typeWeight(content.enemy(standIn), weakOnly = false, recency = false) > 0f) standIn else EnemyType.DRIFTER
+    }
     var target = index % matches
     for (rosterIndex in roster.indices) {
         val definition = roster[rosterIndex]
@@ -642,6 +648,16 @@ internal fun MutableGameState.aspectEscortType(aspect: Int, index: Int): EnemyTy
         target--
     }
     return EnemyType.DRIFTER
+}
+
+/**
+ * The ordinary type that escorts in place of kin for an aspect no ordinary type carries (Sonic, Void), at
+ * the Architect and for Elite and Herald escorts alike; null when ordinary types carry [aspect].
+ */
+internal fun aspectStandIn(aspect: Int): EnemyType? = when (aspect) {
+    StatusElement.SONIC.ordinal -> EnemyType.CHARGER
+    StatusElement.VOID.ordinal -> EnemyType.WEAVER
+    else -> null
 }
 
 /** Uniform element ordinal for a new Elite's or Herald's aspect. */

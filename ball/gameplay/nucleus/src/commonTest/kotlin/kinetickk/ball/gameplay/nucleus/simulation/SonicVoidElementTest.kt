@@ -316,16 +316,28 @@ class SonicVoidElementTest {
     fun seismicAndStasisStopOrdinaryEnemiesWhileElitesAndBossesShrugThemOff() {
         for (reaction in listOf(ReactionId.SEISMIC, ReactionId.STASIS)) {
             val state = buildTestState()
-            val target = state.dummy(x = 400f)
+            // The Core sits at the origin; the target drifts across its line to the Core, not along it.
+            val target = state.dummy(x = 400f, type = EnemyType.SHOOTER).apply { actionTimer = 1f }
             val elite = state.dummy(x = 460f, type = EnemyType.ELITE)
             state.bossSpawned = true
             val boss = state.addEnemyForTesting(400f, 60f, hp = 100_000f, radius = 74f, type = EnemyType.ARCHITECT)
-            target.vx = 50f
+            target.vy = 50f
             state.applyStatus(target, reaction.first, 3, generation = 0)
             state.applyStatus(target, reaction.second, 1, generation = 0)
 
             assertFalse(state.canAct(target), "$reaction stops the ordinary target")
-            assertEquals(0f, state.enemySpeedScale(target), "A disabled enemy neither moves nor counts down attacks")
+            // No steering and no attack countdown; any momentum left only bleeds off.
+            val (x, y, vy) = Triple(target.x, target.y, target.vy)
+            state.updateEnemies(MutableGameState.FIXED_STEP)
+            assertEquals(0f, target.vx, "$reaction: a disabled enemy never steers toward the Core")
+            assertEquals(1f, target.actionTimer, "$reaction: a disabled enemy counts down no attack")
+            if (reaction == ReactionId.STASIS) {
+                assertEquals(x, target.x, "Stasis stops the target dead")
+                assertEquals(y, target.y, "Stasis stops the target dead")
+            } else {
+                assertTrue(target.vy > 0f && target.vy < vy, "A Seismic stun lets momentum bleed off: ${target.vy}")
+                assertTrue(target.y > y, "The stunned target still drifts on its momentum")
+            }
             assertTrue(state.canAct(elite), "$reaction never stops an Elite")
             assertTrue(state.canAct(boss), "$reaction never stops the Architect")
             val seconds = if (reaction == ReactionId.SEISMIC) SEISMIC_STUN_SECONDS else STASIS_STOP_SECONDS
