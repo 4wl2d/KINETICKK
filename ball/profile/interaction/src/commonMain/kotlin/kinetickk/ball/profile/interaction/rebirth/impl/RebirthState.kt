@@ -45,13 +45,13 @@ internal object RebirthReducer {
             !state.confirmationArmed -> RebirthReduction(
                 state = state,
                 effects = listOf(
-                    RebirthEffect.Emit(RebirthOutput.ArmRequested),
+                    RebirthEffect.Emit(RebirthOutput.ArmRequested(state.model.targetTier)),
                     RebirthEffect.PlayAudio(ProfileAudioCue.UI_CLICK),
                 ),
             )
             else -> RebirthReduction(
                 state = state,
-                effects = listOf(RebirthEffect.Emit(RebirthOutput.ConfirmRequested)),
+                effects = listOf(RebirthEffect.Emit(RebirthOutput.ConfirmRequested(state.model.targetTier))),
             )
         }
         RebirthAction.Back -> RebirthReduction(

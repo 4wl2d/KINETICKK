@@ -126,7 +126,7 @@ class RebirthReducerTest {
         )
         assertFalse(first.state.confirmationArmed)
         assertEquals(
-            RebirthOutput.ArmRequested,
+            RebirthOutput.ArmRequested(1),
             assertIs<RebirthEffect.Emit>(first.effects[0]).output,
         )
         assertEquals(
@@ -139,7 +139,7 @@ class RebirthReducerTest {
             RebirthAction.AdvanceRequested,
         )
         assertEquals(
-            RebirthOutput.ConfirmRequested,
+            RebirthOutput.ConfirmRequested(1),
             assertIs<RebirthEffect.Emit>(second.effects.single()).output,
         )
     }

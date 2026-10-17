@@ -98,7 +98,7 @@ class AppSessionApiContractTest {
             SessionInteractionPulse.ShortcutObserved(SessionShortcut.MUTE),
             SessionInteractionPulse.ToggleMuteRequested,
             SessionInteractionPulse.SelectCoreShapeRequested(CoreShape.PRISM),
-            SessionInteractionPulse.RebirthRequested,
+            SessionInteractionPulse.RebirthRequested(1),
         )
 
         assertEquals(9, interactions.size)

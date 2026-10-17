@@ -158,7 +158,10 @@ internal class DefaultAppSessionComponent private constructor(
                     check(pending.runId == output.runId && pending.runId == next.activeRunId)
                     boundRun(output.runId)
                 }
-                AppSessionOutput.AdvanceRebirth -> check(next.pendingWorkflow === PendingWorkflow.AdvancingRebirth)
+                is AppSessionOutput.SelectRebirthTier -> {
+                    val pending = checkNotNull(next.pendingWorkflow as? PendingWorkflow.SelectingRebirthTier)
+                    check(pending.tier == output.tier)
+                }
                 AppSessionOutput.ToggleMute -> check(next.pendingWorkflow === PendingWorkflow.TogglingMute)
                 is AppSessionOutput.SelectCoreShape -> {
                     val pending = checkNotNull(next.pendingWorkflow as? PendingWorkflow.SelectingCoreShape)
@@ -197,9 +200,12 @@ internal class DefaultAppSessionComponent private constructor(
         when (output) {
             is AppSessionOutput.EnsureGameplayRun -> ensureGameplayRun(output)
             is AppSessionOutput.ExitRun -> executeExit(output.runId)
-            AppSessionOutput.AdvanceRebirth -> acceptance.call(
-                invoke = profileRebirth::advanceRebirth,
-                acceptedInput = { kinetickk.flow.session.nucleus.profileRebirthAdvanced(it) },
+            is AppSessionOutput.SelectRebirthTier -> acceptance.call(
+                invoke = { reply -> profileRebirth.selectRebirthTier(output.tier, reply) },
+                acceptedInput = { result ->
+                    check(result.progress.level == output.tier) { "Profile selected a different Rebirth tier" }
+                    kinetickk.flow.session.nucleus.profileRebirthTierSelected(result)
+                },
                 refusedInput = { kinetickk.flow.session.nucleus.profileRebirthRefused(it) },
             )
             AppSessionOutput.ToggleMute -> acceptance.call(
@@ -372,7 +378,7 @@ internal class DefaultAppSessionComponent private constructor(
                     }
                     SessionShortcut.MUTE -> Unit
                 }
-                SessionInteractionPulse.RebirthRequested -> {
+                is SessionInteractionPulse.RebirthRequested -> {
                     rebirthProgress = state.overlay == AppDestination.Rebirth &&
                         (state.base == AppDestination.Home ||
                             state.gameplayPhase == kinetickk.ball.gameplay.api.GameplayRunPhase.VICTORY)
@@ -382,7 +388,7 @@ internal class DefaultAppSessionComponent private constructor(
                 -> Unit
             }
             is AppSessionNucleusPulse.Result -> when (state.pendingWorkflow) {
-                is PendingWorkflow.AdvancingRebirth -> runBootstrap = true
+                is PendingWorkflow.SelectingRebirthTier -> runBootstrap = true
                 else -> Unit
             }
             is AppSessionNucleusPulse.Refusal -> Unit
@@ -489,7 +495,7 @@ private val AppSessionOutput.dispatchOrder: Int
     get() = when (this) {
         is AppSessionOutput.EnsureGameplayRun -> 0
         is AppSessionOutput.ExitRun,
-        AppSessionOutput.AdvanceRebirth,
+        is AppSessionOutput.SelectRebirthTier,
         AppSessionOutput.ToggleMute,
         is AppSessionOutput.SelectCoreShape,
         is AppSessionOutput.StartRun, is AppSessionOutput.PauseForOverlay,
@@ -503,7 +509,7 @@ private val AppSessionOutput.dispatchOrder: Int
 
 private val AppSessionOutput.isParticipantCommand: Boolean
     get() = this is AppSessionOutput.ExitRun ||
-        this === AppSessionOutput.AdvanceRebirth || this === AppSessionOutput.ToggleMute || this is AppSessionOutput.ApplyPreferences ||
+        this is AppSessionOutput.SelectRebirthTier || this === AppSessionOutput.ToggleMute || this is AppSessionOutput.ApplyPreferences ||
         this is AppSessionOutput.SelectCoreShape || this is AppSessionOutput.StartRun ||
         this is AppSessionOutput.PauseForOverlay
 

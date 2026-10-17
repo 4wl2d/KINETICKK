@@ -29,7 +29,7 @@ import kinetickk.ball.profile.api.ProfileWriteResult
 import kinetickk.ball.profile.api.ProfileSettings
 import kinetickk.ball.profile.api.ProfileSettingsChanged
 import kinetickk.ball.profile.api.ProfileRefusal
-import kinetickk.ball.profile.api.ProfileRebirthAdvanced
+import kinetickk.ball.profile.api.ProfileRebirthTierSelected
 import kinetickk.ball.profile.api.ProfileProgressApplied
 import kinetickk.ball.profile.api.GameplayProgressUpdate
 import kinetickk.ball.profile.api.RebirthProgress
@@ -212,7 +212,7 @@ class DefaultProfileComponentTest {
         val resource = RecordingProfileResource(ProfileSnapshotReadResult.Observed(profileSnapshot(initial)))
         val component = testProfileComponent(resource)
         val before = component.stateSnapshot()
-        val caller = ProfileCommandTestCaller<ProfileRebirthAdvanced>()
+        val caller = ProfileCommandTestCaller<ProfileRebirthTierSelected>()
 
         caller.call { reply ->
             resource.beforeWrite = { snapshot ->
@@ -221,7 +221,7 @@ class DefaultProfileComponentTest {
                 assertEquals(snapshot.revision, component.stateSnapshot().revision)
                 assertIs<ProfilePersistenceStatus.Pending>(component.stateSnapshot().persistence)
             }
-            component.advanceRebirth(reply)
+            component.selectRebirthTier(3, reply)
         }
 
         val result = caller.changed.single()
@@ -241,9 +241,9 @@ class DefaultProfileComponentTest {
         val resource = RecordingProfileResource(ProfileSnapshotReadResult.Observed(profileSnapshot(initial)))
             .apply { writeBehavior = { throw fault } }
         val component = testProfileComponent(resource)
-        val caller = ProfileCommandTestCaller<ProfileRebirthAdvanced>()
+        val caller = ProfileCommandTestCaller<ProfileRebirthTierSelected>()
 
-        assertEquals(fault, assertFailsWith<IllegalStateException> { caller.call(component::advanceRebirth) })
+        assertEquals(fault, assertFailsWith<IllegalStateException> { caller.call { reply -> component.selectRebirthTier(3, reply) } })
 
         val result = caller.changed.single()
         assertEquals(initial.copy(rebirthProgress = RebirthProgress(3, 2)), component.stateSnapshot().profile)
@@ -264,9 +264,9 @@ class DefaultProfileComponentTest {
             val resource = RecordingProfileResource(ProfileSnapshotReadResult.Observed(profileSnapshot(initial)))
                 .apply { writeBehavior = { writeResult } }
             val component = testProfileComponent(resource)
-            val caller = ProfileCommandTestCaller<ProfileRebirthAdvanced>()
+            val caller = ProfileCommandTestCaller<ProfileRebirthTierSelected>()
 
-            caller.call(component::advanceRebirth)
+            caller.call { reply -> component.selectRebirthTier(3, reply) }
 
             val result = caller.changed.single()
             assertEquals(initial.copy(rebirthProgress = RebirthProgress(3, 2)), queriedProfile(component))

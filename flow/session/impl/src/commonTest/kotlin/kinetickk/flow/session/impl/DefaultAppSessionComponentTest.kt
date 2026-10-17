@@ -609,17 +609,17 @@ class DefaultAppSessionComponentTest {
     fun rebirthFinishesItsNewRunBeforeAProfileFaultEscapes() {
         val rig = AppSessionTestRig()
         rig.component.accept(SessionInteractionPulse.OpenOverlay(AppDestination.Rebirth))
-        rig.component.accept(SessionInteractionPulse.RebirthRequested)
+        rig.component.accept(SessionInteractionPulse.RebirthRequested(1))
         val fault = IllegalStateException("rebirth-after-result")
         rig.profile.rebirthHandler = { reply ->
-            assertEquals(SessionWorkflowPhase.ADVANCING_REBIRTH, shell(rig).pendingWorkflow)
+            assertEquals(SessionWorkflowPhase.SELECTING_REBIRTH_TIER, shell(rig).pendingWorkflow)
             rig.profile.completeRebirth(reply)
-            assertEquals(SessionWorkflowPhase.ADVANCING_REBIRTH, shell(rig).pendingWorkflow)
+            assertEquals(SessionWorkflowPhase.SELECTING_REBIRTH_TIER, shell(rig).pendingWorkflow)
             throw fault
         }
 
         val thrown = assertFailsWith<IllegalStateException> {
-            rig.component.accept(SessionInteractionPulse.RebirthRequested)
+            rig.component.accept(SessionInteractionPulse.RebirthRequested(1))
         }
 
         assertSame(fault, thrown)
@@ -635,10 +635,10 @@ class DefaultAppSessionComponentTest {
     fun rebirthRefusalLeavesTheConfirmationDisarmedWithoutCreatingARun() {
         val rig = AppSessionTestRig()
         rig.component.accept(SessionInteractionPulse.OpenOverlay(AppDestination.Rebirth))
-        rig.component.accept(SessionInteractionPulse.RebirthRequested)
+        rig.component.accept(SessionInteractionPulse.RebirthRequested(1))
         rig.profile.rebirthHandler = { reply -> reply.refused(ProfileRefusal.Busy) }
 
-        rig.component.accept(SessionInteractionPulse.RebirthRequested)
+        rig.component.accept(SessionInteractionPulse.RebirthRequested(1))
 
         assertEquals(AppDestination.Home, shell(rig).base)
         assertEquals(AppDestination.Rebirth, shell(rig).overlay)

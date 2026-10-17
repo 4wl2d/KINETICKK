@@ -48,6 +48,7 @@ import kinetickk.ball.profile.api.ProfileWriteOutcomeUnknownReason
 import kinetickk.ball.profile.api.ProfileWriteResult
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.RebirthProgressProjection
+import kinetickk.ball.profile.api.rank
 import kinetickk.ball.profile.api.RunBootstrapProjection
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.immutableListOf
@@ -335,8 +336,8 @@ class ProfileNucleusTest {
             ProfileNucleus.decide(state, ProfileNucleusPulse.SelectCoreShape(CoreShape.PRISM)).rejection(),
         )
         assertEquals(
-            ProfileRejection.RebirthLevelNotCleared,
-            ProfileNucleus.decide(state, ProfileNucleusPulse.AdvanceRebirth).rejection(),
+            ProfileRejection.RebirthTierLocked,
+            ProfileNucleus.decide(state, ProfileNucleusPulse.SelectRebirthTier(1)).rejection(),
         )
     }
 
@@ -486,20 +487,50 @@ class ProfileNucleusTest {
     fun rebirthDecisionProducesTheAcceptedProgressAfterItsPersistenceRequest() {
         val profile = defaultPlayerProfile(TestProfilePolicy).copy(rebirthProgress = RebirthProgress(2, 2))
         val state = readyState(profile)
-        val pulse = ProfileNucleusPulse.AdvanceRebirth
+        val pulse = ProfileNucleusPulse.SelectRebirthTier(3)
         val decision = ProfileNucleus.decide(state, pulse)
         assertEquals(decision, ProfileNucleus.decide(state, pulse))
 
         val frame = decision.acceptedFrame()
         assertEquals(2, frame.outputs.size)
         val persist = assertIs<ProfileOutput.PersistSnapshot>(frame.outputs[0])
-        val result = assertIs<ProfileOutput.RebirthAdvanced>(frame.outputs[1]).result
+        val result = assertIs<ProfileOutput.RebirthTierSelected>(frame.outputs[1]).result
         assertEquals(RebirthProgress(3, 2), result.progress)
         assertEquals(frame.nextState.revision, result.revision)
         assertEquals(frame.nextState.profile.rebirthProgress, result.progress)
         assertEquals(frame.nextState.profile, persist.snapshot.profile)
         assertEquals(profile.copy(rebirthProgress = result.progress), frame.nextState.profile)
         assertEquals(profile, state.profile)
+    }
+
+    @Test
+    fun anyTierFromTheMinimumToTheRankCanBeSelectedAndNothingAbove() {
+        val profile = defaultPlayerProfile(TestProfilePolicy).copy(
+            economy = PlayerEconomy(matter = 77L, lifetimeMatter = 90L),
+            rebirthProgress = RebirthProgress(level = 5, highestCleared = 4),
+        )
+        val state = readyState(profile)
+        // Dropping back to tier 0 keeps every other slice and the highest clear (the rank stays 5).
+        (0..5).forEach { tier ->
+            val next = ProfileNucleus.decide(state, ProfileNucleusPulse.SelectRebirthTier(tier)).acceptedFrame().nextState
+            assertEquals(RebirthProgress(level = tier, highestCleared = 4), next.profile.rebirthProgress, "tier $tier")
+            assertEquals(profile.copy(rebirthProgress = next.profile.rebirthProgress), next.profile)
+            assertEquals(5, next.profile.rebirthProgress.rank)
+        }
+        listOf(6, 10, -1).forEach { tier ->
+            assertEquals(ProfileRejection.RebirthTierLocked,
+                ProfileNucleus.decide(state, ProfileNucleusPulse.SelectRebirthTier(tier)).rejection(), "tier $tier")
+        }
+        // A fresh profile may select only tier 0; reselecting it confirms the tier and still publishes.
+        val fresh = readyState()
+        val again = ProfileNucleus.decide(fresh, ProfileNucleusPulse.SelectRebirthTier(0)).acceptedFrame()
+        assertEquals(RebirthProgress(0, -1), assertIs<ProfileOutput.RebirthTierSelected>(again.outputs[1]).result.progress)
+        assertEquals(ProfileRejection.RebirthTierLocked,
+            ProfileNucleus.decide(fresh, ProfileNucleusPulse.SelectRebirthTier(1)).rejection())
+        // Ascendant profiles may select every tier up to the last one.
+        val ascendant = readyState(defaultPlayerProfile(TestProfilePolicy).copy(rebirthProgress = RebirthProgress(3, 10)))
+        assertEquals(10, ProfileNucleus.decide(ascendant, ProfileNucleusPulse.SelectRebirthTier(10)).acceptedFrame()
+            .nextState.profile.rebirthProgress.level)
     }
 
     @Test

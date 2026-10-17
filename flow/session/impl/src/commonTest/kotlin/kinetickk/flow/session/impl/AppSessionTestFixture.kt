@@ -39,7 +39,8 @@ import kinetickk.ball.profile.api.ProfileRefusal
 import kinetickk.foundation.dispatch.InlineReply
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.profile.api.ProfileRebirth
-import kinetickk.ball.profile.api.ProfileRebirthAdvanced
+import kinetickk.ball.profile.api.ProfileRebirthTierSelected
+import kinetickk.ball.profile.api.rank
 import kinetickk.ball.profile.api.ProfileLoadout
 import kinetickk.ball.profile.api.ProfileCoreShapeSelected
 
@@ -109,19 +110,21 @@ internal class FakeProfileCapabilities(
         reply.accepted(transform(ProfileCoreShapeSelected(revision, shape)))
     }
 
-    val rebirthReplies = mutableListOf<InlineReply<ProfileRebirthAdvanced, ProfileRefusal>>()
-    var rebirthHandler: ((InlineReply<ProfileRebirthAdvanced, ProfileRefusal>) -> Unit)? = null
+    val rebirthReplies = mutableListOf<InlineReply<ProfileRebirthTierSelected, ProfileRefusal>>()
+    val rebirthTiers = mutableListOf<Int>()
+    var rebirthHandler: ((InlineReply<ProfileRebirthTierSelected, ProfileRefusal>) -> Unit)? = null
 
-    override fun advanceRebirth(reply: InlineReply<ProfileRebirthAdvanced, ProfileRefusal>) {
+    override fun selectRebirthTier(tier: Int, reply: InlineReply<ProfileRebirthTierSelected, ProfileRefusal>) {
         reply.checkAvailable()
         rebirthReplies += reply
+        rebirthTiers += tier
         rebirthHandler?.invoke(reply) ?: completeRebirth(reply)
     }
 
-    fun completeRebirth(reply: InlineReply<ProfileRebirthAdvanced, ProfileRefusal>) {
+    fun completeRebirth(reply: InlineReply<ProfileRebirthTierSelected, ProfileRefusal>) {
         revision = ProfileRevision(revision.value + 1)
-        profile = profile.copy(rebirthProgress = profile.rebirthProgress.copy(level = profile.rebirthProgress.level + 1))
-        reply.accepted(ProfileRebirthAdvanced(revision, profile.rebirthProgress))
+        profile = profile.copy(rebirthProgress = profile.rebirthProgress.copy(level = rebirthTiers.last()))
+        reply.accepted(ProfileRebirthTierSelected(revision, profile.rebirthProgress))
     }
 
     override fun toggleMute(reply: InlineReply<ProfileSettingsChanged, ProfileRefusal>) {
@@ -183,7 +186,7 @@ internal class FakeProfileCapabilities(
     override fun query(query: ProfileQuery.GetLoadout): kinetickk.ball.profile.api.LoadoutProjection = error("unused")
 
     private fun canAdvanceRebirth(): Boolean =
-        profile.rebirthProgress.highestCleared >= profile.rebirthProgress.level
+        profile.rebirthProgress.rank > profile.rebirthProgress.level
 }
 
 internal class FakeSessionGameplayHost : GameplayRunHost {

@@ -64,9 +64,8 @@ internal fun ArmoryOutput.toSessionPulse(): SessionInteractionPulse = when (this
 
 internal fun RebirthOutput.toSessionPulse(): SessionInteractionPulse = when (this) {
     RebirthOutput.Back -> SessionInteractionPulse.CloseOverlay
-    RebirthOutput.ArmRequested,
-    RebirthOutput.ConfirmRequested,
-    -> SessionInteractionPulse.RebirthRequested
+    is RebirthOutput.ArmRequested -> SessionInteractionPulse.RebirthRequested(tier)
+    is RebirthOutput.ConfirmRequested -> SessionInteractionPulse.RebirthRequested(tier)
 }
 
 internal fun HangarOutput.toSessionPulse(): SessionInteractionPulse = when (this) {

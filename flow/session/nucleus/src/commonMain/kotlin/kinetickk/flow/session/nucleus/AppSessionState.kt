@@ -60,7 +60,7 @@ sealed interface PendingWorkflow {
         val runId: RunId,
     ) : PendingWorkflow
 
-    data object AdvancingRebirth : PendingWorkflow
+    data class SelectingRebirthTier(val tier: Int) : PendingWorkflow
 
     data class StartingRebirthRun(
         val runId: RunId,
@@ -76,6 +76,8 @@ sealed interface RebirthConfirmation {
     data class Armed(
         val profileRevision: ProfileRevision,
         val progress: RebirthProgress,
+        /** The uncleared tier the confirmation is armed for. */
+        val tier: Int,
     ) : RebirthConfirmation
 }
 

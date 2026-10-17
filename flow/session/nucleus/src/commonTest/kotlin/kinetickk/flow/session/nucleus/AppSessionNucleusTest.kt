@@ -28,7 +28,7 @@ import kinetickk.ball.profile.api.PreferencesProjection
 import kinetickk.ball.profile.api.ProfileBootstrapBlockReason
 import kinetickk.ball.profile.api.ProfileBootstrapStatus
 import kinetickk.ball.profile.api.ProfilePersistenceStatus
-import kinetickk.ball.profile.api.ProfileRebirthAdvanced
+import kinetickk.ball.profile.api.ProfileRebirthTierSelected
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileRunBootstrapResult
 import kinetickk.ball.profile.api.RebirthProfileSnapshot
@@ -122,7 +122,7 @@ class AppSessionNucleusTest {
 
         val armed = decide(
             initial.copy(overlay = AppDestination.Rebirth),
-            SessionInteractionPulse.RebirthRequested,
+            SessionInteractionPulse.RebirthRequested(0),
             AppSessionContext(rebirthProgress = rebirthProjection(RebirthProgress())),
         ).accepted()
         assertEquals(SessionRevision.ZERO, armed.nextState.routeRevision)
@@ -409,20 +409,20 @@ class AppSessionNucleusTest {
         val state = initialState().copy(overlay = AppDestination.Rebirth)
         val context = AppSessionContext(rebirthProgress = rebirthProjection(progress))
 
-        val armed = decide(state, SessionInteractionPulse.RebirthRequested, context).accepted()
+        val armed = decide(state, SessionInteractionPulse.RebirthRequested(1), context).accepted()
         assertTrue(armed.nextState.toShell().rebirthConfirmationArmed)
         assertTrue(armed.outputs.isEmpty())
 
         val requested = decide(
             armed.nextState,
-            SessionInteractionPulse.RebirthRequested,
+            SessionInteractionPulse.RebirthRequested(1),
             context,
         ).accepted()
-        assertEquals(AppSessionOutput.AdvanceRebirth, requested.outputs.single())
+        assertEquals(AppSessionOutput.SelectRebirthTier(1), requested.outputs.single())
 
         val starting = AppSessionNucleus.decide(
             requested.nextState,
-            profileRebirthAdvanced(ProfileRebirthAdvanced(ProfileRevision(1), advanced)),
+            profileRebirthTierSelected(ProfileRebirthTierSelected(ProfileRevision(1), advanced)),
             AppSessionContext(runBootstrap = runBootstrap(rebirthProgress = advanced)),
         ).accepted()
         assertEquals(3, starting.outputs.size)
@@ -469,6 +469,50 @@ class AppSessionNucleusTest {
     }
 
     @Test
+    fun aClearedTierStartsAtOnceAndOnlyTheEarnedTierNeedsTwoPresses() {
+        val progress = RebirthProgress(level = 5, highestCleared = 4)
+        val state = initialState().copy(overlay = AppDestination.Rebirth)
+        val context = AppSessionContext(rebirthProgress = rebirthProjection(progress))
+
+        // Dropping back to a cleared tier sends the selection with one press.
+        val lower = decide(state, SessionInteractionPulse.RebirthRequested(0), context).accepted()
+        assertEquals(AppSessionOutput.SelectRebirthTier(0), lower.outputs.single())
+        assertEquals(PendingWorkflow.SelectingRebirthTier(0), lower.nextState.pendingWorkflow)
+        val cleared = decide(state, SessionInteractionPulse.RebirthRequested(4), context).accepted()
+        assertEquals(AppSessionOutput.SelectRebirthTier(4), cleared.outputs.single())
+
+        // The earned, uncleared tier (the rank) arms first; a press on another tier does not confirm it.
+        val armed = decide(state, SessionInteractionPulse.RebirthRequested(5), context).accepted()
+        assertTrue(armed.outputs.isEmpty())
+        assertEquals(5, assertIs<RebirthConfirmation.Armed>(armed.nextState.rebirthConfirmation).tier)
+        val confirmed = decide(armed.nextState, SessionInteractionPulse.RebirthRequested(5), context).accepted()
+        assertEquals(AppSessionOutput.SelectRebirthTier(5), confirmed.outputs.single())
+        assertEquals(RebirthConfirmation.Disarmed, confirmed.nextState.rebirthConfirmation)
+        val switched = decide(armed.nextState, SessionInteractionPulse.RebirthRequested(2), context).accepted()
+        assertEquals(AppSessionOutput.SelectRebirthTier(2), switched.outputs.single())
+
+        // Tiers above the rank are refused without arming.
+        assertEquals(SessionRejection.RebirthUnavailable,
+            decide(state, SessionInteractionPulse.RebirthRequested(6), context).rejection())
+
+        // The Profile result must match the requested tier before the run starts.
+        val selected = RebirthProgress(level = 0, highestCleared = 4)
+        val starting = AppSessionNucleus.decide(
+            lower.nextState,
+            profileRebirthTierSelected(ProfileRebirthTierSelected(ProfileRevision(3), selected)),
+            AppSessionContext(runBootstrap = runBootstrap(rebirthProgress = selected)),
+        ).accepted()
+        assertIs<PendingWorkflow.StartingRebirthRun>(starting.nextState.pendingWorkflow)
+        assertFailsWith<IllegalStateException> {
+            AppSessionNucleus.decide(
+                lower.nextState,
+                profileRebirthTierSelected(ProfileRebirthTierSelected(ProfileRevision(3), progress)),
+                AppSessionContext(runBootstrap = runBootstrap(rebirthProgress = progress)),
+            )
+        }
+    }
+
+    @Test
     fun unavailableBootstrapBlocksEveryInteractionWithoutChangingSessionState() {
         val state = initialState(unavailablePersistence())
         val interactions = listOf(
@@ -480,7 +524,7 @@ class AppSessionNucleusTest {
             SessionInteractionPulse.ShortcutObserved(SessionShortcut.MUTE),
             SessionInteractionPulse.ToggleMuteRequested,
             SessionInteractionPulse.SelectCoreShapeRequested(CoreShape.PRISM),
-            SessionInteractionPulse.RebirthRequested,
+            SessionInteractionPulse.RebirthRequested(1),
         )
 
         interactions.forEach { interaction ->
@@ -551,19 +595,19 @@ class AppSessionNucleusTest {
         )
         val armed = decide(
             rebirthState,
-            SessionInteractionPulse.RebirthRequested,
+            SessionInteractionPulse.RebirthRequested(1),
             rebirthContext,
         ).accepted()
         val advancing = decide(
             armed.nextState,
-            SessionInteractionPulse.RebirthRequested,
+            SessionInteractionPulse.RebirthRequested(1),
             rebirthContext,
         ).accepted()
-        assertEquals(AppSessionOutput.AdvanceRebirth, advancing.outputs.single())
+        assertEquals(AppSessionOutput.SelectRebirthTier(1), advancing.outputs.single())
         val advanced = RebirthProgress(level = 1, highestCleared = 0)
         val startingRebirth = AppSessionNucleus.decide(
             advancing.nextState,
-            profileRebirthAdvanced(ProfileRebirthAdvanced(ProfileRevision(1), advanced)),
+            profileRebirthTierSelected(ProfileRebirthTierSelected(ProfileRevision(1), advanced)),
             AppSessionContext(runBootstrap = runBootstrap(rebirthProgress = advanced)),
         ).accepted()
         val frames = listOf(
@@ -584,7 +628,7 @@ class AppSessionNucleusTest {
             val pending = checkNotNull(frame.nextState.pendingWorkflow)
             val refusal = when (pending) {
                 is PendingWorkflow.ExitingRun -> gameplayExitRefused(pending.runId, GameplayRefusal.Busy)
-                PendingWorkflow.AdvancingRebirth -> profileRebirthRefused(ProfileRefusal.Busy)
+                is PendingWorkflow.SelectingRebirthTier -> profileRebirthRefused(ProfileRefusal.Busy)
                 PendingWorkflow.TogglingMute -> profileSettingsRefused(ProfileRefusal.Busy)
                 is PendingWorkflow.SelectingCoreShape -> profileCoreShapeRefused(ProfileRefusal.Busy)
                 is PendingWorkflow.StartingRun -> gameplayStartRefused(pending.runId, GameplayRefusal.Busy)
@@ -597,7 +641,7 @@ class AppSessionNucleusTest {
             assertNull(recovered.nextState.pendingWorkflow)
             assertEquals(
                 if (pending === PendingWorkflow.TogglingMute || pending is PendingWorkflow.SelectingCoreShape ||
-                    pending === PendingWorkflow.AdvancingRebirth
+                    pending is PendingWorkflow.SelectingRebirthTier
                 ) {
                     SessionWorkflowFailureCode.PROFILE_COMMAND_REFUSED
                 } else {
@@ -682,18 +726,18 @@ class AppSessionNucleusTest {
         val advanced = RebirthProgress(level = 1, highestCleared = 0)
         val armed = decide(
             initialState().copy(overlay = AppDestination.Rebirth),
-            SessionInteractionPulse.RebirthRequested,
+            SessionInteractionPulse.RebirthRequested(1),
             AppSessionContext(rebirthProgress = rebirthProjection(progress)),
         ).accepted()
         val requested = decide(
             armed.nextState,
-            SessionInteractionPulse.RebirthRequested,
+            SessionInteractionPulse.RebirthRequested(1),
             AppSessionContext(rebirthProgress = rebirthProjection(progress)),
         ).accepted()
-        assertEquals(AppSessionOutput.AdvanceRebirth, requested.outputs.single())
+        assertEquals(AppSessionOutput.SelectRebirthTier(1), requested.outputs.single())
         val exact = AppSessionNucleus.decide(
             requested.nextState,
-            profileRebirthAdvanced(ProfileRebirthAdvanced(ProfileRevision(1), advanced)),
+            profileRebirthTierSelected(ProfileRebirthTierSelected(ProfileRevision(1), advanced)),
             AppSessionContext(runBootstrap = runBootstrap(rebirthProgress = advanced)),
         ).accepted()
         assertEquals(3, exact.outputs.size)

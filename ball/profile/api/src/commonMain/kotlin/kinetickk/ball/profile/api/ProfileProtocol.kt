@@ -173,8 +173,8 @@ sealed interface ProfileRejection {
     data object CoreShapeLocked : ProfileRejection
     /** The weapon needs a higher Rebirth rank before it can be bought. */
     data object WeaponRebirthLocked : ProfileRejection
-    data object RebirthMaximumReached : ProfileRejection
-    data object RebirthLevelNotCleared : ProfileRejection
+    /** The requested Rebirth tier lies outside the policy range or above the profile's rank. */
+    data object RebirthTierLocked : ProfileRejection
 
     data class InvalidGameplayProgress(
         val reason: ProfileGameplayProgressRejection,

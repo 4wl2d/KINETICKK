@@ -33,8 +33,12 @@ data class RebirthRenderModel(
 
 sealed interface RebirthOutput {
     data object Back : RebirthOutput
-    data object ArmRequested : RebirthOutput
-    data object ConfirmRequested : RebirthOutput
+
+    /** First press on an uncleared [tier]: Session arms the two-press confirmation. */
+    data class ArmRequested(val tier: Int) : RebirthOutput
+
+    /** Starts a run at [tier]: the second press on an uncleared tier, or one press on a cleared one. */
+    data class ConfirmRequested(val tier: Int) : RebirthOutput
 }
 
 interface RebirthFeature {
