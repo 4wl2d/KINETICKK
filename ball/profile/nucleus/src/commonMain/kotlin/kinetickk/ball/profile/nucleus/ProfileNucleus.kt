@@ -262,8 +262,9 @@ object ProfileNucleus {
     }
 
     /**
-     * Buys the next rank of [id]: it needs a rank below the maximum, the next price in Matter, any one
-     * prerequisite owned and a Rebirth rank at the node's gate. Gates apply only here, never on load.
+     * Buys the next rank of [id]. Checked in order: a rank below the maximum, the Rebirth rank at the
+     * node's gate, any one prerequisite owned, then the next price in Matter. Gates apply only here,
+     * never on load.
      */
     private fun purchaseMatrixNode(
         state: ProfileState,
