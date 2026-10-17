@@ -212,7 +212,7 @@ internal fun MutableGameState.selectRewardFocus(focus: RewardFocus) {
         }
         DirectedReward.ITEM_AND_REPAIR -> {
             val pool = content.items.filter {
-                it.minimumRebirth <= rebirthLevel && hasUsefulItemEffect(it) && itemRewardFocus(it) == focus
+                it.minimumRebirth <= rebirthRank && hasUsefulItemEffect(it) && itemRewardFocus(it) == focus
             }
             choices = pool.shuffled(rewardRandom).take(3).map {
                 ChoiceOption(ChoiceType.ITEM, it.name, it.description, it.rarity.displayLabel, itemId = it.id,

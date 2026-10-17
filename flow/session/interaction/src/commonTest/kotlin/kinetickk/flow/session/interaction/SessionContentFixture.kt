@@ -11,7 +11,6 @@ import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.StatusElement
-import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicKey
@@ -32,7 +31,7 @@ internal val TestRebirthPolicy: RebirthPolicySnapshot = RebirthPolicySnapshot(
     maximumLevel = 10,
     profiles = (0..10).map { tier ->
         RebirthProfile(
-            tier, RebirthDirective.BASELINE, 5, 1f, 1f, 1f, 1f, 1f, 1f, 0f, 1f, 0f, 1f, 0,
+            tier, "Baseline", 5, 1f, 1f, 1f, 1f, 1f, 1f, 0f, 1f, 0f, 1f, 0,
             120, 0.09f, 24f,
         )
     }.toImmutableList(),

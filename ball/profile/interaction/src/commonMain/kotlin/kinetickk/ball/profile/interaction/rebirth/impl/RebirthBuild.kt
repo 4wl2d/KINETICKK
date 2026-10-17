@@ -9,9 +9,11 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.text.TextLayoutResult
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ItemDefinition
+import kinetickk.ball.content.api.RebirthMutator
 import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
@@ -26,6 +28,7 @@ import kinetickk.ball.profile.interaction.drawProfileText
 import kinetickk.ball.profile.interaction.fitKkText
 import kinetickk.ball.profile.interaction.localization.ProfileScreensRedesignText
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthRenderModel
+import kinetickk.ball.profile.interaction.rebirth.api.RebirthTierStatus
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthUnlock
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
@@ -34,6 +37,12 @@ import kinetickk.foundation.design.CanvasRuneStyle
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkAlign
+import kinetickk.foundation.design.KkFormGeometry
+import kinetickk.foundation.design.KkFormPaths
+import kinetickk.foundation.design.KkIcon
+import kinetickk.foundation.design.KkMutatorSigil
+import kinetickk.foundation.design.KkMutatorSigilPaths
+import kinetickk.foundation.design.drawKkIcon
 import kinetickk.foundation.design.KkVAlign
 import kinetickk.foundation.design.bodyStyle
 import kinetickk.foundation.design.condStyle
@@ -56,8 +65,33 @@ internal const val REBIRTH_BUILD_SECTION_ROLE = "rebirth.build.section"
 /** Probe role of a featured unlock row's description. */
 internal const val REBIRTH_UNLOCK_BLURB_ROLE = "rebirth.build.blurb"
 
-/** Rows of the build table: Reborn cards, then each piece of content the target tier unlocks. */
-internal fun RebirthRenderModel.buildRowCount(): Int = if (build == null) 0 else 1 + targetUnlocks.size
+/**
+ * One featured row of the build table: a mutator the focused tier runs ([newest] marks the one it
+ * adds) or a piece of content it opens.
+ */
+internal sealed interface RebirthFeaturedRow {
+    val name: String
+
+    data class Mutator(val mutator: RebirthMutator, val newest: Boolean) : RebirthFeaturedRow {
+        override val name: String get() = mutator.displayName
+    }
+
+    data class Unlock(val unlock: RebirthUnlock) : RebirthFeaturedRow {
+        override val name: String get() = unlock.name
+    }
+}
+
+/** The focused tier's featured rows: its mutators, newest first, then the content it opens. */
+internal fun RebirthRenderModel.featuredRows(): List<RebirthFeaturedRow> {
+    val mutators = focus.mutators
+    return buildList {
+        for (index in mutators.indices.reversed()) add(RebirthFeaturedRow.Mutator(mutators[index], index == mutators.lastIndex))
+        focusUnlocks.forEach { add(RebirthFeaturedRow.Unlock(it)) }
+    }
+}
+
+/** Rows of the build table: Reborn cards, then the focused tier's mutators and the content it opens. */
+internal fun RebirthRenderModel.buildRowCount(): Int = if (build == null) 0 else 1 + featuredRows().size
 
 /** Rows of the Heirloom list (none without build content or stored Heirlooms). */
 internal fun RebirthRenderModel.heirloomRowCount(): Int = build?.heirlooms?.size ?: 0
@@ -74,12 +108,22 @@ internal fun rebirthRebornRow(model: RebirthRenderModel, language: AppLanguage):
 }
 
 /**
- * What an unlock does: a Relic's rule rewrite at rank 1 (its first sentence, the rule itself) or
- * an item's description line, in [language].
+ * What an unlock does: a Relic's rule rewrite at rank 1 (its first sentence, the rule itself), a
+ * character's mechanic, or the description line of a weapon, item, Matrix node or enemy, in [language].
  */
 internal fun rebirthUnlockBlurb(unlock: RebirthUnlock, language: AppLanguage): String = when (unlock) {
     is RebirthUnlock.Relic -> unlock.definition.upsideText(language, 1).firstSentence()
     is RebirthUnlock.Item -> unlock.definition.description.localizedContent(language)
+    is RebirthUnlock.Weapon -> unlock.definition.description.localizedContent(language)
+    is RebirthUnlock.Character -> unlock.definition.mechanicDescription.localizedContent(language)
+    is RebirthUnlock.MatrixNode -> unlock.definition.description.localizedContent(language)
+    is RebirthUnlock.Enemy -> unlock.definition.description.localizedContent(language)
+}
+
+/** A featured row's description: the mutator's rule or what the unlock does. */
+internal fun rebirthFeaturedBlurb(row: RebirthFeaturedRow, language: AppLanguage): String = when (row) {
+    is RebirthFeaturedRow.Mutator -> row.mutator.description.localizedContent(language)
+    is RebirthFeaturedRow.Unlock -> rebirthUnlockBlurb(row.unlock, language)
 }
 
 private fun String.firstSentence(): String {
@@ -87,16 +131,16 @@ private fun String.firstSentence(): String {
     return if (end < 0) this else substring(0, end + 1)
 }
 
-/** The build sections read aloud: the Reborn odds, the unlocks of the target tier and the Heirlooms. */
+/** The build sections read aloud: the Reborn odds, the focused tier's mutators and unlocks, and the Heirlooms. */
 internal fun rebirthBuildDescription(model: RebirthRenderModel, language: AppLanguage): String? {
     val reborn = rebirthRebornRow(model, language) ?: return null
     val build = model.build ?: return null
     return buildString {
         append(language.text(ProfileScreensRedesignText.BuildSummary, language.text(ProfileScreensRedesignText.BuildUnlocks),
             reborn.label, reborn.current, reborn.next))
-        model.targetUnlocks.forEach { unlock ->
-            append(' ').append(unlock.name.localizedContent(language)).append(", ").append(unlockKind(unlock, language)).append(". ")
-            append(rebirthUnlockBlurb(unlock, language))
+        model.featuredRows().forEach { row ->
+            append(' ').append(row.name.localizedContent(language)).append(", ").append(featuredKind(row, language)).append(". ")
+            append(rebirthFeaturedBlurb(row, language))
         }
         if (build.heirlooms.isNotEmpty()) {
             append(' ').append(language.text(ProfileScreensRedesignText.Heirlooms)).append(". ")
@@ -112,8 +156,19 @@ private fun unlockKind(unlock: RebirthUnlock, language: AppLanguage): String = l
     when (unlock) {
         is RebirthUnlock.Relic -> ProfileScreensRedesignText.UnlockRelic
         is RebirthUnlock.Item -> ProfileScreensRedesignText.UnlockItem
+        is RebirthUnlock.Weapon -> ProfileScreensRedesignText.UnlockWeapon
+        is RebirthUnlock.Character -> ProfileScreensRedesignText.UnlockCharacter
+        is RebirthUnlock.MatrixNode -> ProfileScreensRedesignText.UnlockMatrixNode
+        is RebirthUnlock.Enemy -> ProfileScreensRedesignText.UnlockEnemy
     },
 )
+
+/** The gold (threat for mutators and enemies) kind tag of a featured row. */
+internal fun featuredKind(row: RebirthFeaturedRow, language: AppLanguage): String = when (row) {
+    is RebirthFeaturedRow.Mutator ->
+        language.text(if (row.newest) ProfileScreensRedesignText.MutatorNew else ProfileScreensRedesignText.MutatorActive)
+    is RebirthFeaturedRow.Unlock -> unlockKind(row.unlock, language)
+}
 
 /** Left edge of a featured unlock row's name and description, right of its mark. */
 internal fun rebirthUnlockTextLeft(frame: ProfileFrame, row: Rect): Float = row.left + rebirthUnlockIconSize(frame) + frame.d(12f)
@@ -166,12 +221,12 @@ internal fun rebirthBuildInfoRect(frame: ProfileFrame, header: Rect, title: Text
 }
 
 /**
- * The build sections: a table of the Reborn card chance (current and target tier) and one
- * featured row per piece of content the target tier unlocks (its rune or item mark, display name,
- * gold kind tag and what it does), then the stored Heirlooms with their runes. On the regular
- * board both sit on an opaque, gold-rimmed slab under the ladder, so the orbit rings and the
- * tier 5+ band end at its edge. [blurbs] and [lines] are each unlock's description and its line
- * budget ([rebirthUnlockBlurb], [rebirthUnlockLines]).
+ * The build sections: a table of the Reborn card chance (selected and focused tier) and one featured
+ * row per mutator the focused tier runs and per piece of content it opens (its sigil, rune or mark,
+ * display name, kind tag and what it does), then the stored Heirlooms with their runes. On the
+ * regular board both sit on an opaque, gold-rimmed slab under the ladder, so the orbit rings and the
+ * tier 5+ band end at its edge. [blurbs] and [lines] are each featured row's description and its line
+ * budget ([rebirthFeaturedBlurb], [rebirthUnlockLines]).
  */
 internal fun DrawScope.drawRebirthBuild(
     measurer: CanvasTextMeasurer,
@@ -207,9 +262,9 @@ internal fun DrawScope.drawRebirthBuild(
     drawRebirthRow(measurer, frame, type, rebornRect, column, reborn,
         if (reborn.change == RebirthChange.UP) theme.gold else Kk.Mute, inset = icon + frame.d(10f), role = "rebirth.build.row")
 
-    model.targetUnlocks.forEachIndexed { index, unlock ->
+    model.featuredRows().forEachIndexed { index, row ->
         val rect = layout.buildRows.getOrNull(index + 1) ?: return@forEachIndexed
-        drawRebirthUnlockRow(measurer, frame, type, rect, unlock, blurbs.getOrElse(index) { "" },
+        drawRebirthUnlockRow(measurer, frame, type, rect, row, blurbs.getOrElse(index) { "" },
             lines.getOrElse(index) { 1 }, theme, language)
     }
 
@@ -228,16 +283,17 @@ internal fun DrawScope.drawRebirthBuild(
 }
 
 /**
- * One featured unlock row: the Relic's rune or the item's mark at [rebirthUnlockIconSize], its
- * name in display type with the gold kind tag at the row's end, and what it does in muted body
- * text under the name (up to [lines] lines). Name and description sit centered in the row.
+ * One featured row: the mutator's sigil, the Relic's rune, the item's mark, the weapon's icon, the
+ * character's form, a Matrix node or an enemy mark at [rebirthUnlockIconSize], its name in display type
+ * with the kind tag at the row's end (threat for mutators and enemies, gold otherwise), and what it does
+ * in muted body text under the name (up to [lines] lines). Name and description sit centered in the row.
  */
 private fun DrawScope.drawRebirthUnlockRow(
     measurer: CanvasTextMeasurer,
     frame: ProfileFrame,
     type: RebirthType,
     rect: Rect,
-    unlock: RebirthUnlock,
+    row: RebirthFeaturedRow,
     blurb: String,
     lines: Int,
     theme: RebirthTheme,
@@ -246,16 +302,18 @@ private fun DrawScope.drawRebirthUnlockRow(
     val k = frame.k
     val icon = rebirthUnlockIconSize(frame)
     val center = Offset(rect.left + icon * 0.5f, rect.center.y)
-    when (unlock) {
-        is RebirthUnlock.Relic -> drawRebirthRelicRune(unlock.definition, center, icon * 0.5f, theme)
-        is RebirthUnlock.Item -> drawRebirthItemMark(unlock.definition, center, icon * 0.5f, theme)
-    }
+    drawRebirthFeaturedMark(row, center, icon * 0.5f, theme)
     val textLeft = rebirthUnlockTextLeft(frame, rect)
-    val kind = unlockKind(unlock, language)
+    val kind = featuredKind(row, language)
+    val tagColor = when (row) {
+        is RebirthFeaturedRow.Mutator -> theme.threat
+        is RebirthFeaturedRow.Unlock -> if (row.unlock is RebirthUnlock.Enemy) theme.threat else theme.gold
+    }
+    val owner: Any = row.name
     val tagHeight = 18f * k
     val tagFont = type.tag * k
     val tagSize = kkTagSize(measurer, kind, frame.density, tagHeight, tagFont)
-    val name = fitKkText(measurer, unlock.name.localizedContent(language), type.body * REBIRTH_UNLOCK_NAME_SIZE * k,
+    val name = fitKkText(measurer, row.name.localizedContent(language), type.body * REBIRTH_UNLOCK_NAME_SIZE * k,
         (rect.right - tagSize.width - frame.d(10f) - textLeft).coerceAtLeast(1f), minFactor = 0.55f) {
         measurer.typography.condStyle(it, lineHeightEm = PROFILE_WRAPPED_LINE_HEIGHT)
     }
@@ -266,13 +324,13 @@ private fun DrawScope.drawRebirthUnlockRow(
     val gap = rebirthUnlockGap(frame)
     val block = name.kkBoxHeight + if (description == null) 0f else gap + description.kkBoxHeight
     val top = rect.center.y - block * 0.5f
-    drawProfileText(name, textLeft, top, Kk.Bone, "rebirth.build.unlock", unlock.name)
+    drawProfileText(name, textLeft, top, Kk.Bone, "rebirth.build.unlock", owner)
     val nameCenter = top + name.kkBoxHeight * 0.5f
     val tag = drawKkTag(measurer, kind, Offset(rect.right - tagSize.width, nameCenter - tagSize.height * 0.5f),
-        heightDp = tagHeight, fontSize = tagFont, background = theme.gold, foreground = Kk.Ink)
-    ProfileTextProbe.record("rebirth.build.tag", unlock.name, null, tag, theme.gold)
+        heightDp = tagHeight, fontSize = tagFont, background = tagColor, foreground = Kk.Ink)
+    ProfileTextProbe.record("rebirth.build.tag", owner, null, tag, tagColor)
     if (description != null) {
-        drawProfileText(description, textLeft, top + name.kkBoxHeight + gap, Kk.Mute, REBIRTH_UNLOCK_BLURB_ROLE, unlock.name)
+        drawProfileText(description, textLeft, top + name.kkBoxHeight + gap, Kk.Mute, REBIRTH_UNLOCK_BLURB_ROLE, owner)
     }
     drawLine(Kk.Line, Offset(rect.left, rect.bottom), Offset(rect.right, rect.bottom), frame.density)
 }
@@ -415,9 +473,46 @@ internal fun BuildTag.toCanvasGlyphStyle(): CanvasGlyphStyle = when (this) {
     BuildTag.FORTUNE -> CanvasGlyphStyle.FOUR_LEAF
 }
 
+/** The mark of a featured row at [center] in a circle of [radius]. */
+private fun DrawScope.drawRebirthFeaturedMark(row: RebirthFeaturedRow, center: Offset, radius: Float, theme: RebirthTheme) {
+    when (row) {
+        is RebirthFeaturedRow.Mutator -> translate(center.x, center.y) {
+            drawPath(KkMutatorSigilPaths.of(row.mutator.ordinal, radius * 0.86f), if (row.newest) theme.threat else Kk.Mute)
+        }
+        is RebirthFeaturedRow.Unlock -> when (val unlock = row.unlock) {
+            is RebirthUnlock.Relic -> drawRebirthRelicRune(unlock.definition, center, radius, theme)
+            is RebirthUnlock.Item -> drawRebirthItemMark(unlock.definition, center, radius, theme)
+            is RebirthUnlock.Weapon -> {
+                drawCircle(Kk.Ink2, radius, center)
+                drawCircle(theme.gold, radius, center, style = kkStroke(frameStroke(radius)))
+                KkIcon.byKey("weapons." + unlock.definition.id.name.lowercase())?.let { drawKkIcon(it, center, radius * 1.15f, Kk.Bone) }
+            }
+            is RebirthUnlock.Character -> {
+                val index = unlock.definition.id.ordinal.coerceIn(0, KkFormGeometry.COUNT - 1)
+                val form = KkFormPaths.of(index, radius * 0.82f)
+                translate(center.x, center.y) {
+                    if (KkFormGeometry.isStroked(index)) {
+                        drawPath(form, theme.kinetic, style = kkStroke(KkFormGeometry.strokeWidth(index, radius * 0.82f)))
+                    } else {
+                        drawPath(form, theme.kinetic)
+                    }
+                }
+            }
+            is RebirthUnlock.MatrixNode -> translate(center.x, center.y) {
+                drawPath(KkFormPaths.of(KkFormGeometry.HEXAGON, radius * 0.9f), Kk.Ink2)
+                drawPath(KkFormPaths.of(KkFormGeometry.HEXAGON, radius * 0.9f), theme.gold, style = kkStroke(frameStroke(radius)))
+                drawCircle(theme.gold, radius * 0.22f, Offset.Zero)
+            }
+            is RebirthUnlock.Enemy -> drawKkIcon(KkIcon.SYSTEM_ELITE, center, radius * 1.6f, theme.threat)
+        }
+    }
+}
+
+private fun frameStroke(radius: Float): Float = maxOf(1.5f, radius * 0.1f)
+
 /**
- * Gold diamonds over the ladder cells of tiers that unlock build content (one per unlock): gold
- * for the target tier, faint gold for later tiers and muted for tiers already reached.
+ * Gold diamonds over the ladder cells of tiers that open content (one per unlock): gold for the
+ * focused tier and the tiers still ahead, muted for cleared tiers.
  */
 internal fun DrawScope.drawRebirthLadderUnlocks(frame: ProfileFrame, layout: RebirthLayout, model: RebirthRenderModel, theme: RebirthTheme) {
     val build = model.build ?: return
@@ -429,10 +524,13 @@ internal fun DrawScope.drawRebirthLadderUnlocks(frame: ProfileFrame, layout: Reb
         var count = 0
         for (unlock in build.unlocks) if (unlock.tier == tier) count++
         if (count == 0) return@forEachIndexed
-        val color = when (model.tierCell(tier)) {
-            RebirthTierCell.CLEARED, RebirthTierCell.CURRENT -> Kk.Mute
-            RebirthTierCell.NEXT -> theme.gold
-            RebirthTierCell.LATER -> theme.gold.copy(alpha = 0.45f)
+        // As many pips as the cell holds side by side (one per unlock up to that).
+        count = minOf(count, maxOf(1, ((cell.width - half * 2f) / gap).toInt() + 1))
+        val color = when {
+            tier == model.focus.tier -> theme.gold
+            model.status(tier) == RebirthTierStatus.CLEARED -> Kk.Mute
+            model.status(tier) == RebirthTierStatus.EARNED -> theme.gold
+            else -> theme.gold.copy(alpha = 0.45f)
         }
         val y = cell.top - lift
         val start = cell.center.x - (count - 1) * gap * 0.5f

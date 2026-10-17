@@ -41,6 +41,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.toRenderModel
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
+import kinetickk.ball.profile.api.isWithinRebirthBounds
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.immutableListOfSize
@@ -383,10 +384,9 @@ object GameplayNucleus {
         if (profile.collection.discoveredRelicIds.any { id -> content.relics.none { it.id == id } }) {
             return GameplayConfigurationRejection.UNKNOWN_DISCOVERED_RELIC
         }
-        if (
-            profile.rebirthProgress.level !in content.rebirth.minimumLevel..content.rebirth.maximumLevel ||
-            profile.rebirthProgress.highestCleared !in -1..profile.rebirthProgress.level
-        ) return GameplayConfigurationRejection.REBIRTH_LEVEL_OUT_OF_RANGE
+        if (!profile.rebirthProgress.isWithinRebirthBounds(content.rebirth.minimumLevel, content.rebirth.maximumLevel)) {
+            return GameplayConfigurationRejection.REBIRTH_LEVEL_OUT_OF_RANGE
+        }
         if (profile.economy.matter < 0L) return GameplayConfigurationRejection.NEGATIVE_MATTER
         if (profile.economy.lifetimeMatter < profile.economy.matter) {
             return GameplayConfigurationRejection.LIFETIME_MATTER_BELOW_CURRENT

@@ -12,6 +12,7 @@ import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.profile.api.HomeProgressProjection
+import kinetickk.ball.profile.api.rank
 import kinetickk.flow.session.interaction.codex.api.CodexRenderModel
 import kinetickk.flow.session.interaction.localization.CodexText
 import kinetickk.foundation.common.localization.AppLanguage
@@ -134,7 +135,8 @@ internal fun codexItemRows(
     val query = codexItemQuery(search)
     val found = codexFilteredItems(model, query, filter, language).mapTo(HashSet()) { it.id }
     val showMissing = query.isEmpty() && filter == CodexItemFilter.ALL
-    val rebirth = progress.rebirthProgress.level
+    // Items open with the Rebirth rank, whatever tier is selected.
+    val rebirth = progress.rebirthProgress.rank
     val lifetimeMatter = progress.economy.lifetimeMatter
     val rows = ArrayList<CodexItemRow>(groups.size)
     groups.forEachIndexed { index, group ->

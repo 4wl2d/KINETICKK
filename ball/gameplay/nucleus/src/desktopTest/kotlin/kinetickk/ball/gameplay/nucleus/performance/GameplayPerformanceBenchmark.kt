@@ -758,6 +758,9 @@ internal fun canonicalStateFingerprint(state: MutableGameState): Long {
     signature = mix(signature, state.obstacleHitReadyAt.toRawBits())
     signature = mix(signature, state.nearMissReadyAt.toRawBits())
     signature = mix(signature, state.reviveInvulnerableUntil.toRawBits())
+    // 0.4.0 Rebirth rework: the unlock rank and the pending Volatile Remains bursts.
+    signature = mix(signature, state.rebirthRank)
+    signature = mix(signature, state.volatileBursts.toString().hashCode())
     state.pickups.forEach { signature = mix(signature, if (it.attracted) 1 else 0) }
     state.enemies.forEach {
         signature = mix(signature, it.characterMarkTime.toRawBits())
@@ -780,6 +783,8 @@ internal fun canonicalStateFingerprint(state: MutableGameState): Long {
         signature = mix(signature, it.abilityAt.toRawBits())
         signature = mix(signature, it.thrownUntil.toRawBits())
         signature = mix(signature, it.slamReadyAt.toRawBits())
+        signature = mix(signature, if (it.armored) 1 else 0)
+        signature = mix(signature, if (it.armorCracked) 1 else 0)
         it.status.forEach { cell -> signature = mix(signature, cell.toRawBits()) }
     }
     return mixLong(signature, fixtureFingerprint(state))
@@ -845,6 +850,9 @@ private fun canonicalRenderFingerprint(state: MutableGameState): Long {
     signature = mix(signature, render.viewportDensity.toRawBits())
     signature = obstacleProjectionFingerprint(signature, render.obstacles)
     signature = mix(signature, render.minimapRange.toRawBits())
+    signature = mix(signature, render.rebirthRank)
+    signature = mix(signature, render.volatileBursts.toString().hashCode())
+    render.enemies.forEach { signature = mix(signature, if (it.armored) 1 else 0) }
     render.itemStacksSnapshot.forEach { stack -> signature = mix(signature, stack) }
     return mixLong(signature, fixtureFingerprint(state))
 }

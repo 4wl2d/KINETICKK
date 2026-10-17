@@ -25,7 +25,7 @@ internal const val PITY_OFFERS: Int = 6
 internal fun MutableGameState.offerableItems(): List<ItemDefinition> {
     val catalogLevel = max(level, lifetimeMatterOfferLevel(lifetimeMatter))
     return content.items.filter { item ->
-        item.unlockLevel <= catalogLevel && item.minimumRebirth <= rebirthLevel && hasUsefulItemEffect(item)
+        item.unlockLevel <= catalogLevel && item.minimumRebirth <= rebirthRank && hasUsefulItemEffect(item)
     }
 }
 
@@ -163,9 +163,9 @@ private fun MutableGameState.weightedIndex(weights: FloatArray): Int {
 // ---------------------------------------------------------------------------------------------
 // Relic offers.
 
-/** Relics that may appear in an offer: Rebirth-gated, not spent, not maxed, Crown never twice. */
+/** Relics that may appear in an offer: Rebirth-rank gated, not spent, not maxed, Crown never twice. */
 internal fun MutableGameState.offerableRelics(): List<RelicDefinition> = content.relics.filter { relic ->
-    relic.minimumRebirth <= rebirthLevel &&
+    relic.minimumRebirth <= rebirthRank &&
         !(relic.id == RelicId.OUROBOROS_SEAL && ouroborosSpent) &&
         relicRank(relic.id) < content.relicPolicy.maxRank &&
         !(relic.id == RelicId.HOLLOW_CROWN && relicRank(relic.id) > 0)
@@ -255,7 +255,7 @@ private fun MutableGameState.openHeirloomCandidates(): List<RelicId> =
  * carried Relics or the choice bound, where the decline card keeps one slot.
  */
 private fun MutableGameState.heirloomCardCount(candidates: Int, extra: Int): Int =
-    min(content.relicPolicy.heirloomOffers(rebirthLevel) + extra, min(candidates, MutableGameState.MAX_CHOICES - 1))
+    min(content.relicPolicy.heirloomOffers(rebirthRank) + extra, min(candidates, MutableGameState.MAX_CHOICES - 1))
 
 /**
  * Matrix extra Heirloom cards the open offer cannot show (it already shows every carried Relic or fills
@@ -267,11 +267,14 @@ internal fun MutableGameState.heirloomRankBonus(): Int {
     return extra - (heirloomCardCount(candidates, extra) - heirloomCardCount(candidates, 0))
 }
 
-/** The Heirloom offer opens a Reborn run with relics carried over from the last victory. */
+/**
+ * The Heirloom offer opens a run with Relics carried over from the last victory. It reads the rank, so a
+ * player who drops back to a lower tier keeps the offer instead of losing the stored Relics.
+ */
 internal fun MutableGameState.openHeirloomChoice() {
     val candidates = openHeirloomCandidates()
     heirloomPending = false
-    if (candidates.isEmpty() || rebirthLevel < 1) {
+    if (candidates.isEmpty() || rebirthRank < 1) {
         if (heirloomCandidates.isNotEmpty()) pendingHeirloomResolved = true
         return
     }

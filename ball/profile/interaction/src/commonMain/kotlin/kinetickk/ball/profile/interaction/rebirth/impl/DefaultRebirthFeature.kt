@@ -13,9 +13,13 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import kinetickk.ball.content.api.BuildPolicy
+import kinetickk.ball.content.api.CoreShapeDefinition
+import kinetickk.ball.content.api.EnemyDefinition
 import kinetickk.ball.content.api.ItemDefinition
+import kinetickk.ball.content.api.MatrixNodeDefinition
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RelicDefinition
+import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.profile.api.ProfilePort
 import kinetickk.ball.profile.api.ProfileQuery
@@ -30,10 +34,10 @@ import kinetickk.foundation.design.kkIntString
 import kinetickk.resource.audio.api.AudioService
 
 /**
- * The Rebirth screen. [relics], [items] and [buildPolicy] come from the UI catalog (required, so
- * a host cannot silently drop them): the screen shows the Rebirth-gated content the next tier
- * unlocks, the Reborn card chance of both tiers and the stored Heirlooms, which resolve against
- * [relics].
+ * The Rebirth tier ladder. The catalogs come from the UI catalog (required, so a host cannot silently
+ * drop them): for the focused tier the screen shows its mutators, its scaling against the selected
+ * tier, the content it opens (weapons, characters, Relics, items, Matrix nodes, enemies), the Reborn
+ * card chance and the stored Heirlooms, which resolve against [relics].
  */
 class DefaultRebirthFeature(
     private val profilePort: ProfilePort,
@@ -42,9 +46,13 @@ class DefaultRebirthFeature(
     relics: ImmutableList<RelicDefinition>,
     items: ImmutableList<ItemDefinition>,
     buildPolicy: BuildPolicy,
+    weapons: ImmutableList<WeaponDefinition>,
+    coreShapes: ImmutableList<CoreShapeDefinition>,
+    matrixNodes: ImmutableList<MatrixNodeDefinition>,
+    enemies: ImmutableList<EnemyDefinition>,
 ) : RebirthFeature {
     private val audioExecutor = ProfileAudioExecutor(audioService)
-    private val buildContent = RebirthBuildContent(relics, items, buildPolicy)
+    private val buildContent = RebirthBuildContent(relics, items, buildPolicy, weapons, coreShapes, matrixNodes, enemies)
 
     /** Counts accepted advances; each new value plays the advance sequence once. */
     private var acceptedAdvances by mutableIntStateOf(0)
@@ -70,7 +78,7 @@ class DefaultRebirthFeature(
                 .coerceIn(rebirthPolicy.minimumLevel, rebirthPolicy.maximumLevel)
         }
         val theme = remember(tier, roles) { RebirthTheme(tier, roles) }
-        val direction = rebirthPolicy.profile(tier).directive.displayName.localizedContent(language)
+        val direction = rebirthPolicy.profile(tier).displayName.localizedContent(language)
         RebirthAdvanceOverlay(progress.value, theme, kkIntString(tier), direction)
     }
 
@@ -81,22 +89,21 @@ class DefaultRebirthFeature(
         confirmationArmed: Boolean,
         onOutput: (RebirthOutput) -> Unit,
     ) {
-        val renderModelValue = remember(
-            profilePort,
-            rebirthPolicy,
-            routeToken,
-            eligible,
-            confirmationArmed,
-        ) {
-            profilePort
-                .query(ProfileQuery.GetRebirthProgress)
-                .toRenderModel(
-                    rebirthPolicy = rebirthPolicy,
-                    eligible = eligible,
-                    matter = profilePort.query(ProfileQuery.GetLoadout).snapshot.economy.matter,
-                    build = buildContent,
-                    heirloomIds = profilePort.query(ProfileQuery.GetCollection).collection.heirloomRelicIds,
-                )
+        val progress = remember(profilePort, routeToken, eligible, confirmationArmed) {
+            profilePort.query(ProfileQuery.GetRebirthProgress)
+        }
+        // The focused tier is presentation state: it opens on the next challenge (or the selected
+        // tier) whenever the route is entered and follows ladder presses and keyboard focus.
+        var focusTier by remember(profilePort, routeToken) { mutableIntStateOf(progress.defaultFocusTier(rebirthPolicy)) }
+        val renderModelValue = remember(profilePort, rebirthPolicy, progress, eligible, focusTier) {
+            progress.toRenderModel(
+                rebirthPolicy = rebirthPolicy,
+                eligible = eligible,
+                matter = profilePort.query(ProfileQuery.GetLoadout).snapshot.economy.matter,
+                build = buildContent,
+                heirloomIds = profilePort.query(ProfileQuery.GetCollection).collection.heirloomRelicIds,
+                focusTier = focusTier,
+            )
         }
         val textScale = remember(profilePort, routeToken) {
             profilePort.query(ProfileQuery.GetPreferences).preferences.textScale
@@ -110,6 +117,7 @@ class DefaultRebirthFeature(
                 when (effect) {
                     is RebirthEffect.PlayAudio -> audioExecutor.play(effect.cue)
                     is RebirthEffect.Emit -> onOutput(effect.output)
+                    is RebirthEffect.Focus -> focusTier = effect.tier
                 }
             }
         }

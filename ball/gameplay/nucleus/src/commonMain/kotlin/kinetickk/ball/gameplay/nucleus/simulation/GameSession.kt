@@ -87,7 +87,8 @@ internal fun MutableGameState.startRun() {
     arsenalCounter = 0
     necroticClock = 0f
     heirloomOfferActive = false
-    heirloomPending = heirloomCandidates.isNotEmpty() && rebirthLevel >= 1
+    heirloomPending = heirloomCandidates.isNotEmpty() && rebirthRank >= 1
+    volatileBursts = kinetickk.foundation.collections.immutableListOf()
     totem = null
     nextEntityId = 1
     spawnClock = 0.2f

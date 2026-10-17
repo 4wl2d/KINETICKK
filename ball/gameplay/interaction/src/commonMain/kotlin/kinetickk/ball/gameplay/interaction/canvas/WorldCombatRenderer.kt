@@ -101,6 +101,7 @@ private fun DrawScope.drawWorldLayer(
     drawWeaponNodes(engine, shakeX, shakeY, roles)
     drawWeaponEntities(engine, shakeX, shakeY, roles, airborne = false)
     drawPickups(engine, shakeX, shakeY, roles)
+    drawVolatileBursts(engine, shakeX, shakeY, roles)
     drawWeapon(engine, core, shakeX, shakeY, roles)
     drawWeaponEntities(engine, shakeX, shakeY, roles, airborne = true)
     drawWeaponArcs(engine, visualFx, shakeX, shakeY, roles)

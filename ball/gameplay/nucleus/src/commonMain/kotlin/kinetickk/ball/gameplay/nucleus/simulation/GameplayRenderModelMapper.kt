@@ -156,7 +156,8 @@ internal fun MutableGameState.toRenderModel(
                     behaviorRemaining(value).sameBitsAs(previous.behaviorRemaining) &&
                     value.facing.sameBitsAs(previous.facing) &&
                     linkedTo(value) == previous.linkedTo &&
-                    shielded(value) == previous.shielded
+                    shielded(value) == previous.shielded &&
+                    value.armorIntact == previous.armored
             }
             ?: enemies.mapToImmutableList { value ->
                 EnemyProjection(
@@ -183,6 +184,7 @@ internal fun MutableGameState.toRenderModel(
                     facing = value.facing,
                     linkedTo = linkedTo(value),
                     shielded = shielded(value),
+                    armored = value.armorIntact,
                 )
             },
         projectiles = projectiles.reuseEmptyProjection(reusableCollections?.projectiles)
@@ -354,6 +356,8 @@ internal fun MutableGameState.toRenderModel(
         // A scalar-input sibling shares the weapon runtime and changes no synergy input.
         weaponSynergy = reusableCollections?.weaponSynergy?.takeIf { identitySource != null && weaponRuntime === identitySource.weaponRuntime }
             ?: weaponSynergyProjection(reusableCollections?.weaponSynergy),
+        rebirthRank = rebirthRank,
+        volatileBursts = volatileBursts,
     )
 }
 

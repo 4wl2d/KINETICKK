@@ -21,9 +21,8 @@ import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
 import kinetickk.ball.content.api.ReactionId
-import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.RebirthPolicySnapshot
-import kinetickk.ball.content.api.RebirthProfile
+import kinetickk.ball.content.api.defaultRebirthProfile
 import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
@@ -187,9 +186,10 @@ internal val rewardFixtureContent: GameplayContentSnapshot = GameplayContentSnap
     weapons = ShippedWeaponFixtures,
     weaponMasteries = WeaponMastery.entries.toImmutableList(),
     relics = rewardFixtureRelics.toImmutableList(),
+    // The shipped tier ladder, so a fixture run at tier 3 shows its mutators and its Victory earns rank 4.
     rebirth = RebirthPolicySnapshot(
-        minimumLevel = 0, maximumLevel = 0,
-        profiles = immutableListOf(RebirthProfile(0, RebirthDirective.BASELINE, 5, 1f, 1f, 1f, 1f, 1f, 1f, 0f, 1f, 0f, 1f, 0, 120, 0.09f, 24f)),
+        minimumLevel = 0, maximumLevel = 10,
+        profiles = (0..10).map { tier -> defaultRebirthProfile(tier) }.toImmutableList(),
         maxActiveEnemies = 120, minSpawnIntervalSeconds = 0.09f, minEliteIntervalSeconds = 24f,
     ),
     relicPolicy = RelicPolicy(4, 3),

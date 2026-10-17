@@ -28,7 +28,6 @@ import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
-import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicId
@@ -322,7 +321,7 @@ private fun localizationFixtureContent() = GameplayContentSnapshot(
     rebirth = RebirthPolicySnapshot(
         minimumLevel = 0, maximumLevel = 0,
         profiles = immutableListOf(RebirthProfile(
-            0, RebirthDirective.BASELINE, 5, 1f, 1f, 1f, 1f, 1f, 1f, 0f, 1f, 0f, 1f, 0,
+            0, "Baseline", 5, 1f, 1f, 1f, 1f, 1f, 1f, 0f, 1f, 0f, 1f, 0,
             120, 0.09f, 24f,
         )),
         maxActiveEnemies = 120, minSpawnIntervalSeconds = 0.09f, minEliteIntervalSeconds = 24f,

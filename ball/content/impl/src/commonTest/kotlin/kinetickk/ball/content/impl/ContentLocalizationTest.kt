@@ -50,7 +50,7 @@ class ContentLocalizationTest {
             }
             addAll(kinetickk.ball.content.api.CharacterTriggerKind.entries.map { it.displayLabel })
             content.pointsOfInterest.definitions.forEach { addAll(listOf(it.name, it.instruction)) }
-            content.rebirth.profiles.forEach { addAll(listOf(it.directive.displayName, it.directive.description)) }
+            content.rebirth.profiles.forEach { add(it.displayName) }
             RebirthMutator.entries.forEach { addAll(listOf(it.displayName, it.description)) }
             build.elements.forEach { addAll(listOf(it.statusDescription, it.breakDescription)) }
             build.reactions.forEach { addAll(listOf(it.name, it.description)) }
@@ -223,7 +223,7 @@ class ContentLocalizationTest {
             "DRIFT", "SURGE", "HYPER", "OVERDRIVE", "TRANSCENDENT", "Overdrive",
             "DRIFTER", "SHOOTER", "CHARGER", "INTERCEPTOR", "WEAVER", "WARDEN", "SPLITTER", "ELITE", "ARCHITECT",
             "SWARMLING", "BOMBER", "LANCER", "SNIPER", "AEGIS", "MINELAYER", "PHANTOM", "BROODMOTHER", "REFLECTOR", "HERALD",
-            "DRIFT PHASE", "THE ARCHITECT", "KINETIC OVERDRIVE", "DASH ONLINE", "OVERHEAT",
+            "DRIFT PHASE", "THE ARCHITECT", "THE ARCHITECT ENRAGES", "KINETIC OVERDRIVE", "DASH ONLINE", "OVERHEAT",
             "SINGULARITY CONTACT", "POLARITY FIELD STRAIN", "ARCHITECT DISMANTLED",
             "CATALOG COMPLETE // MATTER SALVAGED", "CORE FRACTURED", "ELITE KEY ACQUIRED",
             "RELIC RESONANCE", "TOTEM DETECTED", "ELITE SIGNAL", "HERALD APPROACHES",

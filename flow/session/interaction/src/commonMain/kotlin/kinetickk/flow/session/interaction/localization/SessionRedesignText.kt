@@ -16,6 +16,11 @@ internal enum class SessionRedesignText(
     MAXED("Maxed", "На максимуме"),
     RANKS("Ranks", "Ранги"),
     DIRECTIVE("Directive", "Директива"),
+    TIER("Tier", "Ступень"),
+    RANK("Rank", "Ранг"),
+    ASCENDANT("Ascendant", "Вознесённый"),
+    NEW_TIER("New tier", "Новая ступень"),
+    SELECTED("Selected", "Выбрана"),
     STATUS("Status", "Статус"),
     READY("Ready", "Готово"),
     UNLOCKABLE("Unlockable", "Можно открыть"),
@@ -31,8 +36,8 @@ internal enum class SessionRedesignText(
         "Открывайте стартовое оружие за материю. Любая форма может использовать любое оружие.",
     ),
     REBIRTH_INFO(
-        "Defeat the Architect to open a harder tier. Your run build resets. Matter, Matrix nodes, unlocked weapons, discoveries and settings are kept.",
-        "Победите Архитектора, чтобы открыть более сложный уровень. Сборка забега сбрасывается. Материя, узлы матрицы, открытое оружие, находки и настройки сохраняются.",
+        "Defeat the Architect to earn the next, harder tier and a Reborn rank; any earned tier can be chosen for the next run. Matter, Matrix nodes, unlocked weapons, discoveries and settings are kept.",
+        "Победите Архитектора, чтобы открыть следующую, более сложную ступень и ранг перерождения; для забега можно выбрать любую открытую ступень. Материя, узлы матрицы, открытое оружие, находки и настройки сохраняются.",
     ),
     CODEX_INFO(
         "Everything you have found in runs: items, weapons, relics, forms, reactions and relic pairings.",

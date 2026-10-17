@@ -113,7 +113,8 @@ internal fun HangarContent(
     ) {
         ProfilePanel(
             title = language.text(ProfileText.HangarTitle),
-            count = language.text(ProfileScreensRedesignText.CountOf, model.unlockedCount, model.shapes.size),
+            count = language.text(ProfileScreensRedesignText.CountOf, model.unlockedCount, model.shapes.size) +
+                if (model.ascendant) ", " + language.text(ProfileScreensRedesignText.Ascendant) else "",
             info = language.text(ProfileScreensRedesignText.HangarInfo),
             matter = model.matter,
             scale = scale,
@@ -366,6 +367,11 @@ private fun DrawScope.drawHangarTile(
         val gem = frame.d(if (frame.regular) 9f else 7f)
         drawKkGem(Offset(size.width - pad - gem * 0.5f, pad + gem * 0.6f), if (on) Kk.Ink else roles.you, gem / density)
     }
+    if (shape.ascendant) {
+        // Ascendant: the gold crown in the tile's top-left corner.
+        val crown = frame.d(if (frame.regular) 8f else 6f)
+        translate(pad + crown, pad + crown) { drawPath(KkMutatorSigilPaths.of(KkMutatorSigil.ASCENDANT, crown), Kk.Gold) }
+    }
 }
 
 /** The inspected character's description wrapped to [width] (every line; the details scroll). */
@@ -401,6 +407,13 @@ private fun DrawScope.drawHangarDetail(
     drawHangarForm(definition.id.hangarFormIndex(), center, radius, if (shape.unlocked) Kk.Bone else Kk.Ink3, Kk.Ink,
         time / HANGAR_SPIN_SECONDS * 360f)
     if (!shape.unlocked) drawKkIcon(KkIcon.SYSTEM_LOCKED, center, radius * 0.8f, Kk.Mute)
+    if (shape.ascendant) {
+        // Ascendant: the gold crown over the preview ring.
+        val crown = radius * 0.32f
+        translate(center.x, center.y - radius * 1.35f - crown * 0.4f) {
+            drawPath(KkMutatorSigilPaths.of(KkMutatorSigil.ASCENDANT, crown), Kk.Gold)
+        }
+    }
     val tagText = definition.mechanicName.localizedContent(language) + " / " + definition.triggerKind.displayLabel.localizedContent(language)
     val tag = fitKkText(measurer, tagText, type.mono * k, layout.tag.width, minFactor = 0.5f) { measurer.typography.monoStyle(it) }
     drawProfileText(tag, layout.tag.left, layout.tag.top, roles.you, "hangar.detail.tag")

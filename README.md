@@ -54,8 +54,13 @@ Nineteen enemy kinds, from Swarmling packs and Bombers to the Herald mini-boss,
 arrive through a spawn director that shapes every run's waves differently;
 later Rebirth tiers bring the toughest ones. Spend Kinetic Matter on the 32
 nodes of the Core Matrix and in the Armory between runs. Defeat The Architect
-to unlock the next Rebirth tier while keeping permanent progression; every tier
-also opens four more items, the rarest of them legendary.
+to earn the next Rebirth tier and a Reborn rank while keeping permanent
+progression. Each rank opens weapons, characters, Matrix nodes and four more
+items; each tier is much harder and adds a mutator (packs, hardened Elites,
+volatile remains, armored vanguards, a blackout and an enraged Architect among
+them), and you can pick any earned tier for the next run from the Rebirth
+ladder, so a hard tier never locks you out. Clearing tier 10 makes you
+Ascendant.
 
 ## Build and run
 

@@ -382,6 +382,7 @@ internal fun MutableGameState.spawnedEnemy(type: EnemyType, x: Float, y: Float):
         if (hardened) enemy.escortsPending = HARDENED_ELITE_ESCORTS
         if (type == EnemyType.HERALD) enemy.escortsPending = HERALD_ESCORTS
     }
+    rollVanguardArmor(enemy)
     initializeBehavior(enemy)
     return enemy
 }

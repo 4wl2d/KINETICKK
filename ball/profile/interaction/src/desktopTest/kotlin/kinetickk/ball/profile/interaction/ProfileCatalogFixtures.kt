@@ -9,7 +9,6 @@ import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.MatrixNodeDefinition
-import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicDefinition
@@ -27,6 +26,7 @@ import kinetickk.ball.content.api.WeaponCadence.DISCRETE
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.defaultMatrixNodes
+import kinetickk.ball.content.api.defaultRebirthProfile
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthBuildModel
 import kinetickk.ball.profile.interaction.rebirth.impl.RebirthBuildContent
 import kinetickk.foundation.collections.ImmutableList
@@ -275,36 +275,7 @@ private fun catalogWeapon(
 /** The shipped Core Matrix: its data lives in the content API, so the fixture is the real catalog. */
 internal val CatalogMatrixNodes: ImmutableList<MatrixNodeDefinition> = defaultMatrixNodes()
 
-internal fun catalogRebirthProfile(tier: Int): RebirthProfile {
-    val swarmRanks = (tier + 2) / 3
-    val fortifiedRanks = (tier + 1) / 3
-    val overclockedRanks = tier / 3
-    val directive = when {
-        tier == 0 -> RebirthDirective.BASELINE
-        (tier - 1) % 3 == 0 -> RebirthDirective.SWARM
-        (tier - 1) % 3 == 1 -> RebirthDirective.FORTIFIED
-        else -> RebirthDirective.OVERCLOCKED
-    }
-    return RebirthProfile(
-        tier = tier,
-        directive = directive,
-        openingEnemyCount = 5 + (tier + 1) / 2,
-        enemyCapMultiplier = 1f + tier * 0.08f + swarmRanks * 0.01f,
-        spawnRateMultiplier = 1f + tier * 0.06f + swarmRanks * 0.01f,
-        enemyHealthMultiplier = 1f + tier * 0.18f + tier * tier * 0.012f + fortifiedRanks * 0.02f,
-        enemySpeedMultiplier = 1f + tier * 0.025f + overclockedRanks * 0.005f,
-        incomingDamageMultiplier = 1f + tier * 0.08f + overclockedRanks * 0.005f,
-        eliteRateMultiplier = 1f,
-        threatTimeOffsetSeconds = tier * 8f,
-        playerPowerMultiplier = 1f + tier * 0.05f,
-        playerIntegrityBonus = tier * 3f,
-        matterGainMultiplier = 1f + tier * 0.12f + fortifiedRanks * 0.01f,
-        bonusRerolls = tier / 5,
-        maximumActiveEnemies = 120,
-        minimumSpawnIntervalSeconds = 0.09f,
-        minimumEliteIntervalSeconds = 24f,
-    )
-}
+internal fun catalogRebirthProfile(tier: Int): RebirthProfile = defaultRebirthProfile(tier)
 
 private fun catalogRelic(
     id: RelicId,
@@ -380,6 +351,29 @@ internal val CatalogRebirthItems: ImmutableList<ItemDefinition> = listOf(
 internal val CatalogHeirlooms: List<RelicId> =
     listOf(RelicId.STORMHEART_CAPACITOR, RelicId.EXECUTIONERS_PRISM, RelicId.FURNACE_COVENANT, RelicId.ABSOLUTE_ZERO)
 
-/** The screen's build model between [current] and [target] with the shipped Reborn odds. */
+/** The ladder's catalog content: the gated Relics and items plus the shipped weapons, characters, Matrix and roster. */
+internal val CatalogRebirthContent: RebirthBuildContent = RebirthBuildContent(CatalogRebirthRelics, CatalogRebirthItems, BuildPolicy(),
+    CatalogWeapons, kinetickk.ball.content.api.defaultCoreShapeDefinitions(), CatalogMatrixNodes,
+    kinetickk.ball.content.api.defaultEnemyDefinitions())
+
+/** The screen's build model between the selected [current] and the focused [target] tier with the shipped Reborn odds. */
 internal fun catalogRebirthBuild(current: Int, target: Int, heirlooms: List<RelicId> = CatalogHeirlooms): RebirthBuildModel =
-    RebirthBuildContent(CatalogRebirthRelics, CatalogRebirthItems, BuildPolicy()).model(current, target, heirlooms)
+    CatalogRebirthContent.model(current, target, heirlooms)
+
+/** The ladder selected at [current] (after clearing [highestCleared]) and focused on [focus], with catalog content. */
+internal fun catalogRebirthModel(
+    current: Int,
+    focus: Int,
+    highestCleared: Int = current,
+    eligible: Boolean = true,
+    heirlooms: List<RelicId> = CatalogHeirlooms,
+): kinetickk.ball.profile.interaction.rebirth.api.RebirthRenderModel = kinetickk.ball.profile.interaction.rebirth.api.RebirthRenderModel(
+    current = catalogRebirthProfile(current),
+    focus = catalogRebirthProfile(focus),
+    highestCleared = highestCleared,
+    eligible = eligible,
+    matter = 1_924L,
+    minimumTier = 0,
+    maximumTier = 10,
+    build = catalogRebirthBuild(current, focus, heirlooms),
+)

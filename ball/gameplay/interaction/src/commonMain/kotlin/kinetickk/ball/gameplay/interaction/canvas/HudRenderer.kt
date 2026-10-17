@@ -75,7 +75,9 @@ internal fun DrawScope.drawHud(
     val badgeBottom = drawLevelCluster(engine, textMeasurer, frame, renderTime, memory)
     drawClockAndBoss(engine, textMeasurer, frame, boss, renderTime, memory)
     drawEconomy(engine, textMeasurer, frame, badgeBottom)
+    // The chain first: the portrait Rebirth strip shares its row and stops short of it.
     drawChain(engine, textMeasurer, frame)
+    drawRebirthStrip(engine, textMeasurer, frame)
     drawCoreStatus(engine, textMeasurer, frame, renderTime, memory, critical)
     drawKineticGauge(engine, textMeasurer, frame, renderTime, memory)
     drawLoadout(engine, textMeasurer, frame)
@@ -131,6 +133,16 @@ internal object HudScratch {
     var linkContent: GameplayContentSnapshot? = null
     var links: List<OverlayRelicLink> = emptyList()
     val brackets = HudBracketLevels()
+    /**
+     * The level badge's row this frame, the economy's right edge on phones (inline on landscape, the
+     * chip row on portrait) and the portrait chain's left edge (+inf without a chain): the Rebirth strip.
+     */
+    var badgeTop = 0f
+    var badgeBottom = 0f
+    var badgeRight = 0f
+    var economyRight = 0f
+    var chainLeft = Float.POSITIVE_INFINITY
+    val rebirthTier = HudNumberText { it.toString() }
     val aspects = arrayOfNulls<RelicAspect>(RelicId.entries.size)
     var definitionContent: GameplayContentSnapshot? = null
     val definitions = arrayOfNulls<kinetickk.ball.content.api.RelicDefinition>(RelicId.entries.size)
@@ -242,6 +254,9 @@ private fun DrawScope.drawLevelCluster(
         val bar = HudDrawCache.rect(HudRect.DATA_BAR, badge.left + frame.u(4f), top, badge.left + frame.u(122f), top + frame.u(4f))
         drawKkMeter(bar, fraction, Kk.Bone, measurer.roles, background = Kk.Bone.copy(alpha = 0.12f))
         HudLayoutProbe.record(HudBlock.BADGE, badge.left, badge.top, max(badge.right, bar.right), bar.bottom)
+        HudScratch.badgeTop = badge.top
+        HudScratch.badgeBottom = badge.bottom
+        HudScratch.badgeRight = max(badge.right, bar.right)
         return bar.bottom
     }
     val badgeSize = kkLevelBadgeSize(display, level, density, label, PHONE_BADGE_LABEL_SP * growth, PHONE_BADGE_NUMBER_SP)
@@ -249,6 +264,9 @@ private fun DrawScope.drawLevelCluster(
     val badge = drawKkLevelBadge(display, Offset(frame.margin, top), level, label, renderTime, slam,
         labelSize = PHONE_BADGE_LABEL_SP * growth, numberSize = PHONE_BADGE_NUMBER_SP)
     HudLayoutProbe.record(HudBlock.BADGE, badge.left, badge.top, badge.right, badge.bottom)
+    HudScratch.badgeTop = badge.top
+    HudScratch.badgeBottom = badge.bottom
+    HudScratch.badgeRight = badge.right
     return badge.bottom
 }
 
@@ -418,22 +436,25 @@ private fun DrawScope.drawBossBar(
             segments = 16, ghost = ghost, ghostColor = Kk.Bone, threat = true)
         return
     }
-    // The Architect: three equal parts that empty from the left, one per phase. The active part's
-    // track takes the hue of the aspect it hardened into, and it stripes while the Architect shifts.
+    // The Architect: three equal parts that empty from the left, one per phase (four for the
+    // Singularity Architect of Rebirth tier 10). The active part's track takes the hue of the aspect it
+    // hardened into, and it stripes while the Architect shifts.
     val height = barHeight
     val partGap = frame.u(6f)
-    val partWidth = (width - partGap * 2f) / 3f
+    val parts = if (engine.content.rebirth.profile(engine.rebirthLevel).has(kinetickk.ball.content.api.RebirthMutator.SINGULARITY)) 4 else 3
+    val partWidth = (width - partGap * (parts - 1)) / parts
     val active = EnemyAffinity.phase(boss.affinityBits)
     val aspect = EnemyAffinity.aspect(boss.affinityBits)
     val shifting = EnemyAffinity.shifting(boss.affinityBits)
-    for (part in 0 until 3) {
+    for (part in 0 until parts) {
         val partLeft = left + part * (partWidth + partGap)
-        val fill = (boss.integrity * 3f - (2 - part)).coerceIn(0f, 1f)
-        val partGhost = ((boss.integrity + ghost) * 3f - (2 - part)).coerceIn(0f, 1f) - fill
+        val fill = (boss.integrity * parts - (parts - 1 - part)).coerceIn(0f, 1f)
+        val partGhost = ((boss.integrity + ghost) * parts - (parts - 1 - part)).coerceIn(0f, 1f) - fill
         val slot = when (part) {
             0 -> HudRect.BOSS_0
             1 -> HudRect.BOSS_1
-            else -> HudRect.BOSS_2
+            2 -> HudRect.BOSS_2
+            else -> HudRect.BOSS_3
         }
         val bar = HudDrawCache.rect(slot, partLeft, barTop, partLeft + partWidth, barTop + height)
         val track = if (part == active && aspect >= 0) roles.element(aspect).copy(alpha = 0.22f) else roles.threat.copy(alpha = 0.18f)
@@ -597,6 +618,7 @@ private fun DrawScope.drawEconomy(engine: GameplayRenderModel, hostMeasurer: Tex
             HudLayoutProbe.record(HudBlock.MATTER_CHIP, x - frame.u(18f), centerY - layout.kkBoxHeight * 0.5f, x + layout.size.width,
                 centerY + layout.kkBoxHeight * 0.5f)
             x += layout.size.width + frame.u(12f)
+            HudScratch.economyRight = x - frame.u(12f)
             if (keys != null) {
                 drawKkIcon(KkIcon.SYSTEM_KEY, Offset(x + frame.u(7f), centerY), frame.u(14f), Kk.Bone)
                 val keyLayout = HudDrawCache.layout(HudText.KEYS, measurer, keys, measurer.typography.condStyle(17f, tabular = true, lineHeightEm = 1f),
@@ -604,14 +626,20 @@ private fun DrawScope.drawEconomy(engine: GameplayRenderModel, hostMeasurer: Tex
                 drawKkText(keyLayout, x + frame.u(19f), centerY, Kk.Bone, valign = KkVAlign.CENTER)
                 HudLayoutProbe.record(HudBlock.KEY_CHIP, x, centerY - keyLayout.kkBoxHeight * 0.5f, x + frame.u(19f) + keyLayout.size.width,
                     centerY + keyLayout.kkBoxHeight * 0.5f)
+                HudScratch.economyRight = x + frame.u(19f) + keyLayout.size.width
             }
         }
         GameplayLayoutMode.COMPACT_PORTRAIT -> {
             val top = frame.top + frame.u(PORTRAIT_CHIP_ROW_DP)
             val height = frame.u(PORTRAIT_CHIP_ROW_HEIGHT_DP)
             var left = frame.margin
-            left = drawHudChipFromLeft(measurer, HudPath.MATTER_CHIP, HudText.MATTER, matter, left, top, height, 15f, null, roles) + frame.u(6f)
-            if (keys != null) drawHudChipFromLeft(measurer, HudPath.KEY_CHIP, HudText.KEYS, keys, left, top, height, 15f, KkIcon.SYSTEM_KEY, roles)
+            left = drawHudChipFromLeft(measurer, HudPath.MATTER_CHIP, HudText.MATTER, matter, left, top, height, 15f, null, roles)
+            HudScratch.economyRight = left
+            left += frame.u(6f)
+            if (keys != null) {
+                HudScratch.economyRight =
+                    drawHudChipFromLeft(measurer, HudPath.KEY_CHIP, HudText.KEYS, keys, left, top, height, 15f, KkIcon.SYSTEM_KEY, roles)
+            }
         }
     }
 }
@@ -687,6 +715,7 @@ private fun DrawScope.drawHudChipAt(
 
 /** `×N` chain counter with its draining window bar; hidden without a live combo. */
 private fun DrawScope.drawChain(engine: GameplayRenderModel, hostMeasurer: TextMeasurer, frame: HudFrame) {
+    HudScratch.chainLeft = Float.POSITIVE_INFINITY
     if (engine.combo < 2 || engine.comboTime <= 0f) return
     // Display type: the same size at every text-size setting.
     val measurer = HudMeasurers.display(hostMeasurer)
@@ -725,6 +754,7 @@ private fun DrawScope.drawChain(engine: GameplayRenderModel, hostMeasurer: TextM
             val bar = HudDrawCache.rect(HudRect.CHAIN, right - width, barTop, right, barTop + frame.u(2f))
             drawKkMeter(bar, window, color, measurer.roles)
             HudLayoutProbe.record(HudBlock.CHAIN, right - width, center - digitBoxHeight(measurer, style) * 0.5f, right, bar.bottom)
+            HudScratch.chainLeft = right - width
         }
     }
 }

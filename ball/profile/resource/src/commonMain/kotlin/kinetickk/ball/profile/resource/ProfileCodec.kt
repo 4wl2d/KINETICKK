@@ -29,6 +29,7 @@ import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileSnapshot
 import kinetickk.ball.profile.api.ProfileSnapshotRejection
 import kinetickk.ball.profile.api.RebirthProgress
+import kinetickk.ball.profile.api.isWithinRebirthBounds
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kinetickk.foundation.common.localization.AppLanguage
 import kotlinx.serialization.EncodeDefault
@@ -228,10 +229,14 @@ private data class PlayerCollectionDto(
     @EncodeDefault(EncodeDefault.Mode.NEVER) val heirloomRelicIds: List<String> = emptyList(),
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 private data class RebirthProgressDto(
     val level: Int,
     val highestCleared: Int,
+    // Characters that cleared the final tier, sorted by wire id; written only once one has, so older
+    // saves keep their exact bytes.
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val ascendedCharacterIds: List<String> = emptyList(),
 )
 
 @OptIn(ExperimentalSerializationApi::class)
@@ -314,6 +319,7 @@ private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
             rebirthProgress = RebirthProgressDto(
                 level = profile.rebirthProgress.level,
                 highestCleared = profile.rebirthProgress.highestCleared,
+                ascendedCharacterIds = profile.rebirthProgress.ascendedCharacters.map(CoreShape::wireId).sorted(),
             ),
         ),
     )
@@ -337,7 +343,8 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
     )
 
     rejectUnless(
-        profile.characterAchievements.victoriousCharacterIds.isStrictlySorted(),
+        profile.characterAchievements.victoriousCharacterIds.isStrictlySorted() &&
+            profile.rebirthProgress.ascendedCharacterIds.isStrictlySorted(),
         ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
     )
 
@@ -402,6 +409,7 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
         rebirthProgress = RebirthProgress(
             level = profile.rebirthProgress.level,
             highestCleared = profile.rebirthProgress.highestCleared,
+            ascendedCharacters = profile.rebirthProgress.ascendedCharacterIds.map { it.coreShape() }.toImmutableSet(),
         ),
     )
     validateProfile(decoded)
@@ -513,9 +521,13 @@ private fun validateProfile(profile: PlayerProfile) {
     rejectUnless(heirlooms.size <= MAX_HEIRLOOM_RELICS, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
     rejectUnless(heirlooms.toSet().size == heirlooms.size, ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE)
     rejectUnless(
-        profile.rebirthProgress.level in ContentBounds.MIN_REBIRTH_LEVEL..ContentBounds.MAX_REBIRTH_LEVEL &&
-            profile.rebirthProgress.highestCleared in -1..profile.rebirthProgress.level,
+        profile.rebirthProgress.isWithinRebirthBounds(ContentBounds.MIN_REBIRTH_LEVEL, ContentBounds.MAX_REBIRTH_LEVEL),
         ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+    )
+    // An Ascendant clear is an Architect victory with that character.
+    rejectUnless(
+        achievements.victoriousCharacters.containsAll(profile.rebirthProgress.ascendedCharacters),
+        ProfileSnapshotRejection.INCONSISTENT_PROFILE,
     )
 }
 

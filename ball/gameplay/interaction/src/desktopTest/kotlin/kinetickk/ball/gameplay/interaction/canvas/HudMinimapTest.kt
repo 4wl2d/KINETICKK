@@ -48,7 +48,7 @@ class HudMinimapTest {
     private val others = listOf(
         HudBlock.CLOCK, HudBlock.MATTER_CHIP, HudBlock.KEY_CHIP, HudBlock.CHAIN, HudBlock.BOSS, HudBlock.BADGE,
         HudBlock.INTEGRITY, HudBlock.SPEED, HudBlock.LOADOUT, HudBlock.TRIAL_PANEL, HudBlock.POLARITY_LABEL,
-        HudBlock.DASH_LABEL, HudBlock.BRAKE_LABEL, HudBlock.RELIC_ROW, HudBlock.FEED,
+        HudBlock.DASH_LABEL, HudBlock.BRAKE_LABEL, HudBlock.RELIC_ROW, HudBlock.FEED, HudBlock.REBIRTH,
     )
     private val feed = VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(
         BuildNotificationProjection("Neon Ram", immutableListOf("Impact damage +0.05", "Weapon power +0.04", "+ Ram II"), 4f),
@@ -66,6 +66,8 @@ class HudMinimapTest {
                 val model = hudTestModel(dpWidth, dpHeight).with(
                     "screenWidth" to width, "screenHeight" to height, "uiScale" to density,
                     "keys" to 12, "runMatter" to 9_876_543L, "combo" to 128, "comboTime" to 1f, "comboWindow" to 2.8f, "level" to 45,
+                    // Tier 10: the Rebirth strip with every mutator sigil.
+                    "rebirthLevel" to 10,
                     "enemies" to (if (boss == null) emptyList() else listOf(EnemyProjection(4, boss, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f,
                         0f, 0f, 0f, 0f, 0f, 0f, false, affinityBits = bossAffinity(boss)))).toImmutableList(),
                     "pointsOfInterest" to (if (trial) listOf(orbit) else emptyList()).toImmutableList(),

@@ -23,7 +23,6 @@ import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
 import kinetickk.ball.content.api.PointOfInterestKind
-import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicId
@@ -323,6 +322,8 @@ class WorldHotPathAllocationTest {
                 facing = index * 0.4f,
                 linkedTo = if (type == EnemyType.DRIFTER) EnemyType.AEGIS.ordinal + 1 else -1,
                 shielded = type == EnemyType.HERALD,
+                // Rebirth R8: an Armored Vanguard plate on every third ordinary enemy.
+                armored = index % 3 == 0 && type != EnemyType.ARCHITECT,
             )
         }
         return GameplayRenderModel(
@@ -378,6 +379,11 @@ class WorldHotPathAllocationTest {
             ),
             obstacles = BusyObstacles,
             characterAbility = busyAbility(drift),
+            // Rebirth R4: Volatile Remains telegraphs filling toward detonation.
+            volatileBursts = immutableListOf(
+                kinetickk.ball.gameplay.nucleus.render.VolatileBurstProjection(CORE + 90f, CORE + 70f, 70f, 2.8f, 3.15f),
+                kinetickk.ball.gameplay.nucleus.render.VolatileBurstProjection(CORE - 120f, CORE + 30f, 70f, 2.9f, 3.25f),
+            ),
         )
     }
 
@@ -469,7 +475,7 @@ class WorldHotPathAllocationTest {
             relics = rewardFixtureRelics.toImmutableList(),
             rebirth = RebirthPolicySnapshot(
                 minimumLevel = 0, maximumLevel = 0,
-                profiles = immutableListOf(RebirthProfile(0, RebirthDirective.BASELINE, 5, 1f, 1f, 1f, 1f, 1f, 1f, 0f, 1f, 0f, 1f, 0, 120, 0.09f, 24f)),
+                profiles = immutableListOf(RebirthProfile(0, "Baseline", 5, 1f, 1f, 1f, 1f, 1f, 1f, 0f, 1f, 0f, 1f, 0, 120, 0.09f, 24f)),
                 maxActiveEnemies = 120, minSpawnIntervalSeconds = 0.09f, minEliteIntervalSeconds = 24f,
             ),
             relicPolicy = RelicPolicy(4, 3),

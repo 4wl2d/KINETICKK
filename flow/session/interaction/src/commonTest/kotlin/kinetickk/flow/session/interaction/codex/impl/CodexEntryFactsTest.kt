@@ -211,10 +211,14 @@ class CodexEntryFactsTest {
             assertFalse(locked.summary.contains("Item 5"))
             // Searching never reveals locked cells; reaching the tier turns it into an anonymous cell like any other unfound item.
             assertTrue(codexCatalogEntries(0, "item", CodexItemFilter.ALL, model, catalog.copy(items = items), codexTestProgress(emptySet()), language).isEmpty())
-            val reached = codexTestProgress(emptySet()).copy(rebirthProgress = RebirthProgress(level = 2))
+            val reached = codexTestProgress(emptySet()).copy(rebirthProgress = RebirthProgress(level = 2, highestCleared = 1))
             val open = codexCatalogEntries(0, "", CodexItemFilter.ALL, model, catalog.copy(items = items), reached, language)
             assertTrue(open.none { it.icon is CodexIcon.Locked })
             assertEquals(CodexIcon.Unknown, open.single { it.key == "item/5" }.icon)
+            // The rank opens it, whatever tier is selected: dropping back to tier 0 keeps it open.
+            val lowered = codexTestProgress(emptySet()).copy(rebirthProgress = RebirthProgress(level = 0, highestCleared = 1))
+            assertTrue(codexCatalogEntries(0, "", CodexItemFilter.ALL, model, catalog.copy(items = items), lowered, language)
+                .none { it.icon is CodexIcon.Locked })
         }
         // Sovereign relics gated by Rebirth do the same in the relic category.
         val relics = codexCatalogEntries(2, "", CodexItemFilter.ALL, model, catalog, codexTestProgress(emptySet()))

@@ -11,7 +11,6 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.defaultCoreShapeDefinitions
@@ -46,13 +45,16 @@ import kotlin.test.assertTrue
 /** Home text measured with the bundled fonts: facts, tile labels and the legal line fit whole. */
 @OptIn(ExperimentalTestApi::class)
 class HomeTextFitComposeTest {
+    /** Every shipped tier name (Baseline and the ten mutator names). */
+    private val TierNames = kinetickk.ball.content.api.RebirthTierNames
+
     @Test
     fun factsCardShowsEveryLabelAndValueWholeForRealNamesInBothLanguages() = forMeasurers { text, language, scale ->
         for ((width, height) in listOf(1_440f to 810f, 1_280f to 720f, 1_000f to 700f)) {
             val layout = homeLayoutGeometry(width, height, 1f)
             val rect = requireNotNull(layout.scene.facts)
             val infoLeft = requireNotNull(layout.info(HomeInfoTarget.FACTS)).bounds.left
-            for (weapon in WeaponNames.keys) for (directive in RebirthDirective.entries) for (target in HomeMenuTargets) {
+            for (weapon in WeaponNames.keys) for (directive in TierNames) for (target in HomeMenuTargets) {
                 val facts = homeFacts(model(weapon, directive), target, language, scale)
                 val card = homeFactsCardLayout(text, rect, facts, layout.scene.unit, infoLeft, 1f)
                 assertEquals(facts.facts.size, card.rows.size)
@@ -110,7 +112,7 @@ class HomeTextFitComposeTest {
             runOnIdle {
                 val menu = requireNotNull(measurer)
                 // Stamps on Armory ("Unlockable") and Rebirth ("Ready"), sub values on the others.
-                val model = model(WeaponId.SINGULARITY_SPEAR, RebirthDirective.entries.first()).copy(weaponUnlockAffordable = true, canRebirth = true)
+                val model = model(WeaponId.SINGULARITY_SPEAR, TierNames.first()).copy(weaponUnlockAffordable = true, canRebirth = true)
                 for ((width, height) in listOf(1_440f to 810f, 1_000f to 700f, 844f to 390f, 800f to 360f, 600f to 390f, 390f to 844f, 360f to 800f, 412f to 915f)) {
                     val layout = homeLayoutGeometry(width, height, 1f)
                     if (layout.scene.menuColumns != 1) continue
@@ -209,7 +211,7 @@ class HomeTextFitComposeTest {
                 val text = requireNotNull(home)
                 val menu = requireNotNull(menuMeasurer)
                 // Stamps on Armory and Rebirth, sub values on the others: the widest rows.
-                val model = model(WeaponId.SINGULARITY_SPEAR, RebirthDirective.entries.first()).copy(weaponUnlockAffordable = true, canRebirth = true)
+                val model = model(WeaponId.SINGULARITY_SPEAR, TierNames.first()).copy(weaponUnlockAffordable = true, canRebirth = true)
                 viewports.filter { it.third == density }.forEach { (width, height, _) ->
                     val layout = homeLayoutGeometry(width.toFloat(), height.toFloat(), density)
                     val scene = layout.scene
@@ -304,9 +306,9 @@ class HomeTextFitComposeTest {
         }
     }
 
-    private fun model(weapon: WeaponId, directive: RebirthDirective): HomeUiModel {
+    private fun model(weapon: WeaponId, directive: String): HomeUiModel {
         val weapons = WeaponNames.map { (id, name) -> testWeapon(id, name) }.toImmutableList()
-        val policy = TestRebirthPolicy.copy(profiles = TestRebirthPolicy.profiles.map { it.copy(directive = directive) }.toImmutableList())
+        val policy = TestRebirthPolicy.copy(profiles = TestRebirthPolicy.profiles.map { it.copy(displayName = directive) }.toImmutableList())
         return HomeReducer(defaultCoreShapeDefinitions(), 400, 12, policy, weapons, 40).uiModel(
             HomeProgressProjection(
                 LOCAL_PROFILE_INSTANCE_ID, ProfileRevision.ZERO,

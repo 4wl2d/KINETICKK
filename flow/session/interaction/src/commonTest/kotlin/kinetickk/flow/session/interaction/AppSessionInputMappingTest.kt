@@ -65,12 +65,12 @@ class AppSessionInputMappingTest {
             GameplayInteractionOutput.RestartRun.toSessionPulse(),
         )
         assertEquals(
-            SessionInteractionPulse.RebirthRequested,
-            RebirthOutput.ArmRequested.toSessionPulse(),
+            SessionInteractionPulse.RebirthRequested(3),
+            RebirthOutput.ArmRequested(3).toSessionPulse(),
         )
         assertEquals(
-            SessionInteractionPulse.RebirthRequested,
-            RebirthOutput.ConfirmRequested.toSessionPulse(),
+            SessionInteractionPulse.RebirthRequested(0),
+            RebirthOutput.ConfirmRequested(0).toSessionPulse(),
         )
     }
 

@@ -967,6 +967,10 @@ class GameplayReductionIsolationTest {
         obstacleHitReadyAt = 0.6f
         nearMissReadyAt = 0.7f
         reviveInvulnerableUntil = 0.8f
+        rebirthRank = 7
+        volatileBursts = kinetickk.foundation.collections.immutableListOf(
+            kinetickk.ball.gameplay.nucleus.render.VolatileBurstProjection(12f, -8f, 70f, 0.2f, 0.55f),
+        )
         pickups.firstOrNull()?.attracted = true
         enemies.firstOrNull()?.apply {
             characterMarkTime = 0.75f
@@ -989,6 +993,8 @@ class GameplayReductionIsolationTest {
             abilityAt = 0.85f
             thrownUntil = 0.9f
             slamReadyAt = 0.95f
+            armored = true
+            armorCracked = true
             status[StatusCell.STACKS + StatusElement.THERMAL.ordinal] = 2f
             status[StatusCell.DECAY_AT + StatusElement.THERMAL.ordinal] = 0.5f
             status[StatusCell.FREEZE_IMMUNE_UNTIL] = 0.6f
@@ -1314,6 +1320,8 @@ class GameplayReductionIsolationTest {
             value("settings.runStatisticsOnLeft", settings.runStatisticsOnLeft)
             value("settings.minimapEnabled", settings.minimapEnabled)
             value("rebirthLevel", rebirthLevel)
+            value("rebirthRank", rebirthRank)
+            value("volatileBursts", volatileBursts.toList())
             float("screenWidth", screenWidth)
             float("screenHeight", screenHeight)
             float("coreX", coreX)
@@ -1454,6 +1462,8 @@ class GameplayReductionIsolationTest {
                 float("$prefix.abilityAt", enemy.abilityAt)
                 float("$prefix.thrownUntil", enemy.thrownUntil)
                 float("$prefix.slamReadyAt", enemy.slamReadyAt)
+                value("$prefix.armored", enemy.armored)
+                value("$prefix.armorCracked", enemy.armorCracked)
                 floats("$prefix.status", enemy.status)
             }
 

@@ -164,6 +164,8 @@ data class PlayerCollection(
 data class RebirthProgress(
     val level: Int = 0,
     val highestCleared: Int = -1,
+    /** Characters that cleared the final Rebirth tier (Ascendant runs); empty until the first one does. */
+    val ascendedCharacters: ImmutableSet<CoreShape> = immutableSetOf(),
 )
 
 /** Highest Rebirth tier this profile may select: one above the highest cleared tier, within content bounds. */
@@ -173,6 +175,20 @@ val RebirthProgress.rank: Int
 /** True once the final Rebirth tier has been cleared. */
 val RebirthProgress.isAscendant: Boolean
     get() = highestCleared >= ContentBounds.MAX_REBIRTH_LEVEL
+
+/** [rank] under a policy's tier range: one above the highest clear, never below [minimumLevel] or above [maximumLevel]. */
+fun RebirthProgress.rankWithin(minimumLevel: Int, maximumLevel: Int): Int =
+    (highestCleared + 1).coerceIn(minimumLevel, maximumLevel)
+
+/**
+ * The Rebirth invariant every reader enforces: the highest cleared tier is -1 (none) up to
+ * [maximumLevel], and the selected tier is earned, from [minimumLevel] up to the rank one above the
+ * highest clear ([rankWithin]). A player may select any lower tier again, so `highestCleared > level`
+ * is valid.
+ */
+fun RebirthProgress.isWithinRebirthBounds(minimumLevel: Int, maximumLevel: Int): Boolean =
+    highestCleared in -1..maximumLevel && level in minimumLevel..rankWithin(minimumLevel, maximumLevel) &&
+        (ascendedCharacters.isEmpty() || isAscendant)
 
 /** Cumulative Profile-owned achievements shared by every run and Matrix loadout. */
 data class CharacterAchievementProgress(

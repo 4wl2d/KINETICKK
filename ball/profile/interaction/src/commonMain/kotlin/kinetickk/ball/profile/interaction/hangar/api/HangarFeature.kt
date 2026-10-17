@@ -24,6 +24,8 @@ data class HangarShapeRenderModel(
     val integrityBar: Float,
     val handlingBar: Float,
     val heatBar: Float,
+    /** This character cleared the final Rebirth tier: its tile and details carry the gold crown. */
+    val ascendant: Boolean = false,
 ) {
     val shape: CoreShape get() = definition.id
 }
@@ -49,6 +51,8 @@ data class HangarRenderModel(
     val matter: Long,
     /** Every weapon in catalog order, for each character's signature row. */
     val weapons: ImmutableList<HangarWeaponRenderModel> = immutableListOf(),
+    /** Every Rebirth tier is cleared: the header adds the Ascendant title. */
+    val ascendant: Boolean = false,
 ) {
     val unlockedCount: Int get() = shapes.count { it.unlocked }
 

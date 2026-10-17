@@ -3,6 +3,7 @@
 
 package kinetickk.ball.profile.nucleus
 
+import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.profile.api.CollectionProjection
 import kinetickk.ball.profile.api.CollectionEntry
@@ -44,11 +45,13 @@ import kinetickk.ball.profile.api.ProfileWriteResult
 import kinetickk.ball.profile.api.RebirthProfileSnapshot
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.RebirthProgressProjection
-import kinetickk.ball.profile.api.ProfileRebirthAdvanced
+import kinetickk.ball.profile.api.ProfileRebirthTierSelected
 import kinetickk.ball.profile.api.ProfileProgressApplied
 import kinetickk.ball.profile.api.RunBootstrapProjection
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
+import kinetickk.ball.profile.api.isAscendant
 import kinetickk.ball.profile.api.rank
+import kinetickk.ball.profile.api.rankWithin
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
@@ -75,9 +78,9 @@ object ProfileNucleus {
                 mutationGate(state)?.let { return rejected(it) }
                 selectCoreShape(state, pulse.shape)
             }
-            ProfileNucleusPulse.AdvanceRebirth -> {
+            is ProfileNucleusPulse.SelectRebirthTier -> {
                 mutationGate(state)?.let { return rejected(it) }
-                advanceRebirth(state)
+                selectRebirthTier(state, pulse.tier)
             }
             is ProfileNucleusPulse.ApplyGameplayProgress -> {
                 mutationGate(state)?.let { return rejected(it) }
@@ -156,6 +159,8 @@ object ProfileNucleus {
             shapes = hangarShapeProgress(state.profile, state.policy),
             selected = state.profile.loadout.coreShape,
             rebirthRank = state.profile.rebirthProgress.rank,
+            ascendedCharacters = state.profile.rebirthProgress.ascendedCharacters,
+            ascendant = state.profile.rebirthProgress.isAscendant,
         )
 
     fun query(state: ProfileState, query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection =
@@ -386,21 +391,26 @@ object ProfileNucleus {
         )
     }
 
-    private fun advanceRebirth(
+    /**
+     * Selects [tier] for the next run. Any tier from the policy minimum up to the rank (one above the
+     * highest clear) is allowed, lower tiers included, so a player is never stuck at a tier they
+     * cannot clear; nothing else changes. The current tier is accepted again (it confirms the tier the
+     * next run starts at), so this command always publishes its result.
+     */
+    private fun selectRebirthTier(
         state: ProfileState,
+        tier: Int,
     ): ProfileDecision {
         val progress = state.profile.rebirthProgress
-        if (progress.level >= state.policy.rebirth.maximumLevel) {
-            return rejected(ProfileRejection.RebirthMaximumReached)
+        val rebirth = state.policy.rebirth
+        if (tier !in rebirth.minimumLevel..progress.rankWithin(rebirth.minimumLevel, rebirth.maximumLevel)) {
+            return rejected(ProfileRejection.RebirthTierLocked)
         }
-        if (progress.highestCleared < progress.level) {
-            return rejected(ProfileRejection.RebirthLevelNotCleared)
-        }
-        val next = progress.copy(level = progress.level + 1)
+        val next = progress.copy(level = tier)
         return acceptedMutation(
             state = state,
             nextProfile = state.profile.copy(rebirthProgress = next),
-            commandOutput = ProfileOutput.RebirthAdvanced(ProfileRebirthAdvanced(state.revision.next(), next)),
+            commandOutput = ProfileOutput.RebirthTierSelected(ProfileRebirthTierSelected(state.revision.next(), next)),
         )
     }
 
@@ -424,8 +434,13 @@ object ProfileNucleus {
             addAll(update.discoveredItemIds)
         }
         val rebirth = update.clearedRebirthLevel?.let { cleared ->
-            state.profile.rebirthProgress.copy(
-                highestCleared = max(state.profile.rebirthProgress.highestCleared, cleared),
+            // Clearing the final tier makes the victorious character Ascendant.
+            val ascended = update.architectDefeatedWith?.takeIf { cleared >= ContentBounds.MAX_REBIRTH_LEVEL }
+            val progress = state.profile.rebirthProgress
+            progress.copy(
+                highestCleared = max(progress.highestCleared, cleared),
+                ascendedCharacters = if (ascended == null) progress.ascendedCharacters
+                else (progress.ascendedCharacters + ascended).toImmutableSet(),
             )
         } ?: state.profile.rebirthProgress
         val previousAchievements = state.profile.characterAchievements
@@ -542,8 +557,10 @@ object ProfileNucleus {
             if (level < state.policy.rebirth.minimumLevel) {
                 return ProfileGameplayProgressRejection.ClearedLevelBelowMinimum(level)
             }
-            if (level > state.profile.rebirthProgress.level) {
-                return ProfileGameplayProgressRejection.ClearedLevelAboveCurrent(level)
+            // The run's tier was selected under the rank at its start; the live selection may have
+            // moved since, so the clear is checked against the rank, never against `level`.
+            if (level > state.profile.rebirthProgress.rankWithin(state.policy.rebirth.minimumLevel, state.policy.rebirth.maximumLevel)) {
+                return ProfileGameplayProgressRejection.ClearedLevelAboveRank(level)
             }
         }
         update.victoryRelicIds?.let { relics ->
@@ -556,10 +573,15 @@ object ProfileNucleus {
         return null
     }
 
-    private fun canAdvanceRebirth(state: ProfileState): Boolean =
-        state.bootstrap == ProfileBootstrapStatus.Ready &&
-            state.profile.rebirthProgress.level < state.policy.rebirth.maximumLevel &&
-            state.profile.rebirthProgress.highestCleared >= state.profile.rebirthProgress.level
+    /**
+     * True when a new tier waits: the rank is not cleared yet and lies above the selected `level`. An
+     * Ascendant profile (every tier cleared) has none, whichever tier it replays.
+     */
+    private fun canAdvanceRebirth(state: ProfileState): Boolean {
+        val progress = state.profile.rebirthProgress
+        val rank = progress.rankWithin(state.policy.rebirth.minimumLevel, state.policy.rebirth.maximumLevel)
+        return state.bootstrap == ProfileBootstrapStatus.Ready && rank > progress.level && rank > progress.highestCleared
+    }
 
     private fun ProfileWriteResult.toPersistenceStatus(
         pending: ProfilePersistenceStatus.Pending,

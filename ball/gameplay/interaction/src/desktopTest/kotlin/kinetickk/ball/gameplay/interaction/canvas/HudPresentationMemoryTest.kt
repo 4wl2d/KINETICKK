@@ -11,7 +11,6 @@ import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
 import kinetickk.ball.content.api.PointOfInterestKind
-import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicPolicy
@@ -265,12 +264,10 @@ private fun memoryFixtureContent() = GameplayContentSnapshot(
     weapons = WeaponId.entries.map { fixtureWeapon(it, description = "Fixture.") }.toImmutableList(),
     weaponMasteries = WeaponMastery.entries.toImmutableList(),
     relics = rewardFixtureRelics.toImmutableList(),
+    // The shipped ladder, so HUD tests can show any tier's mutators (tier 0 is the plain baseline).
     rebirth = RebirthPolicySnapshot(
-        minimumLevel = 0, maximumLevel = 0,
-        profiles = immutableListOf(RebirthProfile(
-            0, RebirthDirective.BASELINE, 5, 1f, 1f, 1f, 1f, 1f, 1f, 0f, 1f, 0f, 1f, 0,
-            120, 0.09f, 24f,
-        )),
+        minimumLevel = 0, maximumLevel = 10,
+        profiles = (0..10).map { kinetickk.ball.content.api.defaultRebirthProfile(it) }.toImmutableList(),
         maxActiveEnemies = 120, minSpawnIntervalSeconds = 0.09f, minEliteIntervalSeconds = 24f,
     ),
     relicPolicy = RelicPolicy(4, 3),

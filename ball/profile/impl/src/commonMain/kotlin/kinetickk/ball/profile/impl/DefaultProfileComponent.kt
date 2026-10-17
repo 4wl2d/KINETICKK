@@ -21,7 +21,7 @@ import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileSettingsChanged
 import kinetickk.ball.profile.api.ProfileRefusal
 import kinetickk.ball.profile.api.ProfileCoreShapeSelected
-import kinetickk.ball.profile.api.ProfileRebirthAdvanced
+import kinetickk.ball.profile.api.ProfileRebirthTierSelected
 import kinetickk.ball.profile.api.ProfileProgressApplied
 import kinetickk.ball.profile.api.GameplayProgressUpdate
 import kinetickk.ball.profile.api.ProfileWriteResult
@@ -65,8 +65,8 @@ internal class DefaultProfileComponent(
     override fun selectCoreShape(shape: CoreShape, reply: InlineReply<ProfileCoreShapeSelected, ProfileRefusal>) =
         dispatchCommand(ProfileWorkItem.CoreShapeSelection(shape, reply))
 
-    override fun advanceRebirth(reply: InlineReply<ProfileRebirthAdvanced, ProfileRefusal>) =
-        dispatchCommand(ProfileWorkItem.RebirthAdvancement(reply))
+    override fun selectRebirthTier(tier: Int, reply: InlineReply<ProfileRebirthTierSelected, ProfileRefusal>) =
+        dispatchCommand(ProfileWorkItem.RebirthTierSelection(tier, reply))
 
     override fun applyGameplayProgress(
         update: GameplayProgressUpdate,
@@ -185,8 +185,8 @@ internal class DefaultProfileComponent(
         check(frame.outputs.count { it is ProfileOutput.CoreShapeSelected } ==
             if (item is ProfileWorkItem.CoreShapeSelection) 1 else 0
         ) { "Profile loadout command must accept its one typed result" }
-        check(frame.outputs.count { it is ProfileOutput.RebirthAdvanced } ==
-            if (item is ProfileWorkItem.RebirthAdvancement) 1 else 0
+        check(frame.outputs.count { it is ProfileOutput.RebirthTierSelected } ==
+            if (item is ProfileWorkItem.RebirthTierSelection) 1 else 0
         ) { "Profile rebirth command must accept its one typed result" }
         check(frame.outputs.count { it is ProfileOutput.ProgressApplied } ==
             if (item is ProfileWorkItem.ProgressApplication) 1 else 0
@@ -220,10 +220,11 @@ internal class DefaultProfileComponent(
                     check(output.result.revision == next.revision)
                     check(output.result.shape == next.profile.loadout.coreShape)
                 }
-                is ProfileOutput.RebirthAdvanced -> {
+                is ProfileOutput.RebirthTierSelected -> {
                     check(index == frame.outputs.lastIndex)
                     check(output.result.revision == next.revision)
                     check(output.result.progress == next.profile.rebirthProgress)
+                    check(item is ProfileWorkItem.RebirthTierSelection && output.result.progress.level == item.tier)
                 }
                 is ProfileOutput.ProgressApplied -> {
                     check(index == frame.outputs.lastIndex)
@@ -249,8 +250,8 @@ internal class DefaultProfileComponent(
                 is ProfileWorkItem.CoreShapeSelection -> item.reply.accepted(output.result)
                 else -> error("Profile loadout result has no current typed call")
             }
-            is ProfileOutput.RebirthAdvanced -> when (item) {
-                is ProfileWorkItem.RebirthAdvancement -> item.reply.accepted(output.result)
+            is ProfileOutput.RebirthTierSelected -> when (item) {
+                is ProfileWorkItem.RebirthTierSelection -> item.reply.accepted(output.result)
                 else -> error("Profile rebirth result has no current typed call")
             }
             is ProfileOutput.ProgressApplied -> when (item) {
@@ -318,10 +319,11 @@ private sealed interface ProfileWorkItem {
         override val pulse: ProfileNucleusPulse = ProfileNucleusPulse.SelectCoreShape(shape)
     }
 
-    data class RebirthAdvancement(
-        override val reply: InlineReply<ProfileRebirthAdvanced, ProfileRefusal>,
-    ) : Direct<ProfileRebirthAdvanced> {
-        override val pulse: ProfileNucleusPulse = ProfileNucleusPulse.AdvanceRebirth
+    data class RebirthTierSelection(
+        val tier: Int,
+        override val reply: InlineReply<ProfileRebirthTierSelected, ProfileRefusal>,
+    ) : Direct<ProfileRebirthTierSelected> {
+        override val pulse: ProfileNucleusPulse = ProfileNucleusPulse.SelectRebirthTier(tier)
     }
 
     data class ProgressApplication(

@@ -165,6 +165,8 @@ internal data class TerminalPresentation(
     val recapTags: List<TerminalTag> = emptyList(),
     val dominant: TerminalElement? = null,
     val reactions: List<TerminalReaction> = emptyList(),
+    /** What a Victory earns on the Rebirth ladder (null for a defeat or a replayed cleared tier). */
+    val rebirthEarned: ReportRebirthLines? = null,
 )
 
 /** A leading archetype of the run: the tag, its name and the resonance tier it reached. */
@@ -235,6 +237,7 @@ internal fun GameplayRenderModel.terminalPresentation(
         reactions = ReactionId.entries.filter { reactionsThisRun and (1 shl it.ordinal) != 0 }.map {
             TerminalReaction(it, content.build.reaction(it).name.localizedContent(language), discoveredThisRun and (1 shl it.ordinal) != 0)
         },
+        rebirthEarned = reportRebirthLines(language),
     )
 }
 
@@ -363,7 +366,7 @@ private fun CompactReport(scene: ReportScene, mirrored: Boolean) {
             PaddingValues(start = 18.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
         ) {
             ReportSummary(scene, frame, titleSize = 38f, matterSize = 34f, gemSize = 20f, stampSize = 15f, slotSize = 50f, relicSize = 28f,
-                compact = true, gapScale = 0.6f)
+                compact = true, gapScale = 0.6f, rebirthLines = false)
         }
         Column(
             Modifier.offset(x = if (mirrored) 0.dp else split).width(statsWidth).fillMaxHeight()
@@ -375,6 +378,11 @@ private fun CompactReport(scene: ReportScene, mirrored: Boolean) {
                 Modifier.weight(1f).fillMaxWidth(),
                 "kinetickk.gameplay.results.statistics", Kk.Ink1,
             ) {
+                // Landscape phones keep the summary column for the title, matter and build: what the
+                // Victory earns on the Rebirth ladder leads the statistics instead.
+                scene.presentation.rebirthEarned?.let { earned ->
+                    ReportRebirthEarned(earned, 13f * scene.textScale, 11f * scene.textScale, Modifier.padding(bottom = 10.dp))
+                }
                 ReportStatistics(scene, frame, rowHeight = 26f, labelSize = 13f, valueSize = 17f)
             }
             Spacer(Modifier.height(10.dp))
@@ -395,12 +403,17 @@ private fun PortraitReport(scene: ReportScene) {
         ) {
             // The recap follows the actions here, so the next run's buttons stay on the first screen.
             ReportSummary(scene, frame, titleSize = 44f, matterSize = 40f, gemSize = 22f, stampSize = 15f, slotSize = 50f, relicSize = 30f,
-                compact = true, inlineShatter = true, recap = false)
+                compact = true, inlineShatter = true, recap = false, rebirthLines = false)
             Spacer(Modifier.height(20.dp))
             ReportActions(scene, frame, Modifier.fillMaxWidth(), primaryHeight = 56f, primaryFont = 24f, ghostFont = 20f)
             Spacer(Modifier.height(10.dp))
             ReportMenu(scene, frame, Modifier, touch = true)
             ReportBuildRecap(scene, frame, compact = true)
+            // What the Victory earns on the Rebirth ladder follows the recap, so the actions stay on the first screen.
+            scene.presentation.rebirthEarned?.let { earned ->
+                Spacer(Modifier.height(18.dp))
+                ReportRebirthEarned(earned, 14f * scene.textScale, 12f * scene.textScale)
+            }
             Spacer(Modifier.height(24.dp))
             Column(Modifier.fillMaxWidth().testTag("kinetickk.gameplay.results.statistics")) {
                 ReportStatistics(scene, frame, rowHeight = 28f, labelSize = 14f, valueSize = 18f)
@@ -564,6 +577,8 @@ private fun ColumnScope.ReportSummary(
     inlineShatter: Boolean = false,
     gapScale: Float = 1f,
     recap: Boolean = true,
+    /** Draw the Victory's Rebirth lines under the stamp (landscape phones show them beside the statistics). */
+    rebirthLines: Boolean = true,
 ) {
     val presentation = scene.presentation
     val language = LocalAppLanguage.current
@@ -601,6 +616,10 @@ private fun ColumnScope.ReportSummary(
     Box(Modifier.zIndex(1f).enter(scene, 0.3f)) {
         OverlayStamp(stamp, Modifier.testTag("kinetickk.gameplay.results.cause"),
             if (presentation.victory) KkStampVariant.YOU else KkStampVariant.THREAT, fontSize = stampSize * k, textScale = text)
+    }
+    presentation.rebirthEarned?.takeIf { rebirthLines }?.let { earned ->
+        Spacer(Modifier.height(gap(14f)))
+        ReportRebirthEarned(earned, sp(15f), sp(12f), Modifier.zIndex(1f).enter(scene, 0.35f))
     }
     if (inlineShatter) {
         Canvas(Modifier.fillMaxWidth().height(230.dp).clearAndSetSemantics { }) {

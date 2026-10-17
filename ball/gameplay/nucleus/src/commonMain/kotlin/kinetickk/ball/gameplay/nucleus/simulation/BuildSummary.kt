@@ -42,7 +42,7 @@ internal fun MutableGameState.buildSummary(
     stats = buildStats(),
     eligibleItemIds = content.items.filter { item ->
         val ordinaryOfferEligible = item.unlockLevel <= maxOf(level, lifetimeMatterOfferLevel(lifetimeMatter)) &&
-            item.minimumRebirth <= rebirthLevel
+            item.minimumRebirth <= rebirthRank
         val currentlyOffered = phase == GamePhase.CHOICE && choices.any { it.itemId == item.id }
         (ordinaryOfferEligible || currentlyOffered) && hasUsefulItemEffect(item)
     }.map { it.id }.toImmutableList(),

@@ -130,6 +130,23 @@ class ArchitectEncounterTest {
     }
 
     @Test
+    fun aHarderTierCapsEachHitAtTheTierZeroShareSoItsIntegrityCostsCappedBuildsMoreHits() {
+        // Tier 0: 3,000 integrity, at most 45 per instance.
+        val base = buildTestState()
+        assertEquals(45f, base.damageEnemy(base.architect(), 10_000f).amount, 0.01f)
+
+        // Tier 10 scales the same Architect's integrity, but one instance still removes at most 45.
+        val hard = buildTestState(rebirth = 10)
+        val scale = hard.rebirthProfile.enemyHealthMultiplier
+        assertTrue(scale > 7f)
+        val boss = hard.architect(maxHp = 3_000f * scale)
+        assertEquals(45f, hard.damageEnemy(boss, 10_000f).amount, 0.05f)
+        assertEquals(3_000f * scale - 45f, boss.hp, 0.05f)
+        // A hit below the cap lands in full on every tier.
+        assertEquals(30f, hard.damageEnemy(boss, 30f).amount, 0.01f)
+    }
+
+    @Test
     fun theShiftCallsEscortsARingAndRepairsOnceFromTheEncounterStepEvenWhileFrozen() {
         val state = buildTestState()
         val boss = state.architect()

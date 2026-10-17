@@ -12,8 +12,9 @@ import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
 
-/** Largest share of the Architect's integrity one damage instance may remove. */
+/** Largest share of the Architect's tier-0 integrity one damage instance may remove (see [architectHitCap]). */
 internal const val ARCHITECT_HIT_CAP: Float = 0.015f
+/** Last phase of the ordinary Architect; Singularity (Rebirth R10) adds an enraged one after it. */
 internal const val ARCHITECT_FINAL_PHASE: Int = 2
 internal const val ARCHITECT_SHIFT_SECONDS: Float = 8f
 internal const val ARCHITECT_SHIFT_RING: Int = 16
@@ -38,17 +39,28 @@ internal fun MutableGameState.isShifting(enemy: Enemy): Boolean = enemy.shiftUnt
 /** A Phantom out of phase: intangible, so neither the Core nor a slam meets it. */
 internal fun MutableGameState.isPhasedPhantom(enemy: Enemy): Boolean = enemy.type == EnemyType.PHANTOM && isShifting(enemy)
 
-/** Integrity at which the current phase ends: the boss bar's thirds. */
-private fun architectGate(enemy: Enemy): Float = enemy.maxHp * (ARCHITECT_FINAL_PHASE - enemy.phase) / 3f
+/** Integrity at which the current phase ends: the boss bar's thirds (quarters for the Singularity Architect). */
+private fun MutableGameState.architectGate(enemy: Enemy): Float {
+    val finalPhase = architectFinalPhase()
+    return enemy.maxHp * (finalPhase - enemy.phase) / (finalPhase + 1f)
+}
+
+/**
+ * Largest amount one damage instance may remove: [ARCHITECT_HIT_CAP] of the integrity the Architect
+ * would have without the tier's integrity multiplier. A build that hits the cap therefore needs more
+ * hits on a harder tier, as a build below the cap does; the cap never exceeds the tier-0 share.
+ */
+internal fun MutableGameState.architectHitCap(enemy: Enemy): Float =
+    ARCHITECT_HIT_CAP * enemy.maxHp / rebirthProfile.enemyHealthMultiplier.coerceAtLeast(1f)
 
 /**
  * Applies the Architect's gating to a requested amount: nothing while shifting, at most
- * [ARCHITECT_HIT_CAP] of its integrity, and never past the current phase's gate. Never raises integrity.
+ * [architectHitCap], and never past the current phase's gate. Never raises integrity.
  */
 internal fun MutableGameState.gateArchitectDamage(enemy: Enemy, amount: Float): Float {
     if (isShifting(enemy)) return 0f
-    var gated = min(amount, ARCHITECT_HIT_CAP * enemy.maxHp)
-    if (enemy.phase < ARCHITECT_FINAL_PHASE) {
+    var gated = min(amount, architectHitCap(enemy))
+    if (enemy.phase < architectFinalPhase()) {
         val gate = architectGate(enemy)
         if (enemy.hp > gate) gated = min(gated, enemy.hp - gate)
     }
@@ -57,7 +69,7 @@ internal fun MutableGameState.gateArchitectDamage(enemy: Enemy, amount: Float): 
 
 /** Called after every integrity write on the Architect: reaching a gate starts the next phase. */
 internal fun MutableGameState.onArchitectDamaged(enemy: Enemy) {
-    if (enemy.phase >= ARCHITECT_FINAL_PHASE || enemy.hp <= 0f) return
+    if (enemy.phase >= architectFinalPhase() || enemy.hp <= 0f) return
     if (enemy.hp <= architectGate(enemy) + enemy.maxHp * ARCHITECT_GATE_TOLERANCE) startArchitectPhase(enemy)
 }
 
@@ -70,6 +82,10 @@ private fun MutableGameState.startArchitectPhase(enemy: Enemy) {
     enemy.shiftUntil = elapsed + ARCHITECT_SHIFT_SECONDS
     assignAspect(enemy, adaptiveArchitectAspect(enemy.phase), immune = enemy.type.profile.aspectImmune)
     enemy.escortsPending = architectEscortCount(enemy.aspect)
+    if (architectEnraged(enemy)) {
+        message = "THE ARCHITECT ENRAGES"
+        messageTime = 2.5f
+    }
 }
 
 /** "It hardens against what you rely on": the dominant, then the secondary element, once they reach a tier. */
@@ -128,10 +144,15 @@ internal fun MutableGameState.updateBossEncounter() {
 
 internal fun MutableGameState.updateArchitect(enemy: Enemy, dx: Float, dy: Float, distance: Float, delta: Float) {
     val orbit = elapsed * 0.23f
-    val orbitRadius = if (enemy.phase >= ARCHITECT_FINAL_PHASE) 340f else 380f
+    val enraged = architectEnraged(enemy)
+    val orbitRadius = when {
+        enraged -> 300f
+        enemy.phase >= ARCHITECT_FINAL_PHASE -> 340f
+        else -> 380f
+    }
     val targetX = coreX + cos(orbit) * orbitRadius
     val targetY = coreY + sin(orbit) * orbitRadius
-    steerEnemy(enemy, (targetX - enemy.x) * 0.6f, (targetY - enemy.y) * 0.6f, 1.2f, delta)
+    steerEnemy(enemy, (targetX - enemy.x) * 0.6f, (targetY - enemy.y) * 0.6f, if (enraged) 1.5f else 1.2f, delta)
     val cadence = when (enemy.phase) {
         0 -> 1.3f
         1 -> 1.15f
@@ -141,7 +162,7 @@ internal fun MutableGameState.updateArchitect(enemy: Enemy, dx: Float, dy: Float
         // No attacks while shifting; the next volley comes a full cadence after the shift.
         enemy.actionTimer = cadence
     } else {
-        enemy.actionTimer -= delta * hostileAttackRate()
+        enemy.actionTimer -= delta * hostileAttackRate() * if (enraged) ARCHITECT_ENRAGE_ATTACK_RATE else 1f
         if (enemy.actionTimer <= 0f) {
             enemy.actionTimer = cadence
             if (projectiles.size < ARCHITECT_VOLLEY_PROJECTILE_BUDGET && canAttack(enemy)) fireArchitectVolley(enemy, atan2(dy, dx))
@@ -165,20 +186,27 @@ private fun MutableGameState.fireArchitectVolley(enemy: Enemy, aim: Float) {
             fireRadial(enemy.x, enemy.y, 10, ARCHITECT_RADIAL_SPEED, elapsed * ARCHITECT_SPIRAL_TURN_RATE,
                 damage, ARCHITECT_LATE_RADIAL_LIFE)
         }
-        else -> {
+        ARCHITECT_FINAL_PHASE -> {
             fireSpread(enemy.x, enemy.y, aim, 5, ARCHITECT_AIMED_SPACING, ARCHITECT_AIMED_SPEED, damage)
             fireRadial(enemy.x, enemy.y, 12, ARCHITECT_RADIAL_SPEED, elapsed, damage, ARCHITECT_LATE_RADIAL_LIFE)
+        }
+        else -> {
+            // The enraged Singularity phase: a wider aimed fan and a dense, turning ring.
+            fireSpread(enemy.x, enemy.y, aim, 6, ARCHITECT_AIMED_SPACING, ARCHITECT_AIMED_SPEED, damage)
+            fireRadial(enemy.x, enemy.y, 14, ARCHITECT_RADIAL_SPEED, elapsed * ARCHITECT_SPIRAL_TURN_RATE,
+                damage, ARCHITECT_LATE_RADIAL_LIFE)
         }
     }
 }
 
 /**
  * Executioner's "below the line" test. Against the Architect it reads the integrity within the current
- * third, so a whole phase never auto-crits.
+ * phase's share (a third, or a quarter when [finalPhase] adds the Singularity phase), so a whole phase
+ * never auto-crits.
  */
-internal fun belowExecutionLine(enemy: Enemy, fraction: Float): Boolean {
+internal fun belowExecutionLine(enemy: Enemy, fraction: Float, finalPhase: Int = ARCHITECT_FINAL_PHASE): Boolean {
     if (!enemy.isBoss) return enemy.hp < enemy.maxHp * fraction
-    val third = enemy.maxHp / 3f
-    val floor = third * (ARCHITECT_FINAL_PHASE - enemy.phase.coerceIn(0, ARCHITECT_FINAL_PHASE))
-    return enemy.hp - floor < third * fraction
+    val share = enemy.maxHp / (finalPhase + 1f)
+    val floor = share * (finalPhase - enemy.phase.coerceIn(0, finalPhase))
+    return enemy.hp - floor < share * fraction
 }

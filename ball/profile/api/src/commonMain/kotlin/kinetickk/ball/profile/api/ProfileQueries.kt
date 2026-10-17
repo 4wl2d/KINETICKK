@@ -78,6 +78,7 @@ data class HomeProgressProjection(
     val loadout: PlayerLoadout,
     val collection: PlayerCollection,
     val rebirthProgress: RebirthProgress,
+    /** True when a new Rebirth tier waits: the rank is uncleared and above the selected `level`. */
     val canAdvanceRebirth: Boolean,
     val characterAchievements: CharacterAchievementProgress = CharacterAchievementProgress(),
     val unlockedCoreShapes: ImmutableSet<CoreShape> = immutableSetOf(CoreShape.ORB),
@@ -107,6 +108,7 @@ data class RebirthProgressProjection(
     override val instanceId: ProfileInstanceId,
     override val revision: ProfileRevision,
     val snapshot: RebirthProfileSnapshot,
+    /** True when a new Rebirth tier waits: the rank is uncleared and above the selected `level`. */
     val canAdvance: Boolean,
 ) : ProfileProjection
 
@@ -126,6 +128,10 @@ data class HangarProjection(
     val selected: CoreShape,
     /** Rebirth rank the Reborn-rank unlocks compare against. */
     val rebirthRank: Int = 0,
+    /** Characters that cleared the final Rebirth tier: the Hangar crowns them Ascendant. */
+    val ascendedCharacters: ImmutableSet<CoreShape> = immutableSetOf(),
+    /** Every Rebirth tier is cleared: the Hangar header reads Ascendant. */
+    val ascendant: Boolean = false,
 ) : ProfileProjection
 
 data class PersistenceStatusProjection(

@@ -70,6 +70,16 @@ class HangarReducerTest {
     }
 
     @Test
+    fun charactersThatClearedTheFinalTierAreAscendant() {
+        assertTrue(hangarProjection().toRenderModel(definitions, 0L).shapes.none { it.ascendant })
+        val crowned = hangarProjection().copy(ascendedCharacters = kinetickk.foundation.collections.immutableSetOf(CoreShape.PRISM))
+            .toRenderModel(definitions, 0L)
+        assertEquals(listOf(CoreShape.PRISM), crowned.shapes.filter { it.ascendant }.map { it.shape })
+        assertFalse(crowned.ascendant)
+        assertTrue(hangarProjection().copy(ascendant = true).toRenderModel(definitions, 0L).ascendant)
+    }
+
+    @Test
     fun aPressInspectsThenSelectsAndOnlyUnlockedCharactersCanBeChosen() {
         val state = HangarState(hangarProjection().toRenderModel(definitions, 0L))
         assertEquals(CoreShape.ORB, state.inspected, "the Hangar opens on the selected character")

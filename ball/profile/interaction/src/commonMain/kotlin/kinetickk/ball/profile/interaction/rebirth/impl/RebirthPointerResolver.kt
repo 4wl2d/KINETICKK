@@ -81,8 +81,8 @@ internal class RebirthLayout(
         if (actionScrolls) action.translate(0f, -scroll.coerceIn(0f, scrollMax)) else action
 }
 
-internal const val REBIRTH_HOSTILE_ROWS = 7
-internal const val REBIRTH_COMPENSATION_ROWS = 4
+internal const val REBIRTH_HOSTILE_ROWS = 8
+internal const val REBIRTH_COMPENSATION_ROWS = 3
 
 /** Description lines a featured unlock row holds at most (longer text shrinks to fit them). */
 internal const val REBIRTH_UNLOCK_MAX_LINES = 3
@@ -289,15 +289,25 @@ internal fun rebirthLayout(
         heirloomLabel, heirloomRowRects, heroFixed)
 }
 
-/** Maps a press to the Rebirth action it hits: header Back or the Advance button. */
+/**
+ * Maps a press to the Rebirth action it hits: header Back, the select button or a ladder cell (which
+ * focuses its tier; [minimumTier] is the first cell's tier).
+ */
 internal fun resolveRebirthPress(
     layout: RebirthLayout,
     scroll: Float,
     x: Float,
     y: Float,
+    minimumTier: Int = 0,
 ): RebirthAction? {
     if (layout.back.contains(Offset(x, y))) return RebirthAction.Back
     if (y < layout.viewport.top) return null
-    // A pinned or hero-column Advance does not scroll; otherwise it moves with the content.
-    return if (layout.actionAt(scroll).contains(Offset(x, y))) RebirthAction.AdvanceRequested else null
+    // A pinned or hero-column select button does not scroll; otherwise it moves with the content.
+    if (layout.actionAt(scroll).contains(Offset(x, y))) return RebirthAction.SelectRequested
+    // The ladder scrolls with the content unless the hero column is fixed.
+    val shift = if (layout.heroFixed) 0f else scroll.coerceIn(0f, layout.scrollMax)
+    layout.cells.forEachIndexed { index, cell ->
+        if (cell.translate(0f, -shift).contains(Offset(x, y))) return RebirthAction.FocusTier(minimumTier + index)
+    }
+    return null
 }

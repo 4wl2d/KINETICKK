@@ -9,7 +9,6 @@ import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.CoreShapeDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ProfilePolicySnapshot
-import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicKey
@@ -208,7 +207,7 @@ internal fun testRebirthPolicy(
     maximumLevel = maximumLevel,
     profiles = (minimumLevel..maximumLevel).map { tier ->
         RebirthProfile(
-            tier, RebirthDirective.BASELINE, 5, 1f, 1f, 1f, 1f, 1f, 1f, 0f, 1f, 0f, 1f, 0,
+            tier, "Baseline", 5, 1f, 1f, 1f, 1f, 1f, 1f, 0f, 1f, 0f, 1f, 0,
             120, 0.09f, 24f,
         )
     }.toImmutableList(),

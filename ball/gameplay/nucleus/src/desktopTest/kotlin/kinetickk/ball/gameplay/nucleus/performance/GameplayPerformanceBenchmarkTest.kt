@@ -131,6 +131,13 @@ class GameplayPerformanceBenchmarkTest {
             { pickups += Pickup(PickupType.DATA, 5f, 5f, attracted = true) },
             { enemies.first().thrownUntil = 1f },
             { enemies.first().slamReadyAt = 1f },
+            // 0.4.0 Rebirth rework.
+            { rebirthRank = 9 },
+            { volatileBursts = kinetickk.foundation.collections.immutableListOf(
+                kinetickk.ball.gameplay.nucleus.render.VolatileBurstProjection(1f, 2f, 70f, 0f, 0.35f),
+            ) },
+            { enemies.first().armored = true },
+            { enemies.first().armorCracked = true },
         )
         changes.forEachIndexed { index, change ->
             val changed = source.copyForReduction().apply(change)

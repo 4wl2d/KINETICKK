@@ -26,7 +26,7 @@ import kinetickk.ball.profile.api.ProfileRejection
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileSettingsChanged
 import kinetickk.ball.profile.api.ProfileCoreShapeSelected
-import kinetickk.ball.profile.api.ProfileRebirthAdvanced
+import kinetickk.ball.profile.api.ProfileRebirthTierSelected
 import kinetickk.ball.profile.api.ProfileProgressApplied
 import kinetickk.ball.profile.api.ProfileSnapshotReadResult
 import kinetickk.ball.profile.api.RebirthProgress
@@ -204,7 +204,7 @@ class ProfileComponentCharacterizationTest {
         assertAcceptedAndWritten(
             component,
             resource,
-            ProfileTestOperation.AdvanceRebirth,
+            ProfileTestOperation.SelectRebirthTier(3),
         )
         val advanced = queriedProfile(component)
         assertEquals(afterRun.preferences, advanced.preferences)
@@ -286,13 +286,13 @@ class ProfileComponentCharacterizationTest {
                 profile = testDefaultProfile().copy(
                     rebirthProgress = RebirthProgress(level = 10, highestCleared = 10),
                 ),
-                operation = ProfileTestOperation.AdvanceRebirth,
-                reason = ProfileRejection.RebirthMaximumReached,
+                operation = ProfileTestOperation.SelectRebirthTier(11),
+                reason = ProfileRejection.RebirthTierLocked,
             ),
             RejectionCase(
                 profile = testDefaultProfile(),
-                operation = ProfileTestOperation.AdvanceRebirth,
-                reason = ProfileRejection.RebirthLevelNotCleared,
+                operation = ProfileTestOperation.SelectRebirthTier(1),
+                reason = ProfileRejection.RebirthTierLocked,
             ),
             RejectionCase(
                 profile = testDefaultProfile(),
@@ -385,14 +385,21 @@ class ProfileComponentCharacterizationTest {
         assertAcceptedAndWritten(
             component,
             resource,
-            ProfileTestOperation.AdvanceRebirth,
+            ProfileTestOperation.SelectRebirthTier(3),
         )
         assertEquals(3, component.query(ProfileQuery.GetRebirthProgress).snapshot.progress.level)
         assertRejectedAtomically(
             component,
             resource,
-            ProfileTestOperation.AdvanceRebirth,
-            ProfileRejection.RebirthMaximumReached,
+            ProfileTestOperation.SelectRebirthTier(4),
+            ProfileRejection.RebirthTierLocked,
+        )
+        // The custom policy's minimum is the floor of the selectable range.
+        assertRejectedAtomically(
+            component,
+            resource,
+            ProfileTestOperation.SelectRebirthTier(1),
+            ProfileRejection.RebirthTierLocked,
         )
         assertEquals(4, resource.writes.size)
     }
@@ -400,7 +407,7 @@ class ProfileComponentCharacterizationTest {
 
 private sealed interface ProfileTestOperation {
     data object ToggleMute : ProfileTestOperation
-    data object AdvanceRebirth : ProfileTestOperation
+    data class SelectRebirthTier(val tier: Int) : ProfileTestOperation
     data class SelectCoreShape(val shape: CoreShape) : ProfileTestOperation
     data class Local(val pulse: ProfilePulse.Business) : ProfileTestOperation
     data class ApplyGameplayProgress(val update: GameplayProgressUpdate) : ProfileTestOperation
@@ -431,8 +438,8 @@ private fun assertAcceptedAndWritten(
     val acceptedRevision = when (operation) {
         ProfileTestOperation.ToggleMute -> ProfileCommandTestCaller<ProfileSettingsChanged>()
             .also { it.call(component::toggleMute) }.changed.single().revision
-        ProfileTestOperation.AdvanceRebirth -> ProfileCommandTestCaller<ProfileRebirthAdvanced>()
-            .also { it.call(component::advanceRebirth) }.changed.single().revision
+        is ProfileTestOperation.SelectRebirthTier -> ProfileCommandTestCaller<ProfileRebirthTierSelected>()
+            .also { it.call { reply -> component.selectRebirthTier(operation.tier, reply) } }.changed.single().revision
         is ProfileTestOperation.SelectCoreShape -> ProfileCommandTestCaller<ProfileCoreShapeSelected>()
             .also { it.call { reply -> component.selectCoreShape(operation.shape, reply) } }.changed.single().revision
         is ProfileTestOperation.Local ->
@@ -469,8 +476,9 @@ private fun DefaultProfileComponent.reject(operation: ProfileTestOperation): Pro
         ProfileTestOperation.ToggleMute -> assertIs<kinetickk.ball.profile.api.ProfileRefusal.DecisionRejected>(
             ProfileCommandTestCaller<ProfileSettingsChanged>().also { it.call(this::toggleMute) }.refused.single(),
         ).reason
-        ProfileTestOperation.AdvanceRebirth -> assertIs<kinetickk.ball.profile.api.ProfileRefusal.DecisionRejected>(
-            ProfileCommandTestCaller<ProfileRebirthAdvanced>().also { it.call(this::advanceRebirth) }.refused.single(),
+        is ProfileTestOperation.SelectRebirthTier -> assertIs<kinetickk.ball.profile.api.ProfileRefusal.DecisionRejected>(
+            ProfileCommandTestCaller<ProfileRebirthTierSelected>()
+                .also { it.call { reply -> selectRebirthTier(operation.tier, reply) } }.refused.single(),
         ).reason
         is ProfileTestOperation.SelectCoreShape -> assertIs<kinetickk.ball.profile.api.ProfileRefusal.DecisionRejected>(
             ProfileCommandTestCaller<ProfileCoreShapeSelected>()

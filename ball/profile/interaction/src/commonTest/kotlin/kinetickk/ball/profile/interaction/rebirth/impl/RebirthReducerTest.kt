@@ -4,6 +4,9 @@
 package kinetickk.ball.profile.interaction.rebirth.impl
 
 import kinetickk.ball.content.api.BuildPolicy
+import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.defaultCoreShapeDefinitions
+import kinetickk.ball.content.api.defaultEnemyDefinitions
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.CollectionProjection
@@ -22,6 +25,9 @@ import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.interaction.TestItems
 import kinetickk.ball.profile.interaction.TestRelics
+import kinetickk.ball.profile.interaction.TestMatrixNodes
+import kinetickk.ball.profile.interaction.TestWeapons
+import kinetickk.ball.profile.interaction.rebirth.api.RebirthTierStatus
 import kinetickk.ball.profile.interaction.testRebirthPolicy
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthOutput
@@ -41,140 +47,134 @@ import kotlin.test.assertTrue
 
 class RebirthReducerTest {
     @Test
-    fun eligibleSnapshotMapsCurrentAndNextCycle() {
-        val rebirthPolicy = testRebirthPolicy(maximumLevel = 3)
-        val model = rebirthProjection(
-            progress = RebirthProgress(level = 2, highestCleared = 2),
-            canAdvance = true,
-        ).toRenderModel(rebirthPolicy, eligible = true)
+    fun projectionMapsTheSelectedAndFocusedTiersWithTheirStatus() {
+        val policy = testRebirthPolicy()
+        // Dropped back to tier 0 after clearing tier 4: the ladder opens on the earned tier 5.
+        val lowered = rebirthProjection(RebirthProgress(level = 0, highestCleared = 4)).toRenderModel(policy, matter = 1_924L)
+        assertEquals(0, lowered.current.tier)
+        assertEquals(5, lowered.focus.tier)
+        assertEquals(5, lowered.rank)
+        assertEquals(1_924L, lowered.matter)
+        assertEquals(policy.minimumLevel, lowered.minimumTier)
+        assertEquals(policy.maximumLevel, lowered.maximumTier)
+        assertEquals(RebirthTierStatus.CLEARED, lowered.status(4))
+        assertEquals(RebirthTierStatus.EARNED, lowered.status(5))
+        assertEquals(RebirthTierStatus.LOCKED, lowered.status(6))
+        assertTrue(lowered.needsConfirmation)
+        assertTrue(lowered.canSelect)
+        assertFalse(lowered.ascendant)
 
-        assertEquals(2, model.current.tier)
-        assertEquals(3, model.next.tier)
-        assertTrue(model.canAdvance)
-        assertFalse(model.isMaximumTier)
+        // A cleared tier in focus starts with one press; a locked one cannot start; the shell can close it.
+        val cleared = rebirthProjection(RebirthProgress(0, 4)).toRenderModel(policy, focusTier = 2)
+        assertEquals(2, cleared.focus.tier)
+        assertFalse(cleared.needsConfirmation)
+        assertTrue(cleared.canSelect)
+        assertFalse(rebirthProjection(RebirthProgress(0, 4)).toRenderModel(policy, focusTier = 7).canSelect)
+        assertFalse(rebirthProjection(RebirthProgress(0, 4)).toRenderModel(policy, eligible = false, focusTier = 2).canSelect)
+        assertEquals(10, rebirthProjection(RebirthProgress(0, 4)).toRenderModel(policy, focusTier = 99).focus.tier)
 
-        val withMatter = rebirthProjection(
-            progress = RebirthProgress(level = 2, highestCleared = 2),
-            canAdvance = true,
-        ).toRenderModel(rebirthPolicy, eligible = true, matter = 1_924L)
-        assertEquals(1_924L, withMatter.matter)
-        assertEquals(rebirthPolicy.minimumLevel, withMatter.minimumTier)
-        assertEquals(rebirthPolicy.maximumLevel, withMatter.maximumTier)
-        assertEquals(3, withMatter.targetTier)
-
-        val shellBlocked = rebirthProjection(
-            progress = RebirthProgress(level = 2, highestCleared = 2),
-            canAdvance = true,
-        ).toRenderModel(rebirthPolicy, eligible = false)
-        assertFalse(shellBlocked.canAdvance)
+        // Without a waiting earned tier the ladder opens on the selected tier.
+        assertEquals(3, rebirthProjection(RebirthProgress(3, 2)).toRenderModel(policy).focus.tier)
+        assertEquals(0, rebirthProjection(RebirthProgress()).toRenderModel(policy).focus.tier)
+        assertEquals(RebirthTierStatus.EARNED, rebirthProjection(RebirthProgress()).toRenderModel(policy).focusStatus)
+        val ascendant = rebirthProjection(RebirthProgress(10, 10)).toRenderModel(policy)
+        assertEquals(10, ascendant.focus.tier)
+        assertTrue(ascendant.ascendant)
+        assertEquals(RebirthTierStatus.CLEARED, ascendant.focusStatus)
+        assertFalse(ascendant.needsConfirmation)
     }
 
     @Test
-    fun buildContentMapsTheTargetTiersUnlocksRebornOddsAndHeirlooms() {
-        val rebirthPolicy = testRebirthPolicy()
-        val content = RebirthBuildContent(TestRelics, TestItems, BuildPolicy())
-        // Gated content in unlock order: by tier, Relics before items, then catalog order.
-        assertEquals(listOf(1, 2, 2, 3, 4, 5), content.unlocks.map { it.tier })
+    fun buildContentMapsEveryUnlockKindOntoItsTierAndTheFocusedOdds() {
+        val policy = testRebirthPolicy()
+        val gatedWeapons = TestWeapons.mapIndexed { index, w ->
+            if (index != 3) w else kinetickk.ball.content.api.WeaponDefinition(w.id, w.name, w.description, w.family, w.element, w.tags,
+                w.key, w.signature, w.scaling, w.cadence, w.permanentUnlockCost, 2, w.masteryForms, w.signatureText)
+        }
+        val content = RebirthBuildContent(TestRelics, TestItems, BuildPolicy(), gatedWeapons, defaultCoreShapeDefinitions(),
+            TestMatrixNodes, defaultEnemyDefinitions())
+        // Ladder order: by tier, then weapons, characters, Relics, items, Matrix nodes and enemies.
+        val tierTwo = content.unlocks.filter { it.tier == 2 }
+        assertEquals(gatedWeapons[3].id, assertIs<RebirthUnlock.Weapon>(tierTwo.first()).definition.id)
+        assertEquals(listOf("Weapon", "Item", "Item", "MatrixNode", "MatrixNode", "Enemy", "Enemy"),
+            tierTwo.map(::unlockKindName))
+        val characters = content.unlocks.filterIsInstance<RebirthUnlock.Character>()
+        assertEquals(listOf(CoreShape.SPIRAL, CoreShape.PENTAGON, CoreShape.CRESCENT, CoreShape.HEXAGON), characters.map { it.definition.id })
+        assertEquals(listOf(1, 3, 5, 7), characters.map { it.tier })
         assertEquals(listOf(RelicId.AGONY_SCEPTER, RelicId.HOLLOW_CROWN, RelicId.OUROBOROS_SEAL),
             content.unlocks.filterIsInstance<RebirthUnlock.Relic>().map { it.definition.id })
-        assertEquals(listOf(1, 3, 2), content.unlocks.filterIsInstance<RebirthUnlock.Item>().map { it.definition.id })
+        assertTrue(content.unlocks.filterIsInstance<RebirthUnlock.Enemy>().all { it.definition.minimumRebirth > 0 })
+        assertEquals(content.unlocks.map { it.tier }.sorted(), content.unlocks.map { it.tier })
 
-        fun model(level: Int, heirlooms: List<RelicId> = emptyList()) = rebirthProjection(
-            progress = RebirthProgress(level = level, highestCleared = level),
-            canAdvance = true,
-        ).toRenderModel(rebirthPolicy, build = content, heirloomIds = heirlooms)
+        fun model(level: Int, cleared: Int, focus: Int, heirlooms: List<RelicId> = emptyList()) =
+            rebirthProjection(RebirthProgress(level, cleared)).toRenderModel(policy, build = content, heirloomIds = heirlooms, focusTier = focus)
 
-        val first = model(0)
+        val first = model(0, 0, 1)
         val firstBuild = assertNotNull(first.build)
         assertEquals(0f, firstBuild.currentRebornChance)
         assertEquals(0.05f, firstBuild.nextRebornChance, 0.0001f)
-        assertEquals(listOf(RelicId.AGONY_SCEPTER),
-            first.targetUnlocks.map { assertIs<RebirthUnlock.Relic>(it).definition.id })
-        // Both tier 2 legendaries; no relic joins at tier 2.
-        assertEquals(listOf(1, 3), model(1).targetUnlocks.map { assertIs<RebirthUnlock.Item>(it).definition.id })
-        assertTrue(model(5).targetUnlocks.isEmpty())
-
-        // The odds cap at the policy's 40 %; the last tier shows no further unlocks.
-        val capped = assertNotNull(model(8).build)
-        assertEquals(0.4f, capped.currentRebornChance, 0.0001f)
-        assertEquals(0.4f, capped.nextRebornChance, 0.0001f)
-        val maximum = model(rebirthPolicy.maximumLevel)
-        assertTrue(maximum.isMaximumTier)
-        assertTrue(maximum.targetUnlocks.isEmpty())
-        assertEquals(0.4f, assertNotNull(maximum.build).nextRebornChance, 0.0001f)
+        assertEquals(listOf(CoreShape.SPIRAL), first.focusUnlocks.filterIsInstance<RebirthUnlock.Character>().map { it.definition.id })
+        assertEquals(listOf(RelicId.AGONY_SCEPTER), first.focusUnlocks.filterIsInstance<RebirthUnlock.Relic>().map { it.definition.id })
+        // The odds compare the selected tier with the focused one, whichever is higher.
+        val back = assertNotNull(model(6, 8, 2).build)
+        assertEquals(0.3f, back.currentRebornChance, 0.0001f)
+        assertEquals(0.1f, back.nextRebornChance, 0.0001f)
 
         // Heirlooms keep the stored slot order; repeats and Relics the catalog lacks are dropped.
         val stored = listOf(RelicId.FURNACE_COVENANT, RelicId.GLASS_COMET, RelicId.PERPETUAL_VECTOR, RelicId.FURNACE_COVENANT)
         assertEquals(listOf(RelicId.FURNACE_COVENANT, RelicId.PERPETUAL_VECTOR),
-            assertNotNull(model(3, stored).build).heirlooms.map { it.id })
-        assertTrue(assertNotNull(model(3).build).heirlooms.isEmpty())
+            assertNotNull(model(3, 3, 3, stored).build).heirlooms.map { it.id })
 
         // Without catalog content the screen keeps its build-free model.
-        assertNull(rebirthProjection(RebirthProgress(2, 2), canAdvance = true).toRenderModel(rebirthPolicy).build)
+        assertNull(rebirthProjection(RebirthProgress(2, 2)).toRenderModel(policy).build)
     }
 
     @Test
-    fun controlledConfirmationEmitsDistinctArmAndConfirmRequests() {
-        val rebirthPolicy = testRebirthPolicy()
-        val model = rebirthProjection(
-            progress = RebirthProgress(level = 0, highestCleared = 0),
-            canAdvance = true,
-        ).toRenderModel(rebirthPolicy)
-        val first = RebirthReducer.reduce(
-            RebirthState(model, confirmationArmed = false),
-            RebirthAction.AdvanceRequested,
-        )
-        assertFalse(first.state.confirmationArmed)
-        assertEquals(
-            RebirthOutput.ArmRequested,
-            assertIs<RebirthEffect.Emit>(first.effects[0]).output,
-        )
-        assertEquals(
-            ProfileAudioCue.UI_CLICK,
-            assertIs<RebirthEffect.PlayAudio>(first.effects[1]).cue,
-        )
+    fun theFocusMovesWithinTheLadderAndAnEarnedTierTakesTwoPresses() {
+        val policy = testRebirthPolicy()
+        val model = rebirthProjection(RebirthProgress(level = 0, highestCleared = 0)).toRenderModel(policy)
+        assertEquals(1, model.focus.tier)
+        val first = RebirthReducer.reduce(RebirthState(model, confirmationArmed = false), RebirthAction.SelectRequested)
+        assertEquals(RebirthOutput.ArmRequested(1), assertIs<RebirthEffect.Emit>(first.effects[0]).output)
+        assertEquals(ProfileAudioCue.UI_CLICK, assertIs<RebirthEffect.PlayAudio>(first.effects[1]).cue)
+        val second = RebirthReducer.reduce(RebirthState(model, confirmationArmed = true), RebirthAction.SelectRequested)
+        assertEquals(RebirthOutput.ConfirmRequested(1), assertIs<RebirthEffect.Emit>(second.effects.single()).output)
 
-        val second = RebirthReducer.reduce(
-            first.state.copy(confirmationArmed = true),
-            RebirthAction.AdvanceRequested,
-        )
-        assertEquals(
-            RebirthOutput.ConfirmRequested,
-            assertIs<RebirthEffect.Emit>(second.effects.single()).output,
-        )
+        // A cleared tier starts at once, armed or not.
+        val cleared = rebirthProjection(RebirthProgress(1, 0)).toRenderModel(policy, focusTier = 0)
+        assertEquals(RebirthOutput.ConfirmRequested(0),
+            assertIs<RebirthEffect.Emit>(RebirthReducer.reduce(RebirthState(cleared, false), RebirthAction.SelectRequested).effects.single()).output)
+
+        // Focus: a press, a step and the ladder's ends; an unchanged focus is silent.
+        val focused = RebirthReducer.reduce(RebirthState(model, false), RebirthAction.FocusTier(4))
+        assertEquals(RebirthEffect.Focus(4), focused.effects[0])
+        assertEquals(RebirthEffect.Focus(2), RebirthReducer.reduce(RebirthState(model, false), RebirthAction.StepFocus(1)).effects[0])
+        assertEquals(RebirthEffect.Focus(10), RebirthReducer.reduce(RebirthState(model, false), RebirthAction.FocusTier(42)).effects[0])
+        assertTrue(RebirthReducer.reduce(RebirthState(model, false), RebirthAction.FocusTier(1)).effects.isEmpty())
+        val atStart = rebirthProjection(RebirthProgress()).toRenderModel(policy)
+        assertTrue(RebirthReducer.reduce(RebirthState(atStart, false), RebirthAction.StepFocus(-1)).effects.isEmpty())
     }
 
     @Test
-    fun lockedAndMaximumCyclesCannotArm() {
-        val rebirthPolicy = testRebirthPolicy(maximumLevel = 3)
-        val locked = rebirthProjection(
-            progress = RebirthProgress(level = 1, highestCleared = 0),
-            canAdvance = false,
-        ).toRenderModel(rebirthPolicy)
-        val lockedReduction = RebirthReducer.reduce(
-            RebirthState(locked, confirmationArmed = false),
-            RebirthAction.AdvanceRequested,
-        )
-        assertFalse(lockedReduction.state.confirmationArmed)
-        assertTrue(lockedReduction.effects.isEmpty())
-
-        val maximum = rebirthProjection(
-            progress = RebirthProgress(
-                level = rebirthPolicy.maximumLevel,
-                highestCleared = rebirthPolicy.maximumLevel,
-            ),
-            canAdvance = false,
-        ).toRenderModel(rebirthPolicy)
-        assertTrue(maximum.isMaximumTier)
-        assertFalse(maximum.canAdvance)
+    fun lockedTiersAndAClosedShellCannotStart() {
+        val policy = testRebirthPolicy(maximumLevel = 3)
+        val locked = rebirthProjection(RebirthProgress(level = 1, highestCleared = 0)).toRenderModel(policy, focusTier = 3)
+        assertEquals(RebirthActionState.LOCKED, locked.actionState(confirmationArmed = true))
+        assertTrue(RebirthReducer.reduce(RebirthState(locked, false), RebirthAction.SelectRequested).effects.isEmpty())
+        val closed = rebirthProjection(RebirthProgress(1, 0)).toRenderModel(policy, eligible = false, focusTier = 1)
+        assertEquals(RebirthActionState.UNAVAILABLE, closed.actionState(confirmationArmed = false))
+        assertTrue(RebirthReducer.reduce(RebirthState(closed, false), RebirthAction.SelectRequested).effects.isEmpty())
+        val ready = rebirthProjection(RebirthProgress(1, 0)).toRenderModel(policy, focusTier = 1)
+        assertEquals(RebirthActionState.READY, ready.actionState(confirmationArmed = false))
+        assertEquals(RebirthActionState.ARMED, ready.actionState(confirmationArmed = true))
+        // The arm flag means nothing for a cleared tier.
+        val clearedTier = rebirthProjection(RebirthProgress(1, 0)).toRenderModel(policy, focusTier = 0)
+        assertEquals(RebirthActionState.READY, clearedTier.actionState(confirmationArmed = true))
     }
 
     @Test
     fun backLeavesControlledConfirmationUntouchedAndEmitsClickThenNavigation() {
-        val model = rebirthProjection(
-            progress = RebirthProgress(0, 0),
-            canAdvance = true,
-        ).toRenderModel(testRebirthPolicy())
+        val model = rebirthProjection(RebirthProgress(0, 0)).toRenderModel(testRebirthPolicy())
         val reduction = RebirthReducer.reduce(
             RebirthState(model, confirmationArmed = true),
             RebirthAction.Back,
@@ -194,6 +194,10 @@ class RebirthReducerTest {
             relics = TestRelics,
             items = TestItems,
             buildPolicy = BuildPolicy(),
+            weapons = TestWeapons,
+            coreShapes = defaultCoreShapeDefinitions(),
+            matrixNodes = TestMatrixNodes,
+            enemies = defaultEnemyDefinitions(),
         )
 
         feature.playAcceptedFeedback()
@@ -205,14 +209,22 @@ class RebirthReducerTest {
     }
 }
 
+private fun unlockKindName(unlock: RebirthUnlock): String = when (unlock) {
+    is RebirthUnlock.Weapon -> "Weapon"
+    is RebirthUnlock.Character -> "Character"
+    is RebirthUnlock.Relic -> "Relic"
+    is RebirthUnlock.Item -> "Item"
+    is RebirthUnlock.MatrixNode -> "MatrixNode"
+    is RebirthUnlock.Enemy -> "Enemy"
+}
+
 private fun rebirthProjection(
     progress: RebirthProgress,
-    canAdvance: Boolean,
 ): RebirthProgressProjection = RebirthProgressProjection(
     instanceId = LOCAL_PROFILE_INSTANCE_ID,
     revision = ProfileRevision.ZERO,
     snapshot = RebirthProfileSnapshot(progress),
-    canAdvance = canAdvance,
+    canAdvance = progress.highestCleared + 1 > progress.level,
 )
 
 private object UnusedProfilePort : ProfilePort {

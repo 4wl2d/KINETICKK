@@ -490,6 +490,15 @@ private fun canonicalRenderFingerprint(render: GameplayRenderModel): Long {
     signature = mix(signature, render.previousMorningstarY.toRawBits())
     signature = mix(signature, render.viewportDensity.toRawBits())
     signature = mix(signature, render.minimapRange.toRawBits())
+    signature = mix(signature, render.rebirthRank)
+    signature = mix(signature, render.volatileBursts.size)
+    render.volatileBursts.forEach { burst ->
+        signature = mix(signature, burst.x.toRawBits())
+        signature = mix(signature, burst.y.toRawBits())
+        signature = mix(signature, burst.radius.toRawBits())
+        signature = mix(signature, burst.armedAt.toRawBits())
+        signature = mix(signature, burst.detonatesAt.toRawBits())
+    }
     signature = mix(signature, render.obstacles.size)
     render.obstacles.forEach { obstacle ->
         signature = mixLong(signature, obstacle.id)
@@ -646,6 +655,7 @@ private fun appendRenderCollections(initial: Long, render: GameplayRenderModel):
         signature = mix(signature, enemy.facing.toRawBits())
         signature = mix(signature, enemy.linkedTo)
         signature = mix(signature, enemy.shielded.asInt())
+        signature = mix(signature, enemy.armored.asInt())
     }
     signature = mix(signature, render.projectiles.size)
     render.projectiles.forEach { projectile ->

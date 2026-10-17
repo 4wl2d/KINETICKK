@@ -273,6 +273,12 @@ class RedesignShotsOverlaysTest {
                 TerminalShot(rewardFixtureModel(phase = GamePhase.VICTORY, relics = relics4, language = l, width = w, height = h, textScale = textScale,
                     message = "ARCHITECT DISMANTLED", runMatter = 640L, totalMatter = 1_924L, kills = 1_412, elapsed = 846f, level = 22, weaponLevel = 10))
             },
+            // The final tier's clear: the gold crown and the Ascendant line.
+            Scene("report-victory-ascendant") { w, h, l ->
+                TerminalShot(rewardFixtureModel(phase = GamePhase.VICTORY, relics = relics4, language = l, width = w, height = h, textScale = textScale,
+                    message = "ARCHITECT DISMANTLED", runMatter = 640L, totalMatter = 1_924L, kills = 1_412, elapsed = 846f, level = 22, weaponLevel = 10,
+                    rebirthLevel = 10))
+            },
             Scene("report-defeat") { w, h, l ->
                 TerminalShot(rewardFixtureModel(phase = GamePhase.GAME_OVER, relics = relics4, language = l, width = w, height = h, textScale = textScale,
                     message = "SINGULARITY CONTACT", runMatter = 640L, totalMatter = 1_284L, kills = 901, elapsed = 554f, level = 16, weaponLevel = 8))

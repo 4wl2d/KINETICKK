@@ -17,6 +17,7 @@ import kinetickk.ball.content.api.WeaponMastery
 import kinetickk.foundation.random.CloneableXorWowRandom
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.PlayerPreferences
+import kinetickk.ball.profile.api.rank
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.model.*
@@ -71,6 +72,8 @@ internal class MutableGameState(
         const val MAX_WEAPON_NODES = 12
         const val MAX_WEAPON_ORBITALS = 8
         const val MAX_CHOICES = 4
+        /** Volatile Remains bursts waiting at once (Rebirth R4); more deaths in the window add none. */
+        const val MAX_VOLATILE_BURSTS = 48
         const val MAX_TRAIL_SAMPLES_PER_UPDATE = 32
     }
 
@@ -401,6 +404,15 @@ internal class MutableGameState(
         internal set
     var rebirthLevel: Int = reductionSource?.rebirthLevel ?: activeRebirthProfile.tier
         internal set
+    /**
+     * Rebirth rank (one above the highest clear) from the bootstrap profile, never below the run's tier.
+     * Unlock gates (items, Relics, Heirloom cards) read it; tier scaling and the roster read [rebirthLevel].
+     */
+    var rebirthRank: Int = reductionSource?.rebirthRank
+        ?: max(activeRebirthProfile.tier, bootstrapProgress?.rebirthProgress?.rank ?: activeRebirthProfile.tier)
+        internal set
+    /** Volatile Remains bursts waiting to detonate (Rebirth R4), at most [MAX_VOLATILE_BURSTS]. */
+    internal var volatileBursts: ImmutableList<VolatileBurstProjection> = reductionSource?.volatileBursts ?: immutableListOf()
     var screenWidth: Float = reductionSource?.screenWidth ?: 1280f
         internal set
     var screenHeight: Float = reductionSource?.screenHeight ?: 720f

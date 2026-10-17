@@ -490,7 +490,7 @@ class CodexItemRowsTest {
     private fun model(discovered: Set<Int>, items: ImmutableList<ItemDefinition> = mixed, runStacks: CodexRunStacks = CodexRunStacks()) =
         CodexRenderModel(discovered.toImmutableSet(), runStacks, items)
 
-    private fun progress(rebirth: Int = 0) = codexTestProgress(emptySet()).copy(rebirthProgress = RebirthProgress(level = rebirth))
+    private fun progress(rebirth: Int = 0) = codexTestProgress(emptySet()).copy(rebirthProgress = RebirthProgress(level = rebirth, highestCleared = rebirth - 1))
 
     private fun rows(
         sort: CodexItemSort,

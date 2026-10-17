@@ -25,10 +25,14 @@ data class ProfileCoreShapeSelected(val revision: ProfileRevision, val shape: Co
 
 /** Rebirth progression capability; eligibility and captured tier policy remain Profile decisions. */
 interface ProfileRebirth {
-    fun advanceRebirth(reply: InlineReply<ProfileRebirthAdvanced, ProfileRefusal>)
+    /**
+     * Selects Rebirth [tier] for the next run: any tier from the policy minimum up to the rank (one
+     * above the highest clear). Selecting the current tier again is accepted and confirms it.
+     */
+    fun selectRebirthTier(tier: Int, reply: InlineReply<ProfileRebirthTierSelected, ProfileRefusal>)
 }
 
-data class ProfileRebirthAdvanced(val revision: ProfileRevision, val progress: RebirthProgress)
+data class ProfileRebirthTierSelected(val revision: ProfileRevision, val progress: RebirthProgress)
 
 /** Applies a captured gameplay update under the Profile owner's progression policy. */
 interface ProfileProgress {

@@ -18,6 +18,7 @@ import kinetickk.ball.profile.api.ProfilePersistenceStatus
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileSnapshotReadResult
 import kinetickk.ball.profile.api.RebirthProgress
+import kinetickk.ball.profile.api.isWithinRebirthBounds
 import kinetickk.foundation.collections.immutableSetOf
 import kinetickk.foundation.collections.toImmutableSet
 
@@ -198,10 +199,10 @@ private fun isPolicyCompatibleAtConstruction(
         profile.collection.discoveredRelicIds.size > kinetickk.ball.content.api.ContentBounds.MAX_RELICS ||
         heirlooms.size > MAX_HEIRLOOM_RELICS || heirlooms.toSet().size != heirlooms.size
     ) return false
-    if (
-        profile.rebirthProgress.level !in policy.rebirth.minimumLevel..policy.rebirth.maximumLevel ||
-        profile.rebirthProgress.highestCleared !in -1..profile.rebirthProgress.level
-    ) return false
+    if (!profile.rebirthProgress.isWithinRebirthBounds(policy.rebirth.minimumLevel, policy.rebirth.maximumLevel)) {
+        return false
+    }
+    if (!achievements.victoriousCharacters.containsAll(profile.rebirthProgress.ascendedCharacters)) return false
     return true
 }
 

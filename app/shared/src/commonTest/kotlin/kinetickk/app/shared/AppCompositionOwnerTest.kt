@@ -184,8 +184,9 @@ private class ReadyProfileComponent(
         reply: InlineReply<kinetickk.ball.profile.api.ProfileProgressApplied, ProfileRefusal>,
     ): Unit = error("unused")
 
-    override fun advanceRebirth(
-        reply: InlineReply<kinetickk.ball.profile.api.ProfileRebirthAdvanced, ProfileRefusal>,
+    override fun selectRebirthTier(
+        tier: Int,
+        reply: InlineReply<kinetickk.ball.profile.api.ProfileRebirthTierSelected, ProfileRefusal>,
     ): Unit = error("unused")
 
     override fun toggleMute(reply: InlineReply<ProfileSettingsChanged, ProfileRefusal>): Unit = error("unused")

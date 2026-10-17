@@ -37,6 +37,10 @@ data class HomeUiModel(
     val matrixMaxRanks: Int = 0,
     val matrixOwnedNodes: Int = 0,
     val matrixNodeCount: Int = 0,
+    /** Rebirth rank (one above the highest clear): the badge on the Rebirth chip. */
+    val rebirthRank: Int = rebirthLevel,
+    /** Every Rebirth tier cleared: the badge reads Ascendant under the gold crown. */
+    val ascendant: Boolean = false,
 ) {
     fun coreShape(shape: CoreShape): CoreShapeDefinition =
         coreShapes.first { definition -> definition.id == shape }
