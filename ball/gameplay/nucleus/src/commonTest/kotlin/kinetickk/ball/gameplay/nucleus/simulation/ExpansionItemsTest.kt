@@ -14,8 +14,12 @@ import kinetickk.ball.gameplay.nucleus.model.StatusCell
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
+import kotlin.math.abs
+import kotlin.math.floor
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -57,6 +61,19 @@ class ExpansionItemsTest {
         repeat(8) { impacts.dealHit(rammed, 10f, HitSource.IMPACT, canCrit = false) }
         assertEquals(0, rammed.stacksOf(StatusElement.THERMAL))
         assertEquals(0, impacts.arsenalCounter)
+    }
+
+    @Test
+    fun arsenalThreeWithoutAnElementAddsNothingToTheFourthHit() {
+        val state = arsenalThree()
+        assertNull(state.build.dominant)
+        val target = state.dummy()
+        repeat(8) { shot ->
+            val before = target.hp
+            val result = state.dealHit(target, 10f, HitSource.WEAPON, canCrit = false)
+            assertEquals(result.amount, before - target.hp, 0.001f, "Weapon hit ${shot + 1} deals only itself")
+        }
+        assertTrue(StatusElement.entries.all { target.stacksOf(it) == 0 })
     }
 
     @Test
@@ -191,5 +208,94 @@ class ExpansionItemsTest {
         assertTrue(burning.hp < before, "The slam detonates the fire and the rot")
         assertEquals(0, burning.stacksOf(StatusElement.THERMAL))
         assertEquals(0, burning.stacksOf(StatusElement.ENTROPY))
+    }
+
+    @Test
+    fun hyperfeedRailsVentsFromFullHeatAndShortensTheOverheatLockout() {
+        fun overheatingDash(rails: Boolean): MutableGameState = buildTestState().apply {
+            if (rails) own("Hyperfeed Rails")
+            heat = 80f
+            requestDash()
+            updateHeat(0f)
+        }
+        fun secondsLocked(state: MutableGameState): Float {
+            var seconds = 0f
+            while (state.overheated) {
+                state.updateHeat(1f / 60f)
+                seconds += 1f / 60f
+                assertTrue(seconds < 60f, "The lockout ends")
+            }
+            return seconds
+        }
+        val plain = overheatingDash(rails = false)
+        assertTrue(plain.overheated)
+        assertEquals(MutableGameState.MAX_HEAT, plain.heat, 0.001f)
+
+        val rails = overheatingDash(rails = true)
+        val magnitude = rails.build.magnitude(rails.itemNamed("Hyperfeed Rails").id)
+        assertTrue(rails.overheated, "The Dash still overheats")
+        assertEquals(MutableGameState.MAX_HEAT - 40f * magnitude, rails.heat, 0.001f, "The vent counts down from full heat")
+        assertTrue(secondsLocked(rails) < secondsLocked(plain), "Venting shortens the lockout")
+    }
+
+    @Test
+    fun onlyOneCardAddingItemIsOfferedPerRun() {
+        val pair = listOf("Gambler's Ledger", "Cornucopia Core")
+        for (held in pair) {
+            val other = pair.single { it != held }
+            val fresh = buildTestState(rebirth = 10).apply { lifetimeMatter = 4_000L }
+            assertTrue(fresh.itemNamed(other) in fresh.offerableItems(), "$other is offered to a build without $held")
+
+            val state = buildTestState(rebirth = 10).apply {
+                lifetimeMatter = 4_000L
+                own(held)
+            }
+            assertFalse(state.itemNamed(other) in state.offerableItems(), "$other would add no card beside $held")
+            assertFalse(state.hasUsefulItemEffect(state.itemNamed(other)))
+            state.openItemChoice()
+            assertEquals(4, state.choices.size, "$held adds its card")
+        }
+    }
+
+    @Test
+    fun dataFromALevelUpClauseLevelsAgainOnlyAgainstTheSettledRequirement() {
+        // Chunks that end one level short of a stale-requirement cascade, and that cross several levels.
+        for (chunk in listOf(25f, 140f)) {
+            val state = buildTestState(rebirth = 7).apply { own("Compound Interest", stacks = 2) }
+            val tempo = state.content.tempo
+            val item = state.itemNamed("Compound Interest")
+            val perLevel = 8f * state.build.magnitude(item.id) * state.build.bonus(item.id)
+            state.level = 2
+            state.nextLevelData = tempo.dataRequiredForLevel(2)
+            state.data = state.nextLevelData - 1
+            state.dataFraction = 0f
+
+            // The same grants applied one after another, each level fully settled before its dividend lands.
+            var level = state.level
+            var data = state.data
+            var fraction = 0f
+            var weapon = state.weaponLevel
+            val weaponCap = tempo.maximumAutomaticWeaponLevel + state.matrix.startingWeaponLevels
+            fun gain(amount: Float) {
+                fraction += amount
+                val whole = floor(fraction).toInt()
+                fraction -= whole
+                data += whole
+            }
+            gain(chunk)
+            while (data >= tempo.dataRequiredForLevel(level)) {
+                data -= tempo.dataRequiredForLevel(level)
+                level++
+                if (tempo.grantsWeaponAmplification(level) && weapon < weaponCap) weapon++
+                gain(perLevel)
+            }
+
+            state.gainData(chunk)
+            assertEquals(level, state.level, "Level after $chunk Data")
+            assertEquals(data, state.data, "Data after $chunk Data")
+            assertEquals(tempo.dataRequiredForLevel(level), state.nextLevelData)
+            assertEquals(weapon, state.weaponLevel, "Weapon level after $chunk Data")
+            assertTrue(abs(fraction - state.dataFraction) < 0.001f)
+        }
     }
 }

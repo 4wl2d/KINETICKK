@@ -31,7 +31,7 @@ class ContentBalanceCharacterizationTest {
         assertEquals(173, items.size)
         assertEquals((0 until items.size).toList(), items.map(ItemDefinition::id))
         assertEquals(
-            "af201e9a1f42f315",
+            "775de09339fac180",
             goldenFingerprint {
                 add("item-effects")
                 ItemEffect.entries.forEach { effect ->

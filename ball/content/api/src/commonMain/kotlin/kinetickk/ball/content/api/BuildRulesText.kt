@@ -213,7 +213,7 @@ enum class BuildRulesText(override val english: String, override val russian: St
     RuleRerollsOne("+{0} reroll when taken", "+{0} переброс при получении"),
     RuleRerollsFew("+{0} rerolls when taken", "+{0} переброса при получении"),
     RuleRerollsMany("+{0} rerolls when taken", "+{0} перебросов при получении"),
-    RuleOfferCards("Offers show one more card", "В предложениях на одну карту больше"),
+    RuleOfferCards("Offers show one more card (one card-adding item per run)", "В предложениях на одну карту больше (один такой предмет за забег)"),
     RuleGuaranteedCrit(
         "After {0} non-critical hits in a row, the next hit is critical",
         "После {0} некритических ударов подряд следующий удар будет критическим",

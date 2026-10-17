@@ -457,13 +457,7 @@ internal fun MutableGameState.resolvePickupCollection() {
 }
 
 internal fun MutableGameState.gainData(rawAmount: Float) {
-    val amount = rawAmount * dataGainLiability()
-    dataFraction += amount
-    val whole = floor(dataFraction).toInt()
-    if (whole <= 0) return
-    dataFraction -= whole
-    data += whole
-    dataCollected += whole.toLong()
+    if (creditData(rawAmount) <= 0) return
     while (data >= nextLevelData) {
         data -= nextLevelData
         level++
@@ -479,4 +473,19 @@ internal fun MutableGameState.gainData(rawAmount: Float) {
         }
     }
     openNextPendingChoice()
+}
+
+/**
+ * Adds Data without levelling and returns the whole points added; the fraction carries over. A LEVEL_UP
+ * clause's Data arrives this way, so the level loop in [gainData] that fired it takes the Data up against the
+ * settled requirement and never re-enters itself.
+ */
+internal fun MutableGameState.creditData(rawAmount: Float): Int {
+    dataFraction += rawAmount * dataGainLiability()
+    val whole = floor(dataFraction).toInt()
+    if (whole <= 0) return 0
+    dataFraction -= whole
+    data += whole
+    dataCollected += whole.toLong()
+    return whole
 }

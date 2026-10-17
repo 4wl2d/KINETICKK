@@ -286,15 +286,12 @@ internal fun MutableGameState.performDash() {
 }
 
 /**
- * Heat reaching full from any source: OVERHEAT clauses fire once per climb (re-armed at 70), then the Dash
- * locks unless Furnace Covenant holds. Call after every heat increase with the heat it started from.
+ * Heat reaching full from any source: the Dash locks at full heat unless Furnace Covenant holds, then OVERHEAT
+ * clauses fire once per climb (re-armed at 70). Locking first lets a clause that vents heat count down from full
+ * and shorten the lockout. Call after every heat increase with the heat it started from.
  */
 internal fun MutableGameState.applyOverheatEdge(before: Float) {
     if (before >= MutableGameState.MAX_HEAT || heat < MutableGameState.MAX_HEAT) return
-    if (overheatArmed) {
-        overheatArmed = false
-        fireClauses(EffectTrigger.OVERHEAT)
-    }
     if (!build.upside(RelicId.FURNACE_COVENANT) && !overheated) {
         heat = MutableGameState.MAX_HEAT
         overheated = true
@@ -302,6 +299,10 @@ internal fun MutableGameState.applyOverheatEdge(before: Float) {
         message = "OVERHEAT"
         messageTime = 1.4f
         emitSound(GameplayAudioCue.OVERHEAT)
+    }
+    if (overheatArmed) {
+        overheatArmed = false
+        fireClauses(EffectTrigger.OVERHEAT)
     }
 }
 

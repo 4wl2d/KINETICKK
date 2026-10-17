@@ -412,5 +412,5 @@ internal val ItemPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Usurer's Contract" to "Договор ростовщика",
     "Borrow against your hull; the interest is paid in Data." to "Займите под залог корпуса, а проценты платятся данными.",
     "Feeding Frenzy" to "Кормовое безумие",
-    "Kills feed you. Elites do not." to "Убийства кормят вас. Элитные враги — нет.",
+    "Kills feed you. Elites are harder to bite." to "Убийства кормят вас. Элитных врагов кусать труднее.",
 )

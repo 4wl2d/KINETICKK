@@ -160,7 +160,10 @@ private fun MutableGameState.runClause(
             is EffectAction.Buff -> addBuff(itemId, action.stat, action.amount * magnitude * bonus, action.seconds, action.maxStacks)
             is EffectAction.ExtendCombo -> if (combo > 0) comboTime = min(effectiveComboWindow() * 2f, comboTime + action.seconds * magnitude)
             is EffectAction.RefreshWeapon -> refreshWeapon(action.seconds * magnitude, itemId)
-            is EffectAction.GainData -> gainData(action.amount * magnitude * bonus)
+            // A level-up's dividend joins the level loop that fired it rather than starting a second one inside it.
+            is EffectAction.GainData ->
+                if (clause.trigger == EffectTrigger.LEVEL_UP) creditData(action.amount * magnitude * bonus)
+                else gainData(action.amount * magnitude * bonus)
             is EffectAction.Well -> {
                 // Field ticks apply the relic surge live, so a FLAT well is measured without it.
                 val measured = if (action.basis == DamageBasis.FLAT) runScale() else basisAmount(action.basis, hit, target)
@@ -296,10 +299,7 @@ internal fun MutableGameState.onDirectHit(enemy: Enemy, result: DamageResult, so
             if (tagTier(BuildTag.ARSENAL) >= 3) {
                 // A deterministic counter, not a roll: no draw from the crit and proc stream.
                 arsenalCounter = (arsenalCounter + 1) % ARSENAL_INFUSION_EVERY
-                if (arsenalCounter == 0) {
-                    val infusion = arsenalInfusion()
-                    if (infusion != null) applyStatus(enemy, infusion, 1, 0) else dealProcDamage(enemy, basis * 0.2f, rescale = false)
-                }
+                if (arsenalCounter == 0) arsenalInfusion()?.let { infusion -> applyStatus(enemy, infusion, 1, 0) }
             }
             if (build.upside(kinetickk.ball.content.api.RelicId.ECHO_CHAMBER) && echoHits.size < MutableGameState.MAX_ECHO_HITS) {
                 val share = content.relic(kinetickk.ball.content.api.RelicId.ECHO_CHAMBER)

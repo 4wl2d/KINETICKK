@@ -74,7 +74,7 @@ private fun MutableGameState.ownedSuppressedItems(): ImmutableList<Int> =
     content.items.filter { itemStacks[it.id] > 0 && itemSuppressedShare(it) >= 1f }.map { it.id }.toImmutableList()
 
 internal fun MutableGameState.hasUsefulItemEffect(item: ItemDefinition): Boolean =
-    itemStacks[item.id] < item.maxStacks && itemSuppressedShare(item) < 1f
+    itemStacks[item.id] < item.maxStacks && itemSuppressedShare(item) < 1f && !offerCardsAlreadyAdded(item)
 
 /** The presentation projection of the compiled build and the relic gauges. */
 internal fun MutableGameState.buildProjection(): BuildProjection = BuildProjection(

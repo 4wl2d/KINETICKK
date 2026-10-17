@@ -26,6 +26,7 @@ import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
+import kinetickk.ball.content.api.breakThresholdCut
 import kinetickk.ball.content.api.isLiability
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
@@ -255,13 +256,16 @@ class ContentCatalogTest {
     @Test
     fun thresholdCutsStayOffTheOriginalElementsAndAreRareForSonicAndVoid() {
         val expansion = gameplay.items.drop(EXPANSION_START)
-        fun cuts(items: List<ItemDefinition>, element: StatusElement) =
-            items.sumOf { item -> item.rules.filterIsInstance<ItemRule.BreakThreshold>().filter { it.element == element }.sumOf { it.reduction } }
+        // Stacks cut at full copies, as the build applies them: a second copy cuts one more.
+        fun cuts(items: List<ItemDefinition>, element: StatusElement) = items.sumOf { item ->
+            item.rules.filterIsInstance<ItemRule.BreakThreshold>().filter { it.element == element }
+                .sumOf { breakThresholdCut(it.reduction, item.maxStacks) }
+        }
         StatusElement.entries.filter { it != StatusElement.SONIC && it != StatusElement.VOID }.forEach { element ->
             assertEquals(0, cuts(expansion, element), "The expansion adds no $element threshold cut")
         }
-        assertTrue(cuts(gameplay.items, StatusElement.SONIC) <= 2)
-        assertTrue(cuts(gameplay.items, StatusElement.VOID) <= 2)
+        assertTrue(cuts(gameplay.items, StatusElement.SONIC) <= 2, "Sonic cuts at most 2 stacks catalog-wide")
+        assertTrue(cuts(gameplay.items, StatusElement.VOID) <= 2, "Void cuts at most 2 stacks catalog-wide")
     }
 
     @Test

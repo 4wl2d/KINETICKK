@@ -619,7 +619,7 @@ private val Drafts: List<ItemDraft> = listOf(
     ItemDraft("Usurer's Contract", "Borrow against your hull; the interest is paid in Data.", EPIC, listOf(FORTUNE),
         stats = listOf(stat(ItemEffect.DATA_GAIN, 0.35f), stat(ItemEffect.MATTER_GAIN, 0.25f), stat(ItemEffect.MAX_INTEGRITY, -20f)),
         rebirth = 9, risk = true),
-    ItemDraft("Feeding Frenzy", "Kills feed you. Elites do not.", EPIC, listOf(CHAIN),
+    ItemDraft("Feeding Frenzy", "Kills feed you. Elites are harder to bite.", EPIC, listOf(CHAIN),
         clauses = listOf(on(EffectTrigger.KILL, EffectAction.Heal(3f), EffectAction.Buff(BuffStat.DAMAGE, 0.15f, 2.5f, maxStacks = 2),
             cooldown = 0.5f)),
         rules = listOf(ItemRule.DamageVersus(EffectCondition.TargetElite, -0.25f)), rebirth = 9, risk = true),

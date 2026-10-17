@@ -215,9 +215,14 @@ named element now matches every reaction involving it instead of only the
 reaction's first element. ARSENAL III adds one stack of the weapon's element
 (the dominant element while weapons carry none) on every fourth weapon hit,
 counted rather than rolled, and Breaks deal 25 % more damage; it no longer
-repeats the dominant infusion on every third hit. A desktop test flies every
-item through scripted encounters and requires a 5 % change in its favor at one
-stack; the items it caught were retuned (Rime Rounds, Cold Snap, Null Rounds,
+repeats the dominant infusion on every third hit, and without an element it
+adds nothing. Only one card-adding item (Gambler's Ledger, Cornucopia Core) is
+offered per run. Data from a level-up clause joins the level loop that fired
+it, and overheat locks the Dash at full heat before its clauses vent. A
+desktop test flies every item through scripted encounters and requires a 5 %
+change in its favor at one stack (a fallen Core keeps no integrity and still
+meets the scripted hits it missed; a liability alone scores nothing); the
+items it caught were retuned (Rime Rounds, Cold Snap, Null Rounds,
 Graviton Seed, Permafrost, Flashpoint, Killstreak Engine, Deadeye Reticle,
 Weakpoint Scanner, Detonator Spur, Quiet Engine, Hollow Point and Resonance
 Fork). Expansion Epics and legendaries borrow a family scene for their card.
