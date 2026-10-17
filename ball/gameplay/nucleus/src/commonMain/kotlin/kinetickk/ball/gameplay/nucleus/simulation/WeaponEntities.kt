@@ -143,7 +143,7 @@ private fun MutableGameState.advanceSentry(sentry: WeaponEntity, delta: Float) {
     sentry.timer = cooldown(SENTRY_FIRE_INTERVAL)
     val angle = atan2(target.y - sentry.y, target.x - sentry.x)
     sentry.angle = angle
-    firePlayerProjectile(sentry.x, sentry.y, angle, SENTRY_SHOT_SPEED, sentry.damage, if (hasMasteryForm(2)) 1 else 0, 4f, 1,
+    firePlayerProjectile(sentry.x, sentry.y, angle, SENTRY_SHOT_SPEED, sentry.damage, SENTRY_PIERCE + if (hasMasteryForm(2)) 1 else 0, 4f, 1,
         sentry.procKey, life = SENTRY_RANGE / SENTRY_SHOT_SPEED + 0.2f)
 }
 
@@ -171,7 +171,7 @@ private fun MutableGameState.collapseLens(lens: WeaponEntity) {
         val enemy = enemies[index]
         if (enemy.alive && distanceSquared(lens.x, lens.y, enemy.x, enemy.y) <= square(radius + enemy.radius)) {
             val landed = dealWeaponDamage(enemy, LENS_COLLAPSE_DAMAGE * lens.damage, canCrit = true, procKey = lens.procKey).amount > 0f
-            if (landed) applyWeaponStatus(enemy, StatusElement.GRAVITIC, 1)
+            if (landed) weaponElementTick(enemy, StatusElement.GRAVITIC, LENS_MASS_INTERVAL)
         }
     }
     addWeaponEntity(WeaponEntity(WeaponEntityKind.WELL, lens.x, lens.y, radius, LENS_WELL_SECONDS, LENS_WELL_SECONDS,
@@ -362,7 +362,6 @@ private fun MutableGameState.wellTick(well: WeaponEntity, delta: Float) {
         enemy.vx += dx / distance * pull * knockback
         enemy.vy += dy / distance * pull * knockback
         val landed = dealWeaponDamage(enemy, well.damage * delta, procKey = well.procKey).amount > 0f
-        if (landed && enemy.alive && enemy.hitQualificationCooldown <= 0f) weaponElementTick(enemy, StatusElement.GRAVITIC, LENS_MASS_INTERVAL)
     }
 }
 
@@ -374,8 +373,9 @@ private fun MutableGameState.shardHits(shard: WeaponEntity) {
         dealWeaponDamage(enemy, shard.damage, canCrit = true, procKey = shard.procKey)
         burst(enemy.x, enemy.y, 4, 0)
         if (shard.phase > 0) {
-            // Second form: the shard pierces on to the next nearest enemy.
+            // Second form: the shard pierces on to the next nearest enemy, at half strength.
             shard.phase--
+            shard.damage *= 0.5f
             val next = nearestOtherEnemy(enemy.x, enemy.y, enemy.id, AEGIS_RANGE)
             shard.targetId = next?.id ?: -1
             shard.life = max(shard.life, AEGIS_SHARD_LIFE * 0.6f)
@@ -391,7 +391,11 @@ private fun MutableGameState.missileHits(missile: WeaponEntity) {
         val enemy = enemies[index]
         if (!enemy.alive || isShifting(enemy) || !sweptContact(missile, enemy)) continue
         val landed = dealWeaponDamage(enemy, missile.damage, canCrit = true, procKey = missile.procKey).amount > 0f
-        if (landed) applyWeaponStatus(enemy, StatusElement.ENTROPY, 1)
+        if (landed) {
+            val runtime = weaponRuntime
+            runtime.elementHits = (runtime.elementHits + 1) % HUNTER_DECAY_EVERY
+            if (runtime.elementHits == 0) applyWeaponStatus(enemy, StatusElement.ENTROPY, 1)
+        }
         missileBurst(missile, enemy)
         // Third form: a missile that kills splits into two smaller ones.
         if (!enemy.alive && missile.phase == 0 && hasMasteryForm(3)) {
@@ -406,7 +410,7 @@ private fun MutableGameState.missileHits(missile: WeaponEntity) {
 
 private fun MutableGameState.missileBurst(missile: WeaponEntity, direct: Enemy?) {
     val radius = HUNTER_BURST_RADIUS
-    val share = HUNTER_BURST_SHARE * if (hasMasteryForm(2)) 1.4f else 1f
+    val share = HUNTER_BURST_SHARE * if (hasMasteryForm(2)) HUNTER_BURST_FORM else 1f
     for (index in enemies.indices) {
         val enemy = enemies[index]
         if (enemy === direct || !enemy.alive || distanceSquared(missile.x, missile.y, enemy.x, enemy.y) > square(radius + enemy.radius)) continue
@@ -424,7 +428,8 @@ private fun MutableGameState.tetherTick(tether: WeaponEntity, delta: Float) {
     val runtime = weaponRuntime
     val agonyRank = agonyPower()
     val primary = tether.phase == 0
-    val ramp = if (primary) runtime.tetherRamp else runtime.secondTetherRamp
+    // The second tether rides the primary's ramp.
+    val ramp = runtime.tetherRamp
     val share = if (primary) 1f else TETHER_SECOND_SHARE
     val damage = TETHER_DPS * delta * effectiveWeaponPower() * ramp * share * (1f + 0.1f * agonyRank)
     val landed = dealWeaponDamage(target, damage, cadence = WeaponHitCadence.CONTINUOUS, procKey = tether.procKey).amount > 0f
@@ -493,17 +498,18 @@ private fun MutableGameState.beamTick(beam: WeaponEntity, delta: Float) {
 internal const val GYRE_CATCH_RADIUS: Float = 30f
 internal const val GYRE_SPIN: Float = 18f
 internal const val SENTRY_SHOT_SPEED: Float = 900f
+internal const val SENTRY_PIERCE: Int = 1
 internal const val LENS_THROW: Float = 420f
-internal const val LENS_MASS_INTERVAL: Float = 0.4f
+internal const val LENS_MASS_INTERVAL: Float = 2.5f
 internal const val HOLLOW_PULL: Float = 320f
 internal const val AEGIS_TURN_RATE: Float = 9f
 internal const val HUNTER_SEEK_RANGE: Float = 900f
 internal const val HUNTER_ACCELERATION: Float = 900f
-internal const val TETHER_CHARGE_INTERVAL: Float = 0.5f
+internal const val TETHER_CHARGE_INTERVAL: Float = 0.8f
 internal const val TETHER_OVERLOAD_LINKS: Int = 3
 internal const val TETHER_OVERLOAD_STACKS: Float = 3f
 internal const val SOLAR_REACH: Float = 10f
-internal const val SOLAR_SCORCH_INTERVAL: Float = 0.6f
+internal const val SOLAR_SCORCH_INTERVAL: Float = 1.5f
 internal const val RIFT_SPENT: Int = 4
 
 // ---------------------------------------------------------------------------------------------
@@ -526,9 +532,10 @@ internal fun MutableGameState.weaponShotHit(projectile: Projectile, sourceWeapon
             // Shard signature: a lance on a mark strikes a double Puncture and keeps its pierce.
             if (signatureActive() && tryPuncture(enemy, 2f)) projectile.pierce++
         }
+        // Third form: a point-blank pellet tears through without spending its pierce.
         WeaponId.SCATTER_BLOOM -> if (equipped && hasMasteryForm(3) &&
             distanceSquared(coreX, coreY, enemy.x, enemy.y) <= square(SCATTER_POINT_BLANK + enemy.radius)
-        ) damage *= 2f
+        ) projectile.pierce++
         else -> Unit
     }
     if (!enemy.alive) return
@@ -561,7 +568,7 @@ internal fun MutableGameState.quasarShotEnded(projectile: Projectile) {
     for (index in enemies.indices) {
         val enemy = enemies[index]
         if (!enemy.alive || distanceSquared(projectile.x, projectile.y, enemy.x, enemy.y) > square(QUASAR_BURST_RADIUS + enemy.radius)) continue
-        val landed = dealWeaponDamage(enemy, projectile.damage * 0.5f, procKey = WeaponRuntime.PROC_NEVER).amount > 0f
+        val landed = dealWeaponDamage(enemy, projectile.damage * QUASAR_BURST_SHARE, procKey = WeaponRuntime.PROC_NEVER).amount > 0f
         if (landed) applyWeaponStatus(enemy, StatusElement.SONIC, 1)
     }
     shockwave(projectile.x, projectile.y, 0.3f, QUASAR_BURST_RADIUS, 0)
@@ -606,5 +613,5 @@ internal fun MutableGameState.prismRelayBounced(projectile: Projectile) {
 internal const val ION_SWARM_CHARGE_EVERY: Int = 2
 internal const val QUASAR_KNOCKBACK: Float = 220f
 internal const val PRISM_BURST_RADIUS: Float = 70f
-internal const val PRISM_BURST_SHARE: Float = 0.4f
+internal const val PRISM_BURST_SHARE: Float = 0.25f
 internal const val PRISM_LATTICE_SHARE: Float = 0.4f

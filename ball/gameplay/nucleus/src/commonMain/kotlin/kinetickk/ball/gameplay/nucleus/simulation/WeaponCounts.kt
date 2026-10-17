@@ -8,7 +8,8 @@ import kinetickk.ball.content.api.WeaponMastery
 /** The same bounded counts drive spawning and reward previews. */
 internal fun MutableGameState.weaponOrbitalCount(): Int {
     val rank = agonyPower()
-    return minOf(8, 2 + (weaponLevel - 1) / 3 + if (rank > 0) 1 + rank / 2 else 0)
+    // Orbitals grow through the first mastery form and Agony Scepter, not every level (the level is in the power).
+    return minOf(8, 2 + if (rank > 0) 1 + rank / 2 else 0)
 }
 
 /** Ion Swarm orbitals: the shared count, plus one at its first form. */
@@ -36,6 +37,6 @@ internal fun MutableGameState.prismRelayCount(): Int =
 internal fun MutableGameState.prismRelayBounces(): Int = when (currentWeaponMastery) {
     WeaponMastery.CALIBRATED -> 2
     WeaponMastery.AMPLIFIED -> 3
-    WeaponMastery.RESONANT -> 4
-    WeaponMastery.ASCENDED -> 6
+    WeaponMastery.RESONANT -> 3
+    WeaponMastery.ASCENDED -> 4
 } + agonyPower()

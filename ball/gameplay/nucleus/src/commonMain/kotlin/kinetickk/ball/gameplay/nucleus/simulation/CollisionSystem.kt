@@ -173,7 +173,7 @@ internal fun MutableGameState.resolveWeaponDamage(delta: Float) {
 
 /** Flux Wake: 16/s per enemy touching a live trail point (no speed term: it scales with speed), Scorch every 0.5 s. */
 private fun MutableGameState.resolveFluxWake(delta: Float, power: Float, agonyRank: Int) {
-    val width = FLUX_WIDTH * (if (hasMasteryForm(1)) 1.4f else 1f) + agonyRank * 4f
+    val width = FLUX_WIDTH * (if (hasMasteryForm(1)) FLUX_WIDTH_FORM else 1f) + agonyRank * 4f
     val earlyIgnite = hasMasteryForm(3)
     for (enemyIndex in enemies.indices) {
         val enemy = enemies[enemyIndex]
@@ -198,7 +198,7 @@ private fun MutableGameState.resolveFluxWake(delta: Float, power: Float, agonyRa
 private fun MutableGameState.resolveMorningstar(power: Float, agonyRank: Int) {
     val sizeScale = morningstarScale()
     val hitReach = MORNINGSTAR_REACH * sizeScale
-    val damage = (MORNINGSTAR_DAMAGE + softVelocity(speed) * 0.1f) * power * sizeScale
+    val damage = (MORNINGSTAR_DAMAGE + softVelocity(speed) * MORNINGSTAR_SPEED_SHARE) * power * sizeScale
     val secondStar = hasMasteryForm(2)
     val secondX = coreX - (morningstarX - coreX) * MORNINGSTAR_SECOND_ORBIT
     val secondY = coreY - (morningstarY - coreY) * MORNINGSTAR_SECOND_ORBIT
@@ -272,7 +272,7 @@ private fun MutableGameState.resolveRiftBlades(power: Float) {
             }
         }
         if (!orbitalHit) continue
-        val damage = (RIFT_BLADE_DAMAGE + softVelocity(speed) * 0.025f) * power
+        val damage = (RIFT_BLADE_DAMAGE + softVelocity(speed) * RIFT_BLADE_SPEED_SHARE) * power
         val result = dealWeaponDamage(enemy, damage, canCrit = true, cadence = WeaponHitCadence.CONTACT)
         enemy.weaponCooldown = 0.17f
         if (result.amount > 0f) {
@@ -328,9 +328,9 @@ private fun MutableGameState.entropyField(x: Float, y: Float, radius: Float, pow
     }
 }
 
-/** Entropy Field radius: 170 + 5 per level, +20 % at the first form, +18 per Agony power. */
+/** Entropy Field radius: 170 + 8 per level, +35 % at the first form, +18 per Agony power. */
 internal fun MutableGameState.entropyFieldRadius(): Float =
-    (170f + weaponLevel * 5f) * (if (hasMasteryForm(1)) 1.2f else 1f) + agonyPower() * 18f
+    (170f + weaponLevel * 8f) * (if (hasMasteryForm(1)) 1.35f else 1f) + agonyPower() * 18f
 
 /** Entropy Field's third form: a Rupture inside the field spreads Decay around it. */
 internal fun MutableGameState.onWeaponBreak(enemy: Enemy, element: StatusElement) {
@@ -340,26 +340,29 @@ internal fun MutableGameState.onWeaponBreak(enemy: Enemy, element: StatusElement
     applyStatusAround(enemy.x, enemy.y, ENTROPY_SPREAD_RADIUS, StatusElement.ENTROPY, 2f, generation = 1, excludedId = enemy.id)
 }
 
-internal const val FLUX_DPS: Float = 16f
+internal const val FLUX_DPS: Float = 22f
 internal const val FLUX_WIDTH: Float = 20f
-internal const val FLUX_SCORCH_INTERVAL: Float = 0.5f
-internal const val MORNINGSTAR_DAMAGE: Float = 38f
+internal const val FLUX_WIDTH_FORM: Float = 2f
+internal const val FLUX_SCORCH_INTERVAL: Float = 2f
+internal const val MORNINGSTAR_DAMAGE: Float = 12.3f
 internal const val MORNINGSTAR_REACH: Float = 24f
+internal const val MORNINGSTAR_SPEED_SHARE: Float = 0.032f
 internal const val MORNINGSTAR_KNOCKBACK: Float = 160f
 internal const val MORNINGSTAR_SECOND_ORBIT: Float = 0.72f
-internal const val MORNINGSTAR_SECOND_SIZE: Float = 0.65f
+internal const val MORNINGSTAR_SECOND_SIZE: Float = 0.45f
 internal const val PHASE_LATTICE_CENTER: Float = 110f
-internal const val PHASE_LATTICE_HALF_WIDTH: Float = 28f
-internal const val PHASE_LATTICE_DPS: Float = 26f
+internal const val PHASE_LATTICE_HALF_WIDTH: Float = 42f
+internal const val PHASE_LATTICE_DPS: Float = 55f
 internal const val PHASE_LATTICE_CHILL_INTERVAL: Float = 0.6f
 internal const val PHASE_OUTER_OFFSET: Float = 100f
-internal const val PHASE_OUTER_DPS: Float = 14f
-internal const val RIFT_BLADE_DAMAGE: Float = 31f
+internal const val PHASE_OUTER_DPS: Float = 30f
+internal const val RIFT_BLADE_DAMAGE: Float = 18f
+internal const val RIFT_BLADE_SPEED_SHARE: Float = 0.018f
 internal const val RIFT_BLADE_HOLLOW_EVERY: Int = 3
 internal const val RIFT_SLASH_SHARE: Float = 0.5f
 internal const val RIFT_SLASH_LENGTH: Float = 160f
-internal const val ENTROPY_DPS: Float = 28f
-internal const val ENTROPY_DECAY_INTERVAL: Float = 0.8f
+internal const val ENTROPY_DPS: Float = 11f
+internal const val ENTROPY_DECAY_INTERVAL: Float = 1.6f
 internal const val ENTROPY_EXECUTE: Float = 0.06f
 internal const val ENTROPY_GHOST_RADIUS: Float = 0.7f
 internal const val ENTROPY_SPREAD_RADIUS: Float = 140f

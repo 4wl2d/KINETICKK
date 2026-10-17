@@ -62,7 +62,7 @@ internal fun MutableGameState.updateWeapons(delta: Float) {
             // Crescent: each Blink drives a spear along its path.
             if (signatureActive() && blinkThisStep && elapsed >= runtime.signatureReadyAt) {
                 runtime.signatureReadyAt = elapsed + SPEAR_BLINK_COOLDOWN
-                fireBlinkSpear(SPEAR_DAMAGE * power, beginWeaponActivation())
+                fireBlinkSpear(SPEAR_DAMAGE * power * continuousWeaponRate(), beginWeaponActivation())
             }
         }
         WeaponId.PRISM_RELAY -> if (weaponClock <= 0f && enemies.isNotEmpty()) {
@@ -102,6 +102,30 @@ internal fun MutableGameState.updateWeapons(delta: Float) {
     emitVisualFx(VisualFxCue.WeaponArcsAdvanced(delta))
 }
 
+/**
+ * The travel heading an aimed weapon fires along, nudged onto the enemy closest to it when one lies within
+ * [AIM_ASSIST_CONE] of the heading and [AIM_ASSIST_RANGE] of the Core (a lance flown at an enemy finds it).
+ */
+internal fun MutableGameState.aimedMovementAngle(): Float {
+    val heading = movementAngle()
+    var best = heading
+    var bestOffset = AIM_ASSIST_CONE
+    for (index in enemies.indices) {
+        val enemy = enemies[index]
+        if (!enemy.alive || isShifting(enemy)) continue
+        val dx = enemy.x - coreX
+        val dy = enemy.y - coreY
+        if (dx * dx + dy * dy > AIM_ASSIST_RANGE * AIM_ASSIST_RANGE) continue
+        val bearing = atan2(dy, dx)
+        val offset = abs(atan2(sin(bearing - heading), cos(bearing - heading)))
+        if (offset < bestOffset) {
+            bestOffset = offset
+            best = bearing
+        }
+    }
+    return best
+}
+
 /** A discrete activation: its proc serial, and Agony Scepter's heat liability. */
 internal fun MutableGameState.beginWeaponActivation(): Int {
     onWeaponActivation()
@@ -129,7 +153,8 @@ private fun MutableGameState.trackWeaponInputs(delta: Float): Boolean {
 /** Applies the weapon's own element on a per-enemy interval (continuous weapons). */
 internal fun MutableGameState.weaponElementTick(enemy: Enemy, element: StatusElement, interval: Float, extraBeforeBreak: Boolean = false) {
     if (!enemy.alive || enemy.hitQualificationCooldown > 0f) return
-    enemy.hitQualificationCooldown = interval
+    // A faster weapon applies its element faster too.
+    enemy.hitQualificationCooldown = interval / continuousWeaponRate()
     var count = 1
     // A form that breaks one stack sooner adds the last stack early.
     if (extraBeforeBreak && stacks(enemy, element) + 2 >= breakThreshold(element, enemy)) count = 2
@@ -163,15 +188,17 @@ internal fun MutableGameState.sampleFluxTrail() {
     val turning = signatureActive() && moved > 0f && turn / moved >= FLUX_TURN_CURVATURE
     val life = (if (hasMasteryForm(2)) FLUX_LONG_LIFE else TRAIL_LIFE_SECONDS) * (if (turning) 1.5f else 1f) + agonyRank * 0.18f
     val scale = if (turning) 1.5f else 1f
-    var sampleDistance = 22f - trailDistanceCarry
+    // Samples spread with speed, so the bounded trail covers its whole life at high speed too.
+    val spacing = max(FLUX_SPACING, speed * FLUX_SPACING_PER_SPEED)
+    var sampleDistance = spacing - trailDistanceCarry
     var samples = 0
     while (sampleDistance <= distance && samples < MutableGameState.MAX_TRAIL_SAMPLES_PER_UPDATE) {
         val amount = sampleDistance / distance
         trail += TrailPoint(lerp(trailLastX, coreX, amount), lerp(trailLastY, coreY, amount), life = life, scale = scale)
-        sampleDistance += 22f
+        sampleDistance += spacing
         samples++
     }
-    trailDistanceCarry = (trailDistanceCarry + distance) % 22f
+    trailDistanceCarry = (trailDistanceCarry + distance) % spacing
     while (trail.size > MutableGameState.MAX_TRAIL_POINTS) trail.removeAt(0)
     trailLastX = coreX
     trailLastY = coreY
@@ -198,11 +225,11 @@ private fun MutableGameState.updateMorningstar(delta: Float, agonyRank: Int) {
 private fun MutableGameState.fireNullLance(power: Float, agonyRank: Int) {
     weaponClock = cooldown(1.15f)
     val serial = beginWeaponActivation()
-    val angle = movementAngle()
+    val angle = aimedMovementAngle()
     val lanceSpeed = 940f + softVelocity(speed) * 0.22f
     val pierce = NULL_LANCE_PIERCE + if (hasMasteryForm(1)) 3 else 0
     firePlayerProjectile(coreX, coreY, angle, lanceSpeed, NULL_LANCE_DAMAGE * power, pierce, 6f, 0, serial)
-    if (hasMasteryForm(2)) firePlayerProjectile(coreX, coreY, angle + TAU * 0.5f, lanceSpeed * 0.9f, NULL_LANCE_DAMAGE * 0.5f * power, 3, 5f, 0, serial)
+    if (hasMasteryForm(2)) firePlayerProjectile(coreX, coreY, angle + TAU * 0.5f, lanceSpeed * 0.9f, NULL_LANCE_DAMAGE * NULL_LANCE_REAR_SHARE * power, 3, 5f, 0, serial)
     if (agonyRank > 0) {
         firePlayerProjectile(coreX, coreY, angle + TAU * 0.5f + 0.15f, 820f, 18f * agonyRank * power, 2 + agonyRank, 5f, 4, serial)
         agonyMutationCounts[WeaponId.NULL_LANCE.ordinal]++
@@ -219,7 +246,8 @@ private fun MutableGameState.updateGravityMines(agonyRank: Int) {
             procKey = beginWeaponActivation(), scale = 2f)
     }
     if (weaponClock <= 0f && (braking || speed > 220f)) {
-        weaponClock = cooldown(if (braking) 0.72f else 1.15f)
+        // The second form keeps more mines in the field: they come sooner.
+        weaponClock = cooldown((if (braking) 0.72f else 1.15f) * if (hasMasteryForm(2)) 0.85f else 1f)
         val serial = beginWeaponActivation()
         val mineLife = 0.75f + agonyRank * 0.04f
         if (tryAddWeaponNode(WeaponNode(WeaponNodeType.GRAVITY_MINE, coreX, coreY, mineLife, mineLife, gravityMineRadius(agonyRank),
@@ -232,15 +260,15 @@ private fun MutableGameState.updateGravityMines(agonyRank: Int) {
 }
 
 private fun MutableGameState.gravityMineRadius(agonyRank: Int): Float =
-    96f * (if (hasMasteryForm(1)) 1.2f else 1f) + agonyRank * 12f
+    GRAVITY_MINE_RADIUS * (if (hasMasteryForm(1)) 1.3f else 1f) + agonyRank * 12f
 
 private fun MutableGameState.updateIonSwarm(delta: Float, power: Float, agonyRank: Int) {
     ensureOrbitals(ionOrbitalCount(), 145f + agonyRank * 3f, 8f, delta, 1.8f + agonyRank * 0.05f)
     if (agonyRank > 0) agonyMutationCounts[WeaponId.ION_SWARM.ordinal]++
     if (weaponClock <= 0f && enemies.isNotEmpty()) {
-        weaponClock = cooldown(ION_SWARM_COOLDOWN / if (hasMasteryForm(3)) 1.3f else 1f)
+        weaponClock = cooldown(ION_SWARM_COOLDOWN / if (hasMasteryForm(3)) ION_SWARM_FIRE_RATE_FORM else 1f)
         val serial = beginWeaponActivation()
-        val pierce = if (hasMasteryForm(2)) 1 else 0
+        val pierce = ION_SWARM_PIERCE + if (hasMasteryForm(2)) 1 else 0
         for (index in weaponOrbitals.indices) {
             val orbital = weaponOrbitals[index]
             nearestEnemy(orbital.x, orbital.y, 620f)?.let { enemy ->
@@ -269,13 +297,13 @@ internal fun MutableGameState.riftBladeReach(): Float =
 private fun MutableGameState.fireQuasar(power: Float, agonyRank: Int) {
     weaponClock = cooldown(1.65f)
     val serial = beginWeaponActivation()
-    val angle = movementAngle()
+    val angle = aimedMovementAngle()
     val radius = quasarShotRadius()
     val life = if (hasMasteryForm(3)) QUASAR_BURST_LIFE else 4f
     firePlayerProjectile(coreX, coreY, angle, 690f, QUASAR_DAMAGE * power, 10, radius, 2, serial, life)
     if (hasMasteryForm(2)) {
-        firePlayerProjectile(coreX, coreY, angle - 0.16f, 720f, QUASAR_DAMAGE * 0.4f * power, 3, radius * 0.6f, 2, serial, life)
-        firePlayerProjectile(coreX, coreY, angle + 0.16f, 720f, QUASAR_DAMAGE * 0.4f * power, 3, radius * 0.6f, 2, serial, life)
+        firePlayerProjectile(coreX, coreY, angle - 0.16f, 720f, QUASAR_DAMAGE * QUASAR_SIDE_SHARE * power, 3, radius * 0.6f, 2, serial, life)
+        firePlayerProjectile(coreX, coreY, angle + 0.16f, 720f, QUASAR_DAMAGE * QUASAR_SIDE_SHARE * power, 3, radius * 0.6f, 2, serial, life)
     }
     if (agonyRank > 0) {
         val sideDamage = 28f * agonyRank * power
@@ -289,7 +317,7 @@ private fun MutableGameState.fireQuasar(power: Float, agonyRank: Int) {
 
 /** Quasar shot radius: the first form adds 15 %; the Star signature 3 % per Stellar Mass stack. */
 internal fun MutableGameState.quasarShotRadius(): Float =
-    14f * (if (hasMasteryForm(1)) 1.15f else 1f) * (if (signatureActive()) 1f + 0.03f * stellarMass else 1f)
+    14f * (if (hasMasteryForm(1)) 1.1f else 1f) * (if (signatureActive()) 1f + 0.03f * stellarMass else 1f)
 
 internal fun MutableGameState.ensureOrbitals(
     count: Int,
@@ -341,6 +369,8 @@ internal fun MutableGameState.updateWeaponNodes(delta: Float) {
     while (index < weaponNodes.size) {
         val node = weaponNodes[index]
         node.life -= delta
+        // An enemy stepping onto a mine sets it off early.
+        if (node.life > 0f && enemyWithin(node.x, node.y, node.radius * MINE_PROXIMITY)) node.life = 0f
         if (node.life <= 0f) {
             weaponNodes.removeAt(index)
             explodeMine(node)
@@ -348,6 +378,14 @@ internal fun MutableGameState.updateWeaponNodes(delta: Float) {
             index++
         }
     }
+}
+
+private fun MutableGameState.enemyWithin(x: Float, y: Float, radius: Float): Boolean {
+    for (index in enemies.indices) {
+        val enemy = enemies[index]
+        if (enemy.alive && !isShifting(enemy) && distanceSquared(x, y, enemy.x, enemy.y) <= square(radius + enemy.radius)) return true
+    }
+    return false
 }
 
 internal fun MutableGameState.explodeMine(node: WeaponNode) {
@@ -358,7 +396,7 @@ internal fun MutableGameState.explodeMine(node: WeaponNode) {
         if (distance <= node.radius + enemy.radius) {
             val landed = dealWeaponDamage(enemy, MINE_DAMAGE * node.scale * power * (1f - distance / (node.radius * 1.7f)).coerceAtLeast(0.35f),
                 canCrit = true, procKey = node.procKey).amount > 0f
-            if (landed) applyWeaponStatus(enemy, StatusElement.GRAVITIC, 2)
+            if (landed) weaponElementTick(enemy, StatusElement.GRAVITIC, MINE_MASS_INTERVAL)
             val pull = (1f - distance / max(1f, node.radius)).coerceAtLeast(0f) * 170f * knockbackTaken(enemy)
             enemy.vx += (node.x - enemy.x) / max(1f, distance) * pull
             enemy.vy += (node.y - enemy.y) / max(1f, distance) * pull
@@ -368,12 +406,12 @@ internal fun MutableGameState.explodeMine(node: WeaponNode) {
     if (hasMasteryForm(2)) {
         for (index in weaponNodes.indices) {
             val other = weaponNodes[index]
-            if (distanceSquared(other.x, other.y, node.x, node.y) <= square(node.radius * 1.2f)) other.life = min(other.life, MINE_CHAIN_FUSE)
+            if (distanceSquared(other.x, other.y, node.x, node.y) <= square(node.radius * MINE_CHAIN_REACH)) other.life = min(other.life, MINE_CHAIN_FUSE)
         }
     }
     // Third form: the mine collapses into a short well.
     if (hasMasteryForm(3)) {
-        addWeaponEntity(WeaponEntity(WeaponEntityKind.WELL, node.x, node.y, node.radius, MINE_WELL_SECONDS, MINE_WELL_SECONDS,
+        addWeaponEntity(WeaponEntity(WeaponEntityKind.WELL, node.x, node.y, node.radius * MINE_WELL_REACH, MINE_WELL_SECONDS, MINE_WELL_SECONDS,
             damage = MINE_WELL_DPS, procKey = node.procKey, phase = 1))
     }
     burst(node.x, node.y, 18, 2)
@@ -429,7 +467,7 @@ internal fun MutableGameState.fireArcCoil(baseDamage: Float, serial: Int = Weapo
         val targetX = enemy.x
         val targetY = enemy.y
         val landed = dealWeaponDamage(enemy, baseDamage * powFast(ARC_COIL_FALLOFF, index), canCrit = true, procKey = serial).amount > 0f
-        if (landed) applyWeaponStatus(enemy, StatusElement.ION, 1)
+        if (landed) applyWeaponStatus(enemy, StatusElement.ION, ARC_COIL_CHARGE)
         // Third form: the last hop overloads.
         if (index == targetCount - 1 && hasMasteryForm(3) && enemy.alive) forceElementBreak(enemy, StatusElement.ION)
         addWeaponArc(fromX, fromY, targetX, targetY)
@@ -452,27 +490,27 @@ internal fun MutableGameState.arcCoilHopRange(): Float = ARC_COIL_HOP_RANGE + if
 internal const val MAX_ARC_COIL_TARGETS: Int = 6
 internal const val ARC_COIL_FIRST_RANGE: Float = 380f
 internal const val ARC_COIL_HOP_RANGE: Float = 220f
-internal const val ARC_COIL_FALLOFF: Float = 0.65f
+internal const val ARC_COIL_FALLOFF: Float = 0.9f
 
 internal fun MutableGameState.fireSingularitySpear(damage: Float, serial: Int) {
-    val angle = movementAngle()
+    val angle = aimedMovementAngle()
     val length = (900f + softVelocity(speed) * 0.18f) * if (hasMasteryForm(1)) 1.25f else 1f
     weaponBeamStartX = coreX
     weaponBeamStartY = coreY
     weaponBeamEndX = coreX + cos(angle) * length
     weaponBeamEndY = coreY + sin(angle) * length
     weaponBeamTime = 0.18f
-    spearLine(weaponBeamStartX, weaponBeamStartY, weaponBeamEndX, weaponBeamEndY, 15f, damage, serial)
+    spearLine(weaponBeamStartX, weaponBeamStartY, weaponBeamEndX, weaponBeamEndY, SPEAR_REACH, damage, serial)
     if (hasMasteryForm(2)) {
-        val crossAngle = angle + TAU * 0.25f
-        val crossEndX = coreX + cos(crossAngle) * length * 0.72f
-        val crossEndY = coreY + sin(crossAngle) * length * 0.72f
-        spearLine(coreX, coreY, crossEndX, crossEndY, 12f, damage * 0.5f, serial)
-        addWeaponArc(coreX, coreY, crossEndX, crossEndY, 0.18f)
+        // The cross beam runs both ways across the spear.
+        val crossX = -sin(angle) * length * 0.72f
+        val crossY = cos(angle) * length * 0.72f
+        spearLine(coreX - crossX, coreY - crossY, coreX + crossX, coreY + crossY, 12f, damage * SPEAR_CROSS_SHARE, serial)
+        addWeaponArc(coreX - crossX, coreY - crossY, coreX + crossX, coreY + crossY, 0.18f)
     }
     if (hasMasteryForm(3)) {
         addWeaponEntity(WeaponEntity(WeaponEntityKind.RIFT, weaponBeamStartX, weaponBeamStartY, SPEAR_SCAR_REACH, SPEAR_SCAR_FUSE + 0.2f,
-            SPEAR_SCAR_FUSE + 0.2f, damage = damage * 0.5f, endX = weaponBeamEndX, endY = weaponBeamEndY, timer = SPEAR_SCAR_FUSE,
+            SPEAR_SCAR_FUSE + 0.2f, damage = damage * SPEAR_SCAR_SHARE, endX = weaponBeamEndX, endY = weaponBeamEndY, timer = SPEAR_SCAR_FUSE,
             procKey = serial, phase = RIFT_SPEAR_SCAR))
     }
     val agonyRank = agonyPower()
@@ -521,7 +559,9 @@ internal fun MutableGameState.firePrismRelay(power: Float, serial: Int = WeaponR
     val bounces = prismRelayBounces()
     repeat(relayCount) { index ->
         val offset = (index - (relayCount - 1) * 0.5f) * 0.075f
-        firePlayerProjectile(coreX, coreY, baseAngle + offset, 760f, PRISM_RELAY_DAMAGE * power, bounces, 6f, 3, serial)
+        // The second form's twin (and Agony's extra relay) carry half a relay's damage.
+        val share = if (index == 0) 1f else PRISM_TWIN_SHARE
+        firePlayerProjectile(coreX, coreY, baseAngle + offset, 760f, PRISM_RELAY_DAMAGE * share * power, bounces, 6f, 3, serial)
     }
     if (agonyRank > 0) agonyMutationCounts[WeaponId.PRISM_RELAY.ordinal]++
     emitSound(GameplayAudioCue.WEAPON_LIGHT)
@@ -536,11 +576,13 @@ private fun MutableGameState.throwGyreDiscs(power: Float, agonyRank: Int) {
     val angle = atan2(lastAimDirectionY, lastAimDirectionX)
     val count = 1 + (if (hasMasteryForm(2)) 1 else 0) + if (agonyRank > 0) 1 else 0
     val damage = GYRE_DAMAGE * power * (1f + 0.1f * agonyRank)
-    val radius = GYRE_RADIUS * if (hasMasteryForm(1)) 1.3f else 1f
+    val radius = GYRE_RADIUS * if (hasMasteryForm(1)) 1.15f else 1f
     for (disc in 0 until count) {
         val discAngle = angle + (disc - (count - 1) * 0.5f) * GYRE_SPREAD
+        // The second form's twin (and Agony's extra disc) carry 60 % of a disc's damage.
+        val share = if (disc == 0) 1f else GYRE_EXTRA_SHARE
         addWeaponEntity(WeaponEntity(WeaponEntityKind.DISC, coreX, coreY, radius, GYRE_MAX_LIFE, GYRE_MAX_LIFE,
-            vx = cos(discAngle) * GYRE_SPEED, vy = sin(discAngle) * GYRE_SPEED, damage = damage, angle = discAngle,
+            vx = cos(discAngle) * GYRE_SPEED, vy = sin(discAngle) * GYRE_SPEED, damage = damage * share, angle = discAngle,
             extent = GYRE_REACH, procKey = serial))
     }
     if (agonyRank > 0) agonyMutationCounts[WeaponId.GYRE_DISC.ordinal]++
@@ -553,8 +595,15 @@ private fun MutableGameState.updateScatterBloom(delta: Float, power: Float, agon
     val pellets = SCATTER_PELLETS + (if (hasMasteryForm(1)) 2 else 0) + if (agonyRank > 0) 2 else 0
     val damage = SCATTER_DAMAGE * power * (1f + 0.1f * agonyRank)
     if (dashed) {
-        val angle = if (speed > 20f) atan2(velocityY, velocityX) else atan2(lastAimDirectionY, lastAimDirectionX)
-        fireScatterCone(angle, pellets, damage, beginWeaponActivation())
+        // The bloom opens toward the nearest enemy in reach, else along the Dash.
+        val near = nearestEnemy(coreX, coreY, SCATTER_RANGE)
+        val angle = when {
+            near != null -> atan2(near.y - coreY, near.x - coreX)
+            speed > 20f -> atan2(velocityY, velocityX)
+            else -> atan2(lastAimDirectionY, lastAimDirectionX)
+        }
+        // A Dash is no cooldown: attack speed raises the bloom's damage instead.
+        fireScatterCone(angle, pellets, damage * continuousWeaponRate(), beginWeaponActivation())
         if (agonyRank > 0) agonyMutationCounts[WeaponId.SCATTER_BLOOM.ordinal]++
     }
     if (runtime.passiveClock <= 0f) {
@@ -562,13 +611,13 @@ private fun MutableGameState.updateScatterBloom(delta: Float, power: Float, agon
         val target = nearestEnemy(coreX, coreY, SCATTER_RANGE)
         val angle = if (target != null) atan2(target.y - coreY, target.x - coreX) else atan2(lastAimDirectionY, lastAimDirectionX)
         val volley = SCATTER_PASSIVE_PELLETS + if (agonyRank > 0) 2 else 0
-        fireScatterCone(angle, volley, damage, beginWeaponActivation(), spread = 0.35f)
+        fireScatterCone(angle, volley, damage, beginWeaponActivation(), spread = SCATTER_PASSIVE_SPREAD)
         if (agonyRank > 0) agonyMutationCounts[WeaponId.SCATTER_BLOOM.ordinal]++
     }
 }
 
 private fun MutableGameState.fireScatterCone(angle: Float, pellets: Int, damage: Float, serial: Int, spread: Float = SCATTER_CONE) {
-    val pierce = if (hasMasteryForm(2)) 1 else 0
+    val pierce = SCATTER_PIERCE + if (hasMasteryForm(2)) 1 else 0
     for (pellet in 0 until pellets) {
         val offset = if (pellets <= 1) 0f else (pellet / (pellets - 1f) - 0.5f) * spread
         firePlayerProjectile(coreX, coreY, angle + offset, SCATTER_SPEED, damage, pierce, 4f, 0, serial,
@@ -580,16 +629,17 @@ private fun MutableGameState.fireScatterCone(angle: Float, pellets: Int, damage:
 private fun MutableGameState.updateTethers(delta: Float, agonyRank: Int) {
     val runtime = weaponRuntime
     val range = TETHER_RANGE + if (hasMasteryForm(1)) 80f else 0f
-    val ramp = TETHER_RAMP_MAX + if (hasMasteryForm(3)) 1f else 0f
+    val ramp = TETHER_RAMP_MAX + if (hasMasteryForm(3)) TETHER_RAMP_FORM else 0f
     // The primary tether holds its target while it lives in range; a kill passes most of the ramp on.
     val held = enemyById(runtime.tetherTargetId)?.takeIf { it.alive && distanceSquared(coreX, coreY, it.x, it.y) <= square(range + it.radius) }
+    val rampRate = (ramp - 1f) / TETHER_RAMP_SECONDS * delta
     if (held == null) {
-        val wasKilled = runtime.tetherTargetId >= 0 && enemyById(runtime.tetherTargetId)?.alive != true
+        // A new target (after a kill, or when the old one left the range) keeps 60 % of the ramp; idle, it fades.
         val next = nearestEnemy(coreX, coreY, range)
-        runtime.tetherRamp = if (wasKilled && next != null) 1f + (runtime.tetherRamp - 1f) * TETHER_KILL_KEEP else 1f
+        runtime.tetherRamp = if (next != null) 1f + (runtime.tetherRamp - 1f) * TETHER_KILL_KEEP else max(1f, runtime.tetherRamp - rampRate)
         runtime.tetherTargetId = next?.id ?: -1
     } else {
-        runtime.tetherRamp = min(ramp, runtime.tetherRamp + (ramp - 1f) / TETHER_RAMP_SECONDS * delta)
+        runtime.tetherRamp = min(ramp, runtime.tetherRamp + rampRate)
     }
     val second = if (hasMasteryForm(2) || agonyRank > 0) {
         enemyById(runtime.secondTetherId)?.takeIf {
@@ -667,9 +717,16 @@ private fun MutableGameState.launchSalvo(power: Float, agonyRank: Int) {
     val missiles = HUNTER_MISSILES + (if (hasMasteryForm(1)) 1 else 0) + if (agonyRank > 0) 1 else 0
     val damage = HUNTER_DAMAGE * power * (1f + 0.1f * agonyRank)
     val heading = movementAngle()
+    var previousTarget = -1
     for (missile in 0 until missiles) {
         val angle = heading + TAU * 0.5f + (missile - (missiles - 1) * 0.5f) * 0.55f
         launchMissile(coreX, coreY, angle, damage, serial, split = true)
+        // Missiles of one salvo seek different enemies when there are enough.
+        val target = nearestOtherEnemy(coreX, coreY, previousTarget, HUNTER_RANGE) ?: nearestEnemy(coreX, coreY, HUNTER_RANGE)
+        if (target != null) {
+            weaponRuntime.entities.lastOrNull()?.takeIf { it.kind == WeaponEntityKind.MISSILE }?.targetId = target.id
+            previousTarget = target.id
+        }
     }
     // Hexagon signature: up to three drones each launch one.
     if (signatureActive()) {
@@ -693,8 +750,9 @@ internal fun MutableGameState.onWeaponImpact(impactSpeed: Float, impactDamage: F
     runtime.readyAt = elapsed + CONCUSSION_COOLDOWN
     val agonyRank = agonyPower()
     val radius = concussionRadius(impactSpeed, agonyRank)
+    // Impacts are no cooldown: attack speed raises the shockwave's damage instead.
     val damage = (CONCUSSION_DAMAGE + CONCUSSION_IMPACT_SHARE * impactDamage / impactRunGrowth()) * effectiveWeaponPower() *
-        (1f + 0.1f * agonyRank)
+        (1f + 0.1f * agonyRank) * continuousWeaponRate()
     concussionWave(coreX, coreY, radius, damage, beginWeaponActivation())
 }
 
@@ -754,7 +812,8 @@ private fun MutableGameState.updateGlacierBell(delta: Float, power: Float, agony
     if (tolled) {
         runtime.readyAt = elapsed + cooldown(GLACIER_TOLL_COOLDOWN)
         runtime.passiveClock = cooldown(GLACIER_PASSIVE_INTERVAL)
-        tollBell(coreX, coreY, radius, damage, 2, beginWeaponActivation(), RING_TOLL)
+        // A Brake release (or a parry) is no cooldown: attack speed raises the toll's damage instead.
+        tollBell(coreX, coreY, radius, damage * continuousWeaponRate(), 2, beginWeaponActivation(), RING_TOLL)
         if (hasMasteryForm(3)) {
             runtime.followUpAt = elapsed + GLACIER_SECOND_TOLL
             runtime.followUpX = coreX
@@ -763,12 +822,13 @@ private fun MutableGameState.updateGlacierBell(delta: Float, power: Float, agony
     }
     if (runtime.followUpAt > 0f && elapsed >= runtime.followUpAt) {
         runtime.followUpAt = WeaponRuntime.NEVER
-        tollBell(runtime.followUpX, runtime.followUpY, radius, damage, 2, beginWeaponActivation(), RING_TOLL)
+        // The second toll rings where the Core is now.
+        tollBell(coreX, coreY, radius, damage, 2, beginWeaponActivation(), RING_TOLL)
     }
     runtime.passiveClock -= delta
     if (runtime.passiveClock <= 0f) {
         runtime.passiveClock = cooldown(GLACIER_PASSIVE_INTERVAL)
-        tollBell(coreX, coreY, GLACIER_PASSIVE_RADIUS + 12f * agonyRank, damage * 0.5f, 1, beginWeaponActivation(), RING_PASSIVE)
+        tollBell(coreX, coreY, GLACIER_PASSIVE_RADIUS + 12f * agonyRank, damage * GLACIER_PASSIVE_SHARE, 1, beginWeaponActivation(), RING_PASSIVE)
     }
 }
 
@@ -796,14 +856,15 @@ private fun MutableGameState.castLenses(power: Float, agonyRank: Int) {
     for (lens in 0 until count) {
         val lensAngle = angle + (lens - (count - 1) * 0.5f) * LENS_SPREAD
         addWeaponEntity(WeaponEntity(WeaponEntityKind.LENS, coreX, coreY, LENS_RADIUS, LENS_FUSE, LENS_FUSE,
-            vx = cos(lensAngle) * LENS_SPEED, vy = sin(lensAngle) * LENS_SPEED, damage = power * (1f + 0.1f * agonyRank),
+            vx = cos(lensAngle) * LENS_SPEED, vy = sin(lensAngle) * LENS_SPEED,
+            damage = power * (1f + 0.1f * agonyRank) * if (lens == 0) 1f else LENS_EXTRA_SHARE,
             angle = lensAngle, procKey = serial))
     }
     if (agonyRank > 0) agonyMutationCounts[WeaponId.EVENT_LENS.ordinal]++
     emitSound(GameplayAudioCue.WEAPON_LIGHT)
 }
 
-internal fun MutableGameState.lensWellRadius(): Float = LENS_WELL_RADIUS * if (hasMasteryForm(1)) 1.2f else 1f
+internal fun MutableGameState.lensWellRadius(): Float = LENS_WELL_RADIUS * if (hasMasteryForm(1)) 1.1f else 1f
 
 private fun MutableGameState.updateSolarBeams(delta: Float, agonyRank: Int) {
     val runtime = weaponRuntime
@@ -837,7 +898,7 @@ private fun MutableGameState.updateSolarBeams(delta: Float, agonyRank: Int) {
 
 /** Ring signature: beams start from the Halo radius. */
 internal fun MutableGameState.solarInnerRadius(): Float = if (signatureActive()) haloRadius else 0f
-internal fun MutableGameState.solarBeamLength(): Float = SOLAR_LENGTH + if (hasMasteryForm(1)) 60f else 0f
+internal fun MutableGameState.solarBeamLength(): Float = SOLAR_LENGTH + if (hasMasteryForm(1)) SOLAR_LENGTH_FORM else 0f
 
 private fun MutableGameState.updateAegisShards(delta: Float, power: Float, agonyRank: Int) {
     val runtime = weaponRuntime
@@ -867,10 +928,14 @@ internal fun MutableGameState.aegisShardCount(): Int =
         (if (agonyPower() > 0) 1 else 0)).coerceAtMost(MutableGameState.MAX_WEAPON_ORBITALS)
 
 private fun MutableGameState.launchAegisShards(damage: Float, range: Float, serial: Int) {
-    val pierce = if (hasMasteryForm(2)) 1 else 0
+    val pierce = AEGIS_PIERCE + if (hasMasteryForm(2)) 1 else 0
+    // Each shard takes a different target when there are enough (the nearest one left), then doubles up.
+    var previousTarget = -1
     for (index in weaponOrbitals.indices) {
         val orbital = weaponOrbitals[index]
-        val target = nearestEnemy(orbital.x, orbital.y, range + AEGIS_ORBIT_RADIUS) ?: continue
+        val target = nearestOtherEnemy(orbital.x, orbital.y, previousTarget, range + AEGIS_ORBIT_RADIUS)
+            ?: nearestEnemy(orbital.x, orbital.y, range + AEGIS_ORBIT_RADIUS) ?: continue
+        previousTarget = target.id
         val angle = atan2(target.y - orbital.y, target.x - orbital.x)
         addWeaponEntity(WeaponEntity(WeaponEntityKind.SHARD, orbital.x, orbital.y, AEGIS_SHARD_RADIUS, AEGIS_SHARD_LIFE, AEGIS_SHARD_LIFE,
             vx = cos(angle) * AEGIS_SPEED, vy = sin(angle) * AEGIS_SPEED, damage = damage, angle = angle, phase = pierce,
@@ -903,7 +968,7 @@ private fun MutableGameState.updateHollowRifts(delta: Float, power: Float, agony
         // Crescent signature: Blink scars become full rifts, at the strength of the Crescent's own scar.
         val scale = if (blink && signatureActive()) HOLLOW_BLINK_SCALE else 1f
         addWeaponEntity(WeaponEntity(WeaponEntityKind.RIFT, startX, startY, reach, HOLLOW_FUSE + HOLLOW_LINGER + DASH_PHASE_SECONDS,
-            HOLLOW_FUSE + HOLLOW_LINGER + DASH_PHASE_SECONDS, damage = damage * scale, endX = coreX, endY = coreY,
+            HOLLOW_FUSE + HOLLOW_LINGER + DASH_PHASE_SECONDS, damage = damage * scale * continuousWeaponRate(), endX = coreX, endY = coreY,
             timer = HOLLOW_FUSE + if (blink) 0f else DASH_PHASE_SECONDS, procKey = beginWeaponActivation(),
             phase = if (blink) RIFT_ARMED else RIFT_GROWING))
         if (agonyRank > 0) agonyMutationCounts[WeaponId.HOLLOW_RIFT.ordinal]++
@@ -1000,32 +1065,51 @@ internal fun MutableGameState.addWeaponEntity(entity: WeaponEntity) {
 // ---------------------------------------------------------------------------------------------
 // Tuning (weapon power 1).
 
-internal const val NULL_LANCE_DAMAGE: Float = 64f
+internal const val AIM_ASSIST_CONE: Float = 0.5f
+internal const val AIM_ASSIST_RANGE: Float = 700f
+internal const val NULL_LANCE_DAMAGE: Float = 68f
 internal const val NULL_LANCE_PIERCE: Int = 5
-internal const val MINE_DAMAGE: Float = 62f
+internal const val NULL_LANCE_REAR_SHARE: Float = 0.3f
+internal const val MINE_DAMAGE: Float = 68f
+internal const val MINE_PROXIMITY: Float = 0.45f
+internal const val GRAVITY_MINE_RADIUS: Float = 100f
+internal const val MINE_MASS_INTERVAL: Float = 1.5f
 internal const val BASE_MINE_LIMIT: Int = 8
 internal const val MINE_CHAIN_FUSE: Float = 0.05f
+internal const val MINE_CHAIN_REACH: Float = 0.9f
 internal const val MINE_WELL_SECONDS: Float = 1.2f
-internal const val MINE_WELL_DPS: Float = 12f
-internal const val ION_SWARM_DAMAGE: Float = 15f
+internal const val MINE_WELL_DPS: Float = 15f
+internal const val MINE_WELL_REACH: Float = 0.7f
+internal const val ION_SWARM_DAMAGE: Float = 8.8f
 internal const val ION_SWARM_COOLDOWN: Float = 0.72f
-internal const val ARC_COIL_DAMAGE: Float = 30f
+internal const val ION_SWARM_PIERCE: Int = 1
+internal const val ION_SWARM_FIRE_RATE_FORM: Float = 1.1f
+internal const val ARC_COIL_DAMAGE: Float = 16f
 internal const val ARC_COIL_COOLDOWN: Float = 1.15f
-internal const val QUASAR_DAMAGE: Float = 135f
+internal const val ARC_COIL_CHARGE: Int = 1
+internal const val QUASAR_DAMAGE: Float = 87f
 internal const val QUASAR_BURST_LIFE: Float = 1.3f
+internal const val QUASAR_SIDE_SHARE: Float = 0.1f
+internal const val QUASAR_BURST_SHARE: Float = 0.15f
 internal const val QUASAR_BURST_RADIUS: Float = 120f
-internal const val SPEAR_DAMAGE: Float = 185f
+internal const val SPEAR_DAMAGE: Float = 100f
 internal const val SPEAR_BLINK_COOLDOWN: Float = 2f
+internal const val SPEAR_CROSS_SHARE: Float = 1f
+internal const val SPEAR_REACH: Float = 28f
+internal const val SPEAR_SCAR_SHARE: Float = 1f
 internal const val SPEAR_BLINK_REACH: Float = 320f
 internal const val SPEAR_SCAR_FUSE: Float = 0.4f
 internal const val SPEAR_SCAR_REACH: Float = 30f
-internal const val PRISM_RELAY_DAMAGE: Float = 27f
+internal const val PRISM_RELAY_DAMAGE: Float = 18f
+internal const val PRISM_TWIN_SHARE: Float = 0.5f
 /** Heading change per dp travelled that counts as a hard turn (60° over 100 dp). */
 internal const val FLUX_TURN_CURVATURE: Float = 0.0105f
-internal const val FLUX_LONG_LIFE: Float = 2.4f
+internal const val FLUX_LONG_LIFE: Float = 4f
+internal const val FLUX_SPACING: Float = 22f
+internal const val FLUX_SPACING_PER_SPEED: Float = 0.03f
 internal const val PARRY_TWIST_GUARD: Float = 0.2f
 
-internal const val GYRE_DAMAGE: Float = 44f
+internal const val GYRE_DAMAGE: Float = 45f
 internal const val GYRE_COOLDOWN: Float = 1.3f
 internal const val GYRE_SPEED: Float = 760f
 internal const val GYRE_RETURN_SPEED: Float = 900f
@@ -1035,28 +1119,32 @@ internal const val GYRE_SPREAD: Float = 0.45f
 internal const val GYRE_MAX_LIFE: Float = 3f
 internal const val GYRE_ORBIT_BONUS: Float = 1.25f
 internal const val GYRE_RETURN_BONUS: Float = 1.5f
+internal const val GYRE_EXTRA_SHARE: Float = 0.6f
 
-internal const val SCATTER_DAMAGE: Float = 22f
+internal const val SCATTER_DAMAGE: Float = 10f
+internal const val SCATTER_PIERCE: Int = 2
 internal const val SCATTER_PELLETS: Int = 7
-internal const val SCATTER_PASSIVE_PELLETS: Int = 3
+internal const val SCATTER_PASSIVE_PELLETS: Int = 7
 internal const val SCATTER_PASSIVE_INTERVAL: Float = 2.4f
 internal const val SCATTER_RANGE: Float = 380f
 internal const val SCATTER_SPEED: Float = 950f
 internal const val SCATTER_CONE: Float = TAU / 6f
 internal const val SCATTER_POINT_BLANK: Float = 140f
+internal const val SCATTER_PASSIVE_SPREAD: Float = 0.9f
 
 internal const val TETHER_RANGE: Float = 320f
-internal const val TETHER_DPS: Float = 30f
+internal const val TETHER_DPS: Float = 5.5f
 internal const val TETHER_RAMP_MAX: Float = 3f
+internal const val TETHER_RAMP_FORM: Float = 5f
 internal const val TETHER_RAMP_SECONDS: Float = 2.5f
 internal const val TETHER_KILL_KEEP: Float = 0.6f
-internal const val TETHER_SECOND_SHARE: Float = 0.5f
+internal const val TETHER_SECOND_SHARE: Float = 0.75f
 internal const val TETHER_PULL: Float = 260f
 
 internal const val SENTRY_INTERVAL: Float = 3f
 internal const val SENTRY_LIMIT: Int = 3
 internal const val SENTRY_LIFE: Float = 10f
-internal const val SENTRY_DAMAGE: Float = 14f
+internal const val SENTRY_DAMAGE: Float = 11f
 internal const val SENTRY_FIRE_INTERVAL: Float = 0.6f
 internal const val SENTRY_RANGE: Float = 520f
 internal const val SENTRY_RADIUS: Float = 12f
@@ -1065,7 +1153,8 @@ internal const val SENTRY_FOLDED: Int = 1
 internal const val SENTRY_BLAST_RADIUS: Float = 120f
 internal const val SENTRY_BLAST_DAMAGE: Float = 40f
 
-internal const val HUNTER_DAMAGE: Float = 26f
+internal const val HUNTER_DAMAGE: Float = 9f
+internal const val HUNTER_DECAY_EVERY: Int = 2
 internal const val HUNTER_COOLDOWN: Float = 2.2f
 internal const val HUNTER_MISSILES: Int = 3
 internal const val HUNTER_RANGE: Float = 700f
@@ -1074,12 +1163,13 @@ internal const val HUNTER_TOP_SPEED: Float = 780f
 internal const val HUNTER_TURN_RATE: Float = 7f
 internal const val HUNTER_MISSILE_RADIUS: Float = 7f
 internal const val HUNTER_MISSILE_LIFE: Float = 2.6f
-internal const val HUNTER_BURST_RADIUS: Float = 60f
-internal const val HUNTER_BURST_SHARE: Float = 0.5f
+internal const val HUNTER_BURST_RADIUS: Float = 110f
+internal const val HUNTER_BURST_SHARE: Float = 0.75f
+internal const val HUNTER_BURST_FORM: Float = 1.2f
 
 internal const val CONCUSSION_MIN_SPEED: Float = 300f
 internal const val CONCUSSION_COOLDOWN: Float = 0.35f
-internal const val CONCUSSION_DAMAGE: Float = 20f
+internal const val CONCUSSION_DAMAGE: Float = 24f
 internal const val CONCUSSION_IMPACT_SHARE: Float = 0.25f
 internal const val CONCUSSION_BASE_RADIUS: Float = 90f
 internal const val CONCUSSION_MAX_RADIUS: Float = 260f
@@ -1087,12 +1177,13 @@ internal const val CONCUSSION_KNOCKBACK: Float = 260f
 internal const val CONCUSSION_SHIELD_PER_HIT: Float = 4f
 internal const val CONCUSSION_GHOST_GATE: Float = 0.4f
 
-internal const val GLACIER_DAMAGE: Float = 48f
+internal const val GLACIER_DAMAGE: Float = 37f
 internal const val GLACIER_RADIUS: Float = 240f
 internal const val GLACIER_HOLD_SECONDS: Float = 0.3f
 internal const val GLACIER_TOLL_COOLDOWN: Float = 0.8f
 internal const val GLACIER_PASSIVE_INTERVAL: Float = 3.5f
-internal const val GLACIER_PASSIVE_RADIUS: Float = 120f
+internal const val GLACIER_PASSIVE_RADIUS: Float = 170f
+internal const val GLACIER_PASSIVE_SHARE: Float = 0.6f
 internal const val GLACIER_SECOND_TOLL: Float = 0.5f
 
 internal const val LENS_COOLDOWN: Float = 2.8f
@@ -1100,21 +1191,24 @@ internal const val LENS_SPEED: Float = 380f
 internal const val LENS_FUSE: Float = 0.9f
 internal const val LENS_RADIUS: Float = 14f
 internal const val LENS_SPREAD: Float = 0.7f
+internal const val LENS_EXTRA_SHARE: Float = 0.25f
 internal const val LENS_WELL_RADIUS: Float = 170f
 internal const val LENS_WELL_SECONDS: Float = 1.6f
-internal const val LENS_WELL_DPS: Float = 22f
-internal const val LENS_COLLAPSE_DAMAGE: Float = 40f
-internal const val LENS_IMPLOSION_DAMAGE: Float = 120f
+internal const val LENS_WELL_DPS: Float = 15f
+internal const val LENS_COLLAPSE_DAMAGE: Float = 32f
+internal const val LENS_IMPLOSION_DAMAGE: Float = 10f
 internal const val LENS_PULL: Float = 240f
 
 internal const val SOLAR_LENGTH: Float = 240f
+internal const val SOLAR_LENGTH_FORM: Float = 120f
 internal const val SOLAR_ANGULAR_SPEED: Float = 2.2f
-internal const val SOLAR_DPS: Float = 34f
+internal const val SOLAR_DPS: Float = 44f
 internal const val SOLAR_ARC_SECTOR: Float = 0.4f
-internal const val SOLAR_ARC_SHARE: Float = 0.4f
+internal const val SOLAR_ARC_SHARE: Float = 0.7f
 
 internal const val AEGIS_SHIELD_CAPACITY: Float = 15f
 internal const val AEGIS_SHARDS_BASE: Int = 2
+internal const val AEGIS_PIERCE: Int = 1
 internal const val AEGIS_DAMAGE: Float = 34f
 internal const val AEGIS_COOLDOWN: Float = 1.4f
 internal const val AEGIS_RANGE: Float = 260f
@@ -1126,7 +1220,7 @@ internal const val AEGIS_SPEED: Float = 820f
 internal const val AEGIS_SHARD_LIFE: Float = 0.9f
 internal const val AEGIS_RESTORE_COOLDOWN: Float = 60f
 
-internal const val HOLLOW_DAMAGE: Float = 70f
+internal const val HOLLOW_DAMAGE: Float = 54f
 internal const val HOLLOW_REACH: Float = 40f
 internal const val HOLLOW_FUSE: Float = 0.55f
 internal const val HOLLOW_LINGER: Float = 0.45f
@@ -1138,10 +1232,10 @@ internal const val HOLLOW_SECOND_SHARE: Float = 0.6f
 internal const val HOLLOW_SECOND_DELAY: Float = 0.3f
 internal const val HOLLOW_PULL_RADIUS: Float = 120f
 
-internal const val DRUM_DAMAGE: Float = 26f
+internal const val DRUM_DAMAGE: Float = 30f
 internal const val DRUM_COOLDOWN: Float = 1.6f
 internal const val DRUM_RADIUS: Float = 210f
-internal const val DRUM_KNOCKBACK: Float = 340f
+internal const val DRUM_KNOCKBACK: Float = 240f
 internal const val DRUM_BEAT_SCALE: Float = 1.5f
 internal const val DRUM_DOUBLE_BEAT: Float = 0.25f
 internal const val DRUM_DOUBLE_SHARE: Float = 0.6f
