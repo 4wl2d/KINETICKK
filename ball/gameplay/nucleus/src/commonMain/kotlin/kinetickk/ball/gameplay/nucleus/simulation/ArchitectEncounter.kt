@@ -14,6 +14,10 @@ import kotlin.math.sin
 
 /** Largest share of the Architect's tier-0 integrity one damage instance may remove (see [architectHitCap]). */
 internal const val ARCHITECT_HIT_CAP: Float = 0.015f
+/** Share of the tier-0 hit cap each selected Rebirth tier removes (tier 10 keeps 80 %). */
+internal const val ARCHITECT_HIT_CAP_TIER_SHRINK: Float = 0.02f
+/** The tier shrink never takes the cap below this share of the tier-0 cap (a longer custom ladder). */
+internal const val ARCHITECT_HIT_CAP_MIN_SCALE: Float = 0.5f
 /** Last phase of the ordinary Architect; Singularity (Rebirth R10) adds an enraged one after it. */
 internal const val ARCHITECT_FINAL_PHASE: Int = 2
 internal const val ARCHITECT_SHIFT_SECONDS: Float = 8f
@@ -47,11 +51,13 @@ private fun MutableGameState.architectGate(enemy: Enemy): Float {
 
 /**
  * Largest amount one damage instance may remove: [ARCHITECT_HIT_CAP] of the integrity the Architect
- * would have without the tier's integrity multiplier. A build that hits the cap therefore needs more
- * hits on a harder tier, as a build below the cap does; the cap never exceeds the tier-0 share.
+ * would have without the tier's integrity multiplier, shrunk by [ARCHITECT_HIT_CAP_TIER_SHRINK] per
+ * selected tier. A build that hits the cap therefore needs more hits on a harder tier, as a build below
+ * the cap does, and somewhat more again; the cap never exceeds the tier-0 share.
  */
 internal fun MutableGameState.architectHitCap(enemy: Enemy): Float =
-    ARCHITECT_HIT_CAP * enemy.maxHp / rebirthProfile.enemyHealthMultiplier.coerceAtLeast(1f)
+    ARCHITECT_HIT_CAP * enemy.maxHp / rebirthProfile.enemyHealthMultiplier.coerceAtLeast(1f) *
+        (1f - ARCHITECT_HIT_CAP_TIER_SHRINK * rebirthProfile.tier).coerceIn(ARCHITECT_HIT_CAP_MIN_SCALE, 1f)
 
 /**
  * Applies the Architect's gating to a requested amount: nothing while shifting, at most

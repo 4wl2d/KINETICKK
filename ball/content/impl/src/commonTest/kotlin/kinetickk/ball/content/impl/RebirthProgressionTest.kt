@@ -82,7 +82,7 @@ class RebirthProgressionTest {
         rebirth.profiles.forEach { profile ->
             val t = profile.tier.toFloat()
             val where = "tier ${profile.tier}"
-            assertEquals(1f + 0.32f * t + 0.035f * t * t, profile.enemyHealthMultiplier, 0.0001f, where)
+            assertEquals(1f + 0.32f * t + 0.05f * t * t, profile.enemyHealthMultiplier, 0.0001f, where)
             assertEquals(1f + 0.14f * t + 0.008f * t * t, profile.incomingDamageMultiplier, 0.0001f, where)
             assertEquals(1f + 0.035f * t, profile.enemySpeedMultiplier, 0.0001f, where)
             assertEquals(1f + 0.09f * t, profile.spawnRateMultiplier, 0.0001f, where)

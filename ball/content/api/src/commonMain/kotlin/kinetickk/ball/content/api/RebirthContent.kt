@@ -106,7 +106,7 @@ val RebirthTierNames: List<String> = listOf(
 
 /**
  * The shipped tuning of Rebirth tier [tier] (selected tier t). Hostile scaling grows faster than the
- * player's compensation, so each tier is a real step up: enemy integrity `1 + 0.32t + 0.035t²`,
+ * player's compensation, so each tier is a real step up: enemy integrity `1 + 0.32t + 0.05t²`,
  * incoming damage `1 + 0.14t + 0.008t²`, enemy speed `1 + 0.035t`, spawn rate `1 + 0.09t`, enemy cap
  * `1 + 0.10t`, Elite rate `1 + 0.07t`, threat `12t` s ahead, Matter `1 + 0.2t`, player power
  * `1 + 0.03t`, `t / 4` bonus rerolls, `5 + t` opening enemies and obstacle density `1 + 0.05t`. Tier
@@ -127,7 +127,7 @@ fun defaultRebirthProfile(
         openingEnemyCount = 5 + tier,
         enemyCapMultiplier = 1f + t * 0.10f,
         spawnRateMultiplier = 1f + t * 0.09f,
-        enemyHealthMultiplier = 1f + t * 0.32f + t * t * 0.035f,
+        enemyHealthMultiplier = 1f + t * 0.32f + t * t * 0.05f,
         enemySpeedMultiplier = 1f + t * 0.035f,
         incomingDamageMultiplier = 1f + t * 0.14f + t * t * 0.008f,
         eliteRateMultiplier = 1f + t * 0.07f,
