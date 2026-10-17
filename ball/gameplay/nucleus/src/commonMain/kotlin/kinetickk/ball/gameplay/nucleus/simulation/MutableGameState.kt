@@ -57,8 +57,6 @@ internal class MutableGameState(
         const val DASH_INPUT_BUFFER_SECONDS = 0.16f
         const val MAX_PROJECTILES = 650
         const val MAX_PICKUPS = 420
-        const val MAX_OBSTACLES = ContentBounds.MAX_OBSTACLES
-        const val MAX_DESTROYED_OBSTACLES = ContentBounds.MAX_DESTROYED_OBSTACLES
         const val MAX_TRAIL_POINTS = 110
         const val MAX_ECHO_HITS = 256
         const val MAX_BUFFS = 16
