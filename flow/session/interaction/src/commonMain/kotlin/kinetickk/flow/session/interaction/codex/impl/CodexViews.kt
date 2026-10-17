@@ -5,6 +5,7 @@ package kinetickk.flow.session.interaction.codex.impl
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -382,16 +384,20 @@ internal val CODEX_MATRIX_COLUMNS: Int = StatusElement.entries.size
 /** Space between the reaction matrix's cells and headers. */
 internal val CODEX_MATRIX_GAP: Dp = 6.dp
 
+/** The smallest reaction matrix cell: every cell stays a comfortable touch target. */
+internal val CODEX_MATRIX_MIN_CELL: Dp = 44.dp
+
 /**
  * The reaction matrix's cell edge for [width] and [viewportHeight]: [CODEX_MATRIX_COLUMNS] cells and a
- * header column 0.6 cells wide across, as many rows and a header row down. The width always fits; the
- * height fit never shrinks a cell below 44 dp (the list scrolls instead) and no cell grows past 132 dp.
+ * header column 0.6 cells wide across, as many rows and a header row down. No cell shrinks below
+ * [CODEX_MATRIX_MIN_CELL] (a matrix wider than [width] scrolls sideways, a taller one with the list) and
+ * none grows past 132 dp.
  */
 internal fun codexMatrixCell(width: Dp, viewportHeight: Dp): Dp {
     val columns = CODEX_MATRIX_COLUMNS
     val byWidth = (width - CODEX_MATRIX_GAP * columns) / (columns + 0.6f)
     val byHeight = (viewportHeight - 40.dp - CODEX_MATRIX_GAP * columns) / (columns + 0.6f)
-    return min(min(byWidth, max(byHeight.value, 44f).dp), 132.dp)
+    return min(min(byWidth, byHeight.coerceAtLeast(CODEX_MATRIX_MIN_CELL)), 132.dp).coerceAtLeast(CODEX_MATRIX_MIN_CELL)
 }
 
 /** Width of the reaction matrix with [cell]-sized cells: the header column, then every cell and its gap. */
@@ -428,8 +434,11 @@ internal fun CodexReactionMatrix(
         val matrixWidth = codexMatrixWidth(cell)
         // Cells too small for names list them beside the matrix where there is room, else below it.
         val sideLegend = !labels && available - matrixWidth >= 240.dp
+        // On the narrowest screens the minimum cells overflow the width; the matrix then scrolls sideways.
+        val scroll = rememberScrollState()
+        val sideways = if (matrixWidth > available) Modifier.fillMaxWidth().horizontalScroll(scroll) else Modifier
         val matrix: @Composable () -> Unit = {
-            Column(verticalArrangement = Arrangement.spacedBy(gap)) {
+            Column(sideways, verticalArrangement = Arrangement.spacedBy(gap)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
                     Spacer(Modifier.width(header).height(header))
                     StatusElement.entries.forEach { element ->

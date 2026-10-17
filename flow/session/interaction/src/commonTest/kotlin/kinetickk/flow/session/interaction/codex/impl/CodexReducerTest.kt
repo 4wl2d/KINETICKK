@@ -186,11 +186,16 @@ class CodexReducerTest {
 
     @Test fun reactionMatrixFitsOneColumnPerElementAcrossPhoneAndDesktopWidths() {
         assertEquals(StatusElement.entries.size, CODEX_MATRIX_COLUMNS)
+        val narrowest = codexMatrixWidth(CODEX_MATRIX_MIN_CELL).value
         for (width in listOf(320, 360, 412, 600, 900, 1280)) {
             for (height in listOf(480, 720, 1080)) {
                 val cell = codexMatrixCell(width.dp, height.dp)
-                assertTrue(cell.value > 0f)
-                assertTrue(codexMatrixWidth(cell).value <= width + 0.01f, "the matrix fits $width dp (cell ${cell.value} dp)")
+                assertTrue(cell.value >= 44f, "every cell stays tappable at $width dp (cell ${cell.value} dp)")
+                if (width >= narrowest) {
+                    assertTrue(codexMatrixWidth(cell).value <= width + 0.01f, "the matrix fits $width dp (cell ${cell.value} dp)")
+                } else {
+                    assertEquals(44f, cell.value, "below $narrowest dp the minimum cells scroll sideways")
+                }
             }
         }
         // A wide, tall window still caps the cells.
