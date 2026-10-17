@@ -196,6 +196,9 @@ internal class Projectile(
         }
     }
 
+    /** A spent shot (its life is over, or a reaction spent it) neither hits nor is caught; it awaits removal. */
+    val spent: Boolean get() = life <= 0f
+
     fun tryRecordEnemyHit(enemyId: Int): Boolean {
         val match = findRecordedEnemyHit(enemyId)
         if (match >= 0) return true

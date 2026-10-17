@@ -273,8 +273,48 @@ class SonicVoidElementTest {
         state.applyStatus(target, StatusElement.CRYO, 3, generation = 0)
         state.applyStatus(target, StatusElement.VOID, 1, generation = 0)
 
-        assertEquals(1, state.projectiles.count { it.hostile }, "Only the shot outside the radius survives")
-        assertEquals(1, state.projectiles.count { !it.hostile }, "Player shots are untouched")
+        assertEquals(1, state.projectiles.count { it.hostile && !it.spent }, "Only the shot outside the radius survives")
+        assertEquals(1, state.projectiles.count { !it.hostile && !it.spent }, "Player shots are untouched")
+        state.updateProjectiles(MutableGameState.FIXED_STEP)
+        assertEquals(2, state.projectiles.size, "Spent shots leave with the next projectile update")
+    }
+
+    @Test
+    fun stasisFromAWeaponShotSpendsNearbyHostileShotsWhileProjectileHitsResolve() {
+        val state = buildTestState().apply { own("Null Rounds") }
+        val target = state.dummy(x = state.coreX + 400f, y = state.coreY)
+        state.applyStatus(target, StatusElement.CRYO, 3, generation = 0)
+        // Two weapon hits wind Null Rounds up, so the shot below lands its third hit and the Void.
+        repeat(2) { state.fireClauses(EffectTrigger.WEAPON_HIT, target, hit = 20f, source = HitSource.WEAPON) }
+        val before = hostileShot(target.x + 40f, target.y)
+        val shot = weaponShot(state, target.x, target.y)
+        val bystander = weaponShot(state, state.coreX - 600f, state.coreY)
+        val after = hostileShot(target.x, target.y + 60f)
+        listOf(before, shot, bystander, after).forEach(state::addProjectile)
+
+        state.resolveCollisions(MutableGameState.FIXED_STEP)
+
+        assertEquals(ReactionId.STASIS.ordinal + 1, target.status[StatusCell.LAST_REACTION].toInt())
+        assertEquals(listOf(bystander), state.projectiles, "The spent shot is consumed and both nearby hostile shots are gone")
+    }
+
+    @Test
+    fun stasisFromACoreHitSpendsNearbyHostileShotsWhileProjectileHitsResolve() {
+        val state = buildTestState().apply { own("Frost Plating") }
+        val hollow = state.dummy(x = state.coreX + 140f, y = state.coreY)
+        state.applyStatus(hollow, StatusElement.VOID, 2, generation = 0)
+        val striking = hostileShot(state.coreX, state.coreY)
+        val near = hostileShot(hollow.x + 40f, hollow.y + 20f)
+        val friendly = weaponShot(state, state.coreX - 600f, state.coreY)
+        val distant = hostileShot(state.coreX - 500f, state.coreY + 300f)
+        listOf(striking, near, friendly, distant).forEach(state::addProjectile)
+        val integrity = state.hp
+
+        state.resolveCollisions(MutableGameState.FIXED_STEP)
+
+        assertTrue(state.hp < integrity, "The striking shot hurts the Core")
+        assertEquals(ReactionId.STASIS.ordinal + 1, hollow.status[StatusCell.LAST_REACTION].toInt(), "Frost Plating's Cryo meets the Hollow")
+        assertEquals(listOf(friendly, distant), state.projectiles, "Only shots outside the Stasis remain")
     }
 
     @Test
@@ -505,4 +545,10 @@ class SonicVoidElementTest {
     private data class ItemCase(val item: String, val trigger: EffectTrigger, val element: StatusElement, val stacks: Int, val every: Int)
 
     private fun Enemy.resonant(): Enemy = apply { status[StatusCell.STACKS + StatusElement.SONIC.ordinal] = 1f }
+
+    private fun hostileShot(x: Float, y: Float) = Projectile(x = x, y = y, vx = 0f, vy = 0f, radius = 5f, life = 3f, hostile = true)
+
+    private fun weaponShot(state: MutableGameState, x: Float, y: Float) = Projectile(
+        x = x, y = y, vx = 0f, vy = 0f, radius = 5f, life = 3f, hostile = false, damage = 10f, sourceWeapon = state.weapon,
+    )
 }

@@ -230,8 +230,13 @@ private fun MutableGameState.resolveReaction(
                     target.vy = 0f
                 }
             }
+            // Stasis can fire while projectile hits are being walked by index, so it only spends the shots;
+            // the list keeps its shape until the collision pass or the next projectile update drops them.
             val reach = square(definition.radius)
-            projectiles.removeMatchingStable { it.hostile && distanceSquared(x, y, it.x, it.y) <= reach }
+            for (index in projectiles.indices) {
+                val shot = projectiles[index]
+                if (shot.hostile && distanceSquared(x, y, shot.x, shot.y) <= reach) shot.life = 0f
+            }
             shockwave(x, y, 0.45f, definition.radius, 1)
         }
         ReactionId.ANNIHILATE -> {

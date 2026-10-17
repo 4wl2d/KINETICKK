@@ -136,7 +136,7 @@ private fun MutableGameState.updateStasis(delta: Float) {
         if (stasisMeter <= 0f) stasisLockedUntil = elapsed + 4f
         val radiusSquared = square(stasisRadius())
         projectiles.removeMatchingStable { projectile ->
-            val caught = projectile.hostile && stasisBank < STASIS_MAX_BANK &&
+            val caught = projectile.hostile && !projectile.spent && stasisBank < STASIS_MAX_BANK &&
                 distanceSquared(projectile.x, projectile.y, coreX, coreY) <= radiusSquared
             if (caught) stasisBank++
             caught

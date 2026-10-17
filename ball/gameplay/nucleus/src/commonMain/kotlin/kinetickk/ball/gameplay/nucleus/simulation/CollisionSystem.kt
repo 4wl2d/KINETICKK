@@ -22,6 +22,12 @@ import kotlin.math.sin
 
 
 internal fun MutableGameState.resolveCollisions(delta: Float) {
+    resolveCollisionPasses(delta)
+    // Shots a reaction spent during these passes (Stasis) leave the list only once no pass is walking it.
+    projectiles.removeMatchingStable { projectile -> projectile.spent }
+}
+
+private fun MutableGameState.resolveCollisionPasses(delta: Float) {
     resolveEnemyCoreCollisions()
     if (phase != GamePhase.RUNNING) return
     resolveWeaponDamage(delta)
@@ -242,6 +248,10 @@ internal fun MutableGameState.resolveProjectileHits() {
             }
             break
         }
+        if (projectile.spent) {
+            hostileIndex++
+            continue
+        }
         val hitRadius = coreRadius + projectile.radius
         val hit = segmentCircleIntersects(
             projectile.previousX - previousCoreX,
@@ -293,7 +303,7 @@ internal fun MutableGameState.resolveProjectileHits() {
     while (friendlyRemaining > 0) {
         val projectile = projectiles[friendlyIndex]
         friendlyRemaining--
-        if (projectile.hostile) {
+        if (projectile.hostile || projectile.spent) {
             friendlyIndex++
             continue
         }
