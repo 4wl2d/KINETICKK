@@ -41,7 +41,10 @@ whose statuses Break at a threshold and react with each other: every pair of
 elements has its own reaction, 21 in all. Every Relic rewrites a rule and
 carries a cost; Relic keys predict harmony and dissonance, and the Codex records
 discovered reactions, pairings and known incompatibilities.
-Spend Kinetic Matter in the Core Matrix and Armory between runs. Defeat The Architect
+Nineteen enemy kinds, from Swarmling packs and Bombers to the Herald mini-boss,
+arrive through a spawn director that shapes every run's waves differently;
+later Rebirth tiers bring the toughest ones. Spend Kinetic Matter on the 32
+nodes of the Core Matrix and in the Armory between runs. Defeat The Architect
 to unlock the next Rebirth tier while keeping permanent progression.
 
 ## Build and run

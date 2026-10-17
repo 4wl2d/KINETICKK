@@ -76,8 +76,8 @@ abilities, optional world-fixed trials and bounded relic synergies. Codex reads
 one coherent immutable build summary and preserves pause/reward selection.
 
 The catalog has 90 hand-authored items, 12 weapons, 32 Core Matrix nodes, 22 Relics,
-six characters, and Rebirth levels `0..10` (see the build-system intentional
-delta below). Existing stable declaration order is captured as
+19 enemy types, six characters, and Rebirth levels `0..10` (see the build-system
+and 0.4.0 intentional deltas below). Existing stable declaration order is captured as
 explicit stable IDs during the migration; consumers receive immutable versioned
 snapshots instead of reaching global catalog objects.
 
@@ -119,78 +119,88 @@ gameplay reads or fires them yet. The seeded baseline trace is unchanged. The
 no-POI probe now runs its fixed ten seeds and requires at least five wins;
 six win, and seed `23770` no longer does.
 
-The 0.4.0 enemy step makes Content own the roster: nineteen enemy types with
-threat, time and Rebirth gates and spawn weights, ten of them new (Swarmling,
-Bomber, Lancer, Sniper, Aegis, Minelayer, Phantom, Broodmother, Reflector and
-the Herald mini-boss). A spawn director on its own random stream replaces the
-fixed-interval single spawns and the stage roll table: pacing phases bank
-budget for packs, flanks, swarms, walls, rings and ambushes placed in sectors
-around the heading, and leashed enemies are moved back to spawn distance
-instead of deleted. Elites jitter and roll their aspect from that stream, and
-Heralds arrive at 360 s and 540 s on their tiers. Every hostile shot, contact,
-strike, blast and mine now deals damage through the hostile-damage helper, so
-enemy damage grows with the run; strikes, lances, blasts and mines hurt at any
-Core speed. Each run takes its seed from the application's seed source (the
-default source keeps the fixed seed). The seeded baseline trace keeps its Core
-path and only its opening Drifters move. Multi-member events hold the Warden
-cap for every member, only Swarms bring Swarmlings, a Herald's repeat escorts
-fill only free ordinary room, and the Architect and Herald ignore stun. To keep
-tier 0 at the previous difficulty the director banks one enemy per tempo
-interval at phase rate 1 and keeps spawns clear of offered anomalies: over 40
-seeds the no-POI bot wins 25 times (the previous build: 24), and the reference
-seed and the fixed probe win. The comparative fixture pins the Elite aspect it
-was measured against. With Lab upgrades the Ring has two boss-proof build
-directions and at Rebirth one, because the Architect's grown contact damage
-breaks its shields; the comparative test tracks both gaps at their measured
-floors until the Ring's rework restores three.
+Its first wave changes enemies, elements, frame pacing and permanent upgrades
+together.
 
-Two status elements join the five: Sonic (Resonance: more knockback and impact
-damage taken; Shatter: a radial throwing shockwave) and Void (Hollow: the
-enemy's damage output falls and it remembers a share of damage taken; Unmake:
-the remembered damage strikes again ×1.6 after `0.35s`, capped at 40 % of
-maximum integrity, a weighted share for bosses). Eleven reactions cover the new
-pairs, so every one of the 21 element pairs reacts; Seismic and Stasis stun or
-stop ordinary enemies, Silence stops attacks (`2s`; a boss falls silent for
-`0.75s` and then ignores Silence for `2s`, so chained Silences cannot keep the
-Architect from attacking), Oblivion executes weakened non-boss enemies, and
-Hollow never cuts an enemy's damage below half; its memory ends with its last
-stack, however that stack is spent. Thunder Choir (Sonic) and Null Covenant
-(Void, maximum integrity −10 % of the whole ceiling, raises included) join the
-Relics, items `80..89` are appended, Elites rotate through seven aspects and
-the enemy status layout grows to 71 cells. Seeded runs therefore differ; the
-no-POI probe counts only victories that skip every POI (eight of ten seeds win,
-six of them without a POI).
+- **Enemies and spawning.** Content owns the roster: nineteen enemy types with
+  threat, time and Rebirth gates and spawn weights, ten of them new (Swarmling,
+  Bomber, Lancer, Sniper, Aegis, Minelayer, Phantom, Broodmother, Reflector and
+  the Herald mini-boss). A spawn director on its own random stream replaces the
+  fixed-interval single spawns and the stage roll table: pacing phases bank
+  budget for packs, flanks, swarms, walls, rings and ambushes placed in sectors
+  around the heading, and leashed enemies are moved back to spawn distance
+  instead of deleted. Elites jitter and roll their aspect over all seven
+  elements from that stream, and Heralds arrive at 360 s and 540 s on their
+  tiers. Every hostile shot, contact, strike, blast and mine deals damage
+  through the hostile-damage helper, so enemy damage grows with the run and
+  falls with Hollow; strikes, lances, blasts and mines hurt at any Core speed.
+  Each run takes its seed from the application's seed source (the default
+  source keeps the fixed seed). Multi-member events hold the Warden cap for
+  every member, only Swarms bring Swarmlings and a Herald's repeat escorts fill
+  only free ordinary room. The comparative fixture pins the Elite aspect it was
+  measured against; with the grown hostile damage every form still keeps at
+  least three boss-proof build directions fresh, with Matrix upgrades and at
+  Rebirth.
+- **Elements and reactions.** Sonic (Resonance: more knockback and impact
+  damage taken; Shatter: a radial throwing shockwave) and Void (Hollow: the
+  enemy's damage output falls and it remembers a share of damage taken; Unmake:
+  the remembered damage strikes again ×1.6 after `0.35s`, capped at 40 % of
+  maximum integrity, a weighted share for bosses) join the five elements.
+  Eleven reactions cover the new pairs, so every one of the 21 element pairs
+  reacts. "Boss" in these rules means the Architect and the Herald: Seismic and
+  Stasis stun or stop only ordinary enemies (a stopped enemy keeps drifting on
+  its momentum while it bleeds off), Silence stops attacks for `2s` while a
+  boss falls silent for `0.75s` and then ignores Silence for `2s` (so chained
+  Silences cannot keep it from attacking), and Oblivion executes weakened
+  non-boss enemies through tethers like every execute. Hollow never cuts an
+  enemy's damage below half; its memory ends with its last stack, however that
+  stack is spent. Stasis spends hostile shots and mines in its reach instead
+  of removing them mid-walk. Thunder Choir (Sonic) and Null Covenant (Void,
+  maximum integrity −10 % of the whole ceiling, raises included) join the
+  Relics, items `80..89` are appended and the enemy status layout grows to 71
+  cells.
+- **Frame pacing.** The simulation is density independent: the interaction
+  boundary divides the viewport and the pointer by the display density, so
+  world units, speeds and spawn distances are dp on every display, and the
+  world layer is drawn magnified by the density (the HUD keeps device pixels
+  and `uiScale`). Tests run at density 1 and are unchanged. The render model
+  publishes an interpolation alpha (accumulator over the fixed step, `1`
+  outside a running phase and until the first step after a run starts or
+  resumes) and previous positions; renderers draw moving things, the new
+  enemies, telegraphs, tethers and mines included, between the last two
+  simulated states, and continuous animations run on the matching interpolated
+  time. A running frame whose admitted time stays below one step only advances
+  the accumulator on a scalar copy and reuses every projection. Step admission
+  tolerates two Float ulps, so an input on a nominal step boundary lands on the
+  same step at 30, 60, 144 and 240 Hz; at 50 Hz input the step timing is
+  unchanged. World rebases also shift pickup, camera, Morningstar and orbital
+  previous positions. The 120 Hz step, the 48-step cap and the `0.1` / `0.3` s
+  clamps are unchanged; the version is `0.4.0`.
+- **Core Matrix.** The Core Matrix replaces the Lab (the Lab route, the L key
+  and the screen slot stay). Its 32 nodes in four branches carry per-rank
+  prices, any-of prerequisites, Rebirth-rank gates and typed effects that every
+  run applies from content at start; the Lab's hard-coded run multipliers and
+  its hidden extra reroll per four Data Archive ranks are gone. Purchases check
+  the rank maximum, the Rebirth rank, the prerequisites and Matter in that
+  order; Reset refunds every rank. Loading checks only node membership and rank
+  maxima, clamping ranks above a lowered maximum and refunding them, so a
+  rebalance never wipes a save. A save that still carries Lab ranks decodes
+  with their full spend refunded into Matter and an empty Matrix. The Matrix
+  damage multiplier applies once per damage instance, so bases derived from a
+  hit, Hollow memory included, are measured without it. Matrix effects reach
+  every new path: enemy integrity applies to every spawn
+  (director events, escorts, Heralds, Broodmother births, Splitter fragments
+  and trial defenders), contact damage to strikes, Second Wind to every lethal
+  hit and Elite Bounty to every Elite or Herald kill, executes included. Total
+  kills, ricochets and Data pickups join the cumulative Profile achievements;
+  Gameplay publishes them with any other progress or when the run banks.
 
-The 0.4.0 frame-pacing step makes the simulation density independent: the
-interaction boundary divides the viewport and the pointer by the display
-density, so world units, speeds and spawn distances are dp on every display,
-and the world layer is drawn magnified by the density (the HUD keeps device
-pixels and `uiScale`). Tests run at density 1 and are unchanged. The render
-model publishes an interpolation alpha (accumulator over the fixed step, `1`
-outside a running phase and until the first step after a run starts or
-resumes) and previous positions, and renderers draw moving things between the
-last two simulated states. A running frame whose admitted
-time stays below one step only advances the accumulator on a scalar copy and
-reuses every projection. Step admission tolerates two Float ulps, so an input on
-a nominal step boundary lands on the same step at 30, 60, 144 and 240 Hz; at
-50 Hz input the step timing and the seeded traces are unchanged. World rebases
-also shift pickup, camera, Morningstar and orbital previous positions. The
-120 Hz step, the 48-step cap and the `0.1` / `0.3` s clamps are unchanged; the
-version is `0.4.0`.
-
-The Core Matrix replaces the Lab (the Lab route, the L key and the screen slot
-stay). Its 32 nodes in four branches carry per-rank prices, any-of
-prerequisites, Rebirth-rank gates and typed effects that every run applies from
-content at start; the Lab's hard-coded run multipliers and its hidden extra
-reroll per four Data Archive ranks are gone. Purchases check the rank maximum,
-the Rebirth rank, the prerequisites and Matter in that order; Reset refunds every
-rank. Loading checks only node membership and rank maxima, clamping ranks above
-a lowered maximum and refunding them, so a rebalance never wipes a save. A save
-that still carries Lab ranks decodes with their full spend refunded into Matter
-and an empty Matrix. Total kills, ricochets and Data pickups join the cumulative
-Profile achievements; Gameplay publishes them with any other progress or when
-the run banks. A profile without Matrix ranks starts runs exactly as before, so
-the seeded baseline trace is unchanged.
+Seeded runs differ from the previous baseline: the seeded baseline trace keeps
+its Core path and only its opening Drifters move. To keep tier 0 at the
+previous difficulty the director banks one enemy per tempo interval at phase
+rate 1 and keeps spawns clear of offered anomalies. The no-POI probe counts
+only victories that skip every POI; the reference seed and at least five of
+the fixed probe seeds win.
 
 The compact exit workflow removes the old causal-depth assertion that failed
 when a busy Profile refused progress before acceptance. An injected
