@@ -39,6 +39,8 @@ class WorldContentTest {
         assertFailsWith<IllegalArgumentException> { ObstacleTuning(damageStartReach = 0.8f, lethalReach = 0.7f) }
         assertFailsWith<IllegalArgumentException> { ObstacleTuning(restitution = 1.01f) }
         assertEquals(1f, ObstacleTuning(restitution = 1f).restitution)
+        assertEquals(0.9f, ObstacleTuning().bumperLethalShare)
+        assertFailsWith<IllegalArgumentException> { ObstacleTuning(bumperLethalShare = 1f) }
     }
 
     @Test

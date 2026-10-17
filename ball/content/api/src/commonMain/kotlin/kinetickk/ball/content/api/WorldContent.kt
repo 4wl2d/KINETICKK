@@ -57,6 +57,11 @@ data class ObstacleTuning(
     val bumperMaximumExitSpeed: Float = 1_400f,
     val bumperGain: Float = 1.05f,
     val bumperRicochetCooldownSeconds: Float = 1.5f,
+    /**
+     * A bumper never throws the Core faster than this share of the lethal collision speed along its new
+     * heading, so a throw cannot turn the next asteroid into a lethal hit.
+     */
+    val bumperLethalShare: Float = 0.9f,
     val unstableBlastRadius: Float = 150f,
     val unstableBlastDamage: Float = 10f,
     /** Enemy contact normal speed that slams it, and the speed its slam damage counts from. */
@@ -105,6 +110,7 @@ data class ObstacleTuning(
         require(hitCooldownSeconds.isFinite() && hitCooldownSeconds >= 0f)
         require(bumperMinimumExitSpeed > 0f && bumperMaximumExitSpeed >= bumperMinimumExitSpeed && bumperGain >= 1f)
         require(bumperRicochetCooldownSeconds.isFinite() && bumperRicochetCooldownSeconds >= 0f)
+        require(bumperLethalShare > 0f && bumperLethalShare < 1f) { "A bumper throw must stay below the lethal speed" }
         require(unstableBlastRadius.isFinite() && unstableBlastRadius > 0f && unstableBlastDamage.isFinite() && unstableBlastDamage >= 0f)
         require(slamSpeed > slamDamageOffset && slamDamageOffset >= 0f && slamDamagePerSpeed > 0f)
         require(avoidanceRange.isFinite() && avoidanceRange >= 1f)

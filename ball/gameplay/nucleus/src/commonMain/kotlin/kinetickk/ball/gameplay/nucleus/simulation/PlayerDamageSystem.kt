@@ -129,12 +129,20 @@ internal fun MutableGameState.takeDamage(
 /** Run end message of a collision that leaves the Core at zero integrity. */
 internal const val OBSTACLE_COLLISION_REASON: String = "OBSTACLE COLLISION"
 
-/** See [IncomingDamage.OBSTACLE]. */
+/**
+ * See [IncomingDamage.OBSTACLE]. Glass Comet's liability still holds: collisions deal double damage and
+ * shields do not absorb them.
+ */
 private fun MutableGameState.takeObstacleDamage(rawAmount: Float) {
     if (rawAmount <= 0f || invulnerableUntil > elapsed) return
     var amount = rawAmount * (1f + content.obstacles.damagePerTier * rebirthLevel)
+    val glass = build.liability(RelicId.GLASS_COMET)
+    if (glass) {
+        amount *= 2f
+        glassCharge = 0f
+    }
     val shieldBefore = shield
-    if (shield > 0f) {
+    if (shield > 0f && !glass) {
         val absorbed = min(shield, amount)
         absorbShield(absorbed, incoming = true)
         amount -= absorbed

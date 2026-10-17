@@ -19,12 +19,14 @@ import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.immutableListOf
+import kotlin.math.PI
 import kotlin.math.pow
 import kotlin.math.sqrt
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -314,6 +316,18 @@ class ObstacleSystemTest {
     }
 
     @Test
+    fun ricochetsReachTheRunsProgressUpdate() {
+        val state = buildTestState()
+        state.ramAsteroid(state.bandSpeed(0.1f))
+        state.placeObstaclesForTesting(testObstacle(300f, 0f, radius = 34f, kind = ObstacleKind.BUMPER))
+        state.flyIntoObstaclesForTesting(300f - 34f - MutableGameState.CORE_RADIUS + 1f, 0f, 400f, 0f)
+        assertEquals(2, state.pendingRicochets)
+        state.exitRun()
+        assertEquals(2, assertNotNull(state.takeProgressUpdate()).ricochets, "the profile counts them")
+        assertEquals(0, state.pendingRicochets)
+    }
+
+    @Test
     fun bumpersThrowTheCoreBackWithinTheirBandAndRicochetOncePerCooldown() {
         val state = buildTestState()
         state.placeObstaclesForTesting(testObstacle(300f, 0f, radius = 34f, kind = ObstacleKind.BUMPER))
@@ -332,6 +346,36 @@ class ObstacleSystemTest {
         assertEquals(1_400f, state.speed, 0.5f, "never faster than the bumper's maximum")
         assertEquals(2, state.pendingRicochets)
         assertEquals(state.maxHp, state.hp)
+    }
+
+    @Test
+    fun aBumperNeverThrowsTheCoreToTheLethalSpeedOfItsNewHeading() {
+        // A portrait phone: across its narrow width the lethal speed lies inside the bumper band.
+        val state = buildTestState().apply { resize(412f, 915f) }
+        val tuning = state.content.obstacles
+        val ceiling = state.obstacleLethalSpeed(PI.toFloat()) * tuning.bumperLethalShare
+        assertTrue(ceiling < tuning.bumperMaximumExitSpeed, "the band reaches past the lethal speed here: $ceiling")
+        state.placeObstaclesForTesting(testObstacle(300f, 0f, radius = 34f, kind = ObstacleKind.BUMPER))
+        val bumperContact = 300f - 34f - MutableGameState.CORE_RADIUS
+        state.flyIntoObstaclesForTesting(bumperContact + 10f, 0f, 3_000f, 0f)
+        assertTrue(state.velocityX < 0f)
+        assertEquals(ceiling, state.speed, 0.5f, "held below the lethal speed of the throw")
+        assertEquals(state.maxHp, state.hp)
+    }
+
+    @Test
+    fun glassCometDoublesCollisionDamageAndKeepsShieldsOut() {
+        val plain = buildTestState()
+        val speed = plain.bandSpeed(0.4f)
+        plain.ramAsteroid(speed)
+        val plainShare = (plain.maxHp - plain.hp) / plain.maxHp
+        assertTrue(plainShare > 0f)
+        val glass = buildTestState(RelicId.GLASS_COMET)
+        glass.maxShield = 300f
+        glass.shield = 300f
+        glass.ramAsteroid(speed)
+        assertEquals(300f, glass.shield, "the liability keeps shields from absorbing it")
+        assertEquals(plainShare * 2f, (glass.maxHp - glass.hp) / glass.maxHp, 0.0005f)
     }
 
     @Test
@@ -476,6 +520,20 @@ class ObstacleSystemTest {
         state.markThrown(thrown)
         state.resolveEnemyObstacles()
         assertEquals(100f, thrown.vx, "thrown enemies fly straight into it")
+    }
+
+    @Test
+    fun enemiesStartAvoidingALargeObstacleAcrossAChunkBorder() {
+        val state = buildTestState()
+        // The obstacle's centre lies in the next chunk; the enemy is inside 1.6 × their combined radii.
+        val obstacle = testObstacle(state.content.obstacles.chunkSize + 10f, 5f, radius = 150f)
+        state.placeObstaclesForTesting(obstacle)
+        val enemy = state.dummy(x = obstacle.x - (150f + 17f) * 1.4f, y = 0f)
+        enemy.vx = 100f
+        enemy.vy = 0f
+        state.resolveEnemyObstacles()
+        assertTrue(enemy.vx < 100f, "the approach bends before the chunk border")
+        assertTrue(enemy.vy < 0f, "along the surface")
     }
 
     @Test

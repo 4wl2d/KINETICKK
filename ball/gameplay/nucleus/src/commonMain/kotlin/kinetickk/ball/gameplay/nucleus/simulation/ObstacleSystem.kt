@@ -198,10 +198,13 @@ internal fun MutableGameState.generateChunk(chunkX: Int, chunkY: Int): List<Obst
     if (own.isEmpty()) return emptyList()
     val tuning = content.obstacles
     val chunk = tuning.chunkSize
+    val neighbours = Array(EARLIER_NEIGHBOURS.size / 2) { neighbour ->
+        chunkCandidates(chunkX + EARLIER_NEIGHBOURS[neighbour * 2], chunkY + EARLIER_NEIGHBOURS[neighbour * 2 + 1])
+    }
     val result = ArrayList<Obstacle>(own.size)
     for (index in own.indices) {
         val candidate = own[index]
-        if (yieldsToEarlierNeighbour(chunkX, chunkY, candidate)) continue
+        if (yieldsToEarlierNeighbour(neighbours, candidate)) continue
         val id = obstacleId(chunkX, chunkY, candidate.slot)
         if (id in destroyedObstacleIds) continue
         result += Obstacle(
@@ -226,13 +229,17 @@ private class ObstacleCandidate(
     val offsetY: Float,
 )
 
-private fun MutableGameState.yieldsToEarlierNeighbour(chunkX: Int, chunkY: Int, candidate: ObstacleCandidate): Boolean {
+/** [neighbours] holds the candidates of each [EARLIER_NEIGHBOURS] chunk, in that order. */
+private fun MutableGameState.yieldsToEarlierNeighbour(
+    neighbours: Array<List<ObstacleCandidate>>,
+    candidate: ObstacleCandidate,
+): Boolean {
     val tuning = content.obstacles
     val chunk = tuning.chunkSize
-    for (neighbour in EARLIER_NEIGHBOURS.indices step 2) {
-        val dx = EARLIER_NEIGHBOURS[neighbour]
-        val dy = EARLIER_NEIGHBOURS[neighbour + 1]
-        val others = chunkCandidates(chunkX + dx, chunkY + dy)
+    for (neighbour in neighbours.indices) {
+        val dx = EARLIER_NEIGHBOURS[neighbour * 2]
+        val dy = EARLIER_NEIGHBOURS[neighbour * 2 + 1]
+        val others = neighbours[neighbour]
         for (index in others.indices) {
             val other = others[index]
             val separationX = dx * chunk + other.offsetX - candidate.offsetX
@@ -552,7 +559,10 @@ private fun MutableGameState.onRicochet(x: Float, y: Float, normalSpeed: Float) 
     fireClauses(EffectTrigger.RICOCHET, null, impact)
 }
 
-/** Elastic throw: the Core leaves at 1.05 × its speed, held to the bumper band; never hurts. */
+/**
+ * Elastic throw: the Core leaves at 1.05 × its speed, held to the bumper band and below the lethal
+ * collision speed of its new heading (on a narrow viewport that speed can lie inside the band); never hurts.
+ */
 private fun MutableGameState.bounceOffBumper(
     index: Int,
     obstacle: Obstacle,
@@ -566,15 +576,13 @@ private fun MutableGameState.bounceOffBumper(
     val incoming = speed
     velocityX += 2f * normalSpeed * nx
     velocityY += 2f * normalSpeed * ny
-    val exit = max(tuning.bumperMinimumExitSpeed, min(tuning.bumperGain * incoming, tuning.bumperMaximumExitSpeed))
     val current = speed
-    if (current > 0.001f) {
-        velocityX = velocityX / current * exit
-        velocityY = velocityY / current * exit
-    } else {
-        velocityX = nx * exit
-        velocityY = ny * exit
-    }
+    val directionX = if (current > 0.001f) velocityX / current else nx
+    val directionY = if (current > 0.001f) velocityY / current else ny
+    val band = max(tuning.bumperMinimumExitSpeed, min(tuning.bumperGain * incoming, tuning.bumperMaximumExitSpeed))
+    val exit = min(band, obstacleLethalSpeed(atan2(directionY, directionX)) * tuning.bumperLethalShare)
+    velocityX = directionX * exit
+    velocityY = directionY * exit
     shockwave(obstacle.x, obstacle.y, 0.25f, obstacle.radius * 2.4f, 2)
     emitSound(GameplayAudioCue.IMPACT)
     screenShake = max(screenShake, 4f)
@@ -628,10 +636,12 @@ private fun MutableGameState.checkNearMiss() {
 internal fun MutableGameState.resolveEnemyObstacles() {
     val tuning = content.obstacles
     if (obstacleField.size > 0) {
+        // The lookup adds the largest obstacle radius once; avoidance scales the combined radii.
+        val largest = max(tuning.asteroidMaximumRadius, tuning.bumperRadius)
         for (enemyIndex in enemies.indices) {
             val enemy = enemies[enemyIndex]
             if (!enemy.alive || (enemy.type == EnemyType.PHANTOM && isShifting(enemy))) continue
-            val avoidReach = enemy.radius * tuning.avoidanceRange
+            val avoidReach = (enemy.radius + largest) * tuning.avoidanceRange - largest
             forEachObstacleNear(enemy.x, enemy.y, avoidReach) { _, obstacle ->
                 resolveEnemyObstacle(enemy, obstacle)
             }

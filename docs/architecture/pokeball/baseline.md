@@ -219,7 +219,9 @@ The second wave adds world obstacles, a minimap and a wider Data magnet.
   `1 + 0.04t` instead of the Rebirth incoming-damage multiplier, ignores damage
   reduction, is absorbed by shields and is never cancelled by facets; a lethal
   collision zeroes integrity past shields unless Second Wind or the Ouroboros
-  Seal answers it. Hard bounces and bumper bounces count ricochets and fire
+  Seal answers it; Glass Comet's liability doubles collision damage and keeps
+  shields out. A bumper throw stays below 90 % of the lethal speed of its new
+  heading. Hard bounces and bumper bounces count ricochets and fire
   RICOCHET; enemies slide around obstacles, are pushed out of them and take slam
   damage (firing SLAM) when thrown into them or into each other; asteroids stop
   shots; spawns, totems and anomalies move clear. The ambush waits for 75 % of
@@ -229,9 +231,9 @@ The second wave adds world obstacles, a minimap and a wider Data magnet.
   it in every layout.
 - **Pickups.** The magnet radius is 320 (item floor 120) and Data is collected
   within 56. A pickup entering the radius latches and homes faster than the Core
-  until collected; a level-up and the end of a choice latch every on-screen
-  Data. Keys and Relic resonances never expire, and at the cap they evict the
-  oldest Data. Event Horizon's liability now removes the latch and the level-up
+  until collected, without fading on the way; a level-up and the end of a
+  choice latch every on-screen Data. Keys and Relic resonances never expire,
+  and at the cap they evict the oldest Data. Event Horizon's liability now removes the latch and the level-up
   vacuum instead of halving the radius; Magnet Lens gives +90.
 
 The compact exit workflow removes the old causal-depth assertion that failed

@@ -108,7 +108,8 @@ internal val rewardFixtureRelics: List<RelicDefinition> = listOf(
     relic(RelicId.EVENT_HORIZON, "Event Horizon", RelicAspect.GRAVITIC, listOf(RelicKey.GRAVITY), listOf(BuildTag.ANCHOR, BuildTag.RAM),
         "Enemies within 280 u are dragged toward you. Impacts against enemies carrying Gravitic deal {0} % more, and " +
             "your Collapses implode toward you.",
-        "Contact damage taken ×1.5 and pickup radius halved.", RelicValue(40f, 20f)),
+        "Contact damage taken ×1.5. Data no longer latches onto you, and level-ups no longer pull it in.",
+        RelicValue(40f, 20f)),
     relic(RelicId.VERDANT_ROT, "Verdant Rot", RelicAspect.ENTROPY, listOf(RelicKey.DECAY, RelicKey.LIFE), listOf(BuildTag.BULWARK),
         "Impacts apply 2 Entropy. Every Entropy stack within 320 u heals you {0} per second, up to 3.5.",
         "All other healing is disabled, and every Entropy stack close to you makes you take 1.5 % more damage.", RelicValue(0.25f, 0.05f)),

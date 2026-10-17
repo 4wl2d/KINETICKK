@@ -231,7 +231,7 @@ internal fun MutableGameState.updateProjectiles(delta: Float) {
  * Pickups drift from where they dropped until they enter the magnet radius; there they latch and home on
  * the Core at `max(vacuumSpeed, coreSpeed × factor)` with no damping until collected. Event Horizon's
  * liability turns the latch off: pickups are then only pulled while inside the radius, weaker at its rim.
- * Keys and Relic resonances never expire.
+ * Keys and Relic resonances never expire, and a latched pickup does not age while it homes.
  */
 internal fun MutableGameState.updatePickups(delta: Float) {
     val radius = effectivePickupRadius()
@@ -243,12 +243,14 @@ internal fun MutableGameState.updatePickups(delta: Float) {
         val pickup = pickups[pickupIndex]
         pickup.previousX = pickup.x
         pickup.previousY = pickup.y
-        if (pickup.expires) pickup.life -= delta
         val dx = coreX - pickup.x
         val dy = coreY - pickup.y
         val distance = max(1f, length(dx, dy))
         if (latching && !pickup.attracted && distance < radius) pickup.attracted = true
-        if (latching && pickup.attracted) {
+        val homing = latching && pickup.attracted
+        // A latched pickup is on its way in and never fades before it arrives.
+        if (pickup.expires && !homing) pickup.life -= delta
+        if (homing) {
             pickup.vx = dx / distance * homingSpeed
             pickup.vy = dy / distance * homingSpeed
         } else {

@@ -56,6 +56,18 @@ class PickupVacuumTest {
     }
 
     @Test
+    fun aLatchedPickupNeverFadesBeforeItArrives() {
+        val state = buildTestState()
+        val latched = Pickup(PickupType.DATA, 300f, 0f, life = 0.05f)
+        val loose = Pickup(PickupType.DATA, 2_000f, 0f, life = 0.05f)
+        state.pickups += listOf(latched, loose)
+        repeat(20) { state.updatePickups(step) }
+        assertTrue(latched in state.pickups, "still homing after its life would have run out")
+        assertTrue(latched.x < 200f)
+        assertFalse(loose in state.pickups, "a loose pickup still fades")
+    }
+
+    @Test
     fun aLevelUpAndTheEndOfAChoiceVacuumOnScreenDataOnly() {
         val state = buildTestState()
         val onScreen = Pickup(PickupType.DATA, 500f, 200f)
