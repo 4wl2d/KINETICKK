@@ -49,6 +49,7 @@ import kinetickk.ball.profile.api.ProfileRebirthTierSelected
 import kinetickk.ball.profile.api.ProfileProgressApplied
 import kinetickk.ball.profile.api.RunBootstrapProjection
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
+import kinetickk.ball.profile.api.isAscendant
 import kinetickk.ball.profile.api.rank
 import kinetickk.ball.profile.api.rankWithin
 import kinetickk.foundation.collections.toImmutableSet
@@ -159,6 +160,7 @@ object ProfileNucleus {
             selected = state.profile.loadout.coreShape,
             rebirthRank = state.profile.rebirthProgress.rank,
             ascendedCharacters = state.profile.rebirthProgress.ascendedCharacters,
+            ascendant = state.profile.rebirthProgress.isAscendant,
         )
 
     fun query(state: ProfileState, query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection =

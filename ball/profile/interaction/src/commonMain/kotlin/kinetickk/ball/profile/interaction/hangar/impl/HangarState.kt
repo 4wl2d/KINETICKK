@@ -114,5 +114,6 @@ internal fun HangarProjection.toRenderModel(
         }.toImmutableList(),
         selected = selected,
         matter = matter,
+        ascendant = ascendant,
     )
 }

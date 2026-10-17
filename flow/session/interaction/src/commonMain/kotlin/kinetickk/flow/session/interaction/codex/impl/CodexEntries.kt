@@ -396,8 +396,8 @@ internal fun codexCatalogEntries(
     language: AppLanguage = AppLanguage.English,
     sort: CodexItemSort = CodexItemSort.TAG,
 ): List<CodexEntry> {
-    val rebirth = progress.rebirthProgress.level
-    // Rebirth-gated content shows its tier in the open collection, never its identity.
+    // Rebirth-gated content (opened by the rank) shows its tier in the open collection, never its identity.
+    val rebirth = progress.rebirthProgress.rank
     val showLocks = search.isBlank() && filter == CodexItemFilter.ALL
     return when (category) {
         0 -> codexItemRows(sort, search, filter, model, catalog, progress, language).entries

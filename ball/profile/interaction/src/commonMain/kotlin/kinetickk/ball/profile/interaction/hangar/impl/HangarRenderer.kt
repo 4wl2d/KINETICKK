@@ -110,7 +110,8 @@ internal fun HangarContent(
     ) {
         ProfilePanel(
             title = language.text(ProfileText.HangarTitle),
-            count = language.text(ProfileScreensRedesignText.CountOf, model.unlockedCount, model.shapes.size),
+            count = language.text(ProfileScreensRedesignText.CountOf, model.unlockedCount, model.shapes.size) +
+                if (model.ascendant) ", " + language.text(ProfileScreensRedesignText.Ascendant) else "",
             info = language.text(ProfileScreensRedesignText.HangarInfo),
             matter = model.matter,
             scale = scale,

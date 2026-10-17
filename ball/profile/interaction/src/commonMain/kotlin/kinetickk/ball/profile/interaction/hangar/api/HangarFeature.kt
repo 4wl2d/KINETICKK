@@ -33,6 +33,8 @@ data class HangarRenderModel(
     /** The character the next run starts with. */
     val selected: CoreShape,
     val matter: Long,
+    /** Every Rebirth tier is cleared: the header adds the Ascendant title. */
+    val ascendant: Boolean = false,
 ) {
     val unlockedCount: Int get() = shapes.count { it.unlocked }
 
