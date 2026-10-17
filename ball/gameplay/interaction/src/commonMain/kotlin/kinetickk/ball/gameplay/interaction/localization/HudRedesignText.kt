@@ -41,7 +41,7 @@ internal enum class HudRedesignText(
     HollowSlot("Hollow slot", "Пустая ячейка"),
     WeaponSynergy("Weapon synergy", "Синергия оружия"),
     SynergyTags("Tags +{0}%", "Теги +{0}%"),
-    SynergySignature("Signature {0}", "Сигнатура {0}"),
+    SynergySignature("Signature {0}", "Фирменное {0}"),
     SynergyHarmony("Harmony: {0}", "Гармония: {0}"),
     SynergyElement("Element: {0}", "Стихия: {0}"),
     SynergyScaling("{0} {1}", "{0} {1}"),
