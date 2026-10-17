@@ -188,8 +188,11 @@ internal fun MutableGameState.sampleFluxTrail() {
     val turning = signatureActive() && moved > 0f && turn / moved >= FLUX_TURN_CURVATURE
     val life = (if (hasMasteryForm(2)) FLUX_LONG_LIFE else TRAIL_LIFE_SECONDS) * (if (turning) 1.5f else 1f) + agonyRank * 0.18f
     val scale = if (turning) 1.5f else 1f
-    // Samples spread with speed, so the bounded trail covers its whole life at high speed too.
-    val spacing = max(FLUX_SPACING, speed * FLUX_SPACING_PER_SPEED)
+    // Samples spread so the bounded trail holds the longest live point's whole life and fade at this speed:
+    // at most MAX_TRAIL_POINTS samples in that time, so the oldest burning point is never evicted early.
+    var longestLife = life
+    for (index in trail.indices) longestLife = max(longestLife, trail[index].life)
+    val spacing = max(FLUX_SPACING, speed * (longestLife + TRAIL_FADE_SECONDS) / MutableGameState.MAX_TRAIL_POINTS)
     var sampleDistance = spacing - trailDistanceCarry
     var samples = 0
     while (sampleDistance <= distance && samples < MutableGameState.MAX_TRAIL_SAMPLES_PER_UPDATE) {
@@ -344,9 +347,13 @@ internal fun MutableGameState.ensureOrbitals(
         weaponOrbitals.clear()
         repeat(count) { weaponOrbitals += WeaponOrbital(it, coreX, coreY, hitRadius) }
     }
+    // The phase accumulates, so a change of angular speed (attack speed, a mastery milestone, a buff) only bends
+    // the orbit; deriving it from the run clock would jump every orbital by elapsed × the change.
+    val runtime = weaponRuntime
+    runtime.orbitalPhase = (runtime.orbitalPhase + angularSpeed * delta) % TAU
     for (index in weaponOrbitals.indices) {
         val orbital = weaponOrbitals[index]
-        val angle = elapsed * angularSpeed + orbital.index * TAU / max(1, count)
+        val angle = runtime.orbitalPhase + orbital.index * TAU / max(1, count)
         orbital.previousX = orbital.x
         orbital.previousY = orbital.y
         orbital.x = coreX + cos(angle) * orbitRadius
@@ -778,10 +785,15 @@ private fun MutableGameState.concussionWave(x: Float, y: Float, radius: Float, d
     emitSound(GameplayAudioCue.IMPACT)
 }
 
-/** Spiral signature: the echo ghost's contacts also emit (smaller) shockwaves. */
+/**
+ * Spiral signature: the echo ghost's contacts also emit (smaller) shockwaves. The ghost is a second source with
+ * the Core's own shockwave cadence: at most one wave per [CONCUSSION_COOLDOWN] (on top of the per-enemy gate),
+ * however many enemies it touches.
+ */
 private fun MutableGameState.updateConcussionGhost(power: Float, agonyRank: Int) {
     if (agonyRank > 0) agonyMutationCounts[WeaponId.CONCUSSION_ENGINE.ordinal]++
-    if (!signatureActive() || !ghostActive || ghostSpeed < CONCUSSION_MIN_SPEED) return
+    val runtime = weaponRuntime
+    if (!signatureActive() || !ghostActive || ghostSpeed < CONCUSSION_MIN_SPEED || elapsed < runtime.signatureReadyAt) return
     val x = ghostX
     val y = ghostY
     for (index in enemies.indices) {
@@ -789,7 +801,10 @@ private fun MutableGameState.updateConcussionGhost(power: Float, agonyRank: Int)
         if (!enemy.alive || enemy.weaponCooldown > 0f) continue
         if (distanceSquared(x, y, enemy.x, enemy.y) > square(coreRadius + enemy.radius)) continue
         enemy.weaponCooldown = CONCUSSION_GHOST_GATE
-        concussionWave(x, y, concussionRadius(ghostSpeed, agonyRank) * 0.7f, CONCUSSION_DAMAGE * power * 0.6f, beginWeaponActivation())
+        runtime.signatureReadyAt = elapsed + CONCUSSION_COOLDOWN
+        // Like the Core's impacts, ghost contacts are no cooldown: attack speed raises the wave's damage instead.
+        concussionWave(x, y, concussionRadius(ghostSpeed, agonyRank) * 0.7f, CONCUSSION_DAMAGE * power * 0.6f * continuousWeaponRate(),
+            beginWeaponActivation())
         return
     }
 }
@@ -1046,22 +1061,43 @@ internal fun MutableGameState.enemyById(id: Int): Enemy? {
     return null
 }
 
-/** Adds a weapon entity within [WeaponRuntime.MAX_WEAPON_ENTITIES]; the oldest finished one gives way first. */
+/**
+ * Adds a weapon entity within [WeaponRuntime.MAX_WEAPON_ENTITIES] live ones: a finished entity gives way first,
+ * else the oldest one other than a tether or a beam; with neither, the new entity is dropped. Inside an entity
+ * pass nothing leaves the list: the new entity joins its end (the pass does not visit it) and the one making room
+ * finishes, leaving with the pass's other finished entities, so no index shifts under the pass.
+ */
 internal fun MutableGameState.addWeaponEntity(entity: WeaponEntity) {
-    val entities = weaponRuntime.entities
+    val runtime = weaponRuntime
+    val entities = runtime.entities
+    if (runtime.entityPassActive) {
+        var live = 0
+        for (index in entities.indices) if (entities[index].life > 0f) live++
+        if (live >= WeaponRuntime.MAX_WEAPON_ENTITIES) {
+            val victim = oldestEvictableWeaponEntity(entities)
+            if (victim < 0) return
+            entities[victim].life = 0f
+        }
+        entities += entity
+        return
+    }
     if (entities.size >= WeaponRuntime.MAX_WEAPON_ENTITIES) {
         var victim = -1
         for (index in entities.indices) if (entities[index].life <= 0f) { victim = index; break }
-        if (victim < 0) {
-            for (index in entities.indices) {
-                val kind = entities[index].kind
-                if (kind != WeaponEntityKind.TETHER && kind != WeaponEntityKind.BEAM) { victim = index; break }
-            }
-        }
+        if (victim < 0) victim = oldestEvictableWeaponEntity(entities)
         if (victim < 0) return
         entities.removeAt(victim)
     }
     entities += entity
+}
+
+/** The oldest live entity other than a tether or a beam, or -1. */
+private fun oldestEvictableWeaponEntity(entities: List<WeaponEntity>): Int {
+    for (index in entities.indices) {
+        val candidate = entities[index]
+        if (candidate.life > 0f && candidate.kind != WeaponEntityKind.TETHER && candidate.kind != WeaponEntityKind.BEAM) return index
+    }
+    return -1
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1108,7 +1144,6 @@ internal const val PRISM_TWIN_SHARE: Float = 0.5f
 internal const val FLUX_TURN_CURVATURE: Float = 0.0105f
 internal const val FLUX_LONG_LIFE: Float = 4f
 internal const val FLUX_SPACING: Float = 22f
-internal const val FLUX_SPACING_PER_SPEED: Float = 0.03f
 internal const val PARRY_TWIST_GUARD: Float = 0.2f
 
 internal const val GYRE_DAMAGE: Float = 45f

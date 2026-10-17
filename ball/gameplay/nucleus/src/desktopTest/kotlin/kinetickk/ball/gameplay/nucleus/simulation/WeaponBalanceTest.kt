@@ -103,6 +103,60 @@ class WeaponBalanceTest {
         assertTrue(fast.isEmpty(), "proc rate above 1.5 per base cooldown: $fast")
     }
 
+    @Test
+    fun aSpiralsGhostEmitsShockwavesAtMostAtTheCoresCadenceAmongFortyEnemies() {
+        val rime = canonicalGameplayContent.items.single { it.name == "Rime Rounds" }
+        for (level in listOf(1, 10)) {
+            val game = arenaState(WeaponId.CONCUSSION_ENGINE, Checkpoint.FRESH, shape = CoreShape.SPIRAL)
+            game.acquireItem(rime.id)
+            game.maxHp = 100_000f
+            game.weaponLevel = level
+            // A wide shield and a drained one each frame: every point a wave grants is counted, none hidden by the cap.
+            game.maxShield = 10_000f
+            val targets = cluster(game, 40, ring = 70f, integrity = 900f)
+            val anchors = targets.map { it.x to it.y }
+            val seconds = 24f
+            val firstSerial = game.weaponRuntime.activationSerial
+            var shieldGained = 0.0
+            var frame = 0
+            while (game.elapsed < seconds) {
+                assertTrue(frame < seconds * FPS * 2f, "flight stalled in ${game.phase} (${game.message}, t ${game.elapsed})")
+                hold(game, targets, Checkpoint.FRESH)
+                // Anchored targets (the shockwaves cannot clear the ghost's path), and the Core never strikes,
+                // so every shockwave (and every activation) is the ghost's.
+                for ((index, target) in targets.withIndex()) {
+                    target.x = anchors[index].first
+                    target.y = anchors[index].second
+                    target.vx = 0f
+                    target.vy = 0f
+                    target.disabledUntil = Float.MAX_VALUE
+                    target.contactCooldown = 1f
+                }
+                orbit(game, frame / FPS, 150f, 760f)
+                game.shield = 0f
+                // No recharge: only the shockwaves fill the shield.
+                game.shieldRechargeDelay = 1f
+                game.update(1f / FPS)
+                shieldGained += game.shield
+                drain(game)
+                frame++
+            }
+            val waves = game.weaponRuntime.activationSerial - firstSerial
+            val procs = game.weaponRuntime.qualifiedHits
+            println("GHOST-WAVES L$level waves=$waves procs=$procs shield=${"%.0f".format(shieldGained)}")
+            assertTrue(waves > 0, "L$level: the ghost never emitted a shockwave")
+            val waveBound = seconds / CONCUSSION_COOLDOWN + 1f
+            assertTrue(waves <= waveBound, "L$level: $waves ghost shockwaves in $seconds s (at most $waveBound)")
+            assertTrue(procs <= 1.5f * waveBound, "L$level: $procs qualifying hits from $waves shockwaves")
+            if (level == 10) {
+                // The third form grants 4 shield per enemy a wave strikes: bounded by the cadence, never per step.
+                val shieldBound = waveBound * CONCUSSION_SHIELD_PER_HIT * targets.size
+                assertTrue(shieldGained > 0.0, "the third form granted no shield")
+                assertTrue(shieldGained <= shieldBound, "the ghost granted $shieldGained shield in $seconds s (at most $shieldBound)")
+            }
+        }
+    }
+
     private enum class Arena { SINGLE, CROWD }
 
     private enum class Checkpoint { FRESH, ASCENDED }

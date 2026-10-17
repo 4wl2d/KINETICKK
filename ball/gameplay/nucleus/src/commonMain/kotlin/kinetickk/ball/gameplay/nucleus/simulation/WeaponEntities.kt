@@ -23,45 +23,57 @@ import kotlin.math.sqrt
  */
 
 internal fun MutableGameState.advanceWeaponEntities(delta: Float) {
-    val entities = weaponRuntime.entities
+    val runtime = weaponRuntime
+    val entities = runtime.entities
     if (entities.isEmpty()) return
     val count = entities.size
-    for (index in 0 until count) {
-        val entity = entities[index]
-        if (entity.life <= 0f) continue
-        when (entity.kind) {
-            WeaponEntityKind.DISC -> advanceDisc(entity, delta)
-            WeaponEntityKind.SENTRY -> advanceSentry(entity, delta)
-            WeaponEntityKind.LENS -> advanceLens(entity, delta)
-            WeaponEntityKind.WELL -> advanceWell(entity, delta)
-            WeaponEntityKind.RIFT -> advanceRift(entity, delta)
-            WeaponEntityKind.SHARD -> advanceShard(entity, delta)
-            WeaponEntityKind.MISSILE -> advanceMissile(entity, delta)
-            WeaponEntityKind.RING -> entity.life -= delta
-            WeaponEntityKind.TETHER, WeaponEntityKind.BEAM -> Unit
+    runtime.entityPassActive = true
+    try {
+        for (index in 0 until count) {
+            val entity = entities[index]
+            if (entity.life <= 0f) continue
+            when (entity.kind) {
+                WeaponEntityKind.DISC -> advanceDisc(entity, delta)
+                WeaponEntityKind.SENTRY -> advanceSentry(entity, delta)
+                WeaponEntityKind.LENS -> advanceLens(entity, delta)
+                WeaponEntityKind.WELL -> advanceWell(entity, delta)
+                WeaponEntityKind.RIFT -> advanceRift(entity, delta)
+                WeaponEntityKind.SHARD -> advanceShard(entity, delta)
+                WeaponEntityKind.MISSILE -> advanceMissile(entity, delta)
+                WeaponEntityKind.RING -> entity.life -= delta
+                WeaponEntityKind.TETHER, WeaponEntityKind.BEAM -> Unit
+            }
         }
+    } finally {
+        runtime.entityPassActive = false
     }
     entities.removeMatchingStable { it.life <= 0f }
 }
 
 internal fun MutableGameState.resolveWeaponEntityHits(delta: Float) {
-    val entities = weaponRuntime.entities
+    val runtime = weaponRuntime
+    val entities = runtime.entities
     if (entities.isEmpty()) return
     val count = entities.size
-    for (index in 0 until count) {
-        if (phase != GamePhase.RUNNING) break
-        val entity = entities[index]
-        if (entity.life <= 0f) continue
-        when (entity.kind) {
-            WeaponEntityKind.DISC -> discHits(entity)
-            WeaponEntityKind.LENS -> lensContact(entity)
-            WeaponEntityKind.WELL -> wellTick(entity, delta)
-            WeaponEntityKind.SHARD -> shardHits(entity)
-            WeaponEntityKind.MISSILE -> missileHits(entity)
-            WeaponEntityKind.TETHER -> tetherTick(entity, delta)
-            WeaponEntityKind.BEAM -> beamTick(entity, delta)
-            WeaponEntityKind.SENTRY, WeaponEntityKind.RIFT, WeaponEntityKind.RING -> Unit
+    runtime.entityPassActive = true
+    try {
+        for (index in 0 until count) {
+            if (phase != GamePhase.RUNNING) break
+            val entity = entities[index]
+            if (entity.life <= 0f) continue
+            when (entity.kind) {
+                WeaponEntityKind.DISC -> discHits(entity)
+                WeaponEntityKind.LENS -> lensContact(entity)
+                WeaponEntityKind.WELL -> wellTick(entity, delta)
+                WeaponEntityKind.SHARD -> shardHits(entity)
+                WeaponEntityKind.MISSILE -> missileHits(entity)
+                WeaponEntityKind.TETHER -> tetherTick(entity, delta)
+                WeaponEntityKind.BEAM -> beamTick(entity, delta)
+                WeaponEntityKind.SENTRY, WeaponEntityKind.RIFT, WeaponEntityKind.RING -> Unit
+            }
         }
+    } finally {
+        runtime.entityPassActive = false
     }
     entities.removeMatchingStable { it.life <= 0f }
 }
@@ -69,6 +81,12 @@ internal fun MutableGameState.resolveWeaponEntityHits(delta: Float) {
 // ---------------------------------------------------------------------------------------------
 // Movement and fuses.
 
+/*
+ * A disc flies out ([WeaponEntity.timer] counts the distance) and returns to the Core (phase 1, where the timer
+ * holds back the next spark while the disc glances along a rock). Asteroids turn a disc back, or end a returning one; the third form
+ * ricochets an outgoing disc on and makes a returning one glance along the rock toward the Core, so it comes
+ * home around it. Either way the disc keeps moving on the step it meets the rock.
+ */
 private fun MutableGameState.advanceDisc(disc: WeaponEntity, delta: Float) {
     disc.life -= delta
     if (disc.phase == 1) {
@@ -82,43 +100,65 @@ private fun MutableGameState.advanceDisc(disc: WeaponEntity, delta: Float) {
         disc.vx = dx / distance * GYRE_RETURN_SPEED
         disc.vy = dy / distance * GYRE_RETURN_SPEED
     }
+    disc.angle += GYRE_SPIN * delta
+    if (disc.phase == 1) disc.timer = max(0f, disc.timer - delta)
+    val blocker = obstacleOnPath(disc.x, disc.y, disc.x + disc.vx * delta, disc.y + disc.vy * delta, disc.radius)
+    if (blocker != null) {
+        if (!hasMasteryForm(3)) {
+            if (disc.phase == 0) beginDiscReturn(disc) else disc.life = 0f
+            return
+        }
+        deflectDisc(disc, blocker)
+        // The new heading runs along or away from that rock; a second rock on it holds the disc for this step.
+        val next = obstacleOnPath(disc.x, disc.y, disc.x + disc.vx * delta, disc.y + disc.vy * delta, disc.radius)
+        if (next != null && next !== blocker) return
+    }
     val stepX = disc.vx * delta
     val stepY = disc.vy * delta
-    val nextX = disc.x + stepX
-    val nextY = disc.y + stepY
-    disc.angle += GYRE_SPIN * delta
-    // Asteroids turn a disc back; the third form ricochets it on.
-    val blocker = obstacleOnPath(disc.x, disc.y, nextX, nextY, disc.radius)
-    if (blocker != null) {
-        if (hasMasteryForm(3)) {
-            val nx = disc.x - blocker.x
-            val ny = disc.y - blocker.y
-            val distance = max(1f, length(nx, ny))
-            val ux = nx / distance
-            val uy = ny / distance
-            val along = disc.vx * ux + disc.vy * uy
-            if (along < 0f) {
-                disc.vx -= 2f * along * ux
-                disc.vy -= 2f * along * uy
-            }
-            burst(disc.x, disc.y, 4, 0)
-        } else if (disc.phase == 0) {
-            disc.phase = 1
-            disc.clearHits()
-        } else {
-            disc.life = 0f
-        }
-        return
-    }
-    disc.x = nextX
-    disc.y = nextY
+    disc.x += stepX
+    disc.y += stepY
     if (disc.phase == 0) {
         disc.timer += length(stepX, stepY)
-        if (disc.timer >= disc.extent) {
-            disc.phase = 1
-            disc.clearHits()
-        }
+        if (disc.timer >= disc.extent) beginDiscReturn(disc)
     }
+}
+
+private fun beginDiscReturn(disc: WeaponEntity) {
+    disc.phase = 1
+    disc.timer = 0f
+    disc.clearHits()
+}
+
+/** The third form at a rock: an outgoing disc reflects off it; a returning one glances along it toward the Core. */
+private fun MutableGameState.deflectDisc(disc: WeaponEntity, blocker: Obstacle) {
+    val nx = disc.x - blocker.x
+    val ny = disc.y - blocker.y
+    val distance = max(1f, length(nx, ny))
+    val ux = nx / distance
+    val uy = ny / distance
+    val along = disc.vx * ux + disc.vy * uy
+    if (along >= 0f) return
+    if (disc.phase == 0) {
+        disc.vx -= 2f * along * ux
+        disc.vy -= 2f * along * uy
+        burst(disc.x, disc.y, 4, 0)
+        return
+    }
+    // The heading's part into the rock goes; what is left runs along its surface on the Core's side.
+    disc.vx -= along * ux
+    disc.vy -= along * uy
+    val tangent = length(disc.vx, disc.vy)
+    if (tangent < 1f) {
+        // Straight behind the rock: either way round is as short.
+        disc.vx = -uy * GYRE_RETURN_SPEED
+        disc.vy = ux * GYRE_RETURN_SPEED
+    } else {
+        disc.vx *= GYRE_RETURN_SPEED / tangent
+        disc.vy *= GYRE_RETURN_SPEED / tangent
+    }
+    // One spark as the glance begins, not one per step along the rock.
+    if (disc.timer <= 0f) burst(disc.x, disc.y, 4, 0)
+    disc.timer = GYRE_GLANCE_SPARK_GAP
 }
 
 private fun MutableGameState.advanceSentry(sentry: WeaponEntity, delta: Float) {
@@ -496,6 +536,8 @@ private fun MutableGameState.beamTick(beam: WeaponEntity, delta: Float) {
 }
 
 internal const val GYRE_CATCH_RADIUS: Float = 30f
+/** Seconds a returning disc must run free of rocks before its next glance sparks again. */
+internal const val GYRE_GLANCE_SPARK_GAP: Float = 0.2f
 internal const val GYRE_SPIN: Float = 18f
 internal const val SENTRY_SHOT_SPEED: Float = 900f
 internal const val SENTRY_PIERCE: Int = 1

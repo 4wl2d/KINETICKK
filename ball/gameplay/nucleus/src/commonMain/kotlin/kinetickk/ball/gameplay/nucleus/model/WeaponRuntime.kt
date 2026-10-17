@@ -170,6 +170,13 @@ internal class WeaponRuntime private constructor(
     var shieldRestoreReadyAt: Float = 0f
     /** The Drum waits for the beat once its cooldown is ready. */
     var drumArmed: Boolean = false
+    /** Accumulated orbit phase of the weapon orbitals: a change of angular speed bends the orbit, never jumps it. */
+    var orbitalPhase: Float = 0f
+    /**
+     * True while an entity pass walks [entities] by index: an entity created then joins the end of the list and
+     * one that makes room for it finishes instead of leaving, so no index shifts inside the pass.
+     */
+    var entityPassActive: Boolean = false
 
     /** Claims the next activation serial (bounded window, see [procMask]). */
     fun beginActivation(): Int {
@@ -240,6 +247,7 @@ internal class WeaponRuntime private constructor(
         shieldWasUp = false
         shieldRestoreReadyAt = 0f
         drumArmed = false
+        orbitalPhase = 0f
     }
 
     fun rebase(shiftX: Float, shiftY: Float) {
@@ -279,6 +287,8 @@ internal class WeaponRuntime private constructor(
         copy.shieldWasUp = shieldWasUp
         copy.shieldRestoreReadyAt = shieldRestoreReadyAt
         copy.drumArmed = drumArmed
+        copy.orbitalPhase = orbitalPhase
+        copy.entityPassActive = entityPassActive
     }
 
     /** Deterministic text of every field (the reduction isolation fingerprint reads it). */
@@ -293,7 +303,7 @@ internal class WeaponRuntime private constructor(
         append(readyAt).append(',').append(signatureReadyAt).append(',').append(tetherTargetId).append(',')
         append(tetherRamp).append(',').append(secondTetherId).append(',').append(secondTetherRamp).append(',')
         append(sweepAngle).append(',').append(shieldWasUp).append(',').append(shieldRestoreReadyAt).append(',')
-        append(drumArmed)
+        append(drumArmed).append(',').append(orbitalPhase).append(',').append(entityPassActive)
         append(";sources=").append(sourceReadyAt.joinToString(","))
         append(";shed=").append(shedBuckets.joinToString(","))
         append(";entities=").append(entities.joinToString("|"))
