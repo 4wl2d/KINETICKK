@@ -379,7 +379,7 @@ private fun TotemRow(
             .height(frame.dp(heightBoard))
             .graphicsLayer { translationX = -10f * density * on }
             .testTag("kinetickk.gameplay.choice.${index + 1}")
-            .semantics { stateDescription = listOfNotNull(row.kind, row.meta, row.level?.let { language.text(OverlayRedesignText.LevelLabel) + " " + it }, row.mastery).joinToString(", ") }
+            .semantics { stateDescription = listOfNotNull(row.kind, row.badge, row.meta, row.level?.let { language.text(OverlayRedesignText.LevelLabel) + " " + it }, row.mastery).joinToString(", ") }
             .clickable(
                 interactionSource = source, indication = null, enabled = enabled, role = Role.Button,
                 onClickLabel = language.text(GameplayText.SelectChoice, index + 1, row.name), onClick = onSelect,
@@ -420,6 +420,11 @@ private fun TotemRow(
                         },
                         textScale = frame.textScale,
                     )
+                    // The run character's signature weapon carries its mark beside the kind.
+                    row.badge?.let { badge ->
+                        OverlayTag(badge, variant = KkTagVariant.LINE, foreground = if (selected) Kk.Ink else roles.you, textScale = frame.textScale,
+                            modifier = Modifier.testTag("kinetickk.gameplay.choice.${index + 1}.signature"))
+                    }
                     row.meta?.let { OverlayFitText(it, typography.monoStyle(frame.sp(11f, 9f), color = fg.copy(alpha = 0.7f)), uppercase = true, maxLines = 1) }
                 }
                 BoxWithConstraints(Modifier.fillMaxWidth()) {

@@ -126,6 +126,8 @@ class RedesignShotsOverlaysTest {
                 RewardShot(model {
                     rewardFixtureModel(
                         choiceType = ChoiceType.WEAPON, language = l, width = w, height = h, textScale = textScale,
+                        // The Pentagon runs: Arc Coil, its signature weapon, carries the Signature chip.
+                        coreShape = kinetickk.ball.content.api.CoreShape.PENTAGON,
                         choices = listOf(WeaponId.ARC_COIL, WeaponId.GRAVITY_MINES, WeaponId.NULL_LANCE).map { id ->
                             val weapon = rewardFixtureContent.weapon(id)
                             ChoiceOption(ChoiceType.WEAPON, weapon.name, weapon.description, weapon.tags.first().displayLabel.uppercase(), weaponId = id)
@@ -150,6 +152,7 @@ class RedesignShotsOverlaysTest {
                 RewardShot(model {
                     rewardFixtureModel(
                         choiceType = ChoiceType.TOTEM, language = l, width = w, height = h, textScale = textScale, weaponLevel = 5, directedChoice = true,
+                        coreShape = kinetickk.ball.content.api.CoreShape.PENTAGON,
                         choices = listOf(
                             ChoiceOption(ChoiceType.TOTEM, "Amplify Flux Wake", "Raise current weapon mastery by one level.", "AMPLIFY",
                                 weaponId = WeaponId.FLUX_WAKE, totemAction = TotemAction.AMPLIFY_CURRENT),

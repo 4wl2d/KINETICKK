@@ -309,7 +309,10 @@ internal data class RewardPreviewRow(
     val unknown: Boolean = false,
 )
 
-/** A weapon totem offering row. Ticks fill [fromLevel] owned levels plus the gained ones. */
+/**
+ * A weapon totem offering row. Ticks fill [fromLevel] owned levels plus the gained ones. A weapon
+ * row's [meta] names its family, element and tags; [badge] marks the run character's signature weapon.
+ */
 internal data class RewardTotemRow(
     val icon: KkIcon,
     val kind: String,
@@ -321,13 +324,20 @@ internal data class RewardTotemRow(
     val fromLevel: Int,
     val toLevel: Int,
     val mastery: String?,
+    val badge: String? = null,
 )
 
 /** The outcome tag of a relic offer (Bind, Meld, Salvage, Replace). */
 internal data class RewardAction(val label: String, val tone: RewardTone)
 
 /** What a chip on a reward card marks: identity beside the icon, or a build forecast in the footer. */
-internal enum class RewardChipKind { TAG, ATTUNED, RISK, REBORN, HEIRLOOM, SUPPRESSED, REACTION, TAG_TIER, AFFINITY, CONCORD, DISCORD, HARMONY, DISSONANCE }
+internal enum class RewardChipKind {
+    TAG, ATTUNED, RISK, REBORN, HEIRLOOM, SUPPRESSED, REACTION, TAG_TIER, AFFINITY, CONCORD, DISCORD, HARMONY, DISSONANCE,
+    /** A weapon offer whose signature character is the run's ([RewardChip.core] draws its form). */
+    SIGNATURE,
+    /** A weapon offer's element (no glyph for a Kinetic weapon). */
+    ELEMENT,
+}
 
 /**
  * A chip of a reward card. [tag] and [elements] give its glyphs (a reaction carries its two
@@ -350,6 +360,8 @@ internal data class RewardChip(
     val after: Int = 0,
     val pips: Int = 0,
     val active: Boolean = false,
+    /** The character a SIGNATURE chip names. */
+    val core: CoreShape? = null,
 )
 
 /** One mechanical line of an item ([RuleLineKind.TRIGGER] headers its effect); [suppressed] lines are void. */
@@ -608,7 +620,7 @@ internal fun GameplayRenderModel.rewardCardPresentation(
             weapon != null -> overlayLevel(weaponLevel, language)
             else -> null
         },
-        family = null,
+        family = weapon?.let { rewardWeaponFamily(it, language) },
         tags = when {
             weapon != null -> weapon.tags.map { it.displayLabel.localizedContent(language) }
             item != null -> buildList {
@@ -621,7 +633,7 @@ internal fun GameplayRenderModel.rewardCardPresentation(
         action = action,
         relicPreview = relicPreview,
         totemRow = if (choiceType == ChoiceType.TOTEM) rewardTotemRow(choice, weapon, descriptions.firstOrNull().orEmpty(), language) else null,
-        elements = item?.elements.orEmpty(),
+        elements = item?.elements ?: weapon?.element?.let(::listOf).orEmpty(),
         chips = when {
             item != null -> buildList {
                 if (item.risk) add(RewardChip(RewardChipKind.RISK, language.text(OverlayRedesignText.Risk)))
@@ -634,6 +646,7 @@ internal fun GameplayRenderModel.rewardCardPresentation(
                 if (heirloom) add(RewardChip(RewardChipKind.HEIRLOOM, language.text(OverlayRedesignText.Heirloom), after = rebirthLevel))
                 addAll(rewardAttunedChips(relic, language))
             }
+            weapon != null -> rewardWeaponChips(weapon, language)
             else -> emptyList()
         },
         forecast = when {
@@ -1060,6 +1073,29 @@ private fun GameplayRenderModel.rewardRelicPreview(
     )
 }
 
+/** A weapon offer's family and element ("Trap / Gravitic"; a weapon without an element is Kinetic). */
+internal fun rewardWeaponFamily(weapon: WeaponDefinition, language: AppLanguage): String =
+    weapon.family.displayLabel.localizedContent(language) + " / " + (weapon.element?.displayLabel ?: KineticLabel).localizedContent(language)
+
+private const val KineticLabel = "Kinetic"
+
+/**
+ * A weapon offer's identity chips: Signature when the run's character is its signature character
+ * (the first chip, so it always shows), its element, then its two tags (lit when the build has points in them).
+ */
+private fun GameplayRenderModel.rewardWeaponChips(weapon: WeaponDefinition, language: AppLanguage): List<RewardChip> = buildList {
+    if (weapon.signature == coreShape) add(RewardChip(RewardChipKind.SIGNATURE, language.text(OverlayRedesignText.Signature), core = coreShape))
+    add(RewardChip(RewardChipKind.ELEMENT, (weapon.element?.displayLabel ?: KineticLabel).localizedContent(language),
+        elements = weapon.element?.let(::listOf).orEmpty()))
+    weapon.tags.forEach { tag ->
+        add(RewardChip(RewardChipKind.TAG, tag.displayLabel.localizedContent(language), tag = tag, active = build.tagPoints(tag) > 0))
+    }
+}
+
+/** A weapon row's meta line on the totem: family, element and tags. */
+private fun rewardWeaponMeta(weapon: WeaponDefinition, language: AppLanguage): String =
+    rewardWeaponFamily(weapon, language) + " / " + weapon.tags.joinToString(", ") { it.displayLabel.localizedContent(language) }
+
 /** A totem offering row; [description] is the card's effect line (never the game's step text). */
 private fun GameplayRenderModel.rewardTotemRow(
     choice: ChoiceOption,
@@ -1080,6 +1116,7 @@ private fun GameplayRenderModel.rewardTotemRow(
             meta = language.text(OverlayRedesignText.Equipped), name = currentWeaponDefinition.name.localizedContent(language),
             description = description,
             level = weaponLevel + 1, fromLevel = weaponLevel, toLevel = weaponLevel + 1, mastery = mastery(weaponLevel + 1),
+            badge = language.text(OverlayRedesignText.Signature).takeIf { currentWeaponDefinition.signature == coreShape },
         )
         choice.totemAction == TotemAction.CHANGE_WEAPON -> RewardTotemRow(
             icon = KkIcon.SYSTEM_REROLL, kind = language.text(OverlayRedesignText.ChangeKind), kindTone = RewardTone.YOU,
@@ -1088,8 +1125,9 @@ private fun GameplayRenderModel.rewardTotemRow(
         )
         weapon != null -> RewardTotemRow(
             icon = weapon.id.overlayIcon(), kind = language.text(OverlayRedesignText.NewKind), kindTone = RewardTone.YOU,
-            meta = null, name = weapon.name.localizedContent(language), description = description,
+            meta = rewardWeaponMeta(weapon, language), name = weapon.name.localizedContent(language), description = description,
             level = weaponLevel, fromLevel = weaponLevel, toLevel = weaponLevel, mastery = mastery(weaponLevel),
+            badge = language.text(OverlayRedesignText.Signature).takeIf { weapon.signature == coreShape },
         )
         else -> RewardTotemRow(
             icon = KkIcon.SYSTEM_DATA, kind = choice.tag.localizedContent(language), kindTone = RewardTone.MUTE, meta = null,

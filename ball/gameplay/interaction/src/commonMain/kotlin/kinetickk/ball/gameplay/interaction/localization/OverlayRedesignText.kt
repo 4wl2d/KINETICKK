@@ -30,6 +30,7 @@ internal enum class OverlayRedesignText(
     ChangeKind("Change", "Смена"),
     NewKind("New", "Новое"),
     Equipped("Equipped", "Экипировано"),
+    Signature("Signature", "Фирменное"),
     MasteryInfo(
         "Weapon level stays for the whole run, even when you change weapon. Mastery milestones: {0}.",
         "Уровень оружия сохраняется до конца забега, даже при смене оружия. Этапы мастерства: {0}.",

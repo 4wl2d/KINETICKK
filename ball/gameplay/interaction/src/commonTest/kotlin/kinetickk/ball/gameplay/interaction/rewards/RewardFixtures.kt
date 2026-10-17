@@ -229,6 +229,7 @@ internal fun rewardFixtureModel(
     ),
     rebirthLevel: Int = 3,
     runStatisticsOnLeft: Boolean = false,
+    coreShape: CoreShape = CoreShape.ORB,
 ): GameplayRenderModel = GameplayRenderModel(
     content = content,
     phase = phase,
@@ -260,7 +261,7 @@ internal fun rewardFixtureModel(
     morningstarAngle = 0f, morningstarX = 0f, morningstarY = 0f,
     weaponBeamTime = 0f, weaponBeamStartX = 0f, weaponBeamStartY = 0f, weaponBeamEndX = 0f, weaponBeamEndY = 0f,
     totem = null,
-    coreShape = CoreShape.ORB,
+    coreShape = coreShape,
     enemies = immutableListOf(), projectiles = immutableListOf(), pickups = immutableListOf(), trail = immutableListOf(),
     weaponNodes = immutableListOf(), weaponOrbitals = immutableListOf(),
     choices = choices.toImmutableList(),

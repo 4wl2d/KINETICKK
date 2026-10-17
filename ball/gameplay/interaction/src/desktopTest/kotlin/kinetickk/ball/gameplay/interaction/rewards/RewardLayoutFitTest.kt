@@ -39,6 +39,7 @@ import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.render.BuildForecast
 import kinetickk.ball.gameplay.nucleus.render.ForecastKind
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.interaction.canvas.isCut
 import kinetickk.ball.gameplay.interaction.layout.choiceLayoutGeometry
@@ -226,7 +227,10 @@ class RewardLayoutFitTest {
                     ChoiceOption(ChoiceType.RELIC, relic.name, relic.upside, relic.aspect.displayLabel.uppercase(), relicId = id,
                         relicAction = RelicChoiceAction.ACQUIRE)
                 } + ChoiceOption(ChoiceType.RELIC, "Leave hollow", "", "DECLINE", relicAction = RelicChoiceAction.DECLINE))
-            val cards = listOf(items, relics).flatMap { model -> model.choices.mapIndexed { index, choice -> model.rewardCardPresentation(choice, index, language) } }
+            val weapons = weapons(language, 1440f, 810f, 1.25f)
+            val cards = listOf(items, relics, weapons).flatMap { model ->
+                model.choices.mapIndexed { index, choice -> model.rewardCardPresentation(choice, index, language) }
+            }
             cards.forEach { card ->
                 runDesktopComposeUiTest(width + 20, height + 20, effectContext = object : MotionDurationScale {
                     override val scaleFactor = 0f
@@ -259,7 +263,7 @@ class RewardLayoutFitTest {
                 }
             }
         }
-        assertTrue(checked >= 4 * 2 * 6, "Checked every card at every size ($checked)")
+        assertTrue(checked >= 4 * 2 * 9, "Checked every card at every size ($checked)")
     }
 
     /**
@@ -404,8 +408,10 @@ class RewardLayoutFitTest {
     private fun inkRight(text: Pair<SemanticsNode, TextLayoutResult>): Float =
         text.first.boundsInRoot.left + (0 until text.second.lineCount).maxOf { text.second.getLineRight(it) }
 
+    // The Pentagon runs: the Arc Coil row carries the Signature badge beside its kind.
     private fun directedTotem(language: AppLanguage, width: Float, height: Float, setting: Float) = rewardFixtureModel(
         choiceType = ChoiceType.TOTEM, weaponLevel = 5, directedChoice = true, language = language, width = width, height = height, textScale = setting,
+        coreShape = CoreShape.PENTAGON,
         choices = listOf(ChoiceOption(ChoiceType.TOTEM, "Amplify Flux Wake", "Raise current weapon mastery by one level.", "AMPLIFY",
             weaponId = WeaponId.FLUX_WAKE, totemAction = TotemAction.AMPLIFY_CURRENT)) + listOf(WeaponId.ARC_COIL, WeaponId.GRAVITY_MINES).map { id ->
             val weapon = rewardFixtureContent.weapon(id)
@@ -434,8 +440,9 @@ class RewardLayoutFitTest {
         previews = listOf(RewardPreview(immutableListOf(RewardStatChange("Damage: speed ≥500", 10f, 15f, "%", sourceRelic = RelicId.PERPETUAL_VECTOR)))),
     )
 
+    // The Pentagon runs: Arc Coil, its signature weapon, carries the Signature chip.
     private fun weapons(language: AppLanguage, width: Float, height: Float, setting: Float) = rewardFixtureModel(
-        choiceType = ChoiceType.WEAPON, language = language, width = width, height = height, textScale = setting,
+        choiceType = ChoiceType.WEAPON, language = language, width = width, height = height, textScale = setting, coreShape = CoreShape.PENTAGON,
         choices = listOf(WeaponId.ARC_COIL, WeaponId.GRAVITY_MINES, WeaponId.NULL_LANCE).map { id ->
             val weapon = rewardFixtureContent.weapon(id)
             ChoiceOption(ChoiceType.WEAPON, weapon.name, weapon.description, weapon.tags.first().displayLabel.uppercase(), weaponId = id)
