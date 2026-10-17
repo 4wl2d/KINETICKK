@@ -20,13 +20,17 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** The Rebirth strip: the tier plate and mutator sigils on the badge row, clear of the badge and the clock. */
+/**
+ * The Rebirth strip: the tier plate and mutator sigils on the badge row (the chip row on portrait
+ * phones), clear of the badge, the clock, the chips and the chain, with every active mutator's sigil.
+ */
 class HudRebirthStripTest {
     @Test
     fun theStripShowsFromTierOneBesideTheBadgeAndClearOfTheClock() {
         for ((width, height) in listOf(1_440f to 810f, 844f to 390f, 390f to 844f)) for (textScale in listOf(1f, 1.75f)) {
             for (language in AppLanguage.entries) for (tier in listOf(0, 1, 6, 10)) {
-                val model = hudTestModel(width, height).with("rebirthLevel" to tier, "keys" to 12, "runMatter" to 9_876_543L, "level" to 45)
+                val model = hudTestModel(width, height).with("rebirthLevel" to tier, "keys" to 12, "runMatter" to 9_876_543L, "level" to 45,
+                    "combo" to 128, "comboTime" to 1f, "comboWindow" to 2.8f)
                 draw(width, height, language, textScale) { measurer -> drawHud(model, measurer, 1f) }
                 val where = "${width}x$height x$textScale $language tier $tier"
                 val strip = HudLayoutProbe.rect(HudBlock.REBIRTH)
@@ -45,6 +49,10 @@ class HudRebirthStripTest {
                 HudLayoutProbe.rect(HudBlock.KEY_CHIP)?.let { chip ->
                     assertFalse(strip.overlaps(chip), "$where: strip $strip overlaps the key chip $chip")
                 }
+                val chain = assertNotNull(HudLayoutProbe.rect(HudBlock.CHAIN), "$where: no chain")
+                assertFalse(strip.overlaps(chain), "$where: strip $strip overlaps the chain $chain")
+                // The sigils follow the plate (a square as tall as the strip) on every layout.
+                assertTrue(strip.width > strip.height * 1.2f, "$where: strip $strip shows no mutator sigils")
             }
         }
     }

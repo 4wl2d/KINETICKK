@@ -75,8 +75,9 @@ internal fun DrawScope.drawHud(
     val badgeBottom = drawLevelCluster(engine, textMeasurer, frame, renderTime, memory)
     drawClockAndBoss(engine, textMeasurer, frame, boss, renderTime, memory)
     drawEconomy(engine, textMeasurer, frame, badgeBottom)
-    drawRebirthStrip(engine, textMeasurer, frame)
+    // The chain first: the portrait Rebirth strip shares its row and stops short of it.
     drawChain(engine, textMeasurer, frame)
+    drawRebirthStrip(engine, textMeasurer, frame)
     drawCoreStatus(engine, textMeasurer, frame, renderTime, memory, critical)
     drawKineticGauge(engine, textMeasurer, frame, renderTime, memory)
     drawLoadout(engine, textMeasurer, frame)
@@ -132,11 +133,15 @@ internal object HudScratch {
     var linkContent: GameplayContentSnapshot? = null
     var links: List<OverlayRelicLink> = emptyList()
     val brackets = HudBracketLevels()
-    /** The level badge's row this frame and the inline economy's right edge on landscape phones (Rebirth strip). */
+    /**
+     * The level badge's row this frame, the economy's right edge on phones (inline on landscape, the
+     * chip row on portrait) and the portrait chain's left edge (+inf without a chain): the Rebirth strip.
+     */
     var badgeTop = 0f
     var badgeBottom = 0f
     var badgeRight = 0f
     var economyRight = 0f
+    var chainLeft = Float.POSITIVE_INFINITY
     val rebirthTier = HudNumberText { it.toString() }
     val aspects = arrayOfNulls<RelicAspect>(RelicId.entries.size)
     var definitionContent: GameplayContentSnapshot? = null
@@ -628,8 +633,13 @@ private fun DrawScope.drawEconomy(engine: GameplayRenderModel, hostMeasurer: Tex
             val top = frame.top + frame.u(PORTRAIT_CHIP_ROW_DP)
             val height = frame.u(PORTRAIT_CHIP_ROW_HEIGHT_DP)
             var left = frame.margin
-            left = drawHudChipFromLeft(measurer, HudPath.MATTER_CHIP, HudText.MATTER, matter, left, top, height, 15f, null, roles) + frame.u(6f)
-            if (keys != null) drawHudChipFromLeft(measurer, HudPath.KEY_CHIP, HudText.KEYS, keys, left, top, height, 15f, KkIcon.SYSTEM_KEY, roles)
+            left = drawHudChipFromLeft(measurer, HudPath.MATTER_CHIP, HudText.MATTER, matter, left, top, height, 15f, null, roles)
+            HudScratch.economyRight = left
+            left += frame.u(6f)
+            if (keys != null) {
+                HudScratch.economyRight =
+                    drawHudChipFromLeft(measurer, HudPath.KEY_CHIP, HudText.KEYS, keys, left, top, height, 15f, KkIcon.SYSTEM_KEY, roles)
+            }
         }
     }
 }
@@ -705,6 +715,7 @@ private fun DrawScope.drawHudChipAt(
 
 /** `×N` chain counter with its draining window bar; hidden without a live combo. */
 private fun DrawScope.drawChain(engine: GameplayRenderModel, hostMeasurer: TextMeasurer, frame: HudFrame) {
+    HudScratch.chainLeft = Float.POSITIVE_INFINITY
     if (engine.combo < 2 || engine.comboTime <= 0f) return
     // Display type: the same size at every text-size setting.
     val measurer = HudMeasurers.display(hostMeasurer)
@@ -743,6 +754,7 @@ private fun DrawScope.drawChain(engine: GameplayRenderModel, hostMeasurer: TextM
             val bar = HudDrawCache.rect(HudRect.CHAIN, right - width, barTop, right, barTop + frame.u(2f))
             drawKkMeter(bar, window, color, measurer.roles)
             HudLayoutProbe.record(HudBlock.CHAIN, right - width, center - digitBoxHeight(measurer, style) * 0.5f, right, bar.bottom)
+            HudScratch.chainLeft = right - width
         }
     }
 }

@@ -6,6 +6,8 @@ package kinetickk.ball.gameplay.interaction.canvas
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.translate
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
+import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_CHIP_ROW_DP
+import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_CHIP_ROW_HEIGHT_DP
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkAlign
@@ -23,9 +25,11 @@ import kotlin.math.min
  * The Rebirth strip (`HudBlock.REBIRTH`): the tier plate (the tier numeral on a plate in the tier's
  * color) followed by the sigil of every active mutator, newest last in the tier color. It shares the
  * level badge's row in the top band (right of the badge, or of the inline economy on landscape phones)
- * and never reaches the clock, so it always lies inside the world keep-out's top region. Sigils shrink
- * (and wrap into up to three rows) to fit; below a legible size only the plate is drawn. Tier 0 draws
- * nothing. Cached paths and number text: a steady frame allocates nothing.
+ * and never reaches the clock. Portrait phones leave no room beside the badge, so there it takes the
+ * chip row, right of the chips and clear of the chain at the row's end. Either way it lies inside the
+ * world keep-out's top region. Sigils shrink (and wrap into up to three rows) to fit; below a legible
+ * size only the plate is drawn. Tier 0 draws nothing. Cached paths and number text: a steady frame
+ * allocates nothing.
  */
 internal fun DrawScope.drawRebirthStrip(engine: GameplayRenderModel, hostMeasurer: TextMeasurer, frame: HudFrame) {
     val tier = engine.rebirthLevel
@@ -46,14 +50,20 @@ internal fun DrawScope.drawRebirthStrip(engine: GameplayRenderModel, hostMeasure
             left = HudScratch.economyRight + frame.u(12f)
         }
         GameplayLayoutMode.COMPACT_PORTRAIT -> {
-            centerY = HudScratch.badgeTop + (HudScratch.badgeBottom - HudScratch.badgeTop) * 0.5f
-            height = min(frame.u(28f), HudScratch.badgeBottom - HudScratch.badgeTop)
-            left = HudScratch.badgeRight + frame.u(10f)
+            height = frame.u(PORTRAIT_CHIP_ROW_HEIGHT_DP)
+            centerY = frame.top + frame.u(PORTRAIT_CHIP_ROW_DP) + height * 0.5f
+            left = HudScratch.economyRight + frame.u(10f)
         }
     }
-    // Keep clear of the clock at the top center.
-    val clock = HudDrawCache.peekLayout(HudText.TIMER)?.size?.width?.toFloat() ?: frame.u(120f)
-    val right = frame.width * 0.5f - clock * 0.5f - frame.u(14f)
+    val right = if (frame.mode == GameplayLayoutMode.COMPACT_PORTRAIT) {
+        // The chain ends the chip row: keep its usual width free (so the sigils do not resize as it
+        // comes and goes) and never reach a wider one.
+        min(frame.width - frame.margin - frame.u(PORTRAIT_CHAIN_RESERVE_DP), HudScratch.chainLeft - frame.u(10f))
+    } else {
+        // Keep clear of the clock at the top center.
+        val clock = HudDrawCache.peekLayout(HudText.TIMER)?.size?.width?.toFloat() ?: frame.u(120f)
+        frame.width * 0.5f - clock * 0.5f - frame.u(14f)
+    }
     val plate = min(height, right - left)
     if (plate < frame.u(14f)) return
     val top = centerY - height * 0.5f
@@ -99,6 +109,9 @@ internal fun DrawScope.drawRebirthStrip(engine: GameplayRenderModel, hostMeasure
     }
     HudLayoutProbe.record(HudBlock.REBIRTH, left, top, drawnRight, top + height)
 }
+
+/** Chip-row width (reference dp) the portrait strip leaves for the chain at the row's end. */
+private const val PORTRAIT_CHAIN_RESERVE_DP = 72f
 
 /** Largest mutator sigil (reference dp) and the smallest still drawn. */
 private const val MAX_SIGIL_DP = 14f
