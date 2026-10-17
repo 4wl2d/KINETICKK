@@ -172,6 +172,10 @@ internal fun MutableGameState.takeLethalObstacleHit() {
 }
 
 private fun MutableGameState.noteObstacleHurt() {
+    // A collision is a hit to the character too: it pauses facet regeneration and costs Stellar Mass,
+    // but no facet ever cancels it.
+    pauseFacetRegeneration()
+    onCharacterDamaged()
     timeSinceDamage = 0f
     shieldRechargeDelay = (if (tagTier(BuildTag.BULWARK) >= 2) 2.2f else 4f) * matrix.shieldRegenDelayMultiplier
     damageFlash = 1f

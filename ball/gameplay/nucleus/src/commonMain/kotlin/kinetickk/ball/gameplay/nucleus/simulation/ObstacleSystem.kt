@@ -68,15 +68,28 @@ internal fun MutableGameState.obstacleBlocksSegment(x0: Float, y0: Float, x1: Fl
 
 /**
  * Applies slam damage to [enemy] after it struck an obstacle or another enemy at [normalSpeed] along
- * the contact normal, and fires the SLAM trigger with it as the target. Below the slam speed, or
- * within the enemy's slam cooldown, nothing happens. Returns true when the slam landed.
+ * the contact normal, and fires the SLAM trigger with it as the target. A [polarity] slam (an enemy the
+ * Dipole threw, or the one it struck) takes the Dipole's slam speed and damage instead of the obstacle
+ * slam's. Both rules share the enemy's slam cooldown, so one contact deals one slam and fires SLAM once,
+ * whichever pass meets it first. Below the slam speed, or within the cooldown, nothing happens.
+ * Returns true when the slam landed.
  */
-internal fun MutableGameState.applySlamDamage(enemy: Enemy, normalSpeed: Float): Boolean {
+internal fun MutableGameState.applySlamDamage(
+    enemy: Enemy,
+    normalSpeed: Float,
+    polarity: Boolean = isThrownByPolarity(enemy),
+): Boolean {
     val tuning = content.obstacles
-    if (normalSpeed < tuning.slamSpeed || !enemy.alive || enemy.slamReadyAt > elapsed) return false
+    val slamSpeed = if (polarity) SLAM_MIN_SPEED else tuning.slamSpeed
+    if (normalSpeed < slamSpeed || !enemy.alive || enemy.slamReadyAt > elapsed) return false
     enemy.slamReadyAt = elapsed + tuning.slamCooldownSeconds
-    val damage = (normalSpeed - tuning.slamDamageOffset) * tuning.slamDamagePerSpeed * runScale()
-    dealProcDamage(enemy, damage)
+    val damage = if (polarity) {
+        polaritySlam(enemy, normalSpeed)
+    } else {
+        val amount = (normalSpeed - tuning.slamDamageOffset) * tuning.slamDamagePerSpeed * runScale()
+        dealProcDamage(enemy, amount)
+        amount
+    }
     burst(enemy.x, enemy.y, 6, 3)
     fireClauses(EffectTrigger.SLAM, enemy, damage)
     return true
@@ -678,12 +691,14 @@ private fun MutableGameState.resolveEnemyObstacle(enemy: Enemy, obstacle: Obstac
         if (inward > 0f) {
             enemy.vx += inward * nx
             enemy.vy += inward * ny
-            applySlamDamage(enemy, inward)
+            if (applySlamDamage(enemy, inward)) endPolarityThrow(enemy)
         }
         return
     }
     // Slide: self-propelled enemies bend their approach along the surface; thrown ones and strikes do not.
-    if (inward <= 0f || !canAct(enemy) || enemy.thrownUntil > elapsed || enemy.mode == EnemyBehavior.STRIKE) return
+    if (inward <= 0f || !canAct(enemy) || enemy.thrownUntil > elapsed || isThrownByPolarity(enemy) ||
+        enemy.mode == EnemyBehavior.STRIKE
+    ) return
     val closeness = (1f - (distance - combined) / (avoidRadius - combined)).coerceIn(0f, 1f)
     val removed = inward * closeness
     var tangentX = -ny

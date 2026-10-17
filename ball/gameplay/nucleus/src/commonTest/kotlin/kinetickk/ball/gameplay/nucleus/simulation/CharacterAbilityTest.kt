@@ -210,6 +210,23 @@ class CharacterAbilityTest {
         game.takeDamage(10f, kind = IncomingDamage.SELF)
         assertEquals(4, game.intactFacets)
         assertTrue(game.hp < game.maxHp)
+        // A collision is never cancelled, but it still counts as a hit that pauses regeneration.
+        game.characterRuntime.facetPauseUntil = 0f
+        val before = game.hp
+        game.takeDamage(10f, kind = IncomingDamage.OBSTACLE)
+        assertEquals(4, game.intactFacets)
+        assertTrue(game.hp < before)
+        assertTrue(game.characterRuntime.facetPauseUntil > game.elapsed)
+    }
+
+    @Test fun obstacleHitsCostStellarMass() {
+        val star = game(CoreShape.STAR)
+        star.characterRuntime.stellarMass = 12
+        star.refreshCoreRadius()
+        val radius = star.coreRadius
+        star.takeDamage(10f, kind = IncomingDamage.OBSTACLE)
+        assertEquals(9, star.characterRuntime.stellarMass)
+        assertTrue(star.coreRadius < radius)
     }
 
     @Test fun allFourFacetsStrengthenImpactsAndHeavyImpactsCutTheTimer() {

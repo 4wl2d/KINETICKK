@@ -726,20 +726,14 @@ private fun MutableGameState.updatePolarity(ability: CharacterRuntime, delta: Fl
     }
     ability.charge = if (elapsed >= ability.polarityFlipReadyAt) 1f else
         1f - ((ability.polarityFlipReadyAt - elapsed) / POLARITY_FLIP_INTERVAL).coerceIn(0f, 1f)
+    // Thrown enemies meeting obstacles slam in the obstacle pass (resolveEnemyObstacles), at their
+    // normal speed and through the same applySlamDamage, so each contact is found once. Here they
+    // slam into each other.
     var slams = 0
     for (index in enemies.indices) {
         if (slams >= MAX_SLAMS_PER_STEP) break
         val thrown = enemies[index]
         if (!thrown.alive || thrown.characterMarkTime <= 0f) continue
-        val thrownSpeed = length(thrown.vx, thrown.vy)
-        if (thrownSpeed >= SLAM_MIN_SPEED &&
-            obstacleBlocksSegment(thrown.previousX, thrown.previousY, thrown.x, thrown.y, thrown.radius)
-        ) {
-            thrown.characterMarkTime = 0f
-            dipoleSlam(thrown, thrownSpeed)
-            slams++
-            continue
-        }
         for (otherIndex in enemies.indices) {
             if (otherIndex == index) continue
             val other = enemies[otherIndex]
@@ -759,19 +753,27 @@ private fun MutableGameState.updatePolarity(ability: CharacterRuntime, delta: Fl
             other.vx += dx / distance * share
             other.vy += dy / distance * share
             if (share >= THROW_MIN_SPEED && !other.isBossClass) other.characterMarkTime = THROW_SECONDS
-            dipoleSlam(thrown, closing)
-            dipoleSlam(other, closing)
+            applySlamDamage(thrown, closing, polarity = true)
+            applySlamDamage(other, closing, polarity = true)
             slams++
             break
         }
     }
 }
 
-/** A Dipole slam: the polarity damage, then the shared slam rule (SLAM trigger, obstacle slam damage). */
-private fun MutableGameState.dipoleSlam(enemy: Enemy, speed: Float) {
-    dealCharacterDamage(enemy, (SLAM_BASE_DAMAGE + SLAM_DAMAGE_PER_SPEED * speed) * abilityPower())
-    applySlamDamage(enemy, speed)
-    burst(enemy.x, enemy.y, 6, 3)
+/**
+ * The Dipole's slam damage on [enemy] at [speed], dealt as ability damage; returns the amount the SLAM
+ * trigger sees. [applySlamDamage] calls it for polarity slams, so a slam is one damage instance.
+ */
+internal fun MutableGameState.polaritySlam(enemy: Enemy, speed: Float): Float {
+    val damage = (SLAM_BASE_DAMAGE + SLAM_DAMAGE_PER_SPEED * speed) * abilityPower()
+    dealCharacterDamage(enemy, damage)
+    return damage
+}
+
+/** A landed obstacle slam ends a REPEL throw, so the enemy steers again. */
+internal fun MutableGameState.endPolarityThrow(enemy: Enemy) {
+    if (isThrownByPolarity(enemy)) enemy.characterMarkTime = 0f
 }
 
 /** Records an on-beat action: the streak rises once per beat. */

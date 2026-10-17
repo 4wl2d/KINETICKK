@@ -11,6 +11,7 @@ import kinetickk.ball.content.api.EffectClause
 import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.MatrixEffect
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.gameplay.nucleus.model.Polarity
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.distanceSquared
 import kinetickk.ball.gameplay.nucleus.model.length
@@ -268,9 +269,19 @@ class ObstacleSystemTest {
     @Test
     fun prismFacetsOrBarriersNeverSaveALethalCollision() {
         val prism = buildTestState(shape = CoreShape.PRISM)
+        assertEquals(4, prism.intactFacets, "every facet is up")
         prism.ramAsteroid(prism.obstacleLethalSpeed() + 50f)
         assertEquals(GamePhase.GAME_OVER, prism.phase)
         assertEquals(OBSTACLE_COLLISION_REASON, prism.message)
+    }
+
+    @Test
+    fun prismFacetsNeverCancelABandCollision() {
+        val prism = buildTestState(shape = CoreShape.PRISM)
+        prism.ramAsteroid(prism.bandSpeed(0.4f))
+        assertTrue(prism.hp < prism.maxHp, "the collision hurt")
+        assertEquals(4, prism.intactFacets, "no facet was spent on it")
+        assertEquals(GamePhase.RUNNING, prism.phase)
     }
 
     @Test
@@ -599,6 +610,99 @@ class ObstacleSystemTest {
         struck.vx = 0f
         state.resolveEnemyObstacles()
         assertEquals(after, struck.hp)
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Characters.
+
+    /** The canonical catalog whose Calibrated Coil only counts SLAM triggers (an every-64th gate never pays). */
+    private val slamCounting = contentWithClauses("Calibrated Coil",
+        EffectClause(EffectTrigger.SLAM, actions = immutableListOf(EffectAction.Overdrive(1f)), everyNth = 64))
+
+    private fun MutableGameState.slamTriggers(): Int = clauseCounters[content.clauseIndex(itemNamed("Calibrated Coil").id, 0)]
+
+    private fun repellingDipole(): MutableGameState = buildTestState(shape = CoreShape.DIPOLE, content = slamCounting).apply {
+        own("Calibrated Coil")
+        characterRuntime.polarity = Polarity.REPEL
+    }
+
+    /** Fixed steps of the two passes that can meet a thrown enemy's contact, in step order. */
+    private fun MutableGameState.runThrowSteps(steps: Int) = repeat(steps) {
+        elapsed += MutableGameState.FIXED_STEP
+        updateCharacterRuntime(MutableGameState.FIXED_STEP)
+        updateEnemies(MutableGameState.FIXED_STEP)
+    }
+
+    @Test
+    fun aDipoleThrowIntoAnAsteroidSlamsOnceForTheDipoleDamageAlone() {
+        val state = repellingDipole()
+        val rockX = state.coreX + 500f
+        state.placeObstaclesForTesting(testObstacle(rockX, state.coreY, radius = 80f))
+        // Off-centre, so the enemy keeps sliding along the rock after the push-out (far outside the field).
+        val thrown = state.dummy(x = rockX - 97f, y = state.coreY + 30f, hp = 10_000f)
+        thrown.vx = 700f
+        thrown.characterMarkTime = THROW_SECONDS
+        assertTrue(state.isThrownByPolarity(thrown))
+        state.runThrowSteps(24)
+        val lost = thrown.maxHp - thrown.hp
+        val power = state.abilityPower()
+        // One Dipole slam at the contact's normal speed (below the 700 flight, above 600): no obstacle slam
+        // on top, and no second slam from the slide that follows.
+        assertTrue(lost in (SLAM_BASE_DAMAGE + SLAM_DAMAGE_PER_SPEED * 600f) * power..(SLAM_BASE_DAMAGE + SLAM_DAMAGE_PER_SPEED * 700f) * power,
+            "one Dipole slam: $lost")
+        assertEquals(1, state.slamTriggers(), "one SLAM per contact")
+        assertFalse(state.isThrownByPolarity(thrown), "the slam ends the throw")
+    }
+
+    @Test
+    fun aDipolePairContactSlamsEachEnemyOnce() {
+        val state = repellingDipole()
+        state.clearObstaclesForTesting()
+        val thrown = state.dummy(x = state.coreX + 400f, y = state.coreY, hp = 10_000f)
+        val struck = state.dummy(x = state.coreX + 430f, y = state.coreY, hp = 10_000f)
+        thrown.vx = 600f
+        thrown.characterMarkTime = THROW_SECONDS
+        // Thrown by the player too, so the obstacle pass's own enemy-enemy slam also looks at the pair.
+        state.markThrown(thrown)
+        state.runThrowSteps(24)
+        val slam = (SLAM_BASE_DAMAGE + SLAM_DAMAGE_PER_SPEED * 600f) * state.abilityPower()
+        assertEquals(thrown.maxHp - slam, thrown.hp, 0.5f)
+        assertEquals(struck.maxHp - slam, struck.hp, 0.5f)
+        assertEquals(2, state.slamTriggers(), "one SLAM for each slammed enemy")
+    }
+
+    @Test
+    fun anOrdinaryThrowStillTakesTheObstacleSlamUnderTheDipole() {
+        // Only REPEL throws use the Dipole slam; a player-thrown enemy meets the obstacle rule.
+        val state = repellingDipole()
+        state.placeObstaclesForTesting(testObstacle(state.coreX + 500f, state.coreY, radius = 80f))
+        val thrown = state.dummy(x = state.coreX + 500f - 80f - 17f + 4f, y = state.coreY, hp = 10_000f)
+        thrown.vx = 700f
+        state.resolveEnemyObstacles()
+        assertEquals((700f - 200f) * 0.12f * state.runScale(), thrown.maxHp - thrown.hp, 0.01f)
+        assertEquals(1, state.slamTriggers())
+    }
+
+    @Test
+    fun aCrescentBlinkStopsShortOfAnAsteroidOnItsPath() {
+        val state = buildTestState(shape = CoreShape.CRESCENT)
+        state.heat = 0f
+        // The rock's surface sits 150 ahead of the Core's leading edge, inside the 240 Blink range.
+        val rockX = state.coreX + state.coreRadius + 150f + 60f
+        state.placeObstaclesForTesting(testObstacle(rockX, state.coreY, radius = 60f))
+        state.setVelocityForTesting(500f, 0f)
+        state.pointerX = state.screenWidth
+        state.pointerY = state.screenHeight * 0.5f
+        val startX = state.coreX
+        state.performDash()
+        assertTrue(state.coreX > startX + 100f, "it still blinks most of the way: ${state.coreX - startX}")
+        assertTrue(state.coreX + state.coreRadius < rockX - 60f, "it stops before the rock")
+        assertFalse(state.obstacleBlocksSegment(startX, state.coreY, state.coreX, state.coreY, state.coreRadius))
+        assertEquals(state.coreX, state.previousCoreX, "a blink is a teleport")
+        assertEquals(1, state.characterRuntime.blinkCharges)
+        // The next fixed step meets no rock: the blink never lands the Core inside one.
+        state.updateObstacles()
+        assertEquals(state.maxHp, state.hp)
     }
 
     @Test
