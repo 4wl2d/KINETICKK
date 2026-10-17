@@ -138,6 +138,11 @@ class RebirthMutatorTest {
         repeat(40) { assertFalse(state.spawnedEnemy(EnemyType.ELITE, 900f, 0f).armored) }
         val unarmored = buildTestState(rebirth = 7)
         repeat(100) { assertFalse(unarmored.spawnedEnemy(EnemyType.DRIFTER, 900f, 0f).armored) }
+        // The roll is a hash of the run seed and the id: the same run plates the same enemies.
+        val replay = buildTestState(rebirth = 8)
+        val first = List(40) { replay.spawnedEnemy(EnemyType.DRIFTER, 900f, 0f).armored }
+        val again = buildTestState(rebirth = 8)
+        assertEquals(first, List(40) { again.spawnedEnemy(EnemyType.DRIFTER, 900f, 0f).armored })
 
         val plain = state.dummy(x = 300f)
         val plated = state.dummy(x = -300f).apply { armored = true }
@@ -152,6 +157,14 @@ class RebirthMutatorTest {
         assertTrue(plated.armorCracked)
         assertFalse(state.toRenderModel().enemies.single { it.id == plated.id }.armored)
         assertEquals(plainDamage, state.triggerWeaponContactForTesting(plated), plainDamage * 0.001f)
+    }
+
+    @Test
+    fun theArmoredVanguardRollDrawsNothingFromTheSpawnStream() {
+        val state = buildTestState(rebirth = 8)
+        val before = state.spawnRandom.snapshot()
+        repeat(50) { state.spawnedEnemy(EnemyType.DRIFTER, 900f + it, 0f) }
+        assertEquals(before, state.spawnRandom.snapshot(), "ordinary spawns at tier 8 leave the spawn stream untouched")
     }
 
     @Test

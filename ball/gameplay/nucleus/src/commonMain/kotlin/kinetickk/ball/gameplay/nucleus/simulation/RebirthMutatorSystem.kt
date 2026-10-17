@@ -93,11 +93,18 @@ internal fun MutableGameState.entropyTideHealing(): Float =
 internal fun MutableGameState.entropyTideShieldRegen(): Float =
     if (rebirthProfile.has(RebirthMutator.ENTROPY_TIDE)) ENTROPY_TIDE_SHIELD_REGEN else 1f
 
-/** R8: one ordinary spawn in five arrives armored; the roll uses the spawn stream only under the mutator. */
+/**
+ * R8: one ordinary spawn in five arrives armored. The roll is a stateless SplitMix64 hash of the run
+ * seed and the enemy id, so it draws nothing from the spawn stream and never shifts later spawns.
+ */
 internal fun MutableGameState.rollVanguardArmor(enemy: Enemy) {
     if (!rebirthProfile.has(RebirthMutator.ARMORED_VANGUARD) || !enemy.isOrdinary) return
-    enemy.armored = spawnRandom.nextFloat() < ARMORED_VANGUARD_CHANCE
+    val hash = splitMix64(splitMix64(runSeed.toLong() xor ARMOR_SEED_SALT) xor enemy.id.toLong())
+    enemy.armored = (hash ushr 40).toFloat() / (1 shl 24) < ARMORED_VANGUARD_CHANCE
 }
+
+/** Salt of the Armored Vanguard hash, distinct from the obstacle field's. */
+private const val ARMOR_SEED_SALT: Long = 0x0A2D_0BE5_5EED_0008L
 
 /** R8: a Core impact (or Dash contact) that lands cracks an intact plate for good. */
 internal fun MutableGameState.crackArmor(enemy: Enemy, source: HitSource?) {
