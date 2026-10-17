@@ -149,7 +149,7 @@ class ProfileTextFitTest {
 
     @Test
     fun armoryTextsStayWholeAndInsideTheDetailPanel() {
-        val model = ArmoryRenderModel(1_284L, WeaponId.FLUX_WAKE, CatalogWeapons.take(7).map { it.id }.toImmutableSet(), WeaponId.ION_SWARM)
+        val model = ArmoryRenderModel(1_284L, WeaponId.FLUX_WAKE, CatalogWeapons.take(7).map { it.id }.toImmutableSet(), WeaponId.ION_SWARM, rebirthRank = 0)
         for ((width, height) in sizes) {
             val holders = HashMap<Scene<WeaponId>, ArmoryLayoutHolder>()
             val tileNames = HashMap<Triple<AppLanguage, Float, Any?>, Float>()

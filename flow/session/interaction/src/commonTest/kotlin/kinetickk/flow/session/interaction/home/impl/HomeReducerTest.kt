@@ -19,6 +19,8 @@ import kinetickk.flow.session.interaction.audio.SessionAudioCue
 import kinetickk.flow.session.interaction.home.api.HomeOutput
 import kinetickk.flow.session.interaction.TestCoreShapes
 import kinetickk.flow.session.interaction.TestRebirthPolicy
+import kinetickk.flow.session.interaction.testWeapon
+import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -63,6 +65,29 @@ class HomeReducerTest {
         assertEquals(2, model.unlockedWeaponCount)
         assertFalse(model.canRebirth)
         assertTrue(model.isCoreShapeUnlocked(CoreShape.SHARD))
+    }
+
+    @Test
+    fun theArmoryIsUnlockableOnlyForAWeaponTheRebirthRankAllows() {
+        // Every ungated weapon owned; only Glacier Bell (Reborn 1) is left to buy.
+        val weapons = listOf(
+            testWeapon(WeaponId.FLUX_WAKE, cost = 0),
+            testWeapon(WeaponId.MORNINGSTAR, cost = 120),
+            testWeapon(WeaponId.GLACIER_BELL, cost = 700, minimumRebirth = 1),
+        ).toImmutableList()
+        val reducer = HomeReducer(TestCoreShapes, 80, weapons.size, TestRebirthPolicy, weapons = weapons)
+        val loadout = PlayerLoadout(
+            coreShape = CoreShape.ORB,
+            selectedWeapon = WeaponId.FLUX_WAKE,
+            unlockedWeapons = setOf(WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR),
+        )
+        val rich = PlayerEconomy(matter = 10_000, lifetimeMatter = 10_000)
+
+        assertFalse(reducer.uiModel(homeProjection(economy = rich, loadout = loadout)).weaponUnlockAffordable)
+        // Rank 1 (tier 0 cleared) opens the gate.
+        val reborn = homeProjection(economy = rich, loadout = loadout, rebirth = RebirthProgress(level = 0, highestCleared = 0))
+        assertTrue(reducer.uiModel(reborn).weaponUnlockAffordable)
+        assertFalse(reducer.uiModel(reborn.copy(economy = PlayerEconomy(matter = 699, lifetimeMatter = 10_000))).weaponUnlockAffordable)
     }
 
     @Test

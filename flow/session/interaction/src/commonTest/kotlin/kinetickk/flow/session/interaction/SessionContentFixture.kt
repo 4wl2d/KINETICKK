@@ -60,8 +60,14 @@ internal fun testItems(count: Int = TEST_ITEM_COUNT): ImmutableList<ItemDefiniti
         )
     }.toImmutableList()
 
-/** A neutral weapon for Session scenes that only read its id, name, description and price. */
-internal fun testWeapon(id: WeaponId, name: String = id.name, description: String = "Description", cost: Int = 100): WeaponDefinition =
+/** A neutral weapon for Session scenes that only read its id, name, description, price and Rebirth gate. */
+internal fun testWeapon(
+    id: WeaponId,
+    name: String = id.name,
+    description: String = "Description",
+    cost: Int = 100,
+    minimumRebirth: Int = 0,
+): WeaponDefinition =
     WeaponDefinition(
         id = id,
         name = name,
@@ -74,7 +80,7 @@ internal fun testWeapon(id: WeaponId, name: String = id.name, description: Strin
         scaling = WeaponScaling.SPEED,
         cadence = WeaponCadence.DISCRETE,
         permanentUnlockCost = cost,
-        minimumRebirth = 0,
+        minimumRebirth = minimumRebirth,
         masteryForms = listOf("Test form one", "Test form two", "Test form three"),
         signatureText = "Test signature twist.",
     )

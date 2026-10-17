@@ -9,6 +9,7 @@ import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.profile.api.HomeProgressProjection
 import kinetickk.ball.profile.api.MatrixProgress
+import kinetickk.ball.profile.api.rank
 import kinetickk.flow.session.interaction.audio.SessionAudioCue
 import kinetickk.flow.session.interaction.home.api.HomeOutput
 import kinetickk.flow.session.interaction.home.api.HomeUiModel
@@ -61,8 +62,10 @@ internal class HomeReducer(
         discoveredRelicCount = projection.collection.discoveredRelicIds.size,
         relicCount = relicCount,
         startingWeaponName = weapons.firstOrNull { it.id == projection.loadout.selectedWeapon }?.name,
+        // The Profile refuses a weapon gated above the Rebirth rank, so only a weapon it would sell counts.
         weaponUnlockAffordable = weapons.any { weapon ->
             weapon.id !in projection.loadout.unlockedWeapons &&
+                projection.rebirthProgress.rank >= weapon.minimumRebirth &&
                 projection.economy.matter >= weapon.permanentUnlockCost.toLong()
         },
         matrixRanks = matrix?.let { progress ->

@@ -125,7 +125,7 @@ class RewardInstructionCopyTest {
                 choices = listOf(
                     ChoiceOption(ChoiceType.TOTEM, "Amplify Flux Wake", "Advance the current system from level 5 to 6 immediately.", "RESONANT",
                         weaponId = WeaponId.FLUX_WAKE, totemAction = TotemAction.AMPLIFY_CURRENT),
-                    ChoiceOption(ChoiceType.TOTEM, "Change weapon", "Recalibrate the Totem, then choose one of three different weapon systems.",
+                    ChoiceOption(ChoiceType.TOTEM, "Change weapon", "Recalibrate the Totem, then choose another weapon system you own.",
                         "RECALIBRATE", totemAction = TotemAction.CHANGE_WEAPON),
                 ),
             ),

@@ -37,6 +37,8 @@ data class MatrixProfileSnapshot(
 data class LoadoutProfileSnapshot(
     val economy: PlayerEconomy,
     val loadout: PlayerLoadout,
+    /** Rebirth rank the weapon unlock gates compare against. */
+    val rebirthRank: Int = 0,
 )
 
 data class RebirthProfileSnapshot(

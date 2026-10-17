@@ -12,6 +12,8 @@ data class ArmoryRenderModel(
     val selectedWeapon: WeaponId,
     val unlockedWeapons: ImmutableSet<WeaponId>,
     val activeRunWeapon: WeaponId?,
+    /** Rebirth rank the weapons' unlock gates compare against. */
+    val rebirthRank: Int,
 )
 
 sealed interface ArmoryOutput {

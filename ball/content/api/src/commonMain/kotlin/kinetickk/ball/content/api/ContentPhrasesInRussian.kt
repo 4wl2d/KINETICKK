@@ -298,7 +298,7 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "ANOMALY LOST" to "АНОМАЛИЯ УТРАЧЕНА",
     "ANOMALY RESOLVED" to "АНОМАЛИЯ ЗАВЕРШЕНА",
     "Change weapon" to "Сменить оружие",
-    "Recalibrate the Totem, then choose one of three different weapon systems." to "Перенастройте Тотем и выберите одну из трёх других оружейных систем.",
+    "Recalibrate the Totem, then choose another weapon system you own." to "Перенастройте Тотем и выберите другую свою оружейную систему.",
     "RECALIBRATE" to "ПЕРЕНАСТРОЙКА",
     "Meld resonance" to "Слить резонанс",
     "Leave hollow" to "Оставить пустой",

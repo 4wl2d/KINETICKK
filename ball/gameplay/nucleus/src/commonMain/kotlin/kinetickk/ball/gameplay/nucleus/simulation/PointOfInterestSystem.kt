@@ -169,15 +169,29 @@ internal fun MutableGameState.openDirectedReward(reward: DirectedReward) {
         DirectedReward.ITEM_AND_REPAIR -> ChoiceType.ITEM
     }
     val focuses = when (reward) {
-        DirectedReward.WEAPON -> listOf(RewardFocus.MOTION, RewardFocus.CONTROL, RewardFocus.STRIKE)
+        // Only directions with an owned weapon behind them; a direction with none would offer just Amplify.
+        DirectedReward.WEAPON -> WeaponFocuses.filter { focus -> weaponOfferCandidates().any { weaponRewardFocus(it) == focus } }
         DirectedReward.RELIC -> RelicFocuses.shuffled(rewardRandom).take(3)
         DirectedReward.ITEM_AND_REPAIR -> listOf(RewardFocus.OFFENSE, RewardFocus.DEFENSE, RewardFocus.ECONOMY)
     }
-    choices = focuses.map { ChoiceOption(activeChoiceType, it.label, "Choose a direction, then one of three matching offers.",
-        "FOCUS", rewardFocus = it) }
+    choices = if (focuses.isEmpty()) {
+        // No other owned weapon (a starter-only profile): skip the direction step and offer Amplify alone.
+        directedWeaponChoices(emptyList())
+    } else {
+        focuses.map { ChoiceOption(activeChoiceType, it.label, "Choose a direction, then one of three matching offers.",
+            "FOCUS", rewardFocus = it) }
+    }
     dashBufferTime = 0f
     phase = GamePhase.CHOICE
 }
+
+/** The weapon reward's offer: Amplify the current weapon, then each of [pool] as a change. */
+private fun MutableGameState.directedWeaponChoices(pool: List<WeaponDefinition>): List<ChoiceOption> =
+    listOf(ChoiceOption(ChoiceType.TOTEM, "Amplify ${currentWeaponDefinition.name}",
+        "Raise current weapon mastery by one level.", "AMPLIFY", weaponId = weapon,
+        totemAction = TotemAction.AMPLIFY_CURRENT)) + pool.map {
+        ChoiceOption(ChoiceType.WEAPON, it.name, it.description, "CHANGE", weaponId = it.id)
+    }
 
 internal fun MutableGameState.selectRewardFocus(focus: RewardFocus) {
     val reward = directedReward ?: return
@@ -206,13 +220,9 @@ internal fun MutableGameState.selectRewardFocus(focus: RewardFocus) {
             }
         }
         DirectedReward.WEAPON -> {
-            val pool = weaponOfferCandidates().filter { weaponRewardFocus(it) == focus }
-                .shuffled(rewardRandom).take(2)
-            choices = listOf(ChoiceOption(ChoiceType.TOTEM, "Amplify ${currentWeaponDefinition.name}",
-                "Raise current weapon mastery by one level.", "AMPLIFY", weaponId = weapon,
-                totemAction = TotemAction.AMPLIFY_CURRENT)) + pool.map {
-                ChoiceOption(ChoiceType.WEAPON, it.name, it.description, "CHANGE", weaponId = it.id)
-            }
+            choices = directedWeaponChoices(
+                weaponOfferCandidates().filter { weaponRewardFocus(it) == focus }.shuffled(rewardRandom).take(2),
+            )
         }
     }
     // The finite catalog can be exhausted; salvage is an honest terminal outcome, never a dead choice.
@@ -221,6 +231,9 @@ internal fun MutableGameState.selectRewardFocus(focus: RewardFocus) {
         finishChoice(kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue.LEVEL_UP)
     }
 }
+
+/** Weapon directions, in display order; [weaponRewardFocus] maps every weapon to one of them. */
+private val WeaponFocuses: List<RewardFocus> = listOf(RewardFocus.MOTION, RewardFocus.CONTROL, RewardFocus.STRIKE)
 
 /** Relic directions: Kinetic and one per element, named after their [RelicAspect]. */
 private val RelicFocuses: List<RewardFocus> = listOf(

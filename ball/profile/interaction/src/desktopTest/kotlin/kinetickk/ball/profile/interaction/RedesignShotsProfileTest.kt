@@ -111,6 +111,7 @@ class RedesignShotsProfileTest {
             selectedWeapon = WeaponId.FLUX_WAKE,
             unlockedWeapons = Weapons.take(7).map { it.id }.toImmutableSet(),
             activeRunWeapon = null,
+            rebirthRank = 0,
         )
         for ((state, id) in listOf(
             "starter" to WeaponId.FLUX_WAKE,
@@ -124,7 +125,7 @@ class RedesignShotsProfileTest {
                     remember { ScrollState(0) }, remember { ArmoryLayoutHolder() }) {}
             }
         }
-        val active = ArmoryRenderModel(1_284L, WeaponId.FLUX_WAKE, Weapons.take(7).map { it.id }.toImmutableSet(), WeaponId.ION_SWARM)
+        val active = ArmoryRenderModel(1_284L, WeaponId.FLUX_WAKE, Weapons.take(7).map { it.id }.toImmutableSet(), WeaponId.ION_SWARM, rebirthRank = 0)
         for ((scale, suffix) in scales) {
             shoot("armory", "active$suffix") {
                 ArmoryContent(active, Weapons, WeaponMastery.entries, ArmoryViewState(WeaponId.ION_SWARM), scale,

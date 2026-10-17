@@ -87,6 +87,21 @@ class ContentBootstrapValidationTest {
     }
 
     @Test
+    fun aWeaponKeyCarriedOnlyBySovereignRelicsIsRejected() {
+        val data = defaultContentBootstrapData()
+        // Null Covenant is the only ordinary Void Relic; without it Void rides on two Sovereign Relics alone.
+        val voidless = data.relics.map { relic ->
+            if (relic.id == RelicId.NULL_COVENANT) relic.copy(keys = relic.keys.filter { it != RelicKey.VOID }.toImmutableList()) else relic
+        }.toImmutableList()
+        val carriers = voidless.filter { RelicKey.VOID in it.keys }
+        assertEquals(2, carriers.size)
+        assertTrue(carriers.all { it.isSovereign })
+        assertTrue(data.weapons.any { it.key == RelicKey.VOID })
+
+        assertRejected(data.copy(relics = voidless), "key VOID must be carried by two Relics, one of them not Sovereign")
+    }
+
+    @Test
     fun matrixNodeBoundRejectsNPlusOne() {
         val data = defaultContentBootstrapData()
         val filler = (data.matrixNodes.size until ContentBounds.MAX_MATRIX_NODES).map { data.matrixNodes.first() }

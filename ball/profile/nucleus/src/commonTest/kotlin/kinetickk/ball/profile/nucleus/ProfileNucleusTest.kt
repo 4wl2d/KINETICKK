@@ -692,6 +692,8 @@ class ProfileNucleusTest {
         assertEquals(state.profile.matrix, assertIs<MatrixProgressProjection>(projections[3]).snapshot.progress)
         assertEquals(1, assertIs<MatrixProgressProjection>(projections[3]).snapshot.rebirthRank)
         assertEquals(state.profile.loadout, assertIs<LoadoutProjection>(projections[4]).snapshot.loadout)
+        // The Armory reads the weapon unlock gates' rank from the loadout projection.
+        assertEquals(1, assertIs<LoadoutProjection>(projections[4]).snapshot.rebirthRank)
         assertEquals(state.profile.collection, assertIs<CollectionProjection>(projections[5]).collection)
         assertTrue(assertIs<RebirthProgressProjection>(projections[6]).canAdvance)
         assertEquals(state.persistence, assertIs<PersistenceStatusProjection>(projections[7]).persistence)

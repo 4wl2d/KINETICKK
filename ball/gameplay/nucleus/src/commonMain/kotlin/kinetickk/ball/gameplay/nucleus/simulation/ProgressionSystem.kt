@@ -35,7 +35,7 @@ import kotlin.math.min
 
 internal const val MAX_GENERATED_REWARD_CHOICES: Int = 4
 
-/** A Totem recalibration offers three different weapon systems; Gambler's Ledger only widens item offers. */
+/** A Totem recalibration offers up to three other owned weapon systems; Gambler's Ledger only widens item offers. */
 internal const val WEAPON_OFFER_CHOICES: Int = 3
 
 internal fun MutableGameState.openItemChoice() {
@@ -75,7 +75,7 @@ internal fun MutableGameState.openTotemChoice() {
         ChoiceOption(
             type = ChoiceType.TOTEM,
             title = "Change weapon",
-            description = "Recalibrate the Totem, then choose one of three different weapon systems.",
+            description = "Recalibrate the Totem, then choose another weapon system you own.",
             tag = "RECALIBRATE",
             totemAction = TotemAction.CHANGE_WEAPON,
         ).takeIf { canRecalibrate },

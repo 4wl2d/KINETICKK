@@ -648,8 +648,10 @@ internal class MutableGameState(
     val choiceType: ChoiceType get() = activeChoiceType
     val choicesCanReroll: Boolean
         get() = phase == GamePhase.CHOICE && directedReward == null && rerollsRemaining > 0 && when (activeChoiceType) {
-            ChoiceType.ITEM, ChoiceType.WEAPON -> true
-        ChoiceType.RELIC -> !heirloomOfferActive
+            ChoiceType.ITEM -> true
+            // Offers come from owned weapons only: with no more than one offer's worth a reroll would deal the same set.
+            ChoiceType.WEAPON -> weaponOfferCandidates().size > WEAPON_OFFER_CHOICES
+            ChoiceType.RELIC -> !heirloomOfferActive
             ChoiceType.TOTEM, ChoiceType.RELIC_BIND -> false
         }
     val pendingRelicChoiceCount: Int get() = pendingRelicChoices

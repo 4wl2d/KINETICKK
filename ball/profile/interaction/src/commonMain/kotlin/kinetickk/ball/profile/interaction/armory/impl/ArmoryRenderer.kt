@@ -139,7 +139,7 @@ internal fun ArmoryContent(
         val activeTag = if (model.activeRunWeapon == inspected.id) language.text(ProfileScreensRedesignText.ActiveRun) else null
         val tagTexts = remember(inspected, language) { inspected.tags.map { it.displayLabel.localizedContent(language) } }
         val tileTexts = remember(weapons, model, language) { armoryTileTexts(weapons, model, language) }
-        val layout = armoryLayout(frame, weapons.size, scale, backWidth, actionWidth, needRoom = status == ArmoryWeaponStatus.SHORT,
+        val layout = armoryLayout(frame, weapons.size, scale, backWidth, actionWidth, needRoom = status.blocked,
             masteryCount = masteries.size, tileText = { innerWidth -> armoryTileMetrics(measurer, frame, type, tileTexts, innerWidth) },
         ) { nameWidth, width ->
             ArmoryDetailMetrics(
@@ -211,7 +211,7 @@ internal fun ArmoryContent(
                     drawRect(Kk.Ink1, Offset(layout.detailViewport.left, top),
                         androidx.compose.ui.geometry.Size(layout.detailViewport.width, button.bottom + frame.d(8f) - top))
                 }
-                if (status == ArmoryWeaponStatus.SHORT) drawArmoryNeed(measurer, frame, type, layout.need, inspected, model.totalMatter, language)
+                if (status.blocked) drawArmoryNeed(measurer, frame, type, layout.need, armoryNeedText(status, inspected, model.totalMatter, language))
             },
         )
         ProfileSlabButton(
@@ -223,7 +223,7 @@ internal fun ArmoryContent(
                     size = buttonSize,
                     fontSize = type.action,
                     enabled = status.actionEnabled,
-                    locked = status == ArmoryWeaponStatus.SHORT,
+                    locked = status.blocked,
                     lockIcon = false,
                     cost = action.cost,
                     textScale = scale,
@@ -247,7 +247,7 @@ internal fun armoryActionPresentation(status: ArmoryWeaponStatus, definition: We
     return when (status) {
         ArmoryWeaponStatus.STARTER -> ArmoryActionPresentation(language.text(ProfileScreensRedesignText.Starter), null, null, KkButtonVariant.GHOST)
         ArmoryWeaponStatus.OWNED -> ArmoryActionPresentation(language.text(ProfileScreensRedesignText.SetAsStarter), null, null, KkButtonVariant.GHOST)
-        ArmoryWeaponStatus.AFFORDABLE, ArmoryWeaponStatus.SHORT ->
+        ArmoryWeaponStatus.AFFORDABLE, ArmoryWeaponStatus.SHORT, ArmoryWeaponStatus.REBIRTH_LOCKED ->
             ArmoryActionPresentation(language.text(ProfileScreensRedesignText.Unlock), cost, costDescription, KkButtonVariant.PRIMARY)
     }
 }
@@ -354,6 +354,7 @@ internal fun armoryStatusText(status: ArmoryWeaponStatus, active: Boolean, defin
     active -> language.text(ProfileScreensRedesignText.ActiveRun)
     status == ArmoryWeaponStatus.STARTER -> language.text(ProfileScreensRedesignText.Starter)
     status == ArmoryWeaponStatus.OWNED -> language.text(ProfileScreensRedesignText.Owned)
+    status == ArmoryWeaponStatus.REBIRTH_LOCKED -> language.text(ProfileScreensRedesignText.RebornLock, definition.minimumRebirth)
     else -> language.text(ProfileScreensRedesignText.CostMatter, formatMatter(definition.permanentUnlockCost.toLong(), language))
 }
 
@@ -566,18 +567,22 @@ private fun DrawScope.drawArmoryDetail(
     drawMasteryLadder(measurer, frame, type, layout.ladder, layout.ladderStacked, masteries, language)
 }
 
-/** "Need N more matter" beside a locked Unlock button, in the threat role. */
+/** Why a [ArmoryWeaponStatus.blocked] weapon cannot be unlocked yet: its Rebirth gate, or the Matter still missing. */
+internal fun armoryNeedText(status: ArmoryWeaponStatus, definition: WeaponDefinition, matter: Long, language: AppLanguage): String =
+    if (status == ArmoryWeaponStatus.REBIRTH_LOCKED) {
+        language.text(ProfileScreensRedesignText.RebornLock, definition.minimumRebirth)
+    } else {
+        language.text(ProfileScreensRedesignText.NeedMore, formatMatter((definition.permanentUnlockCost - matter).coerceAtLeast(0L), language))
+    }
+
+/** The [armoryNeedText] ("Reborn N" or "Need N more matter") beside a locked Unlock button, in the threat role. */
 private fun DrawScope.drawArmoryNeed(
     measurer: CanvasTextMeasurer,
     frame: ProfileFrame,
     type: ArmoryType,
     rect: Rect,
-    definition: WeaponDefinition,
-    matter: Long,
-    language: AppLanguage,
+    text: String,
 ) {
-    val need = (definition.permanentUnlockCost - matter).coerceAtLeast(0L)
-    val text = language.text(ProfileScreensRedesignText.NeedMore, formatMatter(need, language))
     val needLayout = fitKkText(measurer, text, type.ladderMono * frame.k, rect.width.coerceAtLeast(frame.d(60f)), maxLines = 3,
         minFactor = 0.6f) { measurer.typography.monoStyle(it, lineHeightEm = 1.6f) }
     drawProfileText(needLayout, rect.left, rect.center.y, measurer.roles.threat, "armory.need", valign = KkVAlign.CENTER)

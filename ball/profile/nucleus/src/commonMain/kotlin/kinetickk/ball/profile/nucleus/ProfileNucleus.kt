@@ -131,7 +131,11 @@ object ProfileNucleus {
         LoadoutProjection(
             instanceId = state.instanceId,
             revision = state.revision,
-            snapshot = LoadoutProfileSnapshot(state.profile.economy, state.profile.loadout),
+            snapshot = LoadoutProfileSnapshot(
+                economy = state.profile.economy,
+                loadout = state.profile.loadout,
+                rebirthRank = state.profile.rebirthProgress.rank,
+            ),
         )
 
     fun query(state: ProfileState, query: ProfileQuery.GetCollection): CollectionProjection =

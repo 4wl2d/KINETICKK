@@ -120,6 +120,26 @@ class PointOfInterestTest {
         assertEquals(RewardFocus.MOTION, weaponRewardFocus(game.content.weapon(WeaponId.SCATTER_BLOOM)))
         assertEquals(RewardFocus.CONTROL, weaponRewardFocus(game.content.weapon(WeaponId.SENTRY_GRID)))
         assertEquals(RewardFocus.STRIKE, weaponRewardFocus(game.content.weapon(WeaponId.ARC_COIL)))
+
+        // Only directions with an owned weapon behind them are offered.
+        val motionOnly = game()
+        motionOnly.unlockWeaponsForTesting(listOf(WeaponId.NULL_LANCE, WeaponId.GYRE_DISC))
+        motionOnly.pendingDirectedRewards = listOf(DirectedReward.WEAPON)
+        motionOnly.openNextPendingChoice()
+        assertEquals(listOf(RewardFocus.MOTION), motionOnly.choices.map { it.rewardFocus })
+
+        // A starter-only profile owns nothing to change to: no empty direction, straight to Amplify.
+        val starter = game()
+        assertEquals(setOf(WeaponId.FLUX_WAKE), starter.unlockedWeapons)
+        starter.pendingDirectedRewards = listOf(DirectedReward.WEAPON)
+        starter.openNextPendingChoice()
+        assertEquals(GamePhase.CHOICE, starter.phase)
+        assertTrue(starter.choices.none { it.rewardFocus != null })
+        assertEquals(listOf(TotemAction.AMPLIFY_CURRENT), starter.choices.map { it.totemAction })
+        val level = starter.weaponLevel
+        starter.choose(0)
+        assertEquals(GamePhase.RUNNING, starter.phase)
+        assertEquals(level + 1, starter.weaponLevel)
     }
 
     @Test fun directedRewardSharesQueueAndFocusCannotRerollOutOfCategory() {

@@ -29,8 +29,11 @@ class TotemEnemySystemsTest {
         engine.choose(engine.choices.indexOfFirst { it.totemAction == TotemAction.CHANGE_WEAPON })
         assertEquals(ChoiceType.WEAPON, engine.choiceType)
         assertEquals(setOf(WeaponId.MORNINGSTAR, WeaponId.GYRE_DISC), engine.choices.mapNotNull(ChoiceOption::weaponId).toSet())
+        // Both candidates are already on the table: a reroll could only deal them again, so it is neither offered nor spent.
+        val rerolls = engine.rerollsRemaining
+        assertFalse(engine.choicesCanReroll)
         engine.rerollChoices()
-        assertTrue(engine.choices.all { it.weaponId in owned && it.weaponId != engine.weapon })
+        assertEquals(rerolls, engine.rerollsRemaining)
 
         // A fresh profile owns only the starter: the Totem can amplify it, never recalibrate into nothing.
         val starter = runningEngine(seed = 203, owned = emptyList())
@@ -39,6 +42,34 @@ class TotemEnemySystemsTest {
         starter.update(GameScenario.FIXED_STEP)
         assertEquals(ChoiceType.TOTEM, starter.choiceType)
         assertEquals(listOf(TotemAction.AMPLIFY_CURRENT), starter.choices.map { it.totemAction })
+    }
+
+    @Test
+    fun aWeaponRerollNeedsMoreOwnedCandidatesThanOneOffer() {
+        fun recalibrated(owned: List<WeaponId>): GameScenario = runningEngine(seed = 204, owned = owned).also { engine ->
+            openTotemChoice(engine)
+            engine.choose(engine.choices.indexOfFirst { it.totemAction == TotemAction.CHANGE_WEAPON })
+            assertEquals(ChoiceType.WEAPON, engine.choiceType)
+        }
+        val threeOthers = listOf(WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR, WeaponId.GYRE_DISC, WeaponId.ARC_COIL)
+
+        // Exactly one offer's worth of owned weapons: the reroll is not offered and costs nothing.
+        val exact = recalibrated(threeOthers)
+        assertEquals(3, exact.choices.size)
+        val choices = exact.choices
+        val rerolls = exact.rerollsRemaining
+        assertTrue(rerolls > 0)
+        assertFalse(exact.choicesCanReroll)
+        exact.rerollChoices()
+        assertEquals(rerolls, exact.rerollsRemaining)
+        assertEquals(choices, exact.choices)
+
+        // One more owned weapon makes a different hand possible, so the reroll is offered and spent.
+        val wider = recalibrated(threeOthers + WeaponId.NULL_LANCE)
+        assertTrue(wider.choicesCanReroll)
+        val before = wider.rerollsRemaining
+        wider.rerollChoices()
+        assertEquals(before - 1, wider.rerollsRemaining)
     }
 
     @Test

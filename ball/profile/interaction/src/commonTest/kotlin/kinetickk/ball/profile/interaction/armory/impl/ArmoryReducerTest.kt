@@ -4,6 +4,7 @@
 package kinetickk.ball.profile.interaction.armory.impl
 
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.profile.api.LoadoutProfileSnapshot
 import kinetickk.ball.profile.api.PlayerEconomy
@@ -13,6 +14,7 @@ import kinetickk.ball.profile.interaction.armory.api.ArmoryOutput
 import kinetickk.ball.profile.interaction.armory.api.ArmoryRenderModel
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.foundation.collections.immutableSetOf
+import kinetickk.foundation.collections.toImmutableList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -28,6 +30,7 @@ class ArmoryReducerTest {
         selectedWeapon = WeaponId.FLUX_WAKE,
         unlockedWeapons = immutableSetOf(WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR),
         activeRunWeapon = null,
+        rebirthRank = 0,
     )
 
     @Test
@@ -44,6 +47,32 @@ class ArmoryReducerTest {
         assertTrue(ArmoryWeaponStatus.OWNED.actionEnabled)
         assertTrue(ArmoryWeaponStatus.AFFORDABLE.actionEnabled)
         assertFalse(ArmoryWeaponStatus.SHORT.actionEnabled)
+    }
+
+    @Test
+    fun aRebirthGatedWeaponStaysDisabledBelowItsRankWhateverTheMatter() {
+        // Glacier Bell's shipped gate: Reborn 1, for 700 Matter.
+        val weapons = TestWeapons.map { if (it.id == WeaponId.GLACIER_BELL) it.gatedAt(minimumRebirth = 1) else it }.toImmutableList()
+        val gatedReducer = ArmoryReducer(weapons)
+        val bell = weapons.first { it.id == WeaponId.GLACIER_BELL }
+        val start = ArmoryViewState(WeaponId.GLACIER_BELL)
+        val rich = model.copy(totalMatter = 10_000L)
+
+        assertEquals(ArmoryWeaponStatus.REBIRTH_LOCKED, rich.status(bell))
+        assertFalse(ArmoryWeaponStatus.REBIRTH_LOCKED.actionEnabled)
+        assertTrue(gatedReducer.reduce(start, rich, ArmoryAction.Apply(WeaponId.GLACIER_BELL)).effects.isEmpty())
+        assertTrue(gatedReducer.reduce(start, rich, ArmoryAction.Activate(WeaponId.GLACIER_BELL)).effects.isEmpty())
+
+        // At exactly its rank the weapon is an ordinary unlock again.
+        val reborn = rich.copy(rebirthRank = 1)
+        assertEquals(ArmoryWeaponStatus.AFFORDABLE, reborn.status(bell))
+        assertEquals(
+            WeaponId.GLACIER_BELL,
+            assertIs<ArmoryEffect.PurchaseOrEquipWeapon>(gatedReducer.reduce(start, reborn, ArmoryAction.Apply(WeaponId.GLACIER_BELL)).effects.single()).id,
+        )
+        assertEquals(ArmoryWeaponStatus.SHORT, reborn.copy(totalMatter = 0L).status(bell))
+        // An owned weapon is never gated: it can still be set as the starter.
+        assertEquals(ArmoryWeaponStatus.OWNED, rich.copy(unlockedWeapons = immutableSetOf(WeaponId.FLUX_WAKE, WeaponId.GLACIER_BELL)).status(bell))
     }
 
     @Test
@@ -105,6 +134,7 @@ class ArmoryReducerTest {
                 selectedWeapon = WeaponId.MORNINGSTAR,
                 unlockedWeapons = setOf(WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR),
             ),
+            rebirthRank = 3,
         )
 
         val model = reducer.renderModel(snapshot, activeRunWeapon = WeaponId.FLUX_WAKE)
@@ -113,5 +143,23 @@ class ArmoryReducerTest {
         assertEquals(WeaponId.MORNINGSTAR, model.selectedWeapon)
         assertEquals(snapshot.loadout.unlockedWeapons, model.unlockedWeapons)
         assertEquals(WeaponId.FLUX_WAKE, model.activeRunWeapon)
+        assertEquals(3, model.rebirthRank)
     }
 }
+
+private fun WeaponDefinition.gatedAt(minimumRebirth: Int): WeaponDefinition = WeaponDefinition(
+    id = id,
+    name = name,
+    description = description,
+    family = family,
+    element = element,
+    tags = tags,
+    key = key,
+    signature = signature,
+    scaling = scaling,
+    cadence = cadence,
+    permanentUnlockCost = permanentUnlockCost,
+    minimumRebirth = minimumRebirth,
+    masteryForms = masteryForms,
+    signatureText = signatureText,
+)

@@ -26,14 +26,21 @@ internal enum class ArmoryWeaponStatus {
     OWNED,
     AFFORDABLE,
     SHORT,
+    /** Not owned and gated above the profile's Rebirth rank, whatever the Matter balance. */
+    REBIRTH_LOCKED,
     ;
 
-    val locked: Boolean get() = this == AFFORDABLE || this == SHORT
+    val locked: Boolean get() = this == AFFORDABLE || this == SHORT || this == REBIRTH_LOCKED
+
+    /** A locked weapon the player cannot unlock yet: the panel says why beside the disabled action. */
+    val blocked: Boolean get() = this == SHORT || this == REBIRTH_LOCKED
 }
 
+// Same order as the Profile's purchase decision: the Rebirth gate before the Matter price.
 internal fun ArmoryRenderModel.status(definition: WeaponDefinition): ArmoryWeaponStatus = when {
     definition.id == selectedWeapon -> ArmoryWeaponStatus.STARTER
     definition.id in unlockedWeapons -> ArmoryWeaponStatus.OWNED
+    rebirthRank < definition.minimumRebirth -> ArmoryWeaponStatus.REBIRTH_LOCKED
     totalMatter >= definition.permanentUnlockCost -> ArmoryWeaponStatus.AFFORDABLE
     else -> ArmoryWeaponStatus.SHORT
 }
@@ -85,6 +92,7 @@ internal class ArmoryReducer(
         selectedWeapon = snapshot.loadout.selectedWeapon,
         unlockedWeapons = snapshot.loadout.unlockedWeapons,
         activeRunWeapon = activeRunWeapon,
+        rebirthRank = snapshot.rebirthRank,
     )
 
     fun reduce(state: ArmoryViewState, model: ArmoryRenderModel, action: ArmoryAction): ArmoryReduction = when (action) {
@@ -115,7 +123,7 @@ internal class ArmoryReducer(
             ArmoryReduction(ArmoryViewState(id), listOf(ArmoryEffect.PlayAudio(ProfileAudioCue.UI_CLICK)))
         }
 
-    // Affordability is only presentation gating (the old disabled button); the Profile Nucleus
+    // Affordability and the Rebirth gate are only presentation gating (a disabled button); the Profile Nucleus
     // remains the authority that accepts or rejects the purchase or equip.
     private fun apply(state: ArmoryViewState, model: ArmoryRenderModel, id: WeaponId): ArmoryReduction {
         val definition = weapons.firstOrNull { it.id == id } ?: return ArmoryReduction(state)
