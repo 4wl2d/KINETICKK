@@ -180,8 +180,6 @@ data class CoreShapeDefinition(
         require(mechanicName.isNotBlank())
         require(unlockTarget >= 0)
         require(unlockRequirement != CharacterUnlockRequirement.AVAILABLE || unlockTarget == 0)
-        require(unlockRequirement != CharacterUnlockRequirement.REBIRTH_RANK ||
-            unlockTarget in 1..ContentBounds.MAX_REBIRTH_LEVEL)
         require(difficulty in 1..3)
     }
 }

@@ -224,6 +224,7 @@ private object UnusedProfilePort : ProfilePort {
     override fun query(query: ProfileQuery.GetPreferences): PreferencesProjection = error("unused")
     override fun query(query: ProfileQuery.GetHomeProgress): HomeProgressProjection = error("unused")
     override fun query(query: ProfileQuery.GetMatrixProgress): MatrixProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetHangar): kinetickk.ball.profile.api.HangarProjection = error("unused")
     override fun query(query: ProfileQuery.GetLoadout): LoadoutProjection = error("unused")
     override fun query(query: ProfileQuery.GetCollection): CollectionProjection = error("unused")
     override fun query(query: ProfileQuery.GetRebirthProgress): RebirthProgressProjection = error("unused")

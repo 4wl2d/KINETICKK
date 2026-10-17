@@ -4,6 +4,7 @@
 package kinetickk.ball.profile.api
 
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.ImmutableSet
 import kinetickk.foundation.collections.immutableSetOf
 
@@ -16,6 +17,8 @@ sealed interface ProfileQuery {
     data object GetCollection : ProfileQuery
     data object GetRebirthProgress : ProfileQuery
     data object GetPersistenceStatus : ProfileQuery
+    /** Every character's unlock state for the Hangar. */
+    data object GetHangar : ProfileQuery
 }
 
 sealed interface ProfileProjection {
@@ -102,6 +105,24 @@ data class RebirthProgressProjection(
     val canAdvance: Boolean,
 ) : ProfileProjection
 
+/** Unlock progress of one character: [progress] of [target], capped at the target for display. */
+data class HangarShapeProgress(
+    val shape: CoreShape,
+    val unlocked: Boolean,
+    val progress: Long,
+    val target: Long,
+)
+
+data class HangarProjection(
+    override val instanceId: ProfileInstanceId,
+    override val revision: ProfileRevision,
+    /** One entry per character in stable [CoreShape] order. */
+    val shapes: ImmutableList<HangarShapeProgress>,
+    val selected: CoreShape,
+    /** Rebirth rank the Reborn-rank unlocks compare against. */
+    val rebirthRank: Int = 0,
+) : ProfileProjection
+
 data class PersistenceStatusProjection(
     override val instanceId: ProfileInstanceId,
     override val revision: ProfileRevision,
@@ -121,6 +142,7 @@ interface ProfileReadPort {
     fun query(query: ProfileQuery.GetLoadout): LoadoutProjection
     fun query(query: ProfileQuery.GetRebirthProgress): RebirthProgressProjection
     fun query(query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection
+    fun query(query: ProfileQuery.GetHangar): HangarProjection
 }
 
 /** Local Profile interactions with their read capability. */

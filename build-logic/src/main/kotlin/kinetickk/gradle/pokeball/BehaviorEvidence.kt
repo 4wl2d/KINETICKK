@@ -311,7 +311,7 @@ internal val runtimeBehaviorEvidence = listOf(
         ":ball:profile:nucleus", "kinetickk.ball.profile.nucleus.ProfileNucleusTest",
         setOf(
             "achievementCountersSaturateWithoutOverflowAndTheDecisionIsDeterministic",
-            "achievementThresholdsAccumulateAcrossRunsAndUnlockAllSixShapes",
+            "achievementThresholdsAccumulateAcrossRunsAndUnlockAllTwelveShapes",
             "gameplayProgressValidationUsesClosedRejectionReasons",
             "targetOwnedCommandOrdersPersistenceBeforeCorrelatedCompletion",
         ),

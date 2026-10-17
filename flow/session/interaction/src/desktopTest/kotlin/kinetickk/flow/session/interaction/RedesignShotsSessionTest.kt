@@ -465,6 +465,7 @@ internal class ShotProfile(private val coreShape: CoreShape = CoreShape.PRISM, p
     override val instanceId = LOCAL_PROFILE_INSTANCE_ID
     override fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection = error("unused")
     override fun query(query: ProfileQuery.GetMatrixProgress) = MatrixProgressProjection(instanceId, ProfileRevision.ZERO,
+    override fun query(query: ProfileQuery.GetHangar): kinetickk.ball.profile.api.HangarProjection = error("unused")
         MatrixProfileSnapshot(PlayerEconomy(1_284), MatrixProgress(MatrixNodeId.entries.mapIndexed { index, _ -> index % 2 })))
     override fun query(query: ProfileQuery.GetLoadout): LoadoutProjection = error("unused")
     override fun query(query: ProfileQuery.GetRebirthProgress): RebirthProgressProjection = error("unused")

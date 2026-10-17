@@ -220,6 +220,8 @@ private class MatrixTestPort(
     }
 
     override fun query(query: ProfileQuery.GetMatrixProgress): MatrixProgressProjection = MatrixProgressProjection(
+
+    override fun query(query: ProfileQuery.GetHangar): kinetickk.ball.profile.api.HangarProjection = error("unused")
         instanceId, revision, MatrixProfileSnapshot(PlayerEconomy(matter, maxOf(matter, 100_000L)), MatrixProgress(ranks.toList()), rebirthRank = 0),
     )
 

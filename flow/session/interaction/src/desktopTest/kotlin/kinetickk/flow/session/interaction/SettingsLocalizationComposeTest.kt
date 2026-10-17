@@ -152,6 +152,7 @@ private class LanguageProfilePort(language: AppLanguage) : ProfilePort {
     override fun query(query: ProfileQuery.GetCollection): CollectionProjection = error("Unused")
     override fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection = error("Unused")
     override fun query(query: ProfileQuery.GetMatrixProgress): MatrixProgressProjection = error("Unused")
+    override fun query(query: ProfileQuery.GetHangar): kinetickk.ball.profile.api.HangarProjection = error("unused")
     override fun query(query: ProfileQuery.GetLoadout): LoadoutProjection = error("Unused")
     override fun query(query: ProfileQuery.GetRebirthProgress): RebirthProgressProjection = error("Unused")
     override fun query(query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection = error("Unused")
