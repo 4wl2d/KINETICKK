@@ -283,6 +283,29 @@ class AppSessionNucleusTest {
     }
 
     @Test
+    fun theHangarAndTheMatrixOrAnyOtherOverlayReplaceEachOtherOverHomeWithoutStacking() {
+        val home = initialState()
+        for (other in listOf(AppDestination.Lab, AppDestination.Armory, AppDestination.Rebirth, AppDestination.Codex)) {
+            val first = decide(home, SessionInteractionPulse.OpenOverlay(other)).accepted().nextState
+            assertEquals(other, first.overlay)
+            // H over another overlay on Home replaces it with the Hangar ...
+            val hangar = decide(first, SessionInteractionPulse.ShortcutObserved(SessionShortcut.HANGAR)).accepted().nextState
+            assertEquals(AppDestination.Hangar, hangar.overlay, "H over $other")
+            assertEquals(AppDestination.Home, hangar.base)
+            // ... and closing it returns to Home, not to the replaced overlay.
+            assertNull(decide(hangar, SessionInteractionPulse.CloseOverlay).accepted().nextState.overlay)
+            // The other overlay replaces the Hangar the same way.
+            val back = decide(hangar, SessionInteractionPulse.OpenOverlay(other)).accepted().nextState
+            assertEquals(other, back.overlay)
+            assertNull(decide(back, SessionInteractionPulse.CloseOverlay).accepted().nextState.overlay)
+        }
+        val matrix = decide(home, SessionInteractionPulse.ShortcutObserved(SessionShortcut.LAB)).accepted().nextState
+        val fromMatrix = decide(matrix, SessionInteractionPulse.ShortcutObserved(SessionShortcut.HANGAR)).accepted().nextState
+        assertEquals(AppDestination.Lab to AppDestination.Hangar, matrix.overlay to fromMatrix.overlay)
+        assertEquals(AppDestination.Lab, decide(fromMatrix, SessionInteractionPulse.ShortcutObserved(SessionShortcut.LAB)).accepted().nextState.overlay)
+    }
+
+    @Test
     fun codexPreservesPausedOrPendingRewardPhaseWhenClosed() {
         listOf(GameplayRunPhase.PAUSED, GameplayRunPhase.CHOICE).forEach { phase ->
             val state = gameplayState(phase)

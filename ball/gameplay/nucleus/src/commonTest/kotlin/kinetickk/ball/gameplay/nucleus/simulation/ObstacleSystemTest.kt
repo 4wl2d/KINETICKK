@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.CharacterUnlockRequirement
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.DamageBasis
@@ -11,6 +12,7 @@ import kinetickk.ball.content.api.EffectClause
 import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.MatrixEffect
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.model.Polarity
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.distanceSquared
@@ -372,6 +374,59 @@ class ObstacleSystemTest {
         state.exitRun()
         assertEquals(2, assertNotNull(state.takeProgressUpdate()).ricochets, "the profile counts them")
         assertEquals(0, state.pendingRicochets)
+    }
+
+    @Test
+    fun aRealRicochetFiresAShippedRicochetItem() {
+        // Heat Shunt vents 20 heat on RICOCHET (0.5 s cooldown).
+        val state = buildTestState()
+        state.own("Heat Shunt")
+        state.heat = 50f
+        state.ramAsteroid(state.bandSpeed(0.2f))
+        assertEquals(1, state.pendingRicochets)
+        assertEquals(30f, state.heat, 0.01f, "the shipped RICOCHET clause vented")
+        // A slow bounce is no ricochet and vents nothing.
+        state.elapsed += 1f
+        state.heat = 50f
+        state.ramAsteroid(state.obstacleDamageStartSpeed() * 0.5f)
+        assertEquals(1, state.pendingRicochets)
+        assertEquals(50f, state.heat, 0.01f)
+    }
+
+    @Test
+    fun aRealSlamFiresAShippedSlamItem() {
+        // Concussive Rivets apply 2 Sonic to the slammed enemy (0.5 s cooldown).
+        val state = buildTestState()
+        state.own("Concussive Rivets")
+        val rockX = state.coreX + 400f
+        state.placeObstaclesForTesting(testObstacle(rockX, state.coreY, radius = 80f))
+        val enemy = state.dummy(x = state.coreX + 120f, y = state.coreY, hp = 10_000f)
+        // The Core's push throws the enemy into the rock.
+        state.pushEnemies(state.coreX, state.coreY, 200f, 1_200f, inward = false)
+        assertTrue(enemy.thrownUntil > state.elapsed)
+        var steps = 0
+        while (enemy.hp == enemy.maxHp && steps < 120) {
+            state.elapsed += MutableGameState.FIXED_STEP
+            state.updateEnemies(MutableGameState.FIXED_STEP)
+            steps++
+        }
+        assertTrue(enemy.hp < enemy.maxHp, "the throw slammed into the rock")
+        assertEquals(2, enemy.stacksOf(StatusElement.SONIC), "the shipped SLAM clause applied Sonic")
+    }
+
+    @Test
+    fun realRicochetsReachTheProgressCounterOfTheDipoleUnlock() {
+        val state = buildTestState()
+        val dipole = state.content.coreShape(CoreShape.DIPOLE)
+        assertEquals(CharacterUnlockRequirement.RICOCHETS, dipole.unlockRequirement)
+        repeat(dipole.unlockTarget) {
+            state.ramAsteroid(state.bandSpeed(0.05f))
+            state.hp = state.maxHp
+            state.elapsed += 0.3f
+        }
+        assertEquals(dipole.unlockTarget, state.pendingRicochets)
+        state.exitRun()
+        assertEquals(dipole.unlockTarget, assertNotNull(state.takeProgressUpdate()).ricochets)
     }
 
     @Test

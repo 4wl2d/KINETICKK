@@ -72,6 +72,21 @@ class DefaultProfileComponentTest {
     }
 
     @Test
+    fun ricochetsFromGameplayUnlockTheDipoleInTheHangar() {
+        val component = testProfileComponent(RecordingProfileResource(ProfileSnapshotReadResult.Observed(profileSnapshot(representativeProfile()))))
+        val dipole = TestProfilePolicy.coreShapes.first { it.id == CoreShape.DIPOLE }
+        assertEquals(kinetickk.ball.content.api.CharacterUnlockRequirement.RICOCHETS, dipole.unlockRequirement)
+        fun dipoleProgress() = component.query(ProfileQuery.GetHangar).shapes.first { it.shape == CoreShape.DIPOLE }
+        ProfileCommandTestCaller<ProfileProgressApplied>().call {
+            component.applyGameplayProgress(GameplayProgressUpdate(ricochets = dipole.unlockTarget - 1), it)
+        }
+        assertEquals(false to dipole.unlockTarget - 1L, dipoleProgress().let { it.unlocked to it.progress })
+        ProfileCommandTestCaller<ProfileProgressApplied>().call { component.applyGameplayProgress(GameplayProgressUpdate(ricochets = 1), it) }
+        assertEquals(true to dipole.unlockTarget.toLong(), dipoleProgress().let { it.unlocked to it.progress })
+        assertEquals(dipole.unlockTarget.toLong(), component.stateSnapshot().profile.characterAchievements.ricochets)
+    }
+
+    @Test
     fun gameplayProgressCapabilityPublishesEveryCapturedFieldBeforeSaveAndReply() {
         val representative = representativeProfile()
         val initial = representative.copy(
