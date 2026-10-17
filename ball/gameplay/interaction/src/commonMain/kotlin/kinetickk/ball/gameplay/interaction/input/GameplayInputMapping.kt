@@ -40,8 +40,8 @@ internal data class GameplayHitTestState(
  * The gameplay surface in device pixels. The simulation viewport is dp; the HUD, the touch
  * controls and the Compose overlays are laid out in device pixels with [GameplayRenderModel.uiScale].
  */
-val GameplayRenderModel.hudWidth: Float get() = screenWidth * viewportDensity
-val GameplayRenderModel.hudHeight: Float get() = screenHeight * viewportDensity
+internal val GameplayRenderModel.hudWidth: Float get() = screenWidth * viewportDensity
+internal val GameplayRenderModel.hudHeight: Float get() = screenHeight * viewportDensity
 
 /** Maps gameplay canvas coordinates (device pixels) without encoding any app destination in domain state. */
 fun GameplayRenderModel.resolveGameplayPress(x: Float, y: Float): GameplayInput? =

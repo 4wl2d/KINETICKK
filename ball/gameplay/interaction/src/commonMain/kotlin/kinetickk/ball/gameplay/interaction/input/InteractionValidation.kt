@@ -68,7 +68,7 @@ sealed interface InteractionValidationResult<out Intent : GameplayInteractionPul
  * The simulation's dp length for [px] device pixels at [density], kept inside the viewport
  * representation bounds (a 1 px viewport at density 8 is still a valid 1 dp viewport).
  */
-fun gameplayViewportDp(px: Float, density: Float): Float =
+internal fun gameplayViewportDp(px: Float, density: Float): Float =
     (px / density).coerceIn(
         InteractionIngressLimits.MIN_VIEWPORT_DIMENSION_PX,
         InteractionIngressLimits.MAX_VIEWPORT_DIMENSION_PX,
