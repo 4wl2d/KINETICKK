@@ -86,7 +86,7 @@ class RewardCardFaceAllocationTest {
             for (frame in frames) { empty(); hand(frame) }
             var perFrame = Long.MAX_VALUE
             for (attempt in 0 until PASSES) {
-                val emptyBytes = allocated { for (frame in frames) empty() }
+                val emptyBytes = allocated { repeat(frames.size) { empty() } }
                 val handBytes = allocated { for (frame in frames) hand(frame) }
                 perFrame = minOf(perFrame, (handBytes - emptyBytes) / frames.size)
                 if (perFrame <= 64) break
