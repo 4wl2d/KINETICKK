@@ -371,10 +371,20 @@ Lance 68, Gravity Mines 68 with a proximity trigger, Ion Swarm 8.8 (fire rate
 ×1.25 at its third form), Rift Blades `18 + 0.018·speed`, Arc Coil 16 falling
 off ×0.9 per hop, Quasar Cannon 87, Entropy Field 11/s, Singularity Spear 100,
 Prism Relay 18 with 2, 3, 3 and 4 bounces, Gyre Disc 45, Scatter Bloom 10 per
-pellet with a passive volley of seven, Tether Arc 5.5/s ramping ×3 (×5 at its
+pellet with a passive volley of seven, Tether Arc 5.5/s ramping ×3 (×8 at its
 third form), Sentry Grid 12, Hunter Salvo 9, Concussion Engine 24, Glacier Bell
 37, Event Lens 15/s and 32 on collapse, Solar Sweep 44/s, Aegis Shards 34,
-Hollow Rift 54 and Resonance Drum 30. Orbital counts no longer grow with the
+Hollow Rift 54 and Resonance Drum 30. Forms and secondary numbers follow the
+same calibration, and the mastery form texts state them: Flux Wake's trail
+doubles its width and lasts 4 s, Gravity Mines gain 30 % radius, Ion Swarm shots
+pierce one enemy from the start and one more at the second form, Quasar shots
+grow 10 %, Scatter Bloom pellets pierce two (three at the second form) and keep
+their pierce point-blank, Tether Arc's second tether deals 75 % and charges every
+0.8 s, Hunter missiles burst for 75 % within 110 (×1.2 at the second form) with
+Decay on every second hit, Glacier Bell's passive pulse reaches 170 at 60 %,
+Event Lens's second lens carries 25 % and its well implodes for 10, Solar Sweep
+gains 120 length and scorches every 1.5 s, Entropy Field decays every 1.6 s and
+the Drum knocks back 240. Orbital counts no longer grow with the
 level (the level is in the power): two, one more at Ion Swarm's and Rift
 Blades' first form, more with Agony. Mines and lenses space their Gravitic Mass
 per enemy (1.5 s and 2.5 s) and wells add none, so Collapse cannot cascade.
