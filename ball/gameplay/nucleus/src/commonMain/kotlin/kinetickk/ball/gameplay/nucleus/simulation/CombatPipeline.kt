@@ -165,7 +165,7 @@ internal fun MutableGameState.holds(
         null -> totalStacks(target) >= condition.stacks
         else -> stacks(target, element) >= condition.stacks
     }
-    EffectCondition.TargetElite -> target != null && (target.isElite || target.isBoss)
+    EffectCondition.TargetElite -> target != null && (target.isElite || target.isBoss || target.isMiniBoss)
     EffectCondition.TargetFrozen -> target != null && (isFrozen(target) || target.id == shatteringEnemyId)
     is EffectCondition.TargetBelow -> target != null && target.hp < target.maxHp * condition.fraction
     EffectCondition.SourceImpact -> source == HitSource.IMPACT || source == HitSource.DASH
@@ -481,7 +481,13 @@ internal fun MutableGameState.damageEnemy(
     unmitigated: Float = amount,
 ): DamageResult {
     if (amount <= 0f || !enemy.alive) return DamageResult(0f, false)
-    val applied = if (enemy.isBoss) gateArchitectDamage(enemy, amount) else amount
+    // Herald shields and Aegis tethers guard the receiver; a phased Phantom takes nothing at all.
+    val guarded = guardedDamage(enemy, amount, source)
+    val applied = when {
+        enemy.isBoss -> gateArchitectDamage(enemy, guarded)
+        isShifting(enemy) -> 0f
+        else -> guarded
+    }
     if (applied <= 0f) return DamageResult(0f, false)
     damageDealt += minOf(applied, enemy.hp).toDouble()
     enemy.hp -= applied

@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.nucleus.characterization
 
 import kinetickk.ball.content.api.*
+import kinetickk.ball.content.api.EnemyType
 import kinetickk.ball.profile.api.DamageNumberFormat
 
 import kinetickk.ball.gameplay.api.*

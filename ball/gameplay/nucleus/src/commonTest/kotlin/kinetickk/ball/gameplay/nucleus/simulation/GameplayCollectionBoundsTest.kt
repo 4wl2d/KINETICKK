@@ -46,8 +46,9 @@ class GameplayCollectionBoundsTest {
     fun fixedStepStableCompactionRetainsOrderAcrossConsecutiveRemovals() {
         val state = newState(seed = 900)
         val retainedEnemy = state.addEnemyForTesting(x = 0f, y = 0f)
-        val firstRemovedEnemy = state.addEnemyForTesting(x = 10_000f, y = 0f)
-        val secondRemovedEnemy = state.addEnemyForTesting(x = 11_000f, y = 0f)
+        // Enemies that left without a kill (a detonated Bomber) are compacted out in order.
+        val firstRemovedEnemy = state.addEnemyForTesting(x = 100f, y = 0f).apply { dead = true }
+        val secondRemovedEnemy = state.addEnemyForTesting(x = 110f, y = 0f).apply { dead = true }
         val lastRetainedEnemy = state.addEnemyForTesting(x = 20f, y = 0f)
         state.updateEnemies(0f)
         assertEquals(

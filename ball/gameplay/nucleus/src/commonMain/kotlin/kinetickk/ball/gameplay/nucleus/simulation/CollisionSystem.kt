@@ -77,6 +77,8 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
     for (index in enemies.indices) {
         val enemy = enemies[index]
         if (phase != GamePhase.RUNNING) return
+        // A Phantom out of phase is not there to hit.
+        if (enemy.type == EnemyType.PHANTOM && isShifting(enemy)) continue
         val combined = coreRadius + enemy.radius
         val sweptHit = segmentCircleIntersects(
             previousCoreX - enemy.previousX,
@@ -102,7 +104,14 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
             val distance = max(1f, length(dx, dy))
             val coreImpactSpeed = kotlin.math.abs(velocityX * dx / distance + velocityY * dy / distance)
             val damage = impactPower(coreImpactSpeed)
+            // Read before the hit: a strike or lance in progress hurts whatever the Core's speed.
+            val strike = strikeDamage(enemy)
+            val defusable = enemy.type == EnemyType.BOMBER && enemy.mode != EnemyBehavior.PRIMED
             dealHit(enemy, damage, HitSource.IMPACT, canCrit = true)
+            // A fast impact destroys an unprimed Bomber outright, before it can prime.
+            if (defusable && enemy.alive && coreImpactSpeed >= BOMBER_DEFUSE_SPEED) {
+                damageEnemy(enemy, enemy.hp, killEligible = true, source = HitSource.IMPACT)
+            }
             if (newDashContact) onDashHit(enemy, damage)
             if (dashPhaseTime <= 0f) onCharacterPrimaryHit(enemy)
             lastImpact = damage
@@ -119,9 +128,10 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
             shockwave(enemy.x, enemy.y, 0.26f, min(150f, 55f + damage * 0.9f), 3)
             directionalBurst(enemy.x, enemy.y, 8, 3, dx / distance, dy / distance)
             emitSound(GameplayAudioCue.IMPACT)
-            if (!parried && coreImpactSpeed < 190f && dashPhaseTime <= 0f) {
+            if (!parried && dashPhaseTime <= 0f && (strike > 0f || coreImpactSpeed < 190f)) {
                 val neutron = if (build.upside(RelicId.NEUTRON_HEART)) 0.5f else 1f
-                takeDamage((7f + enemy.radius * 0.18f) * neutron, kind = IncomingDamage.CONTACT)
+                val contact = if (strike > 0f) strike else contactDamage(enemy)
+                takeDamage(contact * neutron, kind = IncomingDamage.CONTACT)
             }
         }
     }
@@ -205,7 +215,7 @@ internal fun MutableGameState.resolveWeaponDamage(delta: Float) {
             val radius = 170f + weaponLevel * 5f + agonyRank * 18f
             if (distanceSquared(coreX, coreY, enemy.x, enemy.y) <= square(radius + enemy.radius)) {
                 // Agony's collapse executes outright, past every multiplier; the Architect only takes the field.
-                val collapse = agonyRank > 0 && !enemy.isBoss && enemy.hp <= enemy.maxHp * (0.06f + agonyRank * 0.015f)
+                val collapse = agonyRank > 0 && !enemy.isBoss && !enemy.isMiniBoss && enemy.hp <= enemy.maxHp * (0.06f + agonyRank * 0.015f)
                 if (collapse) {
                     damageEnemy(enemy, enemy.hp, killEligible = true, source = HitSource.WEAPON)
                 } else {
@@ -242,6 +252,10 @@ internal fun MutableGameState.resolveProjectileHits() {
             }
             break
         }
+        if (projectile.kind == ProjectileKind.MINE) {
+            if (resolveMine(projectile)) projectiles.removeAt(hostileIndex) else hostileIndex++
+            continue
+        }
         val hitRadius = coreRadius + projectile.radius
         val hit = segmentCircleIntersects(
             projectile.previousX - previousCoreX,
@@ -261,7 +275,8 @@ internal fun MutableGameState.resolveProjectileHits() {
             ) {
                 burst(projectile.x, projectile.y, 6, 2)
             } else if (dashPhaseTime <= 0f) {
-                takeDamage(12f, kind = IncomingDamage.PROJECTILE)
+                // The shot carries the damage its source computed when it fired.
+                takeDamage(projectile.damage, kind = IncomingDamage.PROJECTILE)
                 screenShake = max(screenShake, 6f)
             } else {
                 grantMatter(1f)
@@ -317,6 +332,10 @@ internal fun MutableGameState.resolveProjectileHits() {
             )
             if (hit) {
                 if (!projectile.tryRecordEnemyHit(enemy.id)) continue
+                // A Reflector's front shield meets shots by where they come from, not where the Core is.
+                val shieldBefore = enemy.guarded
+                val shieldFaces = reflectorShieldFaces(enemy, projectile.previousX, projectile.previousY)
+                if (enemy.type == EnemyType.REFLECTOR) enemy.guarded = shieldFaces
                 val sourceWeapon = projectile.sourceWeapon
                 if (sourceWeapon != null) {
                     dealWeaponDamage(enemy, projectile.damage, canCrit = true, sourceWeapon = sourceWeapon)
@@ -327,7 +346,14 @@ internal fun MutableGameState.resolveProjectileHits() {
                         applyStatus(enemy, kinetickk.ball.content.api.StatusElement.entries[projectile.statusElement], 2, 1)
                     }
                 }
+                if (enemy.type == EnemyType.REFLECTOR) enemy.guarded = shieldBefore
                 burst(enemy.x, enemy.y, 4, projectile.colorIndex)
+                if (shieldFaces) {
+                    // The shield stops the shot and may send one back.
+                    reflectShot(enemy)
+                    consumed = true
+                    break
+                }
                 projectile.pierce--
                 if (projectile.pierce < 0) {
                     consumed = true

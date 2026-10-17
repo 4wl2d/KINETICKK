@@ -3,6 +3,8 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.EnemyType
+import kinetickk.ball.content.api.RebirthMutator
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.render.*
@@ -16,6 +18,7 @@ import kotlin.math.sin
 
 
 internal fun MutableGameState.updateEnemies(delta: Float) {
+    val attackRate = hostileAttackRate()
     for (enemyIndex in enemies.indices) {
         val enemy = enemies[enemyIndex]
         enemy.previousX = enemy.x
@@ -35,9 +38,19 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
             enemy.vy = 0f
             continue
         }
+        if (!canAct(enemy)) {
+            // Stunned or stopped: no steering and no attacks; momentum bleeds off.
+            val damping = exp(-6f * delta)
+            enemy.vx *= damping
+            enemy.vy *= damping
+            enemy.x += enemy.vx * delta * scale
+            enemy.y += enemy.vy * delta * scale
+            continue
+        }
         val dx = coreX - enemy.x
         val dy = coreY - enemy.y
         val distance = max(1f, length(dx, dy))
+        val cadence = delta * scale * attackRate
         when (enemy.type) {
             EnemyType.DRIFTER -> steerEnemy(enemy, dx / distance * 78f, dy / distance * 78f, 2.1f, delta)
             EnemyType.SHOOTER -> {
@@ -50,25 +63,18 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
                     2.4f,
                     delta,
                 )
-                enemy.actionTimer -= delta * scale * content.tempo.attackRateMultiplier(threatElapsed)
+                enemy.actionTimer -= cadence
                 if (enemy.actionTimer <= 0f && distance < 760f) {
                     enemy.actionTimer = 1.7f
-                    fireSpread(enemy.x, enemy.y, atan2(dy, dx), if (content.tempo.denseAttacks(threatElapsed)) 3 else 1, 0.14f, 220f)
+                    if (canAttack(enemy)) {
+                        fireSpread(
+                            enemy.x, enemy.y, atan2(dy, dx),
+                            if (content.tempo.denseAttacks(threatElapsed)) 3 else 1, 0.14f, 220f, shotDamage(enemy),
+                        )
+                    }
                 }
             }
-            EnemyType.CHARGER -> {
-                enemy.actionTimer -= delta * scale * content.tempo.attackRateMultiplier(threatElapsed)
-                if (enemy.actionTimer <= -0.45f) {
-                    enemy.actionTimer = 2.15f
-                    enemy.vx = dx / distance * 390f * rebirthProfile.enemySpeedMultiplier
-                    enemy.vy = dy / distance * 390f * rebirthProfile.enemySpeedMultiplier
-                } else if (enemy.actionTimer < 0f) {
-                    enemy.vx *= exp(-6f * delta)
-                    enemy.vy *= exp(-6f * delta)
-                } else {
-                    steerEnemy(enemy, dx / distance * 48f, dy / distance * 48f, 0.7f, delta)
-                }
-            }
+            EnemyType.CHARGER -> updateCharger(enemy, dx, dy, distance, cadence, delta)
             EnemyType.INTERCEPTOR -> {
                 val leadTime = clamp(distance / 650f, 0.28f, 0.85f)
                 val leadX = coreX + velocityX * leadTime - enemy.x
@@ -82,12 +88,14 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
                     4.2f,
                     delta,
                 )
-                enemy.actionTimer -= delta * scale * content.tempo.attackRateMultiplier(threatElapsed)
+                enemy.actionTimer -= cadence
                 if (enemy.actionTimer <= 0f && distance < 720f) {
                     enemy.actionTimer = 2.4f
-                    val interceptBoost = 175f * rebirthProfile.enemySpeedMultiplier
-                    enemy.vx += leadX / leadDistance * interceptBoost
-                    enemy.vy += leadY / leadDistance * interceptBoost
+                    if (canAttack(enemy)) {
+                        val interceptBoost = 175f * rebirthProfile.enemySpeedMultiplier
+                        enemy.vx += leadX / leadDistance * interceptBoost
+                        enemy.vy += leadY / leadDistance * interceptBoost
+                    }
                 }
             }
             EnemyType.WEAVER -> {
@@ -101,17 +109,20 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
                     2.8f,
                     delta,
                 )
-                enemy.actionTimer -= delta * scale * content.tempo.attackRateMultiplier(threatElapsed)
+                enemy.actionTimer -= cadence
                 if (enemy.actionTimer <= 0f && distance < 700f) {
                     enemy.actionTimer = 1.85f
-                    fireProjectileWall(
-                        enemy.x,
-                        enemy.y,
-                        atan2(dy, dx),
-                        if (content.tempo.denseAttacks(threatElapsed)) 5 else 3,
-                        34f,
-                        245f,
-                    )
+                    if (canAttack(enemy)) {
+                        fireProjectileWall(
+                            enemy.x,
+                            enemy.y,
+                            atan2(dy, dx),
+                            if (content.tempo.denseAttacks(threatElapsed)) 5 else 3,
+                            34f,
+                            245f,
+                            shotDamage(enemy),
+                        )
+                    }
                 }
             }
             EnemyType.WARDEN -> {
@@ -124,17 +135,17 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
                     1.55f,
                     delta,
                 )
-                if (distance < 440f && dashPhaseTime <= 0f) {
+                if (distance < 440f && dashPhaseTime <= 0f && canAttack(enemy)) {
                     // Ion charge disrupts the well.
                     val disruption = max(0.2f, 1f - 0.12f * stacks(enemy, StatusElement.ION))
                     val gravity = (38f + (1f - distance / 440f) * 270f) * disruption
                     velocityX -= dx / distance * gravity * delta
                     velocityY -= dy / distance * gravity * delta
                 }
-                enemy.actionTimer -= delta * scale * content.tempo.attackRateMultiplier(threatElapsed)
+                enemy.actionTimer -= cadence
                 if (enemy.actionTimer <= 0f && distance < 780f) {
                     enemy.actionTimer = 2.65f
-                    fireRadial(enemy.x, enemy.y, 8, 132f, elapsed * 0.35f)
+                    if (canAttack(enemy)) fireRadial(enemy.x, enemy.y, 8, 132f, elapsed * 0.35f, shotDamage(enemy))
                 }
             }
             EnemyType.SPLITTER -> {
@@ -150,25 +161,36 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
             EnemyType.ELITE -> {
                 val tangent = if (enemy.id % 2 == 0) 1f else -1f
                 steerEnemy(enemy, dx / distance * 52f - dy / distance * 45f * tangent, dy / distance * 52f + dx / distance * 45f * tangent, 1.3f, delta)
-                enemy.actionTimer -= delta * scale * content.tempo.attackRateMultiplier(threatElapsed)
+                enemy.actionTimer -= cadence
                 if (enemy.actionTimer <= 0f) {
                     enemy.actionTimer = 1.18f
-                    fireRadial(enemy.x, enemy.y, 10, 165f, elapsed * 0.2f)
+                    if (canAttack(enemy)) fireRadial(enemy.x, enemy.y, 10, 165f, elapsed * 0.2f, shotDamage(enemy))
                 }
             }
             EnemyType.ARCHITECT -> updateArchitect(enemy, dx, dy, distance, delta * scale)
+            EnemyType.SWARMLING -> updateSwarmling(enemy, dx, dy, distance, delta)
+            EnemyType.BOMBER -> updateBomber(enemy, dx, dy, distance, delta)
+            EnemyType.LANCER -> updateLancer(enemy, dx, dy, distance, delta)
+            EnemyType.SNIPER -> updateSniper(enemy, dx, dy, distance, delta)
+            EnemyType.AEGIS -> updateAegis(enemy, dx, dy, distance, delta)
+            EnemyType.MINELAYER -> updateMinelayer(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.PHANTOM -> updatePhantom(enemy, dx, dy, distance, delta)
+            EnemyType.BROODMOTHER -> updateBroodmother(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.REFLECTOR -> updateReflector(enemy, dx, dy, distance, delta)
+            EnemyType.HERALD -> updateHerald(enemy, dx, dy, distance, cadence, delta)
         }
         enemy.x += enemy.vx * delta * scale
         enemy.y += enemy.vy * delta * scale
     }
+    // Detonated Bombers leave without a kill.
+    enemies.removeMatchingStable { enemy -> enemy.dead }
     val leashDistance = max(screenWidth, screenHeight) * 1.15f + 360f
     val leashSquared = leashDistance * leashDistance
     val activeDefenders = pointsOfInterest.singleOrNull()?.takeIf { it.active }?.defenderIds
-    enemies.removeMatchingStable { enemy ->
-        enemy.type != EnemyType.ELITE &&
-            enemy.type != EnemyType.ARCHITECT &&
-            activeDefenders?.contains(enemy.id) != true &&
-            distanceSquared(enemy.x, enemy.y, coreX, coreY) > leashSquared
+    for (index in enemies.indices) {
+        val enemy = enemies[index]
+        if (leashExempt(enemy, activeDefenders)) continue
+        if (distanceSquared(enemy.x, enemy.y, coreX, coreY) > leashSquared) relocateLeashedEnemy(enemy)
     }
 }
 
@@ -262,70 +284,18 @@ internal fun MutableGameState.updateTotem(delta: Float) {
     }
 }
 
-internal fun MutableGameState.spawnWave(delta: Float) {
-    // During the fight ordinary adds keep arriving, thinner and slower, only while a live Architect is engaged.
-    val bossFight = bossSpawned
-    if (bossFight) {
-        val boss = liveArchitect() ?: return
-        if (!architectEngaged(boss)) return
-    }
-    spawnClock -= delta
-    val baseMaxEnemies = content.tempo.ordinaryEnemyCap(elapsed)
-    var maxEnemies = min(content.rebirth.maxActiveEnemies, rebirthProfile.enemyCap(baseMaxEnemies))
-    if (bossFight) maxEnemies = (maxEnemies * ARCHITECT_ADD_CAP_SHARE).toInt()
-    if (spawnClock <= 0f && enemies.size < maxEnemies) {
-        val baseInterval = content.tempo.spawnIntervalSeconds(elapsed)
-        spawnClock = rebirthProfile.spawnInterval(baseInterval) * if (bossFight) ARCHITECT_ADD_INTERVAL_SCALE else 1f
-        val rolledType = enemyTypeForElapsed(threatElapsed, gameplayRandom.nextFloat(), content.tempo)
-        val maxWardens = 2 + min(4, rebirthLevel / 3)
-        val type = if (rolledType == EnemyType.WARDEN && enemies.count { it.type == EnemyType.WARDEN } >= maxWardens) {
-            EnemyType.WEAVER
-        } else {
-            rolledType
-        }
-        spawnEnemy(type)
-    }
-    if (bossFight) return
-    if (elapsed >= nextEliteAt) {
-        nextEliteAt += rebirthProfile.eliteInterval(content.tempo.eliteIntervalSeconds(elapsed))
-        if (spawnEnemy(EnemyType.ELITE)) {
-            message = "ELITE SIGNAL"
-            messageTime = 1.4f
-        }
-    }
-}
-
-internal fun MutableGameState.spawnEnemy(type: EnemyType): Boolean {
-    if (enemies.size >= content.rebirth.maxActiveEnemies) return false
-    val useForwardCorridor = type != EnemyType.ELITE &&
-        type != EnemyType.ARCHITECT &&
-        speed > 500f &&
-        gameplayRandom.nextFloat() < 0.82f
-    val angle = if (useForwardCorridor) {
-        movementAngle()
-    } else {
-        gameplayRandom.nextFloat() * TAU
-    }
-    val directionX = cos(angle)
-    val directionY = sin(angle)
-    val distanceToVerticalEdge = screenWidth * 0.5f / max(0.001f, kotlin.math.abs(directionX))
-    val distanceToHorizontalEdge = screenHeight * 0.5f / max(0.001f, kotlin.math.abs(directionY))
-    val viewportEdgeDistance = min(distanceToVerticalEdge, distanceToHorizontalEdge)
-    val distance = viewportEdgeDistance + 90f + gameplayRandom.nextFloat() * 150f
-    val lateralOffset = if (useForwardCorridor) (gameplayRandom.nextFloat() - 0.5f) * 140f else 0f
-    val x = coreX + directionX * distance - directionY * lateralOffset
-    val y = coreY + directionY * distance + directionX * lateralOffset
-    enemies += spawnedEnemy(type, x, y)
-    return true
-}
+/** Spawns a scheduled or escort enemy of [type] at spawn distance; false at the hard cap. */
+internal fun MutableGameState.spawnEnemy(type: EnemyType): Boolean = spawnScheduled(type)
 
 /**
- * A new [type] at ([x], [y]) with its profile and current spawn integrity. Elites take the next aspect in
- * their rotation, so only call this for an enemy that is added.
+ * A new [type] at ([x], [y]) with its profile and current spawn integrity. Elites and Heralds roll an
+ * aspect from the spawn stream, so only call this for an enemy that is added.
  */
 internal fun MutableGameState.spawnedEnemy(type: EnemyType, x: Float, y: Float): Enemy {
     val profile = type.profile
-    val integrity = spawnIntegrity(type)
+    var integrity = spawnIntegrity(type)
+    val hardened = type == EnemyType.ELITE && rebirthProfile.has(RebirthMutator.HARDENED_ELITES)
+    if (hardened) integrity *= HARDENED_ELITE_INTEGRITY
     val enemy = Enemy(
         id = nextEntityId++,
         type = type,
@@ -336,11 +306,13 @@ internal fun MutableGameState.spawnedEnemy(type: EnemyType, x: Float, y: Float):
         radius = profile.radius,
         actionTimer = profile.spawnActionTimer,
     )
-    if (type == EnemyType.ELITE) {
-        // Elites rotate through the elements by spawn order; no random draw.
-        assignAspect(enemy, elitesSpawned % StatusElement.entries.size, immune = profile.aspectImmune)
-        elitesSpawned++
+    if (type == EnemyType.ELITE || type == EnemyType.HERALD) {
+        assignAspect(enemy, rollAspect(), immune = profile.aspectImmune)
+        if (type == EnemyType.ELITE) elitesSpawned++
+        if (hardened) enemy.escortsPending = HARDENED_ELITE_ESCORTS
+        if (type == EnemyType.HERALD) enemy.escortsPending = HERALD_ESCORTS
     }
+    initializeBehavior(enemy)
     return enemy
 }
 

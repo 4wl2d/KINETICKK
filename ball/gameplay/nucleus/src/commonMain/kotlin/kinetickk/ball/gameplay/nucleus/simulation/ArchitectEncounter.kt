@@ -115,7 +115,7 @@ internal fun MutableGameState.updateBossEncounter() {
     val escorts = boss.escortsPending
     if (escorts <= 0) return
     boss.escortsPending = 0
-    fireRadial(boss.x, boss.y, ARCHITECT_SHIFT_RING, ARCHITECT_RADIAL_SPEED, elapsed, ARCHITECT_LATE_RADIAL_LIFE)
+    fireRadial(boss.x, boss.y, ARCHITECT_SHIFT_RING, ARCHITECT_RADIAL_SPEED, elapsed, shotDamage(boss), ARCHITECT_LATE_RADIAL_LIFE)
     for (index in 0 until ARCHITECT_SHIFT_REPAIRS) {
         val side = if (index % 2 == 0) 1f else -1f
         addPickup(Pickup(PickupType.REPAIR, boss.x + side * 22f, boss.y - 10f * index))
@@ -138,10 +138,10 @@ internal fun MutableGameState.updateArchitect(enemy: Enemy, dx: Float, dy: Float
         // No attacks while shifting; the next volley comes a full cadence after the shift.
         enemy.actionTimer = cadence
     } else {
-        enemy.actionTimer -= delta * content.tempo.attackRateMultiplier(threatElapsed)
+        enemy.actionTimer -= delta * hostileAttackRate()
         if (enemy.actionTimer <= 0f) {
             enemy.actionTimer = cadence
-            if (projectiles.size < ARCHITECT_VOLLEY_PROJECTILE_BUDGET) fireArchitectVolley(enemy, atan2(dy, dx))
+            if (projectiles.size < ARCHITECT_VOLLEY_PROJECTILE_BUDGET && canAttack(enemy)) fireArchitectVolley(enemy, atan2(dy, dx))
         }
     }
     if (distance < 180f) {
@@ -151,19 +151,20 @@ internal fun MutableGameState.updateArchitect(enemy: Enemy, dx: Float, dy: Float
 }
 
 private fun MutableGameState.fireArchitectVolley(enemy: Enemy, aim: Float) {
+    val damage = shotDamage(enemy)
     when (enemy.phase) {
         0 -> {
-            fireSpread(enemy.x, enemy.y, aim, 3, ARCHITECT_AIMED_SPACING, ARCHITECT_AIMED_SPEED)
-            fireRadial(enemy.x, enemy.y, 8, ARCHITECT_RADIAL_SPEED, elapsed)
+            fireSpread(enemy.x, enemy.y, aim, 3, ARCHITECT_AIMED_SPACING, ARCHITECT_AIMED_SPEED, damage)
+            fireRadial(enemy.x, enemy.y, 8, ARCHITECT_RADIAL_SPEED, elapsed, damage)
         }
         1 -> {
-            fireSpread(enemy.x, enemy.y, aim, 4, ARCHITECT_AIMED_SPACING, ARCHITECT_AIMED_SPEED)
+            fireSpread(enemy.x, enemy.y, aim, 4, ARCHITECT_AIMED_SPACING, ARCHITECT_AIMED_SPEED, damage)
             fireRadial(enemy.x, enemy.y, 10, ARCHITECT_RADIAL_SPEED, elapsed * ARCHITECT_SPIRAL_TURN_RATE,
-                ARCHITECT_LATE_RADIAL_LIFE)
+                damage, ARCHITECT_LATE_RADIAL_LIFE)
         }
         else -> {
-            fireSpread(enemy.x, enemy.y, aim, 5, ARCHITECT_AIMED_SPACING, ARCHITECT_AIMED_SPEED)
-            fireRadial(enemy.x, enemy.y, 12, ARCHITECT_RADIAL_SPEED, elapsed, ARCHITECT_LATE_RADIAL_LIFE)
+            fireSpread(enemy.x, enemy.y, aim, 5, ARCHITECT_AIMED_SPACING, ARCHITECT_AIMED_SPEED, damage)
+            fireRadial(enemy.x, enemy.y, 12, ARCHITECT_RADIAL_SPEED, elapsed, damage, ARCHITECT_LATE_RADIAL_LIFE)
         }
     }
 }

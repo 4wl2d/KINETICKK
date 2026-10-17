@@ -64,6 +64,7 @@ internal class MutableGameState(
         const val BREAK_BURST = 16f
         const val STASIS_SECONDS = 3f
         const val REWARD_SEED_SALT = 0x5EED_A11
+        const val SPAWN_SEED_SALT = 0x5A_A4_D1_E7
         const val MAX_SEVERED_RELICS = 4
         const val MAX_GAMEPLAY_SOUND_CUES = 32
         const val MAX_WEAPON_NODES = 8
@@ -79,6 +80,13 @@ internal class MutableGameState(
     internal var rewardRandom: CloneableXorWowRandom = reductionSource?.rewardRandom?.let { source ->
         if (shareStableReductionStorage) source else source.copy()
     } ?: CloneableXorWowRandom(seed xor REWARD_SEED_SALT)
+    /**
+     * Every spawn, spawn position, enemy type, Elite and Herald aspect and director draw comes from this
+     * stream, so spawning never shifts crits and procs, and a different run seed reshapes the waves.
+     */
+    internal var spawnRandom: CloneableXorWowRandom = reductionSource?.spawnRandom?.let { source ->
+        if (shareStableReductionStorage) source else source.copy()
+    } ?: CloneableXorWowRandom(seed xor SPAWN_SEED_SALT)
     internal var activeRebirthProfile: RebirthProfile = reductionSource?.activeRebirthProfile
         ?: content.rebirth.profile(
             bootstrapProgress?.rebirthProgress?.level ?: initialRebirthLevel,
@@ -230,8 +238,34 @@ internal class MutableGameState(
     internal var nextEntityId: Int = reductionSource?.nextEntityId ?: 1
     internal var spawnClock: Float = reductionSource?.spawnClock ?: 0f
     internal var nextEliteAt: Float = reductionSource?.nextEliteAt ?: content.tempo.firstEliteAtSeconds
-    /** Elites spawned this run; picks each new Elite's aspect. */
+    /** Elites spawned this run. */
     internal var elitesSpawned: Int = reductionSource?.elitesSpawned ?: 0
+    /** Heralds spawned this run; each scheduled Herald arrives once. */
+    internal var heraldsSpawned: Int = reductionSource?.heraldsSpawned ?: 0
+    /** Spawn director pacing phase ([SpawnDirectorPhase] ordinal) and the run time it ends. */
+    internal var directorPhase: Int = reductionSource?.directorPhase ?: 0
+    internal var directorPhaseUntil: Float = reductionSource?.directorPhaseUntil ?: 0f
+    /** Enemies' worth of spawn budget banked by the director; events spend it. */
+    internal var spawnBudget: Float = reductionSource?.spawnBudget ?: 0f
+    /** The planned next event ([SpawnEventKind] ordinal, or -1), its size and its single enemy type (-1 when mixed). */
+    internal var pendingEventKind: Int = reductionSource?.pendingEventKind ?: -1
+    internal var pendingEventSize: Int = reductionSource?.pendingEventSize ?: 0
+    internal var pendingEventType: Int = reductionSource?.pendingEventType ?: -1
+    /** Enemy types (bit per ordinal) used by the last and the previous event; they spawn at half weight. */
+    internal var recentEventTypes: Int = reductionSource?.recentEventTypes ?: 0
+    internal var previousEventTypes: Int = reductionSource?.previousEventTypes ?: 0
+    internal var ambushReadyAt: Float = reductionSource?.ambushReadyAt ?: 0f
+    internal var encircleReadyAt: Float = reductionSource?.encircleReadyAt ?: 0f
+    internal var wallReadyAt: Float = reductionSource?.wallReadyAt ?: 0f
+    /** When an event may next exceed the ordinary cap by its own size. */
+    internal var capOverflowReadyAt: Float = reductionSource?.capOverflowReadyAt ?: 0f
+    /** Seconds the Core has kept ambush speed without a break. */
+    internal var ambushSpeedSeconds: Float = reductionSource?.ambushSpeedSeconds ?: 0f
+    /** Events fired this run and the kind, planned size and spawned count of the last one. */
+    internal var spawnEventCount: Int = reductionSource?.spawnEventCount ?: 0
+    internal var lastSpawnEventKind: Int = reductionSource?.lastSpawnEventKind ?: -1
+    internal var lastSpawnEventPlanned: Int = reductionSource?.lastSpawnEventPlanned ?: 0
+    internal var lastSpawnEventSpawned: Int = reductionSource?.lastSpawnEventSpawned ?: 0
     internal var dashBufferTime: Float = reductionSource?.dashBufferTime ?: 0f
     internal var bossSpawned: Boolean = reductionSource?.bossSpawned ?: false
     internal var keyboardBrakeActive: Boolean = reductionSource?.keyboardBrakeActive ?: false

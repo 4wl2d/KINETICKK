@@ -6,7 +6,6 @@ package kinetickk.ball.gameplay.nucleus.simulation
 import kinetickk.ball.content.api.RunTempoProfile
 import kinetickk.ball.content.api.FatigueTuning
 import kinetickk.ball.gameplay.nucleus.model.Pickup
-import kinetickk.ball.gameplay.nucleus.model.enemyTypeForElapsed
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.PickupType
@@ -67,7 +66,6 @@ class RunTempoTest {
         val faster = base.copy(bossAtSeconds = 360f)
         for (seconds in listOf(0f, 38f, 90f, 150f, 240f, 360f, 600f)) {
             assertEquals(base.encounterStage(seconds), faster.encounterStage(seconds * 0.5f))
-            assertEquals(enemyTypeForElapsed(seconds, 0.99f, base), enemyTypeForElapsed(seconds * 0.5f, 0.99f, faster))
             assertEquals(base.attackRateMultiplier(seconds), faster.attackRateMultiplier(seconds * 0.5f))
             assertEquals(base.enemyHealthMultiplier(seconds), faster.enemyHealthMultiplier(seconds * 0.5f))
         }
