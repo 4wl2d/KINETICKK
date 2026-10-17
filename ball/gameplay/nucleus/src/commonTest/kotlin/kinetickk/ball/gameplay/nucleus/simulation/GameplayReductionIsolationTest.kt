@@ -803,6 +803,25 @@ class GameplayReductionIsolationTest {
         turnRecoveryCooldown = 0.3f
         turnDirection = -1
         elitesSpawned = 3
+        heraldsSpawned = 1
+        directorPhase = 2
+        directorPhaseUntil = 9.5f
+        spawnBudget = 2.25f
+        pendingEventKind = 3
+        pendingEventSize = 7
+        pendingEventType = 9
+        recentEventTypes = 0b101
+        previousEventTypes = 0b110
+        ambushReadyAt = 21f
+        encircleReadyAt = 41f
+        wallReadyAt = 31f
+        capOverflowReadyAt = 22f
+        ambushSpeedSeconds = 0.75f
+        spawnEventCount = 4
+        lastSpawnEventKind = 1
+        lastSpawnEventPlanned = 5
+        lastSpawnEventSpawned = 4
+        spawnRandom.nextInt()
         coreRadius = 17.5f
         enemies.firstOrNull()?.apply {
             characterMarkTime = 0.75f
@@ -815,6 +834,14 @@ class GameplayReductionIsolationTest {
             lastDamagedAt = 0.3f
             disabledUntil = 0.35f
             silencedUntil = 0.45f
+            mode = 2
+            modeUntil = 0.55f
+            facing = 1.25f
+            guarded = true
+            linkedBy = 7
+            linkedUntil = 0.65f
+            shieldUntil = 0.7f
+            abilityAt = 0.85f
             status[StatusCell.STACKS + StatusElement.THERMAL.ordinal] = 2f
             status[StatusCell.DECAY_AT + StatusElement.THERMAL.ordinal] = 0.5f
             status[StatusCell.FREEZE_IMMUNE_UNTIL] = 0.6f
@@ -892,6 +919,7 @@ class GameplayReductionIsolationTest {
             value("content", content)
             value("random", gameplayRandom.snapshot())
             value("rewardRandom", rewardRandom.snapshot())
+            value("spawnRandom", spawnRandom.snapshot())
             value("activeRebirthProfile", activeRebirthProfile)
             value("unlockedWeaponSet", unlockedWeaponSet.toList())
             value("unlockedWeaponView", unlockedWeaponView.toList())
@@ -1048,6 +1076,24 @@ class GameplayReductionIsolationTest {
             float("spawnClock", spawnClock)
             float("nextEliteAt", nextEliteAt)
             value("elitesSpawned", elitesSpawned)
+            value("heraldsSpawned", heraldsSpawned)
+            value("directorPhase", directorPhase)
+            float("directorPhaseUntil", directorPhaseUntil)
+            float("spawnBudget", spawnBudget)
+            value("pendingEventKind", pendingEventKind)
+            value("pendingEventSize", pendingEventSize)
+            value("pendingEventType", pendingEventType)
+            value("recentEventTypes", recentEventTypes)
+            value("previousEventTypes", previousEventTypes)
+            float("ambushReadyAt", ambushReadyAt)
+            float("encircleReadyAt", encircleReadyAt)
+            float("wallReadyAt", wallReadyAt)
+            float("capOverflowReadyAt", capOverflowReadyAt)
+            float("ambushSpeedSeconds", ambushSpeedSeconds)
+            value("spawnEventCount", spawnEventCount)
+            value("lastSpawnEventKind", lastSpawnEventKind)
+            value("lastSpawnEventPlanned", lastSpawnEventPlanned)
+            value("lastSpawnEventSpawned", lastSpawnEventSpawned)
             float("dashBufferTime", dashBufferTime)
             value("bossSpawned", bossSpawned)
             value("keyboardBrakeActive", keyboardBrakeActive)
@@ -1234,6 +1280,14 @@ class GameplayReductionIsolationTest {
                 float("$prefix.lastDamagedAt", enemy.lastDamagedAt)
                 float("$prefix.disabledUntil", enemy.disabledUntil)
                 float("$prefix.silencedUntil", enemy.silencedUntil)
+                value("$prefix.mode", enemy.mode)
+                float("$prefix.modeUntil", enemy.modeUntil)
+                float("$prefix.facing", enemy.facing)
+                value("$prefix.guarded", enemy.guarded)
+                value("$prefix.linkedBy", enemy.linkedBy)
+                float("$prefix.linkedUntil", enemy.linkedUntil)
+                float("$prefix.shieldUntil", enemy.shieldUntil)
+                float("$prefix.abilityAt", enemy.abilityAt)
                 floats("$prefix.status", enemy.status)
             }
 
@@ -1254,6 +1308,7 @@ class GameplayReductionIsolationTest {
                 float("$prefix.previousX", projectile.previousX)
                 float("$prefix.previousY", projectile.previousY)
                 value("$prefix.statusElement", projectile.statusElement)
+                value("$prefix.kind", projectile.kind)
                 value("$prefix.hasRecordedEnemyHits", projectile.hasRecordedEnemyHits)
                 for (enemyId in 1 until nextEntityId) {
                     value("$prefix.recordedEnemy[$enemyId]", projectile.hasRecordedEnemyHit(enemyId))
