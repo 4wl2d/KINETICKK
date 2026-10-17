@@ -438,7 +438,8 @@ private fun MutableGameState.shardHits(shard: WeaponEntity) {
         hitFrom(enemy, shard.previousX, shard.previousY) { dealWeaponDamage(enemy, shard.damage, canCrit = true, procKey = shard.procKey) }
         burst(enemy.x, enemy.y, 4, 0)
         if (shard.phase > 0) {
-            // A shard pierces on to the next nearest enemy (one more with the second form), losing a little strength.
+            // A shard pierces on to the nearest enemy it has not struck (two more, three with the second form),
+            // losing a little strength at each.
             shard.phase--
             shard.damage *= AEGIS_PIERCE_SHARE
             shard.targetId = nearestUnstruckEnemy(shard, enemy.x, enemy.y, AEGIS_RANGE)?.id ?: -1

@@ -30,8 +30,8 @@ import kotlin.test.assertTrue
  * 1.25, heat 50, cruise 1 100 u/s, Weapon Calibration 3) and neither signature nor harmony. Overdrive is
  * held off. Each weapon's primary arena sits within 0.65..1.35 of that arena's median and the other within
  * 0.5..1.75 of its median: the ceiling on the other arena keeps a crowd weapon from also out-dueling the
- * single-target weapons (and the reverse), so no weapon dominates both fights. Arc Coil, the weapon that
- * dominated before the rework, must lead neither arena at either checkpoint.
+ * single-target weapons (and the reverse). No weapon may lead both arenas at a checkpoint, and Arc Coil,
+ * the weapon that dominated before the rework, must lead neither.
  */
 class WeaponBalanceTest {
     @Test
@@ -52,11 +52,12 @@ class WeaponBalanceTest {
                 val (main, other) = if (primary == Arena.SINGLE) single to crowd else crowd to single
                 if (main !in PRIMARY_BAND || other !in OTHER_BAND) outside += "$checkpoint $weapon single=$single crowd=$crowd"
             }
-            // Arc Coil, the weapon that once dominated, leads neither arena.
-            for (arena in Arena.entries) {
-                val leader = results.maxBy { (_, dps) -> dps.getValue(arena) }.key
+            // Arc Coil, the weapon that once dominated, leads neither arena, and no weapon leads both.
+            val leaders = Arena.entries.associateWith { arena -> results.maxBy { (_, dps) -> dps.getValue(arena) }.key }
+            for ((arena, leader) in leaders) {
                 if (leader == WeaponId.ARC_COIL) outside += "$checkpoint ARC_COIL leads the $arena arena"
             }
+            if (leaders.values.distinct().size == 1) outside += "$checkpoint ${leaders.values.first()} leads both arenas"
         }
         assertTrue(outside.isEmpty(), "weapons outside their band: $outside")
     }
