@@ -242,8 +242,10 @@ private fun MutableGameState.updateGravityMines(agonyRank: Int) {
     // Diamond signature: a parry drops a mine that detonates at once, doubled.
     if (signatureActive() && parriedThisStep && elapsed >= runtime.signatureReadyAt) {
         runtime.signatureReadyAt = elapsed + PARRY_TWIST_GUARD
-        weaponNodes += WeaponNode(WeaponNodeType.GRAVITY_MINE, coreX, coreY, 0.001f, 0.001f, gravityMineRadius(agonyRank),
+        val mine = WeaponNode(WeaponNodeType.GRAVITY_MINE, coreX, coreY, 0.001f, 0.001f, gravityMineRadius(agonyRank),
             procKey = beginWeaponActivation(), scale = 2f)
+        // It joins the field to detonate this step; a full field (the node bound) sets it off at once instead.
+        if (!tryAddWeaponNode(mine)) explodeMine(mine)
     }
     if (weaponClock <= 0f && (braking || speed > 220f)) {
         // The second form keeps more mines in the field: they come sooner.

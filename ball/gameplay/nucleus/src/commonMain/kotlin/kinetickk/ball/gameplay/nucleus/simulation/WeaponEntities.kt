@@ -207,9 +207,9 @@ private fun MutableGameState.advanceRift(rift: WeaponEntity, delta: Float) {
             if (!enemy.alive) continue
             val distanceSquared = pointToSegmentDistanceSquared(enemy.x, enemy.y, rift.x, rift.y, rift.endX, rift.endY)
             if (distanceSquared > square(HOLLOW_PULL_RADIUS) || distanceSquared < 1f) continue
-            val (closestX, closestY) = closestOnSegment(enemy.x, enemy.y, rift.x, rift.y, rift.endX, rift.endY)
-            val dx = closestX - enemy.x
-            val dy = closestY - enemy.y
+            val t = segmentParameter(enemy.x, enemy.y, rift.x, rift.y, rift.endX, rift.endY)
+            val dx = rift.x + (rift.endX - rift.x) * t - enemy.x
+            val dy = rift.y + (rift.endY - rift.y) * t - enemy.y
             val distance = max(1f, length(dx, dy))
             val pull = HOLLOW_PULL * knockbackTaken(enemy) * delta
             enemy.vx += dx / distance * pull
@@ -301,13 +301,13 @@ private fun MutableGameState.obstacleOnPath(x0: Float, y0: Float, x1: Float, y1:
     return null
 }
 
-private fun closestOnSegment(px: Float, py: Float, ax: Float, ay: Float, bx: Float, by: Float): Pair<Float, Float> {
+/** Where along the segment from (ax, ay) to (bx, by) the point nearest (px, py) lies, in [0, 1]. */
+private fun segmentParameter(px: Float, py: Float, ax: Float, ay: Float, bx: Float, by: Float): Float {
     val sx = bx - ax
     val sy = by - ay
     val lengthSquared = sx * sx + sy * sy
-    if (lengthSquared <= 0f) return ax to ay
-    val t = (((px - ax) * sx + (py - ay) * sy) / lengthSquared).coerceIn(0f, 1f)
-    return (ax + sx * t) to (ay + sy * t)
+    if (lengthSquared <= 0f) return 0f
+    return (((px - ax) * sx + (py - ay) * sy) / lengthSquared).coerceIn(0f, 1f)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -361,7 +361,7 @@ private fun MutableGameState.wellTick(well: WeaponEntity, delta: Float) {
         val knockback = knockbackTaken(enemy)
         enemy.vx += dx / distance * pull * knockback
         enemy.vy += dy / distance * pull * knockback
-        val landed = dealWeaponDamage(enemy, well.damage * delta, procKey = well.procKey).amount > 0f
+        dealWeaponDamage(enemy, well.damage * delta, procKey = well.procKey)
     }
 }
 
@@ -521,7 +521,6 @@ internal const val RIFT_SPENT: Int = 4
  */
 internal fun MutableGameState.weaponShotHit(projectile: Projectile, sourceWeapon: WeaponId, enemy: Enemy) {
     val equipped = sourceWeapon == weapon
-    var damage = projectile.damage
     var forceCrit = false
     when (sourceWeapon) {
         WeaponId.NULL_LANCE -> if (equipped) {
@@ -539,7 +538,8 @@ internal fun MutableGameState.weaponShotHit(projectile: Projectile, sourceWeapon
         else -> Unit
     }
     if (!enemy.alive) return
-    val result = dealWeaponDamage(enemy, damage, canCrit = true, sourceWeapon = sourceWeapon, procKey = projectile.procKey, forceCrit = forceCrit)
+    val result = dealWeaponDamage(enemy, projectile.damage, canCrit = true, sourceWeapon = sourceWeapon, procKey = projectile.procKey,
+        forceCrit = forceCrit)
     if (!equipped || result.amount <= 0f) return
     when (sourceWeapon) {
         WeaponId.ION_SWARM -> {

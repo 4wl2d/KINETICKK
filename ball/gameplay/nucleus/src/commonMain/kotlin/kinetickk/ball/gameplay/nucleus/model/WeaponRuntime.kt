@@ -236,6 +236,8 @@ internal class WeaponRuntime private constructor(
         secondTetherId = -1
         secondTetherRamp = 0f
         sweepAngle = 0f
+        // A shield that broke under another weapon is no Aegis break.
+        shieldWasUp = false
         shieldRestoreReadyAt = 0f
         drumArmed = false
     }

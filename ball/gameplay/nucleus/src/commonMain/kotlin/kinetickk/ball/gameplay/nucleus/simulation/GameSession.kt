@@ -169,6 +169,8 @@ internal fun MutableGameState.startRun() {
     weaponLevel = 1 + matrix.startingWeaponLevels + signatureLevelBonus()
     resetRunStats()
     recompileBuild()
+    // A new run starts with a new character runtime (Dash count 0), so the weapon's input tracking starts over too.
+    weaponRuntime = WeaponRuntime()
     resetWeaponRuntime()
     resetPointsOfInterest()
     resetObstacles()
