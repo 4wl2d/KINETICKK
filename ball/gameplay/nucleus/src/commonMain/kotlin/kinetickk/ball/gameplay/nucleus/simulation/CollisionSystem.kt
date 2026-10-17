@@ -108,9 +108,10 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
             val strike = strikeDamage(enemy)
             val defusable = enemy.type == EnemyType.BOMBER && enemy.mode != EnemyBehavior.PRIMED
             dealHit(enemy, damage, HitSource.IMPACT, canCrit = true)
-            // A fast impact destroys an unprimed Bomber outright, before it can prime.
+            // A fast impact destroys an unprimed Bomber outright, before it can prime, even through a tether.
             if (defusable && enemy.alive && coreImpactSpeed >= BOMBER_DEFUSE_SPEED) {
-                damageEnemy(enemy, enemy.hp, killEligible = true, source = HitSource.IMPACT)
+                val outright = if (isLinked(enemy)) enemy.hp / (1f - AEGIS_LINK_REDUCTION) else enemy.hp
+                damageEnemy(enemy, outright, killEligible = true, source = HitSource.IMPACT)
             }
             if (newDashContact) onDashHit(enemy, damage)
             if (dashPhaseTime <= 0f) onCharacterPrimaryHit(enemy)

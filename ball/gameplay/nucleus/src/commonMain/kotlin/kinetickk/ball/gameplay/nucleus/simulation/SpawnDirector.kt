@@ -117,7 +117,8 @@ internal fun MutableGameState.spawnWave(delta: Float) {
     advanceDirectorPhase()
     if (speed > OBSTACLE_DAMAGE_START_SPEED * AMBUSH_SPEED_FRACTION) ambushSpeedSeconds += delta else ambushSpeedSeconds = 0f
     val phase = SpawnDirectorPhase.entries[directorPhase]
-    var rate = phase.rate * DIRECTOR_RATE_SCALE * rebirthProfile.spawnRateMultiplier / content.tempo.spawnIntervalSeconds(elapsed)
+    // The Rebirth interval keeps the published minimum spawn interval as the fastest one-enemy cadence.
+    var rate = phase.rate * DIRECTOR_RATE_SCALE / rebirthProfile.spawnInterval(content.tempo.spawnIntervalSeconds(elapsed))
     if (bossFight) rate /= ARCHITECT_ADD_INTERVAL_SCALE
     spawnBudget = min(MAX_SPAWN_BUDGET, spawnBudget + delta * rate)
     spawnClock -= delta
@@ -566,11 +567,15 @@ internal fun MutableGameState.spawnScheduled(type: EnemyType): Boolean {
     return true
 }
 
-/** The terminal and mini-bosses take priority over the oldest ordinary enemy at the hard cap. */
+/**
+ * The terminal and mini-bosses take priority over the oldest ordinary enemy at the hard cap; an active
+ * trial's defenders stay, so the trial can still be completed.
+ */
 internal fun MutableGameState.evictOldestOrdinaryEnemy() {
+    val activeDefenders = pointsOfInterest.singleOrNull()?.takeIf { it.active }?.defenderIds
     for (index in enemies.indices) {
         val enemy = enemies[index]
-        if (enemy.isBoss || enemy.isMiniBoss || enemy.isElite) continue
+        if (enemy.isBoss || enemy.isMiniBoss || enemy.isElite || activeDefenders?.contains(enemy.id) == true) continue
         enemies.removeAt(index)
         return
     }

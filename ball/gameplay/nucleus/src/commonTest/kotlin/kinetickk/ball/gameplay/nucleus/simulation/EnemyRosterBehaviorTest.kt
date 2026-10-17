@@ -64,6 +64,39 @@ class EnemyRosterBehaviorTest {
         bomber.silencedUntil = 1f
         state.updateEnemies(FIXED)
         assertEquals(EnemyBehavior.IDLE, bomber.mode, "A silenced Bomber does not prime")
+
+        // Silence landing on a primed fuse makes it fizzle instead of exploding.
+        bomber.mode = EnemyBehavior.PRIMED
+        bomber.modeUntil = state.elapsed
+        state.updateEnemies(FIXED)
+        assertTrue(bomber in state.enemies && !bomber.dead, "The silenced fuse fizzles")
+        assertEquals(EnemyBehavior.IDLE, bomber.mode)
+        assertEquals(state.maxHp, state.hp)
+    }
+
+    @Test
+    fun stunnedOrSilencedStrikersLoseTheirAnySpeedHit() {
+        val state = quietState()
+        val lancer = state.spawn(EnemyType.LANCER, 30f, 0f, hp = 10_000f)
+        lancer.mode = EnemyBehavior.STRIKE
+        lancer.modeUntil = state.elapsed + 0.5f
+        assertEquals(state.hostileDamage(lancer, LANCER_DAMAGE), state.strikeDamage(lancer), 1e-4f)
+        lancer.silencedUntil = state.elapsed + 1f
+        assertEquals(0f, state.strikeDamage(lancer), "A silenced lance hits like an ordinary contact")
+        lancer.silencedUntil = 0f
+        lancer.disabledUntil = state.elapsed + 1f
+        assertEquals(0f, state.strikeDamage(lancer), "A stunned Lancer strikes nothing")
+        lancer.disabledUntil = 0f
+        lancer.modeUntil = state.elapsed - FIXED
+        assertEquals(0f, state.strikeDamage(lancer), "The strike ends with its window")
+
+        // A fast Core meeting the silenced Lancer takes no contact damage.
+        lancer.modeUntil = state.elapsed + 0.5f
+        lancer.silencedUntil = state.elapsed + 1f
+        state.previousCoreX = -10f
+        state.setVelocityForTesting(900f, 0f)
+        state.resolveEnemyCoreCollisions()
+        assertEquals(state.maxHp, state.hp)
     }
 
     @Test
@@ -104,6 +137,18 @@ class EnemyRosterBehaviorTest {
         state.sweepKills()
         assertTrue(bomber !in state.enemies)
         assertEquals(state.maxHp, state.hp)
+
+        // An Aegis tether does not save it from a fast impact.
+        val tethered = quietState()
+        val aegis = tethered.spawn(EnemyType.AEGIS, 900f, 0f)
+        val linkedBomber = tethered.spawn(EnemyType.BOMBER, 30f, 0f, hp = 10_000f)
+        linkedBomber.linkedBy = aegis.id
+        linkedBomber.linkedUntil = tethered.elapsed + 1f
+        assertTrue(tethered.isLinked(linkedBomber))
+        tethered.previousCoreX = -10f
+        tethered.setVelocityForTesting(600f, 0f)
+        tethered.resolveEnemyCoreCollisions()
+        assertFalse(linkedBomber.alive)
 
         // A slow bump only damages it.
         val slow = quietState()

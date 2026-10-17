@@ -76,8 +76,8 @@ internal fun DrawScope.drawEnemy(
     if (center.x < -renderMargin || center.y < -renderMargin || center.x > size.width + renderMargin || center.y > size.height + renderMargin) return
     val threat = roles.threat
     drawEnemyTelegraph(engine, enemy, center, shakeX, shakeY, threat)
-    if (enemy.type == EnemyType.PHANTOM && enemy.behavior == EnemyBehavior.PHASED) {
-        // Out of phase: only a faint, turning outline marks where it went.
+    if (enemy.type == EnemyType.PHANTOM && enemy.behavior == EnemyBehavior.PHASED && EnemyAffinity.shifting(enemy.affinityBits)) {
+        // Out of phase (and untargetable): only a faint, turning outline marks where it went.
         rotate(engine.elapsed * spin(2f), center) {
             drawCircle(threat.copy(alpha = 0.32f), enemy.radius * 1.2f, center, style = WorldStrokes.dashedThin)
         }

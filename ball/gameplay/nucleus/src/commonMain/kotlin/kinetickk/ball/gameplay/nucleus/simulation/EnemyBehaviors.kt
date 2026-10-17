@@ -75,13 +75,21 @@ internal const val HERALD_SHIELD_SECONDS: Float = 3f
 internal const val HERALD_SHIELD_INTERVAL_SECONDS: Float = 12f
 internal const val HERALD_FIRST_SHIELD_SECONDS: Float = 6f
 
-/** Contact damage of an attack that hurts at any Core speed (strikes, lances, the Herald), or 0. */
-internal fun MutableGameState.strikeDamage(enemy: Enemy): Float = when (enemy.type) {
-    EnemyType.CHARGER -> if (enemy.mode == EnemyBehavior.STRIKE && elapsed < enemy.modeUntil) contactDamage(enemy) else 0f
-    EnemyType.LANCER -> if (enemy.mode == EnemyBehavior.STRIKE) hostileDamage(enemy, LANCER_DAMAGE) else 0f
-    EnemyType.PHANTOM -> if (enemy.mode == EnemyBehavior.STRIKE) hostileDamage(enemy, PHANTOM_STRIKE_DAMAGE) else 0f
-    EnemyType.HERALD -> contactDamage(enemy)
-    else -> 0f
+/**
+ * Contact damage of an attack that hurts at any Core speed (strikes, lances, the Herald), or 0. A stunned
+ * or silenced enemy strikes nothing (its contact is ordinary again); a strike ends with its window even
+ * while a stun holds its mode.
+ */
+internal fun MutableGameState.strikeDamage(enemy: Enemy): Float {
+    if (!canAttack(enemy)) return 0f
+    val striking = enemy.mode == EnemyBehavior.STRIKE && elapsed < enemy.modeUntil
+    return when (enemy.type) {
+        EnemyType.CHARGER -> if (striking) contactDamage(enemy) else 0f
+        EnemyType.LANCER -> if (striking) hostileDamage(enemy, LANCER_DAMAGE) else 0f
+        EnemyType.PHANTOM -> if (striking) hostileDamage(enemy, PHANTOM_STRIKE_DAMAGE) else 0f
+        EnemyType.HERALD -> contactDamage(enemy)
+        else -> 0f
+    }
 }
 
 /** Ordinary contact damage, `7 + 0.18 r` through [hostileDamage]. */
@@ -166,7 +174,10 @@ private const val SWARM_SPACING: Float = 34f
 internal fun MutableGameState.updateBomber(enemy: Enemy, dx: Float, dy: Float, distance: Float, delta: Float) {
     if (enemy.mode == EnemyBehavior.PRIMED) {
         enemy.damp(8f, delta)
-        if (elapsed >= enemy.modeUntil) detonateBomber(enemy)
+        if (elapsed >= enemy.modeUntil) {
+            // A silenced fuse fizzles; the Bomber has to close in and prime again.
+            if (canAttack(enemy)) detonateBomber(enemy) else enemy.mode = EnemyBehavior.IDLE
+        }
         return
     }
     val closing = 1f - clamp(distance / 700f, 0f, 1f)

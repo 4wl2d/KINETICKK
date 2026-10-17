@@ -10,10 +10,54 @@ import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 /** Multi-minute director runs: the variety of the waves and the roster gates over a real run clock. */
 class SpawnDirectorPacingTest {
+    @Test
+    fun theDirectorIsDeterministicPerSeedAndSeedsReshapeTheFirstMinute() {
+        fun firstMinute(seed: Int): List<String> {
+            val state = runningState(seed, tier = 0)
+            val spawned = mutableListOf<String>()
+            val seen = mutableSetOf<Int>()
+            state.drive(60f) {
+                state.enemies.forEach { enemy ->
+                    if (seen.add(enemy.id)) spawned += "${enemy.type}@${enemy.x.toInt()},${enemy.y.toInt()}@${state.elapsed.toInt()}"
+                }
+            }
+            return spawned
+        }
+        val first = firstMinute(seed = 7)
+        assertTrue(first.size > 10, "A minute of spawns: $first")
+        assertEquals(first, firstMinute(seed = 7))
+        assertNotEquals(first, firstMinute(seed = 8))
+    }
+
+    @Test
+    fun pacingPhasesOpenCalmThenLoopBuildSurgeBreather() {
+        val state = runningState(seed = 11, tier = 0)
+        assertEquals(SpawnDirectorPhase.CALM.ordinal, state.directorPhase)
+        assertTrue(state.directorPhaseUntil in 10f..16f)
+        val sequence = mutableListOf(SpawnDirectorPhase.CALM)
+        val starts = mutableListOf(0f)
+        state.drive(150f) {
+            val phase = SpawnDirectorPhase.entries[state.directorPhase]
+            if (phase != sequence.last()) {
+                sequence += phase
+                starts += state.elapsed
+            }
+        }
+        val expected = listOf(SpawnDirectorPhase.CALM, SpawnDirectorPhase.BUILD, SpawnDirectorPhase.SURGE, SpawnDirectorPhase.BREATHER, SpawnDirectorPhase.BUILD)
+        assertEquals(expected, sequence.take(5))
+        for (index in 0 until 4) {
+            val length = starts[index + 1] - starts[index]
+            val phase = sequence[index]
+            assertTrue(length in phase.minimumSeconds - 0.05f..phase.maximumSeconds + 0.05f, "$phase lasted $length")
+        }
+    }
+
     @Test
     fun everyFirstFourMinutesAtTierZeroMixAtLeastThreeEventKindsAtFullStrength() {
         for (seed in listOf(101, 202, 303, 404, 505)) {

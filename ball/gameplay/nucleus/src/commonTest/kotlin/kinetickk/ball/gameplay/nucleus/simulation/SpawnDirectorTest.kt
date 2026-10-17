@@ -20,25 +20,6 @@ import kotlin.test.assertTrue
 
 class SpawnDirectorTest {
     @Test
-    fun theDirectorIsDeterministicPerSeedAndSeedsReshapeTheFirstMinute() {
-        fun firstMinute(seed: Int): List<String> {
-            val state = directorState(seed)
-            val spawned = mutableListOf<String>()
-            val seen = mutableSetOf<Int>()
-            state.drive(60f) {
-                state.enemies.forEach { enemy ->
-                    if (seen.add(enemy.id)) spawned += "${enemy.type}@${enemy.x.toInt()},${enemy.y.toInt()}@${state.elapsed.toInt()}"
-                }
-            }
-            return spawned
-        }
-        val first = firstMinute(seed = 7)
-        assertTrue(first.size > 10, "A minute of spawns: $first")
-        assertEquals(first, firstMinute(seed = 7))
-        assertNotEquals(first, firstMinute(seed = 8))
-    }
-
-    @Test
     fun spawningDrawsOnlyFromItsOwnStream() {
         val state = directorState(seed = 3)
         val gameplay = state.gameplayRandom.snapshot()
@@ -52,29 +33,6 @@ class SpawnDirectorTest {
     }
 
     @Test
-    fun pacingPhasesOpenCalmThenLoopBuildSurgeBreather() {
-        val state = directorState(seed = 11)
-        assertEquals(SpawnDirectorPhase.CALM.ordinal, state.directorPhase)
-        assertTrue(state.directorPhaseUntil in 10f..16f)
-        val sequence = mutableListOf(SpawnDirectorPhase.CALM)
-        val starts = mutableListOf(0f)
-        state.drive(150f) {
-            val phase = SpawnDirectorPhase.entries[state.directorPhase]
-            if (phase != sequence.last()) {
-                sequence += phase
-                starts += state.elapsed
-            }
-        }
-        val expected = listOf(SpawnDirectorPhase.CALM, SpawnDirectorPhase.BUILD, SpawnDirectorPhase.SURGE, SpawnDirectorPhase.BREATHER, SpawnDirectorPhase.BUILD)
-        assertEquals(expected, sequence.take(5))
-        for (index in 0 until 4) {
-            val length = starts[index + 1] - starts[index]
-            val phase = sequence[index]
-            assertTrue(length in phase.minimumSeconds - 0.05f..phase.maximumSeconds + 0.05f, "$phase lasted $length")
-        }
-    }
-
-    @Test
     fun budgetAccruesAtThePhaseRateOverTheTempoInterval() {
         val state = directorState(seed = 5)
         state.elapsed = 200f
@@ -85,10 +43,24 @@ class SpawnDirectorTest {
         state.spawnWave(0.5f)
         val expected = 0.5f * SpawnDirectorPhase.SURGE.rate * DIRECTOR_RATE_SCALE *
             state.rebirthProfile.spawnRateMultiplier / state.content.tempo.spawnIntervalSeconds(200f)
+        assertEquals(expected, 0.5f * SpawnDirectorPhase.SURGE.rate * DIRECTOR_RATE_SCALE /
+            state.rebirthProfile.spawnInterval(state.content.tempo.spawnIntervalSeconds(200f)), 1e-6f)
         assertEquals(expected, state.spawnBudget, 1e-5f)
         state.spawnBudget = MAX_SPAWN_BUDGET
         state.spawnWave(10f)
         assertEquals(MAX_SPAWN_BUDGET, state.spawnBudget, "The bank is bounded")
+
+        // The Rebirth minimum spawn interval caps the cadence however fast a tier spawns.
+        val fast = directorState(seed = 5)
+        fast.activeRebirthProfile = fast.rebirthProfile.copy(spawnRateMultiplier = 1_000f)
+        fast.elapsed = 200f
+        fast.directorPhase = SpawnDirectorPhase.SURGE.ordinal
+        fast.directorPhaseUntil = 1_000f
+        fast.spawnBudget = 0f
+        fast.spawnClock = Float.MAX_VALUE
+        fast.spawnWave(0.01f)
+        val capped = 0.01f * SpawnDirectorPhase.SURGE.rate * DIRECTOR_RATE_SCALE / fast.rebirthProfile.minimumSpawnIntervalSeconds
+        assertEquals(capped, fast.spawnBudget, 1e-5f)
     }
 
     @Test
@@ -247,6 +219,26 @@ class SpawnDirectorTest {
         assertEquals(2, sixth.heraldsSpawned, "Two at most")
         // The Herald calls its aspect escorts the step after it arrives.
         assertTrue(sixth.enemies.count { it.type != EnemyType.HERALD } >= 2)
+    }
+
+    @Test
+    fun aHeraldAtTheHardCapEvictsTheOldestOrdinaryEnemyButNeverAnActiveDefender() {
+        val state = directorState(seed = 33)
+        val offer = kinetickk.ball.gameplay.nucleus.model.PointOfInterestState(
+            0, kinetickk.ball.content.api.PointOfInterestKind.SEALED_ANOMALY, 0f, 0f, 85f,
+        )
+        state.activatePointOfInterest(offer)
+        val defenders = state.pointsOfInterest.single().defenderIds
+        assertEquals(3, defenders.size)
+        val elite = state.spawnedEnemy(EnemyType.ELITE, 3_000f, 0f).also { state.enemies += it }
+        val oldest = state.addEnemyForTesting(2_000f, 900f)
+        while (state.enemies.size < state.content.rebirth.maxActiveEnemies) state.addEnemyForTesting(2_100f, 900f)
+
+        state.evictOldestOrdinaryEnemy()
+        assertTrue(state.enemies.map { it.id }.containsAll(defenders), "Active defenders stay")
+        assertTrue(elite in state.enemies, "Elites stay")
+        assertFalse(oldest in state.enemies, "The oldest ordinary enemy makes room")
+        assertEquals(state.content.rebirth.maxActiveEnemies - 1, state.enemies.size)
     }
 
     @Test
