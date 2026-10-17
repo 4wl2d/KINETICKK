@@ -159,6 +159,27 @@ class RewardCardStylesTest {
         assertTrue(pairs >= 7, "Compared every same-family pair ($pairs)")
     }
 
+    @Test
+    fun everyShippedWeaponOfferHasItsOwnPatternOrnamentAndGlyph() {
+        val looks = content.weapons.map { weapon ->
+            val choice = ChoiceOption(ChoiceType.WEAPON, weapon.name, weapon.description, weapon.tags.first().displayLabel.uppercase(),
+                weaponId = weapon.id)
+            val card = rewardFixtureModel(content = content, choiceType = ChoiceType.WEAPON, choices = listOf(choice)).rewardCardPresentation(choice, 0)
+            weapon.name to rewardCardLook(card, KkVisionMode.DEFAULT.palette).style
+        }
+        assertEquals(KkIcon.Weapons.size, looks.size)
+        // Every weapon offer is the player's own system in a steel frame and the `you` hue; what the weapon
+        // is (orbital, beam, trap, pulse ...) sets its pattern and ornament pair apart, and its icon its glyph.
+        looks.forEach { (name, style) ->
+            assertEquals(KkCardMaterial.STEEL, style.material, name)
+            assertEquals(KkVisionMode.DEFAULT.palette.you, style.hue, name)
+            assertTrue(style.ornament != KkCardOrnament.NONE, "$name has an ornament")
+        }
+        val pairs = looks.groupBy { (_, style) -> style.pattern to style.ornament }.filterValues { it.size > 1 }
+        assertTrue(pairs.isEmpty(), "Weapons sharing a pattern and ornament: " + pairs.values.joinToString { group -> group.joinToString(" = ") { it.first } })
+        assertEquals(looks.size, looks.mapNotNull { it.second.watermark }.toSet().size, "every weapon carries its own glyph")
+    }
+
     /**
      * What a watermark at 5–8 % reads as: its outer outline. Glyphs drawn round one outline (a hexagon,
      * a diamond, a ring) look alike that faint; every other glyph is its own.

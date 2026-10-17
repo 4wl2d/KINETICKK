@@ -47,7 +47,7 @@ internal fun englishSessionText(text: SessionText): String = when (text) {
     SessionText.UNDISCOVERED -> "Undiscovered"
     SessionText.START_WEAPON_SELECTED -> "Starting weapon"
     SessionText.START_WEAPON_UNLOCKED -> "Unlocked"
-    SessionText.WEAPON_HELP -> "Available as an acquisition during any run. Every character can use every weapon."
+    SessionText.WEAPON_HELP -> "Weapon offers in a run deal only weapons you own. Every character can use every weapon; its signature character, a Relic with its key and its tags make it stronger."
     SessionText.WEAPON -> "Weapon"
     SessionText.LEVEL_SHORT -> "Lvl {0}"
     SessionText.MASTERY -> "Mastery"

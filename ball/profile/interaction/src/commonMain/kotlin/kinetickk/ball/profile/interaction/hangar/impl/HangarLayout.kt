@@ -32,9 +32,14 @@ internal class HangarLayout(
     /** Mass, Integrity, Handling and Heat bars. */
     val traits: List<Rect>,
     val difficulty: Rect,
+    /** The signature block: its label beside one row per signature weapon (each with its harmony line). */
     val signature: Rect,
     val unlock: Rect,
     val select: Rect,
+    /** One row per signature weapon inside [signature] (detail content coordinates), harmony line included. */
+    val signatureRows: List<Rect> = emptyList(),
+    /** Height (px) of a signature row's main line (icon, name, state), above its harmony line. */
+    val signatureLine: Float = 0f,
 ) {
     val detailScrollMax: Float get() = max(0f, detailContentHeight - detailViewport.height)
 }
@@ -66,6 +71,8 @@ internal fun hangarLayout(
     frame: ProfileFrame,
     textScale: Float,
     backWidth: Float,
+    /** Per signature weapon, whether it shows a harmony line under its row. */
+    signatureHarmony: List<Boolean> = listOf(false, false),
     descriptionHeight: ((width: Float) -> Float)? = null,
 ): HangarLayout {
     fun d(value: Float) = frame.d(value)
@@ -143,12 +150,21 @@ internal fun hangarLayout(
     y = traits.last().bottom + d(if (regular) 10f else 5f)
     val difficulty = Rect(0f, y, width, y + rowHeight)
     y = difficulty.bottom + d(if (regular) 10f else 5f)
-    val signature = Rect(0f, y, width, y + rowHeight)
+    // Each signature weapon takes a row (icon, name, state), plus its harmony line when a heirloom
+    // candidate carries its key.
+    val weaponRow = max(rowHeight * 1.3f, frame.density * 28f)
+    val signatureTop = y
+    val signatureRows = signatureHarmony.ifEmpty { listOf(false) }.map { harmony ->
+        val row = Rect(0f, y, width, y + weaponRow + if (harmony) monoHeight else 0f)
+        y = row.bottom + d(if (regular) 4f else 2f)
+        row
+    }
+    val signature = Rect(0f, signatureTop, width, signatureRows.last().bottom)
     y = signature.bottom + d(if (regular) 12f else 6f)
     val unlock = Rect(0f, y, width, y + monoHeight * 2.2f)
     val contentHeight = unlock.bottom + d(4f)
     return HangarLayout(frame, back, roster, tiles, viewport, contentHeight, preview, tag, name, description, traits, difficulty,
-        signature, unlock, select)
+        signature, unlock, select, signatureRows, weaponRow)
 }
 
 /** Maps a press to the Hangar action it hits: header Back, a roster tile or the Select button. */

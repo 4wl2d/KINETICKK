@@ -26,6 +26,10 @@ import androidx.compose.ui.test.v2.runSkikoComposeUiTest
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.profile.interaction.CatalogRebirthRelics
+import kinetickk.ball.profile.interaction.CatalogWeapons
+import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.content.api.defaultCoreShapeDefinitions
 import kinetickk.ball.profile.api.CollectionProjection
 import kinetickk.ball.profile.api.HangarProjection
@@ -69,12 +73,18 @@ class HangarComposeTest {
         height: Float = 810f,
         language: AppLanguage = AppLanguage.English,
         outputs: MutableList<HangarOutput> = mutableListOf(),
+        withWeapons: Boolean = false,
         test: androidx.compose.ui.test.ComposeUiTest.() -> Unit,
     ) = runSkikoComposeUiTest(Size(width, height), Density(1f)) {
         setContent {
             CompositionLocalProvider(LocalAppLanguage provides language) {
                 Box(Modifier.requiredSize(width.dp, height.dp)) {
-                    DefaultHangarFeature(port, defaultCoreShapeDefinitions(), HangarSilentAudio).Content(0L) { outputs += it }
+                    val feature = if (withWeapons) {
+                        DefaultHangarFeature(port, defaultCoreShapeDefinitions(), HangarSilentAudio, CatalogWeapons, CatalogRebirthRelics)
+                    } else {
+                        DefaultHangarFeature(port, defaultCoreShapeDefinitions(), HangarSilentAudio)
+                    }
+                    feature.Content(0L) { outputs += it }
                 }
             }
         }
@@ -154,6 +164,22 @@ class HangarComposeTest {
         }
     }
 
+    @Test
+    fun theSignatureRowShowsTheInspectedCharactersTwoWeaponsAndTheirHarmony() {
+        run(HangarTestPort(heirlooms = listOf(RelicId.STORMHEART_CAPACITOR)), withWeapons = true) {
+            // The Circle's signature weapons: Flux Wake (the starter) and Gyre Disc (120 Matter).
+            onNodeWithTag("profile-hangar-signature-FLUX_WAKE").assert(stateContains("Starter"))
+            onNodeWithTag("profile-hangar-signature-GYRE_DISC").assert(stateContains("120 Matter"))
+            onNodeWithTag("profile-hangar-signature-ION_SWARM").assertDoesNotExist()
+            // The Hexagon's: Ion Swarm (Charge, carried by the heirloom) and Hunter Salvo (Reborn 4).
+            onNodeWithTag(tag(CoreShape.HEXAGON)).performClick()
+            waitForIdle()
+            onNodeWithTag("profile-hangar-signature-ION_SWARM").assert(stateContains("Harmonizes with Stormheart Capacitor"))
+            onNodeWithTag("profile-hangar-signature-HUNTER_SALVO").assert(stateContains("Reborn 4"))
+            onNodeWithTag("profile-hangar-signature-FLUX_WAKE").assertDoesNotExist()
+        }
+    }
+
     private fun stateContains(text: String) = SemanticsMatcher("state contains '$text'") { node ->
         node.config.getOrElseNullable(SemanticsProperties.StateDescription) { null }?.contains(text) == true
     }
@@ -163,6 +189,7 @@ class HangarComposeTest {
 private class HangarTestPort(
     private val unlocked: Set<CoreShape> = setOf(CoreShape.ORB, CoreShape.PRISM, CoreShape.SPIRAL),
     private var selected: CoreShape = CoreShape.ORB,
+    private val heirlooms: List<RelicId> = emptyList(),
 ) : ProfilePort {
     private var revision = ProfileRevision(1L)
     val pulses = mutableListOf<ProfilePulse.Business>()
@@ -202,7 +229,8 @@ private class HangarTestPort(
     override fun query(query: ProfileQuery.GetMatrixProgress): MatrixProgressProjection = error("unused")
     override fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection = error("unused")
     override fun query(query: ProfileQuery.GetHomeProgress): HomeProgressProjection = error("unused")
-    override fun query(query: ProfileQuery.GetCollection): CollectionProjection = error("unused")
+    override fun query(query: ProfileQuery.GetCollection): CollectionProjection =
+        CollectionProjection(instanceId, revision, PlayerCollection(heirloomRelicIds = heirlooms.toImmutableList()))
     override fun query(query: ProfileQuery.GetRebirthProgress): RebirthProgressProjection = error("unused")
     override fun query(query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection = error("unused")
 }

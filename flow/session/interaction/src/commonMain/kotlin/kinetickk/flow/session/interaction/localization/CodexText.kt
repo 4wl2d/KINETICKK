@@ -172,4 +172,41 @@ internal enum class CodexText(
         "Reach this Rebirth rank to meet this enemy in runs.",
         "Достигните этого ранга перерождения, чтобы встретить этого врага в забегах.",
     ),
+    WEAPON_FAMILY("Family", "Семейство"),
+    WEAPON_ELEMENT("Element", "Стихия"),
+    WEAPON_KEY("Relic key", "Ключ реликвий"),
+    WEAPON_SCALING("Scales with", "Растёт от"),
+    WEAPON_CADENCE("Cadence", "Ритм"),
+    CADENCE_CONTINUOUS("Continuous", "Непрерывно"),
+    CADENCE_CONTACT("On contact", "При касании"),
+    CADENCE_DISCRETE("Periodic", "Периодически"),
+    WEAPON_SIGNATURE("Signature", "Фирменное"),
+    WEAPON_SIGNATURE_OF("Signature of {0}", "Фирменное оружие формы «{0}»"),
+    WEAPON_SIGNATURE_ACTIVE(
+        "Active with your character: +20% weapon power, and runs start at weapon level 2.",
+        "Действует с вашим персонажем: +20% мощности оружия, забег начинается с уровня оружия 2.",
+    ),
+    WEAPON_SIGNATURE_INACTIVE(
+        "With {0}: +20% weapon power, and runs start at weapon level 2.",
+        "С формой «{0}»: +20% мощности оружия, забег начинается с уровня оружия 2.",
+    ),
+    WEAPON_TWIST("Signature twist", "Фирменный эффект"),
+    WEAPON_FORMS("Mastery forms", "Формы мастерства"),
+    WEAPON_HARMONY_BOUND(
+        "Bound Relics carrying the {0} key: {1}. The weapon gains 20% power; each of these Relics grows 10% stronger.",
+        "Привязанные реликвии с ключом «{0}»: {1}. Оружие получает +20% мощности; каждая из этих реликвий усиливается на 10%.",
+    ),
+    WEAPON_HARMONY_HEIRLOOM(
+        "Heirloom candidates carrying the {0} key: {1}. Choosing one adds 20% weapon power.",
+        "Реликвии наследия с ключом «{0}»: {1}. Выбор любой из них даёт +20% мощности оружия.",
+    ),
+    WEAPON_HARMONY_NONE(
+        "A Relic with the {0} key, chosen as heirloom or bound in a run, adds 20% weapon power and grows 10% stronger itself.",
+        "Реликвия с ключом «{0}», выбранная из наследия или привязанная в забеге, даёт +20% мощности оружия и сама усиливается на 10%.",
+    ),
+    WEAPON_RESONANCE(
+        "Each point in {0} or {1} adds 5% weapon power, up to 50%.",
+        "Каждое очко «{0}» или «{1}» даёт +5% мощности оружия, до +50%.",
+    ),
+    WEAPON_RESONANCE_NOW("This run: {0} points, +{1}% weapon power.", "В этом забеге очков: {0}, +{1}% мощности оружия."),
 }

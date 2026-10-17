@@ -112,11 +112,15 @@ internal class AppCompositionOwner(
         weapons = uiCatalog.weapons,
         weaponMasteries = uiCatalog.weaponMasteries,
         audioService = this.audioService,
+        coreShapes = uiCatalog.coreShapes,
+        relics = uiCatalog.relics,
     )
     private val hangarFeature: HangarFeature = hangarFeature ?: DefaultHangarFeature(
         profilePort = this.profilePort,
         coreShapes = uiCatalog.coreShapes,
         audioService = this.audioService,
+        weapons = uiCatalog.weapons,
+        relics = uiCatalog.relics,
     )
     private val rebirthFeature: RebirthFeature = rebirthFeature ?: DefaultRebirthFeature(
         profilePort = this.profilePort,

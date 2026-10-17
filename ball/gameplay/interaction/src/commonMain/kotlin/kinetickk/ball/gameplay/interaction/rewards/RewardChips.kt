@@ -76,7 +76,8 @@ private fun RewardChip.glyphCount(): Int = when (kind) {
     RewardChipKind.TAG, RewardChipKind.TAG_TIER -> if (tag != null) 1 else 0
     RewardChipKind.ATTUNED -> if (tag != null) 2 else 1
     RewardChipKind.REACTION -> elements.size.coerceAtMost(2)
-    RewardChipKind.AFFINITY -> elements.size.coerceAtMost(1)
+    RewardChipKind.AFFINITY, RewardChipKind.ELEMENT -> elements.size.coerceAtMost(1)
+    RewardChipKind.SIGNATURE -> if (core != null) 1 else 0
     RewardChipKind.SUPPRESSED -> if (rune != null) 2 else 1
     else -> 0
 }
@@ -140,6 +141,13 @@ private fun RewardChip.ink(roles: KkRolePalette): ChipInk = when (kind) {
     RewardChipKind.DISCORD -> ChipInk(roles.threat.copy(alpha = if (discovered) 0.22f else 0.1f), roles.threat, roles.threat, roles.threat)
     RewardChipKind.HARMONY -> ChipInk(Kk.Ink3, Kk.Mute.copy(alpha = 0.6f), Kk.Bone2, Kk.Bone2)
     RewardChipKind.DISSONANCE -> ChipInk(Kk.Ink3, roles.threat.copy(alpha = 0.6f), roles.threat, roles.threat)
+    // The run character's own weapon: a filled `you` plate with the character's form.
+    RewardChipKind.SIGNATURE -> ChipInk(roles.you, Color.Transparent, Kk.Ink, Kk.Ink)
+    // A weapon's element: outlined in its hue (Kinetic in the preset's volt).
+    RewardChipKind.ELEMENT -> {
+        val hue = elements.firstOrNull()?.overlayColor(roles) ?: roles.kinetic
+        ChipInk(hue.copy(alpha = 0.14f), hue, Kk.Bone, hue)
+    }
 }
 
 /** Dashed chip outline of an unmet pairing, cached per stroke width (draw-thread confined). */
@@ -212,6 +220,7 @@ internal fun DrawScope.drawRewardChip(
                 val icon = when (chip.kind) {
                     RewardChipKind.SUPPRESSED -> KkIcon.SYSTEM_LOCKED
                     RewardChipKind.TAG, RewardChipKind.TAG_TIER, RewardChipKind.ATTUNED -> chip.tag?.overlayIcon() ?: KkIcon.UI_PLUS
+                    RewardChipKind.SIGNATURE -> chip.core?.let { KkIcon.Forms.getOrNull(it.ordinal) } ?: KkIcon.UI_PLUS
                     else -> chip.elements[index].overlayIcon()
                 }
                 val color = when (chip.kind) {
@@ -283,7 +292,8 @@ internal fun RewardChipFlow(
                     Modifier.size((widths[index] / density).dp, style.heightDp.dp)
                         .semantics {
                             text = AnnotatedString(chip.label)
-                            if (chip.elements.isNotEmpty()) {
+                            // An element chip's label already is its element's name.
+                            if (chip.elements.isNotEmpty() && chip.kind != RewardChipKind.ELEMENT) {
                                 contentDescription = chip.elements.joinToString(" ") { it.displayLabel.localizedContent(language) } + " " + chip.label
                             }
                         }

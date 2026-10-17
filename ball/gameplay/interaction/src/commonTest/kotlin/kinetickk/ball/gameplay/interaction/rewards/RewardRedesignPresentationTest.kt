@@ -21,6 +21,7 @@ import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.RelicPolicy
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.liabilityText
 import kinetickk.ball.gameplay.interaction.canvas.UNKNOWN_PAIRING_NAME
 import kinetickk.ball.gameplay.interaction.canvas.overlayName
@@ -488,6 +489,52 @@ class RewardRedesignPresentationTest {
         assertEquals(0f, rewardDealProgress(210f, 1, 1), "90 ms stagger")
         assertEquals(1f, rewardDealProgress(720f, 0, 3), "Common to rare land in 600 ms")
         assertTrue(rewardDealProgress(720f, 0, 5) < 1f, "Epic and legendary take 750 ms")
+    }
+
+    @Test
+    fun weaponOfferCardsNameFamilyElementTagsAndTheSignatureOfTheRunsCharacter() {
+        // Arc Coil: Chain / Ion, Arsenal + Chain, the Pentagon's signature weapon.
+        val choice = ChoiceOption(ChoiceType.WEAPON, "Arc Coil", "", "ARSENAL", weaponId = WeaponId.ARC_COIL)
+        val chainPoints = BuildProjection(tagPoints = BuildTag.entries.map { if (it == BuildTag.CHAIN) 2 else 0 }.toImmutableList())
+        val signature = rewardFixtureModel(choiceType = ChoiceType.WEAPON, choices = listOf(choice), coreShape = CoreShape.PENTAGON, build = chainPoints)
+            .rewardCardPresentation(choice, 0)
+        assertEquals("Chain / Ion", signature.family)
+        assertEquals(listOf(StatusElement.ION), signature.elements)
+        assertEquals(listOf(RewardChipKind.SIGNATURE, RewardChipKind.ELEMENT, RewardChipKind.TAG, RewardChipKind.TAG), signature.chips.map { it.kind })
+        assertEquals("Signature", signature.chips[0].label)
+        assertEquals(CoreShape.PENTAGON, signature.chips[0].core)
+        assertEquals("Ion", signature.chips[1].label)
+        assertEquals(listOf(StatusElement.ION), signature.chips[1].elements)
+        // Tags read as chips, lit where the build already has points.
+        assertEquals(listOf(BuildTag.ARSENAL to false, BuildTag.CHAIN to true), signature.chips.drop(2).map { it.tag to it.active })
+
+        // Another character's run: no Signature chip. A Kinetic weapon names Kinetic, without an element pip.
+        val lance = ChoiceOption(ChoiceType.WEAPON, "Null Lance", "", "DRIVE", weaponId = WeaponId.NULL_LANCE)
+        val plain = rewardFixtureModel(choiceType = ChoiceType.WEAPON, choices = listOf(choice, lance))
+        assertTrue(plain.rewardCardPresentation(choice, 0).chips.none { it.kind == RewardChipKind.SIGNATURE })
+        val kinetic = plain.rewardCardPresentation(lance, 1)
+        assertEquals("Projectile / Kinetic", kinetic.family)
+        assertTrue(kinetic.elements.isEmpty())
+        assertEquals("Kinetic", kinetic.chips.first { it.kind == RewardChipKind.ELEMENT }.label)
+        // In Russian, too.
+        assertEquals("Цепь / Ион", rewardFixtureModel(choiceType = ChoiceType.WEAPON, choices = listOf(choice), language = AppLanguage.Russian)
+            .rewardCardPresentation(choice, 0, AppLanguage.Russian).family)
+    }
+
+    @Test
+    fun totemWeaponRowsCarryTheirFactsAndTheSignatureBadge() {
+        val amplify = ChoiceOption(ChoiceType.TOTEM, "Amplify Flux Wake", "", "", weaponId = WeaponId.FLUX_WAKE, totemAction = TotemAction.AMPLIFY_CURRENT)
+        val gyre = ChoiceOption(ChoiceType.WEAPON, "Gyre Disc", "", "CHANGE", weaponId = WeaponId.GYRE_DISC)
+        val coil = ChoiceOption(ChoiceType.WEAPON, "Arc Coil", "", "CHANGE", weaponId = WeaponId.ARC_COIL)
+        // The Circle runs Flux Wake; Flux Wake and Gyre Disc are its signature weapons.
+        val rows = rewardFixtureModel(choiceType = ChoiceType.TOTEM, choices = listOf(amplify, gyre, coil)).rewardPresentation().cards.map { it.totemRow!! }
+        assertEquals(listOf("Signature", "Signature", null), rows.map { it.badge })
+        assertEquals("Equipped", rows[0].meta)
+        assertEquals("Momentum / Kinetic / Drive, Precision", rows[1].meta)
+        assertEquals("Chain / Ion / Arsenal, Chain", rows[2].meta)
+        val star = rewardFixtureModel(choiceType = ChoiceType.TOTEM, choices = listOf(amplify, gyre), coreShape = CoreShape.STAR)
+            .rewardPresentation().cards.map { it.totemRow!! }
+        assertTrue(star.all { it.badge == null })
     }
 
     @Test

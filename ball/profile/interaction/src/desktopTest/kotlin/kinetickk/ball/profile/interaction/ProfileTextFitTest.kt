@@ -28,9 +28,11 @@ import androidx.compose.ui.test.v2.runSkikoComposeUiTest
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
+import kinetickk.ball.content.api.defaultCoreShapeDefinitions
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.profile.api.MatrixProfileSnapshot
 import kinetickk.ball.profile.api.MatrixProgress
@@ -39,8 +41,13 @@ import kinetickk.ball.profile.interaction.armory.api.ArmoryRenderModel
 import kinetickk.ball.profile.interaction.armory.impl.ArmoryContent
 import kinetickk.ball.profile.interaction.armory.impl.ArmoryLayout
 import kinetickk.ball.profile.interaction.armory.impl.ArmoryLayoutHolder
+import kinetickk.ball.profile.interaction.armory.impl.ArmoryNotice
+import kinetickk.ball.profile.interaction.armory.impl.ArmoryRefusal
+import kinetickk.ball.profile.interaction.armory.impl.ArmoryWeaponStatus
 import kinetickk.ball.profile.interaction.armory.impl.ArmoryViewState
 import kinetickk.ball.profile.interaction.armory.impl.armoryLadderCellsTop
+import kinetickk.ball.profile.interaction.armory.impl.refusal
+import kinetickk.ball.profile.interaction.armory.impl.status
 import kinetickk.ball.profile.interaction.matrix.impl.MatrixContent
 import kinetickk.ball.profile.interaction.matrix.impl.MatrixLayoutHolder
 import kinetickk.ball.profile.interaction.matrix.impl.MatrixState
@@ -57,12 +64,14 @@ import kinetickk.ball.profile.interaction.rebirth.impl.actionState
 import kinetickk.ball.profile.interaction.rebirth.impl.rebirthBuildInfoText
 import kinetickk.ball.profile.interaction.rebirth.impl.rebirthInfoText
 import kinetickk.ball.profile.interaction.rebirth.impl.rebirthUnlockBlurb
+import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.measureKkTooltip
 import kinetickk.foundation.design.rememberKkCanvasMeasurer
+import kinetickk.foundation.design.kkBoxBottom
 import kinetickk.foundation.design.kkBoxHeight
 import kinetickk.foundation.design.kkBoxTop
 import kotlin.math.abs
@@ -149,13 +158,28 @@ class ProfileTextFitTest {
 
     @Test
     fun armoryTextsStayWholeAndInsideTheDetailPanel() {
-        val model = ArmoryRenderModel(1_284L, WeaponId.FLUX_WAKE, CatalogWeapons.take(7).map { it.id }.toImmutableSet(), WeaponId.ION_SWARM, rebirthRank = 0)
+        // The Hexagon is selected (Ion Swarm and Hunter Salvo are its signature weapons) and the four
+        // long-named heirloom candidates harmonize with the Charge, Critical, Heat and Cold keys.
+        val model = ArmoryRenderModel(1_284L, WeaponId.FLUX_WAKE, CatalogWeapons.take(7).map { it.id }.toImmutableSet(), WeaponId.ION_SWARM,
+            rebirthRank = 0, character = CoreShape.HEXAGON, heirloomRelics = CatalogHeirlooms.toImmutableList())
+        // Every other weapon of each refusal shows that refusal beside the action instead of the need
+        // line: the one a locked press names (Matter short, Rebirth rank), or the Profile's generic one
+        // for an owned weapon.
+        val seen = HashMap<ArmoryRefusal, Int>()
+        val notices = CatalogWeapons.mapNotNull { weapon ->
+            val status = model.status(weapon)
+            val refusal = status.refusal() ?: ArmoryRefusal.REFUSED.takeIf { status == ArmoryWeaponStatus.OWNED } ?: return@mapNotNull null
+            val count = seen.getOrElse(refusal) { 0 }.also { seen[refusal] = it + 1 }
+            if (count % 2 == 0) ArmoryNotice(weapon.id, refusal) else null
+        }.associateBy { it.weapon }
+        assertEquals(ArmoryRefusal.entries.toSet(), notices.values.map { it.refusal }.toSet(), "every refusal is drawn")
         for ((width, height) in sizes) {
             val holders = HashMap<Scene<WeaponId>, ArmoryLayoutHolder>()
             val tileNames = HashMap<Triple<AppLanguage, Float, Any?>, Float>()
             render(width, height, scenes(CatalogWeapons.map { it.id }), content = { scene ->
-                ArmoryContent(model, CatalogWeapons, WeaponMastery.entries, ArmoryViewState(scene.item), scene.setting,
-                    remember { ScrollState(0) }, holders.getOrPut(scene) { ArmoryLayoutHolder() }) {}
+                ArmoryContent(model, CatalogWeapons, WeaponMastery.entries, ArmoryViewState(scene.item, notices[scene.item]), scene.setting,
+                    remember { ScrollState(0) }, holders.getOrPut(scene) { ArmoryLayoutHolder() },
+                    coreShapes = defaultCoreShapeDefinitions(), relics = CatalogRebirthRelics) {}
             }) { scene, frame ->
                 val context = "${width}x$height $scene"
                 assertWhole(frame, context)
@@ -200,6 +224,31 @@ class ProfileTextFitTest {
                         assertTrue(cells + layout.frame.d(10f) <= viewport.bottom, "$context ladder cells $cells below ${viewport.bottom}")
                     }
                 }
+                // The weapon sheet follows the ladder: forms, synergy and facts, every text inside the panel.
+                assertTrue(layout.ladder.bottom <= layout.forms.top && layout.forms.bottom <= layout.synergy.top &&
+                    layout.synergy.bottom <= layout.facts.top, "$context sheet order")
+                val sheet = frame.texts.filter { it.role.startsWith("armory.forms") || it.role.startsWith("armory.synergy") ||
+                    it.role.startsWith("armory.facts") }
+                assertEquals(3, frame.of("armory.forms.text").size, "$context mastery forms")
+                assertEquals(5, frame.of("armory.facts.value").size, "$context facts")
+                assertEquals(1, frame.of("armory.synergy.twist").size, "$context twist")
+                sheet.forEach {
+                    assertTrue(it.box.left >= layout.forms.left - 0.5f && it.box.right <= layout.forms.right + 0.5f,
+                        "$context ${it.role} '${it.layout?.layoutInput?.text}' ${it.box} outside ${layout.forms.left}..${layout.forms.right}")
+                    // The CSS line box of every sheet text ends inside the sheet.
+                    assertTrue(it.box.top + assertNotNull(it.layout).kkBoxBottom <= layout.facts.bottom + 0.5f, "$context ${it.role} below the sheet")
+                }
+                // A refusal replaces the need line beside the action, inside the panel: centred on the
+                // action, its line boxes stay within the 8 px gap above it and on screen below it.
+                val notice = frame.of("armory.notice")
+                assertEquals(if (scene.item in notices) 1 else 0, notice.size, "$context notice")
+                notice.forEach {
+                    assertTrue(it.box.left >= layout.need.left - 0.5f && it.box.right <= layout.detailViewport.right + 0.5f &&
+                        it.box.top >= layout.need.top - layout.frame.d(8f) && it.box.bottom <= height + 0.5f &&
+                        abs(it.box.center.y - layout.need.center.y) <= 1.5f,
+                        "$context notice ${it.box} outside ${layout.need}")
+                    assertTrue(frame.of("armory.need").isEmpty(), "$context notice and need line together")
+                }
                 if (width == 1440) assertTileTagsInside(frame, layout, scene.language, context)
                 frame.of("armory.tile.name").forEach { tileNames[Triple(scene.language, scene.setting, it.owner)] = fontSize(it) }
                 // The default text size (125 %) draws UI text at the board's size (tile status: 11 px on the 1440 board).
@@ -212,6 +261,44 @@ class ProfileTextFitTest {
             if (width != 1440) {
                 // "Гравитационные мины" keeps both words whole in the phone tile at 175 %.
                 assertNotNull(tileNames[Triple(AppLanguage.Russian, 1.75f, "Гравитационные мины")], "${width}x$height")
+            }
+        }
+    }
+
+    @Test
+    fun hangarSignatureRowsStayWholeInsideTheDetailPanel() {
+        val model = with(kinetickk.ball.profile.interaction.hangar.impl.HangarShotAccess) {
+            kinetickk.ball.profile.interaction.hangar.impl.hangarProjection(unlocked = setOf(CoreShape.ORB, CoreShape.HEXAGON)).model(1_284L)
+        }
+        for ((width, height) in sizes) {
+            val probes = HashMap<Scene<CoreShape>, kinetickk.ball.profile.interaction.hangar.impl.HangarShotAccess.HangarDetailProbe>()
+            render(width, height, scenes(CoreShape.entries.toList()), content = { scene ->
+                kinetickk.ball.profile.interaction.hangar.impl.HangarShotAccess.Content(model, scene.item, scene.setting,
+                    probes.getOrPut(scene) { kinetickk.ball.profile.interaction.hangar.impl.HangarShotAccess.HangarDetailProbe() })
+            }) { scene, frame ->
+                val context = "${width}x$height $scene"
+                assertWhole(frame, context)
+                val probe = assertNotNull(probes[scene], context)
+                val viewport = assertNotNull(probe.viewport, context)
+                val signature = assertNotNull(probe.signature, context)
+                // Two signature weapons per character, each with its name and state, inside the panel's width
+                // (the spinning forms redraw the panel: the last draw of each weapon counts).
+                val names = frame.of("hangar.detail.signature.value").associateBy { it.owner }.values.toList()
+                val states = frame.of("hangar.detail.signature.state").associateBy { it.owner }.values.toList()
+                assertEquals(2, names.size, "$context names")
+                assertEquals(2, states.size, "$context states")
+                // The detail panel draws in its own content coordinates (0 at its left edge).
+                (names + states + frame.of("hangar.detail.signature.harmony")).forEach {
+                    assertTrue(it.box.left >= -0.5f && it.box.right <= viewport.width + 0.5f,
+                        "$context ${it.role} ${it.box} outside 0..${viewport.width}")
+                    val text = assertNotNull(it.layout)
+                    assertTrue(it.box.top + text.kkBoxTop >= signature.top - 0.5f && it.box.top + text.kkBoxBottom <= signature.bottom + 0.5f,
+                        "$context ${it.role} ${it.box} outside the signature block $signature")
+                }
+                names.zip(states).forEach { (name, state) ->
+                    assertTrue(name.box.right <= state.box.left + 0.5f, "$context name ${name.box} runs into its state ${state.box}")
+                }
+                assertTrue(signature.height > 0f, context)
             }
         }
     }

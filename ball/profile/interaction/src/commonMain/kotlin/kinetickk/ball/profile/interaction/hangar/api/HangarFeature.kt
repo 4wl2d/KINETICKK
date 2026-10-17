@@ -6,7 +6,10 @@ package kinetickk.ball.profile.interaction.hangar.api
 import androidx.compose.runtime.Composable
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.CoreShapeDefinition
+import kinetickk.ball.content.api.RelicDefinition
+import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.immutableListOf
 
 /**
  * One character in the Hangar roster: its content [definition], the Profile's unlock state
@@ -25,16 +28,34 @@ data class HangarShapeRenderModel(
     val shape: CoreShape get() = definition.id
 }
 
+/**
+ * A weapon as the Hangar's signature row shows it: whether the Profile owns it (or starts runs
+ * with it), whether its Rebirth gate is above the profile's rank, and the heirloom candidates
+ * that carry its Relic key ([harmonizing], in heirloom slot order).
+ */
+data class HangarWeaponRenderModel(
+    val definition: WeaponDefinition,
+    val owned: Boolean,
+    val starter: Boolean,
+    val rebirthLocked: Boolean,
+    val harmonizing: ImmutableList<RelicDefinition> = immutableListOf(),
+)
+
 /** Small immutable payload rendered by the Hangar feature. */
 data class HangarRenderModel(
     val shapes: ImmutableList<HangarShapeRenderModel>,
     /** The character the next run starts with. */
     val selected: CoreShape,
     val matter: Long,
+    /** Every weapon in catalog order, for each character's signature row. */
+    val weapons: ImmutableList<HangarWeaponRenderModel> = immutableListOf(),
 ) {
     val unlockedCount: Int get() = shapes.count { it.unlocked }
 
     fun shape(id: CoreShape): HangarShapeRenderModel? = shapes.firstOrNull { it.shape == id }
+
+    /** The weapons whose signature character is [id] (two per character in the shipped catalog). */
+    fun signatureWeapons(id: CoreShape): List<HangarWeaponRenderModel> = weapons.filter { it.definition.signature == id }
 }
 
 sealed interface HangarOutput {

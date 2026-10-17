@@ -404,6 +404,8 @@ internal fun ProfileSlabButton(
     textScale: Float = 1f,
     contentDescription: String = if (cost == null) label else "$label $cost",
     stateDescription: String? = null,
+    /** A press on an enabled but [locked] button (one that explains why it is locked); null keeps it inert. */
+    onLockedClick: (() -> Unit)? = null,
 ) {
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
@@ -426,11 +428,12 @@ internal fun ProfileSlabButton(
                 this.contentDescription = contentDescription
                 if (stateDescription != null) this.stateDescription = stateDescription
             }
-            .clickable(interactionSource = source, indication = null, enabled = interactive, role = Role.Button) {
+            .clickable(interactionSource = source, indication = null, enabled = interactive || (locked && enabled && onLockedClick != null),
+                role = Role.Button) {
                 panelFocus?.requestFocus()
-                onClick()
+                if (interactive) onClick() else onLockedClick?.invoke()
             }
-            .then(if (locked && enabled) Modifier.focusable(interactionSource = source) else Modifier)
+            .then(if (locked && enabled && onLockedClick == null) Modifier.focusable(interactionSource = source) else Modifier)
             .drawBehind {
                 scale(k, k, Offset.Zero) {
                     val bounds = Rect(0f, 0f, this.size.width / k, this.size.height / k)

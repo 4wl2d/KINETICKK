@@ -47,7 +47,7 @@ internal fun russianSessionText(text: SessionText): String = when (text) {
     SessionText.UNDISCOVERED -> "Не открыто"
     SessionText.START_WEAPON_SELECTED -> "Стартовое"
     SessionText.START_WEAPON_UNLOCKED -> "Открыто"
-    SessionText.WEAPON_HELP -> "Можно получить в любом забеге. Каждый персонаж может использовать любое оружие."
+    SessionText.WEAPON_HELP -> "Предложения оружия в забеге включают только открытое оружие. Любой персонаж может использовать любое оружие; его усиливают фирменный персонаж, реликвия с его ключом и его теги."
     SessionText.WEAPON -> "Оружие"
     SessionText.LEVEL_SHORT -> "Ур. {0}"
     SessionText.MASTERY -> "Мастерство"

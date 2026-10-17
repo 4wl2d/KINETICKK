@@ -126,6 +126,48 @@ class CodexFitComposeTest {
         }
     }
 
+    /**
+     * The shipped weapons with the longest sheets, opened from the Catalog: their mastery forms,
+     * signature line, twist, harmony and resonance texts wrap only between words in the side panel
+     * and the phone sheet, in both languages at every text size.
+     */
+    @Test fun weaponSheetsWrapOnlyBetweenWords() {
+        val shipped = kinetickk.ball.content.impl.createContentCatalog().uiCatalog()
+        val model = CodexRenderModel(immutableSetOf(), CodexRunStacks(), shipped.items)
+        val progress = codexTestProgress(emptySet()).let { base ->
+            base.copy(
+                loadout = kinetickk.ball.profile.api.PlayerLoadout(coreShape = CoreShape.HEXAGON,
+                    unlockedWeapons = setOf(WeaponId.FLUX_WAKE, WeaponId.ION_SWARM)),
+                collection = base.collection.copy(heirloomRelicIds = immutableListOf(kinetickk.ball.content.api.RelicId.STORMHEART_CAPACITOR,
+                    kinetickk.ball.content.api.RelicId.THUNDER_CHOIR)),
+            )
+        }
+        val weapons = listOf(WeaponId.ION_SWARM, WeaponId.AEGIS_SHARDS, WeaponId.HOLLOW_RIFT, WeaponId.TETHER_ARC)
+        for (language in AppLanguage.entries) for ((width, height) in sizes) for (scale in scales) for (id in weapons) {
+            runDesktopComposeUiTest(width, height) {
+                setContent {
+                    CompositionLocalProvider(LocalAppLanguage provides language, LocalDensity provides Density(1f, 1f)) {
+                        Box(Modifier.requiredSize(width.dp, height.dp)) { CodexContent(shipped, model, progress, scale) { } }
+                    }
+                }
+                val where = "${width}x$height ${language.code} @$scale $id"
+                onNodeWithTag("codex-category-1").performSemanticsAction(SemanticsActions.OnClick)
+                onNodeWithTag("codex-grid").performScrollToKey("weapon/$id")
+                onNodeWithTag("codex-slot-weapon/$id").performSemanticsAction(SemanticsActions.OnClick)
+                val entry = codexWeaponEntry(shipped.weapon(id), model, progress, shipped, language)
+                val detail = entry.detail as CodexDetail.Weapon
+                val texts = detail.weapon.masteryForms.map { it.localizedContent(language) } + detail.weapon.signatureText.localizedContent(language) +
+                    language.text(if (detail.signatureActive) CodexText.WEAPON_SIGNATURE_ACTIVE else CodexText.WEAPON_SIGNATURE_INACTIVE, detail.signature)
+                texts.forEach { text ->
+                    onNodeWithTag("codex-details-scroll").performScrollToNode(hasText(text))
+                    assertWrapsOnlyBetweenWords(text, where)
+                }
+                onNodeWithTag("codex-weapon-harmony").assertExists()
+                onNodeWithTag("codex-weapon-resonance").assertExists()
+            }
+        }
+    }
+
     @Test fun sectionRowTitlesShrinkTogetherToFitBesideTheirCounts() = runDesktopComposeUiTest(200, 200) {
         val measurers = mutableMapOf<Pair<AppLanguage, Float>, CanvasTextMeasurer>()
         setContent {

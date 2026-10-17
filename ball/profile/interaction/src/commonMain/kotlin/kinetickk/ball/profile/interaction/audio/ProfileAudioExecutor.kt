@@ -12,6 +12,8 @@ import kinetickk.resource.audio.api.ToneWave
 internal enum class ProfileAudioCue {
     UI_CLICK,
     PURCHASE,
+    /** A press the Profile would refuse (a locked unlock): lower and shorter than a click. */
+    REFUSED,
 }
 
 /** Translates Profile-owned semantics before crossing the mechanical Resource boundary. */
@@ -36,4 +38,5 @@ internal class ProfileAudioExecutor(
 private fun ProfileAudioCue.toToneRequest(): ToneRequest = when (this) {
     ProfileAudioCue.UI_CLICK -> ToneRequest(520f, 0.035f, 0.11f, ToneWave.SINE)
     ProfileAudioCue.PURCHASE -> ToneRequest(490f, 0.1f, 0.16f, ToneWave.SINE)
+    ProfileAudioCue.REFUSED -> ToneRequest(260f, 0.06f, 0.12f, ToneWave.SINE)
 }
