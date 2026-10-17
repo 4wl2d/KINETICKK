@@ -84,9 +84,10 @@ class NoPoiPlaythroughTest {
     @Test fun freshProfileAlsoWinsFurtherReferenceNoPoiSeeds() {
         // The fixed balance probe after the reference (i * 7_919 + 13, i = 1..10). Seeds are never picked by
         // their outcome; the floor catches a drop in robustness. After wave A (roster and director, Sonic and
-        // Void, frame pacing, Core Matrix) and its integration fixes, 6 of the 10 win, all without a POI. With the
-        // 173-item catalog (the bot skips ricochet and slam items, passes on the Furnace Covenant and keeps wider of
-        // skipped POIs) 8 win, all without a POI.
+        // Void, frame pacing, Core Matrix) and its integration fixes, 6 of the 10 win, all without a POI. After the
+        // second wave (obstacles the bot steers around, twelve characters, the 173-item catalog; the bot skips
+        // ricochet and slam items, passes on the Furnace Covenant and keeps wider of skipped POIs) 7 win, all
+        // without a POI.
         val minimumWins = 5
         var wins = 0
         for (seed in (1..10).map { it * 7_919 + 13 }) {
@@ -338,8 +339,8 @@ private class NoPoiBot(
         }
         c.itemId?.let { id ->
             val item = s.content.item(id) ?: return 0f
-            // The reference flight never bounces off obstacles or throws enemies into them: ricochet and slam
-            // items would sit idle in this build.
+            // The reference flight steers around obstacles and seldom throws enemies into them: ricochet and slam
+            // items would sit nearly idle in this build.
             if (item.clauses.any { it.trigger == EffectTrigger.RICOCHET || it.trigger == EffectTrigger.SLAM }) return -100f
             val archetype = (if (archetypeTag in item.tags) 50f else 0f) + (if (element != null && element in item.elements) 50f else 0f)
             val survival = item.stats.sumOf { stat ->

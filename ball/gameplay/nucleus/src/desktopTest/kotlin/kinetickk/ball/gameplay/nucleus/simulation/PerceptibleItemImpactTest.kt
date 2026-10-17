@@ -34,6 +34,7 @@ import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.sin
 import kotlin.test.Test
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -48,7 +49,7 @@ import kotlin.test.assertTrue
  * item no encounter can show, with the reason, and is empty.
  *
  * Ricochets and slams are dispatched directly every 0.6 s; the collisions that fire them belong to the
- * obstacle field.
+ * obstacle field, which the scripted paths never reach (they stay inside the run origin's safe area).
  */
 class PerceptibleItemImpactTest {
     @Test
@@ -298,6 +299,7 @@ class PerceptibleItemImpactTest {
         game.previousSingularityY = game.coreY + sin(heading) * 120f
         var dashes = 0
         var overdrive = 0f
+        var nearObstacle = false
         val frames = (SECONDS * FPS).toInt()
         // The frame the Core fell on, or [frames] while it stands.
         var fellAt = frames
@@ -402,12 +404,19 @@ class PerceptibleItemImpactTest {
             }
             val dashSequence = game.characterRuntime.dashSequence
             game.update(1f / FPS)
+            // The scripted paths stay inside the obstacle-free start area: a collision never enters a measurement.
+            game.forEachObstacleNear(game.coreX, game.coreY, OBSTACLE_MARGIN) { _, obstacle ->
+                if (length(obstacle.x - game.coreX, obstacle.y - game.coreY) < obstacle.radius + game.coreRadius + OBSTACLE_MARGIN) {
+                    nearObstacle = true
+                }
+            }
             dashes += game.characterRuntime.dashSequence - dashSequence
             game.takeVisualFxCues()
             game.takeSoundCues()
             game.takeProgressUpdate()
             if (game.overdriveTime > 0f) overdrive += 1f / FPS
         }
+        assertFalse(nearObstacle, "${arena} came within $OBSTACLE_MARGIN of an obstacle")
         // A fallen Core keeps nothing and still meets every scripted hit it did not live to take.
         val integrity = if (arena.defended) max(0f, game.hp + game.shield) else 0f
         var taken = if (arena.defended) game.damageTaken else 0.0
@@ -655,6 +664,8 @@ class PerceptibleItemImpactTest {
         const val PASS_TURN = 520f
         const val PASS_PULL = 240f
         const val PASS_SPEED = 1_500f
+        /** The clearance every scripted path keeps from obstacles (the run origin's safe area holds them all). */
+        const val OBSTACLE_MARGIN = 60f
 
         val PathFor: Map<Motion, Path> = mapOf(
             Motion.ORBIT to Path(RING, 0f, RING, 2.9f),
