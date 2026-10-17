@@ -415,8 +415,9 @@ private fun DrawScope.drawRebirthSection(
         RebirthTierStatus.EARNED -> Kk.Bone
         RebirthTierStatus.LOCKED -> Kk.Mute
     }
-    val statusTag = drawKkTag(measurer, statusLabel, Offset(tierTag.right + frame.d(8f), tagTop), heightDp = 22f * k,
-        fontSize = type.tag * k, background = statusColor, foreground = Kk.Ink)
+    val statusPlace = rebirthStatusTagPlace(measurer, layout, statusLabel, nameLeft, tierTag, type.tag * k, 22f * k)
+    val statusTag = drawKkTag(measurer, statusLabel, statusPlace.topLeft, heightDp = 22f * k,
+        fontSize = statusPlace.fontSize, background = statusColor, foreground = Kk.Ink)
     ProfileTextProbe.record("rebirth.status.tag", null, null, statusTag)
 
     layout.cells.forEachIndexed { index, cell ->
@@ -655,4 +656,33 @@ private object NumeralPaths {
         key[0] = a; key[1] = b; key[2] = c; key[3] = d; key[4] = e
         return hit
     }
+}
+
+/** Where the focused tier's status tag sits and its label size. */
+private class RebirthStatusTagPlace(val topLeft: Offset, val fontSize: Float)
+
+/**
+ * The status tag beside the tier tag when it fits in the name column; otherwise on its own row under the tier tag
+ * (when that row ends above the ladder), and shrunk to the room left as a last resort, never past the column.
+ */
+private fun DrawScope.rebirthStatusTagPlace(
+    measurer: CanvasTextMeasurer,
+    layout: RebirthLayout,
+    label: String,
+    nameLeft: Float,
+    tierTag: Rect,
+    fontSize: Float,
+    heightDp: Float,
+): RebirthStatusTagPlace {
+    val frame = layout.frame
+    val beside = Offset(tierTag.right + frame.d(8f), tierTag.top)
+    fun width(size: Float) = kkTagSize(measurer, label, density, heightDp, size).width
+    if (beside.x + width(fontSize) <= layout.name.right) return RebirthStatusTagPlace(beside, fontSize)
+    val below = Offset(nameLeft, tierTag.bottom + frame.d(6f))
+    val belowFits = below.y + heightDp * density <= layout.ladder.top - frame.d(4f)
+    val origin = if (belowFits) below else beside
+    val room = layout.name.right - origin.x
+    var size = fontSize
+    while (size > fontSize * 0.5f && width(size) > room) size -= fontSize * 0.05f
+    return RebirthStatusTagPlace(origin, size)
 }

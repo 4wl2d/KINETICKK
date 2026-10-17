@@ -377,6 +377,13 @@ class ProfileTextFitTest {
                     frame.of("rebirth.directive").map { assertNotNull(it.layout).layoutInput.text.text }.distinct(), context)
                 val layout = assertNotNull(holders[scene]?.layout, context)
                 assertRebirthBuildTexts(frame, layout, model(scene.item), language, context)
+                // The tier and status tags stay in the name column, on screen and above the ladder.
+                (frame.of("rebirth.tier.tag") + frame.of("rebirth.status.tag")).forEach {
+                    assertTrue(it.box.left >= -0.5f && it.box.right <= minOf(layout.name.right, width.toFloat()) + 0.5f &&
+                        it.box.bottom <= layout.ladder.top + 0.5f, "$context ${it.role} ${it.box} outside the name column ${layout.name}")
+                }
+                val tags = frame.of("rebirth.status.tag")
+                assertEquals(1, tags.size, context)
                 // Every ladder numeral lies inside its cell.
                 val numbers = frame.of("rebirth.ladder.number")
                 assertEquals(layout.cells.size, numbers.size, context)
