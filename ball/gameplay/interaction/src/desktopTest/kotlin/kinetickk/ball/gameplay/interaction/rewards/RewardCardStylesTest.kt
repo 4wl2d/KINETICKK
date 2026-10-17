@@ -14,6 +14,7 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
+import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.RelicAspect
@@ -44,6 +45,7 @@ import kinetickk.foundation.design.bandBackgroundsAt
 import kinetickk.foundation.design.bandLabelColors
 import kinetickk.foundation.design.kkContrast
 import kinetickk.foundation.design.kkMix
+import kinetickk.foundation.collections.toImmutableList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -206,15 +208,40 @@ class RewardCardStylesTest {
         content.items.forEach { item ->
             val art = rewardCardArt(item)
             if (item.rarity >= ItemRarity.EPIC) {
-                assertNotNull(art, "${item.name} (${item.rarity}) has bespoke art")
+                assertNotNull(art, "${item.name} (${item.rarity}) has art")
                 assertEquals(item.rarity == ItemRarity.LEGENDARY, art.animated, "${item.name}: legendary art is animated, epic art static")
             } else {
-                assertEquals(null, art, "${item.name} (${item.rarity}) has no bespoke art")
+                assertEquals(null, art, "${item.name} (${item.rarity}) has no art")
             }
         }
         val names = content.items.map { it.name }.toSet()
         RewardCardArt.entries.forEach { art -> assertTrue(art.itemName in names, "${art.itemName} names a shipped item") }
-        assertEquals(RewardCardArt.entries.size, content.items.count { it.rarity >= ItemRarity.EPIC }, "One art per epic and legendary item")
+        // Every scene belongs to the item it was drawn for; later epics and legendaries borrow one from their family.
+        RewardCardArt.entries.forEach { art -> assertEquals(art, rewardCardArt(content.items.single { it.name == art.itemName })) }
+        val borrowing = content.items.filter { it.rarity >= ItemRarity.EPIC && usesFamilyArt(it) }
+        assertEquals(content.items.count { it.rarity >= ItemRarity.EPIC } - RewardCardArt.entries.size, borrowing.size)
+        assertTrue(borrowing.isNotEmpty(), "The expansion's epics and legendaries borrow family scenes")
+        // A borrowed scene never repeats its owner's look: the hue or the ornament tells them apart.
+        val owners = content.items.filter { it.rarity >= ItemRarity.EPIC && !usesFamilyArt(it) }.associateBy { rewardCardArt(it) }
+        borrowing.forEach { item ->
+            val owner = owners.getValue(rewardCardArt(item))
+            assertTrue(owner.elements != item.elements || owner.tags.firstOrNull() != item.tags.firstOrNull(),
+                "${item.name} looks like ${owner.name}")
+        }
+    }
+
+    @Test
+    fun anEpicOrLegendaryMissingFromTheArtTablesStillGetsASceneOfItsKind() {
+        val template = content.items.first { it.rarity == ItemRarity.EPIC }
+        ItemRarity.entries.forEach { rarity ->
+            BuildTag.entries.map { listOf(it) }.plus(listOf(emptyList())).forEach { tags ->
+                val unknown = template.copy(name = "Unlisted ${rarity.name} ${tags.firstOrNull()}", rarity = rarity,
+                    tags = tags.toImmutableList())
+                val art = rewardCardArt(unknown)
+                if (rarity >= ItemRarity.EPIC) assertEquals(rarity == ItemRarity.LEGENDARY, assertNotNull(art).animated)
+                else assertNull(art)
+            }
+        }
     }
 
     @Test

@@ -85,7 +85,8 @@ class NoPoiPlaythroughTest {
         // The fixed balance probe after the reference (i * 7_919 + 13, i = 1..10). Seeds are never picked by
         // their outcome; the floor catches a drop in robustness. After wave A (roster and director, Sonic and
         // Void, frame pacing, Core Matrix) and its integration fixes, 6 of the 10 win, all without a POI. With the
-        // 173-item catalog (the bot skips ricochet and slam items and keeps wider of skipped POIs) 8 win, 7 without one.
+        // 173-item catalog (the bot skips ricochet and slam items, passes on the Furnace Covenant and keeps wider of
+        // skipped POIs) 8 win, all without a POI.
         val minimumWins = 5
         var wins = 0
         for (seed in (1..10).map { it * 7_919 + 13 }) {
@@ -154,6 +155,8 @@ private class NoPoiBot(
         RelicId.EXECUTIONERS_PRISM to -20f,
         // It takes steady chip damage, which Stormheart turns into self-discharges.
         RelicId.STORMHEART_CAPACITOR to -20f,
+        // It never manages heat, so the Covenant's cooling cut keeps it above 80 heat, bleeding integrity.
+        RelicId.FURNACE_COVENANT to -20f,
     ),
 ) {
     private var cursorAngle = 0f

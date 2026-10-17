@@ -344,9 +344,23 @@ private fun EffectClause.watermarkIcon(): KkIcon = when (val action = actions.fi
     is EffectAction.Shield -> KkIcon.SYSTEM_SHIELD
     is EffectAction.Heal -> KkIcon.SYSTEM_INTEGRITY
     is EffectAction.ExtendCombo -> KkIcon.SYSTEM_CYCLE_CLOCK
-    is EffectAction.ApplyStatus -> if (action.pick.element != null) trigger.watermarkIcon() else KkIcon.WEAPONS_PRISM_RELAY
+    is EffectAction.ApplyStatus -> when {
+        action.pick.element == null -> KkIcon.WEAPONS_PRISM_RELAY
+        // A weapon infusion that splashes around the target reads as a field, not a single hit.
+        trigger == EffectTrigger.WEAPON_HIT && action.radius > 0f -> KkIcon.WEAPONS_ENTROPY_FIELD
+        else -> trigger.watermarkIcon()
+    }
+    is EffectAction.Burst -> when (trigger) {
+        EffectTrigger.DASH -> KkIcon.WEAPONS_NULL_LANCE
+        EffectTrigger.OVERDRIVE -> KkIcon.WEAPONS_SINGULARITY_SPEAR
+        else -> trigger.watermarkIcon()
+    }
+    // Shards are a prism's splinters; a slam's are the wreckage it breaks off.
+    is EffectAction.Shards -> if (trigger == EffectTrigger.SLAM) trigger.watermarkIcon() else KkIcon.WEAPONS_PRISM_RELAY
     is EffectAction.Strike -> when (trigger) {
         EffectTrigger.WEAPON_HIT -> KkIcon.WEAPONS_MORNINGSTAR
+        // A follow-up on a critical hit is a lance into the opened seam.
+        EffectTrigger.CRIT -> KkIcon.WEAPONS_NULL_LANCE
         else -> trigger.watermarkIcon()
     }
     is EffectAction.Buff -> when {
@@ -356,6 +370,8 @@ private fun EffectClause.watermarkIcon(): KkIcon = when (val action = actions.fi
         action.stat == BuffStat.COOLING -> KkIcon.SYSTEM_HEAT
         action.stat == BuffStat.ACTIVATION -> KkIcon.SYSTEM_CYCLE_CLOCK
         action.stat == BuffStat.WEAPON -> KkIcon.WEAPONS_QUASAR_CANNON
+        // Damage while overheated: the redline's warning triangle.
+        action.stat == BuffStat.DAMAGE && trigger == EffectTrigger.OVERHEAT -> KkIcon.FORMS_TRIANGLE
         else -> trigger.watermarkIcon()
     }
     else -> trigger.watermarkIcon()
@@ -383,15 +399,21 @@ private fun EffectTrigger.watermarkIcon(): KkIcon = when (this) {
 }
 
 private fun ItemEffect.watermarkIcon(): KkIcon = when (this) {
-    ItemEffect.IMPACT_DAMAGE, ItemEffect.MASS -> KkIcon.FORMS_RING
-    ItemEffect.WEAPON_POWER, ItemEffect.ATTACK_SPEED -> KkIcon.WEAPONS_QUASAR_CANNON
+    ItemEffect.MASS -> KkIcon.FORMS_RING
+    // Impact damage is the mace's head; mass stays the ring of the Core itself.
+    ItemEffect.IMPACT_DAMAGE -> KkIcon.WEAPONS_MORNINGSTAR
+    ItemEffect.WEAPON_POWER -> KkIcon.WEAPONS_QUASAR_CANNON
+    // Attack speed is a stream of small shots, never the cannon's single heavy one.
+    ItemEffect.ATTACK_SPEED -> KkIcon.WEAPONS_ION_SWARM
     ItemEffect.MAGNETISM, ItemEffect.PICKUP_RADIUS -> KkIcon.SYSTEM_POLARITY
     ItemEffect.COOLING -> KkIcon.SYSTEM_HEAT
     ItemEffect.MAX_INTEGRITY -> KkIcon.SYSTEM_INTEGRITY
     // Regeneration is a repair swarm at work, never a second hexagon beside the shield's.
     ItemEffect.REGEN -> KkIcon.WEAPONS_ION_SWARM
     ItemEffect.DASH_POWER, ItemEffect.DASH_EFFICIENCY -> KkIcon.SYSTEM_DASH
-    ItemEffect.CRIT_CHANCE, ItemEffect.CRIT_DAMAGE -> KkIcon.FORMS_DIAMOND
+    ItemEffect.CRIT_CHANCE -> KkIcon.FORMS_DIAMOND
+    // Critical damage is the cut a critical hit leaves.
+    ItemEffect.CRIT_DAMAGE -> KkIcon.WEAPONS_RIFT_BLADES
     ItemEffect.LUCK -> KkIcon.FORMS_CIRCLE
     ItemEffect.DATA_GAIN -> KkIcon.SYSTEM_DATA
     ItemEffect.MATTER_GAIN -> KkIcon.SYSTEM_MATTER

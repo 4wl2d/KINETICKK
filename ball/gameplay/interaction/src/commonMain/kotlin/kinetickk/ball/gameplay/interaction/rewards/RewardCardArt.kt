@@ -11,7 +11,9 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ItemDefinition
+import kinetickk.ball.content.api.ItemRarity
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.clipKkCardFace
@@ -19,9 +21,10 @@ import kinetickk.foundation.design.kkSeedFraction
 
 /**
  * The bespoke art of the shipped epic and legendary items, keyed by canonical English item name.
- * This enum is the single name-to-art table: [rewardCardArt] looks items up here and
- * [drawRewardCardArt] dispatches on it. Epic art is a static signature illustration; legendary art
- * ([animated]) is a looping scene that replaces the generic legendary rays and sparks.
+ * This enum is the single name-to-scene table: [rewardCardArt] looks items up here (and later epics and
+ * legendaries borrow a family scene from it) and [drawRewardCardArt] dispatches on it. Epic art is a static
+ * signature illustration; legendary art ([animated]) is a looping scene that replaces the generic legendary
+ * rays and sparks.
  */
 internal enum class RewardCardArt(val itemName: String, val animated: Boolean = false) {
     TUNGSTEN_HEART("Tungsten Heart"),
@@ -48,8 +51,59 @@ internal enum class RewardCardArt(val itemName: String, val animated: Boolean = 
 
 private val ArtByName: Map<String, RewardCardArt> = RewardCardArt.entries.associateBy { it.itemName }
 
-/** The bespoke art of [item] (epic and legendary items only), or null. */
-internal fun rewardCardArt(item: ItemDefinition?): RewardCardArt? = item?.let { ArtByName[it.name] }
+/**
+ * Epic and legendary items without a scene of their own borrow the scene of the shipped item closest in
+ * theme, keyed by canonical English item name. The face still differs: the art is drawn in the item's own
+ * hues, under its own ornament and frame, so no two cards share a look.
+ */
+private val FamilyArtByName: Map<String, RewardCardArt> = mapOf(
+    "Pile-Up Protocol" to RewardCardArt.DOMINO_PROTOCOL,
+    "Gravity Breech" to RewardCardArt.DARK_STAR,
+    "Frozen Moment" to RewardCardArt.SHATTERGLASS,
+    "Annihilator Coil" to RewardCardArt.STORM_LATTICE,
+    "Singularity Seed" to RewardCardArt.DARK_STAR,
+    "Stillness Sight" to RewardCardArt.SHATTERGLASS,
+    "Avalanche Protocol" to RewardCardArt.DARK_STAR,
+    "Comet Drive" to RewardCardArt.TUNGSTEN_HEART,
+    "Siege Ram" to RewardCardArt.ARREST_ENGINE,
+    "Nitro Injector" to RewardCardArt.REDLINE_REACTOR,
+    "Hard Stop" to RewardCardArt.REDLINE_GOVERNOR,
+    "Usurer's Contract" to RewardCardArt.LAST_STAND,
+    "Feeding Frenzy" to RewardCardArt.NECROTIC_EXCHANGE,
+    "Cathedral Bell" to RewardCardArt.RESONANCE_FORK,
+    "Nothing Left" to RewardCardArt.RESONANCE_FORK,
+    "Perfect Carom" to RewardCardArt.GLACIAL_HEART,
+    "Pyre Magazine" to RewardCardArt.SOLAR_CHOIR,
+    "Last Word" to RewardCardArt.RESONANCE_FORK,
+    "Cornucopia Core" to RewardCardArt.SOLAR_CHOIR,
+)
+
+/**
+ * The art of [item]: its bespoke scene, else its family's (epic and legendary items only), else null. An
+ * epic or legendary item missing from both tables still gets a scene of its kind (a looping legendary scene
+ * or a static epic signature, chosen by its primary tag), so a card never lacks one.
+ */
+internal fun rewardCardArt(item: ItemDefinition?): RewardCardArt? {
+    if (item == null) return null
+    ArtByName[item.name]?.let { return it }
+    if (item.rarity.rank < ItemRarity.EPIC.rank) return null
+    FamilyArtByName[item.name]?.let { return it }
+    return if (item.rarity == ItemRarity.LEGENDARY) RewardCardArt.RESONANCE_FORK else when (item.tags.firstOrNull()) {
+        BuildTag.RAM -> RewardCardArt.TUNGSTEN_HEART
+        BuildTag.DRIVE -> RewardCardArt.REDLINE_GOVERNOR
+        BuildTag.ANCHOR -> RewardCardArt.ARREST_ENGINE
+        BuildTag.ARSENAL -> RewardCardArt.OVERCHARGED_CAPACITOR
+        BuildTag.PRECISION -> RewardCardArt.GLASS_EDGE
+        BuildTag.BULWARK -> RewardCardArt.LAST_STAND
+        BuildTag.OVERCLOCK -> RewardCardArt.REDLINE_REACTOR
+        BuildTag.CHAIN -> RewardCardArt.DOMINO_PROTOCOL
+        BuildTag.FORTUNE -> RewardCardArt.GAMBLERS_LEDGER
+        null -> RewardCardArt.PRISMATIC_CORE
+    }
+}
+
+/** Whether [item] draws a scene borrowed from its family rather than one of its own. */
+internal fun usesFamilyArt(item: ItemDefinition): Boolean = rewardCardArt(item) != null && item.name !in ArtByName
 
 /**
  * Draws [art] into the card face of [frame] at [time] seconds, clipped to the face slab. The card
