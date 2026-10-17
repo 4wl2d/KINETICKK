@@ -81,9 +81,12 @@ class NoPoiPlaythroughTest {
 
     /** The reference win is not a single knife-edge seed: other fresh-profile seeds win the same way. */
     @Test fun freshProfileAlsoWinsFurtherReferenceNoPoiSeeds() {
-        // The first winning seeds of the balance probe after the reference (i * 7_919 + 13). About half of its
-        // seeds win this way; after the 0.4.0 impact and ability growth change, 6 of i = 1..10 win and 23_770 does not.
-        for (seed in listOf(7_932, 15_851, 47_527)) {
+        // The fixed balance probe after the reference (i * 7_919 + 13, i = 1..10). Seeds are never picked by
+        // their outcome; the floor catches a drop in robustness. After the 0.4.0 impact and ability growth
+        // change, 6 of the 10 win.
+        val minimumWins = 5
+        var wins = 0
+        for (seed in (1..10).map { it * 7_919 + 13 }) {
             val state = MutableGameState(canonicalGameplayContent, seed = seed)
             state.applyPreferences(state.settings.copy(simulationSpeed = 1f))
             state.startRun()
@@ -99,12 +102,14 @@ class NoPoiPlaythroughTest {
                 state.takeSoundCues()
                 state.takeVisualFxCues()
             }
-            report("NOPOI SEED seed=$seed phase=${state.phase} sec=${state.elapsed} hp=${state.hp}/${state.maxHp} weapon=${state.weapon}/${state.weaponLevel} relics=${state.equippedRelics}")
-            assertEquals(GamePhase.VICTORY, state.phase, "seed=$seed ${state.message}")
+            report("NOPOI SEED seed=$seed phase=${state.phase} sec=${state.elapsed} hp=${state.hp}/${state.maxHp} weapon=${state.weapon}/${state.weaponLevel} relics=${state.equippedRelics} reason=${state.message}")
+            if (state.phase != GamePhase.VICTORY) continue
+            wins++
             assertTrue(state.elapsed in 720f..900f, "seed=$seed activeSeconds=${state.elapsed}")
             assertTrue(!poiEngaged, "seed=$seed must skip every POI")
             assertEquals(4, state.equippedRelics.size, "seed=$seed")
         }
+        assertTrue(wins >= minimumWins, "only $wins of 10 probe seeds won; expected at least $minimumWins")
     }
 }
 

@@ -586,7 +586,7 @@ private fun DrawScope.drawCharacterField(engine: GameplayRenderModel, shakeX: Fl
 
 private val TesseractVertices = FloatArray(32)
 
-/** A 4D rotating wireframe projected to Canvas; the fixed center dot stays visible. */
+/** A 4D rotating wireframe projected to Canvas and scaled to [radius]; the fixed center dot stays visible. */
 internal fun DrawScope.drawTesseractCore(
     center: Offset,
     elapsed: Float,
@@ -594,6 +594,7 @@ internal fun DrawScope.drawTesseractCore(
     radius: Float = GameplayRenderModel.CORE_RADIUS,
 ) {
     drawCircle(color.copy(alpha = 0.22f), radius, center, style = kkStroke(1f))
+    val scale = radius / GameplayRenderModel.CORE_RADIUS
     val angle = elapsed * 0.65f
     val c = cos(angle)
     val s = sin(angle)
@@ -609,7 +610,7 @@ internal fun DrawScope.drawTesseractCore(
         val rotatedW = x * s + w * c
         val rotatedY = y * c2 - z * s2
         val rotatedZ = y * s2 + z * c2
-        val perspective = 24f / (2.8f - rotatedW * 0.55f)
+        val perspective = 24f * scale / (2.8f - rotatedW * 0.55f)
         vertices[index * 2] = center.x + (rotatedX + rotatedZ * 0.35f) * perspective
         vertices[index * 2 + 1] = center.y + (rotatedY + rotatedZ * 0.25f) * perspective
     }
@@ -626,6 +627,6 @@ internal fun DrawScope.drawTesseractCore(
             }
         }
     }
-    drawCircle(Kk.Ink, 6f, center)
-    drawCircle(Kk.Bone, 3.5f, center)
+    drawCircle(Kk.Ink, 6f * scale, center)
+    drawCircle(Kk.Bone, 3.5f * scale, center)
 }

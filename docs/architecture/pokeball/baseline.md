@@ -115,9 +115,9 @@ version is `kinetickk-content-3`. Rebirth tiers now carry cumulative mutators,
 a pack-size bonus and an obstacle-density multiplier; the RICOCHET and SLAM
 triggers, enemy disable and silence timers, the hostile-damage helper, the
 variable Core radius (default `16`) and the obstacle queries exist, but no
-gameplay reads or fires them yet. The seeded baseline trace is unchanged; the
-no-POI probe seed `23770` now loses and was replaced by the next winning probe
-seed.
+gameplay reads or fires them yet. The seeded baseline trace is unchanged. The
+no-POI probe now runs its fixed ten seeds and requires at least five wins;
+six win, and seed `23770` no longer does.
 
 The compact exit workflow removes the old causal-depth assertion that failed
 when a busy Profile refused progress before acceptance. An injected

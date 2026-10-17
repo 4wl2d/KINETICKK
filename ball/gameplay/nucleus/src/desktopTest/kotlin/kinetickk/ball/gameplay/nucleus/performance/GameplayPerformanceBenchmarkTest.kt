@@ -78,6 +78,9 @@ class GameplayPerformanceBenchmarkTest {
             { enemies.first().shiftUntil = 3f },
             { enemies.first().escortsPending = 2 },
             { enemies.first().lastDamagedAt = 2f },
+            { coreRadius = 20f },
+            { enemies.first().disabledUntil = 2f },
+            { enemies.first().silencedUntil = 2f },
         )
         changes.forEachIndexed { index, change ->
             val changed = source.copyForReduction().apply(change)
