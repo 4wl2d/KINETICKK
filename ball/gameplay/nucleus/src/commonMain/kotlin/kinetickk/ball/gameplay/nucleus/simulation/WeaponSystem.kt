@@ -421,8 +421,8 @@ internal fun MutableGameState.explodeMine(node: WeaponNode) {
 
 /**
  * Arc Coil: the nearest enemy within [ARC_COIL_FIRST_RANGE] of the Core, then the nearest unhit enemy within
- * [arcCoilHopRange] of the previous target, for [arcCoilTargetCount] targets. Each hop deals 0.65 of the last
- * and adds a Charge; only the first hit fires on-hit effects.
+ * [arcCoilHopRange] of the previous target, for [arcCoilTargetCount] targets. Each hop deals [ARC_COIL_FALLOFF]
+ * of the last and adds a Charge; only the first hit fires on-hit effects.
  */
 internal fun MutableGameState.fireArcCoil(baseDamage: Float, serial: Int = WeaponRuntime.PROC_ALWAYS) {
     val maximumTargets = arcCoilTargetCount()
