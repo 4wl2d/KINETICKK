@@ -384,6 +384,9 @@ class GameSystemsTest {
         assertTrue(engine.lastImpactTime > 0f)
 
         engine.enemies.clear()
+        // Coast to a stop at the centre: a 24 000 u/s Core would otherwise meet the world's obstacles.
+        engine.setVelocityForTesting(0f, 0f)
+        engine.updatePointer(engine.screenWidth * 0.5f, engine.screenHeight * 0.5f)
         repeat(100) { engine.update(GameScenario.FIXED_STEP) }
 
         assertEquals(0f, engine.lastImpactTime)

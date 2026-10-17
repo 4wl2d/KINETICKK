@@ -186,12 +186,69 @@ internal fun MutableGameState.refreshObstacleWindow() {
 
 /**
  * The obstacles of one absolute chunk: a binomial count over the chunk's slots (mean scaled by Rebirth
- * density and Fractured Space), kinds and radii from the tuning, positions kept a half gap inside the
- * chunk and a full gap from each other, none reaching into the safe radius around the run origin.
- * Destroyed unstable asteroids stay gone; every slot still draws the same values, so the rest of the
- * chunk never moves.
+ * density and Fractured Space), kinds and radii from the tuning, centres anywhere in the chunk (so no
+ * obstacle-free corridor runs along chunk borders), a full gap from each other, none reaching into the
+ * safe radius around the run origin. A candidate too close to a candidate of an earlier neighbour
+ * chunk (lower row, or the same row to the left) yields to it, which keeps the gap across borders
+ * while every chunk still depends only on its own hash and its neighbours'. Destroyed unstable
+ * asteroids stay gone; they still count as candidates, so the rest of the field never moves.
  */
 internal fun MutableGameState.generateChunk(chunkX: Int, chunkY: Int): List<Obstacle> {
+    val own = chunkCandidates(chunkX, chunkY)
+    if (own.isEmpty()) return emptyList()
+    val tuning = content.obstacles
+    val chunk = tuning.chunkSize
+    val result = ArrayList<Obstacle>(own.size)
+    for (index in own.indices) {
+        val candidate = own[index]
+        if (yieldsToEarlierNeighbour(chunkX, chunkY, candidate)) continue
+        val id = obstacleId(chunkX, chunkY, candidate.slot)
+        if (id in destroyedObstacleIds) continue
+        result += Obstacle(
+            id = id,
+            kind = candidate.kind,
+            x = (chunkX.toDouble() * chunk + candidate.offsetX - worldOriginX).toFloat(),
+            y = (chunkY.toDouble() * chunk + candidate.offsetY - worldOriginY).toFloat(),
+            radius = candidate.radius,
+            shapeSeed = candidate.shapeSeed,
+        )
+    }
+    return result
+}
+
+/** One placed obstacle of a chunk before cross-border resolution; offsets are within the chunk. */
+private class ObstacleCandidate(
+    val slot: Int,
+    val kind: ObstacleKind,
+    val radius: Float,
+    val shapeSeed: Int,
+    val offsetX: Float,
+    val offsetY: Float,
+)
+
+private fun MutableGameState.yieldsToEarlierNeighbour(chunkX: Int, chunkY: Int, candidate: ObstacleCandidate): Boolean {
+    val tuning = content.obstacles
+    val chunk = tuning.chunkSize
+    for (neighbour in EARLIER_NEIGHBOURS.indices step 2) {
+        val dx = EARLIER_NEIGHBOURS[neighbour]
+        val dy = EARLIER_NEIGHBOURS[neighbour + 1]
+        val others = chunkCandidates(chunkX + dx, chunkY + dy)
+        for (index in others.indices) {
+            val other = others[index]
+            val separationX = dx * chunk + other.offsetX - candidate.offsetX
+            val separationY = dy * chunk + other.offsetY - candidate.offsetY
+            val gap = other.radius + candidate.radius + tuning.minimumGap
+            if (separationX * separationX + separationY * separationY < gap * gap) return true
+        }
+    }
+    return false
+}
+
+/** Neighbour chunks generated "before" a chunk, as (dx, dy) pairs: the row below and the left one. */
+private val EARLIER_NEIGHBOURS: IntArray = intArrayOf(-1, -1, 0, -1, 1, -1, -1, 0)
+
+/** The chunk's own placements: deterministic from its hash, gap kept inside the chunk. */
+private fun MutableGameState.chunkCandidates(chunkX: Int, chunkY: Int): List<ObstacleCandidate> {
     val tuning = content.obstacles
     val fractured = rebirthProfile.has(RebirthMutator.FRACTURED_SPACE)
     val mean = tuning.meanPerChunk * rebirthProfile.obstacleDensityMultiplier *
@@ -207,11 +264,7 @@ internal fun MutableGameState.generateChunk(chunkX: Int, chunkY: Int): List<Obst
     val chunk = tuning.chunkSize
     val baseX = chunkX.toDouble() * chunk
     val baseY = chunkY.toDouble() * chunk
-    val placedX = FloatArray(count)
-    val placedY = FloatArray(count)
-    val placedRadius = FloatArray(count)
-    var placed = 0
-    val result = ArrayList<Obstacle>(count)
+    val placed = ArrayList<ObstacleCandidate>(count)
     for (slot in 0 until count) {
         val bumper = random.nextFloat() < bumperShare
         val unstable = random.nextFloat() < tuning.fracturedUnstableShare
@@ -223,48 +276,27 @@ internal fun MutableGameState.generateChunk(chunkX: Int, chunkY: Int): List<Obst
             else -> ObstacleKind.ASTEROID
         }
         val radius = if (bumper) tuning.bumperRadius else lerp(tuning.asteroidMinimumRadius, tuning.asteroidMaximumRadius, size)
-        val margin = radius + tuning.minimumGap * 0.5f
-        val usable = chunk - margin * 2f
-        var accepted = false
-        var localX = 0f
-        var localY = 0f
         for (attempt in 0 until PLACEMENT_ATTEMPTS) {
-            val candidateX = margin + random.nextFloat() * usable
-            val candidateY = margin + random.nextFloat() * usable
-            val absoluteX = baseX + candidateX
-            val absoluteY = baseY + candidateY
+            val offsetX = random.nextFloat() * chunk
+            val offsetY = random.nextFloat() * chunk
+            val absoluteX = baseX + offsetX
+            val absoluteY = baseY + offsetY
             if (sqrt(absoluteX * absoluteX + absoluteY * absoluteY) - radius < tuning.safeRadius) continue
             var clear = true
-            for (other in 0 until placed) {
-                val gap = placedRadius[other] + radius + tuning.minimumGap
-                if (distanceSquared(candidateX, candidateY, placedX[other], placedY[other]) < gap * gap) {
+            for (index in placed.indices) {
+                val other = placed[index]
+                val gap = other.radius + radius + tuning.minimumGap
+                if (distanceSquared(offsetX, offsetY, other.offsetX, other.offsetY) < gap * gap) {
                     clear = false
                     break
                 }
             }
             if (!clear) continue
-            localX = candidateX
-            localY = candidateY
-            accepted = true
+            placed += ObstacleCandidate(slot, kind, radius, shapeSeed, offsetX, offsetY)
             break
         }
-        if (!accepted) continue
-        placedX[placed] = localX
-        placedY[placed] = localY
-        placedRadius[placed] = radius
-        placed++
-        val id = obstacleId(chunkX, chunkY, slot)
-        if (id in destroyedObstacleIds) continue
-        result += Obstacle(
-            id = id,
-            kind = kind,
-            x = (baseX + localX - worldOriginX).toFloat(),
-            y = (baseY + localY - worldOriginY).toFloat(),
-            radius = radius,
-            shapeSeed = shapeSeed,
-        )
     }
-    return result
+    return placed
 }
 
 private const val PLACEMENT_ATTEMPTS: Int = 8
