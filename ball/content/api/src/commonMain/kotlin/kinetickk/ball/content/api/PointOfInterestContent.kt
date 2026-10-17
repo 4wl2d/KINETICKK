@@ -13,6 +13,7 @@ enum class RewardFocus(val label: String) {
     KINETIC("Kinetic"), THERMAL("Thermal"), CRYO("Cryo"),
     ION("Ion"), GRAVITIC("Gravitic"), ENTROPY("Entropy"),
     OFFENSE("Offense"), DEFENSE("Defense"), ECONOMY("Economy"),
+    SONIC("Sonic"), VOID("Void"),
 }
 
 data class PointOfInterestDefinition(

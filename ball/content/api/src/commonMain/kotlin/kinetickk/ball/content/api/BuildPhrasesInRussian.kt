@@ -15,6 +15,7 @@ internal val BuildPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Ion" to "Ион",
     "Gravitic" to "Гравитация",
     "Entropy" to "Энтропия",
+    "Sonic" to "Звук",
     "Sovereign" to "Владычество",
     "Scorch" to "Ожог",
     "Chill" to "Стужа",
@@ -26,6 +27,10 @@ internal val BuildPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Overload" to "Разряд",
     "Collapse" to "Коллапс",
     "Rupture" to "Разрыв",
+    "Resonance" to "Резонанс",
+    "Hollow" to "Опустошение",
+    "Shatter" to "Раскол",
+    "Unmake" to "Развоплощение",
     "Each stack burns the target every second." to "Каждый слой каждую секунду обжигает цель.",
     "Ignite: the stacks explode around the target." to "Воспламенение: слои взрываются вокруг цели.",
     "Each stack slows the target." to "Каждый слой замедляет цель.",
@@ -39,6 +44,14 @@ internal val BuildPhrasesInRussian: List<Pair<String, String>> = listOf(
         "Коллапс: ближайших врагов затягивает к цели и сминает вместе с ней.",
     "Each stack makes the target take more damage from every source." to "Каждый слой увеличивает весь урон, который получает цель.",
     "Rupture: the target loses a share of its maximum integrity." to "Разрыв: цель теряет часть своей максимальной прочности.",
+    "Each stack makes the target take more knockback and more impact damage." to
+        "Каждый слой усиливает отбрасывание цели и урон от столкновений по ней.",
+    "Shatter: a shockwave throws nearby enemies away and hurts them." to
+        "Раскол: ударная волна отшвыривает ближайших врагов и ранит их.",
+    "Each stack weakens the target's attacks and makes it remember a share of the damage it takes." to
+        "Каждый слой ослабляет атаки цели и заставляет её запоминать часть полученного урона.",
+    "Unmake: a moment later the target suffers the remembered damage again, amplified." to
+        "Развоплощение: мгновение спустя цель снова получает запомненный урон, причём усиленный.",
 
     // Reactions.
     "Thermal Shock" to "Термошок",
@@ -67,6 +80,39 @@ internal val BuildPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Rot Well" to "Гнилой колодец",
     "A rotting well opens on the target, pulling enemies in and decaying them." to
         "На цели открывается гнилой колодец: он затягивает врагов и разлагает их.",
+    "Thunderclap" to "Громовой раскат",
+    "Heat and sound burst outward in a blast that hurls enemies away." to
+        "Жар и звук вырываются наружу взрывом, который отшвыривает врагов.",
+    "Shatterpoint" to "Точка раскола",
+    "The frozen ring of sound splits into five ice shards that chill what they pierce." to
+        "Застывший звон раскалывается на пять ледяных осколков, которые остужают всё, что пронзают.",
+    "Resonant Arc" to "Резонансная дуга",
+    "Lightning rides the resonance through four enemies; more Resonance reaches farther." to
+        "Молния бежит по резонансу через четырёх врагов; чем сильнее Резонанс, тем дальше она достаёт.",
+    "Seismic" to "Сейсмический удар",
+    "A quake crushes nearby enemies and briefly stuns the ordinary ones." to
+        "Толчок сминает ближайших врагов и ненадолго оглушает обычных.",
+    "Fracture" to "Трещина",
+    "The vibration cracks rot open and spreads Decay to everything close." to
+        "Вибрация вскрывает гниль и разносит Распад на всех поблизости.",
+    "Silence" to "Безмолвие",
+    "Sound falls into the void: nearby enemies take damage and cannot attack for two seconds." to
+        "Звук проваливается в пустоту: ближайшие враги получают урон и две секунды не могут атаковать.",
+    "Blackfire" to "Чёрное пламя",
+    "A black flame burns the target for three seconds, ignoring every resistance and immunity." to
+        "Чёрное пламя три секунды жжёт цель, не считаясь ни со стойкостью, ни с неуязвимостью.",
+    "Stasis" to "Стазис",
+    "Time stops around the target: ordinary enemies halt in place and hostile shots vanish." to
+        "Время вокруг цели замирает: обычные враги застывают на месте, а вражеские снаряды исчезают.",
+    "Annihilate" to "Аннигиляция",
+    "The void strikes the target and the toughest enemy nearby at once." to
+        "Пустота разом бьёт по цели и по самому прочному врагу поблизости.",
+    "Null Well" to "Нуль-колодец",
+    "A well of nothing pulls enemies in and strips a share of their maximum integrity." to
+        "Колодец небытия затягивает врагов и отнимает часть их максимальной прочности.",
+    "Oblivion" to "Забвение",
+    "Rot meets the void: a weakened enemy is erased outright, anything sturdier takes a heavy burst." to
+        "Гниль встречает пустоту: ослабленный враг стирается целиком, а более крепкий получает мощный удар.",
 
     // Archetype tags and resonance tiers.
     "Ram" to "Таран",

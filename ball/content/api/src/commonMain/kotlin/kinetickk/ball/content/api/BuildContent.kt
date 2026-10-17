@@ -22,7 +22,10 @@ enum class BuildTag(val displayLabel: String) {
     FORTUNE("Fortune"),
 }
 
-/** Elemental fields. Impacts and weapons deal Kinetic damage, which carries no status. */
+/**
+ * Elemental fields. Impacts and weapons deal Kinetic damage, which carries no status. New elements are
+ * appended: gameplay, presentation and the profile index cells and colors by ordinal.
+ */
 enum class StatusElement(
     val displayLabel: String,
     val statusLabel: String,
@@ -33,6 +36,8 @@ enum class StatusElement(
     ION("Ion", "Charge", "Overload"),
     GRAVITIC("Gravitic", "Mass", "Collapse"),
     ENTROPY("Entropy", "Decay", "Rupture"),
+    SONIC("Sonic", "Resonance", "Shatter"),
+    VOID("Void", "Hollow", "Unmake"),
 }
 
 /** Captured status tuning; every number is mechanical content, never presentation. */
@@ -68,7 +73,10 @@ data class ElementDefinition(
     }
 }
 
-/** The ten unordered element pairs. Each pair has exactly one reaction. */
+/**
+ * The twenty-one unordered element pairs. Each pair has exactly one reaction. Entries are appended in
+ * release order; the profile stores discoveries by a stable wire id and gameplay by ordinal.
+ */
 enum class ReactionId(val first: StatusElement, val second: StatusElement) {
     THERMAL_SHOCK(StatusElement.THERMAL, StatusElement.CRYO),
     PLASMA_BURST(StatusElement.THERMAL, StatusElement.ION),
@@ -79,7 +87,18 @@ enum class ReactionId(val first: StatusElement, val second: StatusElement) {
     EMBRITTLE(StatusElement.CRYO, StatusElement.ENTROPY),
     MAGNETIZE(StatusElement.ION, StatusElement.GRAVITIC),
     FEEDBACK(StatusElement.ION, StatusElement.ENTROPY),
-    ROT_WELL(StatusElement.GRAVITIC, StatusElement.ENTROPY);
+    ROT_WELL(StatusElement.GRAVITIC, StatusElement.ENTROPY),
+    THUNDERCLAP(StatusElement.THERMAL, StatusElement.SONIC),
+    SHATTERPOINT(StatusElement.CRYO, StatusElement.SONIC),
+    RESONANT_ARC(StatusElement.ION, StatusElement.SONIC),
+    SEISMIC(StatusElement.GRAVITIC, StatusElement.SONIC),
+    FRACTURE(StatusElement.ENTROPY, StatusElement.SONIC),
+    SILENCE(StatusElement.SONIC, StatusElement.VOID),
+    BLACKFIRE(StatusElement.THERMAL, StatusElement.VOID),
+    STASIS(StatusElement.CRYO, StatusElement.VOID),
+    ANNIHILATE(StatusElement.ION, StatusElement.VOID),
+    NULL_WELL(StatusElement.GRAVITIC, StatusElement.VOID),
+    OBLIVION(StatusElement.ENTROPY, StatusElement.VOID);
 
     fun involves(element: StatusElement): Boolean = first == element || second == element
 
@@ -93,7 +112,7 @@ data class ReactionDefinition(
     val id: ReactionId,
     val name: String,
     val description: String,
-    /** Damage per consumed stack (or a fraction of maximum integrity for Feedback). */
+    /** Damage per consumed stack (or a fraction of maximum integrity for Feedback and Null Well). */
     val power: Float,
     val radius: Float,
     /** Multi-stage residue applied to every enemy the reaction touches. */
@@ -275,6 +294,8 @@ enum class ElementPick(val element: StatusElement?) {
     ION(StatusElement.ION),
     GRAVITIC(StatusElement.GRAVITIC),
     ENTROPY(StatusElement.ENTROPY),
+    SONIC(StatusElement.SONIC),
+    VOID(StatusElement.VOID),
     DOMINANT(null),
     SECONDARY(null);
 

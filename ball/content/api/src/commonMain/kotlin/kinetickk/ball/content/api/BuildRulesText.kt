@@ -716,6 +716,8 @@ private class RuleWriter(private val language: AppLanguage, private val context:
             StatusElement.ION -> "Иона"
             StatusElement.GRAVITIC -> "Гравитации"
             StatusElement.ENTROPY -> "Энтропии"
+            StatusElement.SONIC -> "Звука"
+            StatusElement.VOID -> "Пустоты"
         }
     }
 
@@ -727,6 +729,8 @@ private class RuleWriter(private val language: AppLanguage, private val context:
             StatusElement.ION -> "Разряда"
             StatusElement.GRAVITIC -> "Коллапса"
             StatusElement.ENTROPY -> "Разрыва"
+            StatusElement.SONIC -> "Раскола"
+            StatusElement.VOID -> "Развоплощения"
         }
     }
 
