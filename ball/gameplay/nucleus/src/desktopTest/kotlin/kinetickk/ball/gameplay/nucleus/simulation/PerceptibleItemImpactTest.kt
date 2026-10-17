@@ -41,8 +41,10 @@ import kotlin.test.assertTrue
  * Every item matters at one stack: in scripted encounters chosen by its triggers, conditions, stats and
  * rules (fixed seeds, 40 s each), owning one copy moves at least one measured output (damage dealt, damage
  * taken, integrity left, time survived, kills, Data, Matter, Overdrive time, Dashes or offer quality) by at
- * least 5 % in the item's favor, against the same encounter without it. A Core that falls keeps no integrity
- * and still takes the scripted hits it would have met, so falling sooner or by less never reads as a gain;
+ * least 5 % in the item's favor, against the same encounter without it. Each encounter is flown five times from
+ * different seeds and orbit phases; an item whose best gain lands within 2.5 points of the floor is judged again
+ * over fifteen, so a single lucky or unlucky draw of a chaotic encounter decides nothing. A Core that falls keeps
+ * no integrity and still takes the scripted hits it would have met, so falling sooner or by less never reads as a gain;
  * [aLiabilityOrAnInertStatAloneScoresNoGain] holds the measure to that. Both runs hold the same supporting items (the
  * sources of the item's elements, a crit source for crit items, a shield for shield items) at full stacks.
  * Encounters run in dp at simulation speed 1, so each is reproducible; [JUSTIFIED_EXCEPTIONS] would list an
@@ -83,16 +85,28 @@ class PerceptibleItemImpactTest {
         val baselines = HashMap<Setup, Outcome>()
         val report = ArrayList<String>()
         val misses = ArrayList<String>()
+        val confirmedBaselines = HashMap<Setup, Outcome>()
         for (item in canonicalGameplayContent.items) {
-            var best: Triple<Setup, String, Float>? = null
-            for (setup in setupsFor(item)) {
+            val measured = setupsFor(item).map { setup ->
                 val baseline = baselines.getOrPut(setup) { run(setup, null) }
-                val owned = run(setup, item)
-                val (output, share) = bestGain(setup.arena, baseline, owned)
-                if (best == null || share > best.third) best = Triple(setup, output, share)
+                val (output, share) = bestGain(setup.arena, baseline, run(setup, item))
+                Triple(setup, output, share)
             }
-            val (setup, output, share) = requireNotNull(best)
-            val line = "${item.id} ${item.name}: ${setup.arena}/${setup.weapon} ${setup.support} $output ${"%+.1f".format(share * 100f)} %"
+            var best = measured.maxBy { it.third }
+            var fights = VARIANTS
+            if (best.third in MIN_GAIN - CONFIRM_BAND..MIN_GAIN + CONFIRM_BAND) {
+                // A best gain near the floor is one draw of a chaotic measure: every encounter that came near is
+                // flown again from more seeds and orbit phases, and the item is judged on the larger sample.
+                fights = CONFIRM_VARIANTS
+                best = measured.filter { it.third >= MIN_GAIN - CONFIRM_BAND }.map { (setup, _, _) ->
+                    val baseline = confirmedBaselines.getOrPut(setup) { run(setup, null, variants = CONFIRM_VARIANTS) }
+                    val (output, share) = bestGain(setup.arena, baseline, run(setup, item, variants = CONFIRM_VARIANTS))
+                    Triple(setup, output, share)
+                }.maxBy { it.third }
+            }
+            val (setup, output, share) = best
+            val line = "${item.id} ${item.name}: ${setup.arena}/${setup.weapon} ${setup.support} $output ${"%+.1f".format(share * 100f)} % " +
+                "($fights fights)"
             report += line
             if (share < MIN_GAIN && item.name !in JUSTIFIED_EXCEPTIONS) misses += line
         }
@@ -242,10 +256,11 @@ class PerceptibleItemImpactTest {
         output.name.lowercase() to ((after - before) / max(abs(before), FLOORS.getValue(output))).toFloat()
     }.maxBy { it.second }
 
-    /** Fights are flown [VARIANTS] times from different seeds and orbit phases and summed, which damps the chaos. */
-    private fun run(setup: Setup, item: ItemDefinition?, content: GameplayContentSnapshot = canonicalGameplayContent): Outcome =
+    /** Fights are flown [variants] times from different seeds and orbit phases and summed, which damps the chaos. */
+    private fun run(setup: Setup, item: ItemDefinition?, content: GameplayContentSnapshot = canonicalGameplayContent,
+        variants: Int = VARIANTS): Outcome =
         if (setup.arena == Arena.OFFERS) offers(setup, item, content)
-        else (0 until VARIANTS).map { variant -> fight(setup, item, variant, content) }.reduce { a, b ->
+        else (0 until variants).map { variant -> fight(setup, item, variant, content) }.reduce { a, b ->
             Outcome(a.damage + b.damage, a.taken + b.taken, a.integrity + b.integrity, a.survival + b.survival, a.kills + b.kills,
                 a.data + b.data, a.matter + b.matter, a.overdrive + b.overdrive, a.dashes + b.dashes, a.offers + b.offers)
         }
@@ -692,6 +707,9 @@ class PerceptibleItemImpactTest {
         /** Weapon power and impact power in the alchemy arena: hits that land, with almost no damage of their own. */
         const val TAP = 0.02f
         const val MIN_GAIN = 0.05f
+        /** A best gain this close to [MIN_GAIN] (either side) is confirmed over [CONFIRM_VARIANTS] fights. */
+        const val CONFIRM_BAND = 0.025f
+        const val CONFIRM_VARIANTS = 15
 
         /** The smallest baseline a gain is measured against, so a handful of kills is never "+200 %". */
         val FLOORS: Map<Output, Double> = mapOf(

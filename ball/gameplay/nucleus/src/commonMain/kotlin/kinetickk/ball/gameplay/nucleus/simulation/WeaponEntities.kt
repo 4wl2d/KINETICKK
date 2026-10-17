@@ -283,8 +283,9 @@ private fun MutableGameState.advanceShard(shard: WeaponEntity, delta: Float) {
     shard.life -= delta
     var target = enemyById(shard.targetId)
     if (target != null && target.alive && isShifting(target)) {
-        // A phased target takes nothing: the shard turns to the nearest enemy it can hit, as a missile does.
-        target = nearestEnemy(shard.x, shard.y, AEGIS_RANGE)
+        // A phased target takes nothing: the shard turns to the nearest enemy it can still hit (one it has not
+        // struck yet), or flies straight on.
+        target = nearestUnstruckEnemy(shard, shard.x, shard.y, AEGIS_RANGE)
         shard.targetId = target?.id ?: -1
     }
     if (target != null && target.alive) steer(shard, target.x, target.y, AEGIS_SPEED, AEGIS_TURN_RATE, delta)
@@ -438,17 +439,33 @@ private fun MutableGameState.shardHits(shard: WeaponEntity) {
         hitFrom(enemy, shard.previousX, shard.previousY) { dealWeaponDamage(enemy, shard.damage, canCrit = true, procKey = shard.procKey) }
         burst(enemy.x, enemy.y, 4, 0)
         if (shard.phase > 0) {
-            // Second form: the shard pierces on to the next nearest enemy, at half strength.
+            // A shard pierces on to the nearest enemy it has not struck (two more, three with the second form),
+            // losing a little strength at each.
             shard.phase--
-            shard.damage *= 0.5f
-            val next = nearestOtherEnemy(enemy.x, enemy.y, enemy.id, AEGIS_RANGE)
-            shard.targetId = next?.id ?: -1
+            shard.damage *= AEGIS_PIERCE_SHARE
+            shard.targetId = nearestUnstruckEnemy(shard, enemy.x, enemy.y, AEGIS_RANGE)?.id ?: -1
             shard.life = max(shard.life, AEGIS_SHARD_LIFE * 0.6f)
         } else {
             shard.life = 0f
             return
         }
     }
+}
+
+/** The nearest enemy within [range] of (x, y) that [entity] has not struck yet on this pass, or null. */
+private fun MutableGameState.nearestUnstruckEnemy(entity: WeaponEntity, x: Float, y: Float, range: Float): Enemy? {
+    var nearest: Enemy? = null
+    var nearestDistanceSquared = range * range
+    for (index in enemies.indices) {
+        val candidate = enemies[index]
+        if (!candidate.alive || isShifting(candidate) || entity.hasHit(candidate.id)) continue
+        val candidateDistanceSquared = distanceSquared(x, y, candidate.x, candidate.y)
+        if (candidateDistanceSquared < nearestDistanceSquared || (nearest == null && candidateDistanceSquared == nearestDistanceSquared)) {
+            nearest = candidate
+            nearestDistanceSquared = candidateDistanceSquared
+        }
+    }
+    return nearest
 }
 
 private fun MutableGameState.missileHits(missile: WeaponEntity) {
@@ -545,11 +562,19 @@ private fun MutableGameState.beamTick(beam: WeaponEntity, delta: Float) {
     val outerX = coreX + cosine * (beam.radius + beam.extent)
     val outerY = coreY + sine * (beam.radius + beam.extent)
     val arcs = hasMasteryForm(3)
+    // The nearest enemy in the beam's path burns at full heat; the ones it shadows take [SOLAR_SHADOW_SHARE].
+    var nearestSquared = Float.MAX_VALUE
+    for (index in enemies.indices) {
+        val enemy = enemies[index]
+        if (!enemy.alive || !segmentCircleIntersects(innerX, innerY, outerX, outerY, enemy.x, enemy.y, enemy.radius + SOLAR_REACH)) continue
+        nearestSquared = min(nearestSquared, distanceSquared(coreX, coreY, enemy.x, enemy.y))
+    }
     for (index in enemies.indices) {
         val enemy = enemies[index]
         if (!enemy.alive) continue
         if (segmentCircleIntersects(innerX, innerY, outerX, outerY, enemy.x, enemy.y, enemy.radius + SOLAR_REACH)) {
-            val landed = dealWeaponDamage(enemy, dps * delta, cadence = WeaponHitCadence.CONTINUOUS, procKey = beam.procKey).amount > 0f
+            val heat = if (distanceSquared(coreX, coreY, enemy.x, enemy.y) <= nearestSquared) 1f else SOLAR_SHADOW_SHARE
+            val landed = dealWeaponDamage(enemy, dps * heat * delta, cadence = WeaponHitCadence.CONTINUOUS, procKey = beam.procKey).amount > 0f
             if (landed) weaponElementTick(enemy, StatusElement.THERMAL, SOLAR_SCORCH_INTERVAL)
             continue
         }
@@ -572,10 +597,14 @@ internal const val GYRE_GLANCE_SPARK_GAP: Float = 0.2f
 internal const val GYRE_SPIN: Float = 18f
 internal const val SENTRY_SHOT_SPEED: Float = 900f
 internal const val SENTRY_PIERCE: Int = 1
+internal const val SENTRY_SPLASH_RADIUS: Float = 40f
+internal const val SENTRY_SPLASH_SHARE: Float = 0.32f
 internal const val LENS_THROW: Float = 420f
 internal const val LENS_MASS_INTERVAL: Float = 2.5f
 internal const val HOLLOW_PULL: Float = 320f
 internal const val AEGIS_TURN_RATE: Float = 9f
+/** The share of its damage a shard keeps for each enemy it pierces on to. */
+internal const val AEGIS_PIERCE_SHARE: Float = 0.9f
 internal const val HUNTER_SEEK_RANGE: Float = 900f
 internal const val HUNTER_ACCELERATION: Float = 900f
 internal const val TETHER_CHARGE_INTERVAL: Float = 0.8f
@@ -631,8 +660,26 @@ internal fun MutableGameState.weaponShotHit(projectile: Projectile, sourceWeapon
             }
         }
         WeaponId.SCATTER_BLOOM -> if (signatureActive()) markForPuncture(enemy)
+        WeaponId.SENTRY_GRID -> sentrySplash(projectile, enemy)
         else -> Unit
     }
+}
+
+/**
+ * A sentry shot bursts where it strikes: every other enemy within [SENTRY_SPLASH_RADIUS] of the struck one takes
+ * [SENTRY_SPLASH_SHARE] of the shot (it may crit, but fires no on-hit effects). A crowd feeds the grid; a lone
+ * target takes only the shot.
+ */
+private fun MutableGameState.sentrySplash(projectile: Projectile, struck: Enemy) {
+    val damage = projectile.damage * SENTRY_SPLASH_SHARE
+    for (index in enemies.indices) {
+        val enemy = enemies[index]
+        if (enemy === struck || !enemy.alive || isShifting(enemy)) continue
+        if (distanceSquared(struck.x, struck.y, enemy.x, enemy.y) > square(SENTRY_SPLASH_RADIUS + enemy.radius)) continue
+        dealWeaponDamage(enemy, damage, canCrit = true, sourceWeapon = WeaponId.SENTRY_GRID, procKey = WeaponRuntime.PROC_NEVER)
+    }
+    // A small ring shows the burst's reach.
+    shockwave(struck.x, struck.y, 0.2f, SENTRY_SPLASH_RADIUS, projectile.colorIndex)
 }
 
 /** Quasar Cannon's third form: a shot that ends (spent or out of life) bursts into a sonic wave. */
@@ -685,6 +732,6 @@ internal fun MutableGameState.prismRelayBounced(projectile: Projectile) {
 
 internal const val ION_SWARM_CHARGE_EVERY: Int = 2
 internal const val QUASAR_KNOCKBACK: Float = 220f
-internal const val PRISM_BURST_RADIUS: Float = 70f
-internal const val PRISM_BURST_SHARE: Float = 0.25f
+internal const val PRISM_BURST_RADIUS: Float = 60f
+internal const val PRISM_BURST_SHARE: Float = 0.12f
 internal const val PRISM_LATTICE_SHARE: Float = 0.4f

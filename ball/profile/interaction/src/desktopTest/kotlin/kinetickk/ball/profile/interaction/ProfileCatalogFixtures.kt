@@ -46,7 +46,7 @@ internal val CatalogWeapons: ImmutableList<WeaponDefinition> =
     listOf(
         catalogWeapon(
             WeaponId.FLUX_WAKE, "Flux Wake",
-            "High-speed movement leaves a damaging trail that lingers behind the Core.",
+            "High-speed movement leaves a damaging trail behind the Core; a big crowd in it shares the heat.",
             WeaponFamily.MOMENTUM, StatusElement.THERMAL, CONTINUOUS, BuildTag.DRIVE, BuildTag.OVERCLOCK,
             RelicKey.MOTION, WeaponScaling.SPEED, CoreShape.ORB, cost = 0,
             forms = listOf("Trail width doubles", "The trail lasts 4 s", "Ignite comes one stack sooner in the trail"),
@@ -166,10 +166,10 @@ internal val CatalogWeapons: ImmutableList<WeaponDefinition> =
         ),
         catalogWeapon(
             WeaponId.SENTRY_GRID, "Sentry Grid",
-            "Deploys up to three sentries that hold their ground and fire at enemies in range until they expire.",
+            "Deploys up to three sentries that hold their ground and fire bursting shots at enemies in range until they expire.",
             WeaponFamily.TRAP, null, DISCRETE, BuildTag.ANCHOR, BuildTag.ARSENAL,
             RelicKey.STILLNESS, WeaponScaling.ATTACK_SPEED, CoreShape.TESSERACT, cost = 380,
-            forms = listOf("One more sentry", "Sentry shots pierce", "Sentries explode when they expire"),
+            forms = listOf("One more sentry", "Sentry shots pierce one more enemy", "Sentries explode when they expire"),
             signature = "Sentries deploy on lattice nodes.",
         ),
         catalogWeapon(
@@ -182,7 +182,7 @@ internal val CatalogWeapons: ImmutableList<WeaponDefinition> =
         ),
         catalogWeapon(
             WeaponId.CONCUSSION_ENGINE, "Concussion Engine",
-            "Every hard impact releases a shockwave whose radius and damage grow with the Core's speed.",
+            "Every hard impact releases a shockwave that grows with the Core's speed and hits harder in a crowd.",
             WeaponFamily.PULSE, StatusElement.SONIC, DISCRETE, BuildTag.RAM, BuildTag.BULWARK,
             RelicKey.MOTION, WeaponScaling.SPEED, CoreShape.SPIRAL, cost = 520,
             forms = listOf("A wider shockwave", "Shockwave knockback +50%", "+4 shield for each enemy the wave hits"),
@@ -206,7 +206,7 @@ internal val CatalogWeapons: ImmutableList<WeaponDefinition> =
         ),
         catalogWeapon(
             WeaponId.SOLAR_SWEEP, "Solar Sweep",
-            "Two opposite solar beams rotate around the Core, burning everything they sweep across.",
+            "Two opposite solar beams rotate around the Core, burning everything they sweep; the nearest enemy burns hottest.",
             WeaponFamily.BEAM, StatusElement.THERMAL, CONTINUOUS, BuildTag.OVERCLOCK, BuildTag.PRECISION,
             RelicKey.HEAT, WeaponScaling.HEAT, CoreShape.RING, cost = 1_500, rebirth = 5,
             forms = listOf("Beam length +120", "Three beams sweep at once", "Beams leave burning arcs"),
@@ -214,10 +214,10 @@ internal val CatalogWeapons: ImmutableList<WeaponDefinition> =
         ),
         catalogWeapon(
             WeaponId.AEGIS_SHARDS, "Aegis Shards",
-            "Raises shield capacity and launches orbiting shards at nearby enemies; a broken shield fires them all at once.",
+            "Raises shield capacity and launches orbiting shards that pierce through nearby enemies; a broken shield fires them all at once.",
             WeaponFamily.ORBITAL, null, DISCRETE, BuildTag.BULWARK, BuildTag.ARSENAL,
             RelicKey.SHIELD, WeaponScaling.SHIELD, CoreShape.PRISM, cost = 1_800, rebirth = 6,
-            forms = listOf("One more shard", "Shards pierce", "A broken shield restores 25% shield, once every 60 s"),
+            forms = listOf("One more shard", "Shards pierce one more enemy", "A broken shield restores 25% shield, once every 60 s"),
             signature = "Each intact facet adds a shard, up to two.",
         ),
         catalogWeapon(

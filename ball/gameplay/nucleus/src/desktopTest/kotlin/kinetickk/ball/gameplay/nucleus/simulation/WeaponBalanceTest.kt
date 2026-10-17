@@ -16,6 +16,7 @@ import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -28,7 +29,12 @@ import kotlin.test.assertTrue
  * so no kill ends a measurement. Checkpoint (a) is a fresh level-1 weapon; checkpoint (b) is an Ascended
  * level-10 weapon with the reference stat block (shield 60, combo 30, mass 1.6, luck 0.6, attack speed
  * 1.25, heat 50, cruise 1 100 u/s, Weapon Calibration 3) and neither signature nor harmony. Overdrive is
- * held off. Each weapon's primary arena sits within 0.65..1.35 of that arena's median, the other at 0.5 or more.
+ * held off. No weapon dominates: each weapon's primary arena sits within 0.65..1.35 of that arena's median
+ * and the other within 0.5..1.35 of its median; in each arena no weapon of the other families out-damages
+ * the best weapon of that arena's own families (a crowd weapon never out-duels every single-target weapon,
+ * and the reverse); the geometric mean of a weapon's two shares stays at most 1.3 (strong in one arena and
+ * near the top of the other is a dominant pick); and Arc Coil, the weapon that dominated before the rework,
+ * leads neither arena.
  */
 class WeaponBalanceTest {
     @Test
@@ -47,7 +53,18 @@ class WeaponBalanceTest {
                 val primary = primaryArena(weapon)
                 println("WEAPON-BALANCE $checkpoint $weapon primary=$primary single=${"%.2f".format(single)} crowd=${"%.2f".format(crowd)}")
                 val (main, other) = if (primary == Arena.SINGLE) single to crowd else crowd to single
-                if (main !in 0.65..1.35 || other < 0.5) outside += "$checkpoint $weapon single=$single crowd=$crowd"
+                if (main !in PRIMARY_BAND || other !in OTHER_BAND) outside += "$checkpoint $weapon single=$single crowd=$crowd"
+                if (sqrt(single * crowd) > OVERALL_CEILING) outside += "$checkpoint $weapon overall=${sqrt(single * crowd)} (single=$single crowd=$crowd)"
+            }
+            for (arena in Arena.entries) {
+                val (family, others) = results.entries.partition { (weapon, _) -> primaryArena(weapon) == arena }
+                val best = family.maxBy { (_, dps) -> dps.getValue(arena) }
+                // The arena's own families lead it: no weapon of the other families out-damages their best there.
+                for ((weapon, dps) in others) {
+                    if (dps.getValue(arena) >= best.value.getValue(arena)) outside += "$checkpoint $weapon out-damages ${best.key} in the $arena arena"
+                }
+                // Arc Coil, the weapon that once dominated, leads neither arena.
+                if (results.maxBy { (_, dps) -> dps.getValue(arena) }.key == WeaponId.ARC_COIL) outside += "$checkpoint ARC_COIL leads the $arena arena"
             }
         }
         assertTrue(outside.isEmpty(), "weapons outside their band: $outside")
@@ -165,6 +182,15 @@ class WeaponBalanceTest {
         const val FPS = 60f
         const val SECONDS = 30f
         const val ATTACK_SPEED_SECONDS = 60f
+
+        /** A weapon's family arena, as a share of that arena's median. */
+        val PRIMARY_BAND = 0.65..1.35
+
+        /** The other arena, as a share of its median: a floor, and a ceiling no higher than the primary one. */
+        val OTHER_BAND = 0.5..1.35
+
+        /** The highest geometric mean of a weapon's two shares. */
+        const val OVERALL_CEILING = 1.3
 
         /** Seconds between a weapon's qualifying activations by design (0.25 s for persistent sources). */
         val BaseCooldowns: Map<WeaponId, Float> = mapOf(

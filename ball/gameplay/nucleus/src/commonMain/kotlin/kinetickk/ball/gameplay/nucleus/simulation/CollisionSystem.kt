@@ -171,27 +171,44 @@ internal fun MutableGameState.resolveWeaponDamage(delta: Float) {
     resolveWeaponEntityHits(delta)
 }
 
-/** Flux Wake: 16/s per enemy touching a live trail point (no speed term: it scales with speed), Scorch every 0.5 s. */
+/**
+ * Flux Wake: [FLUX_DPS] per enemy touching a live trail point (no speed term: it scales with speed), Scorch every
+ * [FLUX_SCORCH_INTERVAL]. The trail's heat spreads thin over a crowd: with more than [FLUX_FULL_HEAT_ENEMIES]
+ * enemies in it at once, they share that many enemies' worth.
+ */
 private fun MutableGameState.resolveFluxWake(delta: Float, power: Float, agonyRank: Int) {
     val width = FLUX_WIDTH * (if (hasMasteryForm(1)) FLUX_WIDTH_FORM else 1f) + agonyRank * 4f
     val earlyIgnite = hasMasteryForm(3)
+    var burning = 0
+    for (enemyIndex in enemies.indices) {
+        val enemy = enemies[enemyIndex]
+        if (enemy.alive && fluxTrailScale(enemy, width) > 0f) burning++
+    }
+    val spread = if (burning > FLUX_FULL_HEAT_ENEMIES) FLUX_FULL_HEAT_ENEMIES.toFloat() / burning else 1f
     for (enemyIndex in enemies.indices) {
         val enemy = enemies[enemyIndex]
         if (!enemy.alive) continue
-        var scale = 0f
-        for (trailIndex in trail.indices) {
-            val point = trail[trailIndex]
-            if (point.age < point.life && point.scale > scale &&
-                distanceSquared(point.x, point.y, enemy.x, enemy.y) < square(enemy.radius + width)
-            ) {
-                scale = point.scale
-            }
-        }
+        val scale = fluxTrailScale(enemy, width)
         if (scale > 0f) {
-            val landed = dealWeaponDamage(enemy, FLUX_DPS * delta * power * scale * (1f + agonyRank * 0.10f), cadence = WeaponHitCadence.CONTINUOUS).amount > 0f
+            val landed = dealWeaponDamage(enemy, FLUX_DPS * delta * power * scale * spread * (1f + agonyRank * 0.10f),
+                cadence = WeaponHitCadence.CONTINUOUS).amount > 0f
             if (landed) weaponElementTick(enemy, StatusElement.THERMAL, FLUX_SCORCH_INTERVAL, extraBeforeBreak = earlyIgnite)
         }
     }
+}
+
+/** The strongest live trail point [enemy] touches (a turning trail's is larger), or 0. */
+private fun MutableGameState.fluxTrailScale(enemy: Enemy, width: Float): Float {
+    var scale = 0f
+    for (trailIndex in trail.indices) {
+        val point = trail[trailIndex]
+        if (point.age < point.life && point.scale > scale &&
+            distanceSquared(point.x, point.y, enemy.x, enemy.y) < square(enemy.radius + width)
+        ) {
+            scale = point.scale
+        }
+    }
+    return scale
 }
 
 /** Morningstar: (38 + 0.1 v) per contact (mass is its scaling, so no mass term); the forms add reach, a star and throws. */
@@ -344,6 +361,8 @@ internal const val FLUX_DPS: Float = 22f
 internal const val FLUX_WIDTH: Float = 20f
 internal const val FLUX_WIDTH_FORM: Float = 2f
 internal const val FLUX_SCORCH_INTERVAL: Float = 2f
+/** Enemies the Flux Wake trail burns at full heat at once; a larger crowd in it shares that heat. */
+internal const val FLUX_FULL_HEAT_ENEMIES: Int = 6
 internal const val MORNINGSTAR_DAMAGE: Float = 13.8f
 internal const val MORNINGSTAR_REACH: Float = 24f
 internal const val MORNINGSTAR_SPEED_SHARE: Float = 0.036f

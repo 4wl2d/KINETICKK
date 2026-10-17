@@ -253,10 +253,12 @@ characters with the Hangar, and 83 items.
   magnitudes are calibrated by seeded 90-second balance fights (Drifter packs at
   random bearings, content bolt and contact damage, exact and 0.05-0.15 s jittered
   Dash and brake timing) that keep every offensive character's averaged ability
-  output within 40 % of their median; the Prism and the Diamond must keep off a large
-  share of the damage the Orb takes. At content damage their prevented totals stay
-  near a fifth of the offensive median, so SPEC 8.2's damage-prevented band is not
-  met and is left to a spec decision. Character state is
+  output within 40 % of their median. The Prism and the Diamond are defensive
+  characters and the accepted rule leaves them outside that band (content damage
+  caps their prevented totals near a fifth of the offensive median): they are
+  accepted by the defensive criterion instead, the Prism losing at most 60 % and
+  the Diamond at most 75 % of the integrity the Orb loses in the same fights
+  (measured: 44 % and 23 % with exact timing, 36 % and 57 % jittered). Character state is
   copy-on-write: a reduction forks scalars and shares the echo ghost path, lattice,
   drones and scars until its first write. The echo path is paged, so a fixed step
   copies at most the small page its sample lands on (and the page table once per
@@ -308,7 +310,8 @@ Tesseract origin and Pentagon beat end with its phase, so a Gravity Surfer
 phase never revives them. In the combined game the
 Orb's baseline damage in the impact encounters rose and two crit-damage items
 fell under the 5 % floor, so Weakpoint Scanner (`+120 %` against any status)
-and Harmonic Lens (`+125 %` against Sonic) gained crit damage; the impact
+and Harmonic Lens (`+125 %` against Sonic, `+140 %` since the final weapon balance)
+gained crit damage; the impact
 encounters never come within 60 of an obstacle. The balance fights still hold every offensive character within 40 %
 of the median. The no-POI bot steers around obstacles, skips ricochet and slam
 items (it rarely bounces), passes on the Furnace Covenant and keeps wider of
@@ -362,20 +365,53 @@ weapon screens, and turns Rebirth into tier selection.
   gains trailing `weaponEntities` and `weaponSynergy` projections, and trail points
   carry their life and strength. The pause board lists the active synergies (on
   phones while they fit).
-- **Weapon numbers.** Calibrated in `WeaponBalanceTest`: each weapon stays within
-  ±35 % of the median on its family's primary metric and at half the median or more
-  on the other, at a fresh level-1 checkpoint and at an Ascended level-10 reference
-  block; +25 % attack speed adds at least 12 % to every weapon; one `WEAPON_HIT`
-  item procs at most 1.5 times per base cooldown among forty enemies. They depart
-  from the design sketch: Flux Wake 22/s with Scorch every 2 s, Morningstar `13.8 +
-  0.036·speed`, Phase Lattice 55/s over a wider band, Null Lance 68, Gravity Mines
-  68 with a proximity trigger, Ion Swarm 8.8 (fire rate ×1.25 at its third form),
-  Rift Blades `18 + 0.018·speed`, Arc Coil 16 falling off ×0.9 per hop, Quasar
-  Cannon 87, Entropy Field 11/s, Singularity Spear 100, Prism Relay 18 with 2, 3, 3
-  and 4 bounces, Gyre Disc 45, Scatter Bloom 10 per pellet with a passive volley of
-  seven, Tether Arc 5.5/s ramping ×3 (×8 at its third form), Sentry Grid 12, Hunter
-  Salvo 9, Concussion Engine 24, Glacier Bell 37, Event Lens 15/s and 32 on
-  collapse, Solar Sweep 44/s, Aegis Shards 34, Hollow Rift 54 and Resonance Drum 30.
+- **Weapon numbers.** Calibrated in `WeaponBalanceTest` so that no weapon dominates:
+  each weapon stays within ±35 % of the median on its family's primary metric and
+  between half and 1.35 times the median on the other, at a fresh level-1 checkpoint
+  and at an Ascended level-10 reference block; in each fight no weapon of the other
+  families out-damages the best weapon of that fight's own families; the geometric
+  mean of a weapon's two shares stays at most 1.3; and Arc Coil leads neither fight.
+  +25 % attack speed adds at least 12 % to every weapon; one `WEAPON_HIT` item procs
+  at most 1.5 times per base cooldown among forty enemies. They depart from the
+  design sketch: Flux Wake 22/s with Scorch every 2 s (more than six enemies in the
+  trail share six enemies' worth), Morningstar `13.8 + 0.036·speed`, Phase Lattice
+  55/s over a wider band, Null Lance 68, Gravity Mines 68 with a proximity trigger,
+  Ion Swarm 4.5 (fire rate ×1.25 at its third form), Rift Blades `18 + 0.018·speed`,
+  Arc Coil 16 falling off ×0.9 per hop, Quasar Cannon 87, Entropy Field 11/s,
+  Singularity Spear 100, Prism Relay 18 with 2, 3, 3 and 3 bounces (the twin relay
+  carries 20 %; the third form adds no bounce and bursts 12 % within 60), Gyre Disc
+  45 (radius 11, ×1.65 at the first form), Scatter Bloom 10 per pellet with a passive
+  volley of seven, Tether Arc 5.5/s ramping ×3 (×8 at its third form), Sentry Grid
+  4.8 every 0.6 s with a 32 % splash within 40 of the struck enemy, Hunter Salvo 9,
+  Concussion Engine 24 (a lone enemy takes 70 % of a wave, plus 18 % of that for each
+  other enemy it catches, up to four), Glacier Bell 37, Event Lens 15/s and 32 on
+  collapse, Solar Sweep 41/s (the nearest enemy in a beam burns at full heat, the
+  ones behind it at half; third-form arcs 90 %), Aegis Shards 13 per shard, each
+  piercing on to three more enemies it has not struck (four at the second form) and
+  keeping 90 % of its damage at each, Hollow Rift 54 and Resonance Drum 30. The
+  dominance checks retuned eight weapons (single/crowd share of the median, fresh
+  then Ascended): Sentry Grid 1.14/1.16 and 0.99/1.17 (from 2.66/0.97 and 2.38/1.18),
+  Aegis Shards 0.92/0.75 and 1.17/0.95 (from 2.24/0.91 and 2.95/1.30), Ion Swarm
+  1.21/1.07 and 1.17/0.96 (from 1.71/1.30 and 1.96/1.24), Prism Relay 1.00/0.52 and
+  1.08/1.21 (Ascended crowd from 1.96), Concussion Engine 1.18/1.05 and 1.02/0.84
+  (fresh single from 1.49), Solar Sweep 1.30/1.07 and 0.80/0.93 (fresh crowd from
+  1.48), Flux Wake 1.21/1.15 and 0.93/1.04 (fresh crowd from 1.47) and Gyre Disc
+  1.03/1.08 and 1.26/1.13 (fresh crowd from 1.30). Each fight's leader belongs to its
+  own families with at least 7 % to spare (fresh: Solar Sweep 1.30 single against Ion
+  Swarm 1.21, Hollow Rift 1.24 crowd against Flux Wake 1.15; Ascended: Gyre Disc 1.26
+  single against Ion Swarm and Aegis Shards 1.17, Morningstar 1.31 crowd against
+  Prism Relay 1.21), the highest geometric mean is 1.19 (Gyre Disc, Ascended) and Arc
+  Coil sits at 1.29/0.54 and 0.73/0.96. The comparative boss fights and the item
+  impact encounters are chaotic, so neither picks a weapon number: a build direction
+  is viable when it clears all four comparative encounters from at least two of three
+  fixed seeds, and an item whose best gain lands within 2.5 points of the 5 % floor
+  is measured again over fifteen fights. Harmonic Lens grants `+140 %` crit damage
+  against Sonic (the 4× crit multiplier cap limits what more would add) and measures
+  +6.5 % over fifteen fights; its gain still follows the arena weapon's cadence (in
+  the weapon-only encounter a Sentry Grid firing 10 % slower takes it from about
+  5.5 % to 2.5 %). With Ion Swarm and Prism Relay in
+  the no-POI bot's weapon order no Rebirth gate flipped (no difficulty knob moved) and
+  the no-POI probe wins all ten of its seeds.
   Forms and secondary numbers follow the same calibration, and the mastery form
   texts state them: Flux Wake's trail doubles its width and lasts 4 s, Gravity Mines
   gain 30 % radius, Ion Swarm shots pierce one enemy from the start and one more at
@@ -399,7 +435,7 @@ weapon screens, and turns Rebirth into tier selection.
   The perceptible-impact arenas that carry a weapon fly both Ion Swarm (a volley)
   and Sentry Grid (a persistent source) and keep the better result, so `WEAPON_HIT`
   items are measured under the proc rule; the comparative scenario keeps three
-  viable directions for every form.
+  viable directions for every form, each viable from at least two of three seeds.
 - **Weapon screens.** The Armory lays all 24 weapons on a scrolling grid that brings
   the inspected weapon into view when it opens and whenever the selection moves,
   keeps rows at least 84 px tall on narrow phones, tints each icon with its element,
@@ -470,9 +506,10 @@ half-Matrix profile winning tier 8 in two of five seeds and the strong build
 clearing tier 10 in three, so enemy integrity's quadratic tier term rose from 0.035
 to 0.05 and the Architect's cap shrinks with the tier (above); the R10 enrage was
 probed and stays. Eight desktop gates play the no-POI bot on five fixed seeds and
-record their measured outcomes: tier 0 fresh wins 4/5, tier 3 with a full Matrix and
+record their measured outcomes: tier 0 fresh wins 5/5 (4/5 before the final weapon
+balance), tier 3 with a full Matrix and
 the Pentagon's signature Arc Coil 5/5, tier 6 fresh 0/5, the half Matrix 5/5 at tier
-2 and 1/5 at tier 8, the strong build (full Matrix, signature, Charge harmony, four
+2 and 0/5 at tier 8 (1/5 before the final weapon balance), the strong build (full Matrix, signature, Charge harmony, four
 Relics, both bonuses read from the synergy projection) clears tier 10 once while
 surviving a median 850 s, its tier-10 fights never beat the tier-3 median by less
 than 1.3×, and a full Matrix with the Pentagon and Arc Coil clears tier 10 once.

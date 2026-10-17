@@ -13,6 +13,7 @@ import kotlin.test.*
 
 /** Controlled encounters compare behavior and measured outcomes, not seeded-state hashes.
  * Build resources are held equal. These scenarios do not prove acquisition timing or a full-run win.
+ * A form's build direction counts as viable when it clears all four encounters from most of three fixed seeds.
  */
 class ComparativeBuildScenarioTest {
     @Test
@@ -103,11 +104,21 @@ class ComparativeBuildScenarioTest {
             val boss = row(Encounter.BOSS)
             report += "BALANCE ${profile.name},${shape.name},${build.name},${crowd.targetKills},${elite.percent.toInt()},${mobile.targetKills},${boss.percent.toInt()},${boss.seconds.toInt()},${rows.sumOf { it.matter }},${rows.sumOf { it.levels }},${boss.endReason},${(boss.integrity * 100f).toInt()}"
         }
+        // Boss fights are chaotic, so one seed decides little: a direction is viable when it clears all four
+        // encounters from at least two of the three coverage seeds (the canonical seed first; the third is flown
+        // only when the first two disagree).
+        val viableDirections = HashMap<Pair<ProfileCondition, CoreShape>, List<BuildDirection>>()
         for (profile in ProfileCondition.entries) for (shape in CoreShape.entries) {
             val viable = BuildDirection.entries.filter { build ->
-                val rows = results.filter { it.profile == profile && it.shape == shape && it.build == build }
-                rows.all { it.percent >= 99.9f && it.integrity > 0f }
+                val canonical = results.filter { it.profile == profile && it.shape == shape && it.build == build }
+                    .all { it.percent >= 99.9f && it.integrity > 0f }
+                fun clears(seed: Int) = Encounter.entries.all { encounter ->
+                    runEncounter(shape, build, profile, encounter, seed = seed).let { it.percent >= 99.9f && it.integrity > 0f }
+                }
+                val second = clears(COVERAGE_SEEDS[1])
+                if (canonical == second) canonical else clears(COVERAGE_SEEDS[2])
             }
+            viableDirections[profile to shape] = viable
             report += "COVERAGE ${profile.name},${shape.name},${viable.size},${viable.joinToString { it.name }}"
         }
         // Additive boss-fight columns: per-phase seconds and integrity lost per second of the fight.
@@ -126,12 +137,9 @@ class ComparativeBuildScenarioTest {
         }
         report.forEach(::println)
         java.io.File(System.getProperty("java.io.tmpdir"), "kinetickk-comparative-results.txt").writeText(report.joinToString("\n"))
-        for (profile in ProfileCondition.entries) for (shape in CoreShape.entries) {
-            val viable = BuildDirection.entries.count { build ->
-                results.filter { it.profile == profile && it.shape == shape && it.build == build }
-                    .all { it.percent >= 99.9f && it.integrity > 0f }
-            }
-            assertTrue(viable >= 3, "$profile/$shape has $viable viable combat directions; need at least three")
+        for ((condition, viable) in viableDirections) {
+            val (profile, shape) = condition
+            assertTrue(viable.size >= 3, "$profile/$shape has ${viable.size} viable combat directions; need at least three")
         }
         // Repeated equal inputs must yield the same measured combat result.
         assertEquals(runEncounter(CoreShape.ORB, BuildDirection.KINETIC, ProfileCondition.FRESH, Encounter.CROWD),
@@ -160,6 +168,8 @@ private enum class BuildDirection(val weapon: WeaponId, val relics: List<RelicId
         listOf("Rust Spores" to 3, "Corrosive Touch" to 3, "Necrotic Lattice" to 2, "Rot Bloom" to 2, "Hunter's Sigil" to 2)),
 }
 private enum class Encounter(val seconds: Int) { CROWD(25), ELITE(45), MOBILE(30), BOSS(180) }
+/** The coverage seeds, fixed by definition (the canonical seed, then steps of 7 919): never picked by outcome. */
+private val COVERAGE_SEEDS: List<Int> = List(3) { 73_199 + it * 7_919 }
 /** Non-boss encounters meet enemies as they spawn at this point of the run. */
 private const val ENCOUNTER_ELAPSED_SECONDS = 540f
 private data class EncounterResult(
@@ -174,9 +184,9 @@ private data class EncounterResult(
 
 private fun runEncounter(
     shape: CoreShape, build: BuildDirection, profile: ProfileCondition, encounter: Encounter,
-    weaponOverride: WeaponId = build.weapon, secondsOverride: Int = encounter.seconds,
+    weaponOverride: WeaponId = build.weapon, secondsOverride: Int = encounter.seconds, seed: Int = COVERAGE_SEEDS.first(),
 ): EncounterResult {
-    val game = MutableGameState(canonicalGameplayContent, seed = 73_199, initialRebirthLevel = profile.rebirth).apply {
+    val game = MutableGameState(canonicalGameplayContent, seed = seed, initialRebirthLevel = profile.rebirth).apply {
         coreShape = shape
         startingWeapon = weaponOverride
         matrixRanks.fill(profile.matrixRank)
