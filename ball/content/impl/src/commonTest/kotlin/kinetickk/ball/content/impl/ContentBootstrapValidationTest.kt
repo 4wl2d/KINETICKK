@@ -42,7 +42,7 @@ class ContentBootstrapValidationTest {
         val data = defaultContentBootstrapData()
         val gameplay = createContentCatalogForTesting(data).gameplayContent()
 
-        assertEquals(90, gameplay.items.size)
+        assertEquals(173, gameplay.items.size)
         assertEquals(ContentBounds.MAX_WEAPONS, gameplay.weapons.size)
         assertEquals(MatrixNodeId.entries.size, gameplay.matrixNodes.size)
         assertEquals(RelicId.entries.size, gameplay.relics.size)
@@ -61,7 +61,7 @@ class ContentBootstrapValidationTest {
     fun itemBoundRejectsNPlusOne() {
         val data = defaultContentBootstrapData()
 
-        assertRejected(data.copy(items = data.items.paddedTo(ContentBounds.MAX_ITEMS + 1)), "items size 97")
+        assertRejected(data.copy(items = data.items.paddedTo(ContentBounds.MAX_ITEMS + 1)), "items size 193")
     }
 
     @Test

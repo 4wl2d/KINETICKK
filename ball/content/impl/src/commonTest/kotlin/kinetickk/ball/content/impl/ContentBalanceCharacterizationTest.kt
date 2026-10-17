@@ -28,10 +28,10 @@ class ContentBalanceCharacterizationTest {
     fun itemCatalogCardinalityOrderingAndContentAreGolden() {
         val items = ui.items
 
-        assertEquals(90, items.size)
+        assertEquals(173, items.size)
         assertEquals((0 until items.size).toList(), items.map(ItemDefinition::id))
         assertEquals(
-            "a1f3dc274648db7d",
+            "673839334761886b",
             goldenFingerprint {
                 add("item-effects")
                 ItemEffect.entries.forEach { effect ->
@@ -57,7 +57,7 @@ class ContentBalanceCharacterizationTest {
         val build = ui.build
 
         assertEquals(
-            "f0e05a0fd34929c0",
+            "6b94bfd3ccc1e1a6",
             goldenFingerprint {
                 build.elements.forEach { element ->
                     add(element.element.name)

@@ -8,6 +8,7 @@ import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.DamageBasis
 import kinetickk.ball.content.api.EffectCondition
 import kinetickk.ball.content.api.EffectTrigger
+import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.StatusElement
@@ -153,6 +154,7 @@ internal fun MutableGameState.holds(
     target: Enemy?,
     source: HitSource?,
     element: StatusElement?,
+    reaction: ReactionId? = null,
 ): Boolean = when (condition) {
     is EffectCondition.SpeedAtLeast -> speed >= condition.speed
     is EffectCondition.SpeedBelow -> speed < condition.speed
@@ -171,7 +173,8 @@ internal fun MutableGameState.holds(
     is EffectCondition.TargetBelow -> target != null && target.hp < target.maxHp * condition.fraction
     EffectCondition.SourceImpact -> source == HitSource.IMPACT || source == HitSource.DASH
     EffectCondition.SourceWeapon -> source == HitSource.WEAPON || source == HitSource.ECHO
-    is EffectCondition.ElementIs -> element == condition.element
+    // A reaction involves both of its elements; a Break names its own.
+    is EffectCondition.ElementIs -> reaction?.involves(condition.element) ?: (element == condition.element)
 }
 
 // ---------------------------------------------------------------------------------------------

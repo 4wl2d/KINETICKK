@@ -102,6 +102,8 @@ enum class BuildRulesText(override val english: String, override val russian: St
     EveryElementBreak("Every {0} {1} break", "Каждый {0}-й пробой {1}"),
     OnElementReaction("On a reaction involving {0}", "При реакции с участием {0}"),
     EveryElementReaction("Every {0} reaction involving {1}", "Каждая {0}-я реакция с участием {1}"),
+    OnElementPairReaction("On a reaction between {0} and {1}", "При реакции {0} и {1}"),
+    EveryElementPairReaction("Every {0} reaction between {1} and {2}", "Каждая {0}-я реакция {1} и {2}"),
     TriggerCooldown(", once every {0}", ", не чаще раза в {0}"),
     TriggerLuck(", sooner with Luck", ", с удачей чаще"),
 
@@ -338,10 +340,16 @@ private class RuleWriter(private val language: AppLanguage, private val context:
     }
 
     fun trigger(clause: EffectClause): RuleLine {
-        val folded = clause.conditions.firstNotNullOfOrNull { (it as? EffectCondition.ElementIs)?.element }
-            ?.takeIf { clause.trigger == EffectTrigger.BREAK || clause.trigger == EffectTrigger.REACTION }
+        val named = clause.conditions.mapNotNull { (it as? EffectCondition.ElementIs)?.element }.distinct()
+        // Two elements on a reaction name the one reaction between them.
+        val pair = named.takeIf { clause.trigger == EffectTrigger.REACTION && it.size >= 2 }?.let { it[0] to it[1] }
+        val folded = named.firstOrNull()
+            ?.takeIf { pair == null && (clause.trigger == EffectTrigger.BREAK || clause.trigger == EffectTrigger.REACTION) }
         val every = clause.everyNth
         val head = when {
+            pair != null ->
+                if (every == 1) text(BuildRulesText.OnElementPairReaction, element(pair.first), element(pair.second))
+                else text(BuildRulesText.EveryElementPairReaction, ordinal(every), element(pair.first), element(pair.second))
             folded != null && clause.trigger == EffectTrigger.BREAK ->
                 if (every == 1) text(BuildRulesText.OnElementBreak, element(folded))
                 else text(BuildRulesText.EveryElementBreak, ordinal(every), element(folded))
@@ -356,10 +364,9 @@ private class RuleWriter(private val language: AppLanguage, private val context:
             EffectTrigger.KILL -> TargetCase.KILL
             else -> TargetCase.HIT
         }
-        var foldedConsumed = false
+        val unconsumed = listOfNotNull(folded, pair?.first, pair?.second).toMutableList()
         val conditions = clause.conditions.mapNotNull { condition ->
-            if (!foldedConsumed && condition is EffectCondition.ElementIs && condition.element == folded) {
-                foldedConsumed = true
+            if (condition is EffectCondition.ElementIs && unconsumed.remove(condition.element)) {
                 null
             } else {
                 condition(condition, case)
@@ -371,7 +378,7 @@ private class RuleWriter(private val language: AppLanguage, private val context:
             if (clause.cooldownSeconds > 0f) append(text(BuildRulesText.TriggerCooldown, seconds(clause.cooldownSeconds.toDouble())))
             if (clause.luckShortened) append(text(BuildRulesText.TriggerLuck))
         }
-        val tint = folded ?: clause.conditions.firstNotNullOfOrNull(::conditionElement)
+        val tint = folded ?: pair?.first ?: clause.conditions.firstNotNullOfOrNull(::conditionElement)
         return RuleLine(RuleLineKind.TRIGGER, sentence, tint)
     }
 

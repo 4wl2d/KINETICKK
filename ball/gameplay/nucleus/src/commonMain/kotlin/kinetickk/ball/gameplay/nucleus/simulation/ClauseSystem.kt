@@ -35,8 +35,9 @@ internal const val ITEM_STATUS_RATE: Float = 6f
 
 /**
  * Dispatches every owned clause listening to [trigger]. [target] is the enemy involved (hit, killed,
- * broken), [hit] the triggering damage, [element] the element of a Break or reaction. Clause
- * consequences are proc damage, so they never re-trigger hit or kill clauses.
+ * broken), [hit] the triggering damage, [element] the element of a Break and [reaction] the reaction
+ * that fired (its two elements both count as involved). Clause consequences are proc damage, so they
+ * never re-trigger hit or kill clauses.
  */
 internal fun MutableGameState.fireClauses(
     trigger: EffectTrigger,
@@ -45,6 +46,7 @@ internal fun MutableGameState.fireClauses(
     source: HitSource? = null,
     element: StatusElement? = null,
     statusOnly: Boolean = false,
+    reaction: ReactionId? = null,
 ) {
     val packed = build.clauses(trigger)
     if (packed.isEmpty() || clauseDepth >= MAX_CLAUSE_DEPTH) return
@@ -59,7 +61,7 @@ internal fun MutableGameState.fireClauses(
             if (clauseReadyAt[global] > elapsed) continue
             var conditionsHold = true
             for (conditionIndex in clause.conditions.indices) {
-                if (!holds(clause.conditions[conditionIndex], target, source, element)) {
+                if (!holds(clause.conditions[conditionIndex], target, source, element, reaction)) {
                     conditionsHold = false
                     break
                 }
@@ -292,10 +294,11 @@ internal fun MutableGameState.onDirectHit(enemy: Enemy, result: DamageResult, so
         HitSource.WEAPON -> {
             fireClauses(EffectTrigger.WEAPON_HIT, enemy, basis, source)
             if (tagTier(BuildTag.ARSENAL) >= 3) {
-                arsenalCounter = (arsenalCounter + 1) % 3
+                // A deterministic counter, not a roll: no draw from the crit and proc stream.
+                arsenalCounter = (arsenalCounter + 1) % ARSENAL_INFUSION_EVERY
                 if (arsenalCounter == 0) {
-                    val dominant = build.dominant
-                    if (dominant != null) applyStatus(enemy, dominant, 1, 0) else dealProcDamage(enemy, basis * 0.2f, rescale = false)
+                    val infusion = arsenalInfusion()
+                    if (infusion != null) applyStatus(enemy, infusion, 1, 0) else dealProcDamage(enemy, basis * 0.2f, rescale = false)
                 }
             }
             if (build.upside(kinetickk.ball.content.api.RelicId.ECHO_CHAMBER) && echoHits.size < MutableGameState.MAX_ECHO_HITS) {
@@ -321,6 +324,22 @@ internal fun MutableGameState.onDirectHit(enemy: Enemy, result: DamageResult, so
     if (enemy.alive) arcCharge(enemy)
     relicOnDirectHit(enemy, result, source)
 }
+
+/** ARSENAL III adds one stack on every this-many weapon hit (one in four). */
+internal const val ARSENAL_INFUSION_EVERY: Int = 4
+
+/** ARSENAL III: every Break deals this share more damage. */
+internal const val ARSENAL_BREAK_BONUS: Float = 0.25f
+
+/**
+ * The element ARSENAL III adds: the weapon's own element when it has one, else the dominant element.
+ * The shipped weapons deal elementless Kinetic damage, so today this is the dominant element.
+ */
+internal fun MutableGameState.arsenalInfusion(): StatusElement? = build.dominant
+
+/** Damage scale of every Break: ARSENAL III raises it, nothing else does. */
+internal fun MutableGameState.breakDamageScale(): Float =
+    if (tagTier(BuildTag.ARSENAL) >= 3) 1f + ARSENAL_BREAK_BONUS else 1f
 
 internal fun MutableGameState.onBuildKill(enemy: Enemy) {
     onStatusCarrierDied(enemy)
@@ -349,7 +368,7 @@ internal fun MutableGameState.onBreak(enemy: Enemy, element: StatusElement) {
 
 internal fun MutableGameState.onReaction(enemy: Enemy, reaction: ReactionId) {
     if (!listens(EffectTrigger.REACTION)) return
-    fireClauses(EffectTrigger.REACTION, enemy, 0f, HitSource.STATUS, reaction.first)
+    fireClauses(EffectTrigger.REACTION, enemy, 0f, HitSource.STATUS, reaction.first, reaction = reaction)
 }
 
 /** First contact with an enemy during a Dash. */

@@ -6,6 +6,8 @@ package kinetickk.ball.content.impl
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.EffectAction
+import kinetickk.ball.content.api.EffectCondition
 import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
@@ -17,6 +19,9 @@ import kinetickk.ball.content.api.MatrixEffect
 import kinetickk.ball.content.api.MatrixNodeDefinition
 import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.RuleLineKind
+import kinetickk.ball.content.api.ruleLines
+import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
@@ -80,10 +85,11 @@ class ContentCatalogTest {
     }
 
     @Test
-    fun itemCatalogContainsNinetyDistinctHandAuthoredItemsWithinTheBound() {
+    fun itemCatalogContainsOneHundredSeventyThreeDistinctHandAuthoredItemsWithinTheBound() {
         val items = gameplay.items
 
-        assertEquals(90, items.size)
+        assertEquals(173, items.size)
+        assertEquals(192, ContentBounds.MAX_ITEMS)
         assertTrue(items.size <= ContentBounds.MAX_ITEMS)
         assertEquals((0 until items.size).toList(), items.map(ItemDefinition::id))
         assertEquals(items.size, items.map(ItemDefinition::name).toSet().size)
@@ -129,10 +135,152 @@ class ContentCatalogTest {
             assertTrue(items.any { element in it.elements && it.unlockLevel <= 2 }, "$element needs an early enabler")
         }
         val legendaries = items.filter { it.rarity == ItemRarity.LEGENDARY }
-        assertEquals(setOf("Solar Choir", "Glacial Heart", "Resonance Fork"), legendaries.map { it.name }.toSet())
-        assertEquals(mapOf("Solar Choir" to 2, "Glacial Heart" to 2, "Resonance Fork" to 4), legendaries.associate { it.name to it.minimumRebirth })
-        assertTrue(items.filter { it.rarity != ItemRarity.LEGENDARY }.all { it.minimumRebirth == 0 })
+        assertEquals(
+            mapOf(
+                "Solar Choir" to 2, "Glacial Heart" to 2, "Resonance Fork" to 4,
+                // The expansion's legendaries: Fortune, Ricochet, Weapon, Sonic, Void and Reaction.
+                "Cornucopia Core" to 3, "Perfect Carom" to 4, "Pyre Magazine" to 5, "Cathedral Bell" to 6,
+                "Nothing Left" to 8, "Last Word" to 10,
+            ),
+            legendaries.associate { it.name to it.minimumRebirth },
+        )
+        assertTrue(legendaries.all { it.minimumRebirth > 0 }, "Every legendary waits for a Rebirth")
+        // Before the expansion only legendaries were gated; the first ninety items keep that rule.
+        assertTrue(items.take(EXPANSION_START).filter { it.rarity != ItemRarity.LEGENDARY }.all { it.minimumRebirth == 0 })
         assertTrue(items.filter { it.risk }.all { it.rarity == ItemRarity.EPIC }, "Volatile offers draw from high-risk epics")
+    }
+
+    @Test
+    fun theExpansionAppendsEightyThreeItemsWithTheirRarityMix() {
+        val expansion = gameplay.items.drop(EXPANSION_START)
+
+        assertEquals(83, expansion.size)
+        assertEquals((EXPANSION_START until 173).toList(), expansion.map(ItemDefinition::id))
+        assertEquals(
+            mapOf(ItemRarity.COMMON to 20, ItemRarity.UNCOMMON to 24, ItemRarity.RARE to 20, ItemRarity.EPIC to 13, ItemRarity.LEGENDARY to 6),
+            ItemRarity.entries.associateWith { rarity -> expansion.count { it.rarity == rarity } },
+        )
+        // Four high-risk epics, one for each of Drive, Anchor, Fortune and Chain.
+        val risky = expansion.filter { it.risk }
+        assertEquals(setOf(BuildTag.DRIVE, BuildTag.ANCHOR, BuildTag.FORTUNE, BuildTag.CHAIN), risky.map { it.tags.single() }.toSet())
+        assertTrue(risky.all { it.rarity == ItemRarity.EPIC && it.minimumRebirth in 7..9 }, "High-risk epics sit in Reborn 7 to 9")
+    }
+
+    @Test
+    fun eachRebirthTierUnlocksFourExpansionItemsAndTheRestStayOpen() {
+        val expansion = gameplay.items.drop(EXPANSION_START)
+        val expected = mapOf(
+            1 to listOf(ItemRarity.RARE, ItemRarity.RARE, ItemRarity.RARE, ItemRarity.RARE),
+            2 to listOf(ItemRarity.RARE, ItemRarity.RARE, ItemRarity.RARE, ItemRarity.RARE),
+            3 to listOf(ItemRarity.RARE, ItemRarity.RARE, ItemRarity.RARE, ItemRarity.LEGENDARY),
+            4 to listOf(ItemRarity.RARE, ItemRarity.RARE, ItemRarity.RARE, ItemRarity.LEGENDARY),
+            5 to listOf(ItemRarity.RARE, ItemRarity.RARE, ItemRarity.EPIC, ItemRarity.LEGENDARY),
+            6 to listOf(ItemRarity.RARE, ItemRarity.RARE, ItemRarity.EPIC, ItemRarity.LEGENDARY),
+            7 to listOf(ItemRarity.RARE, ItemRarity.RARE, ItemRarity.EPIC, ItemRarity.EPIC),
+            8 to listOf(ItemRarity.EPIC, ItemRarity.EPIC, ItemRarity.EPIC, ItemRarity.LEGENDARY),
+            9 to listOf(ItemRarity.EPIC, ItemRarity.EPIC, ItemRarity.EPIC, ItemRarity.EPIC),
+            10 to listOf(ItemRarity.UNCOMMON, ItemRarity.EPIC, ItemRarity.EPIC, ItemRarity.LEGENDARY),
+        )
+        expected.forEach { (tier, rarities) ->
+            val gated = expansion.filter { it.minimumRebirth == tier }
+            assertEquals(rarities, gated.map { it.rarity }.sortedBy { it.rank }, "Reborn $tier unlocks")
+            assertTrue(gated.all { it.unlockLevel == 1 }, "Reborn $tier items are offered from the first level")
+        }
+        val open = expansion.filter { it.minimumRebirth == 0 }
+        assertEquals(20, open.count { it.rarity == ItemRarity.COMMON })
+        assertEquals(23, open.count { it.rarity == ItemRarity.UNCOMMON })
+        assertEquals(43, open.size, "Only Commons and Uncommons are open without a Rebirth")
+        open.filter { it.rarity == ItemRarity.COMMON }.forEach { assertTrue(it.unlockLevel in 1..8, "${it.name} unlock level") }
+        open.filter { it.rarity == ItemRarity.UNCOMMON }.forEach { assertTrue(it.unlockLevel in 4..16, "${it.name} unlock level") }
+    }
+
+    @Test
+    fun theExpansionBucketsCoverRicochetsSlamsWeaponsAndEveryNewReaction() {
+        val expansion = gameplay.items.drop(EXPANSION_START)
+        fun clausesOn(trigger: EffectTrigger) = expansion.filter { item -> item.clauses.any { it.trigger == trigger } }
+
+        val ricochet = clausesOn(EffectTrigger.RICOCHET)
+        val slam = clausesOn(EffectTrigger.SLAM)
+        assertEquals(
+            setOf(EffectAction.Burst::class, EffectAction.Shield::class, EffectAction.Vent::class, EffectAction.Overdrive::class, EffectAction.Buff::class),
+            ricochet.map { it.clauses.first().actions.first()::class }.toSet(),
+        )
+        assertEquals(
+            setOf(EffectAction.ApplyStatus::class, EffectAction.Shards::class, EffectAction.Strike::class, EffectAction.GainData::class, EffectAction.Detonate::class),
+            slam.map { it.clauses.first().actions.first()::class }.toSet(),
+        )
+        assertEquals(10, ricochet.size + slam.size)
+        // Both are frequent events: every clause on them is rate-limited.
+        (ricochet + slam).flatMap { it.clauses }.filter { it.trigger == EffectTrigger.RICOCHET || it.trigger == EffectTrigger.SLAM }
+            .forEach { clause -> assertTrue(clause.cooldownSeconds >= 0.5f || clause.everyNth >= 2, "$clause is rate-limited") }
+
+        val arsenal = expansion.filter { BuildTag.ARSENAL in it.tags }
+        assertEquals(12, arsenal.size)
+        assertEquals(3, arsenal.count { item -> item.stats.any { it.effect == ItemEffect.ATTACK_SPEED } })
+        assertEquals(2, arsenal.count { item -> item.stats.any { it.effect == ItemEffect.WEAPON_POWER } })
+        val infused = arsenal.mapNotNull { item ->
+            item.clauses.firstOrNull { it.trigger == EffectTrigger.WEAPON_HIT }?.actions?.first()?.let { it as? EffectAction.ApplyStatus }?.pick?.element
+        }
+        assertEquals(listOf(StatusElement.THERMAL, StatusElement.CRYO, StatusElement.ION, StatusElement.GRAVITIC, StatusElement.ENTROPY),
+            infused.sortedBy { it.ordinal })
+        assertTrue(arsenal.any { item ->
+            item.clauses.any { it.trigger == EffectTrigger.KILL && EffectCondition.SourceWeapon in it.conditions && it.actions.first() is EffectAction.RefreshWeapon }
+        })
+        val legendaryArsenal = arsenal.single { it.rarity == ItemRarity.LEGENDARY }
+        assertTrue(legendaryArsenal.clauses.first().let { it.trigger == EffectTrigger.WEAPON_HIT && it.everyNth > 1 && it.actions.first() is EffectAction.Detonate })
+
+        // One item for each reaction of Sonic and Void: a reaction clause naming both of its elements.
+        val newReactions = ReactionId.entries.drop(ReactionId.THUNDERCLAP.ordinal)
+        newReactions.forEach { reaction ->
+            val matching = expansion.filter { item ->
+                item.clauses.any { clause ->
+                    clause.trigger == EffectTrigger.REACTION &&
+                        clause.conditions.filterIsInstance<EffectCondition.ElementIs>().map { it.element }.toSet() == setOf(reaction.first, reaction.second)
+                }
+            }
+            assertEquals(1, matching.size, "$reaction has exactly one item")
+            assertEquals(setOf(reaction.first, reaction.second), matching.single().elements.toSet(), "${matching.single().name} declares both elements")
+        }
+        assertEquals(11, clausesOn(EffectTrigger.REACTION).size)
+    }
+
+    @Test
+    fun expansionItemsNeverShareTheirMechanicalHeadline() {
+        val expansion = gameplay.items.drop(EXPANSION_START)
+        val headlines = expansion.groupBy(::headline).filterValues { it.size > 1 }
+        assertTrue(headlines.isEmpty(), "Items sharing trigger or rule, action and element: " +
+            headlines.entries.joinToString { (key, group) -> "$key = " + group.joinToString { it.name } })
+    }
+
+    @Test
+    fun thresholdCutsStayOffTheOriginalElementsAndAreRareForSonicAndVoid() {
+        val expansion = gameplay.items.drop(EXPANSION_START)
+        fun cuts(items: List<ItemDefinition>, element: StatusElement) =
+            items.sumOf { item -> item.rules.filterIsInstance<ItemRule.BreakThreshold>().filter { it.element == element }.sumOf { it.reduction } }
+        StatusElement.entries.filter { it != StatusElement.SONIC && it != StatusElement.VOID }.forEach { element ->
+            assertEquals(0, cuts(expansion, element), "The expansion adds no $element threshold cut")
+        }
+        assertTrue(cuts(gameplay.items, StatusElement.SONIC) <= 2)
+        assertTrue(cuts(gameplay.items, StatusElement.VOID) <= 2)
+    }
+
+    @Test
+    fun everyExpansionItemReadsAsPlainSentencesInBothLanguages() {
+        gameplay.items.drop(EXPANSION_START).forEach { item ->
+            val english = item.ruleLines(AppLanguage.English)
+            val russian = item.ruleLines(AppLanguage.Russian)
+            assertEquals(english.map { it.kind }, russian.map { it.kind }, item.name)
+            assertTrue(english.isNotEmpty(), "${item.name} has rules text")
+            english.forEach { line ->
+                assertTrue(line.text.isNotBlank() && '{' !in line.text && "  " !in line.text, "${item.name}: '${line.text}'")
+                assertTrue(line.text.first().isUpperCase() || line.text.first() in "+−", "${item.name}: '${line.text}' starts a sentence")
+                assertTrue(line.text.length <= 140, "${item.name}: '${line.text}' fits a card")
+            }
+            russian.forEach { line -> assertFalse(line.text.any { it in 'A'..'Z' || it in 'a'..'z' }, "${item.name}: '${line.text}'") }
+            item.clauses.filter { it.trigger == EffectTrigger.REACTION }.forEach {
+                assertTrue(english.any { line -> line.kind == RuleLineKind.TRIGGER && line.text.startsWith("On a reaction between") }, item.name)
+            }
+        }
     }
 
     @Test
@@ -326,6 +474,45 @@ class ContentCatalogTest {
         assertEquals(3, profile.coreShape(CoreShape.PRISM).unlockTarget)
         assertEquals(20, profile.coreShape(CoreShape.SHARD).unlockTarget)
         assertEquals(profile.coreShapes, gameplay.coreShapes)
+    }
+
+    /**
+     * What an item does first: its first clause's trigger, action and element, else its first rule's kind
+     * (with the stat a modifier changes) and element, else its first stat.
+     */
+    private fun headline(item: ItemDefinition): Triple<String, String, String> {
+        item.clauses.firstOrNull()?.let { clause ->
+            val action = clause.actions.first()
+            val element = when (action) {
+                is EffectAction.ApplyStatus -> action.pick.name
+                is EffectAction.Chain -> action.pick?.name
+                is EffectAction.Shards -> action.pick?.name
+                is EffectAction.Well -> action.pick?.name
+                is EffectAction.Detonate -> action.elements.first().name
+                else -> null
+            }
+            return Triple(clause.trigger.name, action::class.simpleName.orEmpty(), element ?: "-")
+        }
+        item.rules.firstOrNull()?.let { rule ->
+            val (kind, element) = when (rule) {
+                is ItemRule.WhileModifier -> "WhileModifier ${rule.stat}" to null
+                is ItemRule.ElementPotency -> "ElementPotency" to rule.element
+                is ItemRule.StatusDuration -> "StatusDuration" to rule.element
+                is ItemRule.BreakThreshold -> "BreakThreshold" to rule.element
+                is ItemRule.BreakPower -> "BreakPower" to rule.element
+                is ItemRule.BreakSpread -> "BreakSpread" to rule.element
+                is ItemRule.CritDamageVersus -> "CritDamageVersus" to (rule.condition as? EffectCondition.TargetHas)?.element
+                is ItemRule.DamageVersus -> "DamageVersus" to (rule.condition as? EffectCondition.TargetHas)?.element
+                else -> (rule::class.simpleName.orEmpty()) to null
+            }
+            return Triple("rule $kind", "", element?.name ?: "-")
+        }
+        return Triple("stat ${item.stats.first().effect}", "", "-")
+    }
+
+    private companion object {
+        /** The first id of the 0.4.0 expansion (ids 90 to 172). */
+        const val EXPANSION_START = 90
     }
 
     /** Everything that changes how an item plays, ignoring its name, flavor and id. */
