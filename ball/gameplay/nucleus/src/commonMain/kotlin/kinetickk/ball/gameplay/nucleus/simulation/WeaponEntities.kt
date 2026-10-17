@@ -283,8 +283,9 @@ private fun MutableGameState.advanceShard(shard: WeaponEntity, delta: Float) {
     shard.life -= delta
     var target = enemyById(shard.targetId)
     if (target != null && target.alive && isShifting(target)) {
-        // A phased target takes nothing: the shard turns to the nearest enemy it can hit, as a missile does.
-        target = nearestEnemy(shard.x, shard.y, AEGIS_RANGE)
+        // A phased target takes nothing: the shard turns to the nearest enemy it can still hit (one it has not
+        // struck yet), or flies straight on.
+        target = nearestUnstruckEnemy(shard, shard.x, shard.y, AEGIS_RANGE)
         shard.targetId = target?.id ?: -1
     }
     if (target != null && target.alive) steer(shard, target.x, target.y, AEGIS_SPEED, AEGIS_TURN_RATE, delta)

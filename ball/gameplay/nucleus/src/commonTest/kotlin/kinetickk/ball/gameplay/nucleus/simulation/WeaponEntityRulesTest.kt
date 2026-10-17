@@ -124,6 +124,37 @@ class WeaponEntityRulesTest {
     }
 
     @Test
+    fun aPiercingShardWhoseNextTargetPhasesNeverTurnsBackToAnEnemyItStruck() {
+        val state = buildTestState(weapon = WeaponId.AEGIS_SHARDS, shape = CoreShape.HEXAGON)
+        state.critChance = 0f
+        val struck = state.spawn(EnemyType.DRIFTER, 80f, 0f)
+        val phantom = state.spawn(EnemyType.PHANTOM, 150f, 0f)
+        // Farther from the struck enemy than the Phantom, so the shard first pierces on to the Phantom.
+        val unstruck = state.spawn(EnemyType.DRIFTER, 80f, 170f)
+        val shard = WeaponEntity(WeaponEntityKind.SHARD, state.coreX, state.coreY, AEGIS_SHARD_RADIUS, AEGIS_SHARD_LIFE, AEGIS_SHARD_LIFE,
+            vx = AEGIS_SPEED, damage = 10f, phase = AEGIS_PIERCE, targetId = struck.id)
+        state.weaponRuntime.entities.clear()
+        state.weaponRuntime.entities += shard
+        var steps = 0
+        while (struck.hp == DUMMY_HP) {
+            assertTrue(steps++ < 60, "the shard never reached its first target")
+            state.advanceWeaponEntities(STEP)
+            state.resolveWeaponEntityHits(STEP)
+        }
+        assertEquals(phantom.id, shard.targetId, "the shard pierces on to the nearest enemy it has not struck")
+
+        // The Phantom phases out while the shard still sits beside the enemy it struck.
+        phantom.shiftUntil = state.elapsed + PHANTOM_PHASE_SECONDS
+        state.advanceWeaponEntities(STEP)
+        assertEquals(unstruck.id, shard.targetId, "the shard turns to the enemy it has not struck, never back")
+        while (shard.life > 0f) {
+            state.advanceWeaponEntities(STEP)
+            state.resolveWeaponEntityHits(STEP)
+            assertTrue(shard.targetId != struck.id, "the shard turned back to the enemy it struck")
+        }
+    }
+
+    @Test
     fun theConcussionShockwaveTakesTheRebirthPowerOnce() {
         fun wave(tier: Int): Float {
             val state = buildTestState(rebirth = tier, weapon = WeaponId.CONCUSSION_ENGINE, shape = CoreShape.HEXAGON)
