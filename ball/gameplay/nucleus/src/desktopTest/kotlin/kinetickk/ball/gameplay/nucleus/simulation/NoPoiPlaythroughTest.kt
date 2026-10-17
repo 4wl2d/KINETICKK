@@ -88,7 +88,8 @@ class NoPoiPlaythroughTest {
         // Void, frame pacing, Core Matrix) and its integration fixes, 6 of the 10 win, all without a POI. After the
         // second wave (obstacles the bot steers around, twelve characters, the 173-item catalog; the bot skips
         // ricochet and slam items, passes on the Furnace Covenant and keeps wider of skipped POIs) 7 win, all
-        // without a POI. After the final weapon balance (Ion Swarm 6 per shot, smaller Prism Relay bursts) 9 win.
+        // without a POI. After the final weapon balance (no weapon out-damages another family's best: Ion Swarm
+        // 4.5 per shot, a 20 % Prism Relay twin, a Flux Wake trail that shares its heat in a crowd) all 10 win.
         val minimumWins = 5
         var wins = 0
         for (seed in (1..10).map { it * 7_919 + 13 }) {
