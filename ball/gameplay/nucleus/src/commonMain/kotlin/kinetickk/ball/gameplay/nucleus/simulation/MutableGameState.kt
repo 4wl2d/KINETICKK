@@ -233,7 +233,10 @@ internal class MutableGameState(
         get() = PendingVisualFxCueBuffer(this)
     internal var pendingBankedMatter: Long = reductionSource?.pendingBankedMatter ?: 0L
     internal var pendingClearedRebirthLevel: Int? = reductionSource?.pendingClearedRebirthLevel
-    internal var characterRuntime: CharacterRuntime = reductionSource?.characterRuntime ?: CharacterRuntime()
+    /** Mutable character state; a full reduction forks it (scalars copied, buffers copy-on-write). */
+    internal var characterRuntime: CharacterRuntime = reductionSource?.characterRuntime?.let { source ->
+        if (shareStableReductionStorage) source else source.fork()
+    } ?: CharacterRuntime()
     internal var pendingEliteKills: Int = reductionSource?.pendingEliteKills ?: 0
     internal var pendingDashHits: Int = reductionSource?.pendingDashHits ?: 0
     internal var pendingCompletedOrbits: Int = reductionSource?.pendingCompletedOrbits ?: 0

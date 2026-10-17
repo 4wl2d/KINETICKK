@@ -55,7 +55,7 @@ internal fun MutableGameState.effectiveMass(): Float {
         content.relic(RelicId.NEUTRON_HEART).value(0, relicRank(RelicId.NEUTRON_HEART)) / 100f *
             build.relicUpside(RelicId.NEUTRON_HEART)
     } else 0f
-    return mass * (1f + neutron)
+    return mass * (1f + neutron) * characterMassMultiplier()
 }
 
 /** Impact power at [atSpeed], including run growth; the shared basis of impacts and IMPACT procs. */
@@ -270,12 +270,12 @@ internal fun MutableGameState.vulnerability(enemy: Enemy, source: HitSource): Fl
 
 private class CritOutcome(val critical: Boolean, val multiplier: Float)
 
-private fun MutableGameState.resolveCrit(enemy: Enemy, source: HitSource, canCrit: Boolean): CritOutcome {
-    if (!canCrit) return CritOutcome(false, 1f)
+private fun MutableGameState.resolveCrit(enemy: Enemy, source: HitSource, canCrit: Boolean, forceCrit: Boolean): CritOutcome {
+    if (!canCrit && !forceCrit) return CritOutcome(false, 1f)
     val executioner = build.upside(RelicId.EXECUTIONERS_PRISM)
     val chance = effectiveCritChance()
     var multiplier = critMultiplier
-    var forced = false
+    var forced = forceCrit
     val always = build.alwaysCrit
     for (index in always.indices) {
         if (holds(always[index], enemy, source, null)) {
@@ -319,6 +319,8 @@ internal fun MutableGameState.dealHit(
     canCrit: Boolean = true,
     qualified: Boolean = true,
     sourceWeapon: WeaponId? = null,
+    /** The Diamond's full Edge: this hit is critical whatever the roll. */
+    forceCrit: Boolean = false,
 ): DamageResult {
     if (base <= 0f || !enemy.alive) return DamageResult(0f, false)
     // A shifting Architect takes nothing, so no roll, Brittle or Freeze is spent on it.
@@ -329,9 +331,10 @@ internal fun MutableGameState.dealHit(
         if (echo.amount > 0f && qualified) onDirectHit(enemy, echo, source, sourceWeapon)
         return echo
     }
-    val crit = resolveCrit(enemy, source, canCrit)
+    val crit = resolveCrit(enemy, source, canCrit, forceCrit)
     var amount = base * (1f + itemAmplification(enemy, source)) * relicSurge() * crit.multiplier *
-        (1f + vulnerability(enemy, source)) * damageLiability(source, crit.critical) * matrix.damageMultiplier
+        (1f + vulnerability(enemy, source)) * damageLiability(source, crit.critical) * matrix.damageMultiplier *
+        characterDamageMultiplier()
     if (enemy.status[StatusCell.BRITTLE] > 0f) enemy.status[StatusCell.BRITTLE] = 0f
     val shatter = build.upside(RelicId.ABSOLUTE_ZERO) && isFrozen(enemy)
     if (shatter) {
@@ -420,11 +423,16 @@ internal fun MutableGameState.dealStatusDamage(
         showNumber = showNumber)
 }
 
-/** Character abilities bypass the build pipeline but still meet the receiver's kinetic frame. */
+/**
+ * Character abilities bypass the build pipeline but still meet the receiver's kinetic frame. The Edge
+ * applies; the dealt amount counts as the run's ability output.
+ */
 internal fun MutableGameState.dealCharacterDamage(enemy: Enemy, amount: Float): DamageResult {
     if (amount <= 0f || !enemy.alive) return DamageResult(0f, false)
-    val scaled = amount * matrix.damageMultiplier
-    return damageEnemy(enemy, scaled * enemy.weaponTaken, unmitigated = scaled)
+    val scaled = amount * matrix.damageMultiplier * characterDamageMultiplier()
+    val result = damageEnemy(enemy, scaled * enemy.weaponTaken, unmitigated = scaled)
+    characterRuntime.abilityDamage += result.amount.toDouble()
+    return result
 }
 
 /** Final share of a victim's weighted integrity a kill proc may take from any one other enemy. */

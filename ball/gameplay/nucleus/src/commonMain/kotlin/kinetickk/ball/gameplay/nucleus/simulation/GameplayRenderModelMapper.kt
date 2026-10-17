@@ -3,6 +3,9 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.CoreShape
+import kinetickk.foundation.collections.immutableListOf
+import kinetickk.foundation.collections.immutableListOfSize
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.collections.mapToImmutableList
@@ -384,28 +387,138 @@ private fun MutableGameState.runStatisticsProjection(reusable: RunStatistics?): 
     )
 }
 
-/** The immutable runtime value is replaced on change, so identity or equal content keeps the projection. */
+/** The same runtime (a scalar-input sibling) or equal content keeps the previous projection. */
 private fun MutableGameState.characterAbilityProjection(
     reusable: CharacterAbilityProjection?,
     identityRuntime: CharacterRuntime?,
 ): CharacterAbilityProjection {
     val runtime = characterRuntime
-    if (reusable != null && (runtime === identityRuntime || reusable.matches(runtime))) return reusable
-    return CharacterAbilityProjection(runtime.charge, runtime.barrier, runtime.ringRadius, runtime.parryWindow,
-        runtime.lattice.map { CharacterLatticePoint(it.x, it.y) }.toImmutableList())
+    if (reusable != null && (runtime === identityRuntime || reusable.matches(this, runtime))) return reusable
+    val shape = coreShape
+    return CharacterAbilityProjection(
+        charge = runtime.charge,
+        ringRadius = runtime.haloRadius,
+        parryWindow = runtime.parryWindow,
+        lattice = if (shape == CoreShape.TESSERACT) {
+            immutableListOfSize(runtime.latticeCount) { CharacterLatticePoint(runtime.latticeX(it), runtime.latticeY(it)) }
+        } else {
+            immutableListOf()
+        },
+        facets = if (shape == CoreShape.PRISM) runtime.facets else 0,
+        facetProgress = facetProgress(runtime),
+        edge = if (shape == CoreShape.DIAMOND) runtime.edge else 0,
+        stellarMass = if (shape == CoreShape.STAR) runtime.stellarMass else 0,
+        novaFlash = runtime.novaFlash,
+        haloBurstFlash = runtime.haloBurstFlash,
+        polarity = if (shape == CoreShape.DIPOLE) runtime.polarity.ordinal else 0,
+        polarityFlash = runtime.polarityFlash,
+        beatPeriod = if (shape == CoreShape.PENTAGON) BEAT_PERIOD else 0f,
+        beatWindow = if (shape == CoreShape.PENTAGON) BEAT_WINDOW else 0f,
+        beatStreak = if (shape == CoreShape.PENTAGON) runtime.beatStreak else 0,
+        blinkCharges = if (shape == CoreShape.CRESCENT) runtime.blinkCharges else 0,
+        blinkRecharge = if (shape == CoreShape.CRESCENT) runtime.blinkRecharge / BLINK_RECHARGE_SECONDS else 0f,
+        scars = if (shape == CoreShape.CRESCENT) {
+            immutableListOfSize(runtime.scarCount) { index -> scarProjection(runtime, index) }
+        } else {
+            immutableListOf()
+        },
+        drones = if (shape == CoreShape.HEXAGON) {
+            immutableListOfSize(runtime.droneCount) { index ->
+                CharacterDroneProjection(
+                    x = runtime.droneValue(index, CharacterRuntime.DRONE_X),
+                    y = runtime.droneValue(index, CharacterRuntime.DRONE_Y),
+                    previousX = runtime.droneValue(index, CharacterRuntime.DRONE_PREVIOUS_X),
+                    previousY = runtime.droneValue(index, CharacterRuntime.DRONE_PREVIOUS_Y),
+                    darting = runtime.droneValue(index, CharacterRuntime.DRONE_DART) > 0f,
+                )
+            }
+        } else {
+            immutableListOf()
+        },
+        ghostActive = ghostActive,
+        ghostX = if (ghostActive) ghostX else 0f,
+        ghostY = if (ghostActive) ghostY else 0f,
+        previousGhostX = if (ghostActive) previousGhostX else 0f,
+        previousGhostY = if (ghostActive) previousGhostY else 0f,
+    )
 }
 
-private fun CharacterAbilityProjection.matches(runtime: CharacterRuntime): Boolean {
-    if (!charge.sameBitsAs(runtime.charge) || !barrier.sameBitsAs(runtime.barrier) ||
-        !ringRadius.sameBitsAs(runtime.ringRadius) || !parryWindow.sameBitsAs(runtime.parryWindow) ||
-        lattice.size != runtime.lattice.size
+private fun MutableGameState.facetProgress(runtime: CharacterRuntime): Float =
+    if (coreShape == CoreShape.PRISM && runtime.facets < CharacterRuntime.MAX_FACETS) {
+        (runtime.facetTimer / FACET_REGEN_SECONDS).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+
+private fun MutableGameState.scarProjection(runtime: CharacterRuntime, index: Int): CharacterScarProjection {
+    val age = runtime.scarValue(index, CharacterRuntime.SCAR_AGE)
+    val detonateAt = runtime.scarValue(index, CharacterRuntime.SCAR_DETONATE_AT)
+    return CharacterScarProjection(
+        x0 = runtime.scarValue(index, CharacterRuntime.SCAR_X0),
+        y0 = runtime.scarValue(index, CharacterRuntime.SCAR_Y0),
+        x1 = runtime.scarValue(index, CharacterRuntime.SCAR_X1),
+        y1 = runtime.scarValue(index, CharacterRuntime.SCAR_Y1),
+        fuse = if (age >= 0f) 1f else (1f - (detonateAt - elapsed) / SCAR_FUSE_SECONDS).coerceIn(0f, 1f),
+        fade = if (age >= 0f) age else 0f,
+    )
+}
+
+/** Compares every projected field bit for bit against what [characterAbilityProjection] would build now. */
+private fun CharacterAbilityProjection.matches(state: MutableGameState, runtime: CharacterRuntime): Boolean {
+    val shape = state.coreShape
+    if (!charge.sameBitsAs(runtime.charge) || !ringRadius.sameBitsAs(runtime.haloRadius) ||
+        !parryWindow.sameBitsAs(runtime.parryWindow) ||
+        facets != (if (shape == CoreShape.PRISM) runtime.facets else 0) ||
+        !facetProgress.sameBitsAs(state.facetProgress(runtime)) ||
+        edge != (if (shape == CoreShape.DIAMOND) runtime.edge else 0) ||
+        stellarMass != (if (shape == CoreShape.STAR) runtime.stellarMass else 0) ||
+        !novaFlash.sameBitsAs(runtime.novaFlash) || !haloBurstFlash.sameBitsAs(runtime.haloBurstFlash) ||
+        polarity != (if (shape == CoreShape.DIPOLE) runtime.polarity.ordinal else 0) ||
+        !polarityFlash.sameBitsAs(runtime.polarityFlash) ||
+        !beatPeriod.sameBitsAs(if (shape == CoreShape.PENTAGON) BEAT_PERIOD else 0f) ||
+        !beatWindow.sameBitsAs(if (shape == CoreShape.PENTAGON) BEAT_WINDOW else 0f) ||
+        beatStreak != (if (shape == CoreShape.PENTAGON) runtime.beatStreak else 0) ||
+        blinkCharges != (if (shape == CoreShape.CRESCENT) runtime.blinkCharges else 0) ||
+        !blinkRecharge.sameBitsAs(if (shape == CoreShape.CRESCENT) runtime.blinkRecharge / BLINK_RECHARGE_SECONDS else 0f) ||
+        ghostActive != state.ghostActive
     ) {
         return false
     }
+    if (ghostActive && (!ghostX.sameBitsAs(state.ghostX) || !ghostY.sameBitsAs(state.ghostY) ||
+            !previousGhostX.sameBitsAs(state.previousGhostX) || !previousGhostY.sameBitsAs(state.previousGhostY))
+    ) {
+        return false
+    }
+    val latticeCount = if (shape == CoreShape.TESSERACT) runtime.latticeCount else 0
+    if (lattice.size != latticeCount) return false
     for (index in lattice.indices) {
         val point = lattice[index]
-        val source = runtime.lattice[index]
-        if (!point.x.sameBitsAs(source.x) || !point.y.sameBitsAs(source.y)) return false
+        if (!point.x.sameBitsAs(runtime.latticeX(index)) || !point.y.sameBitsAs(runtime.latticeY(index))) return false
+    }
+    val scarCount = if (shape == CoreShape.CRESCENT) runtime.scarCount else 0
+    if (scars.size != scarCount) return false
+    for (index in scars.indices) {
+        val scar = scars[index]
+        val expected = state.scarProjection(runtime, index)
+        if (!scar.x0.sameBitsAs(expected.x0) || !scar.y0.sameBitsAs(expected.y0) ||
+            !scar.x1.sameBitsAs(expected.x1) || !scar.y1.sameBitsAs(expected.y1) ||
+            !scar.fuse.sameBitsAs(expected.fuse) || !scar.fade.sameBitsAs(expected.fade)
+        ) {
+            return false
+        }
+    }
+    val droneCount = if (shape == CoreShape.HEXAGON) runtime.droneCount else 0
+    if (drones.size != droneCount) return false
+    for (index in drones.indices) {
+        val drone = drones[index]
+        if (!drone.x.sameBitsAs(runtime.droneValue(index, CharacterRuntime.DRONE_X)) ||
+            !drone.y.sameBitsAs(runtime.droneValue(index, CharacterRuntime.DRONE_Y)) ||
+            !drone.previousX.sameBitsAs(runtime.droneValue(index, CharacterRuntime.DRONE_PREVIOUS_X)) ||
+            !drone.previousY.sameBitsAs(runtime.droneValue(index, CharacterRuntime.DRONE_PREVIOUS_Y)) ||
+            drone.darting != (runtime.droneValue(index, CharacterRuntime.DRONE_DART) > 0f)
+        ) {
+            return false
+        }
     }
     return true
 }

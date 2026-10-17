@@ -22,6 +22,7 @@ import kinetickk.ball.gameplay.nucleus.model.EchoHit
 import kinetickk.ball.gameplay.nucleus.model.SeveredRelic
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
 import kinetickk.ball.gameplay.nucleus.model.CharacterRuntime
+import kinetickk.ball.gameplay.nucleus.model.Polarity
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.PointOfInterestState
 import kinetickk.ball.gameplay.nucleus.model.Projectile
@@ -88,7 +89,7 @@ class GameplayReductionIsolationTest {
             pendingClearedRebirthLevel = null
             recentItem = null
             totem = null
-            characterRuntime = characterRuntime.copy(dashOrigin = null)
+            characterRuntime.hasDashOrigin = false
             pendingArchitectDefeatedWith = null
             directedReward = null
             selectedRewardFocus = null
@@ -764,25 +765,49 @@ class GameplayReductionIsolationTest {
     }
 
     private fun MutableGameState.populateAdditionalRetainedState() {
-        characterRuntime = CharacterRuntime(
-            charge = 0.3f,
-            barrier = 4f,
-            barrierTime = 0.8f,
-            previousSpeed = 123f,
-            previousHeading = 0.4f,
-            turnArc = 0.7f,
-            turnDistance = 50f,
-            wasBraking = true,
-            parryWindow = 0.2f,
-            parryCooldown = 0.6f,
-            ringRadius = 58f,
-            dashSequence = 2,
-            dashOrigin = WorldPoint(4f, -0f),
-            dashRecorded = true,
-            ramPower = 0.9f,
-            lattice = listOf(WorldPoint(-1f, 2f), WorldPoint(3f, -4f)),
-            latticeTime = 0.5f,
-        )
+        characterRuntime = CharacterRuntime().apply {
+            charge = 0.3f
+            previousSpeed = 123f
+            previousHeading = 0.4f
+            turnArc = 0.7f
+            turnDistance = 50f
+            wasBraking = true
+            parryWindow = 0.2f
+            parryCooldown = 0.6f
+            haloRadius = 58f
+            dashSequence = 2
+            hasDashOrigin = true
+            dashOriginX = 4f
+            dashOriginY = -0f
+            dashRecorded = true
+            punctureReadyAt = 0.9f
+            facets = 3
+            facetTimer = 1.5f
+            edge = 2
+            edgeUntil = 4f
+            latticeCount = 2
+            latticeNodes[0] = -1f
+            latticeNodes[1] = 2f
+            latticeNodes[2] = 3f
+            latticeNodes[3] = -4f
+            latticeTime = 0.5f
+            stellarMass = 7
+            ghostHead = 3
+            ghostSamples = 4
+            ghostPath[6] = 11f
+            polarity = Polarity.REPEL
+            beatStreak = 2
+            blinkCharges = 1
+            blinkRecharge = 0.7f
+            scarCount = 1
+            scars[0] = 1f
+            scars[4] = 2f
+            droneCount = 1
+            drones[0] = 5f
+            drones[4] = 12f
+            abilityDamage = 33.0
+            damagePrevented = 4.0
+        }
         pendingEliteKills = 2
         pendingDashHits = 3
         pendingCompletedOrbits = 4
@@ -1123,31 +1148,7 @@ class GameplayReductionIsolationTest {
             value("pendingRicochets", pendingRicochets)
             value("pendingDataPickups", pendingDataPickups)
             value("achievementFlushDue", achievementFlushDue)
-            float("characterRuntime.charge", characterRuntime.charge)
-            float("characterRuntime.barrier", characterRuntime.barrier)
-            float("characterRuntime.barrierTime", characterRuntime.barrierTime)
-            float("characterRuntime.previousSpeed", characterRuntime.previousSpeed)
-            float("characterRuntime.previousHeading", characterRuntime.previousHeading)
-            float("characterRuntime.turnArc", characterRuntime.turnArc)
-            float("characterRuntime.turnDistance", characterRuntime.turnDistance)
-            value("characterRuntime.wasBraking", characterRuntime.wasBraking)
-            float("characterRuntime.parryWindow", characterRuntime.parryWindow)
-            float("characterRuntime.parryCooldown", characterRuntime.parryCooldown)
-            float("characterRuntime.ringRadius", characterRuntime.ringRadius)
-            value("characterRuntime.dashSequence", characterRuntime.dashSequence)
-            value("characterRuntime.dashOrigin.present", characterRuntime.dashOrigin != null)
-            characterRuntime.dashOrigin?.let { origin ->
-                float("characterRuntime.dashOrigin.x", origin.x)
-                float("characterRuntime.dashOrigin.y", origin.y)
-            }
-            value("characterRuntime.dashRecorded", characterRuntime.dashRecorded)
-            float("characterRuntime.ramPower", characterRuntime.ramPower)
-            value("characterRuntime.lattice.size", characterRuntime.lattice.size)
-            characterRuntime.lattice.forEachIndexed { index, point ->
-                float("characterRuntime.lattice[$index].x", point.x)
-                float("characterRuntime.lattice[$index].y", point.y)
-            }
-            float("characterRuntime.latticeTime", characterRuntime.latticeTime)
+            value("characterRuntime", characterRuntime.toString())
             value("pointsOfInterest.size", pointsOfInterest.size)
             pointsOfInterest.forEachIndexed { index, point ->
                 val prefix = "pointsOfInterest[$index]"

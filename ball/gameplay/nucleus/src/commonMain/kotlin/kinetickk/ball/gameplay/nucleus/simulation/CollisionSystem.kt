@@ -96,12 +96,6 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
             combined,
         )
         if (enemy.contactCooldown <= 0f && sweptHit && !enemy.dead && enemy.hp > 0f) {
-            val parried = tryCharacterParry(
-                enemy.previousX, enemy.previousY, enemy.vx, enemy.vy,
-                previousCoreX, previousCoreY,
-            )
-            val newDashContact = dashPhaseTime > 0f && enemy.lastCharacterDash != characterRuntime.dashSequence
-            onCharacterDashContact(enemy)
             val relativeX = velocityX - enemy.vx
             val relativeY = velocityY - enemy.vy
             val impactSpeed = length(relativeX, relativeY)
@@ -109,11 +103,23 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
             val dy = coreY - enemy.y
             val distance = max(1f, length(dx, dy))
             val coreImpactSpeed = kotlin.math.abs(velocityX * dx / distance + velocityY * dy / distance)
-            val damage = impactPower(coreImpactSpeed)
             // Read before the hit: a strike or lance in progress hurts whatever the Core's speed.
             val strike = strikeDamage(enemy)
+            val wouldHurt = dashPhaseTime <= 0f && (strike > 0f || coreImpactSpeed < 190f)
+            val parried = tryCharacterParry(
+                enemy.previousX, enemy.previousY, enemy.vx, enemy.vy,
+                previousCoreX, previousCoreY,
+                damage = if (wouldHurt) (if (strike > 0f) strike else contactDamage(enemy)) else 0f,
+            )
+            val newDashContact = dashPhaseTime > 0f && enemy.lastCharacterDash != characterRuntime.dashSequence
+            onCharacterDashContact(enemy)
+            val characterMultiplier = characterImpactMultiplier()
+            val damage = impactPower(coreImpactSpeed) * characterMultiplier
             val defusable = enemy.type == EnemyType.BOMBER && enemy.mode != EnemyBehavior.PRIMED
-            dealHit(enemy, damage, HitSource.IMPACT, canCrit = true)
+            val edgeCritical = edgeCriticalReady()
+            val impact = dealHit(enemy, damage, HitSource.IMPACT, canCrit = true, forceCrit = edgeCritical)
+            if (edgeCritical) spendEdgeCritical()
+            onCharacterImpact(enemy, impact, coreImpactSpeed, characterMultiplier)
             // A fast impact destroys an unprimed Bomber outright, before it can prime, even through a tether.
             if (defusable && enemy.alive && coreImpactSpeed >= BOMBER_DEFUSE_SPEED) {
                 executeEnemy(enemy, HitSource.IMPACT)
@@ -281,6 +287,8 @@ internal fun MutableGameState.resolveProjectileHits() {
             if (tryCharacterParry(
                     projectile.previousX, projectile.previousY, projectile.vx, projectile.vy,
                     previousCoreX, previousCoreY,
+                    damage = if (dashPhaseTime <= 0f) projectile.damage else 0f,
+                    projectile = true,
                 )
             ) {
                 burst(projectile.x, projectile.y, 6, 2)
@@ -289,7 +297,8 @@ internal fun MutableGameState.resolveProjectileHits() {
                 takeDamage(projectile.damage, kind = IncomingDamage.PROJECTILE)
                 screenShake = max(screenShake, 6f)
             } else {
-                grantMatter(1f)
+                // Shots phased by an on-beat Pentagon Dash pay no Matter.
+                if (!characterRuntime.dashOnBeat) grantMatter(1f)
                 burst(projectile.x, projectile.y, 5, 2)
             }
         } else {
@@ -431,6 +440,7 @@ internal fun MutableGameState.resolvePickupCollection() {
             when (pickup.type) {
                 PickupType.DATA -> {
                     pendingDataPickups++
+                    onCharacterDataPickup()
                     gainData(dataGain * content.tempo.dataPickupMultiplier * (1f + matrix.pickupValueBonus))
                     fireClauses(EffectTrigger.PICKUP)
                 }

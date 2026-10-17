@@ -386,8 +386,12 @@ internal class CompiledBuild private constructor(
 internal fun CoreShape.characterTag(): BuildTag = when (this) {
     CoreShape.ORB, CoreShape.TESSERACT -> BuildTag.DRIVE
     CoreShape.PRISM, CoreShape.DIAMOND -> BuildTag.ANCHOR
-    CoreShape.SHARD -> BuildTag.PRECISION
-    CoreShape.RING -> BuildTag.BULWARK
+    CoreShape.SHARD, CoreShape.CRESCENT -> BuildTag.PRECISION
+    CoreShape.RING, CoreShape.SPIRAL -> BuildTag.BULWARK
+    CoreShape.STAR -> BuildTag.RAM
+    CoreShape.DIPOLE -> BuildTag.CHAIN
+    CoreShape.PENTAGON -> BuildTag.OVERCLOCK
+    CoreShape.HEXAGON -> BuildTag.ARSENAL
 }
 
 internal fun MutableGameState.tagTier(tag: BuildTag): Int =

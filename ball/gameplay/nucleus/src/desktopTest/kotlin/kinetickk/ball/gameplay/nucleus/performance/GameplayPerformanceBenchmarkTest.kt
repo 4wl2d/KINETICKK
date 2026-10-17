@@ -43,7 +43,8 @@ class GameplayPerformanceBenchmarkTest {
         val original = canonicalStateFingerprint(source)
         val changes: List<MutableGameState.() -> Unit> = listOf(
             { coreShape = CoreShape.SHARD },
-            { characterRuntime = characterRuntime.copy(charge = 0.5f) },
+            { characterRuntime.charge = 0.5f },
+            { characterRuntime.ghostPath[0] = 3f },
             { smoothedVelocityX = 10f },
             { turnHoldTime = 0.1f },
             { pendingEliteKills = 1 },

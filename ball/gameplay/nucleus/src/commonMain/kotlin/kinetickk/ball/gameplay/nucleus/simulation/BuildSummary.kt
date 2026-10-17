@@ -118,6 +118,14 @@ internal fun MutableGameState.buildStats(includeTemporary: Boolean = true): Immu
     }
     // Matrix contributions come from the folded content effects, never from duplicated numbers.
     fun matrixShare(effect: ItemEffect, base: Float): Float = matrix.statValue(effect, base) - base
+    // The character's traits are part of its base column.
+    val traits = content.coreShape(coreShape).traits
+    val baseIntegrity = 100f + traits.integrityBonus
+    val baseMass = traits.massMultiplier
+    val baseDashHeat = 36f * traits.dashHeatMultiplier
+    val baseCritChance = 0.05f + traits.critChanceBonus
+    val baseCritPower = 1.5f + traits.critDamageBonus
+    val basePickupRadius = 150f + traits.pickupRadiusBonus
     stat("Impact power", damageMultiplier, 1f, matrixShare(ItemEffect.IMPACT_DAMAGE, 1f), unit = "×")
     val globalPower = rebirthProfile.playerPowerMultiplier
     // Run growth reports with mastery: both are progression the run grants, not items.
@@ -144,24 +152,25 @@ internal fun MutableGameState.buildStats(includeTemporary: Boolean = true): Immu
         BuildStatContribution(BuildStatSource.SYNERGIES, buildSpeed - masterySpeed),
         BuildStatContribution(BuildStatSource.TEMPORARY, effectiveSpeed - buildSpeed),
     ).filter { it.amount != 0f }.toImmutableList())
-    stat("Integrity", maxHp, 100f, matrixShare(ItemEffect.MAX_INTEGRITY, 100f) + rebirthProfile.playerIntegrityBonus)
+    stat("Integrity", maxHp, baseIntegrity, matrixShare(ItemEffect.MAX_INTEGRITY, baseIntegrity) + rebirthProfile.playerIntegrityBonus)
     stat("Shield", shieldCapacity(), 0f, matrixShare(ItemEffect.SHIELD_CAPACITY, 0f), relics = shieldCapacity() - maxShield)
     stat("Damage reduction", effectiveDamageReduction() * 100f, 0f, matrixShare(ItemEffect.DAMAGE_REDUCTION, 0f) * 100f,
         relics = (effectiveDamageReduction() - damageReduction) * 100f, unit = "%")
     stat("Regeneration", regenPerSecond, 0f, matrixShare(ItemEffect.REGEN, 0f), unit = "/s")
-    stat("Mass", effectiveMass(), 1f, matrixShare(ItemEffect.MASS, 1f), relics = effectiveMass() - mass)
+    stat("Mass", effectiveMass(), baseMass, matrixShare(ItemEffect.MASS, baseMass), relics = effectiveMass() - mass)
     stat("Magnetism", effectiveMagnetism(), 4.65f, matrixShare(ItemEffect.MAGNETISM, 4.65f),
         relics = effectiveMagnetism() - magnetStrength)
     stat("Cooling", effectiveCooling(), 19f, matrixShare(ItemEffect.COOLING, 19f),
         relics = effectiveCooling() - coolingRate, unit = "/s")
     stat("Dash impulse", effectiveDashImpulse(), 590f, matrixShare(ItemEffect.DASH_POWER, 590f),
         relics = effectiveDashImpulse() - dashImpulse)
-    stat("Dash heat", effectiveDashHeatCost(), 36f, 36f * (matrix.dashHeatMultiplier - 1f),
+    stat("Dash heat", effectiveDashHeatCost(), baseDashHeat, baseDashHeat * (matrix.dashHeatMultiplier - 1f),
         relics = effectiveDashHeatCost() - dashHeatCost)
-    stat("Critical chance", effectiveCritChance() * 100f, 5f, matrixShare(ItemEffect.CRIT_CHANCE, 0.05f) * 100f,
+    stat("Critical chance", effectiveCritChance() * 100f, baseCritChance * 100f,
+        matrixShare(ItemEffect.CRIT_CHANCE, baseCritChance) * 100f,
         relics = (effectiveCritChance() - critChance) * 100f, unit = "%")
-    stat("Critical power", critMultiplier, 1.5f, matrixShare(ItemEffect.CRIT_DAMAGE, 1.5f), unit = "×")
-    stat("Pickup radius", effectivePickupRadius(), 150f, matrixShare(ItemEffect.PICKUP_RADIUS, 150f),
+    stat("Critical power", critMultiplier, baseCritPower, matrixShare(ItemEffect.CRIT_DAMAGE, baseCritPower), unit = "×")
+    stat("Pickup radius", effectivePickupRadius(), basePickupRadius, matrixShare(ItemEffect.PICKUP_RADIUS, basePickupRadius),
         relics = effectivePickupRadius() - pickupRadius)
     stat("Luck", effectiveLuck(), 0f, matrixShare(ItemEffect.LUCK, 0f), relics = effectiveLuck() - luck)
     stat("Data gain", dataGain, 1f, matrixShare(ItemEffect.DATA_GAIN, 1f), unit = "×")

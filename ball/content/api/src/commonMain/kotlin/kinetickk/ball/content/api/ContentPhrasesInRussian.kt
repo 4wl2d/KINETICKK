@@ -118,8 +118,8 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Data fades sooner and the minimap sees less." to "Данные исчезают быстрее, а миникарта видит меньше.",
     "Singularity" to "Сингулярность",
     "The Architect gains an enraged fourth phase." to "Архитектор получает четвёртую фазу ярости.",
-    "Arc in one direction to charge Orbit. When it is full, your next impact or weapon hit releases a ring wave that applies your dominant element." to
-        "Двигайтесь по дуге в одну сторону, чтобы зарядить орбиту. Когда она полна, следующее столкновение или попадание оружием выпускает кольцевую волну с вашей основной стихией.",
+    "Arc in one direction to charge Orbit. When it is full, your next impact or weapon hit releases a ring wave and brands the struck enemy with your dominant element." to
+        "Двигайтесь по дуге в одну сторону, чтобы зарядить орбиту. Когда она полна, следующее столкновение или попадание оружием выпускает кольцевую волну и клеймит поражённого врага вашей основной стихией.",
     "Four facets each negate one hit and regenerate over time. Elite kills and heavy impacts restore them faster; while all four hold, your impacts hit harder." to
         "Четыре грани гасят по одному удару и со временем восстанавливаются. Убийства элиты и мощные столкновения ускоряют их возврат; пока целы все четыре, столкновения бьют сильнее.",
     "Dash through enemies to mark them. A later impact or weapon hit punctures the mark for heavy damage and vents heat." to

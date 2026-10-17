@@ -69,7 +69,7 @@ data class CoreShapeDefinition(
     },
     val mechanicDescription: String = when (id) {
         CoreShape.ORB -> "Arc in one direction to charge Orbit. When it is full, your next impact or weapon hit " +
-            "releases a ring wave that applies your dominant element."
+            "releases a ring wave and brands the struck enemy with your dominant element."
         CoreShape.PRISM -> "Four facets each negate one hit and regenerate over time. Elite kills and heavy impacts " +
             "restore them faster; while all four hold, your impacts hit harder."
         CoreShape.SHARD -> "Dash through enemies to mark them. A later impact or weapon hit punctures the mark for " +

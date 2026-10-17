@@ -276,7 +276,7 @@ internal fun MutableGameState.relicOnKill(enemy: Enemy, source: HitSource?) {
 
 /** Dash departure: resolves Blink and dash-time rules. Returns true when the Dash became a Blink. */
 internal fun MutableGameState.relicOnDash(directionX: Float, directionY: Float): Boolean {
-    if (build.upside(RelicId.ABSOLUTE_ZERO)) applyStatusAround(coreX, coreY, 140f, StatusElement.CRYO, 3f, generation = 0)
+    relicOnDashDeparture()
     if (!build.upside(RelicId.BLINK_DRIVE)) return false
     var range = relicValue(RelicId.BLINK_DRIVE, 1)
     var strikeMass = 1f
@@ -323,6 +323,11 @@ internal fun MutableGameState.relicOnDash(directionX: Float, directionY: Float):
     velocityY *= keep
     shockwave(endX, endY, 0.25f, 120f, 0)
     return true
+}
+
+/** Relic rules of every Dash departure, Blink or not. */
+internal fun MutableGameState.relicOnDashDeparture() {
+    if (build.upside(RelicId.ABSOLUTE_ZERO)) applyStatusAround(coreX, coreY, 140f, StatusElement.CRYO, 3f, generation = 0)
 }
 
 internal fun MutableGameState.relicOnBrakeRelease() {

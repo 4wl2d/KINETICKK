@@ -60,10 +60,7 @@ internal fun MutableGameState.rebaseWorldIfNeeded() {
         orbital.previousX -= shiftX
         orbital.previousY -= shiftY
     }
-    characterRuntime = characterRuntime.copy(
-        dashOrigin = characterRuntime.dashOrigin?.let { it.copy(x = it.x - shiftX, y = it.y - shiftY) },
-        lattice = characterRuntime.lattice.map { it.copy(x = it.x - shiftX, y = it.y - shiftY) },
-    )
+    rebaseCharacterRuntime(shiftX, shiftY)
     pointsOfInterest = pointsOfInterest.map { it.copy(x = it.x - shiftX, y = it.y - shiftY) }
     rebaseCombatFields(shiftX, shiftY)
     totem?.let { it.x -= shiftX; it.y -= shiftY }

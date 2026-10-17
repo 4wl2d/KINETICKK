@@ -319,6 +319,7 @@ internal fun MutableGameState.onDirectHit(enemy: Enemy, result: DamageResult, so
         areaDamage(enemy.x, enemy.y, 80f, basis * 0.35f, excludedId = enemy.id, rescale = false)
     }
     if (enemy.alive) arcCharge(enemy)
+    if (source == HitSource.WEAPON && enemy.alive) onCharacterPrimaryHit(enemy)
     relicOnDirectHit(enemy, result, source)
 }
 
