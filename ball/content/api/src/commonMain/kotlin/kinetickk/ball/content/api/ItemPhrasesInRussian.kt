@@ -318,7 +318,7 @@ internal val ItemPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Singularity Seed" to "Зерно сингулярности",
     "Weight falls into nothing and keeps on falling." to "Тяжесть падает в ничто и продолжает падать.",
     "Last Word" to "Последнее слово",
-    "Rot and void agree on one thing: an ending." to "Гниль и пустота согласны в одном: в конце.",
+    "Rot and void agree on one thing: an ending." to "Гниль и пустота сходятся в одном: всему приходит конец.",
 
     // Fortune.
     "Salvage Rig" to "Утилизатор",
