@@ -6,6 +6,7 @@ package kinetickk.ball.content.impl
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.ItemRule
@@ -147,6 +148,12 @@ class ContentCatalogTest {
         }
         assertEquals(1, sonic.count { it.unlockLevel <= 2 }, "one early Sonic enabler")
         assertEquals(1, void.count { it.unlockLevel <= 2 }, "one early Void enabler")
+        // An enabler applies its element on an event every run sees often, not on a rare one such as a crit.
+        val frequent = setOf(EffectTrigger.IMPACT, EffectTrigger.HURT, EffectTrigger.WEAPON_HIT)
+        listOf(sonic, void).forEach { group ->
+            val enabler = group.single { it.unlockLevel <= 2 }
+            assertTrue(enabler.clauses.any { it.trigger in frequent }, "${enabler.name} applies its element on a frequent event")
+        }
     }
 
     @Test

@@ -340,9 +340,9 @@ private val Drafts: List<ItemDraft> = listOf(
 
     // VOID (ids 85-89).
     ItemDraft("Hollow Point", "Every clean hit leaves an empty space.", COMMON, listOf(PRECISION), listOf(StatusElement.VOID),
-        clauses = listOf(on(EffectTrigger.CRIT, apply(StatusElement.VOID, 2))), unlock = 2),
+        clauses = listOf(on(EffectTrigger.CRIT, apply(StatusElement.VOID, 2))), unlock = 4),
     ItemDraft("Null Rounds", "Shots that take a little of the target with them.", COMMON, listOf(ARSENAL), listOf(StatusElement.VOID),
-        clauses = listOf(on(EffectTrigger.WEAPON_HIT, apply(StatusElement.VOID, 1), every = 3)), unlock = 4),
+        clauses = listOf(on(EffectTrigger.WEAPON_HIT, apply(StatusElement.VOID, 1), every = 3)), unlock = 2),
     ItemDraft("Event Veil", "A failing shield folds the space around it.", UNCOMMON, listOf(BULWARK), listOf(StatusElement.VOID),
         clauses = listOf(on(EffectTrigger.SHIELD_BREAK, apply(StatusElement.VOID, 3, 220f))), unlock = 6),
     ItemDraft("Quiet Engine", "The emptiness spreads from the fallen.", UNCOMMON, listOf(CHAIN), listOf(StatusElement.VOID),
