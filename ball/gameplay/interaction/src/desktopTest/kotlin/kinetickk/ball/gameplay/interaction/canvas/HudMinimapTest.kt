@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.ImageBitmap
@@ -13,6 +14,10 @@ import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.gameplay.interaction.fx.BuildNoticeKind
+import kinetickk.ball.gameplay.interaction.fx.BuildNotificationProjection
+import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
+import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
@@ -43,7 +48,12 @@ class HudMinimapTest {
     private val others = listOf(
         HudBlock.CLOCK, HudBlock.MATTER_CHIP, HudBlock.KEY_CHIP, HudBlock.CHAIN, HudBlock.BOSS, HudBlock.BADGE,
         HudBlock.INTEGRITY, HudBlock.SPEED, HudBlock.LOADOUT, HudBlock.TRIAL_PANEL, HudBlock.POLARITY_LABEL,
+        HudBlock.DASH_LABEL, HudBlock.BRAKE_LABEL, HudBlock.RELIC_ROW, HudBlock.FEED,
     )
+    private val feed = VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(
+        BuildNotificationProjection("Neon Ram", immutableListOf("Impact damage +0.05", "Weapon power +0.04", "+ Ram II"), 4f),
+        BuildNotificationProjection("REACTION DISCOVERED", immutableListOf("+ Thermal Shock"), 5f, BuildNoticeKind.DISCOVERY),
+    ))
 
     @Test
     fun theMinimapOverlapsNoOtherHudBlockInAnyLayout() {
@@ -67,6 +77,9 @@ class HudMinimapTest {
                 for (block in others) {
                     val rect = HudLayoutProbe.rect(block) ?: continue
                     assertFalse(rect.overlaps(minimap), "$where: the minimap $minimap overlaps $block $rect")
+                }
+                forEachRunningControlBounds(width, height, density) { target, left, top, right, bottom ->
+                    assertFalse(Rect(left, top, right, bottom).overlaps(minimap), "$where: the minimap $minimap overlaps $target")
                 }
                 val keepOut = WorldHudKeepOut().update(width, height, density, textScale, trial, boss != null)
                 assertTrue(keepOut.rects().any { it.contains(minimap.topLeft) && it.contains(minimap.bottomRight) },
@@ -119,6 +132,8 @@ class HudMinimapTest {
         val measurer = measurer(density, textScale)
         CanvasDrawScope().draw(Density(density), LayoutDirection.Ltr, Canvas(ImageBitmap(64, 64)), Size(width, height)) {
             drawHud(model, measurer, 1f)
+            // The feed records its block after the HUD; it docks clear of the minimap too.
+            drawHudFeed(model, feed, measurer, 1f, null)
         }
     }
 

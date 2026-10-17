@@ -125,7 +125,7 @@ internal class WorldHudKeepOut {
             val panel = trialPanel.update(width, height, scale, textScale)
             add(panel.left - pad, panel.top - pad, panel.right + pad, panel.bottom + pad)
         }
-        if (minimapShown && HudMinimapGeometry.place(frame, if (trialActive) trialPanel else null, minimap)) {
+        if (minimapShown && HudMinimapGeometry.place(frame, textScale, if (trialActive) trialPanel else null, minimap)) {
             add(minimap[0] - pad, minimap[1] - pad, minimap[2] + pad, minimap[3] + pad)
         }
         if (controlsLeft.isFinite()) add(controlsLeft - pad, controlsTop - pad, width, height)

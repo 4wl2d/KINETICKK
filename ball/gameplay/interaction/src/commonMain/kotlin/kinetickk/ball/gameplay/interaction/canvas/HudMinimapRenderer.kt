@@ -11,8 +11,6 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
-import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_HUD_TOP_DP
-import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_PANEL_ROW_DP
 import kinetickk.ball.gameplay.nucleus.render.EnemyAffinity
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
@@ -24,38 +22,60 @@ import kinetickk.foundation.design.TextMeasurer
 import kinetickk.foundation.design.kkStroke
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sqrt
 
 /**
  * Where the minimap sits (px), shared by the renderer and the world keep-out ([WorldHudKeepOut]) so
- * edge markers and world labels stay off it: the left column under the level badge on desktop and
- * landscape phones, the right edge under the boss row on portrait phones; under the trial panel
- * while a trial runs. It shrinks to fit above the bottom clusters and is left out when even the
- * smallest size does not fit.
+ * edge markers and world labels stay off it:
+ * - desktop: the left column under the level badge, under the trial panel while a trial runs;
+ * - landscape phones: the right edge between the loadout and the Dash button;
+ * - portrait phones: inside the bottom clusters, between the integrity cluster and the speed gauge,
+ *   where the feed, the markers and the playfield never reach.
+ * It shrinks to fit and is left out when even the smallest size does not fit.
  */
 internal object HudMinimapGeometry {
-    /** Side of the minimap in reference dp: desktop and phones. */
+    /** Side of the minimap in reference dp: desktop and landscape phones (where it fits). */
     const val REGULAR_SIDE_DP: Float = 132f
     const val COMPACT_SIDE_DP: Float = 104f
+    /** Portrait phones: the gap between the loadout row and the touch buttons. */
+    const val PORTRAIT_SIDE_DP: Float = 72f
     private const val MINIMUM_SIDE_DP: Float = 56f
 
     /**
-     * Writes the square into [out] (left, top, right, bottom) for [frame]; [trial] is the laid-out trial
-     * panel while one runs. Returns false when it has no room.
+     * Writes the square into [out] (left, top, right, bottom) for [frame] at the text size [textScale];
+     * [trial] is the laid-out trial panel while one runs. Returns false when it has no room.
      */
-    fun place(frame: HudFrame, trial: HudTrialPanelLayout?, out: FloatArray): Boolean {
-        val gap = frame.u(if (frame.regular) 10f else 6f)
-        var side = frame.u(if (frame.regular) REGULAR_SIDE_DP else COMPACT_SIDE_DP)
-        val top = when {
-            trial != null -> trial.bottom + gap
-            frame.mode == GameplayLayoutMode.REGULAR -> frame.u(118f)
-            frame.mode == GameplayLayoutMode.COMPACT_LANDSCAPE -> frame.u(48f)
-            else -> frame.u(PORTRAIT_HUD_TOP_DP + PORTRAIT_PANEL_ROW_DP)
+    fun place(frame: HudFrame, textScale: Float, trial: HudTrialPanelLayout?, out: FloatArray): Boolean {
+        val left: Float
+        val top: Float
+        var side: Float
+        when (frame.mode) {
+            GameplayLayoutMode.REGULAR -> {
+                val gap = frame.u(10f)
+                side = frame.u(REGULAR_SIDE_DP)
+                top = if (trial != null) trial.bottom + gap else frame.u(118f)
+                side = min(side, frame.bottomClustersTop - gap - top)
+                left = frame.margin
+            }
+            GameplayLayoutMode.COMPACT_LANDSCAPE -> {
+                val gap = frame.u(8f)
+                // Under the relic row and weapon slot (the keep-out's loadout reserve), above the Dash button.
+                val loadoutBottom = frame.u(62f + 34f + 4f) + 9f * frame.density * hudUiScale(textScale)
+                top = loadoutBottom + gap
+                val dashTop = frame.height - frame.u(18f + 150f)
+                side = min(frame.u(COMPACT_SIDE_DP), dashTop - gap - top)
+                left = frame.width - frame.margin - side
+            }
+            GameplayLayoutMode.COMPACT_PORTRAIT -> {
+                side = frame.u(PORTRAIT_SIDE_DP)
+                top = frame.bottomClustersTop + frame.u(56f)
+                // Centred between the integrity cluster (170 wide) and the speed gauge (44 from the edge).
+                val center = (frame.margin + frame.u(170f) + frame.width - frame.margin - frame.u(44f)) * 0.5f
+                left = center - side * 0.5f
+            }
         }
-        val limit = frame.bottomClustersTop - gap
-        if (top + side > limit) side = limit - top
         if (side < frame.u(MINIMUM_SIDE_DP)) return false
-        val left = if (frame.portrait) frame.width - frame.margin - side else frame.margin
         out[0] = left
         out[1] = top
         out[2] = left + side
@@ -84,7 +104,7 @@ internal fun DrawScope.drawMinimap(engine: GameplayRenderModel, measurer: TextMe
     for (index in points.indices) if (points[index].active) trialActive = true
     val trial = if (trialActive) MinimapScratch.trial.update(size.width, size.height, density, measurer.scale) else null
     val rect = MinimapScratch.rect
-    if (!HudMinimapGeometry.place(frame, trial, rect)) return
+    if (!HudMinimapGeometry.place(frame, measurer.scale, trial, rect)) return
     val left = rect[0]
     val top = rect[1]
     val side = rect[2] - left
