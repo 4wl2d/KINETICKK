@@ -119,6 +119,27 @@ gameplay reads or fires them yet. The seeded baseline trace is unchanged. The
 no-POI probe now runs its fixed ten seeds and requires at least five wins;
 six win, and seed `23770` no longer does.
 
+The 0.4.0 enemy step makes Content own the roster: nineteen enemy types with
+threat, time and Rebirth gates and spawn weights, ten of them new (Swarmling,
+Bomber, Lancer, Sniper, Aegis, Minelayer, Phantom, Broodmother, Reflector and
+the Herald mini-boss). A spawn director on its own random stream replaces the
+fixed-interval single spawns and the stage roll table: pacing phases bank
+budget for packs, flanks, swarms, walls, rings and ambushes placed in sectors
+around the heading, and leashed enemies are moved back to spawn distance
+instead of deleted. Elites jitter and roll their aspect from that stream, and
+Heralds arrive at 360 s and 540 s on their tiers. Every hostile shot, contact,
+strike, blast and mine now deals damage through the hostile-damage helper, so
+enemy damage grows with the run; strikes, lances, blasts and mines hurt at any
+Core speed. Each run takes its seed from the application's seed source (the
+default source keeps the fixed seed). The seeded baseline trace keeps its Core
+path and only its opening Drifters move. To keep tier 0 at the previous
+difficulty the director banks 0.95 of the tempo rate and keeps spawns clear of
+offered anomalies: over 40 seeds the no-POI bot wins 25 times (the previous
+build: 24), and the reference seed and the fixed probe win. The comparative
+fixture pins the Elite aspect it was measured against; the Ring keeps one
+boss-proof build direction while the Architect's grown contact damage breaks
+its shields, until the Ring's rework re-measures it.
+
 The compact exit workflow removes the old causal-depth assertion that failed
 when a busy Profile refused progress before acceptance. An injected
 persistence callback reproduced that failure on the original source snapshot;
