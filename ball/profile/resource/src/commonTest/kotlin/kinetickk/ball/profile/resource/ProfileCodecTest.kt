@@ -30,6 +30,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class ProfileCodecTest {
@@ -514,6 +515,21 @@ class ProfileCodecTest {
             }
         val invalidMatter = DEFAULT_GOLDEN.replace("\"matter\":\"0\"", "\"matter\":\"01\"")
         assertEquals(ProfileSnapshotRejection.INVALID_DECIMAL, decodeRejection(invalidMatter))
+    }
+
+    @Test
+    fun anAppendedWeaponIdRoundTripsByItsOwnWireId() {
+        val payload = DEFAULT_GOLDEN.replace(
+            "\"selectedWeaponId\":\"FLUX_WAKE\",\"unlockedWeaponIds\":[\"FLUX_WAKE\"]",
+            "\"selectedWeaponId\":\"TETHER_ARC\",\"unlockedWeaponIds\":[\"FLUX_WAKE\",\"TETHER_ARC\"]",
+        )
+        assertNotEquals(DEFAULT_GOLDEN, payload)
+
+        val decoded = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(payload))
+
+        assertEquals(WeaponId.TETHER_ARC, decoded.snapshot.profile.loadout.selectedWeapon)
+        assertEquals(setOf(WeaponId.FLUX_WAKE, WeaponId.TETHER_ARC), decoded.snapshot.profile.loadout.unlockedWeapons)
+        assertEquals(payload, requireEncoded(decoded.snapshot))
     }
 
     @Test

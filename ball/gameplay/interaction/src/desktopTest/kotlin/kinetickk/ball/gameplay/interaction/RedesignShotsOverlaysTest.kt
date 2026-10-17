@@ -128,7 +128,7 @@ class RedesignShotsOverlaysTest {
                         choiceType = ChoiceType.WEAPON, language = l, width = w, height = h, textScale = textScale,
                         choices = listOf(WeaponId.ARC_COIL, WeaponId.GRAVITY_MINES, WeaponId.NULL_LANCE).map { id ->
                             val weapon = rewardFixtureContent.weapon(id)
-                            ChoiceOption(ChoiceType.WEAPON, weapon.name, weapon.description, weapon.tags.first(), weaponId = id)
+                            ChoiceOption(ChoiceType.WEAPON, weapon.name, weapon.description, weapon.tags.first().displayLabel.uppercase(), weaponId = id)
                         },
                     )
                 })

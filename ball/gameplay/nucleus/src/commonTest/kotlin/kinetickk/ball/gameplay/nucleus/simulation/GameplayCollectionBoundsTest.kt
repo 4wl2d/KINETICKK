@@ -520,6 +520,7 @@ class GameplayCollectionBoundsTest {
                 weapons = (listOf(currentWeapon) + weaponCandidates).toImmutableList(),
             )
             val weaponState = newState(seed = 912 + index, content = weaponContent)
+            weaponState.unlockWeaponsForTesting(weaponCandidates.map { it.id })
             weaponState.buildWeaponChoices()
             val selectedWeaponIds = weaponState.choices.mapNotNull { choice -> choice.weaponId }.toSet()
             assertEquals(WEAPON_OFFER_CHOICES, selectedWeaponIds.size)

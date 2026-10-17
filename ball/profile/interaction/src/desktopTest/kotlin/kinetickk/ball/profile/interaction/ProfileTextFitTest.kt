@@ -172,7 +172,7 @@ class ProfileTextFitTest {
                 assertNoInkRows(frame.image, name.box.left, name.box.right, viewport.top + 1f, 2, context)
 
                 // Every tag, and the in-run tag, is drawn inside the tag rows.
-                val expected = weapon.tags.map { it.localizedContent(scene.language) } +
+                val expected = weapon.tags.map { it.displayLabel.localizedContent(scene.language) } +
                     listOfNotNull(if (weapon.id == model.activeRunWeapon) scene.language.text(ProfileScreensRedesignText.ActiveRun) else null)
                 val tags = frame.of("armory.detail.tag")
                 assertEquals(expected.toSet(), tags.map { it.owner }.toSet(), context)

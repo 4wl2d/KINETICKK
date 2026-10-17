@@ -17,6 +17,10 @@ import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicKey
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponDefinition
+import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.WeaponCadence
+import kinetickk.ball.content.api.WeaponFamily
+import kinetickk.ball.content.api.WeaponScaling
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
 import kinetickk.ball.content.api.defaultMatrixNodes
@@ -32,8 +36,17 @@ internal val TestWeapons: ImmutableList<WeaponDefinition> = WeaponId.entries.map
         id = id,
         name = "Test ${id.name}",
         description = "Injected test weapon $index",
-        tags = listOf("TEST"),
+        family = WeaponFamily.PROJECTILE,
+        element = null,
+        tags = listOf(BuildTag.DRIVE, BuildTag.ARSENAL),
+        key = RelicKey.MOTION,
+        signature = CoreShape.entries[index % CoreShape.entries.size],
+        scaling = WeaponScaling.SPEED,
+        cadence = WeaponCadence.DISCRETE,
         permanentUnlockCost = index * 100,
+        minimumRebirth = 0,
+        masteryForms = listOf("Test form one", "Test form two", "Test form three"),
+        signatureText = "Test signature twist",
     )
 }.toImmutableList()
 

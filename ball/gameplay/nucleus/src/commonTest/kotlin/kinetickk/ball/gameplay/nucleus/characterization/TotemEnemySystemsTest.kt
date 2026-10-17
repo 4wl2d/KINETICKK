@@ -22,6 +22,26 @@ import kotlin.test.Test
 
 class TotemEnemySystemsTest {
     @Test
+    fun recalibrationDealsOnlyOwnedWeaponsAndALoneStarterOnlyAmplifies() {
+        val owned = listOf(WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR, WeaponId.GYRE_DISC)
+        val engine = runningEngine(seed = 202, owned = owned)
+        openTotemChoice(engine)
+        engine.choose(engine.choices.indexOfFirst { it.totemAction == TotemAction.CHANGE_WEAPON })
+        assertEquals(ChoiceType.WEAPON, engine.choiceType)
+        assertEquals(setOf(WeaponId.MORNINGSTAR, WeaponId.GYRE_DISC), engine.choices.mapNotNull(ChoiceOption::weaponId).toSet())
+        engine.rerollChoices()
+        assertTrue(engine.choices.all { it.weaponId in owned && it.weaponId != engine.weapon })
+
+        // A fresh profile owns only the starter: the Totem can amplify it, never recalibrate into nothing.
+        val starter = runningEngine(seed = 203, owned = emptyList())
+        assertEquals(setOf(WeaponId.FLUX_WAKE), starter.unlockedWeapons)
+        starter.activateTotemForTesting()
+        starter.update(GameScenario.FIXED_STEP)
+        assertEquals(ChoiceType.TOTEM, starter.choiceType)
+        assertEquals(listOf(TotemAction.AMPLIFY_CURRENT), starter.choices.map { it.totemAction })
+    }
+
+    @Test
     fun totemAmplifyAndChangeFormATwoStageChoiceThatPreservesWeaponLevel() {
         val engine = runningEngine(seed = 201)
         val startingWeapon = engine.weapon
@@ -273,11 +293,13 @@ class TotemEnemySystemsTest {
         assertEquals(2, engine.choices.size)
     }
 
-    private fun runningEngine(seed: Int): GameScenario = gameScenario(seed = seed, initialMatter = 0).also { engine ->
-        engine.resize(1_280f, 720f)
-        engine.startRun()
-        engine.enemies.clear()
-        engine.projectiles.clear()
-        engine.updatePointer(640f, 360f)
-    }
+    private fun runningEngine(seed: Int, owned: List<WeaponId> = WeaponId.entries): GameScenario =
+        gameScenario(seed = seed, initialMatter = 0).also { engine ->
+            engine.unlockWeaponsForTesting(owned)
+            engine.resize(1_280f, 720f)
+            engine.startRun()
+            engine.enemies.clear()
+            engine.projectiles.clear()
+            engine.updatePointer(640f, 360f)
+        }
 }

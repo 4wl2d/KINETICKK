@@ -586,6 +586,18 @@ private fun WeaponId.wireId(): String = when (this) {
     WeaponId.ENTROPY_FIELD -> "ENTROPY_FIELD"
     WeaponId.SINGULARITY_SPEAR -> "SINGULARITY_SPEAR"
     WeaponId.PRISM_RELAY -> "PRISM_RELAY"
+    WeaponId.GYRE_DISC -> "GYRE_DISC"
+    WeaponId.SCATTER_BLOOM -> "SCATTER_BLOOM"
+    WeaponId.TETHER_ARC -> "TETHER_ARC"
+    WeaponId.SENTRY_GRID -> "SENTRY_GRID"
+    WeaponId.HUNTER_SALVO -> "HUNTER_SALVO"
+    WeaponId.CONCUSSION_ENGINE -> "CONCUSSION_ENGINE"
+    WeaponId.GLACIER_BELL -> "GLACIER_BELL"
+    WeaponId.EVENT_LENS -> "EVENT_LENS"
+    WeaponId.SOLAR_SWEEP -> "SOLAR_SWEEP"
+    WeaponId.AEGIS_SHARDS -> "AEGIS_SHARDS"
+    WeaponId.HOLLOW_RIFT -> "HOLLOW_RIFT"
+    WeaponId.RESONANCE_DRUM -> "RESONANCE_DRUM"
 }
 
 private fun String.weaponId(): WeaponId = when (this) {
@@ -601,6 +613,18 @@ private fun String.weaponId(): WeaponId = when (this) {
     "ENTROPY_FIELD" -> WeaponId.ENTROPY_FIELD
     "SINGULARITY_SPEAR" -> WeaponId.SINGULARITY_SPEAR
     "PRISM_RELAY" -> WeaponId.PRISM_RELAY
+    "GYRE_DISC" -> WeaponId.GYRE_DISC
+    "SCATTER_BLOOM" -> WeaponId.SCATTER_BLOOM
+    "TETHER_ARC" -> WeaponId.TETHER_ARC
+    "SENTRY_GRID" -> WeaponId.SENTRY_GRID
+    "HUNTER_SALVO" -> WeaponId.HUNTER_SALVO
+    "CONCUSSION_ENGINE" -> WeaponId.CONCUSSION_ENGINE
+    "GLACIER_BELL" -> WeaponId.GLACIER_BELL
+    "EVENT_LENS" -> WeaponId.EVENT_LENS
+    "SOLAR_SWEEP" -> WeaponId.SOLAR_SWEEP
+    "AEGIS_SHARDS" -> WeaponId.AEGIS_SHARDS
+    "HOLLOW_RIFT" -> WeaponId.HOLLOW_RIFT
+    "RESONANCE_DRUM" -> WeaponId.RESONANCE_DRUM
     else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
 }
 

@@ -137,7 +137,7 @@ internal fun ArmoryContent(
             frame.d(if (frame.regular) 240f else 180f),
         )
         val activeTag = if (model.activeRunWeapon == inspected.id) language.text(ProfileScreensRedesignText.ActiveRun) else null
-        val tagTexts = remember(inspected, language) { inspected.tags.map { it.localizedContent(language) } }
+        val tagTexts = remember(inspected, language) { inspected.tags.map { it.displayLabel.localizedContent(language) } }
         val tileTexts = remember(weapons, model, language) { armoryTileTexts(weapons, model, language) }
         val layout = armoryLayout(frame, weapons.size, scale, backWidth, actionWidth, needRoom = status == ArmoryWeaponStatus.SHORT,
             masteryCount = masteries.size, tileText = { innerWidth -> armoryTileMetrics(measurer, frame, type, tileTexts, innerWidth) },
@@ -317,7 +317,7 @@ private fun ArmoryTile(
     val name = definition.name.localizedContent(language)
     val statusText = armoryStatusText(status, active, definition, language)
     val costText = formatMatter(definition.permanentUnlockCost.toLong(), language)
-    val tags = remember(definition, language) { definition.tags.map { it.localizedContent(language) } }
+    val tags = remember(definition, language) { definition.tags.map { it.displayLabel.localizedContent(language) } }
     Box(
         Modifier.offset { IntOffset(tile.left.roundToInt(), tile.top.roundToInt()) }
             .size(frame.dp(tile.width), frame.dp(tile.height))

@@ -170,6 +170,8 @@ sealed interface ProfileRejection {
     /** The node needs a higher Rebirth rank. */
     data object MatrixRebirthLocked : ProfileRejection
     data object CoreShapeLocked : ProfileRejection
+    /** The weapon needs a higher Rebirth rank before it can be bought. */
+    data object WeaponRebirthLocked : ProfileRejection
     data object RebirthMaximumReached : ProfileRejection
     data object RebirthLevelNotCleared : ProfileRejection
 

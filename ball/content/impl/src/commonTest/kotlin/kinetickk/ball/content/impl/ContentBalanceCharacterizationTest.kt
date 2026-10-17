@@ -124,8 +124,33 @@ class ContentBalanceCharacterizationTest {
                 WeaponId.ENTROPY_FIELD to 860,
                 WeaponId.SINGULARITY_SPEAR to 1_200,
                 WeaponId.PRISM_RELAY to 1_650,
+                WeaponId.GYRE_DISC to 120,
+                WeaponId.SCATTER_BLOOM to 260,
+                WeaponId.TETHER_ARC to 900,
+                WeaponId.SENTRY_GRID to 380,
+                WeaponId.HUNTER_SALVO to 1_300,
+                WeaponId.CONCUSSION_ENGINE to 520,
+                WeaponId.GLACIER_BELL to 700,
+                WeaponId.EVENT_LENS to 1_100,
+                WeaponId.SOLAR_SWEEP to 1_500,
+                WeaponId.AEGIS_SHARDS to 1_800,
+                WeaponId.HOLLOW_RIFT to 2_100,
+                WeaponId.RESONANCE_DRUM to 2_600,
             ),
             ui.weapons.map { weapon -> weapon.id to weapon.permanentUnlockCost },
+        )
+        assertEquals(
+            mapOf(
+                WeaponId.GLACIER_BELL to 1,
+                WeaponId.TETHER_ARC to 2,
+                WeaponId.EVENT_LENS to 3,
+                WeaponId.HUNTER_SALVO to 4,
+                WeaponId.SOLAR_SWEEP to 5,
+                WeaponId.AEGIS_SHARDS to 6,
+                WeaponId.HOLLOW_RIFT to 7,
+                WeaponId.RESONANCE_DRUM to 9,
+            ),
+            ui.weapons.filter { it.minimumRebirth > 0 }.associate { it.id to it.minimumRebirth },
         )
         assertEquals(
             listOf(
@@ -165,16 +190,25 @@ class ContentBalanceCharacterizationTest {
             ui.matrixNodes.map { node -> node.id to node.costs.toList() },
         )
         assertEquals(
-            "75db0a6d325eea71",
+            "a62a1446cf743de6",
             goldenFingerprint {
                 add("weapons")
                 ui.weapons.forEach { weapon ->
                     add(weapon.id.name)
                     add(weapon.name)
                     add(weapon.description)
+                    add(weapon.family.name)
+                    add(weapon.element?.name ?: "-")
                     add(weapon.tags.size)
-                    weapon.tags.forEach(::add)
+                    weapon.tags.forEach { add(it.name) }
+                    add(weapon.key.name)
+                    add(weapon.signature.name)
+                    add(weapon.scaling.name)
+                    add(weapon.cadence.name)
                     add(weapon.permanentUnlockCost)
+                    add(weapon.minimumRebirth)
+                    weapon.masteryForms.forEach(::add)
+                    add(weapon.signatureText)
                 }
                 add("matrix")
                 ui.matrixNodes.forEach { node ->

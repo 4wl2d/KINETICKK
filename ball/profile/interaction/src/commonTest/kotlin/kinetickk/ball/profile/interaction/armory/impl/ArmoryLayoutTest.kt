@@ -18,7 +18,7 @@ import kotlin.test.assertTrue
 
 class ArmoryLayoutTest {
     private fun layout(width: Float, height: Float, density: Float = 1f, textScale: Float = 1f) =
-        armoryLayout(profileFrame(width, height, density), TestWeapons.size, textScale, backWidth = 80f * density, actionWidth = 260f * density)
+        armoryLayout(profileFrame(width, height, density), BoardWeapons.size, textScale, backWidth = 80f * density, actionWidth = 260f * density)
 
     @Test
     fun regularGridMatchesTheBoardFourColumnGrid() {
@@ -66,31 +66,31 @@ class ArmoryLayoutTest {
         // The large text size makes the portrait grid scroll.
         val layout = layout(390f, 844f, textScale = 1.75f)
         val grid = layout.gridViewport
-        val reversed = TestWeapons.reversed().toImmutableList()
+        val reversed = BoardWeapons.reversed().toImmutableList()
         val firstCenter = layout.tiles.first().center
         val x = grid.left + firstCenter.x
         val y = grid.top + firstCenter.y
 
         assertEquals(WeaponId.FLUX_WAKE, assertIs<ArmoryAction.Activate>(
-            resolveArmoryPress(layout, TestWeapons, WeaponId.FLUX_WAKE, 0f, x, y)).id)
+            resolveArmoryPress(layout, BoardWeapons, WeaponId.FLUX_WAKE, 0f, x, y)).id)
         assertEquals(reversed.first().id, assertIs<ArmoryAction.Activate>(
             resolveArmoryPress(layout, reversed, WeaponId.FLUX_WAKE, 0f, x, y)).id)
 
         // Scrolling the grid by (up to) one row maps the same point to the tile one row below.
         assertTrue(layout.gridScrollMax >= layout.rowPitch)
         val scroll = layout.rowPitch
-        assertEquals(TestWeapons[layout.columns].id, assertIs<ArmoryAction.Activate>(
-            resolveArmoryPress(layout, TestWeapons, WeaponId.FLUX_WAKE, scroll, x, y)).id)
+        assertEquals(BoardWeapons[layout.columns].id, assertIs<ArmoryAction.Activate>(
+            resolveArmoryPress(layout, BoardWeapons, WeaponId.FLUX_WAKE, scroll, x, y)).id)
 
         // The primary action does not scroll: it maps at its screen position to the inspected weapon.
         val action = layout.action.center
         assertEquals(WeaponId.ARC_COIL, assertIs<ArmoryAction.Apply>(
-            resolveArmoryPress(layout, TestWeapons, WeaponId.ARC_COIL, 0f, action.x, action.y)).id)
-        assertIs<ArmoryAction.Back>(resolveArmoryPress(layout, TestWeapons, WeaponId.FLUX_WAKE, 0f,
+            resolveArmoryPress(layout, BoardWeapons, WeaponId.ARC_COIL, 0f, action.x, action.y)).id)
+        assertIs<ArmoryAction.Back>(resolveArmoryPress(layout, BoardWeapons, WeaponId.FLUX_WAKE, 0f,
             layout.back.center.x, layout.back.center.y))
         // The gap between two tiles and the empty panel area below the action do not act.
         val gapX = grid.left + (layout.tiles[0].right + layout.tiles[1].left) * 0.5f
-        assertNull(resolveArmoryPress(layout, TestWeapons, WeaponId.FLUX_WAKE, 0f, gapX, y))
+        assertNull(resolveArmoryPress(layout, BoardWeapons, WeaponId.FLUX_WAKE, 0f, gapX, y))
     }
 
     @Test
@@ -121,9 +121,9 @@ class ArmoryLayoutTest {
     @Test
     fun lockedWeaponsKeepRoomForTheShortfall() {
         val frame = profileFrame(844f, 390f, 1f)
-        val wide = armoryLayout(frame, TestWeapons.size, 1f, 80f, actionWidth = 10_000f, needRoom = true)
+        val wide = armoryLayout(frame, BoardWeapons.size, 1f, 80f, actionWidth = 10_000f, needRoom = true)
         assertTrue(wide.need.width >= (wide.detailViewport.width - 24f) * 0.3f)
-        val owned = armoryLayout(frame, TestWeapons.size, 1f, 80f, actionWidth = 10_000f, needRoom = false)
+        val owned = armoryLayout(frame, BoardWeapons.size, 1f, 80f, actionWidth = 10_000f, needRoom = false)
         assertEquals(owned.detailViewport.right - 12f, owned.action.right, 0.01f)
     }
 
@@ -145,7 +145,7 @@ class ArmoryLayoutTest {
         val frame = profileFrame(844f, 390f, 1f)
         val insets = armoryTileInsets(frame)
         val icon = frame.d(armoryType(frame.mode).tileIcon)
-        fun layout(status: Float, nameBlock: Float) = armoryLayout(frame, TestWeapons.size, 1f, 80f, 260f,
+        fun layout(status: Float, nameBlock: Float) = armoryLayout(frame, BoardWeapons.size, 1f, 80f, 260f,
             tileText = { ArmoryTileMetrics(status, nameBlock) })
         val plain = layout(status = 0f, nameBlock = 0f)
         // Room to spare: the board's icon, centred between the texts.
@@ -199,3 +199,6 @@ class ArmoryLayoutTest {
         }
     }
 }
+
+/** The reference board lays out the original twelve weapons on one unscrolled four-column grid. */
+private val BoardWeapons = TestWeapons.take(12).toImmutableList()

@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
+import kinetickk.ball.gameplay.interaction.fixtureWeapon
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -313,9 +314,8 @@ private fun localizationFixtureContent() = GameplayContentSnapshot(
     version = KINETICKK_CONTENT_VERSION,
     // Shipped items and relics, so the Russian scenes render real catalog phrases.
     items = rewardFixtureContent.items,
-    weapons = immutableListOf(WeaponDefinition(
+    weapons = immutableListOf(fixtureWeapon(
         WeaponId.FLUX_WAKE, "Flux Wake", "Your trail hardens into a cutting wake; enemies crossing it take damage.",
-        listOf("TRAIL"), 0,
     )),
     weaponMasteries = WeaponMastery.entries.toImmutableList(),
     relics = rewardFixtureContent.relics,

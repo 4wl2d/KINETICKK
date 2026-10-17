@@ -8,7 +8,6 @@ import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.CoreShapeDefinition
 import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.ProfilePolicySnapshot
-import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
@@ -334,13 +333,7 @@ class ProfileComponentCharacterizationTest {
             }.toImmutableList(),
             weapons = TestProfilePolicy.weapons.map { definition ->
                 if (definition.id == WeaponId.MORNINGSTAR) {
-                    WeaponDefinition(
-                        id = definition.id,
-                        name = definition.name,
-                        description = definition.description,
-                        tags = definition.tags,
-                        permanentUnlockCost = 7,
-                    )
+                    testWeapon(definition.id, cost = 7)
                 } else {
                     definition
                 }

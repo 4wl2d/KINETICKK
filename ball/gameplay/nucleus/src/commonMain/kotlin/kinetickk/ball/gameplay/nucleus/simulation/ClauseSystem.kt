@@ -280,8 +280,15 @@ private fun MutableGameState.refreshWeapon(seconds: Float, itemId: Int) {
     weaponSecondaryClock -= min(seconds, max(0f, weaponSecondaryClock) * 0.4f)
 }
 
-internal fun WeaponId.isContinuous(): Boolean =
-    this == WeaponId.FLUX_WAKE || this == WeaponId.PHASE_LATTICE || this == WeaponId.ENTROPY_FIELD
+/** True for the CONTINUOUS cadence of the weapon roster (damage per second instead of activations). */
+internal fun WeaponId.isContinuous(): Boolean = when (this) {
+    WeaponId.FLUX_WAKE, WeaponId.PHASE_LATTICE, WeaponId.ENTROPY_FIELD, WeaponId.TETHER_ARC, WeaponId.SOLAR_SWEEP -> true
+    WeaponId.MORNINGSTAR, WeaponId.NULL_LANCE, WeaponId.GRAVITY_MINES, WeaponId.ION_SWARM, WeaponId.RIFT_BLADES,
+    WeaponId.ARC_COIL, WeaponId.QUASAR_CANNON, WeaponId.SINGULARITY_SPEAR, WeaponId.PRISM_RELAY, WeaponId.GYRE_DISC,
+    WeaponId.SCATTER_BLOOM, WeaponId.SENTRY_GRID, WeaponId.HUNTER_SALVO, WeaponId.CONCUSSION_ENGINE,
+    WeaponId.GLACIER_BELL, WeaponId.EVENT_LENS, WeaponId.AEGIS_SHARDS, WeaponId.HOLLOW_RIFT, WeaponId.RESONANCE_DRUM,
+    -> false
+}
 
 // ---------------------------------------------------------------------------------------------
 // Hooks called by the simulation. Each derives its edge inside the fixed step.

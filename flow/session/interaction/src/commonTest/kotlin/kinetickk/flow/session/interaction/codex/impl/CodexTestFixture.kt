@@ -3,6 +3,7 @@
 
 package kinetickk.flow.session.interaction.codex.impl
 
+import kinetickk.flow.session.interaction.testWeapon
 import kinetickk.ball.content.api.*
 import kinetickk.ball.profile.api.*
 import kinetickk.foundation.collections.*
@@ -13,7 +14,7 @@ import kinetickk.flow.session.interaction.testItems
 
 internal fun codexTestCatalog(count: Int = TEST_ITEM_COUNT): UiCatalogSnapshot = UiCatalogSnapshot(
     version = ContentVersion("test-v1"), items = testItems(count),
-    weapons = WeaponId.entries.map { WeaponDefinition(it, it.name, "Full weapon description for ${it.name}", listOf("test"), 10) }.toImmutableList(),
+    weapons = WeaponId.entries.map { testWeapon(it, description = "Full weapon description for ${it.name}", cost = 10) }.toImmutableList(),
     weaponMasteries = WeaponMastery.entries.toImmutableList(),
     relics = testRelics, coreShapes = TestCoreShapes, rebirth = TestRebirthPolicy, relicPolicy = RelicPolicy(4, 3),
 )

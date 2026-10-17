@@ -3,6 +3,7 @@
 
 package kinetickk.flow.session.interaction.home.impl
 
+import kinetickk.flow.session.interaction.testWeapon
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -304,7 +305,7 @@ class HomeTextFitComposeTest {
     }
 
     private fun model(weapon: WeaponId, directive: RebirthDirective): HomeUiModel {
-        val weapons = WeaponNames.map { (id, name) -> WeaponDefinition(id, name, "Description", listOf("tag"), 100) }.toImmutableList()
+        val weapons = WeaponNames.map { (id, name) -> testWeapon(id, name) }.toImmutableList()
         val policy = TestRebirthPolicy.copy(profiles = TestRebirthPolicy.profiles.map { it.copy(directive = directive) }.toImmutableList())
         return HomeReducer(defaultCoreShapeDefinitions(), 400, 12, policy, weapons, 40).uiModel(
             HomeProgressProjection(

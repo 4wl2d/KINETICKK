@@ -179,6 +179,7 @@ private fun validateBootstrap(data: ContentBootstrapData) {
         data.relics.any { it.id == pairing.first } && data.relics.any { it.id == pairing.second }
     }) { "Pairings must join catalog Relics" }
     validateBuildReferences(data.items, data.build)
+    validateWeaponKeys(data.weapons, data.relics)
 
     requireUniqueIds("core-shape", data.coreShapes.map(CoreShapeDefinition::id))
     require(data.coreShapes.map(CoreShapeDefinition::id) == CoreShape.entries.toList()) {
@@ -231,6 +232,19 @@ private fun validateMatrix(nodes: List<MatrixNodeDefinition>) {
             require(node.row == prerequisites.maxOf(MatrixNodeDefinition::row) + 1) {
                 "Matrix node ${node.id} must sit one row below its deepest prerequisite"
             }
+        }
+    }
+}
+
+/**
+ * Relic key harmony must be reachable for every weapon: its key is carried by at least two Relics, one of
+ * them an ordinary (non-Sovereign) Relic that any run can be offered.
+ */
+private fun validateWeaponKeys(weapons: List<WeaponDefinition>, relics: List<RelicDefinition>) {
+    weapons.forEach { weapon ->
+        val carriers = relics.filter { weapon.key in it.keys }
+        require(carriers.size >= 2 && carriers.any { !it.isSovereign }) {
+            "Weapon ${weapon.id} key ${weapon.key} must be carried by two Relics, one of them not Sovereign"
         }
     }
 }

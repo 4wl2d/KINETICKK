@@ -287,7 +287,13 @@ class RelicSystemTest {
 
     @Test
     fun agonyScepterCreatesAWeaponSpecificRuntimeMutationForEveryWeapon() {
-        val signatures = WeaponId.entries.associateWith { weapon ->
+        // Weapons whose behavior has not landed carry no Forbidden form yet: they must not mutate at all.
+        PendingWeaponBehaviors.forEach { weapon ->
+            val idle = exerciseAgonyMutation(weapon, equipScepter = true)
+            assertTrue(idle.all { it == 0 }, "$weapon now has an Agony form: drop it from PendingWeaponBehaviors")
+        }
+        val implemented = WeaponId.entries.filterNot { it in PendingWeaponBehaviors }
+        val signatures = implemented.associateWith { weapon ->
             val baseline = exerciseAgonyMutation(weapon, equipScepter = false)
             assertTrue(baseline.all { it == 0 }, "$weapon reported an Agony mutation without Agony Scepter: $baseline")
 
@@ -305,7 +311,7 @@ class RelicSystemTest {
         }
 
         assertEquals(
-            WeaponId.entries.size,
+            implemented.size,
             signatures.values.toSet().size,
             "Agony Scepter mutation signatures were not weapon-specific: $signatures",
         )

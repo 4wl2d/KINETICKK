@@ -68,6 +68,12 @@ internal fun MutableGameState.activateTotemForTesting(x: Float = coreX, y: Float
 
 internal fun MutableGameState.equipWeaponForTesting(id: WeaponId) = equipRunWeapon(id)
 
+/** Owns [ids] as a profile purchase before the run would (Totem and point-of-interest offers read this set). */
+internal fun MutableGameState.unlockWeaponsForTesting(ids: Iterable<WeaponId>) {
+    unlockedWeaponSet.addAll(ids)
+    unlockedWeaponView = unlockedWeaponSet.toSet()
+}
+
 internal fun MutableGameState.acquireItemForTesting(id: Int) = acquireItem(id)
 
 internal fun MutableGameState.acquireRelicForTesting(id: RelicId) = acquireRelic(id)

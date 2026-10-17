@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
+import kinetickk.ball.gameplay.interaction.fixtureWeapon
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.ImageBitmap
@@ -405,7 +406,7 @@ class WorldHotPathAllocationTest {
             items = immutableListOf(ItemDefinition(0, "Ram", "Ram", ItemRarity.COMMON, immutableListOf(BuildTag.RAM),
                 stats = immutableListOf(StatDelta(ItemEffect.IMPACT_DAMAGE, 0.05f), StatDelta(ItemEffect.WEAPON_POWER, 0.04f)),
                 maxStacks = 3, unlockLevel = 1)),
-            weapons = WeaponId.entries.map { WeaponDefinition(it, it.name, "Fixture", listOf("TAG"), 0) }.toImmutableList(),
+            weapons = WeaponId.entries.map { fixtureWeapon(it, description = "Fixture") }.toImmutableList(),
             weaponMasteries = WeaponMastery.entries.toImmutableList(),
             relics = rewardFixtureRelics.toImmutableList(),
             rebirth = RebirthPolicySnapshot(

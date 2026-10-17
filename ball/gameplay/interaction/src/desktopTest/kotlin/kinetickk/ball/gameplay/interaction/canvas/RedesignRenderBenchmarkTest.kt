@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
+import kinetickk.ball.gameplay.interaction.fixtureWeapon
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.ImageBitmap
@@ -192,9 +193,8 @@ private fun benchmarkFixtureContent() = GameplayContentSnapshot(
             maxStacks = 3, unlockLevel = 1,
         )
     }.toImmutableList(),
-    weapons = immutableListOf(WeaponDefinition(
+    weapons = immutableListOf(fixtureWeapon(
         WeaponId.FLUX_WAKE, "Flux Wake", "Your trail hardens into a cutting wake; enemies crossing it take damage.",
-        listOf("TRAIL"), 0,
     )),
     weaponMasteries = WeaponMastery.entries.toImmutableList(),
     relics = rewardFixtureRelics.toImmutableList(),

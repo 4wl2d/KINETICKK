@@ -397,9 +397,17 @@ class ContentCatalogTest {
         assertEquals(weapons.size, weapons.map(WeaponDefinition::id).toSet().size)
         assertEquals(weapons.size, weapons.map(WeaponDefinition::name).toSet().size)
         assertEquals(weapons.size, weapons.map(WeaponDefinition::description).toSet().size)
-        assertTrue(weapons.zipWithNext().all { (left, right) ->
-            right.permanentUnlockCost > left.permanentUnlockCost
+        // The original twelve keep their rising Matter costs; the twelve additions rise with their Rebirth
+        // gate (a higher gate never costs less) and never share a price.
+        val original = weapons.filter { it.id.ordinal < ORIGINAL_WEAPONS }
+        assertTrue(original.zipWithNext().all { (left, right) -> right.permanentUnlockCost > left.permanentUnlockCost })
+        assertTrue(original.all { it.minimumRebirth == 0 })
+        val additions = weapons.filter { it.id.ordinal >= ORIGINAL_WEAPONS }.sortedBy(WeaponDefinition::permanentUnlockCost)
+        assertEquals(ORIGINAL_WEAPONS, additions.size)
+        assertTrue(additions.zipWithNext().all { (left, right) ->
+            right.permanentUnlockCost > left.permanentUnlockCost && right.minimumRebirth >= left.minimumRebirth
         })
+        assertEquals(0, weapons.first().permanentUnlockCost, "the starter weapon is free")
         weapons.forEach { weapon -> assertEquals(weapon, gameplay.weapon(weapon.id)) }
 
         val milestones = gameplay.weaponMasteries
@@ -415,6 +423,55 @@ class ContentCatalogTest {
                 right.damageBonus > left.damageBonus &&
                 right.activationSpeedBonus > left.activationSpeedBonus
         })
+    }
+
+    @Test
+    fun everyWeaponCarriesItsTypedSynergyContract() {
+        val weapons = gameplay.weapons
+        val roster = weapons.associate { weapon ->
+            weapon.id to listOf(
+                weapon.family.name, weapon.element?.name ?: "-", weapon.cadence.name,
+                weapon.tags.joinToString("+") { it.name }, weapon.key.name, weapon.scaling.name, weapon.signature.name,
+            ).joinToString(" ")
+        }
+        assertEquals(
+            mapOf(
+                WeaponId.FLUX_WAKE to "MOMENTUM THERMAL CONTINUOUS DRIVE+OVERCLOCK MOTION SPEED ORB",
+                WeaponId.MORNINGSTAR to "ORBITAL - CONTACT RAM+ANCHOR GRAVITY MASS PRISM",
+                WeaponId.PHASE_LATTICE to "AURA CRYO CONTINUOUS BULWARK+ANCHOR STILLNESS SHIELD RING",
+                WeaponId.NULL_LANCE to "PROJECTILE - DISCRETE DRIVE+PRECISION MOTION SPEED SHARD",
+                WeaponId.GRAVITY_MINES to "TRAP GRAVITIC DISCRETE ANCHOR+CHAIN STILLNESS BRAKE DIAMOND",
+                WeaponId.ION_SWARM to "ORBITAL ION DISCRETE ARSENAL+CHAIN CHARGE ATTACK_SPEED HEXAGON",
+                WeaponId.RIFT_BLADES to "ORBITAL VOID CONTACT PRECISION+RAM CRITICAL CRIT STAR",
+                WeaponId.ARC_COIL to "CHAIN ION DISCRETE ARSENAL+CHAIN CHARGE STATUS PENTAGON",
+                WeaponId.QUASAR_CANNON to "PROJECTILE SONIC DISCRETE ARSENAL+OVERCLOCK HEAT HEAT STAR",
+                WeaponId.ENTROPY_FIELD to "AURA ENTROPY CONTINUOUS BULWARK+CHAIN DECAY STATUS SPIRAL",
+                WeaponId.SINGULARITY_SPEAR to "BEAM VOID DISCRETE OVERCLOCK+PRECISION VOID OVERDRIVE CRESCENT",
+                WeaponId.PRISM_RELAY to "CHAIN - DISCRETE PRECISION+FORTUNE SPREAD LUCK TESSERACT",
+                WeaponId.GYRE_DISC to "MOMENTUM - DISCRETE DRIVE+PRECISION MOTION SPEED ORB",
+                WeaponId.SCATTER_BLOOM to "PROJECTILE - DISCRETE DRIVE+RAM MOTION DASH SHARD",
+                WeaponId.TETHER_ARC to "BEAM ION CONTINUOUS ARSENAL+PRECISION CHARGE ATTACK_SPEED DIPOLE",
+                WeaponId.SENTRY_GRID to "TRAP - DISCRETE ANCHOR+ARSENAL STILLNESS ATTACK_SPEED TESSERACT",
+                WeaponId.HUNTER_SALVO to "PROJECTILE ENTROPY DISCRETE CHAIN+ARSENAL SPREAD COMBO HEXAGON",
+                WeaponId.CONCUSSION_ENGINE to "PULSE SONIC DISCRETE RAM+BULWARK MOTION SPEED SPIRAL",
+                WeaponId.GLACIER_BELL to "PULSE CRYO DISCRETE ANCHOR+BULWARK COLD BRAKE DIAMOND",
+                WeaponId.EVENT_LENS to "TRAP GRAVITIC DISCRETE ANCHOR+CHAIN GRAVITY MASS DIPOLE",
+                WeaponId.SOLAR_SWEEP to "BEAM THERMAL CONTINUOUS OVERCLOCK+PRECISION HEAT HEAT RING",
+                WeaponId.AEGIS_SHARDS to "ORBITAL - DISCRETE BULWARK+ARSENAL SHIELD SHIELD PRISM",
+                WeaponId.HOLLOW_RIFT to "TRAP VOID DISCRETE DRIVE+CHAIN VOID DASH CRESCENT",
+                WeaponId.RESONANCE_DRUM to "PULSE SONIC DISCRETE ANCHOR+RAM ECHO MASS PENTAGON",
+            ),
+            roster,
+        )
+        assertTrue(weapons.all { it.tags.size == 2 && it.tags.toSet().size == 2 })
+        assertTrue(weapons.all { it.masteryForms.size == 3 && it.masteryForms.none(String::isBlank) && it.signatureText.isNotBlank() })
+        assertEquals(weapons.size * 3, weapons.flatMap { it.masteryForms }.toSet().size, "mastery forms are each weapon's own")
+        assertEquals(weapons.size, weapons.map(WeaponDefinition::signatureText).toSet().size)
+        CoreShape.entries.forEach { shape -> assertEquals(2, weapons.count { it.signature == shape }, "$shape signature weapons") }
+        weapons.forEach { weapon ->
+            val carriers = ui.relics.filter { weapon.key in it.keys }
+            assertTrue(carriers.size >= 2 && carriers.any { !it.isSovereign }, "${weapon.id} key ${weapon.key} carriers")
+        }
     }
 
     @Test
@@ -553,3 +610,5 @@ class ContentCatalogTest {
     private fun mechanicalSignature(item: ItemDefinition): List<Any> =
         listOf(item.rarity, item.tags, item.elements, item.stats, item.clauses, item.rules, item.maxStacks, item.risk)
 }
+
+private const val ORIGINAL_WEAPONS = 12

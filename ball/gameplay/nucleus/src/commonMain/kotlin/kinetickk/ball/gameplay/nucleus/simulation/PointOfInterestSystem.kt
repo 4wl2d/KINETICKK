@@ -9,7 +9,7 @@ import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.BuildTag
-import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.foundation.collections.toImmutableList
@@ -206,7 +206,7 @@ internal fun MutableGameState.selectRewardFocus(focus: RewardFocus) {
             }
         }
         DirectedReward.WEAPON -> {
-            val pool = content.weapons.filter { it.id != weapon && weaponRewardFocus(it.id) == focus }
+            val pool = weaponOfferCandidates().filter { weaponRewardFocus(it) == focus }
                 .shuffled(rewardRandom).take(2)
             choices = listOf(ChoiceOption(ChoiceType.TOTEM, "Amplify ${currentWeaponDefinition.name}",
                 "Raise current weapon mastery by one level.", "AMPLIFY", weaponId = weapon,
@@ -234,8 +234,9 @@ internal fun itemRewardFocus(item: ItemDefinition): RewardFocus = when {
     else -> RewardFocus.OFFENSE
 }
 
-internal fun weaponRewardFocus(weapon: WeaponId): RewardFocus = when (weapon) {
-    WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR, WeaponId.RIFT_BLADES, WeaponId.PHASE_LATTICE -> RewardFocus.MOTION
-    WeaponId.GRAVITY_MINES, WeaponId.ION_SWARM, WeaponId.ENTROPY_FIELD, WeaponId.ARC_COIL -> RewardFocus.CONTROL
-    WeaponId.NULL_LANCE, WeaponId.QUASAR_CANNON, WeaponId.SINGULARITY_SPEAR, WeaponId.PRISM_RELAY -> RewardFocus.STRIKE
+/** A weapon's POI direction follows its first build tag: movement, control or striking power. */
+internal fun weaponRewardFocus(weapon: WeaponDefinition): RewardFocus = when (weapon.tags.first()) {
+    BuildTag.RAM, BuildTag.DRIVE, BuildTag.OVERCLOCK -> RewardFocus.MOTION
+    BuildTag.ANCHOR, BuildTag.BULWARK, BuildTag.CHAIN -> RewardFocus.CONTROL
+    BuildTag.ARSENAL, BuildTag.PRECISION, BuildTag.FORTUNE -> RewardFocus.STRIKE
 }

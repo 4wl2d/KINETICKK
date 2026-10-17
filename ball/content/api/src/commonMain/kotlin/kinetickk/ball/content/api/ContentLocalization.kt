@@ -20,6 +20,7 @@ internal fun String.contentInRussian(): String? =
  */
 internal val RussianContentSources: List<List<Pair<String, String>>> = listOf(
     ContentPhrasesInRussian,
+    WeaponPhrasesInRussian,
     BuildPhrasesInRussian,
     RelicPhrasesInRussian,
     ItemPhrasesInRussian,

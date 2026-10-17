@@ -132,6 +132,10 @@ internal fun MutableGameState.updateWeapons(delta: Float) {
                 firePrismRelay(power)
             }
         }
+        // The twelve additions are typed in content; until their behavior lands they stay idle.
+        WeaponId.GYRE_DISC, WeaponId.SCATTER_BLOOM, WeaponId.TETHER_ARC, WeaponId.SENTRY_GRID,
+        WeaponId.HUNTER_SALVO, WeaponId.CONCUSSION_ENGINE, WeaponId.GLACIER_BELL, WeaponId.EVENT_LENS,
+        WeaponId.SOLAR_SWEEP, WeaponId.AEGIS_SHARDS, WeaponId.HOLLOW_RIFT, WeaponId.RESONANCE_DRUM -> Unit
     }
 
     var retainedTrailCount = 0

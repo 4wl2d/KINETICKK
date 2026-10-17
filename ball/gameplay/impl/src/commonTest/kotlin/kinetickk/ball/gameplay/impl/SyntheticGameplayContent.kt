@@ -45,7 +45,22 @@ private fun syntheticGameplayContent(): GameplayContentSnapshot {
             )
         }.toImmutableList(),
         weapons = WeaponId.entries.mapIndexed { index, id ->
-            WeaponDefinition(id, "Weapon $index", "Synthetic weapon $index", listOf("TEST"), 0)
+            WeaponDefinition(
+                id = id,
+                name = "Weapon $index",
+                description = "Synthetic weapon $index",
+                family = WeaponFamily.entries[index % WeaponFamily.entries.size],
+                element = null,
+                tags = listOf(BuildTag.entries[index % BuildTag.entries.size], BuildTag.entries[(index + 1) % BuildTag.entries.size]),
+                key = RelicKey.entries[index % RelicKey.entries.size],
+                signature = CoreShape.entries[index % CoreShape.entries.size],
+                scaling = WeaponScaling.entries[index % WeaponScaling.entries.size],
+                cadence = WeaponCadence.DISCRETE,
+                permanentUnlockCost = 0,
+                minimumRebirth = 0,
+                masteryForms = listOf("Synthetic form one", "Synthetic form two", "Synthetic form three"),
+                signatureText = "Synthetic signature twist $index",
+            )
         }.toImmutableList(),
         weaponMasteries = WeaponMastery.entries.toImmutableList(),
         relics = RelicId.entries.mapIndexed { index, id ->

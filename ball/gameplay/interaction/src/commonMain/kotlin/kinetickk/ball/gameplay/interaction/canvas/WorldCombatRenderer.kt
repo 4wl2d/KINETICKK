@@ -434,6 +434,10 @@ internal fun DrawScope.drawWeapon(engine: GameplayRenderModel, core: Offset, sha
                 drawRect(Kk.Bone.copy(alpha = 0.8f), Offset(core.x - 10f, core.y - 10f), Size(20f, 20f), style = kkStroke(1.5f))
             }
         }
+        // The twelve additions idle until their behavior and world projections land.
+        WeaponId.GYRE_DISC, WeaponId.SCATTER_BLOOM, WeaponId.TETHER_ARC, WeaponId.SENTRY_GRID,
+        WeaponId.HUNTER_SALVO, WeaponId.CONCUSSION_ENGINE, WeaponId.GLACIER_BELL, WeaponId.EVENT_LENS,
+        WeaponId.SOLAR_SWEEP, WeaponId.AEGIS_SHARDS, WeaponId.HOLLOW_RIFT, WeaponId.RESONANCE_DRUM -> Unit
     }
 }
 

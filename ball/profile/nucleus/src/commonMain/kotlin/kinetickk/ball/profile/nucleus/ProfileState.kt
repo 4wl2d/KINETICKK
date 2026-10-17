@@ -181,6 +181,7 @@ private fun isPolicyCompatibleAtConstruction(
         policy.weapons.first().id !in profile.loadout.unlockedWeapons ||
         profile.loadout.unlockedWeapons.isEmpty() ||
         profile.loadout.unlockedWeapons.size > policy.weapons.size ||
+        profile.loadout.unlockedWeapons.size > kinetickk.ball.content.api.ContentBounds.MAX_WEAPONS ||
         profile.loadout.unlockedWeapons.any { it !in allowedWeapons }
     ) return false
     val matrix = profile.matrix

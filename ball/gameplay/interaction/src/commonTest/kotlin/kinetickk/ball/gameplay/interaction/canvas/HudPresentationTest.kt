@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
+import kinetickk.ball.gameplay.interaction.fixtureWeapon
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.GameplayContentSnapshot
@@ -178,7 +179,7 @@ private fun fixtureContent() = GameplayContentSnapshot(
             maxStacks = 3, unlockLevel = 1,
         ),
     ),
-    weapons = WeaponId.entries.map { WeaponDefinition(it, it.name, "Fixture.", listOf("TRAIL"), 0) }.toImmutableList(),
+    weapons = WeaponId.entries.map { fixtureWeapon(it, description = "Fixture.") }.toImmutableList(),
     weaponMasteries = WeaponMastery.entries.toImmutableList(),
     relics = rewardFixtureRelics.toImmutableList(),
     rebirth = RebirthPolicySnapshot(

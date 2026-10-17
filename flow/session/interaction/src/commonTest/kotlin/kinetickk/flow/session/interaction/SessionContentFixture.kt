@@ -14,6 +14,12 @@ import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
+import kinetickk.ball.content.api.RelicKey
+import kinetickk.ball.content.api.WeaponCadence
+import kinetickk.ball.content.api.WeaponDefinition
+import kinetickk.ball.content.api.WeaponFamily
+import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.WeaponScaling
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
@@ -53,3 +59,22 @@ internal fun testItems(count: Int = TEST_ITEM_COUNT): ImmutableList<ItemDefiniti
             unlockLevel = 1,
         )
     }.toImmutableList()
+
+/** A neutral weapon for Session scenes that only read its id, name, description and price. */
+internal fun testWeapon(id: WeaponId, name: String = id.name, description: String = "Description", cost: Int = 100): WeaponDefinition =
+    WeaponDefinition(
+        id = id,
+        name = name,
+        description = description,
+        family = WeaponFamily.PROJECTILE,
+        element = null,
+        tags = listOf(BuildTag.DRIVE, BuildTag.PRECISION),
+        key = RelicKey.MOTION,
+        signature = CoreShape.entries[id.ordinal % CoreShape.entries.size],
+        scaling = WeaponScaling.SPEED,
+        cadence = WeaponCadence.DISCRETE,
+        permanentUnlockCost = cost,
+        minimumRebirth = 0,
+        masteryForms = listOf("Test form one", "Test form two", "Test form three"),
+        signatureText = "Test signature twist.",
+    )

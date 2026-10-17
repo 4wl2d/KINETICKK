@@ -314,6 +314,21 @@ of the median. The no-POI bot steers around obstacles, skips ricochet and slam
 items (it rarely bounces), passes on the Furnace Covenant and keeps wider of
 skipped POIs; the reference seed and seven of the ten probe seeds win.
 
+The weapon contract step types the roster before the weapons wave. Twelve
+`WeaponId` entries are appended (24 in all, bound 24), each with a family, an
+element, two build tags, a Relic key, a scaling stat, a cadence, a signature
+character, three mastery forms and a signature twist; the free-form weapon tags
+are gone. Every weapon key rides on at least two Relics, one of them ordinary,
+and every character is the signature of exactly two weapons. The original twelve
+keep their Matter prices; the additions cost 120 to 2,600 and eight of them need
+Rebirth rank 1 to 9, which purchases enforce (`WeaponRebirthLocked`). The new
+weapons equip and idle until their behavior lands. Totem recalibration and point
+of interest weapon offers now deal only weapons the profile owns: a profile that
+owns only the starter can amplify but no longer recalibrate, and a weapon's point
+of interest direction follows its first tag. The no-POI runs own the original
+twelve weapons, so their recalibration offers match the earlier ones; the seeded
+trace and the probe results are unchanged.
+
 The compact exit workflow removes the old causal-depth assertion that failed
 when a busy Profile refused progress before acceptance. An injected
 persistence callback reproduced that failure on the original source snapshot;

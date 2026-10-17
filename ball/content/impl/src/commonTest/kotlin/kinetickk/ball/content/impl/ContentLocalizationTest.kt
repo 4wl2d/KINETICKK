@@ -36,7 +36,12 @@ class ContentLocalizationTest {
         val build = content.build
         val phrases = buildList {
             content.items.forEach { addAll(listOf(it.name, it.description)) }
-            content.weapons.forEach { addAll(listOf(it.name, it.description)); addAll(it.tags) }
+            content.weapons.forEach {
+                addAll(listOf(it.name, it.description, it.signatureText, it.family.displayLabel, it.scaling.displayLabel))
+                addAll(it.masteryForms)
+            }
+            addAll(kinetickk.ball.content.api.WeaponFamily.entries.map { it.displayLabel })
+            addAll(kinetickk.ball.content.api.WeaponScaling.entries.map { it.displayLabel })
             content.matrixNodes.forEach { addAll(listOf(it.name, it.description)) }
             addAll(MatrixBranch.entries.map { it.displayLabel })
             content.relics.forEach { addAll(listOf(it.name, it.upside, it.liability)) }
@@ -68,6 +73,9 @@ class ContentLocalizationTest {
         assertDistinctInRussian(content.items.map { it.name })
         assertDistinctInRussian(content.items.map { it.description })
         assertDistinctInRussian(content.relics.map { it.name })
+        assertDistinctInRussian(content.weapons.map { it.name })
+        assertDistinctInRussian(kinetickk.ball.content.api.WeaponFamily.entries.map { it.displayLabel })
+        assertDistinctInRussian(kinetickk.ball.content.api.WeaponScaling.entries.map { it.displayLabel })
         assertDistinctInRussian(build.pairings.map { it.name })
         assertDistinctInRussian(build.reactions.map { it.name })
         assertDistinctInRussian(RebirthMutator.entries.map { it.displayName })

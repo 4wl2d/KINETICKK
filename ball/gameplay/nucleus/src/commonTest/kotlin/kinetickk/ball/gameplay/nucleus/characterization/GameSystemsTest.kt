@@ -143,13 +143,22 @@ class GameSystemsTest {
     @Test
     fun everyWeaponCanBeEquippedAndProducesADistinctRuntimeSignature() {
         val signatures = WeaponId.entries.associateWith(::exerciseWeapon)
+        val (pending, implemented) = signatures.entries.partition { it.key in PendingWeaponBehaviors }
 
         assertEquals(WeaponId.entries.size, signatures.size)
         assertEquals(
-            WeaponId.entries.size,
-            signatures.values.toSet().size,
+            implemented.size,
+            implemented.map { it.value }.toSet().size,
             "Weapon runtime signatures were not distinct: $signatures",
         )
+        // The typed additions equip safely but stay idle until their behavior lands; each one must leave
+        // this list (and gain its own branch above) the moment it acts.
+        val idle = WeaponRuntimeSignature(
+            trailCount = 0, orbitalCount = 0, orbitalRadiusBits = 0, nodeCount = 0, projectileCount = 0,
+            projectilePierce = -1, projectileRadiusBits = 0, projectileSourceOrdinal = -1, arcCount = 0,
+            beamActive = false, morningstarMoved = false, enemyDamageMilli = 0,
+        )
+        pending.forEach { (id, signature) -> assertEquals(idle, signature, "$id now acts: drop it from PendingWeaponBehaviors") }
     }
 
     @Test
@@ -465,6 +474,12 @@ class GameSystemsTest {
                 engine.update(GameScenario.FIXED_STEP)
                 assertTrue(engine.projectiles.any { !it.hostile && it.sourceWeapon == id && it.pierce == 2 })
             }
+            WeaponId.GYRE_DISC, WeaponId.SCATTER_BLOOM, WeaponId.TETHER_ARC, WeaponId.SENTRY_GRID,
+            WeaponId.HUNTER_SALVO, WeaponId.CONCUSSION_ENGINE, WeaponId.GLACIER_BELL, WeaponId.EVENT_LENS,
+            WeaponId.SOLAR_SWEEP, WeaponId.AEGIS_SHARDS, WeaponId.HOLLOW_RIFT, WeaponId.RESONANCE_DRUM -> {
+                observedEnemy = engine.addEnemyForTesting(250f, 0f)
+                engine.update(GameScenario.FIXED_STEP)
+            }
         }
 
         val visualFxCues = engine.takeVisualFxCues()
@@ -509,3 +524,4 @@ class GameSystemsTest {
         val enemyDamageMilli: Int,
     )
 }
+

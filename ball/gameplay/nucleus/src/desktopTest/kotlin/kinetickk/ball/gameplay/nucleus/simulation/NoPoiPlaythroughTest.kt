@@ -22,6 +22,7 @@ class NoPoiPlaythroughTest {
             val seed = 2026
             report("REFERENCE attempt=${attempt + 1} seed=$seed simulationSpeed=1.0 inputHz=50 freshLab=true")
             val state = MutableGameState(canonicalGameplayContent, seed = seed)
+            state.unlockWeaponsForTesting(ReferenceArmory)
             state.applyPreferences(state.settings.copy(simulationSpeed = 1f))
             state.startRun()
             assertEquals(1f, state.settings.simulationSpeed)
@@ -92,6 +93,7 @@ class NoPoiPlaythroughTest {
         var wins = 0
         for (seed in (1..10).map { it * 7_919 + 13 }) {
             val state = MutableGameState(canonicalGameplayContent, seed = seed)
+            state.unlockWeaponsForTesting(ReferenceArmory)
             state.applyPreferences(state.settings.copy(simulationSpeed = 1f))
             state.startRun()
             val bot = NoPoiBot()
@@ -365,3 +367,10 @@ private class NoPoiBot(
         return 0f
     }
 }
+
+/**
+ * The reference run owns the original twelve weapons, so its Totem recalibrations deal exactly the
+ * offers they did before weapon offers were limited to owned weapons (a profile that owns only the
+ * starter can amplify but never recalibrate).
+ */
+private val ReferenceArmory: List<WeaponId> = WeaponId.entries.take(12)

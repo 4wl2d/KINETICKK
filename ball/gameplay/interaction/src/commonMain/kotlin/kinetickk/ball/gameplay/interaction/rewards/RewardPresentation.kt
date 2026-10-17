@@ -598,7 +598,7 @@ internal fun GameplayRenderModel.rewardCardPresentation(
         bandStart = when {
             item != null -> item.rarity.displayLabel.localizedContent(language)
             relicAspect != null -> relicAspect.displayLabel.localizedContent(language)
-            weapon != null -> weapon.tags.firstOrNull()?.localizedContent(language) ?: choiceTag
+            weapon != null -> weapon.tags.first().displayLabel.localizedContent(language)
             decline -> language.text(if (choice.heirloom) OverlayRedesignText.Heirloom else OverlayRedesignText.Relics)
             else -> choiceTag
         },
@@ -610,7 +610,7 @@ internal fun GameplayRenderModel.rewardCardPresentation(
         },
         family = null,
         tags = when {
-            weapon != null -> weapon.tags.map { it.localizedContent(language) }.take(2)
+            weapon != null -> weapon.tags.map { it.displayLabel.localizedContent(language) }
             item != null -> buildList {
                 item.tags.forEach { add(it.displayLabel.localizedContent(language)) }
                 if (item.risk) add(language.text(OverlayRedesignText.Risk))

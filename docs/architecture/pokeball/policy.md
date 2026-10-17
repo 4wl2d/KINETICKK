@@ -135,7 +135,7 @@ remain independently enforced.
 | Desktop synthesis samples / PCM bytes per tone | 22050 / 44100 | validated one-second maximum buffer shape |
 | Android audio workers / queued tasks | 1 / 24 | fixed executor and discard-oldest queue policy |
 | Android synthesis samples / PCM bytes per tone | 22050 / 44100 | validated one-second maximum PCM16 buffer shape |
-| items / weapons / Matrix nodes / Relics / named pairings / reactions | 192 / 12 / 40 / 24 / 32 / 21 (current catalog 173 / 12 / 32 / 22 / 20 / 21) | Content bootstrap validation, including key-consistent pairings, declared elements, Break floors and Matrix prerequisites within their branch, each node one row below its deepest prerequisite; reactions are exactly one per pair of the 7 status elements |
+| items / weapons / Matrix nodes / Relics / named pairings / reactions | 192 / 24 / 40 / 24 / 32 / 21 (current catalog 173 / 24 / 32 / 22 / 20 / 21) | Content bootstrap validation, including key-consistent pairings, every weapon key carried by two Relics (one not Sovereign), declared elements, Break floors and Matrix prerequisites within their branch, each node one row below its deepest prerequisite; reactions are exactly one per pair of the 7 status elements |
 | Matrix node ranks / rows / effects per node | 5 / 8 / 4 | Content definition construction; every node lists one price per rank |
 | Rebirth level | `0..10` | Content typed policy plus Profile/Gameplay validation |
 | equipped Relic slots / rank | 4 / `1..3` (generic Meld reaches 2) | captured Content Relic policy plus Gameplay retention/saturation |
@@ -166,17 +166,17 @@ copying modes or source-body expectations is a policy requirement.
 | Derived ID | Effective bound | Mechanical derivation |
 |---|---:|---|
 | `gameplay.item-indexed-state` | item arrays, Reborn flags, status accumulators and discoveries <=192; clause timers/counters <= 192 x 2 | validated contiguous Item IDs; pending is a subset; cardinality-stable COW |
-| `gameplay.weapon-indexed-state` | unlocked weapons/mutation counters <=12 | closed WeaponId bootstrap; invariant-preserving COW |
+| `gameplay.weapon-indexed-state` | unlocked weapons/mutation counters <=24 | closed WeaponId bootstrap; invariant-preserving COW |
 | `gameplay.matrix-indexed-state` | rank slots <=40; folded run modifiers fixed-size | validated closed MatrixNodeId catalog sizes the array; one immutable fold per run start |
 | `gameplay.relic-indexed-state` | state arrays <=24; enemy status cells <=120 x 71 | validated RelicId catalog; per-enemy status layout driven by the element count (four 7-wide element blocks, 21 reaction-pair slots, Void memory, Unmake and Blackfire cells) times the enemy cap |
 | `gameplay.collision-live-enemy-ids` | <=120 | lazy compact sorted array from bounded live enemies |
 | `gameplay.reducer-copy-collections` | equal to bounded committed source cardinality | isolated candidate storage; immutable sharing or owned copies; bounded pending outputs |
 | `gameplay.render-projection-collections` | equal to bounded source cardinality | verified predecessor provenance; identity/storage reuse or exact ordered fallback |
 | `gameplay.stable-compaction` | retained cardinality <= bounded source; stable survivor order | forward survivor compaction/reverse-tail deletion or index-stable removal |
-| `profile.codec-temporary-collections` | unlocked <=12; Matrix ranks <=40; retired Lab ranks =8; discoveries <=400 legacy / <=192 current | materialized after schema validation |
+| `profile.codec-temporary-collections` | unlocked <=24; Matrix ranks <=40; retired Lab ranks =8; discoveries <=400 legacy / <=192 current | materialized after schema validation |
 | `session.shell-entries` | 1..2 | one base plus one nullable overlay |
 | `content.closed-ui-catalogs` | CoreShape 12 / WeaponMastery 4 / EnemyType 19 | bootstrap requires exact stable order |
-| `ui.catalog-backed-sources` | Codex items <=192; Codex enemies <=24; Armory weapons <=12; Matrix nodes <=40; mastery closed | validated immutable Content plus bounded Profile state |
+| `ui.catalog-backed-sources` | Codex items <=192; Codex enemies <=24; Armory weapons <=24; Matrix nodes <=40; mastery closed | validated immutable Content plus bounded Profile state |
 | `audio.music-notes` | 8 | fixed literal array with modulo-only indexing |
 | `foundation.immutable-set-copy` | list = input cardinality; set <= input cardinality | safe immutable reuse or owned copy; stable first-occurrence set semantics |
 

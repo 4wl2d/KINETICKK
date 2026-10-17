@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
+import kinetickk.ball.gameplay.interaction.fixtureWeapon
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.ImageBitmap
@@ -285,7 +286,7 @@ private fun shotContent() = GameplayContentSnapshot(
             maxStacks = 3, unlockLevel = 1,
         )
     }.toImmutableList(),
-    weapons = WeaponId.entries.map { WeaponDefinition(it, it.name, "Fixture weapon.", listOf("TRAIL"), 0) }.toImmutableList(),
+    weapons = WeaponId.entries.map { fixtureWeapon(it) }.toImmutableList(),
     weaponMasteries = WeaponMastery.entries.toImmutableList(),
     relics = rewardFixtureRelics.toImmutableList(),
     rebirth = RebirthPolicySnapshot(

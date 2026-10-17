@@ -347,6 +347,10 @@ object ProfileNucleus {
         )
     }
 
+    /**
+     * Equips an owned weapon, or buys a locked one: the Rebirth rank must reach the weapon's gate, then the
+     * Matter price is paid. Gates apply only to the purchase, never to weapons already owned.
+     */
     private fun purchaseOrEquipWeapon(
         state: ProfileState,
         id: kinetickk.ball.content.api.WeaponId,
@@ -354,7 +358,11 @@ object ProfileNucleus {
         val unlocked = state.profile.loadout.unlockedWeapons.toMutableSet()
         var economy = state.profile.economy
         if (id !in unlocked) {
-            val cost = state.policy.weapon(id).permanentUnlockCost.toLong()
+            val definition = state.policy.weapon(id)
+            if (state.profile.rebirthProgress.rank < definition.minimumRebirth) {
+                return rejected(ProfileRejection.WeaponRebirthLocked)
+            }
+            val cost = definition.permanentUnlockCost.toLong()
             if (economy.matter < cost) return rejected(ProfileRejection.InsufficientMatter)
             economy = economy.copy(matter = economy.matter - cost)
             unlocked += id

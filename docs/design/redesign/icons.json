@@ -295,6 +295,178 @@
     }
    ]
   },
+  "weapons.gyre_disc": {
+   "label": "Gyre Disc",
+   "layers": [
+    {
+     "d": "M4 9a8 3 0 1 0 16 0a8 3 0 1 0 -16 0Z",
+     "style": "stroke"
+    },
+    {
+     "d": "M5 15a7 5 0 0 0 14 0",
+     "style": "stroke-dashed"
+    }
+   ]
+  },
+  "weapons.scatter_bloom": {
+   "label": "Scatter Bloom",
+   "layers": [
+    {
+     "d": "M2 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0Z",
+     "style": "fill"
+    },
+    {
+     "d": "M11 9h1M11 15h1M15.5 6h1M15.5 12h1M15.5 18h1M20 4h1M20 9.5h1M20 14.5h1M20 20h1",
+     "style": "stroke"
+    }
+   ]
+  },
+  "weapons.tether_arc": {
+   "label": "Tether Arc",
+   "layers": [
+    {
+     "d": "M2 17a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z",
+     "style": "stroke"
+    },
+    {
+     "d": "M16 7a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z",
+     "style": "fill"
+    },
+    {
+     "d": "M7.5 14.5c1-3 3-1 4-4s3-1 4-3.5",
+     "style": "stroke"
+    }
+   ]
+  },
+  "weapons.sentry_grid": {
+   "label": "Sentry Grid",
+   "layers": [
+    {
+     "d": "M3 15h6v6h-6ZM15 15h6v6h-6ZM9 3h6v6h-6Z",
+     "style": "stroke"
+    },
+    {
+     "d": "M9.5 18h5M10 9.5l-3 5M14 9.5l3 5",
+     "style": "stroke-dotted"
+    }
+   ]
+  },
+  "weapons.hunter_salvo": {
+   "label": "Hunter Salvo",
+   "layers": [
+    {
+     "d": "M14 5a2 2 0 1 0 4 0a2 2 0 1 0 -4 0ZM17 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0ZM14 19a2 2 0 1 0 4 0a2 2 0 1 0 -4 0Z",
+     "style": "fill"
+    },
+    {
+     "d": "M2 5h10M4 12h11M2 19h10",
+     "style": "stroke-dashed"
+    }
+   ]
+  },
+  "weapons.concussion_engine": {
+   "label": "Concussion Engine",
+   "layers": [
+    {
+     "d": "M12 2l2 4.5 4.5-2-2 4.5 4.5 3-4.5 3 2 4.5-4.5-2-2 4.5-2-4.5-4.5 2 2-4.5-4.5-3 4.5-3-2-4.5 4.5 2Z",
+     "style": "stroke"
+    },
+    {
+     "d": "M10.5 12a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0Z",
+     "style": "fill"
+    }
+   ]
+  },
+  "weapons.glacier_bell": {
+   "label": "Glacier Bell",
+   "layers": [
+    {
+     "d": "M6 17v-6a6 6 0 0 1 12 0v6l2 2H4Z",
+     "style": "stroke"
+    },
+    {
+     "d": "M10 22h4",
+     "style": "stroke"
+    },
+    {
+     "d": "M12 8v6",
+     "style": "stroke-dotted"
+    }
+   ]
+  },
+  "weapons.event_lens": {
+   "label": "Event Lens",
+   "layers": [
+    {
+     "d": "M2 12c5-7 15-7 20 0c-5 7-15 7-20 0Z",
+     "style": "stroke"
+    },
+    {
+     "d": "M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z",
+     "style": "fill"
+    }
+   ]
+  },
+  "weapons.solar_sweep": {
+   "label": "Solar Sweep",
+   "layers": [
+    {
+     "d": "M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z",
+     "style": "stroke"
+    },
+    {
+     "d": "M2 16l6-2.5M16 10.5l6-2.5",
+     "style": "stroke"
+    },
+    {
+     "d": "M5 5.5a9 9 0 0 1 9-2.5M19 18.5a9 9 0 0 1 -9 2.5",
+     "style": "stroke-dashed"
+    }
+   ]
+  },
+  "weapons.aegis_shards": {
+   "label": "Aegis Shards",
+   "layers": [
+    {
+     "d": "M12 2l3 3-3 3-3-3ZM5 15l3 3-3 3-3-3ZM19 15l3 3-3 3-3-3Z",
+     "style": "stroke"
+    },
+    {
+     "d": "M12 10.5 14.5 12v3L12 16.5 9.5 15v-3Z",
+     "style": "fill"
+    }
+   ]
+  },
+  "weapons.hollow_rift": {
+   "label": "Hollow Rift",
+   "layers": [
+    {
+     "d": "M12 2l-3 6 4 3-4 4 3 7",
+     "style": "stroke"
+    },
+    {
+     "d": "M5 12a7 10 0 1 0 14 0a7 10 0 1 0 -14 0Z",
+     "style": "stroke-dashed"
+    }
+   ]
+  },
+  "weapons.resonance_drum": {
+   "label": "Resonance Drum",
+   "layers": [
+    {
+     "d": "M4 7a8 3 0 1 0 16 0a8 3 0 1 0 -16 0Z",
+     "style": "stroke"
+    },
+    {
+     "d": "M4 7v10a8 3 0 0 0 16 0V7",
+     "style": "stroke"
+    },
+    {
+     "d": "M4 12a8 3 0 0 0 16 0",
+     "style": "stroke-dashed"
+    }
+   ]
+  },
   "system.integrity": {
    "label": "Integrity",
    "layers": [

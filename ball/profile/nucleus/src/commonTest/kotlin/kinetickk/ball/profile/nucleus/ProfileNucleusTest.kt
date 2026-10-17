@@ -24,6 +24,7 @@ import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
 import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
+import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.PreferenceAdjustmentDirection
 import kinetickk.ball.profile.api.PreferencesProjection
@@ -277,6 +278,44 @@ class ProfileNucleusTest {
             .acceptedFrame().nextState.profile.preferences
         assertFalse(muted.soundEnabled)
         assertFalse(muted.musicEnabled)
+    }
+
+    @Test
+    fun aWeaponRebirthGateOpensAtExactlyItsRankBeforeMatterIsChecked() {
+        val gated = TestProfilePolicy.weapon(WeaponId.TETHER_ARC)
+        assertEquals(2, gated.minimumRebirth)
+        fun purchase(state: ProfileState) =
+            ProfileNucleus.decide(state, ProfileNucleusPulse.Intent(ProfilePulse.PurchaseOrEquipWeapon(gated.id)))
+        fun rich(highestCleared: Int) = readyState(
+            profile = defaultPlayerProfile(TestProfilePolicy).copy(
+                economy = PlayerEconomy(matter = 10_000L, lifetimeMatter = 10_000L),
+                rebirthProgress = RebirthProgress(level = 0, highestCleared = highestCleared),
+            ),
+        )
+
+        // Rank = highest cleared tier + 1: one clear is rank 1, one below the gate.
+        val rankOne = rich(highestCleared = 0)
+        assertEquals(ProfileRejection.WeaponRebirthLocked, purchase(rankOne).rejection())
+        // The gate comes before the price: a poor rank-one profile still hears about the gate.
+        val poor = readyState(profile = rankOne.profile.copy(economy = PlayerEconomy()))
+        assertEquals(ProfileRejection.WeaponRebirthLocked, purchase(poor).rejection())
+
+        val rankTwo = rich(highestCleared = 1)
+        val bought = purchase(rankTwo).acceptedFrame().nextState.profile
+        assertEquals(gated.id, bought.loadout.selectedWeapon)
+        assertTrue(gated.id in bought.loadout.unlockedWeapons)
+        assertEquals(10_000L - gated.permanentUnlockCost, bought.economy.matter)
+
+        // Owning it already: equipping never re-checks the gate.
+        val owned = readyState(
+            profile = rankOne.profile.copy(
+                loadout = PlayerLoadout(
+                    coreShape = rankOne.profile.loadout.coreShape,
+                    unlockedWeapons = rankOne.profile.loadout.unlockedWeapons + gated.id,
+                ),
+            ),
+        )
+        assertEquals(gated.id, purchase(owned).acceptedFrame().nextState.profile.loadout.selectedWeapon)
     }
 
     @Test

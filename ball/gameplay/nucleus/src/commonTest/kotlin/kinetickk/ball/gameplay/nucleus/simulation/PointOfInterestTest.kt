@@ -104,6 +104,24 @@ class PointOfInterestTest {
         assertTrue(game.pointsOfInterest.isEmpty())
     }
 
+    @Test fun aWeaponDirectionOffersOnlyUnlockedWeaponsOfItsFocus() {
+        val game = game()
+        val owned = listOf(WeaponId.NULL_LANCE, WeaponId.GYRE_DISC, WeaponId.ARC_COIL, WeaponId.SENTRY_GRID)
+        game.unlockWeaponsForTesting(owned)
+        game.pendingDirectedRewards = listOf(DirectedReward.WEAPON)
+        game.openNextPendingChoice()
+        val motion = game.choices.indexOfFirst { it.rewardFocus == RewardFocus.MOTION }
+        game.choose(motion)
+
+        // Amplify plus the owned Motion weapons (first tag Drive, Ram or Overclock), never a locked one.
+        val offered = game.choices.filter { it.type == ChoiceType.WEAPON }.map { it.weaponId!! }.toSet()
+        assertEquals(setOf(WeaponId.NULL_LANCE, WeaponId.GYRE_DISC), offered)
+        assertEquals(TotemAction.AMPLIFY_CURRENT, game.choices.first().totemAction)
+        assertEquals(RewardFocus.MOTION, weaponRewardFocus(game.content.weapon(WeaponId.SCATTER_BLOOM)))
+        assertEquals(RewardFocus.CONTROL, weaponRewardFocus(game.content.weapon(WeaponId.SENTRY_GRID)))
+        assertEquals(RewardFocus.STRIKE, weaponRewardFocus(game.content.weapon(WeaponId.ARC_COIL)))
+    }
+
     @Test fun directedRewardSharesQueueAndFocusCannotRerollOutOfCategory() {
         val game = game()
         game.pendingLevelChoices = 1

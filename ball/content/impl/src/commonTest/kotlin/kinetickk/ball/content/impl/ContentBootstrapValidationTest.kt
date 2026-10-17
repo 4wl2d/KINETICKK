@@ -67,15 +67,23 @@ class ContentBootstrapValidationTest {
     @Test
     fun weaponBoundRejectsNPlusOne() {
         val data = defaultContentBootstrapData()
-        val extra = WeaponDefinition(
-            id = WeaponId.FLUX_WAKE,
-            name = "Overflow Weapon",
-            description = "Only used to exercise the bootstrap weapon bound.",
-            tags = listOf("TEST"),
-            permanentUnlockCost = 0,
-        )
+        val extra = data.weapons.first().copied(name = "Overflow Weapon")
 
-        assertRejected(data.copy(weapons = data.weapons + extra), "weapons size 13")
+        assertRejected(data.copy(weapons = data.weapons + extra), "weapons size 25")
+    }
+
+    @Test
+    fun aWeaponKeyMustBeCarriedByTwoRelicsOneOfThemOrdinary() {
+        val data = defaultContentBootstrapData()
+        // Fragile rides on a single Relic: harmony with it would be a dead end.
+        assertEquals(1, data.relics.count { RelicKey.FRAGILE in it.keys })
+        assertRejected(
+            data.copy(weapons = data.weapons.replaceLast(data.weapons.last().copied(key = RelicKey.FRAGILE))),
+            "key FRAGILE must be carried by two Relics",
+        )
+        // Shield rides on exactly two ordinary Relics, the minimum the rule accepts.
+        assertEquals(2, data.relics.count { RelicKey.SHIELD in it.keys && !it.isSovereign })
+        createContentCatalogForTesting(data.copy(weapons = data.weapons.replaceLast(data.weapons.last().copied(key = RelicKey.SHIELD))))
     }
 
     @Test
@@ -174,13 +182,7 @@ class ContentBootstrapValidationTest {
         assertRejected(
             data.copy(
                 weapons = data.weapons.replaceLast(
-                    WeaponDefinition(
-                        id = WeaponId.FLUX_WAKE,
-                        name = data.weapons.last().name,
-                        description = data.weapons.last().description,
-                        tags = data.weapons.last().tags,
-                        permanentUnlockCost = data.weapons.last().permanentUnlockCost,
-                    ),
+                    data.weapons.last().copied(id = WeaponId.FLUX_WAKE),
                 ),
             ),
             "weapon ids must be unique",
@@ -409,3 +411,24 @@ private fun <Value> List<Value>.replaceLast(replacement: Value): List<Value> =
 
 private fun <Value> List<Value>.withReplaced(index: Int, replacement: Value): ImmutableList<Value> =
     mapIndexed { i, value -> if (i == index) replacement else value }.toImmutableList()
+
+private fun WeaponDefinition.copied(
+    id: WeaponId = this.id,
+    name: String = this.name,
+    key: RelicKey = this.key,
+): WeaponDefinition = WeaponDefinition(
+    id = id,
+    name = name,
+    description = description,
+    family = family,
+    element = element,
+    tags = tags,
+    key = key,
+    signature = signature,
+    scaling = scaling,
+    cadence = cadence,
+    permanentUnlockCost = permanentUnlockCost,
+    minimumRebirth = minimumRebirth,
+    masteryForms = masteryForms,
+    signatureText = signatureText,
+)

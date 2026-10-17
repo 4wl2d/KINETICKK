@@ -17,6 +17,7 @@ import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.lifetimeMatterOfferLevel
 
@@ -60,7 +61,9 @@ internal fun MutableGameState.openTotemChoice() {
     } else {
         "LEVEL $nextLevel"
     }
-    choices = listOf(
+    // Recalibration needs another owned weapon to offer; a profile with only the starter amplifies.
+    val canRecalibrate = weaponOfferCandidates().isNotEmpty()
+    choices = listOfNotNull(
         ChoiceOption(
             type = ChoiceType.TOTEM,
             title = "Amplify ${currentWeaponDefinition.name}",
@@ -75,7 +78,7 @@ internal fun MutableGameState.openTotemChoice() {
             description = "Recalibrate the Totem, then choose one of three different weapon systems.",
             tag = "RECALIBRATE",
             totemAction = TotemAction.CHANGE_WEAPON,
-        ),
+        ).takeIf { canRecalibrate },
     )
     dashBufferTime = 0f
     phase = GamePhase.CHOICE
@@ -88,9 +91,12 @@ internal fun MutableGameState.openWeaponChoice() {
     phase = GamePhase.CHOICE
 }
 
+/** Weapons a Totem or point of interest may offer: owned by the profile and not the one equipped. */
+internal fun MutableGameState.weaponOfferCandidates(): List<WeaponDefinition> =
+    content.weapons.filter { it.id != weapon && it.id in unlockedWeapons }
+
 internal fun MutableGameState.buildWeaponChoices() {
-    val pool = content.weapons
-        .filter { it.id != weapon }
+    val pool = weaponOfferCandidates()
         .shuffled(rewardRandom)
         .take(WEAPON_OFFER_CHOICES)
     choices = pool.map {
@@ -98,7 +104,7 @@ internal fun MutableGameState.buildWeaponChoices() {
             type = ChoiceType.WEAPON,
             title = it.name,
             description = it.description,
-            tag = it.tags.first(),
+            tag = it.tags.first().displayLabel.uppercase(),
             weaponId = it.id,
         )
     }

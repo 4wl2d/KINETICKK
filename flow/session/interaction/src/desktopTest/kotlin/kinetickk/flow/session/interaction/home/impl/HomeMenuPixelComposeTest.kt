@@ -3,6 +3,7 @@
 
 package kinetickk.flow.session.interaction.home.impl
 
+import kinetickk.flow.session.interaction.testWeapon
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Canvas
@@ -274,7 +275,7 @@ class HomeMenuPixelComposeTest {
         /** Stamps on Armory and Rebirth, counts on the others. */
         val StampModel: HomeUiModel by lazy {
             val weapons = listOf(WeaponId.FLUX_WAKE to "Flux Wake", WeaponId.SINGULARITY_SPEAR to "Singularity Spear")
-                .map { (id, name) -> WeaponDefinition(id, name, "Description", listOf("tag"), 100) }.toImmutableList()
+                .map { (id, name) -> testWeapon(id, name) }.toImmutableList()
             HomeReducer(defaultCoreShapeDefinitions(), 400, 12, TestRebirthPolicy, weapons, 40).uiModel(
                 HomeProgressProjection(
                     LOCAL_PROFILE_INSTANCE_ID, ProfileRevision.ZERO,

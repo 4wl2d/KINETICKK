@@ -103,6 +103,7 @@ val ItemRule.isLiability: Boolean
         else -> false
     }
 
+/** Append only: persisted by stable codec ids and indexed by ordinal (Agony forms, icons, card marks). */
 enum class WeaponId {
     FLUX_WAKE,
     MORNINGSTAR,
@@ -116,7 +117,53 @@ enum class WeaponId {
     ENTROPY_FIELD,
     SINGULARITY_SPEAR,
     PRISM_RELAY,
+    GYRE_DISC,
+    SCATTER_BLOOM,
+    TETHER_ARC,
+    SENTRY_GRID,
+    HUNTER_SALVO,
+    CONCUSSION_ENGINE,
+    GLACIER_BELL,
+    EVENT_LENS,
+    SOLAR_SWEEP,
+    AEGIS_SHARDS,
+    HOLLOW_RIFT,
+    RESONANCE_DRUM,
 }
+
+/** How a weapon reaches enemies; balance compares each family on its primary metric. */
+enum class WeaponFamily(val displayLabel: String) {
+    MOMENTUM("Momentum"),
+    ORBITAL("Orbital"),
+    AURA("Aura"),
+    PROJECTILE("Projectile"),
+    TRAP("Trap"),
+    CHAIN("Chain"),
+    BEAM("Beam"),
+    PULSE("Pulse"),
+}
+
+/** The one run stat that scales a weapon's own power; it never also feeds the weapon's base or count formula. */
+enum class WeaponScaling(val displayLabel: String) {
+    SPEED("Speed"),
+    MASS("Mass"),
+    HEAT("Heat"),
+    COMBO("Combo"),
+    SHIELD("Shield"),
+    BRAKE("Brake"),
+    DASH("Dash"),
+    CRIT("Critical chance"),
+    STATUS("Status"),
+    OVERDRIVE("Overdrive"),
+    LUCK("Luck"),
+    ATTACK_SPEED("Attack speed"),
+}
+
+/**
+ * How attack speed reaches a weapon: [DISCRETE] activations wait on the cooldown, while [CONTINUOUS] and
+ * [CONTACT] damage and rotation scale with it instead.
+ */
+enum class WeaponCadence { CONTINUOUS, CONTACT, DISCRETE }
 
 enum class WeaponMastery(
     val displayLabel: String,
@@ -130,22 +177,45 @@ enum class WeaponMastery(
     ASCENDED("Ascended", 10, 0.45f, 0.25f),
 }
 
+/**
+ * A weapon's typed identity: what it is ([family], [element], [cadence]), what it resonates with (two
+ * build [tags], a Relic [key], a [scaling] stat and a [signature] character) and how it unlocks
+ * ([permanentUnlockCost] Matter at Rebirth rank [minimumRebirth] or higher). [masteryForms] name the
+ * level 3, 6 and 10 forms and [signatureText] the twist the signature character adds.
+ */
 class WeaponDefinition(
     val id: WeaponId,
     val name: String,
     val description: String,
-    tags: List<String>,
+    val family: WeaponFamily,
+    val element: StatusElement?,
+    tags: List<BuildTag>,
+    val key: RelicKey,
+    val signature: CoreShape,
+    val scaling: WeaponScaling,
+    val cadence: WeaponCadence,
     val permanentUnlockCost: Int,
+    val minimumRebirth: Int,
+    masteryForms: List<String>,
+    val signatureText: String,
 ) {
-    val tags: ImmutableList<String> = tags.toImmutableList()
+    val tags: ImmutableList<BuildTag> = tags.toImmutableList()
+    val masteryForms: ImmutableList<String> = masteryForms.toImmutableList()
 
     init {
         require(name.isNotBlank()) { "Weapon name must not be blank" }
         require(description.isNotBlank()) { "Weapon description must not be blank" }
-        require(tags.isNotEmpty() && tags.none(String::isBlank)) {
-            "Weapon tags must not be empty or blank"
+        require(this.tags.size == WEAPON_TAG_COUNT && this.tags.toSet().size == WEAPON_TAG_COUNT) {
+            "A weapon carries exactly two distinct build tags"
         }
         require(permanentUnlockCost >= 0) { "Weapon unlock cost must be non-negative" }
+        require(minimumRebirth in ContentBounds.MIN_REBIRTH_LEVEL..ContentBounds.MAX_REBIRTH_LEVEL) {
+            "Weapon Rebirth gate must be within the Rebirth tiers"
+        }
+        require(this.masteryForms.size == WEAPON_MASTERY_FORMS && this.masteryForms.none(String::isBlank)) {
+            "A weapon names exactly three mastery forms"
+        }
+        require(signatureText.isNotBlank()) { "Weapon signature text must not be blank" }
     }
 
     override fun equals(other: Any?): Boolean =
@@ -153,18 +223,46 @@ class WeaponDefinition(
             id == other.id &&
             name == other.name &&
             description == other.description &&
+            family == other.family &&
+            element == other.element &&
             tags == other.tags &&
-            permanentUnlockCost == other.permanentUnlockCost
+            key == other.key &&
+            signature == other.signature &&
+            scaling == other.scaling &&
+            cadence == other.cadence &&
+            permanentUnlockCost == other.permanentUnlockCost &&
+            minimumRebirth == other.minimumRebirth &&
+            masteryForms == other.masteryForms &&
+            signatureText == other.signatureText
 
     override fun hashCode(): Int {
         var result = id.hashCode()
         result = 31 * result + name.hashCode()
         result = 31 * result + description.hashCode()
+        result = 31 * result + family.hashCode()
+        result = 31 * result + (element?.hashCode() ?: 0)
         result = 31 * result + tags.hashCode()
-        return 31 * result + permanentUnlockCost
+        result = 31 * result + key.hashCode()
+        result = 31 * result + signature.hashCode()
+        result = 31 * result + scaling.hashCode()
+        result = 31 * result + cadence.hashCode()
+        result = 31 * result + permanentUnlockCost
+        result = 31 * result + minimumRebirth
+        result = 31 * result + masteryForms.hashCode()
+        return 31 * result + signatureText.hashCode()
     }
 
     override fun toString(): String =
-        "WeaponDefinition(id=$id, name=$name, description=$description, " +
-            "tags=$tags, permanentUnlockCost=$permanentUnlockCost)"
+        "WeaponDefinition(id=$id, name=$name, description=$description, family=$family, element=$element, " +
+            "tags=$tags, key=$key, signature=$signature, scaling=$scaling, cadence=$cadence, " +
+            "permanentUnlockCost=$permanentUnlockCost, minimumRebirth=$minimumRebirth, " +
+            "masteryForms=$masteryForms, signatureText=$signatureText)"
+
+    companion object {
+        /** Build tags per weapon; tag resonance reads both. */
+        const val WEAPON_TAG_COUNT: Int = 2
+
+        /** Mastery forms per weapon, unlocked at weapon levels 3, 6 and 10. */
+        const val WEAPON_MASTERY_FORMS: Int = 3
+    }
 }

@@ -81,7 +81,7 @@ class RewardCardStylesTest {
                 relicAction = RelicChoiceAction.ACQUIRE, heirloom = true))
         }
         val weapons = content.weapons.map { weapon ->
-            card(ChoiceType.WEAPON, ChoiceOption(ChoiceType.WEAPON, weapon.name, weapon.description, weapon.tags.first(), weaponId = weapon.id))
+            card(ChoiceType.WEAPON, ChoiceOption(ChoiceType.WEAPON, weapon.name, weapon.description, weapon.tags.first().displayLabel.uppercase(), weaponId = weapon.id))
         }
         val systems = listOf(
             card(ChoiceType.TOTEM, ChoiceOption(ChoiceType.TOTEM, "Amplify", "", "AMPLIFY", weaponId = content.weapons.first().id,

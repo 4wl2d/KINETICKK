@@ -122,7 +122,7 @@ class RewardCardGalleryShotsTest {
         fun card(type: ChoiceType, choice: ChoiceOption) = rewardFixtureModel(content = content, choiceType = type, choices = listOf(choice),
             discoveredRelics = RelicId.entries.toSet()).rewardCardPresentation(choice, 0)
         val weapons = content.weapons.map { weapon ->
-            card(ChoiceType.WEAPON, ChoiceOption(ChoiceType.WEAPON, weapon.name, weapon.description, weapon.tags.first(), weaponId = weapon.id))
+            card(ChoiceType.WEAPON, ChoiceOption(ChoiceType.WEAPON, weapon.name, weapon.description, weapon.tags.first().displayLabel.uppercase(), weaponId = weapon.id))
         }
         val totems = listOf(
             card(ChoiceType.TOTEM, ChoiceOption(ChoiceType.TOTEM, "Amplify Flux Wake", "Raise current weapon mastery by one level.", "AMPLIFY",

@@ -484,6 +484,18 @@ internal fun WeaponId.cardMarks(): Pair<KkFillKind, KkCardOrnament> = when (this
     WeaponId.ENTROPY_FIELD -> KkFillKind.PITTING to KkCardOrnament.PATTERN_CORNER
     WeaponId.SINGULARITY_SPEAR -> KkFillKind.SLASH to KkCardOrnament.VENTS
     WeaponId.PRISM_RELAY -> KkFillKind.LATTICE to KkCardOrnament.RETICLE
+    WeaponId.GYRE_DISC -> KkFillKind.RINGS to KkCardOrnament.SLASHES
+    WeaponId.SCATTER_BLOOM -> KkFillKind.HALFTONE to KkCardOrnament.RETICLE
+    WeaponId.TETHER_ARC -> KkFillKind.ZIGZAG to KkCardOrnament.DOUBLE_RIM
+    WeaponId.SENTRY_GRID -> KkFillKind.LATTICE to KkCardOrnament.RACK
+    WeaponId.HUNTER_SALVO -> KkFillKind.HAIRLINE to KkCardOrnament.RACK
+    WeaponId.CONCUSSION_ENGINE -> KkFillKind.HALFTONE_LARGE to KkCardOrnament.VENTS
+    WeaponId.GLACIER_BELL -> KkFillKind.RINGS to KkCardOrnament.DOUBLE_RIM
+    WeaponId.EVENT_LENS -> KkFillKind.PITTING to KkCardOrnament.WEIGHT
+    WeaponId.SOLAR_SWEEP -> KkFillKind.SCANLINE to KkCardOrnament.PERFORATION
+    WeaponId.AEGIS_SHARDS -> KkFillKind.SHIMMER to KkCardOrnament.BUMPER
+    WeaponId.HOLLOW_RIFT -> KkFillKind.SLASH to KkCardOrnament.PATTERN_CORNER
+    WeaponId.RESONANCE_DRUM -> KkFillKind.RINGS to KkCardOrnament.BUMPER
 }
 
 /** Identity-keyed memo of card looks (draw thread; a dealt hand plus the gallery's sheets). */
