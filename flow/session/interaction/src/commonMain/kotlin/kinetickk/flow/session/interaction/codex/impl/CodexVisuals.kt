@@ -13,6 +13,8 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -24,6 +26,8 @@ import kinetickk.ball.content.api.RelicKey
 import kinetickk.ball.content.api.RelicPolicy
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.UiCatalogSnapshot
+import kinetickk.ball.gameplay.interaction.canvas.EnemySilhouette
+import kinetickk.ball.gameplay.interaction.canvas.enemySilhouette
 import kinetickk.flow.session.interaction.home.impl.formIcon
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.Kk
@@ -191,6 +195,15 @@ internal fun DrawScope.drawCodexCell(entry: CodexEntry, catalog: UiCatalogSnapsh
             drawKkIcon(icon.id.formIcon(), center, radius * 1.1f, if (entry.discovered) Kk.Bone else Kk.Mute)
             if (!entry.discovered) drawKkIcon(KkIcon.SYSTEM_LOCKED, Offset(size.width - 11.dp.toPx(), 11.dp.toPx()), 11.dp.toPx(), Kk.Mute)
         }
+        is CodexIcon.Enemy -> {
+            // The world silhouette in the threat hue; a Rebirth-locked enemy is muted, hatched and padlocked.
+            drawRect(if (hovered) Kk.Ink3 else Kk.Ink2)
+            if (icon.locked) drawKkHatch(rect)
+            drawRect(Kk.Line2, style = kkStroke(1.dp.toPx()))
+            drawCodexEnemy(enemySilhouette(icon.type), center, radius * 0.95f,
+                if (icon.locked) Kk.Mute else roles.threat, if (icon.locked) Kk.Ink3 else Kk.Ink1)
+            if (icon.locked) drawKkIcon(KkIcon.SYSTEM_LOCKED, Offset(size.width - 11.dp.toPx(), 11.dp.toPx()), 11.dp.toPx(), Kk.Mute)
+        }
         is CodexIcon.Locked -> {
             drawRect(Kk.Ink3)
             drawKkHatch(rect, Kk.Gold.copy(alpha = 0.12f))
@@ -216,6 +229,35 @@ internal fun DrawScope.drawCodexCell(entry: CodexEntry, catalog: UiCatalogSnapsh
             drawKkIcon(KkIcon.UI_PLUS, center, radius * 0.8f, Kk.Mute2)
         }
         else -> drawRect(Kk.Ink2)
+    }
+}
+
+/** An enemy outline at [center] with half extent [radius]: [body] fill and an [outline] edge. */
+internal fun DrawScope.drawCodexEnemy(silhouette: EnemySilhouette, center: Offset, radius: Float, outline: Color, body: Color) {
+    val path = CodexEnemyOutlines.of(silhouette)
+    translate(center.x, center.y) {
+        scale(radius, radius, Offset.Zero) {
+            drawPath(path, body)
+            drawPath(path, outline, style = Stroke(2.dp.toPx() / radius.coerceAtLeast(1f)))
+        }
+    }
+}
+
+/** Unit outlines (grid half extent 1) built once per silhouette and drawn under a scale. */
+private object CodexEnemyOutlines {
+    private val paths = arrayOfNulls<Path>(EnemySilhouette.entries.size)
+
+    fun of(silhouette: EnemySilhouette): Path = paths[silhouette.ordinal] ?: Path().also { path ->
+        for (contour in silhouette.contours) {
+            path.moveTo((contour[0] - 12f) / 10f, (contour[1] - 12f) / 10f)
+            var index = 2
+            while (index < contour.size) {
+                path.lineTo((contour[index] - 12f) / 10f, (contour[index + 1] - 12f) / 10f)
+                index += 2
+            }
+            path.close()
+        }
+        paths[silhouette.ordinal] = path
     }
 }
 

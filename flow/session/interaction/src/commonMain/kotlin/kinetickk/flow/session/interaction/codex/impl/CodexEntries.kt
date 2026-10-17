@@ -9,6 +9,8 @@ import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.ConversionKind
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.CoreShapeDefinition
+import kinetickk.ball.content.api.EnemyDefinition
+import kinetickk.ball.content.api.EnemyType
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.ReactionId
@@ -30,6 +32,7 @@ import kinetickk.ball.content.api.ruleLines
 import kinetickk.ball.content.api.upsideText
 import kinetickk.ball.gameplay.api.GameplayBuildSummaryProjection
 import kinetickk.ball.profile.api.HomeProgressProjection
+import kinetickk.ball.profile.api.rank
 import kinetickk.flow.session.interaction.codex.api.CodexRenderModel
 import kinetickk.flow.session.interaction.home.impl.coreShapeUnlockProgress
 import kinetickk.flow.session.interaction.localization.CodexText
@@ -46,6 +49,8 @@ internal sealed interface CodexIcon {
     data class Relic(val definition: RelicDefinition, val rank: Int?, val severed: Boolean = false) : CodexIcon
     data class Weapon(val id: WeaponId) : CodexIcon
     data class Shape(val id: CoreShape) : CodexIcon
+    /** A roster enemy; [locked] while the profile's Rebirth rank is below its minimum. */
+    data class Enemy(val type: EnemyType, val locked: Boolean) : CodexIcon
     /** Content gated behind a Rebirth tier the player has not reached; its identity stays hidden. */
     data class Locked(val rebirth: Int) : CodexIcon
     data class Reaction(val id: ReactionId, val discovered: Boolean, val reachable: Boolean) : CodexIcon
@@ -341,6 +346,40 @@ internal fun codexShapeEntry(shape: CoreShapeDefinition, model: CodexRenderModel
 }
 
 /**
+ * A roster enemy, always named: its threat, when it joins the waves ("From 5:30") and the Rebirth rank it
+ * needs ("Reborn 3"); a rank below that gives it the locked look.
+ */
+internal fun codexEnemyEntry(enemy: EnemyDefinition, progress: HomeProgressProjection, language: AppLanguage = AppLanguage.English): CodexEntry {
+    val locked = enemy.minimumRebirth > progress.rebirthProgress.rank
+    val kind = language.text(when {
+        enemy.isBoss -> CodexText.BOSS_KIND
+        enemy.isMiniBoss -> CodexText.MINI_BOSS_KIND
+        enemy.isElite -> CodexText.ELITE_KIND
+        else -> CodexText.ENEMY_KIND
+    })
+    val threat = "${enemy.threat}/$MAX_CODEX_THREAT"
+    val facts = buildList {
+        add(codexStatus(language, language.text(if (locked) SessionText.LOCKED else CodexText.IN_ROSTER)))
+        add(CodexFact(language.text(CodexText.THREAT), threat))
+        add(CodexFact(language.text(CodexText.APPEARS), language.text(CodexText.FROM_TIME, codexClock(enemy.timeGateSeconds))))
+        if (enemy.minimumRebirth > 0) {
+            add(CodexFact(language.text(CodexText.UNLOCKS_AT), language.text(CodexText.REBORN_GATE, enemy.minimumRebirth)))
+        }
+    }
+    return CodexEntry("enemy/${enemy.type}", enemy.name.localizedContent(language), enemy.description.localizedContent(language),
+        kind, threat, facts, CodexIcon.Enemy(enemy.type, locked), if (locked) Kk.Mute else Kk.Bone, discovered = !locked,
+        help = language.text(if (locked) CodexText.ENEMY_LOCKED_HELP else CodexText.ENEMY_HELP))
+}
+
+private const val MAX_CODEX_THREAT = 5
+
+/** Run clock as m:ss ("5:30"), the way the Codex states when an enemy arrives. */
+internal fun codexClock(seconds: Float): String {
+    val total = seconds.toInt().coerceAtLeast(0)
+    return "${total / 60}:${(total % 60).toString().padStart(2, '0')}"
+}
+
+/**
  * The Catalog tab's entries of [category]. Items (0) are the matrix of [sort] in reading order, row by
  * row and slot by slot (see [codexItemRows]); the other categories keep catalog order.
  */
@@ -368,9 +407,14 @@ internal fun codexCatalogEntries(
                 else -> null
             }
         }
-        else -> catalog.coreShapes.map { codexShapeEntry(it, model, progress, language) }.filter { search.isBlank() || it.discovered && it.title.contains(search, ignoreCase = true) }
+        3 -> catalog.coreShapes.map { codexShapeEntry(it, model, progress, language) }.filter { search.isBlank() || it.discovered && it.title.contains(search, ignoreCase = true) }
+        // Enemies are always listed by name; a Rebirth gate only gives them the locked look.
+        else -> catalog.enemies.map { codexEnemyEntry(it, progress, language) }.filter { search.isBlank() || it.title.contains(search, ignoreCase = true) }
     }
 }
+
+/** Catalog category of the enemy roster (after Items, Weapons, Relics and Forms). */
+internal const val CODEX_ENEMIES_CATEGORY = 4
 
 /**
  * The Build tab of a run: character, weapon, every relic slot (empty ones as placeholders, never
