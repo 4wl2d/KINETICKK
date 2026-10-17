@@ -15,6 +15,7 @@ import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.isOnScreen
 import kinetickk.foundation.design.kkStroke
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
@@ -43,7 +44,7 @@ private fun DrawScope.drawAsteroid(obstacle: ObstacleProjection, center: Offset,
     val unstable = obstacle.kind == ObstacleKind.UNSTABLE
     translate(center.x, center.y) {
         drawPath(outline, Kk.Ink3)
-        drawPath(outline, Kk.Ink4, alpha = 0.6f, style = kkStroke(obstacle.radius * 0.18f))
+        drawPath(outline, Kk.Ink4, alpha = 0.6f, style = kkStroke(rimWidth(obstacle.radius)))
         drawPath(outline, (if (unstable) roles.heat else Kk.Bone).copy(alpha = if (unstable) 0.7f else 0.32f), style = kkStroke(2f))
         if (unstable) drawPath(ObstaclePaths.cracks(obstacle.shapeSeed, obstacle.radius), roles.heat.copy(alpha = 0.75f), style = kkStroke(1.5f))
     }
@@ -53,6 +54,12 @@ private fun DrawScope.drawAsteroid(obstacle: ObstacleProjection, center: Offset,
         drawCircle(roles.heat.copy(alpha = 0.6f + 0.3f * pulse), obstacle.radius * 0.12f, center)
     }
 }
+
+/**
+ * Width of an asteroid's inner rim: 18 % of its radius rounded to whole 2-unit steps. Radii are continuous,
+ * so unrounded widths would give every rock its own stroke and crowd the shared stroke cache.
+ */
+internal fun rimWidth(radius: Float): Float = (radius * 0.09f).roundToInt().coerceAtLeast(1) * 2f
 
 private fun DrawScope.drawBumper(center: Offset, radius: Float, time: Float, roles: KkRolePalette) {
     val glow = (sin(time * 3.2f) + 1f) * 0.5f

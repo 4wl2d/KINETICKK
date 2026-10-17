@@ -315,18 +315,28 @@ class WorldHotPathAllocationTest {
                 PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed", CORE + 900f + drift, CORE - 300f, false, 20f, 1, 0f,
                     immutableListOf(), 0f, 0f),
             ),
-            // Every obstacle kind on screen (and one off it), with outlines of several corner counts.
-            obstacles = immutableListOf(
+            obstacles = BusyObstacles,
+        )
+    }
+
+    private companion object {
+        /**
+         * Every obstacle kind on screen (and one off it), with outlines of several corner counts, plus a
+         * crowded view of rocks whose radii all differ (every continuous radius is its own outline).
+         */
+        val BusyObstacles = (
+            listOf(
                 ObstacleProjection(1L, ObstacleKind.ASTEROID, CORE + 300f, CORE + 160f, 120f, 11),
                 ObstacleProjection(2L, ObstacleKind.ASTEROID, CORE - 360f, CORE - 200f, 60f, 4),
                 ObstacleProjection(3L, ObstacleKind.UNSTABLE, CORE + 330f, CORE - 230f, 80f, 27),
                 ObstacleProjection(4L, ObstacleKind.BUMPER, CORE - 120f, CORE + 220f, 34f, 0),
                 ObstacleProjection(5L, ObstacleKind.ASTEROID, CORE + 2_400f, CORE, 140f, 9),
-            ),
-        )
-    }
+            ) + List(30) { index ->
+                ObstacleProjection(100L + index, if (index % 5 == 0) ObstacleKind.UNSTABLE else ObstacleKind.ASTEROID,
+                    CORE - 450f + (index % 6) * 180f, CORE - 260f + (index / 6) * 130f, 46f + index * 3.47f, 200 + index * 13)
+            }
+            ).toImmutableList()
 
-    private companion object {
         /**
          * Statuses of the busy frame's enemies: a reaction ready (Thermal with Cryo), a primed Ion arc,
          * Frozen and Brittle, Embrittled, a full Entropy fill, Sonic with Void, none.
