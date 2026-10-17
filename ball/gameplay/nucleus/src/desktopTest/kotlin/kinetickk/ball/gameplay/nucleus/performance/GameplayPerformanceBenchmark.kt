@@ -665,6 +665,8 @@ internal fun canonicalStateFingerprint(state: MutableGameState): Long {
     signature = mix(signature, state.coreShape.ordinal)
     signature = mix(signature, state.coreRadius.toRawBits())
     signature = mix(signature, state.characterRuntime.toString().hashCode())
+    // 0.4.0 weapons: the weapon runtime (entities, proc gates, counters, orbit phase) in its deterministic text.
+    signature = mix(signature, state.weaponRuntime.toString().hashCode())
     signature = mix(signature, state.nextEliteAt.toRawBits())
     signature = mix(signature, state.elitesSpawned)
     // 0.4.0 spawn director: its own stream, pacing phase, budget, planned event and cooldowns.

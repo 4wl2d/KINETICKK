@@ -131,6 +131,13 @@ class GameplayPerformanceBenchmarkTest {
             { pickups += Pickup(PickupType.DATA, 5f, 5f, attracted = true) },
             { enemies.first().thrownUntil = 1f },
             { enemies.first().slamReadyAt = 1f },
+            // 0.4.0 weapons: the weapon runtime.
+            { weaponRuntime.orbitalPhase = 1f },
+            { weaponRuntime.entityPassActive = true },
+            { weaponRuntime.tetherRamp = 1.5f },
+            { weaponRuntime.entities += kinetickk.ball.gameplay.nucleus.model.WeaponEntity(
+                kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind.DISC, x = 17f, y = 27f, radius = 5f, life = 1f, maxLife = 1f,
+            ) },
             // 0.4.0 Rebirth rework.
             { rebirthRank = 9 },
             { volatileBursts = kinetickk.foundation.collections.immutableListOf(

@@ -43,7 +43,7 @@ class CodexWeaponEntriesTest {
         WeaponId.EVENT_LENS, "Event Lens", "Fires a lens that collapses into a gravity well.", WeaponFamily.TRAP, StatusElement.GRAVITIC,
         listOf(BuildTag.ANCHOR, BuildTag.CHAIN), RelicKey.GRAVITY, CoreShape.DIPOLE, WeaponScaling.MASS, WeaponCadence.DISCRETE,
         permanentUnlockCost = 1_100, minimumRebirth = 3,
-        masteryForms = listOf("A wider well", "Two lenses fly at once", "The well implodes for 120 damage"),
+        masteryForms = listOf("A wider well", "Two lenses fly at once", "The well implodes as it closes"),
         signatureText = "Attract doubles the pull; Repel turns the implosion into a throw.",
     )
     private val catalog = codexTestCatalog().let { base ->

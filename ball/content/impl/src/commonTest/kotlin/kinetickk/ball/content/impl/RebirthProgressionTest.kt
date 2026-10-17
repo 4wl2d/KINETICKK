@@ -188,4 +188,64 @@ class RebirthRankUnlocksTest {
         assertEquals(listOf(1, 3, 5, 7), (1..10).filter { rank -> unlocks(rank).characters.isNotEmpty() })
         assertEquals(listOf("Glacier Bell"), unlocks(1).weapons.map { it.name })
     }
+
+    /**
+     * The tier ladder (Rebirth screen and Victory report) names exactly what each rank opens in the shipped
+     * catalog: the twelve added weapons' Rebirth gates (Glacier Bell at 1 ... Resonance Drum at 9), the four
+     * Reborn-rank characters, the Sovereign Relics, the gated items by name, the Matrix nodes and the enemy
+     * types that join the roster at that tier.
+     */
+    @Test
+    fun theLadderListsExactlyTheShippedUnlocksOfEveryTier() {
+        val expected = mapOf(
+            1 to Ladder(weapons = listOf("Glacier Bell"), characters = listOf("Spiral"), relics = listOf("Agony Scepter"),
+                items = listOf("Hyperfeed Rails", "Dead Stop", "Redline Rush", "Fortress Protocol"),
+                matrix = listOf("Overdrive Coil", "Second Wind", "Ricochet Rig")),
+            2 to Ladder(weapons = listOf("Tether Arc"),
+                items = listOf("Solar Choir", "Glacial Heart", "Shatter Coil", "Unmaking Engine", "Kinetic Recapture", "Phantom Wake"),
+                matrix = listOf("Bastion Protocol", "Elite Bounty"), enemies = listOf("Phantom", "Herald")),
+            3 to Ladder(weapons = listOf("Event Lens"), characters = listOf("Pentagon"), relics = listOf("Hollow Crown"),
+                items = listOf("Tectonic Driver", "Cornucopia Core", "Aegis Feedback", "Executioner's Scope"),
+                matrix = listOf("Glass Engine", "Heirloom Vault"), enemies = listOf("Broodmother")),
+            4 to Ladder(weapons = listOf("Hunter Salvo"),
+                items = listOf("Resonance Fork", "Perfect Carom", "Salvage Collisions", "Siege Capacitor", "Wrecking Ball"),
+                matrix = listOf("Juggernaut", "Prospector"), enemies = listOf("Reflector")),
+            5 to Ladder(weapons = listOf("Solar Sweep"), characters = listOf("Crescent"), relics = listOf("Ouroboros Seal"),
+                items = listOf("Black Mirror", "Gravity Breech", "Pyre Magazine", "Blackfire Censer"), matrix = listOf("Perpetual Drift")),
+            6 to Ladder(weapons = listOf("Aegis Shards"),
+                items = listOf("Cathedral Bell", "Pile-Up Protocol", "Storm Breech", "Vortex Ledger"), matrix = listOf("Reborn Arsenal")),
+            7 to Ladder(weapons = listOf("Hollow Rift"), characters = listOf("Hexagon"),
+                items = listOf("Quiet Ward", "Compound Interest", "Stillness Sight", "Nitro Injector"), matrix = listOf("Aegis Lattice")),
+            8 to Ladder(items = listOf("Nothing Left", "Frozen Moment", "Avalanche Protocol", "Hard Stop")),
+            9 to Ladder(weapons = listOf("Resonance Drum"),
+                items = listOf("Comet Drive", "Siege Ram", "Usurer's Contract", "Feeding Frenzy"), matrix = listOf("Gravity Surfer")),
+            10 to Ladder(items = listOf("Fault Line", "Annihilator Coil", "Singularity Seed", "Last Word")),
+        )
+        for (tier in 1..10) {
+            val opened = unlocks(tier)
+            val actual = Ladder(
+                weapons = opened.weapons.map { it.name },
+                characters = opened.characters.map { it.displayName },
+                relics = opened.relics.map { it.name },
+                items = opened.items.map { it.name },
+                matrix = opened.matrixNodes.map { it.name },
+                enemies = opened.enemies.map { it.name },
+            )
+            assertEquals(expected.getValue(tier), actual, "tier $tier")
+        }
+        // The weapon column is the catalog's own Rebirth gates, nothing else.
+        assertEquals(
+            ui.weapons.filter { it.minimumRebirth > 0 }.map { it.minimumRebirth to it.name }.sortedBy { it.first },
+            (1..10).flatMap { tier -> unlocks(tier).weapons.map { tier to it.name } },
+        )
+    }
+
+    private data class Ladder(
+        val weapons: List<String> = emptyList(),
+        val characters: List<String> = emptyList(),
+        val relics: List<String> = emptyList(),
+        val items: List<String> = emptyList(),
+        val matrix: List<String> = emptyList(),
+        val enemies: List<String> = emptyList(),
+    )
 }

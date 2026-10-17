@@ -49,7 +49,7 @@ internal val CatalogWeapons: ImmutableList<WeaponDefinition> =
             "High-speed movement leaves a damaging trail that lingers behind the Core.",
             WeaponFamily.MOMENTUM, StatusElement.THERMAL, CONTINUOUS, BuildTag.DRIVE, BuildTag.OVERCLOCK,
             RelicKey.MOTION, WeaponScaling.SPEED, CoreShape.ORB, cost = 0,
-            forms = listOf("Trail width +40%", "The trail lasts 2.4 s", "Ignite comes one stack sooner in the trail"),
+            forms = listOf("Trail width doubles", "The trail lasts 4 s", "Ignite comes one stack sooner in the trail"),
             signature = "A trail laid while turning deals 50% more damage and lasts 50% longer.",
         ),
         catalogWeapon(
@@ -81,7 +81,7 @@ internal val CatalogWeapons: ImmutableList<WeaponDefinition> =
             "Braking plants implosive mines that pull enemies inward before detonating.",
             WeaponFamily.TRAP, StatusElement.GRAVITIC, DISCRETE, BuildTag.ANCHOR, BuildTag.CHAIN,
             RelicKey.STILLNESS, WeaponScaling.BRAKE, CoreShape.DIAMOND, cost = 145,
-            forms = listOf("Mine radius +20%", "Up to 12 mines that detonate in a chain", "Mines collapse into a well for 1.2 s"),
+            forms = listOf("Mine radius +30%", "Up to 12 mines that detonate in a chain", "Mines collapse into a well for 1.2 s"),
             signature = "A parry drops a mine that detonates at once for double damage.",
         ),
         catalogWeapon(
@@ -89,7 +89,7 @@ internal val CatalogWeapons: ImmutableList<WeaponDefinition> =
             "Autonomous ion motes orbit the Core, seek targets, and accelerate with attack speed.",
             WeaponFamily.ORBITAL, StatusElement.ION, DISCRETE, BuildTag.ARSENAL, BuildTag.CHAIN,
             RelicKey.CHARGE, WeaponScaling.ATTACK_SPEED, CoreShape.HEXAGON, cost = 215,
-            forms = listOf("One more ion mote", "Mote shots pierce one enemy", "Mote fire rate +30%"),
+            forms = listOf("One more ion mote", "Mote shots pierce one more enemy", "Mote fire rate +25%"),
             signature = "Up to three drones fire with the swarm.",
         ),
         catalogWeapon(
@@ -113,7 +113,7 @@ internal val CatalogWeapons: ImmutableList<WeaponDefinition> =
             "A slow-charging cannon compresses momentum into a colossal piercing projectile.",
             WeaponFamily.PROJECTILE, StatusElement.SONIC, DISCRETE, BuildTag.ARSENAL, BuildTag.OVERCLOCK,
             RelicKey.HEAT, WeaponScaling.HEAT, CoreShape.STAR, cost = 610,
-            forms = listOf("Shot size +15%", "Side shots fire with every blast", "A sonic burst where the shot ends"),
+            forms = listOf("Shot size +10%", "Side shots fire with every blast", "A sonic burst where the shot ends"),
             signature = "Shot size grows with Stellar Mass.",
         ),
         catalogWeapon(
@@ -153,7 +153,7 @@ internal val CatalogWeapons: ImmutableList<WeaponDefinition> =
             "Every Dash fires a wide cone of pellets ahead of the Core; a small volley also fires on its own between Dashes.",
             WeaponFamily.PROJECTILE, null, DISCRETE, BuildTag.DRIVE, BuildTag.RAM,
             RelicKey.MOTION, WeaponScaling.DASH, CoreShape.SHARD, cost = 260,
-            forms = listOf("Two more pellets", "Pellets pierce one enemy", "Point-blank pellets deal double damage"),
+            forms = listOf("Two more pellets", "Pellets pierce one more enemy", "Point-blank pellets keep their pierce"),
             signature = "Pellets leave Puncture marks.",
         ),
         catalogWeapon(
@@ -161,7 +161,7 @@ internal val CatalogWeapons: ImmutableList<WeaponDefinition> =
             "An ion beam locks onto the nearest enemy, ramps its damage while held and jumps to a new target on a kill.",
             WeaponFamily.BEAM, StatusElement.ION, CONTINUOUS, BuildTag.ARSENAL, BuildTag.PRECISION,
             RelicKey.CHARGE, WeaponScaling.ATTACK_SPEED, CoreShape.DIPOLE, cost = 900, rebirth = 2,
-            forms = listOf("Tether range +80", "A second tether at half strength", "The ramp reaches four times and a kill Overloads"),
+            forms = listOf("Tether range +80", "A second tether at 75% strength", "The ramp reaches eight times and a kill Overloads"),
             signature = "Attract pulls the target in; Repel throws it into slams.",
         ),
         catalogWeapon(
@@ -177,7 +177,7 @@ internal val CatalogWeapons: ImmutableList<WeaponDefinition> =
             "Launches a salvo of homing missiles that burst on impact and spread Decay.",
             WeaponFamily.PROJECTILE, StatusElement.ENTROPY, DISCRETE, BuildTag.CHAIN, BuildTag.ARSENAL,
             RelicKey.SPREAD, WeaponScaling.COMBO, CoreShape.HEXAGON, cost = 1_300, rebirth = 4,
-            forms = listOf("One more missile", "Missile burst +40%", "Missiles split on a kill"),
+            forms = listOf("One more missile", "Missile burst +20%", "Missiles split on a kill"),
             signature = "Up to three drones each launch a missile.",
         ),
         catalogWeapon(
@@ -201,7 +201,7 @@ internal val CatalogWeapons: ImmutableList<WeaponDefinition> =
             "Fires a lens toward the aim that collapses into a gravity well, pulling enemies in and crushing them.",
             WeaponFamily.TRAP, StatusElement.GRAVITIC, DISCRETE, BuildTag.ANCHOR, BuildTag.CHAIN,
             RelicKey.GRAVITY, WeaponScaling.MASS, CoreShape.DIPOLE, cost = 1_100, rebirth = 3,
-            forms = listOf("A wider well", "Two lenses fly at once", "The well implodes for 120 damage"),
+            forms = listOf("A wider well", "Two lenses fly at once", "The well implodes as it closes"),
             signature = "Attract doubles the pull; Repel turns the implosion into a throw.",
         ),
         catalogWeapon(
@@ -209,7 +209,7 @@ internal val CatalogWeapons: ImmutableList<WeaponDefinition> =
             "Two opposite solar beams rotate around the Core, burning everything they sweep across.",
             WeaponFamily.BEAM, StatusElement.THERMAL, CONTINUOUS, BuildTag.OVERCLOCK, BuildTag.PRECISION,
             RelicKey.HEAT, WeaponScaling.HEAT, CoreShape.RING, cost = 1_500, rebirth = 5,
-            forms = listOf("Beam length +60", "Three beams sweep at once", "Beams leave burning arcs"),
+            forms = listOf("Beam length +120", "Three beams sweep at once", "Beams leave burning arcs"),
             signature = "The beams start from the Halo radius.",
         ),
         catalogWeapon(

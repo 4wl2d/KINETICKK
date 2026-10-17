@@ -157,11 +157,11 @@ class WeaponBalanceTest {
         }
     }
 
-    private enum class Arena { SINGLE, CROWD }
+    internal enum class Arena { SINGLE, CROWD }
 
-    private enum class Checkpoint { FRESH, ASCENDED }
+    internal enum class Checkpoint { FRESH, ASCENDED }
 
-    private companion object {
+    internal companion object {
         const val FPS = 60f
         const val SECONDS = 30f
         const val ATTACK_SPEED_SECONDS = 60f

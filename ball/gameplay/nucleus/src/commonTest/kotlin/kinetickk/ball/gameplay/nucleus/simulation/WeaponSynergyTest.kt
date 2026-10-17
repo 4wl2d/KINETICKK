@@ -5,11 +5,23 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.EffectAction
+import kinetickk.ball.content.api.MatrixNodeId
+import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponScaling
 import kinetickk.ball.gameplay.nucleus.model.WeaponRuntime
+import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
+import kinetickk.ball.profile.api.GameplayProfileSnapshot
+import kinetickk.ball.profile.api.MatrixProgress
+import kinetickk.ball.profile.api.PlayerCollection
+import kinetickk.ball.profile.api.PlayerEconomy
+import kinetickk.ball.profile.api.PlayerLoadout
+import kinetickk.ball.profile.api.PlayerPreferences
+import kinetickk.ball.profile.api.RebirthProgress
+import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.abs
 import kotlin.math.min
 import kotlin.test.Test
@@ -75,6 +87,63 @@ class WeaponSynergyTest {
         assertClose(HARMONY_POWER, harmonized.permanentWeaponSynergy() / (1f + harmonized.weaponTagBonus()), "harmony power")
         assertClose(HARMONY_MAGNITUDE, harmonized.build.relicUpside(relic) / unrelated.build.relicUpside(relic), "harmony magnitude")
         assertEquals(relic, harmonized.weaponSynergyProjection(null).harmonizingRelic)
+    }
+
+    /**
+     * Harmony reads the Relics bound this run, so a chosen heirloom harmonizes like any bound Relic: here
+     * at Rebirth rank 6 replaying tier 0 (the heirloom count reads the rank) with the Heirloom Vault, whose
+     * extra card cannot fit beside three carried Relics and raises the taken heirloom to rank 2 instead.
+     */
+    @Test
+    fun aChosenHeirloomHarmonizesUnderTheRankHeirloomCountAndTheHeirloomVault() {
+        val weapon = WeaponId.ARC_COIL
+        val definition = canonicalGameplayContent.weapon(weapon)
+        val carrier = RelicId.STORMHEART_CAPACITOR
+        assertTrue(definition.key in canonicalGameplayContent.relic(carrier).keys)
+        val others = canonicalGameplayContent.relics
+            .filter { definition.key !in it.keys && it.minimumRebirth == 0 }
+            .map { it.id }
+            .take(2)
+
+        fun heirloomRun(): MutableGameState {
+            val vault = canonicalGameplayContent.matrixNodes.map { if (it.id == MatrixNodeId.HEIRLOOM_VAULT) it.maxRanks else 0 }
+            val snapshot = GameplayProfileSnapshot(
+                preferences = PlayerPreferences(),
+                economy = PlayerEconomy(),
+                loadout = PlayerLoadout(CoreShape.PENTAGON, weapon, setOf(WeaponId.FLUX_WAKE, weapon)),
+                matrix = MatrixProgress(vault),
+                collection = PlayerCollection(heirloomRelicIds = (listOf(carrier) + others).toImmutableList()),
+                rebirthProgress = RebirthProgress(level = 0, highestCleared = 5),
+            )
+            return MutableGameState(canonicalGameplayContent, seed = 4_404, bootstrapProgress = snapshot).apply {
+                startRun()
+                enemies.clear()
+                spawnClock = Float.MAX_VALUE
+                update(MutableGameState.FIXED_STEP * 1.5f)
+            }
+        }
+
+        val chosen = heirloomRun()
+        assertEquals(0, chosen.rebirthProfile.tier)
+        assertEquals(6, chosen.rebirthRank)
+        assertEquals(1, chosen.matrix.extraHeirloomOffers)
+        assertEquals(GamePhase.CHOICE, chosen.phase)
+        val cards = chosen.choices.filter { it.heirloom && it.relicAction == RelicChoiceAction.ACQUIRE }
+        assertEquals(setOf(carrier) + others, cards.map { it.relicId }.toSet(), "rank 6 offers three heirlooms")
+        assertNull(chosen.harmonizingRelic(), "nothing is bound before the choice")
+
+        chosen.choose(chosen.choices.indexOfFirst { it.relicId == carrier })
+        assertEquals(2, chosen.relicRank(carrier), "the Vault's extra card became a rank")
+        assertEquals(carrier, chosen.harmonizingRelic())
+        assertEquals(carrier, chosen.toRenderModel().weaponSynergy.harmonizingRelic)
+        assertTrue(chosen.toRenderModel().weaponSynergy.signatureActive)
+        assertClose(SIGNATURE_POWER * HARMONY_POWER, chosen.permanentWeaponSynergy() / (1f + chosen.weaponTagBonus()),
+            "signature and harmony each count once")
+
+        val declined = heirloomRun()
+        declined.choose(declined.choices.indexOfFirst { it.relicId == others.first() })
+        assertNull(declined.harmonizingRelic())
+        assertClose(SIGNATURE_POWER, declined.permanentWeaponSynergy() / (1f + declined.weaponTagBonus()), "a foreign heirloom")
     }
 
     @Test
