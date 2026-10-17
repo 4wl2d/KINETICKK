@@ -21,19 +21,19 @@ class HomeSweepCacheTest {
     fun aSecondSweepReusesTheTintedAndMenuMeasurersOfTheFirst() {
         val base = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f)
         val motion = HomeMenuMotion()
-        repeat(KkTime.PaletteShift / 16 + 2) { motion.advance(HomeLayoutTarget.CODEX, CoreShape.ORB, 1f / 60f) }
+        repeat(KkTime.PaletteShift / 16 + 2) { motion.advance(HomeLayoutTarget.CODEX, 1f / 60f) }
         val frames = (HOME_CODEX_SWEEP_SECONDS * 60f).toInt()
         val tinted = mutableMapOf<Color, CanvasTextMeasurer>()
         val menus = mutableMapOf<Color, CanvasTextMeasurer>()
         repeat(frames) {
-            motion.advance(HomeLayoutTarget.CODEX, CoreShape.ORB, 1f / 60f)
+            motion.advance(HomeLayoutTarget.CODEX, 1f / 60f)
             val tint = motion.tinted(base)
             assertEquals(motion.accent, tint.roles.you, "the menu wears the sweep's accent")
             tinted.getOrPut(motion.accent) { tint }
             menus.getOrPut(motion.accent) { motion.menuMeasurer(tint) }
         }
         repeat(frames) {
-            motion.advance(HomeLayoutTarget.CODEX, CoreShape.ORB, 1f / 60f)
+            motion.advance(HomeLayoutTarget.CODEX, 1f / 60f)
             val tint = motion.tinted(base)
             assertTrue(tinted[motion.accent] === tint, "a steady sweep tinted a new measurer for ${motion.accent}")
             assertTrue(menus[motion.accent] === motion.menuMeasurer(tint), "a steady sweep built a new menu measurer")

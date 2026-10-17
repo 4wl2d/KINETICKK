@@ -34,7 +34,6 @@ import kinetickk.ball.gameplay.api.GameplayBuildSummaryProjection
 import kinetickk.ball.profile.api.HomeProgressProjection
 import kinetickk.ball.profile.api.rank
 import kinetickk.flow.session.interaction.codex.api.CodexRenderModel
-import kinetickk.flow.session.interaction.home.impl.coreShapeUnlockProgress
 import kinetickk.flow.session.interaction.localization.CodexText
 import kinetickk.flow.session.interaction.localization.SessionText
 import kinetickk.foundation.common.localization.AppLanguage
@@ -327,7 +326,8 @@ internal fun codexRelicEntry(
 
 internal fun codexShapeEntry(shape: CoreShapeDefinition, model: CodexRenderModel, progress: HomeProgressProjection, language: AppLanguage = AppLanguage.English): CodexEntry {
     val unlocked = shape.id in progress.unlockedCoreShapes
-    val current = coreShapeUnlockProgress(shape, progress.characterAchievements)
+    // The Profile counts unlock progress; a projection without it shows none yet.
+    val current = progress.characterProgress.firstOrNull { it.shape == shape.id }?.progress ?: 0L
     val requirement = shape.unlockDescription.localizedContent(language)
     val equipped = shape.id == model.runStacks.build?.character
     val facts = buildList {
@@ -337,6 +337,9 @@ internal fun codexShapeEntry(shape: CoreShapeDefinition, model: CodexRenderModel
             else -> SessionText.LOCKED
         })))
         if (!unlocked) add(CodexFact(language.text(SessionText.PROGRESS), "$current/${shape.unlockTarget}"))
+        add(CodexFact(language.text(CodexText.MECHANIC), shape.mechanicName.localizedContent(language)))
+        add(CodexFact(language.text(CodexText.TRIGGER), shape.triggerKind.displayLabel.localizedContent(language)))
+        add(CodexFact(language.text(CodexText.DIFFICULTY), "${shape.difficulty}/3"))
     }
     return CodexEntry("shape/${shape.id}", if (unlocked) shape.displayName.localizedContent(language) else language.text(SessionText.UNKNOWN_CORE),
         if (unlocked) "${shape.mechanicDescription.localizedContent(language)}\n\n$requirement" else requirement,

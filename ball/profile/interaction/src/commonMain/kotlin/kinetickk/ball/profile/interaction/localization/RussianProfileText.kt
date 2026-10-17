@@ -40,6 +40,7 @@ internal object RussianProfileText {
         ProfileText.Full -> "Полно"
         ProfileText.ArmoryTitle -> "Арсенал"
         ProfileText.MatrixTitle -> "Матрица"
+        ProfileText.HangarTitle -> "Ангар"
         ProfileText.MaximumSynchrony -> "Максимум"
         ProfileText.RebirthTitle -> "Перерождение"
         ProfileText.HostileEscalation -> "Усиление врагов"

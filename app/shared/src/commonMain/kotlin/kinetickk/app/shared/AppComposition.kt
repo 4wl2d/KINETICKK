@@ -21,6 +21,8 @@ import kinetickk.ball.profile.impl.ProfilePersistenceCapability
 import kinetickk.ball.profile.impl.createProfileComponent
 import kinetickk.ball.profile.interaction.armory.api.ArmoryFeature
 import kinetickk.ball.profile.interaction.armory.impl.DefaultArmoryFeature
+import kinetickk.ball.profile.interaction.hangar.api.HangarFeature
+import kinetickk.ball.profile.interaction.hangar.impl.DefaultHangarFeature
 import kinetickk.ball.profile.interaction.matrix.api.MatrixFeature
 import kinetickk.ball.profile.interaction.matrix.impl.DefaultMatrixFeature
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthFeature
@@ -63,6 +65,7 @@ internal class AppCompositionOwner(
     settingsFeature: SettingsFeature? = null,
     matrixFeature: MatrixFeature? = null,
     armoryFeature: ArmoryFeature? = null,
+    hangarFeature: HangarFeature? = null,
     rebirthFeature: RebirthFeature? = null,
     codexFeature: CodexFeature? = null,
     profileUnavailableFeature: ProfileUnavailableFeature? = null,
@@ -110,6 +113,11 @@ internal class AppCompositionOwner(
         weaponMasteries = uiCatalog.weaponMasteries,
         audioService = this.audioService,
     )
+    private val hangarFeature: HangarFeature = hangarFeature ?: DefaultHangarFeature(
+        profilePort = this.profilePort,
+        coreShapes = uiCatalog.coreShapes,
+        audioService = this.audioService,
+    )
     private val rebirthFeature: RebirthFeature = rebirthFeature ?: DefaultRebirthFeature(
         profilePort = this.profilePort,
         rebirthPolicy = uiCatalog.rebirth,
@@ -154,6 +162,7 @@ internal class AppCompositionOwner(
             settingsFeature = settingsFeature,
             matrixFeature = matrixFeature,
             armoryFeature = armoryFeature,
+            hangarFeature = hangarFeature,
             rebirthFeature = rebirthFeature,
             codexFeature = codexFeature,
             profileUnavailableFeature = profileUnavailableFeature,

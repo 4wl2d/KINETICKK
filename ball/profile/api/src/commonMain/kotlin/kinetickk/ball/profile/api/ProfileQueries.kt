@@ -6,6 +6,7 @@ package kinetickk.ball.profile.api
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.ImmutableSet
+import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.immutableSetOf
 
 sealed interface ProfileQuery {
@@ -78,6 +79,8 @@ data class HomeProgressProjection(
     val canAdvanceRebirth: Boolean,
     val characterAchievements: CharacterAchievementProgress = CharacterAchievementProgress(),
     val unlockedCoreShapes: ImmutableSet<CoreShape> = immutableSetOf(CoreShape.ORB),
+    /** Every character's unlock progress in stable order (the Hangar query's [HangarProjection.shapes]). */
+    val characterProgress: ImmutableList<HangarShapeProgress> = immutableListOf(),
 ) : ProfileProjection
 
 data class MatrixProgressProjection(

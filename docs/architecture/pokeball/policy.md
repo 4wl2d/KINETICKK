@@ -91,6 +91,7 @@ remain independently enforced.
 | Session participant commands at one time | 1 | Session State/Nucleus plus acceptor |
 | Profile / Gameplay / Session completion deque capacity | 8 / 8 / 8 | owned bounded completion storage; preflight and overflow tests |
 | active GameplayRun instances | 1 | Session allocation/lifecycle invariant |
+| application routes / overlays | 8 / 6 | closed `AppDestination` inventory; the Hangar overlay opens only over the Home base |
 | Gameplay fixed steps per render frame | 48 | Gameplay simulation loop |
 | Gameplay simulation raw-delta / accumulator cap seconds | `0.1` / `0.3` | production GameLoop clamps before and during accumulator admission |
 | Gameplay fixed-step admission rounding tolerance | 2 ulps of `1/120` s | GameLoop treats an accumulator within two Float ulps of a whole step as that step, so an input on a nominal step boundary lands on the same step at every frame rate; a frame below one step runs no step on a scalar copy |
@@ -104,6 +105,7 @@ remain independently enforced.
 | enemy roster / spawn budget / event members / live mines / Aegis links / Heralds per run | 19 (Content bound 24) / 14 / 10 / 10 / 3 per Aegis / 2 | bootstrap requires the exact EnemyType order; the director clamps its bank, plans sizes up to 10 (a pack 6 plus the Pack Hunters bonus) and never exceeds the hard enemy cap; Minelayers stop at ten live mines; an Aegis renews its three nearest allies; Heralds are scheduled at 360 s and 540 s |
 | POI directed rewards | 6 per run | six Content schedule windows and checked queue growth before candidate publication |
 | Character lattice | 4 collapse vertices / at most 3 retained | fourth distinct Dash position collapses the lattice; nearby positions add nothing |
+| Character runtime: facets / Edge / Stellar Mass / Blink charges / void scars / drones / echo path / Dipole slams per step | 4 / 5 / 24 / 2 / 4 / 4 / 122 samples / 8 | copy-on-write buffers allocated once per run; a full scar list detonates its oldest, a full hive refreshes instead of growing, the echo ring overwrites its oldest sample |
 | combat fields / active buffs / severed Relics | 12 (Content bound 16) / 16 / 4 | `addField` and buff insertion reject at capacity; severance keeps the newest four |
 | status Breaks / reactions | 40 per s burst 16 / 30 per s burst 12 | deterministic token buckets; generation-0 events are admitted whole, generation 1 is dropped when empty, generation 2 never cascades |
 | status and reaction visual cues per fixed step | 6 | Gameplay-owned per-step cue budget before the bounded accumulator |
@@ -135,7 +137,7 @@ remain independently enforced.
 | Rebirth level | `0..10` | Content typed policy plus Profile/Gameplay validation |
 | equipped Relic slots / rank | 4 / `1..3` (generic Meld reaches 2) | captured Content Relic policy plus Gameplay retention/saturation |
 | Profile retained Matrix node ranks / each rank | one slot per stable MatrixNodeId (at most 40) / `0..5` on the wire, clamped to the captured `maxRanks` on load with the excess refunded | Profile bootstrap compatibility plus policy-free Resource schema validation; prerequisites and Rebirth gates apply only at purchase |
-| Profile character achievement totals (including total kills, ricochets and Data pickups) / distinct winners | non-negative saturating `Long` / six stable character IDs | Profile validates deltas, persists cumulative progress and owns unlock evaluation |
+| Profile character achievement totals (including total kills, ricochets and Data pickups) / distinct winners | non-negative saturating `Long` / twelve stable character IDs | Profile validates deltas, persists cumulative progress and owns unlock evaluation |
 | Profile retained discoveries | items: captured `itemCount` (at most 96); Relics 24; reactions 21; pairings 32; heirloom Relics 4 | Profile bootstrap compatibility plus policy-free Resource schema validation; legacy (pre-epoch) lists up to 400 items / 40 Relics are discarded at decode |
 | Profile master volume / text scale | `0..1` / `1..1.75` | Profile and Gameplay normalized compatibility plus Resource ingress validation |
 | Profile simulation speed / damage-tier threshold | exact declared option sets | API declarations consumed by Profile Nucleus, Gameplay Nucleus, and Resource validation |
@@ -170,7 +172,7 @@ copying modes or source-body expectations is a policy requirement.
 | `gameplay.stable-compaction` | retained cardinality <= bounded source; stable survivor order | forward survivor compaction/reverse-tail deletion or index-stable removal |
 | `profile.codec-temporary-collections` | unlocked <=12; Matrix ranks <=40; retired Lab ranks =8; discoveries <=400 legacy / <=96 current | materialized after schema validation |
 | `session.shell-entries` | 1..2 | one base plus one nullable overlay |
-| `content.closed-ui-catalogs` | CoreShape 6 / WeaponMastery 4 / EnemyType 19 | bootstrap requires exact stable order |
+| `content.closed-ui-catalogs` | CoreShape 12 / WeaponMastery 4 / EnemyType 19 | bootstrap requires exact stable order |
 | `ui.catalog-backed-sources` | Codex items <=96; Codex enemies <=24; Armory weapons <=12; Matrix nodes <=40; mastery closed | validated immutable Content plus bounded Profile state |
 | `audio.music-notes` | 8 | fixed literal array with modulo-only indexing |
 | `foundation.immutable-set-copy` | list = input cardinality; set <= input cardinality | safe immutable reuse or owned copy; stable first-occurrence set semantics |

@@ -118,30 +118,30 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Data fades sooner and the minimap sees less." to "Данные исчезают быстрее, а миникарта видит меньше.",
     "Singularity" to "Сингулярность",
     "The Architect gains an enraged fourth phase." to "Архитектор получает четвёртую фазу ярости.",
-    "Arc in one direction to charge Orbit. When it is full, your next impact or weapon hit releases a ring wave and brands the struck enemy with your dominant element." to
-        "Двигайтесь по дуге в одну сторону, чтобы зарядить орбиту. Когда она полна, следующее столкновение или попадание оружием выпускает кольцевую волну и клеймит поражённого врага вашей основной стихией.",
-    "Four facets each negate one hit and regenerate over time. Elite kills and heavy impacts restore them faster; while all four hold, your impacts hit harder." to
-        "Четыре грани гасят по одному удару и со временем восстанавливаются. Убийства элиты и мощные столкновения ускоряют их возврат; пока целы все четыре, столкновения бьют сильнее.",
-    "Dash through enemies to mark them. A later impact or weapon hit punctures the mark for heavy damage and vents heat." to
-        "Пронзайте врагов рывком, чтобы пометить их. Следующее столкновение или попадание оружием пробивает метку, нанося тяжёлый урон и сбрасывая нагрев.",
-    "A halo widens with your speed and burns enemies on its band. Accelerating through high speed sends out a Halo Burst." to
-        "Ореол расширяется вместе со скоростью и жжёт врагов на своей кромке. Разгон через высокую скорость выпускает вспышку ореола.",
-    "Start braking from speed to open a brief parry. A parry negates the hit, returns shots and builds Edge; full Edge makes your next impact critical." to
-        "Начните тормозить на скорости, чтобы открыть короткое парирование. Оно гасит удар, возвращает выстрелы и копит остроту; полная острота делает следующее столкновение критическим.",
-    "Separated Dash origins become lattice nodes. Closing the loop or placing the fourth node collapses it along its edges." to
-        "Точки рывков на расстоянии друг от друга становятся узлами решётки. Замыкание контура или четвёртый узел схлопывает её вдоль рёбер.",
-    "Kills gather Stellar Mass that strengthens impacts and grows the Core. Full mass, or an impact kill past half, bursts into a Supernova; taking damage sheds mass." to
-        "Убийства собирают звёздную массу, которая усиливает столкновения и увеличивает ядро. Полная масса или убийство столкновением после половины взрывается сверхновой; полученный урон сбрасывает массу.",
-    "An echo ghost retraces your path one second behind, striking the enemies it passes at speed and absorbing a shot now and then." to
-        "Призрак-эхо повторяет ваш путь с отставанием в секунду, бьёт врагов, мимо которых проносится на скорости, и время от времени поглощает выстрел.",
-    "Every real turn flips polarity. Attract pulls enemies toward the Core; Repel throws them into obstacles and each other." to
-        "Каждый настоящий поворот меняет полярность. Притяжение тянет врагов к ядру, отталкивание швыряет их в препятствия и друг в друга.",
-    "Act on the visible beat. On-beat Dashes cost less heat, on-beat impacts pulse and weapons activate faster; keeping time builds a streak." to
-        "Действуйте в такт видимому ритму. Рывки в такт стоят меньше нагрева, столкновения в такт дают импульс, а оружие срабатывает быстрее; соблюдение ритма копит серию.",
-    "Dash becomes a two-charge Blink that keeps most of your speed and leaves a void scar that detonates." to
-        "Рывок становится скачком с двумя зарядами: он сохраняет большую часть скорости и оставляет пустотный шрам, который взрывается.",
-    "Data pickups build a hive of up to four drones that orbit the Core and dart at nearby enemies." to
-        "Подобранные данные собирают улей до четырёх дронов, которые кружат вокруг ядра и бросаются на ближайших врагов.",
+    "Arc in one direction to charge Orbit; your next hit releases a ring wave that brands its target." to
+        "Двигайтесь по дуге, чтобы зарядить орбиту: следующее попадание выпустит волну и заклеймит цель.",
+    "Four facets each negate a hit and regrow; Elite kills restore them, all four strengthen impacts." to
+        "Четыре грани гасят по удару и отрастают; убийства элиты их возвращают, а целые грани усиливают удары.",
+    "Dash through enemies to mark them; a later hit punctures the mark for heavy damage and vents heat." to
+        "Пронзайте врагов рывком, чтобы пометить их; следующее попадание пробьёт метку и сбросит нагрев.",
+    "A halo grows with speed and burns its band; breaking through high speed sends a Halo Burst." to
+        "Ореол растёт со скоростью и жжёт кромкой; прорыв на высокую скорость выпускает вспышку ореола.",
+    "Brake from speed to parry: it negates the hit, returns shots and builds Edge toward a crit." to
+        "Тормозите на скорости, чтобы парировать: удар гаснет, выстрел возвращается, а острота копит крит.",
+    "Separated Dash origins become nodes; closing the loop or a fourth node collapses the lattice." to
+        "Точки рывков становятся узлами; замкнутый контур или четвёртый узел схлопывает решётку.",
+    "Kills gather Stellar Mass that grows the Core and its impacts until it bursts into a Supernova." to
+        "Убийства копят звёздную массу: она растит ядро и удары, пока не взорвётся сверхновой.",
+    "An echo ghost replays your path a second behind, striking what it passes and eating shots." to
+        "Призрак-эхо повторяет ваш путь с отставанием в секунду, бьёт встречных и поглощает выстрелы.",
+    "Each real turn flips polarity: Attract pulls enemies in, Repel throws them into each other." to
+        "Каждый поворот меняет полярность: притяжение тянет врагов, отталкивание швыряет их друг в друга.",
+    "Act on the beat: on-beat Dashes cost less heat, impacts pulse and weapons fire faster." to
+        "Действуйте в такт: рывки в такт дешевле, столкновения дают импульс, а оружие стреляет чаще.",
+    "Dash becomes a two-charge Blink that keeps your speed and leaves a detonating void scar." to
+        "Рывок становится скачком с двумя зарядами: скорость сохраняется, а пустотный шрам взрывается.",
+    "Data pickups build a hive of up to four drones that orbit you and dart at nearby enemies." to
+        "Подобранные данные собирают улей до четырёх дронов, которые кружат рядом и бросаются на врагов.",
     "Available from the start" to "Доступен с самого начала",
     "Defeat 3 elites across runs" to "Победите 3 элитных врагов за все забеги",
     "Land 20 Dash hits across runs" to "Нанесите 20 попаданий рывком за все забеги",

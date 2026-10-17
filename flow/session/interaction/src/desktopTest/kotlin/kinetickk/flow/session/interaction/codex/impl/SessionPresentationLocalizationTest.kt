@@ -82,7 +82,6 @@ class SessionPresentationLocalizationTest {
         mainClock.advanceTimeBy(500)
         assertTrue(outputs.isEmpty(), "Hover changes the scene without navigating or starting a run")
         onNodeWithTag("kinetickk.home.lab").assertIsFocused()
-        onNodeWithTag("kinetickk.home.core.orb").assertIsSelected()
         // Hover selected Lab; Down selects Armory and Enter dispatches one action.
         onRoot().performKeyInput { pressKey(Key.DirectionDown) }
         mainClock.advanceTimeByFrame()
@@ -169,12 +168,12 @@ class SessionPresentationLocalizationTest {
         }
         mainClock.advanceTimeByFrame()
         onNodeWithTag("kinetickk.home.start").assertContentDescriptionEquals("Начать забег")
-        onNodeWithTag("kinetickk.home.core.orb").assertContentDescriptionEquals("Выбрать ядро «Круг»")
+        onNodeWithTag("kinetickk.home.hangar").assertContentDescriptionEquals("Открыть ангар. Текущая форма: Круг")
         saveLocalizationCapture("home-ru")
         runOnIdle { languageValue = AppLanguage.English }
         mainClock.advanceTimeByFrame()
         onNodeWithTag("kinetickk.home.start").assertContentDescriptionEquals("Start run")
-        onNodeWithTag("kinetickk.home.core.orb").assertContentDescriptionEquals("Select Circle core")
+        onNodeWithTag("kinetickk.home.hangar").assertContentDescriptionEquals("Open the Hangar. Current form: Circle")
         saveLocalizationCapture("home-en")
     }
 }
@@ -183,8 +182,8 @@ private class LocalizationProfilePort : ProfileReadPort {
     override val instanceId = LOCAL_PROFILE_INSTANCE_ID
     override fun query(query: ProfileQuery.GetRunBootstrap): kinetickk.ball.profile.api.RunBootstrapProjection = error("unused")
     override fun query(query: ProfileQuery.GetMatrixProgress) = MatrixProgressProjection(instanceId, ProfileRevision.ZERO,
-    override fun query(query: ProfileQuery.GetHangar): kinetickk.ball.profile.api.HangarProjection = error("unused")
         MatrixProfileSnapshot(PlayerEconomy(), MatrixProgress()))
+    override fun query(query: ProfileQuery.GetHangar): kinetickk.ball.profile.api.HangarProjection = error("unused")
     override fun query(query: ProfileQuery.GetLoadout): kinetickk.ball.profile.api.LoadoutProjection = error("unused")
     override fun query(query: ProfileQuery.GetRebirthProgress): kinetickk.ball.profile.api.RebirthProgressProjection = error("unused")
     override fun query(query: ProfileQuery.GetPersistenceStatus): kinetickk.ball.profile.api.PersistenceStatusProjection = error("unused")

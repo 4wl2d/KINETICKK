@@ -55,7 +55,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
-import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.foundation.design.*
 import kinetickk.ball.profile.api.ProfileReadPort
@@ -92,7 +92,6 @@ class DefaultHomeFeature(
         var revisionValue by remember { mutableIntStateOf(0) }
         var viewportValue by remember { mutableStateOf(HomeViewport(0f, 0f, density)) }
         var renderTimeSecondsValue by remember { mutableFloatStateOf(0f) }
-        var previewShapeValue by remember { mutableStateOf<CoreShape?>(null) }
         var activeTargetValue by remember { mutableStateOf(HomeLayoutTarget.START) }
         var focusedTargetValue by remember { mutableStateOf<HomeLayoutTarget?>(null) }
         var hoveredTargetValue by remember { mutableStateOf<HomeLayoutTarget?>(null) }
@@ -142,15 +141,11 @@ class DefaultHomeFeature(
                 } else {
                     openInfoValue = null
                     val action = resolveHomePress(viewportValue, position.x, position.y)
-                    if (action is HomeAction.SelectCoreShape) previewShapeValue = action.shape
-                    val enabled = action !is HomeAction.SelectCoreShape ||
-                        uiModel.isCoreShapeUnlocked(action.shape)
-                    if (action != null && enabled) dispatch(action)
+                    if (action != null) dispatch(action)
                 }
             }
         }
 
-        val selectedShapeValue by rememberUpdatedState(uiModel.coreShape)
         val elementHuesValue by rememberUpdatedState(roles.elements)
         LaunchedEffect(Unit) {
             var previousFrame = withFrameNanos { it }
@@ -158,7 +153,7 @@ class DefaultHomeFeature(
                 val frame = withFrameNanos { it }
                 val delta = selectHomePresentationFrameDeltaSeconds((frame - previousFrame) / 1_000_000_000f)
                 renderTimeSecondsValue += delta
-                menuMotion.advance(activeTargetValue, selectedShapeValue, delta, elementHuesValue)
+                menuMotion.advance(activeTargetValue, delta, elementHuesValue)
                 previousFrame = frame
             }
         }
@@ -180,8 +175,9 @@ class DefaultHomeFeature(
                         (event.key != Key.DirectionDown && event.key != Key.DirectionUp)) false
                     else {
                         val step = if (event.key == Key.DirectionDown) 1 else -1
-                        val index = HomeMenuTargets.indexOf(activeTargetValue)
-                        activeTargetValue = HomeMenuTargets[(index + step + HomeMenuTargets.size) % HomeMenuTargets.size]
+                        val targets = HomeNavigationTargets
+                        val index = targets.indexOf(activeTargetValue)
+                        activeTargetValue = targets[(index + step + targets.size) % targets.size]
                         actionFocus.getValue(activeTargetValue).requestFocus()
                         true
                     }
@@ -200,7 +196,6 @@ class DefaultHomeFeature(
                 drawHome(
                     uiModel, textMeasurer, renderTimeSecondsValue, layout,
                     HomeDrawState(
-                        previewShape = previewShapeValue,
                         activeTarget = activeTargetValue,
                         focusedTarget = focusedTargetValue,
                         hoveredTarget = hoveredTargetValue,
@@ -214,29 +209,20 @@ class DefaultHomeFeature(
             if (actionsReady) {
                 layout.actions.forEach { action ->
                     key(action.target) {
-                        val shape = action.target.coreShapeOrNull()
-                        val enabled = shape == null || uiModel.isCoreShapeUnlocked(shape)
                         HomeSemanticAction(
                             action = action,
                             density = localDensity,
-                            enabled = enabled,
-                            selected = shape != null && uiModel.coreShape == shape,
+                            characterName = uiModel.coreShape(uiModel.coreShape).displayName.localizedContent(language),
                             focusRequester = actionFocus.getValue(action.target),
                             onPreview = { focused, hovered ->
                                 if (focused) focusedTargetValue = action.target
                                 else if (focusedTargetValue == action.target) focusedTargetValue = null
                                 if (hovered) hoveredTargetValue = action.target
                                 else if (hoveredTargetValue == action.target) hoveredTargetValue = null
-                                val active = focused || hovered
-                                if (active) {
-                                    // Every target is focusable, locked forms included.
+                                if (focused || hovered) {
                                     actionFocus.getValue(action.target).requestFocus()
-                                    if (shape != null) previewShapeValue = shape
-                                    else {
-                                        activeTargetValue = action.target
-                                        previewShapeValue = null
-                                    }
-                                } else if (previewShapeValue == shape) previewShapeValue = null
+                                    activeTargetValue = action.target
+                                }
                             },
                             onClick = { dispatch(action.target.toHomeAction()) },
                         )
@@ -249,7 +235,7 @@ class DefaultHomeFeature(
                             density = localDensity,
                             description = when (info.target) {
                                 HomeInfoTarget.FACTS -> menuMotion.facts(uiModel, activeTargetValue, language, textScale).info
-                                HomeInfoTarget.FORM -> homeFormInfo(uiModel, previewShapeValue ?: uiModel.coreShape, language)
+                                HomeInfoTarget.FORM -> homeFormInfo(uiModel, language)
                             },
                             onActive = { active ->
                                 if (active) activeInfoValue = info.target
@@ -268,14 +254,13 @@ class DefaultHomeFeature(
 private fun HomeSemanticAction(
     action: HomeActionBounds,
     density: Density,
-    enabled: Boolean,
-    selected: Boolean,
+    characterName: String,
     focusRequester: FocusRequester,
     onPreview: (focused: Boolean, hovered: Boolean) -> Unit,
     onClick: () -> Unit,
 ) {
     val language = LocalAppLanguage.current
-    val description = if (!enabled && action.target.coreShapeOrNull() != null) language.text(SessionText.UNKNOWN_CORE) else action.target.homeContentDescription(language)
+    val description = action.target.homeContentDescription(language, characterName)
     val interactions = remember { MutableInteractionSource() }
     val focused by interactions.collectIsFocusedAsState()
     val hovered by interactions.collectIsHoveredAsState()
@@ -286,31 +271,16 @@ private fun HomeSemanticAction(
             .focusRequester(focusRequester)
             .hoverable(interactions)
             .testTag(action.target.homeTestTag())
-            .onKeyEvent { event ->
-                enabled && activateHomeSemanticButtonFromKey(
-                    event.key,
-                    event.type,
-                    onClick,
-                )
-            }
+            .onKeyEvent { event -> activateHomeSemanticButtonFromKey(event.key, event.type, onClick) }
             .semantics {
                 role = Role.Button
                 contentDescription = description
-                if (action.target.coreShapeOrNull() != null) {
-                    this.selected = selected
-                    stateDescription = if (selected) language.text(SessionText.SELECTED_STATE) else if (enabled) language.text(SessionText.AVAILABLE_STATE) else language.text(SessionText.LOCKED_STATE)
-                }
-                if (enabled) {
-                    onClick(label = description) {
-                        onClick()
-                        true
-                    }
-                } else {
-                    disabled()
+                onClick(label = description) {
+                    onClick()
+                    true
                 }
             }
-            // Locked forms stay focusable: focus previews them and their (!) explains the goal.
-            .focusable(enabled = enabled || action.target.coreShapeOrNull() != null, interactionSource = interactions),
+            .focusable(interactionSource = interactions),
     )
 }
 
@@ -356,12 +326,7 @@ private fun Modifier.placeInHomeBounds(bounds: Rect, density: Density): Modifier
         )
 
 private fun HomeLayoutTarget.homeTestTag(): String = when (this) {
-    HomeLayoutTarget.CORE_ORB -> "kinetickk.home.core.orb"
-    HomeLayoutTarget.CORE_PRISM -> "kinetickk.home.core.prism"
-    HomeLayoutTarget.CORE_SHARD -> "kinetickk.home.core.shard"
-    HomeLayoutTarget.CORE_RING -> "kinetickk.home.core.ring"
-    HomeLayoutTarget.CORE_DIAMOND -> "kinetickk.home.core.diamond"
-    HomeLayoutTarget.CORE_TESSERACT -> "kinetickk.home.core.tesseract"
+    HomeLayoutTarget.HANGAR -> "kinetickk.home.hangar"
     HomeLayoutTarget.START -> "kinetickk.home.start"
     HomeLayoutTarget.LAB -> "kinetickk.home.lab"
     HomeLayoutTarget.ARMORY -> "kinetickk.home.armory"
@@ -375,13 +340,8 @@ private fun HomeInfoTarget.homeInfoTestTag(): String = when (this) {
     HomeInfoTarget.FORM -> "kinetickk.home.info.form"
 }
 
-private fun HomeLayoutTarget.homeContentDescription(language: AppLanguage): String = when (this) {
-    HomeLayoutTarget.CORE_ORB -> language.text(SessionText.SELECT_CIRCLE)
-    HomeLayoutTarget.CORE_PRISM -> language.text(SessionText.SELECT_SQUARE)
-    HomeLayoutTarget.CORE_SHARD -> language.text(SessionText.SELECT_TRIANGLE)
-    HomeLayoutTarget.CORE_RING -> language.text(SessionText.SELECT_RING)
-    HomeLayoutTarget.CORE_DIAMOND -> language.text(SessionText.SELECT_DIAMOND)
-    HomeLayoutTarget.CORE_TESSERACT -> language.text(SessionText.SELECT_TESSERACT)
+private fun HomeLayoutTarget.homeContentDescription(language: AppLanguage, characterName: String): String = when (this) {
+    HomeLayoutTarget.HANGAR -> language.text(SessionText.HANGAR_DESCRIPTION, characterName)
     HomeLayoutTarget.START -> language.text(SessionText.START_DESCRIPTION)
     HomeLayoutTarget.LAB -> language.text(SessionText.LAB_DESCRIPTION)
     HomeLayoutTarget.ARMORY -> language.text(SessionText.ARMORY_DESCRIPTION)

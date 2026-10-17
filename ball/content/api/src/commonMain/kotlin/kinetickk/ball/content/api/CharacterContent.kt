@@ -68,30 +68,18 @@ data class CoreShapeDefinition(
         CoreShape.HEXAGON -> "Hexagon"
     },
     val mechanicDescription: String = when (id) {
-        CoreShape.ORB -> "Arc in one direction to charge Orbit. When it is full, your next impact or weapon hit " +
-            "releases a ring wave and brands the struck enemy with your dominant element."
-        CoreShape.PRISM -> "Four facets each negate one hit and regenerate over time. Elite kills and heavy impacts " +
-            "restore them faster; while all four hold, your impacts hit harder."
-        CoreShape.SHARD -> "Dash through enemies to mark them. A later impact or weapon hit punctures the mark for " +
-            "heavy damage and vents heat."
-        CoreShape.RING -> "A halo widens with your speed and burns enemies on its band. Accelerating through high " +
-            "speed sends out a Halo Burst."
-        CoreShape.DIAMOND -> "Start braking from speed to open a brief parry. A parry negates the hit, returns shots " +
-            "and builds Edge; full Edge makes your next impact critical."
-        CoreShape.TESSERACT -> "Separated Dash origins become lattice nodes. Closing the loop or placing the fourth " +
-            "node collapses it along its edges."
-        CoreShape.STAR -> "Kills gather Stellar Mass that strengthens impacts and grows the Core. Full mass, or an " +
-            "impact kill past half, bursts into a Supernova; taking damage sheds mass."
-        CoreShape.SPIRAL -> "An echo ghost retraces your path one second behind, striking the enemies it passes at " +
-            "speed and absorbing a shot now and then."
-        CoreShape.DIPOLE -> "Every real turn flips polarity. Attract pulls enemies toward the Core; Repel throws " +
-            "them into obstacles and each other."
-        CoreShape.PENTAGON -> "Act on the visible beat. On-beat Dashes cost less heat, on-beat impacts pulse and " +
-            "weapons activate faster; keeping time builds a streak."
-        CoreShape.CRESCENT -> "Dash becomes a two-charge Blink that keeps most of your speed and leaves a void scar " +
-            "that detonates."
-        CoreShape.HEXAGON -> "Data pickups build a hive of up to four drones that orbit the Core and dart at " +
-            "nearby enemies."
+        CoreShape.ORB -> "Arc in one direction to charge Orbit; your next hit releases a ring wave that brands its target."
+        CoreShape.PRISM -> "Four facets each negate a hit and regrow; Elite kills restore them, all four strengthen impacts."
+        CoreShape.SHARD -> "Dash through enemies to mark them; a later hit punctures the mark for heavy damage and vents heat."
+        CoreShape.RING -> "A halo grows with speed and burns its band; breaking through high speed sends a Halo Burst."
+        CoreShape.DIAMOND -> "Brake from speed to parry: it negates the hit, returns shots and builds Edge toward a crit."
+        CoreShape.TESSERACT -> "Separated Dash origins become nodes; closing the loop or a fourth node collapses the lattice."
+        CoreShape.STAR -> "Kills gather Stellar Mass that grows the Core and its impacts until it bursts into a Supernova."
+        CoreShape.SPIRAL -> "An echo ghost replays your path a second behind, striking what it passes and eating shots."
+        CoreShape.DIPOLE -> "Each real turn flips polarity: Attract pulls enemies in, Repel throws them into each other."
+        CoreShape.PENTAGON -> "Act on the beat: on-beat Dashes cost less heat, impacts pulse and weapons fire faster."
+        CoreShape.CRESCENT -> "Dash becomes a two-charge Blink that keeps your speed and leaves a detonating void scar."
+        CoreShape.HEXAGON -> "Data pickups build a hive of up to four drones that orbit you and dart at nearby enemies."
     },
     val unlockRequirement: CharacterUnlockRequirement = when (id) {
         CoreShape.ORB -> CharacterUnlockRequirement.AVAILABLE

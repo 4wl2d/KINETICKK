@@ -102,12 +102,9 @@ class HomeReducerTest {
     fun actionsEmitTypedProfileIntentOrOrderedShellEffects() {
         val reducer = homeReducer()
 
-        val selection = reducer.reduce(HomeAction.SelectCoreShape(CoreShape.PRISM)).effects
-        val emittedSelection = assertIs<HomeOutput.SelectCoreShape>(
-            assertIs<HomeEffect.Emit>(selection[0]).output,
-        )
-        assertEquals(CoreShape.PRISM, emittedSelection.shape)
-        assertEquals(SessionAudioCue.UI_CLICK, assertIs<HomeEffect.PlayAudio>(selection[1]).cue)
+        val hangar = reducer.reduce(HomeAction.OpenHangar).effects
+        assertEquals(SessionAudioCue.UI_CLICK, assertIs<HomeEffect.PlayAudio>(hangar[0]).cue)
+        assertIs<HomeOutput.OpenHangar>(assertIs<HomeEffect.Emit>(hangar[1]).output)
 
         val start = reducer.reduce(HomeAction.StartRun).effects
         assertEquals(SessionAudioCue.UI_CLICK, assertIs<HomeEffect.PlayAudio>(start[0]).cue)
@@ -122,8 +119,8 @@ class HomeReducerTest {
         val viewport = HomeViewport(1_280f, 720f, 1f)
 
         assertEquals(
-            HomeAction.SelectCoreShape(CoreShape.PRISM),
-            homeLayoutGeometry(1_280f, 720f, 1f).bounds(HomeLayoutTarget.CORE_PRISM).center.let {
+            HomeAction.OpenHangar,
+            homeLayoutGeometry(1_280f, 720f, 1f).bounds(HomeLayoutTarget.HANGAR).center.let {
                 resolveHomePress(viewport, it.x, it.y)
             },
         )

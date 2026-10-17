@@ -258,6 +258,31 @@ class AppSessionNucleusTest {
     }
 
     @Test
+    fun theHangarOpensOnlyOverHomeAndItsShortcutTogglesItThere() {
+        val home = initialState()
+        val opened = decide(home, SessionInteractionPulse.OpenOverlay(AppDestination.Hangar)).accepted()
+        assertEquals(AppDestination.Hangar, opened.nextState.overlay)
+        assertTrue(opened.outputs.isEmpty())
+        val byKey = decide(home, SessionInteractionPulse.ShortcutObserved(SessionShortcut.HANGAR)).accepted()
+        assertEquals(AppDestination.Hangar, byKey.nextState.overlay)
+        val closed = decide(byKey.nextState, SessionInteractionPulse.ShortcutObserved(SessionShortcut.HANGAR)).accepted()
+        assertNull(closed.nextState.overlay)
+        // During a run, every phase refuses it: characters change between runs.
+        GameplayRunPhase.entries.filter { it != GameplayRunPhase.CREATED && it != GameplayRunPhase.EXITED }.forEach { phase ->
+            val running = gameplayState(phase)
+            val context = AppSessionContext(gameplayStatus = gameplayStatus(running, phase))
+            assertEquals(
+                SessionRejection.OverlayUnavailable(AppDestination.Hangar),
+                decide(running, SessionInteractionPulse.OpenOverlay(AppDestination.Hangar), context).rejection(),
+            )
+            assertEquals(
+                SessionRejection.ShortcutUnavailable,
+                decide(running, SessionInteractionPulse.ShortcutObserved(SessionShortcut.HANGAR), context).rejection(),
+            )
+        }
+    }
+
+    @Test
     fun codexPreservesPausedOrPendingRewardPhaseWhenClosed() {
         listOf(GameplayRunPhase.PAUSED, GameplayRunPhase.CHOICE).forEach { phase ->
             val state = gameplayState(phase)

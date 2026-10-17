@@ -30,7 +30,11 @@ import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkAlign
+import kinetickk.foundation.design.KkButtonSize
+import kinetickk.foundation.design.KkButtonVariant
 import kinetickk.foundation.design.KkEase
+import kinetickk.foundation.design.KkFormGeometry
+import kinetickk.foundation.design.KkFormPaths
 import kinetickk.foundation.design.KkHomePalette
 import kinetickk.foundation.design.KkIcon
 import kinetickk.foundation.design.KkTime
@@ -38,6 +42,7 @@ import kinetickk.foundation.design.KkTooltipPlacement
 import kinetickk.foundation.design.KkVAlign
 import kinetickk.foundation.design.bodyStyle
 import kinetickk.foundation.design.condStyle
+import kinetickk.foundation.design.drawKkButton
 import kinetickk.foundation.design.drawKkGem
 import kinetickk.foundation.design.drawKkGrid
 import kinetickk.foundation.design.drawKkHalftone
@@ -78,12 +83,12 @@ private val EnemyAngles = floatArrayOf(60f, 150f, 250f, 320f)
 
 /**
  * Draw-only Home motion and caches; semantic selection stays with HomeReducer and the feature.
- * Palette recolor (350 ms Out), menu selection slabs (240 ms Pull) and form tiles are
+ * Palette recolor (350 ms Out), menu selection slabs and the Hangar card's lift (240 ms Pull) are
  * interpolated here from the frame clock.
  */
 internal class HomeMenuMotion {
     private val menu = FloatArray(HomeMenuTargets.size).also { it[0] = 1f }
-    private val tiles = FloatArray(CoreShape.entries.size)
+    private var hangar = 0f
     private var activeIndex = 0
     private var accentFrom = KkHomePalette.START.accent
     private var accentTarget = HomeLayoutTarget.START
@@ -103,18 +108,17 @@ internal class HomeMenuMotion {
      * Advances the frame clock. The accent eases into the selected item's palette; on the Codex it
      * then follows the element sweep through [hues] in cached steps, so a steady frame allocates nothing.
      */
-    fun advance(target: HomeLayoutTarget, coreShape: CoreShape, deltaSeconds: Float, hues: List<Color> = Kk.Elements) {
+    fun advance(target: HomeLayoutTarget, deltaSeconds: Float, hues: List<Color> = Kk.Elements) {
         val delta = deltaSeconds.coerceIn(0f, MAX_HOME_PRESENTATION_FRAME_DELTA_SECONDS)
-        val index = HomeMenuTargets.indexOf(target).coerceAtLeast(0)
+        // The Hangar card is not a menu row: while it is active no row is selected.
+        val index = HomeMenuTargets.indexOf(target)
         selectedSeconds = if (index == activeIndex) selectedSeconds + delta else 0f
         activeIndex = index
         val step = delta * 1000f / KkTime.MenuSelect
         for (index in menu.indices) {
             menu[index] = if (index == activeIndex) min(1f, menu[index] + step) else max(0f, menu[index] - step)
         }
-        for (index in tiles.indices) {
-            tiles[index] = if (index == coreShape.ordinal) min(1f, tiles[index] + step) else max(0f, tiles[index] - step)
-        }
+        hangar = if (target == HomeLayoutTarget.HANGAR) min(1f, hangar + step) else max(0f, hangar - step)
         sweepSeconds = (sweepSeconds + delta) % HOME_CODEX_SWEEP_SECONDS
         val sweep = homeCodexSweepStep(sweepSeconds)
         if (hues !== sweepHues) {
@@ -146,7 +150,8 @@ internal class HomeMenuMotion {
     fun menuSelection(index: Int): Float =
         if (index == activeIndex) KkEase.Pull.transform(menu[index]) else KkEase.Out.transform(menu[index])
 
-    fun tileSelection(shape: CoreShape): Float = KkEase.Pull.transform(tiles[shape.ordinal])
+    /** Lift of the Hangar card while it is the active Home target (Pull overshoot while growing). */
+    fun hangarSelection(): Float = KkEase.Pull.transform(hangar)
 
     // Caches (draw thread only): the accent-tinted measurer, strokes, paths and the trail brush.
     private var tintedBase: CanvasTextMeasurer? = null
@@ -364,27 +369,6 @@ internal class HomeMenuMotion {
             .also { menuFactsValue[index] = it }
     }
 
-    private var labelKeyModel: Any? = null
-    private var labelKeyMeasurer: CanvasTextMeasurer? = null
-    private var labelKeyWidth = 0f
-
-    private val labelSizes = FloatArray(CoreShape.entries.size)
-
-    /** Label size of each form tile (see [homeTileLabelSize]), cached per model, measurer and tile. */
-    fun tileLabelSize(model: HomeUiModel, text: CanvasTextMeasurer, tile: Rect, density: Float, shape: CoreShape): Float {
-        if (labelKeyModel !== model || labelKeyMeasurer !== text || labelKeyWidth != tile.width) {
-            labelKeyModel = model
-            labelKeyMeasurer = text
-            labelKeyWidth = tile.width
-            CoreShape.entries.forEach { entry ->
-                labelSizes[entry.ordinal] = homeTileLabelSize(model.coreShape(entry).displayName.localizedContent(text.language), tile, density, text.scale) { name, size ->
-                    measureKkText(text, name, text.typography.labelStyle(size), uppercase = true).size.width
-                }
-            }
-        }
-        return labelSizes[shape.ordinal]
-    }
-
     private companion object {
         const val TRAIL_START = 100f
         const val TRAIL_SWEEP = 167f
@@ -400,32 +384,6 @@ internal class HomeMenuMotion {
         }
     }
 }
-
-/** Cut of a form tile's slab (px): smaller tiles use the smaller cut. */
-internal fun homeTileCut(tile: Rect, density: Float): Float = (if (tile.width < 70f * density) 8f else 12f) * density
-
-/** Horizontal padding kept on both sides of a tile label, inside the slanted face (px per dp). */
-internal const val HOME_TILE_LABEL_PADDING_DP = 6f
-
-/**
- * Label size (13 down to the size that draws 7 px at the measurer's [scale]) at which [name] fits
- * its tile's face with padding: the slanted face near the label is the tile width minus one cut.
- * 0 hides the label (icon only) when even 7 px does not fit or the tile is too short.
- */
-internal fun homeTileLabelSize(name: String, tile: Rect, density: Float, scale: Float, width: (String, Float) -> Int): Float {
-    if (tile.height < 60f * density) return 0f
-    val available = tile.width - homeTileCut(tile, density) - 2f * HOME_TILE_LABEL_PADDING_DP * density
-    val smallest = HOME_TILE_LABEL_MIN_PX / scale.coerceAtLeast(0.1f)
-    var size = 13f
-    while (size > smallest) {
-        if (width(name, size) <= available) return size
-        size -= 1f
-    }
-    return if (width(name, smallest) <= available) smallest else 0f
-}
-
-/** Smallest drawn size (px) of a form tile label. */
-internal const val HOME_TILE_LABEL_MIN_PX = 7f
 
 /**
  * Seconds into the menu trail cycle (`kk-trail`: 0.9 s, lines delayed 0 / 0.15 / 0.3 s, opaque
@@ -516,7 +474,8 @@ internal fun homeMenuStampText(target: HomeLayoutTarget, language: AppLanguage):
 }
 
 internal fun homeFacts(model: HomeUiModel, target: HomeLayoutTarget, language: AppLanguage, textScale: Float): HomeFacts {
-    val label = language.text(HomeMenuLabels[HomeMenuTargets.indexOf(target).coerceAtLeast(0)])
+    val label = if (target == HomeLayoutTarget.HANGAR) language.text(SessionText.HANGAR)
+        else language.text(HomeMenuLabels[HomeMenuTargets.indexOf(target).coerceAtLeast(0)])
     val matter = homeNumber(model.totalMatter, language)
     val weapon = model.startingWeaponName?.localizedContent(language)
     val directive = model.rebirthProfile.directive
@@ -569,6 +528,20 @@ internal fun homeFacts(model: HomeUiModel, target: HomeLayoutTarget, language: A
             "${model.discoveredItemCount}/${model.itemCount}",
             null,
         )
+        HomeLayoutTarget.HANGAR -> {
+            val definition = model.coreShape(model.coreShape)
+            HomeFacts(
+                label,
+                "${model.unlockedCoreShapes.size}/${model.coreShapes.size}",
+                listOf(
+                    language.text(SessionRedesignText.FORM) to definition.displayName.localizedContent(language),
+                    language.text(SessionRedesignText.MECHANIC) to definition.mechanicName.localizedContent(language),
+                ),
+                language.text(SessionRedesignText.HANGAR_INFO),
+                null,
+                null,
+            )
+        }
         HomeLayoutTarget.SETTINGS -> HomeFacts(
             label,
             language.code.uppercase(),
@@ -606,32 +579,17 @@ internal fun homeNumber(value: Long, language: AppLanguage): String {
     }
 }
 
-/** The (!) text of the form showcase: the mechanic, or the unlock goal and progress when locked. */
-internal fun homeFormInfo(model: HomeUiModel, shape: CoreShape, language: AppLanguage): String {
-    val definition = model.coreShape(shape)
-    return if (model.isCoreShapeUnlocked(shape)) {
-        definition.mechanicDescription.localizedContent(language)
-    } else {
-        definition.unlockDescription.localizedContent(language) + "\n" + language.text(
-            SessionText.UNLOCK_PROGRESS,
-            coreShapeUnlockProgress(definition, model.characterAchievements),
-            definition.unlockTarget,
-        )
-    }
+/** The (!) text of the form panel: the current character's mechanic name and what it does. */
+internal fun homeFormInfo(model: HomeUiModel, language: AppLanguage): String {
+    val definition = model.coreShape(model.coreShape)
+    return definition.mechanicName.localizedContent(language) + "\n" + definition.mechanicDescription.localizedContent(language)
 }
 
-internal fun CoreShape.formIcon(): KkIcon = when (this) {
-    CoreShape.ORB -> KkIcon.FORMS_CIRCLE
-    CoreShape.PRISM -> KkIcon.FORMS_SQUARE
-    CoreShape.SHARD -> KkIcon.FORMS_TRIANGLE
-    CoreShape.RING -> KkIcon.FORMS_RING
-    CoreShape.DIAMOND -> KkIcon.FORMS_DIAMOND
-    CoreShape.TESSERACT -> KkIcon.FORMS_TESSERACT
-}
+/** The form icon of a character: [KkIcon.Forms] follows the character order. */
+internal fun CoreShape.formIcon(): KkIcon = KkIcon.Forms[ordinal]
 
 /** Interaction state the Canvas reflects (hover/focus come from the semantic overlay). */
 internal class HomeDrawState(
-    val previewShape: CoreShape?,
     val activeTarget: HomeLayoutTarget,
     val focusedTarget: HomeLayoutTarget?,
     val hoveredTarget: HomeLayoutTarget?,
@@ -755,7 +713,7 @@ internal fun DrawScope.drawHome(
         if (info != null) {
             val content = when (open) {
                 HomeInfoTarget.FACTS -> facts.info
-                HomeInfoTarget.FORM -> homeFormInfo(model, state.previewShape ?: model.coreShape, language)
+                HomeInfoTarget.FORM -> homeFormInfo(model, language)
             }
             val placement = if (layout.mode == HomeLayoutMode.COMPACT_PORTRAIT) KkTooltipPlacement.ABOVE else KkTooltipPlacement.ABOVE_END
             drawKkTooltip(text, info.bounds, content, placement)
@@ -844,13 +802,13 @@ private fun DrawScope.drawHero(
     drawEnemies(text, time, center, k, spin, accent, far = true, motion)
     if (coreFar) {
         drawTether(core, center, k, accent, roles.threat)
-        drawCore(model, text, core, k, perspective, time, state.previewShape, motion)
+        drawCore(model, core, k, perspective, time, motion)
     }
     drawSingularity(center, k, time, roles.threat, motion)
     drawEnemies(text, time, center, k, spin, accent, far = false, motion)
     if (!coreFar) {
         drawTether(core, center, k, accent, roles.threat)
-        drawCore(model, text, core, k, perspective, time, state.previewShape, motion)
+        drawCore(model, core, k, perspective, time, motion)
     }
 }
 
@@ -884,18 +842,16 @@ private fun DrawScope.drawSingularity(center: Offset, k: Float, time: Float, thr
     drawCircle(Kk.Bone, max(6f * k, density * 3f), center)
 }
 
+/** The current character's form ([KkFormPaths]) on the hero orbit, with its accent glow. */
 private fun DrawScope.drawCore(
     model: HomeUiModel,
-    text: CanvasTextMeasurer,
     center: Offset,
     k: Float,
     perspective: Float,
     time: Float,
-    previewShape: CoreShape?,
     motion: HomeMenuMotion,
 ) {
-    val shape = previewShape ?: model.coreShape
-    val unlocked = model.isCoreShapeUnlocked(shape)
+    val shape = model.coreShape
     val radius = max(32f * k, density * 18f) * perspective
     val accent = motion.accent
     // Glow (box-shadow 46 px accent @85 %) as stacked translucent rings, never a real-time blur.
@@ -903,76 +859,34 @@ private fun DrawScope.drawCore(
         drawCircle(accent.copy(alpha = 0.85f * (0.13f - index * 0.025f)), radius + (6f + index * 8f) * k, center)
     }
     val spin = when (shape) {
-        CoreShape.PRISM -> time / 60f * 360f
-        CoreShape.TESSERACT -> time / 40f * 360f
+        CoreShape.PRISM, CoreShape.HEXAGON -> time / 60f * 360f
+        CoreShape.TESSERACT, CoreShape.STAR -> time / 40f * 360f
+        CoreShape.SPIRAL -> -time / 30f * 360f
         else -> 0f
     }
-    val path = motion.shapePath
+    val index = shape.formIndex()
+    val path = KkFormPaths.of(index, radius)
     rotate(spin % 360f, center) {
-        buildCoreShape(path, shape, center, radius)
-        val outline = kkStroke(max(10f * k, density * 5f))
-        drawPath(path, Kk.Ink, style = outline)
-        if (shape == CoreShape.RING || shape == CoreShape.TESSERACT) {
-            val stroke = kkStroke(if (shape == CoreShape.RING) radius * 0.33f else radius * 0.12f)
-            drawPath(path, if (unlocked) Kk.Bone else Kk.Mute2, style = stroke)
-            if (shape == CoreShape.RING) {
-                drawCircle(Kk.Ink, radius * 0.24f + max(5f * k, density * 2.5f), center)
-                drawCircle(if (unlocked) Kk.Bone else Kk.Mute2, radius * 0.24f, center)
-            }
-        } else {
-            drawPath(path, if (unlocked) Kk.Bone else Kk.Ink3)
-            if (!unlocked) drawKkHatch(path)
-        }
-    }
-    if (!unlocked) drawKkIcon(KkIcon.SYSTEM_LOCKED, center, radius * 0.9f, Kk.Mute)
-}
-
-/** Form silhouettes (Deploy board shapes) scaled so the disc form has [radius]. */
-private fun buildCoreShape(path: Path, shape: CoreShape, center: Offset, radius: Float) {
-    path.rewind()
-    val u = radius / 42f
-    fun p(x: Float, y: Float) = Offset(center.x + (x - 50f) * u, center.y + (y - 50f) * u)
-    when (shape) {
-        CoreShape.ORB -> path.addOval(Rect(center.x - radius, center.y - radius, center.x + radius, center.y + radius))
-        CoreShape.RING -> {
-            val r = 36f * u
-            path.addOval(Rect(center.x - r, center.y - r, center.x + r, center.y + r))
-        }
-        CoreShape.PRISM -> path.addRect(Rect(p(22f, 22f), p(78f, 78f)))
-        CoreShape.SHARD -> {
-            val a = p(50f, 10f)
-            val b = p(92f, 84f)
-            val c = p(8f, 84f)
-            path.moveTo(a.x, a.y)
-            path.lineTo(b.x, b.y)
-            path.lineTo(c.x, c.y)
-            path.close()
-        }
-        CoreShape.DIAMOND -> {
-            val a = p(50f, 6f)
-            val b = p(94f, 50f)
-            val c = p(50f, 94f)
-            val d = p(6f, 50f)
-            path.moveTo(a.x, a.y)
-            path.lineTo(b.x, b.y)
-            path.lineTo(c.x, c.y)
-            path.lineTo(d.x, d.y)
-            path.close()
-        }
-        CoreShape.TESSERACT -> {
-            path.addRect(Rect(p(14f, 14f), p(64f, 64f)))
-            path.addRect(Rect(p(36f, 36f), p(86f, 86f)))
-            for ((x, y) in TesseractEdges) {
-                val a = p(x, y)
-                val b = p(x + 22f, y + 22f)
-                path.moveTo(a.x, a.y)
-                path.lineTo(b.x, b.y)
+        translate(center.x, center.y) {
+            val outline = max(10f * k, density * 5f)
+            if (KkFormGeometry.isStroked(index)) {
+                val width = KkFormGeometry.strokeWidth(index, radius)
+                drawPath(path, Kk.Ink, style = kkStroke(width + outline))
+                drawPath(path, Kk.Bone, style = kkStroke(width))
+            } else {
+                drawPath(path, Kk.Ink, style = kkStroke(outline))
+                drawPath(path, Kk.Bone)
             }
         }
     }
+    if (shape == CoreShape.RING) {
+        drawCircle(Kk.Ink, radius * 0.24f + max(5f * k, density * 2.5f), center)
+        drawCircle(Kk.Bone, radius * 0.24f, center)
+    }
 }
 
-private val TesseractEdges = listOf(14f to 14f, 64f to 14f, 14f to 64f, 64f to 64f)
+/** The form index of a character: [KkFormGeometry] and [KkIcon.Forms] follow the character order. */
+internal fun CoreShape.formIndex(): Int = ordinal
 
 private fun DrawScope.drawEnemies(
     text: CanvasTextMeasurer,
@@ -1243,12 +1157,12 @@ internal fun DrawScope.drawHomeFormDescription(text: CanvasTextMeasurer, scene: 
 
 /**
  * Vertical span (px) the form description may take: from 4 dp below the form name's lowest ink (its
- * descenders, [HOME_FORM_NAME_INK_EM]) to the tiles (a selected tile lifts 8 dp).
+ * descenders, [HOME_FORM_NAME_INK_EM]) to 8 dp above the Hangar card.
  */
 internal fun homeFormDescriptionSpan(layout: HomeLayoutGeometry, density: Float): Pair<Float, Float> {
     val scene = layout.scene
     val top = scene.formNameCenterY + scene.formNameSize * HOME_FORM_NAME_INK_EM + 4f * density
-    val bottom = HomeCoreTargets.minOf { layout.bounds(it).top } - 8f * density
+    val bottom = layout.bounds(HomeLayoutTarget.HANGAR).top - 8f * density
     return top to bottom
 }
 
@@ -1361,6 +1275,7 @@ private fun DrawScope.drawFactsCard(
     }
 }
 
+/** The current character: its name, its (!), its mechanic and the Hangar card that changes it. */
 private fun DrawScope.drawFormPanel(
     model: HomeUiModel,
     text: CanvasTextMeasurer,
@@ -1370,45 +1285,25 @@ private fun DrawScope.drawFormPanel(
 ) {
     val scene = layout.scene
     val language = text.language
-    val shape = state.previewShape ?: model.coreShape
-    val unlocked = model.isCoreShapeUnlocked(shape)
-    val definition = model.coreShape(shape)
+    val definition = model.coreShape(model.coreShape)
     val info = layout.info(HomeInfoTarget.FORM)
     motion.formPanel(layout, density)
-    val nameRight = motion.formNameRight
-    val name = if (unlocked) definition.displayName.localizedContent(language) else language.text(SessionText.UNKNOWN_CORE)
-    drawHomeFormName(text, scene, name, nameRight, if (unlocked) Kk.Bone else Kk.Mute)
+    drawHomeFormName(text, scene, definition.displayName.localizedContent(language), motion.formNameRight, Kk.Bone)
     if (info != null) {
         drawKkInfoButton(text, info.bounds, active = state.activeInfo == HomeInfoTarget.FORM || state.openInfo == HomeInfoTarget.FORM)
     }
-    if (unlocked) {
-        drawHomeFormDescription(text, scene, definition.mechanicDescription.localizedContent(language),
-            motion.formDescriptionTop, motion.formDescriptionBottom)
-    }
-    HomeCoreTargets.forEach { target ->
-        val tileShape = requireNotNull(target.coreShapeOrNull())
-        val bounds = layout.bounds(target)
-        val labelSize = motion.tileLabelSize(model, text, bounds, density, tileShape)
-        val tileUnlocked = model.isCoreShapeUnlocked(tileShape)
-        val label = if (tileUnlocked && labelSize > 0f) model.coreShape(tileShape).displayName.localizedContent(language) else null
-        val iconSize = min(24f, bounds.height / density * 0.42f)
-        drawKkTile(
-            text, bounds,
-            label = label,
-            labelSize = if (labelSize > 0f) labelSize else 13f,
-            icon = tileShape.formIcon(),
-            selected = motion.tileSelection(tileShape),
-            hovered = state.hoveredTarget == target || state.previewShape == tileShape,
-            locked = !tileUnlocked,
-            cutDp = homeTileCut(bounds, density) / density,
-            iconSizeDp = iconSize,
-            focused = state.focusedTarget == target,
-        )
-        if (!tileUnlocked) {
-            val lift = -8f * density * motion.tileSelection(tileShape)
-            drawKkIcon(KkIcon.SYSTEM_LOCKED, Offset(bounds.right - 14f * density, bounds.top + 11f * density + lift), 12f * density, Kk.Mute)
-        }
-    }
+    drawHomeFormDescription(text, scene, definition.mechanicDescription.localizedContent(language),
+        motion.formDescriptionTop, motion.formDescriptionBottom)
+    val card = layout.bounds(HomeLayoutTarget.HANGAR)
+    val hovered = state.hoveredTarget == HomeLayoutTarget.HANGAR
+    drawKkButton(
+        text, card, language.text(SessionText.HANGAR),
+        variant = KkButtonVariant.GHOST,
+        size = if (card.height < 52f * density) KkButtonSize.SM else KkButtonSize.MD,
+        hover = max(motion.hangarSelection(), if (hovered) 1f else 0f),
+        focused = state.focusedTarget == HomeLayoutTarget.HANGAR,
+        icon = model.coreShape.formIcon(),
+    )
 }
 
 internal fun DrawScope.drawLegal(text: CanvasTextMeasurer, layout: HomeLayoutGeometry) {

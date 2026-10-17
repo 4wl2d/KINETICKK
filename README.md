@@ -29,11 +29,14 @@ profiles start at 1× speed. Pauses and reward choices stop the run clock.
 | `1`–`4` | Select a reward |
 | `Q` | Reroll an item or weapon choice |
 | `L` / `A` / `B` / `C` or `I` / `S` | Core Matrix, Armory, Rebirth, Codex, Settings |
+| `H` | Hangar: choose a character (from Home) |
 | `M` | Toggle sound and music |
 | `F3` | Toggle and reset the performance HUD |
 | `R` | Restart after a completed run |
 
-Six characters share permanent upgrades and can use all twelve weapons.
+Twelve characters, chosen in the Hangar, each play a mechanic of their own
+(facets, an echo ghost, polarity, a beat, Blink and more), share permanent
+upgrades and can use all twelve weapons.
 Builds combine 90 items, twenty-two Relics and optional anomaly trials. Items are
 rules, not stat sticks: triggers, conditions and effects over nine archetype
 tags and seven elements (Thermal, Cryo, Ion, Gravitic, Entropy, Sonic, Void)

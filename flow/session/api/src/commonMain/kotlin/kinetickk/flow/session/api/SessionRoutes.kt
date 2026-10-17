@@ -3,7 +3,7 @@
 
 package kinetickk.flow.session.api
 
-/** Closed inventory of the seven application routes. */
+/** Closed inventory of the eight application routes. */
 sealed interface AppDestination {
     data object Home : AppDestination
     data object Gameplay : AppDestination
@@ -12,6 +12,8 @@ sealed interface AppDestination {
     data object Armory : AppDestination
     data object Rebirth : AppDestination
     data object Codex : AppDestination
+    /** Character selection; opens only over the Home base. */
+    data object Hangar : AppDestination
 }
 
 fun AppDestination.isBaseDestination(): Boolean = when (this) {
@@ -23,6 +25,7 @@ fun AppDestination.isBaseDestination(): Boolean = when (this) {
     AppDestination.Armory,
     AppDestination.Rebirth,
     AppDestination.Codex,
+    AppDestination.Hangar,
     -> false
 }
 
@@ -37,6 +40,8 @@ enum class SessionShortcut {
     MUTE,
     BACK,
     ENTER,
+    /** H: the Hangar, from the Home base only. */
+    HANGAR,
 }
 
 enum class SessionLifecycle {

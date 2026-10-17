@@ -37,16 +37,16 @@ item appears under **Intentional delta**.
 
 ### Routes and workflow
 
-All seven screens remain available: Home, Gameplay, Settings, Lab, Armory,
-Rebirth, and Codex. Home and Gameplay are base destinations; the other five are
+All eight screens are available: Home, Gameplay, Settings, Lab, Armory,
+Rebirth, Codex, and Hangar. Home and Gameplay are base destinations; the other six are
 single overlays. Replacing an overlay never builds a feature-to-feature stack.
 Opening an allowed overlay during a running game pauses that run. A choice
 blocks overlays; Game Over and Victory allow only Rebirth. Closing Settings
 propagates the persisted preferences to an active run. Restart and completed
 Rebirth start a fresh run from the latest Profile snapshot.
 
-The existing keyboard mapping remains `S/L/A/B/C/I/M/Escape/Enter` for Settings,
-Lab, Armory, Rebirth, Codex (C or I), mute, back, and contextual enter.
+The keyboard mapping is `S/L/A/B/C/I/H/M/Escape/Enter` for Settings,
+Lab, Armory, Rebirth, Codex (C or I), Hangar (from Home only), mute, back, and contextual enter.
 
 ### Profile
 
@@ -71,12 +71,12 @@ render frame. Current caps remain enemies `120`, projectiles `650`, pickups
 12-minute boss clock and its encounter/progression profile. Active-time goals
 are 12–15 minutes including the boss; no hard defeat timer is introduced.
 Fatigue recovers from actual sustained turns or low-speed Brake, while lateral
-and counter-thrust remain available at exhaustion. Gameplay owns six character
+and counter-thrust remain available at exhaustion. Gameplay owns twelve character
 abilities, optional world-fixed trials and bounded relic synergies. Codex reads
 one coherent immutable build summary and preserves pause/reward selection.
 
 The catalog has 90 hand-authored items, 12 weapons, 32 Core Matrix nodes, 22 Relics,
-19 enemy types, six characters, and Rebirth levels `0..10` (see the build-system
+19 enemy types, twelve characters, and Rebirth levels `0..10` (see the build-system
 and 0.4.0 intentional deltas below). Existing stable declaration order is captured as
 explicit stable IDs during the migration; consumers receive immutable versioned
 snapshots instead of reaching global catalog objects.
@@ -194,6 +194,20 @@ together.
   hit and Elite Bounty to every Elite or Herald kill, executes included. Total
   kills, ricochets and Data pickups join the cumulative Profile achievements;
   Gameplay publishes them with any other progress or when the run banks.
+
+- **Characters and the Hangar.** Twelve characters (Star, Spiral, Dipole, Pentagon,
+  Crescent and Hexagon appended in stable order) each own a distinct mechanic,
+  trigger, base traits and difficulty from content; at most four use Dash as their main
+  trigger and only the Diamond uses Brake. The Prism's brake barrier is gone: four
+  facets each negate one hurt window, regenerate on a paused six-second timer and never
+  cancel damage kinds marked non-cancellable (obstacle collisions). Orbit, Puncture,
+  Halo, Parry (with Edge) and Lattice are reworked (Brake no longer collapses the
+  lattice). Character state is copy-on-write: a reduction forks scalars and shares
+  the echo ghost path, lattice, drones and scars until its first write, and no fixed
+  step allocates. New unlocks count total kills, ricochets, Data pickups and the Reborn
+  rank; no existing unlock target rose. The six Home form tiles became one Hangar card,
+  and the Hangar overlay (H, from Home only) lists every character with its unlock
+  progress and selects through the Profile.
 
 Seeded runs differ from the previous baseline: the seeded baseline trace keeps
 its Core path and only its opening Drifters move. To keep tier 0 at the

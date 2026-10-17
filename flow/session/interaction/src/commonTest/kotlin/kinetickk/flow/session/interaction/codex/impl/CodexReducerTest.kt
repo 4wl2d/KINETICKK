@@ -45,11 +45,20 @@ class CodexReducerTest {
         val catalog = codexTestCatalog()
         val shape = catalog.coreShape(CoreShape.PRISM).copy(mechanicDescription = "Hidden power",
             unlockDescription = "Defeat three elites", unlockTarget = 3, unlockRequirement = CharacterUnlockRequirement.ELITE_KILLS)
-        val progress = codexTestProgress().copy(characterAchievements = CharacterAchievementProgress(eliteKills = 2))
+        val progress = codexTestProgress().copy(
+            characterAchievements = CharacterAchievementProgress(eliteKills = 2),
+            characterProgress = kinetickk.foundation.collections.immutableListOf(
+                kinetickk.ball.profile.api.HangarShapeProgress(CoreShape.PRISM, unlocked = false, progress = 2L, target = 3L),
+            ),
+        )
         val entry = codexShapeEntry(shape, model(), progress)
         assertEquals("Unknown core", entry.title)
         assertEquals("Defeat three elites", entry.description)
         assertEquals(CodexFact("Progress", "2/3"), entry.facts.single { it.label == "Progress" })
+        // Forms entries show the character's mechanic, its trigger and difficulty.
+        assertEquals(CodexFact("Mechanic", "Facets"), entry.facts.single { it.label == "Mechanic" })
+        assertEquals(CodexFact("Trigger", "Kills"), entry.facts.single { it.label == "Trigger" })
+        assertEquals(CodexFact("Difficulty", "1/3"), entry.facts.single { it.label == "Difficulty" })
         assertEquals("Locked", entry.status)
         assertFalse(entry.discovered)
         assertTrue(codexCatalogEntries(3, shape.displayName, CodexItemFilter.ALL, model(), catalog, progress).isEmpty())

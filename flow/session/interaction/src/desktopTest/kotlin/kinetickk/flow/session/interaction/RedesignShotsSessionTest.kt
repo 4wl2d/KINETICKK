@@ -52,7 +52,7 @@ import kotlin.test.Test
 class RedesignShotsSessionTest {
     private val sizes = listOf(1440 to 810, 844 to 390, 390 to 844)
     @Test fun home() {
-        val targets = listOf("start", "lab", "armory", "rebirth", "codex", "settings")
+        val targets = listOf("start", "lab", "armory", "rebirth", "codex", "settings", "hangar")
         for ((w, h) in sizes) for (language in AppLanguage.entries) {
             for (target in targets) {
                 shot("home", target, w, h, language, { ShotProfile() }) {
@@ -60,14 +60,12 @@ class RedesignShotsSessionTest {
                 }
             }
             for (shape in CoreShape.entries) {
-                val locked = shape == CoreShape.TESSERACT
-                shot("home", "form-${shape.name.lowercase()}", w, h, language,
-                    { ShotProfile(coreShape = if (locked) CoreShape.RING else shape) }) {
-                    if (locked) onNodeWithTag("kinetickk.home.core.tesseract").performSemanticsAction(SemanticsActions.RequestFocus)
+                shot("home", "form-${shape.name.lowercase()}", w, h, language, { ShotProfile(coreShape = shape) }) {
+                    onNodeWithTag("kinetickk.home.hangar").performSemanticsAction(SemanticsActions.RequestFocus)
                 }
             }
-            shot("home", "form-locked-info", w, h, language, { ShotProfile() }) {
-                onNodeWithTag("kinetickk.home.core.tesseract").performSemanticsAction(SemanticsActions.RequestFocus)
+            shot("home", "form-info", w, h, language, { ShotProfile() }) {
+                onNodeWithTag("kinetickk.home.hangar").performSemanticsAction(SemanticsActions.RequestFocus)
                 mainClock.advanceTimeBy(300)
                 onNodeWithTag("kinetickk.home.info.form").performSemanticsAction(SemanticsActions.OnClick)
             }
@@ -90,8 +88,8 @@ class RedesignShotsSessionTest {
                     onNodeWithTag("kinetickk.home.$target").performSemanticsAction(SemanticsActions.RequestFocus)
                 }
             }
-            shot("home", "form-locked-info-text175", w, h, language, { ShotProfile(textScale = 1.75f) }) {
-                onNodeWithTag("kinetickk.home.core.tesseract").performSemanticsAction(SemanticsActions.RequestFocus)
+            shot("home", "form-info-text175", w, h, language, { ShotProfile(textScale = 1.75f) }) {
+                onNodeWithTag("kinetickk.home.hangar").performSemanticsAction(SemanticsActions.RequestFocus)
                 mainClock.advanceTimeBy(300)
                 onNodeWithTag("kinetickk.home.info.form").performSemanticsAction(SemanticsActions.OnClick)
             }
@@ -119,8 +117,8 @@ class RedesignShotsSessionTest {
             for (target in listOf("armory", "codex", "settings")) shot("home", target, w, h, language, { ShotProfile() }) {
                 onNodeWithTag("kinetickk.home.$target").performSemanticsAction(SemanticsActions.RequestFocus)
             }
-            shot("home", "form-locked-info", w, h, language, { ShotProfile() }) {
-                onNodeWithTag("kinetickk.home.core.tesseract").performSemanticsAction(SemanticsActions.RequestFocus)
+            shot("home", "form-info", w, h, language, { ShotProfile() }) {
+                onNodeWithTag("kinetickk.home.hangar").performSemanticsAction(SemanticsActions.RequestFocus)
                 mainClock.advanceTimeBy(300)
                 onNodeWithTag("kinetickk.home.info.form").performSemanticsAction(SemanticsActions.OnClick)
             }
@@ -465,8 +463,8 @@ internal class ShotProfile(private val coreShape: CoreShape = CoreShape.PRISM, p
     override val instanceId = LOCAL_PROFILE_INSTANCE_ID
     override fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection = error("unused")
     override fun query(query: ProfileQuery.GetMatrixProgress) = MatrixProgressProjection(instanceId, ProfileRevision.ZERO,
-    override fun query(query: ProfileQuery.GetHangar): kinetickk.ball.profile.api.HangarProjection = error("unused")
         MatrixProfileSnapshot(PlayerEconomy(1_284), MatrixProgress(MatrixNodeId.entries.mapIndexed { index, _ -> index % 2 })))
+    override fun query(query: ProfileQuery.GetHangar): kinetickk.ball.profile.api.HangarProjection = error("unused")
     override fun query(query: ProfileQuery.GetLoadout): LoadoutProjection = error("unused")
     override fun query(query: ProfileQuery.GetRebirthProgress): RebirthProgressProjection = error("unused")
     override fun query(query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection = error("unused")

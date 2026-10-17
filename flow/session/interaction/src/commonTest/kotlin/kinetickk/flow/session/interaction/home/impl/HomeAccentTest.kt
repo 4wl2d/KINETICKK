@@ -46,16 +46,16 @@ class HomeAccentTest {
     fun theSettledCodexAccentFollowsTheSweepAndVisitsEveryElement() {
         val motion = HomeMenuMotion()
         // Select the Codex and let the palette shift settle.
-        repeat(KkTime.PaletteShift / 16 + 2) { motion.advance(HomeLayoutTarget.CODEX, CoreShape.ORB, 1f / 60f) }
+        repeat(KkTime.PaletteShift / 16 + 2) { motion.advance(HomeLayoutTarget.CODEX, 1f / 60f) }
         val seen = mutableSetOf<Color>()
         repeat((HOME_CODEX_SWEEP_SECONDS * 60f).toInt()) {
-            motion.advance(HomeLayoutTarget.CODEX, CoreShape.ORB, 1f / 60f)
+            motion.advance(HomeLayoutTarget.CODEX, 1f / 60f)
             assertTrue(motion.accent in HomeCodexSweep, "a settled accent is one of the cached sweep steps")
             seen += motion.accent
         }
         Kk.Elements.forEach { hue -> assertTrue(hue in seen, "the sweep shows $hue") }
         // Leaving the Codex eases back into a fixed palette.
-        repeat(30) { motion.advance(HomeLayoutTarget.SETTINGS, CoreShape.ORB, 1f / 60f) }
+        repeat(30) { motion.advance(HomeLayoutTarget.SETTINGS, 1f / 60f) }
         assertEquals(KkHomePalette.SETTINGS.accent, motion.accent)
     }
 
@@ -73,11 +73,11 @@ class HomeAccentTest {
     fun aSecondSweepReusesTheTrailBrushOfEveryAccentItAlreadyBuilt() {
         val motion = HomeMenuMotion()
         val center = androidx.compose.ui.geometry.Offset(320f, 240f)
-        repeat(KkTime.PaletteShift / 16 + 2) { motion.advance(HomeLayoutTarget.CODEX, CoreShape.ORB, 1f / 60f) }
+        repeat(KkTime.PaletteShift / 16 + 2) { motion.advance(HomeLayoutTarget.CODEX, 1f / 60f) }
         val frames = (HOME_CODEX_SWEEP_SECONDS * 60f).toInt()
         val built = mutableMapOf<Color, androidx.compose.ui.graphics.Brush>()
         repeat(frames) {
-            motion.advance(HomeLayoutTarget.CODEX, CoreShape.ORB, 1f / 60f)
+            motion.advance(HomeLayoutTarget.CODEX, 1f / 60f)
             val brush = motion.trailBrush(center)
             val known = built.getOrPut(motion.accent) { brush }
             assertTrue(known === brush, "one accent, one brush (the holds share theirs)")
@@ -85,7 +85,7 @@ class HomeAccentTest {
         assertEquals(homeCodexSweepSlots(HomeCodexSweep).distinct().size, built.size, "every distinct accent of the sweep was drawn once")
         // The next loop draws with the very brushes of the first: a steady sweep builds nothing new.
         repeat(frames) {
-            motion.advance(HomeLayoutTarget.CODEX, CoreShape.ORB, 1f / 60f)
+            motion.advance(HomeLayoutTarget.CODEX, 1f / 60f)
             assertTrue(built[motion.accent] === motion.trailBrush(center), "a steady sweep built a new brush for ${motion.accent}")
         }
     }

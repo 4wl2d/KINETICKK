@@ -113,6 +113,7 @@ object ProfileNucleus {
             canAdvanceRebirth = canAdvanceRebirth(state),
             characterAchievements = state.profile.characterAchievements,
             unlockedCoreShapes = unlockedCoreShapes(state.profile, state.policy),
+            characterProgress = hangarShapeProgress(state.profile, state.policy),
         )
 
     fun query(state: ProfileState, query: ProfileQuery.GetMatrixProgress): MatrixProgressProjection =
