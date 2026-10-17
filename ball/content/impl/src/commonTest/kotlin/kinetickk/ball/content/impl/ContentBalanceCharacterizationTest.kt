@@ -190,7 +190,7 @@ class ContentBalanceCharacterizationTest {
             ui.matrixNodes.map { node -> node.id to node.costs.toList() },
         )
         assertEquals(
-            "b1318f24a82a9c4e",
+            "c48c2a6b65f342b4",
             goldenFingerprint {
                 add("weapons")
                 ui.weapons.forEach { weapon ->

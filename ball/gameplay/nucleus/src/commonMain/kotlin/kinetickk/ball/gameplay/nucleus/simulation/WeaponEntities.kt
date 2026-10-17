@@ -667,6 +667,8 @@ private fun MutableGameState.sentrySplash(projectile: Projectile, struck: Enemy)
         if (distanceSquared(struck.x, struck.y, enemy.x, enemy.y) > square(SENTRY_SPLASH_RADIUS + enemy.radius)) continue
         dealWeaponDamage(enemy, damage, canCrit = true, sourceWeapon = WeaponId.SENTRY_GRID, procKey = WeaponRuntime.PROC_NEVER)
     }
+    // A small ring shows the burst's reach.
+    shockwave(struck.x, struck.y, 0.2f, SENTRY_SPLASH_RADIUS, projectile.colorIndex)
 }
 
 /** Quasar Cannon's third form: a shot that ends (spent or out of life) bursts into a sonic wave. */

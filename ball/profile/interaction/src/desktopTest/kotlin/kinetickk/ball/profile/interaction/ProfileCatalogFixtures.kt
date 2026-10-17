@@ -166,10 +166,10 @@ internal val CatalogWeapons: ImmutableList<WeaponDefinition> =
         ),
         catalogWeapon(
             WeaponId.SENTRY_GRID, "Sentry Grid",
-            "Deploys up to three sentries that hold their ground and fire at enemies in range until they expire.",
+            "Deploys up to three sentries that hold their ground and fire bursting shots at enemies in range until they expire.",
             WeaponFamily.TRAP, null, DISCRETE, BuildTag.ANCHOR, BuildTag.ARSENAL,
             RelicKey.STILLNESS, WeaponScaling.ATTACK_SPEED, CoreShape.TESSERACT, cost = 380,
-            forms = listOf("One more sentry", "Sentry shots pierce", "Sentries explode when they expire"),
+            forms = listOf("One more sentry", "Sentry shots pierce one more enemy", "Sentries explode when they expire"),
             signature = "Sentries deploy on lattice nodes.",
         ),
         catalogWeapon(
@@ -214,10 +214,10 @@ internal val CatalogWeapons: ImmutableList<WeaponDefinition> =
         ),
         catalogWeapon(
             WeaponId.AEGIS_SHARDS, "Aegis Shards",
-            "Raises shield capacity and launches orbiting shards at nearby enemies; a broken shield fires them all at once.",
+            "Raises shield capacity and launches orbiting shards that pierce through nearby enemies; a broken shield fires them all at once.",
             WeaponFamily.ORBITAL, null, DISCRETE, BuildTag.BULWARK, BuildTag.ARSENAL,
             RelicKey.SHIELD, WeaponScaling.SHIELD, CoreShape.PRISM, cost = 1_800, rebirth = 6,
-            forms = listOf("One more shard", "Shards pierce", "A broken shield restores 25% shield, once every 60 s"),
+            forms = listOf("One more shard", "Shards pierce one more enemy", "A broken shield restores 25% shield, once every 60 s"),
             signature = "Each intact facet adds a shard, up to two.",
         ),
         catalogWeapon(
