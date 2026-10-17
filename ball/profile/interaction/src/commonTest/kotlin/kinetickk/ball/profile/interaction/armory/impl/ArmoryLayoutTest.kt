@@ -35,6 +35,17 @@ class ArmoryLayoutTest {
         assertEquals(0f, layout.gridScrollMax)
         assertEquals(950f, layout.plate.left, 0.01f)
         assertTrue(layout.tiles.all { it.right + layout.gridViewport.left < layout.detailViewport.left })
+
+        // The shipped 24 keep the board's tile geometry and add three rows under the fold: the grid
+        // scrolls by exactly those rows instead of shrinking the tiles.
+        val shipped = armoryLayout(profileFrame(1440f, 810f, 1f), TestWeapons.size, 1f, backWidth = 80f, actionWidth = 260f)
+        assertEquals(24, shipped.tiles.size)
+        assertEquals(layout.tiles.first(), shipped.tiles.first())
+        assertEquals(layout.tiles[4], shipped.tiles[4])
+        assertEquals(layout.gridViewport, shipped.gridViewport)
+        assertEquals(layout.gridContentHeight + 3f * shipped.rowPitch, shipped.gridContentHeight, 0.01f)
+        assertEquals(shipped.gridContentHeight - shipped.gridViewport.height, shipped.gridScrollMax, 0.01f)
+        assertTrue(shipped.gridScrollMax > 0f)
     }
 
     @Test

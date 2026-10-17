@@ -207,6 +207,7 @@ class RewardLayoutFitTest {
         val sizes = listOf(300 to 450, 220 to 254, 195 to 254, 178 to 305)
         val bound = listOf(EquippedRelic(RelicId.PERPETUAL_VECTOR, 2), EquippedRelic(RelicId.GYRE_ENGINE, 1))
         var checked = 0
+        var elementChips = 0
         for ((width, height) in sizes) for (language in AppLanguage.entries) {
             val items = rewardFixtureModel(
                 choices = listOf(itemChoice(0), itemChoice(2, reborn = true), itemChoice(5)), relics = listOf(EquippedRelic(RelicId.GLASS_COMET, 1)),
@@ -252,6 +253,15 @@ class RewardLayoutFitTest {
                     onAllNodes(hasTestTag("kinetickk.gameplay.choice.1.chips"), useUnmergedTree = true).fetchSemanticsNodes().forEach { node ->
                         val chips = node.children.map { it.boundsInRoot }.filter { it.height > 0f }
                         chips.forEach { chip -> assertTrue(chip.bottom <= textTop + 0.5f && chip.right <= width + 0.5f, "$scene: chip $chip clear of the text at $textTop") }
+                        // A weapon's element chip is read once: its label already names the element.
+                        card.chips.filter { it.kind == RewardChipKind.ELEMENT }.forEach { element ->
+                            node.children.filter { child -> child.config.getOrElseNullable(SemanticsProperties.Text) { null }
+                                ?.joinToString(" ") == element.label }.forEach { child ->
+                                val spoken = child.config.getOrElseNullable(SemanticsProperties.ContentDescription) { null }?.joinToString(" ")
+                                assertTrue(spoken == null || spoken == element.label, "$scene: element chip reads '$spoken'")
+                                elementChips++
+                            }
+                        }
                     }
                     onAllNodes(hasTestTag("kinetickk.gameplay.choice.1.footer"), useUnmergedTree = true).fetchSemanticsNodes().forEach { node ->
                         val footer = node.boundsInRoot
@@ -264,6 +274,7 @@ class RewardLayoutFitTest {
             }
         }
         assertTrue(checked >= 4 * 2 * 9, "Checked every card at every size ($checked)")
+        assertTrue(elementChips > 0, "Weapon element chips were read")
     }
 
     /**

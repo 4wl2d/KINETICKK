@@ -292,7 +292,8 @@ internal fun RewardChipFlow(
                     Modifier.size((widths[index] / density).dp, style.heightDp.dp)
                         .semantics {
                             text = AnnotatedString(chip.label)
-                            if (chip.elements.isNotEmpty()) {
+                            // An element chip's label already is its element's name.
+                            if (chip.elements.isNotEmpty() && chip.kind != RewardChipKind.ELEMENT) {
                                 contentDescription = chip.elements.joinToString(" ") { it.displayLabel.localizedContent(language) } + " " + chip.label
                             }
                         }

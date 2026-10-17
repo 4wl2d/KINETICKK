@@ -126,7 +126,7 @@ remain independently enforced.
 | authoritative Gameplay pointer | `0..current viewport` | Gameplay Nucleus validates both pointer coordinates against committed viewport state |
 | Gameplay / Home / Armory presentation delta seconds | `0.1` / `0.1` / `0.1` | Interaction-owned presentation clocks clamp the first larger representable delta |
 | Codex catalog entries / search characters | 192 / 128 | Interaction rejects catalog overflow; bounded local name search feeds a lazy grid in original catalog order |
-| Armory visible page slice | 3 | deployed draw path selects only the bounded current-page slice |
+| Armory grid tiles | 24 | one tile per validated catalog weapon (Content bound) on a scrolling grid; the pager and the selection reveal move the scroll, never the tile set |
 | accepted caller effect ToneRequests per advance | 32 | Audio Resource rejects an oversized caller batch atomically |
 | caller effect ToneRequests selected per advance | 3 | Audio Resource preserves caller order/deduplication within the accepted batch |
 | music clock advance delta seconds | `0.1` | Audio Resource clamps finite caller time before advancing its internal music clock |

@@ -41,8 +41,13 @@ import kinetickk.ball.profile.interaction.armory.api.ArmoryRenderModel
 import kinetickk.ball.profile.interaction.armory.impl.ArmoryContent
 import kinetickk.ball.profile.interaction.armory.impl.ArmoryLayout
 import kinetickk.ball.profile.interaction.armory.impl.ArmoryLayoutHolder
+import kinetickk.ball.profile.interaction.armory.impl.ArmoryNotice
+import kinetickk.ball.profile.interaction.armory.impl.ArmoryRefusal
+import kinetickk.ball.profile.interaction.armory.impl.ArmoryWeaponStatus
 import kinetickk.ball.profile.interaction.armory.impl.ArmoryViewState
 import kinetickk.ball.profile.interaction.armory.impl.armoryLadderCellsTop
+import kinetickk.ball.profile.interaction.armory.impl.refusal
+import kinetickk.ball.profile.interaction.armory.impl.status
 import kinetickk.ball.profile.interaction.matrix.impl.MatrixContent
 import kinetickk.ball.profile.interaction.matrix.impl.MatrixLayoutHolder
 import kinetickk.ball.profile.interaction.matrix.impl.MatrixState
@@ -157,11 +162,22 @@ class ProfileTextFitTest {
         // long-named heirloom candidates harmonize with the Charge, Critical, Heat and Cold keys.
         val model = ArmoryRenderModel(1_284L, WeaponId.FLUX_WAKE, CatalogWeapons.take(7).map { it.id }.toImmutableSet(), WeaponId.ION_SWARM,
             rebirthRank = 0, character = CoreShape.HEXAGON, heirloomRelics = CatalogHeirlooms.toImmutableList())
+        // Every other weapon of each refusal shows that refusal beside the action instead of the need
+        // line: the one a locked press names (Matter short, Rebirth rank), or the Profile's generic one
+        // for an owned weapon.
+        val seen = HashMap<ArmoryRefusal, Int>()
+        val notices = CatalogWeapons.mapNotNull { weapon ->
+            val status = model.status(weapon)
+            val refusal = status.refusal() ?: ArmoryRefusal.REFUSED.takeIf { status == ArmoryWeaponStatus.OWNED } ?: return@mapNotNull null
+            val count = seen.getOrElse(refusal) { 0 }.also { seen[refusal] = it + 1 }
+            if (count % 2 == 0) ArmoryNotice(weapon.id, refusal) else null
+        }.associateBy { it.weapon }
+        assertEquals(ArmoryRefusal.entries.toSet(), notices.values.map { it.refusal }.toSet(), "every refusal is drawn")
         for ((width, height) in sizes) {
             val holders = HashMap<Scene<WeaponId>, ArmoryLayoutHolder>()
             val tileNames = HashMap<Triple<AppLanguage, Float, Any?>, Float>()
             render(width, height, scenes(CatalogWeapons.map { it.id }), content = { scene ->
-                ArmoryContent(model, CatalogWeapons, WeaponMastery.entries, ArmoryViewState(scene.item), scene.setting,
+                ArmoryContent(model, CatalogWeapons, WeaponMastery.entries, ArmoryViewState(scene.item, notices[scene.item]), scene.setting,
                     remember { ScrollState(0) }, holders.getOrPut(scene) { ArmoryLayoutHolder() },
                     coreShapes = defaultCoreShapeDefinitions(), relics = CatalogRebirthRelics) {}
             }) { scene, frame ->
@@ -221,6 +237,17 @@ class ProfileTextFitTest {
                         "$context ${it.role} '${it.layout?.layoutInput?.text}' ${it.box} outside ${layout.forms.left}..${layout.forms.right}")
                     // The CSS line box of every sheet text ends inside the sheet.
                     assertTrue(it.box.top + assertNotNull(it.layout).kkBoxBottom <= layout.facts.bottom + 0.5f, "$context ${it.role} below the sheet")
+                }
+                // A refusal replaces the need line beside the action, inside the panel: centred on the
+                // action, its line boxes stay within the 8 px gap above it and on screen below it.
+                val notice = frame.of("armory.notice")
+                assertEquals(if (scene.item in notices) 1 else 0, notice.size, "$context notice")
+                notice.forEach {
+                    assertTrue(it.box.left >= layout.need.left - 0.5f && it.box.right <= layout.detailViewport.right + 0.5f &&
+                        it.box.top >= layout.need.top - layout.frame.d(8f) && it.box.bottom <= height + 0.5f &&
+                        abs(it.box.center.y - layout.need.center.y) <= 1.5f,
+                        "$context notice ${it.box} outside ${layout.need}")
+                    assertTrue(frame.of("armory.need").isEmpty(), "$context notice and need line together")
                 }
                 if (width == 1440) assertTileTagsInside(frame, layout, scene.language, context)
                 frame.of("armory.tile.name").forEach { tileNames[Triple(scene.language, scene.setting, it.owner)] = fontSize(it) }

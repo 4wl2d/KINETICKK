@@ -73,7 +73,7 @@ internal enum class ProfileScreensRedesignText(
     CadenceDiscrete("Periodic", "Периодически"),
     ArmoryRefusedMatter("Not enough Matter: {0} more needed", "Не хватает материи, нужно ещё {0}"),
     ArmoryRefusedRebirth("Locked until Rebirth rank {0}", "Закрыто до ранга перерождения {0}"),
-    ArmoryRefused("The purchase was refused", "Покупка отклонена"),
+    ArmoryRefused("Not applied. Try again", "Не применено. Попробуйте ещё раз"),
     ArmorySignatureMark("Signature of your character", "Фирменное для вашего персонажа"),
 
     MatrixInfo(
