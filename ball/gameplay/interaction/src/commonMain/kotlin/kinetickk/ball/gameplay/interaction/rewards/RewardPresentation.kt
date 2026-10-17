@@ -673,7 +673,7 @@ private fun GameplayRenderModel.rewardItemRules(
         dominant = build.dominant,
         secondary = build.secondary,
         flatScale = runScale,
-        weaponUnit = WeaponUnitDamage * effectiveWeaponPower,
+        weaponUnit = WeaponUnitDamage * abilityPower,
         shieldCapacity = shield.takeIf { it > 0f },
         bonus = (if (reborn) policy.rebornMagnitude else 1f) * (if (attuned) 1f + policy.attunementBonus else 1f),
         stacks = stacks.coerceIn(1, ContentBounds.MAX_ITEM_STACKS),

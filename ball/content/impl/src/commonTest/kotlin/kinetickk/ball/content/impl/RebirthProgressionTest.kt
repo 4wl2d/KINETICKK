@@ -4,8 +4,13 @@
 package kinetickk.ball.content.impl
 
 import kinetickk.ball.content.api.RebirthDirective
+import kinetickk.ball.content.api.RebirthMutator
+import kinetickk.ball.content.api.RebirthProfile
+import kinetickk.foundation.collections.immutableListOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class RebirthProgressionTest {
@@ -29,6 +34,10 @@ class RebirthProgressionTest {
         assertEquals(0f, profile.playerIntegrityBonus)
         assertEquals(1f, profile.matterGainMultiplier)
         assertEquals(0, profile.bonusRerolls)
+        assertEquals(emptyList(), profile.mutators)
+        assertEquals(0, profile.packSizeBonus)
+        assertEquals(1f, profile.obstacleDensityMultiplier)
+        RebirthMutator.entries.forEach { assertFalse(profile.has(it), "tier 0 has $it") }
 
         assertEquals(14, profile.enemyCap(14))
         assertEquals(90, profile.enemyCap(90))
@@ -58,12 +67,42 @@ class RebirthProgressionTest {
             assertTrue(current.playerIntegrityBonus >= previous.playerIntegrityBonus)
             assertTrue(current.matterGainMultiplier >= previous.matterGainMultiplier)
             assertTrue(current.bonusRerolls >= previous.bonusRerolls)
+            assertTrue(current.mutators.containsAll(previous.mutators))
+            assertTrue(current.packSizeBonus >= previous.packSizeBonus)
+            assertTrue(current.obstacleDensityMultiplier >= previous.obstacleDensityMultiplier)
 
             assertTrue(current.enemyCap(90) >= previous.enemyCap(90))
             assertTrue(current.spawnInterval(0.84f) <= previous.spawnInterval(0.84f))
             assertTrue(current.eliteInterval(48f) <= previous.eliteInterval(48f))
             assertTrue(current.enemyHealth(100f) >= previous.enemyHealth(100f))
         }
+    }
+
+    @Test
+    fun eachTierActivatesTheNextMutatorCumulatively() {
+        rebirth.profiles.forEach { profile ->
+            val tier = profile.tier
+            assertEquals(RebirthMutator.entries.take(tier), profile.mutators, "tier $tier")
+            RebirthMutator.entries.forEachIndexed { index, mutator ->
+                assertEquals(index < tier, profile.has(mutator), "tier $tier has $mutator")
+            }
+            assertEquals(if (tier >= 1) 1 else 0, profile.packSizeBonus, "tier $tier pack bonus")
+            assertEquals(1f + tier * 0.05f, profile.obstacleDensityMultiplier, "tier $tier obstacle density")
+        }
+        assertEquals(RebirthMutator.entries.toList(), rebirth.profile(rebirth.maximumLevel).mutators)
+    }
+
+    @Test
+    fun mutatorFieldsRejectDuplicatesNegativeBonusesAndInvalidDensity() {
+        val base = rebirth.profile(0)
+        val duplicated = immutableListOf(RebirthMutator.PACK_HUNTERS, RebirthMutator.PACK_HUNTERS)
+        assertFailsWith<IllegalArgumentException> { base.copy(mutators = duplicated) }
+        assertFailsWith<IllegalArgumentException> { base.copy(packSizeBonus = -1) }
+        listOf(0f, -1f, Float.NaN, Float.POSITIVE_INFINITY).forEach { density ->
+            assertFailsWith<IllegalArgumentException>("density $density") { base.copy(obstacleDensityMultiplier = density) }
+        }
+        val accepted: RebirthProfile = base.copy(packSizeBonus = 0, obstacleDensityMultiplier = Float.MIN_VALUE)
+        assertEquals(Float.MIN_VALUE, accepted.obstacleDensityMultiplier)
     }
 
     @Test
@@ -84,6 +123,7 @@ class RebirthProgressionTest {
                 profile.playerPowerMultiplier,
                 profile.playerIntegrityBonus,
                 profile.matterGainMultiplier,
+                profile.obstacleDensityMultiplier,
             )
 
             assertTrue(

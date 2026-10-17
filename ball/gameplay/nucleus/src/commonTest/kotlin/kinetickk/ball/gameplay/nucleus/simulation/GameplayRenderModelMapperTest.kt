@@ -574,6 +574,8 @@ class GameplayRenderModelMapperTest {
         "build" to build,
         "discoveredReactionMask" to discoveredReactionMask,
         "discoveredPairingMask" to discoveredPairingMask,
+        "coreRadius" to coreRadius.toRawBits(),
+        "abilityPower" to abilityPower.toRawBits(),
     )
 
     private class ReadGuardList<Element>(

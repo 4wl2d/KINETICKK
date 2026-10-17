@@ -77,7 +77,7 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
     for (index in enemies.indices) {
         val enemy = enemies[index]
         if (phase != GamePhase.RUNNING) return
-        val combined = MutableGameState.CORE_RADIUS + enemy.radius
+        val combined = coreRadius + enemy.radius
         val sweptHit = segmentCircleIntersects(
             previousCoreX - enemy.previousX,
             previousCoreY - enemy.previousY,
@@ -242,7 +242,7 @@ internal fun MutableGameState.resolveProjectileHits() {
             }
             break
         }
-        val hitRadius = MutableGameState.CORE_RADIUS + projectile.radius
+        val hitRadius = coreRadius + projectile.radius
         val hit = segmentCircleIntersects(
             projectile.previousX - previousCoreX,
             projectile.previousY - previousCoreY,

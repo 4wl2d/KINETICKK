@@ -65,7 +65,7 @@ internal fun MutableGameState.updateCharacterRuntime(delta: Float) {
             if (moved > 0.01f && currentSpeed >= 40f) for (enemy in enemies) {
                 val distance = length(enemy.x - coreX, enemy.y - coreY)
                 if (distance in max(36f, radius - 18f)..(radius + 18f + enemy.radius)) {
-                    dealCharacterDamage(enemy, 27f * delta * effectiveWeaponPower())
+                    dealCharacterDamage(enemy, 27f * delta * abilityPower())
                 }
             }
         }
@@ -117,7 +117,7 @@ internal fun MutableGameState.onCharacterDashContact(enemy: Enemy) {
     pendingDashHits++
     when (coreShape) {
         CoreShape.SHARD -> enemy.characterMarkTime = 3f
-        CoreShape.PRISM -> if (characterRuntime.ramPower > 0f) dealCharacterDamage(enemy, characterRuntime.ramPower * effectiveWeaponPower())
+        CoreShape.PRISM -> if (characterRuntime.ramPower > 0f) dealCharacterDamage(enemy, characterRuntime.ramPower * abilityPower())
         else -> Unit
     }
 }
@@ -126,11 +126,11 @@ internal fun MutableGameState.onCharacterPrimaryHit(enemy: Enemy) {
     when (coreShape) {
         CoreShape.ORB -> if (characterRuntime.charge >= 1f) {
             characterRuntime = characterRuntime.copy(charge = 0f, turnArc = 0f, turnDistance = 0f)
-            areaRelicDamage(coreX, coreY, 210f, 55f * effectiveWeaponPower())
+            areaRelicDamage(coreX, coreY, 210f, 55f * abilityPower())
         }
         CoreShape.SHARD -> if (enemy.characterMarkTime > 0f) {
             enemy.characterMarkTime = 0f
-            dealCharacterDamage(enemy, 48f * effectiveWeaponPower())
+            dealCharacterDamage(enemy, 48f * abilityPower())
             shockwave(enemy.x, enemy.y, 0.3f, 65f, 2)
         }
         else -> Unit
@@ -147,7 +147,7 @@ internal fun MutableGameState.tryCharacterParry(
     if (vx * (threatenedCoreX - x) + vy * (threatenedCoreY - y) <= 0f) return false
     characterRuntime = characterRuntime.copy(parryWindow = 0f)
     nearestOtherEnemy(coreX, coreY, -1, 800f)?.let { enemy ->
-        fireRelicProjectile(coreX, coreY, enemy, 65f * effectiveWeaponPower())
+        fireRelicProjectile(coreX, coreY, enemy, 65f * abilityPower())
     }
     shockwave(coreX, coreY, 0.25f, 110f, 2)
     return true
@@ -162,7 +162,7 @@ private fun MutableGameState.collapseCharacterLattice(nodes: List<WorldPoint>) {
             val b = nodes[(index + 1) % nodes.size]
             if (segmentCircleIntersects(a.x, a.y, b.x, b.y, enemy.x, enemy.y, enemy.radius + 48f)) touches = true
         }
-        if (touches) dealCharacterDamage(enemy, (35f + nodes.size * 17f) * effectiveWeaponPower())
+        if (touches) dealCharacterDamage(enemy, (35f + nodes.size * 17f) * abilityPower())
     }
     for (index in nodes.indices) {
         val a = nodes[index]

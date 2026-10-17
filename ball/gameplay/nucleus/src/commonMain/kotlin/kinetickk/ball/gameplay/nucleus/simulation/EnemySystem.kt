@@ -172,6 +172,12 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
     }
 }
 
+/** False while [enemy] is disabled (stunned or stopped): it neither moves by itself nor attacks. */
+internal fun MutableGameState.canAct(enemy: Enemy): Boolean = elapsed >= enemy.disabledUntil
+
+/** False while [enemy] cannot act or is silenced; every hostile attack branch checks it before firing. */
+internal fun MutableGameState.canAttack(enemy: Enemy): Boolean = canAct(enemy) && elapsed >= enemy.silencedUntil
+
 internal fun MutableGameState.steerEnemy(enemy: Enemy, desiredX: Float, desiredY: Float, agility: Float, delta: Float) {
     val factor = 1f - exp(-agility * delta)
     enemy.vx = lerp(enemy.vx, desiredX * rebirthProfile.enemySpeedMultiplier, factor)

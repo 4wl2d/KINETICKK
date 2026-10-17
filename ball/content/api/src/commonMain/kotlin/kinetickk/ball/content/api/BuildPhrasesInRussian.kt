@@ -161,4 +161,6 @@ internal val BuildPhrasesInRussian: List<Pair<String, String>> = listOf(
     "On break" to "При пробое",
     "On level up" to "При повышении уровня",
     "On data pickup" to "При сборе данных",
+    "On ricochet" to "При рикошете",
+    "On slam" to "При впечатывании врага",
 )

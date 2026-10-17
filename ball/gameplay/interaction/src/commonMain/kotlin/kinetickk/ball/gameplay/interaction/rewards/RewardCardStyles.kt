@@ -378,6 +378,8 @@ private fun EffectTrigger.watermarkIcon(): KkIcon = when (this) {
     EffectTrigger.BREAK -> KkIcon.SYSTEM_DISMANTLED
     EffectTrigger.LEVEL_UP -> KkIcon.FORMS_TRIANGLE
     EffectTrigger.PICKUP -> KkIcon.SYSTEM_DATA
+    EffectTrigger.RICOCHET -> KkIcon.SYSTEM_ANOMALY
+    EffectTrigger.SLAM -> KkIcon.SYSTEM_DISMANTLED
 }
 
 private fun ItemEffect.watermarkIcon(): KkIcon = when (this) {

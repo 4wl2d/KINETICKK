@@ -20,6 +20,26 @@ import kotlin.math.min
  */
 internal enum class IncomingDamage { HIT, CONTACT, PROJECTILE, SELF }
 
+/**
+ * Damage of a hostile attack from [enemy] (null for sourceless hazards), evaluated when the attack is
+ * created: a projectile is fired or a contact resolves. It applies the run growth `1 + 0.5p` and the
+ * per-enemy [hostileOutputFactor]. The Rebirth incoming-damage multiplier is not part of it, because
+ * [takeDamage] applies that multiplier to every amount it receives; applying it here as well would
+ * count it twice.
+ */
+internal fun MutableGameState.hostileDamage(enemy: Enemy?, base: Float): Float =
+    base * (1f + HOSTILE_RUN_GROWTH * runProgress) * hostileOutputFactor(enemy)
+
+/**
+ * Hook for effects on the attacking enemy that scale its damage output. It is 1 until the Hollow
+ * status lands, which multiplies `1 - 0.03 * hollowStacks` in here.
+ */
+@Suppress("UNUSED_PARAMETER")
+internal fun MutableGameState.hostileOutputFactor(enemy: Enemy?): Float = 1f
+
+/** Hostile damage grows by this fraction of run progress; see [hostileDamage]. */
+internal const val HOSTILE_RUN_GROWTH: Float = 0.5f
+
 internal fun MutableGameState.takeDamage(
     rawAmount: Float,
     ignoreReduction: Boolean = false,

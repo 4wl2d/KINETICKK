@@ -45,7 +45,7 @@ internal fun DrawScope.drawHudWorldAnchors(
     val core = world(engine, engine.coreX, engine.coreY, shakeX, shakeY)
     val cursor = Offset(engine.pointerX + shakeX * 0.18f, engine.pointerY + shakeY * 0.18f)
     val draining = memory != null && memory.polarityDraining(renderTime)
-    val haloRadius = GameplayRenderModel.CORE_RADIUS * CORE_HALO_RATIO
+    val haloRadius = engine.coreRadius * CORE_HALO_RATIO
 
     drawTether(engine, roles, core, cursor, renderTime, critical, draining)
     if (engine.overdriveTime > 0f) drawOverdriveCore(roles, core, renderTime)
@@ -69,7 +69,7 @@ private fun DrawScope.drawTether(
     val dx = cursor.x - core.x
     val dy = cursor.y - core.y
     val distance = sqrt(dx * dx + dy * dy)
-    val startGap = GameplayRenderModel.CORE_RADIUS + 4f
+    val startGap = engine.coreRadius + 4f
     val endGap = 16f
     if (distance <= startGap + endGap + 2f) return
     val ux = dx / distance

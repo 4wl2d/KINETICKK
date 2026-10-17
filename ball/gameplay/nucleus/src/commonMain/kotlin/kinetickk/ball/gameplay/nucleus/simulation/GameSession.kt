@@ -188,6 +188,7 @@ internal fun MutableGameState.resetRunStats() {
     critChance = 0.05f
     critMultiplier = 1.5f
     pickupRadius = 150f
+    coreRadius = MutableGameState.CORE_RADIUS
     luck = 0f
     dataGain = 1f + metaLevel(MetaUpgradeId.DATA_ARCHIVE) * 0.05f
     matterGain = (1f + metaLevel(MetaUpgradeId.SALVAGE_PROTOCOL) * 0.05f) *

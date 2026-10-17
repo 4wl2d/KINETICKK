@@ -314,6 +314,8 @@ internal class MutableGameState(
         internal set
     var coreY: Float = reductionSource?.coreY ?: 0f
         internal set
+    /** Collision and draw radius of the Core; every simulation contact reads this, never [CORE_RADIUS]. */
+    internal var coreRadius: Float = reductionSource?.coreRadius ?: CORE_RADIUS
     var velocityX: Float = reductionSource?.velocityX ?: 0f
         internal set
     var velocityY: Float = reductionSource?.velocityY ?: 0f

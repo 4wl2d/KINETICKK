@@ -23,7 +23,7 @@ data class RuleTextContext(
     val secondary: StatusElement? = null,
     /** Run progress and Rebirth factor applied to [DamageBasis.FLAT] amounts. */
     val flatScale: Float? = null,
-    /** Damage of one [DamageBasis.WEAPON] unit (40 × effective weapon power). */
+    /** Damage of one [DamageBasis.WEAPON] unit (40 × ability power). */
     val weaponUnit: Float? = null,
     val shieldCapacity: Float? = null,
     /**
@@ -76,6 +76,8 @@ enum class BuildRulesText(override val english: String, override val russian: St
     OnBreak("On break", "При пробое"),
     OnLevelUp("On level up", "При повышении уровня"),
     OnPickup("On data pickup", "При сборе данных"),
+    OnRicochet("On ricochet", "При рикошете"),
+    OnSlam("On slam", "При впечатывании врага"),
 
     EveryImpact("Every {0} impact", "Каждое {0}-е столкновение"),
     EveryWeaponHit("Every {0} weapon hit", "Каждое {0}-е попадание оружия"),
@@ -93,6 +95,8 @@ enum class BuildRulesText(override val english: String, override val russian: St
     EveryBreak("Every {0} break", "Каждый {0}-й пробой"),
     EveryLevelUp("Every {0} level up", "Каждое {0}-е повышение уровня"),
     EveryPickup("Every {0} data pickup", "Каждый {0}-й сбор данных"),
+    EveryRicochet("Every {0} ricochet", "Каждый {0}-й рикошет"),
+    EverySlam("Every {0} slam", "Каждое {0}-е впечатывание врага"),
 
     OnElementBreak("On {0} break", "При пробое {0}"),
     EveryElementBreak("Every {0} {1} break", "Каждый {0}-й пробой {1}"),
@@ -875,6 +879,8 @@ val EffectTrigger.onPhrase: BuildRulesText
         EffectTrigger.BREAK -> BuildRulesText.OnBreak
         EffectTrigger.LEVEL_UP -> BuildRulesText.OnLevelUp
         EffectTrigger.PICKUP -> BuildRulesText.OnPickup
+        EffectTrigger.RICOCHET -> BuildRulesText.OnRicochet
+        EffectTrigger.SLAM -> BuildRulesText.OnSlam
     }
 
 private val EffectTrigger.everyPhrase: BuildRulesText
@@ -895,4 +901,6 @@ private val EffectTrigger.everyPhrase: BuildRulesText
         EffectTrigger.BREAK -> BuildRulesText.EveryBreak
         EffectTrigger.LEVEL_UP -> BuildRulesText.EveryLevelUp
         EffectTrigger.PICKUP -> BuildRulesText.EveryPickup
+        EffectTrigger.RICOCHET -> BuildRulesText.EveryRicochet
+        EffectTrigger.SLAM -> BuildRulesText.EverySlam
     }

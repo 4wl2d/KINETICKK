@@ -81,8 +81,9 @@ class NoPoiPlaythroughTest {
 
     /** The reference win is not a single knife-edge seed: other fresh-profile seeds win the same way. */
     @Test fun freshProfileAlsoWinsFurtherReferenceNoPoiSeeds() {
-        // The balance probe's first seeds after the reference (i * 7_919 + 13); about half of its seeds win this way.
-        for (seed in listOf(7_932, 15_851, 23_770)) {
+        // The first winning seeds of the balance probe after the reference (i * 7_919 + 13). About half of its
+        // seeds win this way; after the 0.4.0 impact and ability growth change, 6 of i = 1..10 win and 23_770 does not.
+        for (seed in listOf(7_932, 15_851, 47_527)) {
             val state = MutableGameState(canonicalGameplayContent, seed = seed)
             state.applyPreferences(state.settings.copy(simulationSpeed = 1f))
             state.startRun()

@@ -8,6 +8,7 @@ import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRarity
+import kinetickk.ball.content.api.RebirthMutator
 import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicKey
 import kinetickk.ball.content.api.RewardFocus
@@ -39,6 +40,7 @@ class ContentLocalizationTest {
             content.coreShapes.forEach { addAll(listOf(it.displayName, it.mechanicDescription, it.unlockDescription)) }
             content.pointsOfInterest.definitions.forEach { addAll(listOf(it.name, it.instruction)) }
             content.rebirth.profiles.forEach { addAll(listOf(it.directive.displayName, it.directive.description)) }
+            RebirthMutator.entries.forEach { addAll(listOf(it.displayName, it.description)) }
             build.elements.forEach { addAll(listOf(it.statusDescription, it.breakDescription)) }
             build.reactions.forEach { addAll(listOf(it.name, it.description)) }
             build.resonances.forEach { add(it.description); addAll(it.tiers) }
@@ -62,6 +64,7 @@ class ContentLocalizationTest {
         assertDistinctInRussian(content.relics.map { it.name })
         assertDistinctInRussian(build.pairings.map { it.name })
         assertDistinctInRussian(build.reactions.map { it.name })
+        assertDistinctInRussian(RebirthMutator.entries.map { it.displayName })
         assertDistinctInRussian(BuildTag.entries.map { it.displayLabel })
         assertDistinctInRussian(StatusElement.entries.flatMap { listOf(it.displayLabel, it.statusLabel, it.breakLabel) })
     }

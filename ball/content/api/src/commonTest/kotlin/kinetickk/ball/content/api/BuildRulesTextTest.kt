@@ -80,6 +80,14 @@ class BuildRulesTextTest {
         assertEquals("Каждое 8-е убийство, с удачей чаще", trigger(EffectTrigger.KILL, 8, AppLanguage.Russian, luck = true))
         assertEquals("On brake release, once every 2 s", trigger(EffectTrigger.BRAKE_RELEASE, 1, AppLanguage.English, cooldown = 2f))
         assertEquals("При отпускании тормоза, не чаще раза в 0,5 с", trigger(EffectTrigger.BRAKE_RELEASE, 1, AppLanguage.Russian, cooldown = 0.5f))
+        assertEquals("On ricochet, once every 2 s", trigger(EffectTrigger.RICOCHET, 1, AppLanguage.English, cooldown = 2f))
+        assertEquals("При рикошете, не чаще раза в 0,5 с", trigger(EffectTrigger.RICOCHET, 1, AppLanguage.Russian, cooldown = 0.5f))
+        assertEquals("Every 3rd ricochet", trigger(EffectTrigger.RICOCHET, 3, AppLanguage.English))
+        assertEquals("Каждый 3-й рикошет", trigger(EffectTrigger.RICOCHET, 3, AppLanguage.Russian))
+        assertEquals("On slam, once every 2 s", trigger(EffectTrigger.SLAM, 1, AppLanguage.English, cooldown = 2f))
+        assertEquals("При впечатывании врага, не чаще раза в 0,5 с", trigger(EffectTrigger.SLAM, 1, AppLanguage.Russian, cooldown = 0.5f))
+        assertEquals("Every 2nd slam", trigger(EffectTrigger.SLAM, 2, AppLanguage.English))
+        assertEquals("Каждое 2-е впечатывание врага", trigger(EffectTrigger.SLAM, 2, AppLanguage.Russian))
     }
 
     @Test

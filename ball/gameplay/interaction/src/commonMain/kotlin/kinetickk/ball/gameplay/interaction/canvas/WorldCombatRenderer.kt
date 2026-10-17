@@ -506,7 +506,7 @@ internal fun DrawScope.drawCore(engine: GameplayRenderModel, center: Offset, rol
         val compression = (sin(engine.elapsed * 15f) + 1f) * 0.5f
         drawCircle(Kk.Bone.copy(alpha = 0.6f), 30f - compression * 5f, center, style = WorldStrokes.dashedMedium)
     }
-    val radius = GameplayRenderModel.CORE_RADIUS
+    val radius = engine.coreRadius
     when (engine.coreShape) {
         CoreShape.ORB -> {
             drawCircle(Kk.Ink, radius + 3f, center)
@@ -535,7 +535,7 @@ internal fun DrawScope.drawCore(engine: GameplayRenderModel, center: Offset, rol
                 drawRect(fill, Offset(center.x - half, center.y - half), Size(half * 2f, half * 2f))
             }
         }
-        CoreShape.TESSERACT -> drawTesseractCore(center, engine.elapsed, fill)
+        CoreShape.TESSERACT -> drawTesseractCore(center, engine.elapsed, fill, radius)
     }
     val ability = engine.characterAbility
     if (ability.charge > 0f && engine.coreShape != CoreShape.RING) {
@@ -587,8 +587,13 @@ private fun DrawScope.drawCharacterField(engine: GameplayRenderModel, shakeX: Fl
 private val TesseractVertices = FloatArray(32)
 
 /** A 4D rotating wireframe projected to Canvas; the fixed center dot stays visible. */
-internal fun DrawScope.drawTesseractCore(center: Offset, elapsed: Float, color: Color) {
-    drawCircle(color.copy(alpha = 0.22f), GameplayRenderModel.CORE_RADIUS, center, style = kkStroke(1f))
+internal fun DrawScope.drawTesseractCore(
+    center: Offset,
+    elapsed: Float,
+    color: Color,
+    radius: Float = GameplayRenderModel.CORE_RADIUS,
+) {
+    drawCircle(color.copy(alpha = 0.22f), radius, center, style = kkStroke(1f))
     val angle = elapsed * 0.65f
     val c = cos(angle)
     val s = sin(angle)

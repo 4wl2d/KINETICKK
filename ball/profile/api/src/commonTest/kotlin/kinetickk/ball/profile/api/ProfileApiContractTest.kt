@@ -3,6 +3,7 @@
 
 package kinetickk.ball.profile.api
 
+import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
@@ -21,6 +22,20 @@ class ProfileApiContractTest {
     fun localIdentityHasStableCanonicalValues() {
         assertEquals("local-player", LocalPlayerId.LOCAL_PLAYER.stableValue)
         assertEquals("kinetickk.local/Profile/local-player", LOCAL_PROFILE_INSTANCE_ID.canonicalValue)
+    }
+
+    @Test
+    fun rebirthRankIsOneAboveTheHighestClearedTierWithinBoundsAndAscendantAfterTheLast() {
+        assertEquals(0, RebirthProgress().rank)
+        assertEquals(1, RebirthProgress(level = 0, highestCleared = 0).rank)
+        assertEquals(5, RebirthProgress(level = 2, highestCleared = 4).rank)
+        assertEquals(ContentBounds.MAX_REBIRTH_LEVEL, RebirthProgress(highestCleared = ContentBounds.MAX_REBIRTH_LEVEL - 1).rank)
+        assertEquals(ContentBounds.MAX_REBIRTH_LEVEL, RebirthProgress(highestCleared = ContentBounds.MAX_REBIRTH_LEVEL).rank)
+        assertEquals(ContentBounds.MIN_REBIRTH_LEVEL, RebirthProgress(highestCleared = -5).rank)
+
+        assertFalse(RebirthProgress().isAscendant)
+        assertFalse(RebirthProgress(highestCleared = ContentBounds.MAX_REBIRTH_LEVEL - 1).isAscendant)
+        assertTrue(RebirthProgress(highestCleared = ContentBounds.MAX_REBIRTH_LEVEL).isAscendant)
     }
 
     @Test

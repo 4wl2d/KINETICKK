@@ -9,6 +9,7 @@ import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.immutableSetOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.toImmutableSet
+import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.ReactionId
@@ -156,6 +157,14 @@ data class RebirthProgress(
     val level: Int = 0,
     val highestCleared: Int = -1,
 )
+
+/** Highest Rebirth tier this profile may select: one above the highest cleared tier, within content bounds. */
+val RebirthProgress.rank: Int
+    get() = (highestCleared + 1).coerceIn(ContentBounds.MIN_REBIRTH_LEVEL, ContentBounds.MAX_REBIRTH_LEVEL)
+
+/** True once the final Rebirth tier has been cleared. */
+val RebirthProgress.isAscendant: Boolean
+    get() = highestCleared >= ContentBounds.MAX_REBIRTH_LEVEL
 
 /** Cumulative Profile-owned achievements shared by every run and Lab loadout. */
 data class CharacterAchievementProgress(

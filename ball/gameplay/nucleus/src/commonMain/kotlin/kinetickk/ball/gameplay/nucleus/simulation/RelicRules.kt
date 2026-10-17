@@ -271,7 +271,7 @@ internal fun MutableGameState.relicOnDash(directionX: Float, directionY: Float):
     for (index in enemies.indices) {
         val enemy = enemies[index]
         if (!enemy.alive) continue
-        if (segmentCircleIntersects(startX, startY, endX, endY, enemy.x, enemy.y, enemy.radius + MutableGameState.CORE_RADIUS)) {
+        if (segmentCircleIntersects(startX, startY, endX, endY, enemy.x, enemy.y, enemy.radius + coreRadius)) {
             // The mark forces the crit of this strike only; dealHit dispatches relic on-hit rules once.
             if (assassin) enemy.status[StatusCell.MARKED_UNTIL] = elapsed + 1f
             dealHit(enemy, strike, HitSource.DASH, canCrit = true)

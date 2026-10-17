@@ -210,6 +210,19 @@ internal fun MutableGameState.effectiveWeaponPower(): Float =
         weaponRunGrowth() *
         if (overdriveTime > 0f) 1.45f else 1f
 
+/**
+ * Power of character abilities and weapon-based item effects. It shares the weapon's level, mastery and
+ * Overdrive factors but grows with [kinetickk.ball.content.api.RunTempoProfile.abilityRunGrowth], so
+ * equipped-weapon bonuses applied only to [effectiveWeaponPower] never leak into abilities.
+ */
+internal fun MutableGameState.abilityPower(): Float =
+    weaponPower *
+        rebirthProfile.playerPowerMultiplier *
+        (1f + (weaponLevel - 1) * 0.08f) *
+        (1f + currentWeaponMastery.damageBonus) *
+        content.tempo.abilityRunGrowth(elapsed) *
+        if (overdriveTime > 0f) 1.45f else 1f
+
 internal fun MutableGameState.cooldown(base: Float): Float =
     base / (
         attackSpeed *

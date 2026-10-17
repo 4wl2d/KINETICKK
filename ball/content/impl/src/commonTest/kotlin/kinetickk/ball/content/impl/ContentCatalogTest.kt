@@ -36,7 +36,7 @@ class ContentCatalogTest {
 
     @Test
     fun authorityPublishesOneVersionedSetOfCachedQuerySnapshots() {
-        assertEquals("kinetickk-content-2", catalog.version.value)
+        assertEquals("kinetickk-content-3", catalog.version.value)
         assertEquals(KINETICKK_CONTENT_VERSION, catalog.version)
         assertEquals(catalog.version, gameplay.version)
         assertEquals(catalog.version, profile.version)

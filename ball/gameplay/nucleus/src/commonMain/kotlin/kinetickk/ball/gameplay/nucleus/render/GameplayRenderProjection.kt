@@ -244,6 +244,10 @@ class GameplayRenderModel(
     val build: BuildProjection = BuildProjection(),
     internal val discoveredReactionMask: Int = 0,
     internal val discoveredPairingMask: Int = 0,
+    /** Current Core radius; renderers draw the Core with it. [CORE_RADIUS] is only the default. */
+    val coreRadius: Float = CORE_RADIUS,
+    /** Power of character abilities and weapon-based item effects; reward cards price weapon units with it. */
+    val abilityPower: Float = effectiveWeaponPower,
 ) {
     val speed: Float get() = vectorLength(velocityX, velocityY)
     val runProgress: Float get() = content.tempo.progress(elapsed)

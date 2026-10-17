@@ -72,8 +72,10 @@ data class RunTempoProfile(
     fun enemyHealthMultiplier(elapsedSeconds: Float): Float = 1f + 5.9f * progress(elapsedSeconds)
     /** Run scale of flat, status, reaction and proc damage; gameplay and reward cards both read it. */
     fun runScaleGrowth(elapsedSeconds: Float): Float = 1f + 1.6f * progress(elapsedSeconds)
-    fun impactRunGrowth(elapsedSeconds: Float): Float = 1f + 0.6f * progress(elapsedSeconds)
+    fun impactRunGrowth(elapsedSeconds: Float): Float = 1f + 1.2f * progress(elapsedSeconds)
     fun weaponRunGrowth(elapsedSeconds: Float): Float = 1f + 0.3f * progress(elapsedSeconds)
+    /** Growth of character abilities and weapon-based item effects: 1 + 1.0p. */
+    fun abilityRunGrowth(elapsedSeconds: Float): Float = 1f + 1.0f * progress(elapsedSeconds)
     /** Damage the build deals to its own Core (reaction recoil) keeps linear growth. */
     fun selfDamageRunGrowth(elapsedSeconds: Float): Float = 1f + 1.6f * progress(elapsedSeconds)
     fun attackRateMultiplier(elapsedSeconds: Float): Float = 1f + progress(elapsedSeconds) * 0.40f

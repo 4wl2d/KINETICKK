@@ -206,6 +206,10 @@ enum class EffectTrigger(val displayLabel: String) {
     BREAK("On break"),
     LEVEL_UP("On level up"),
     PICKUP("On data pickup"),
+    /** The Core bounced off an obstacle fast enough to count as a collision. */
+    RICOCHET("On ricochet"),
+    /** An enemy struck an obstacle or another enemy hard enough to take slam damage; it is the clause target. */
+    SLAM("On slam"),
 }
 
 /** A clause condition. Every value is validated at construction. */
@@ -424,7 +428,7 @@ data class EffectClause(
         val FrequentTriggers: Set<EffectTrigger> = setOf(
             EffectTrigger.IMPACT, EffectTrigger.WEAPON_HIT, EffectTrigger.CRIT, EffectTrigger.KILL,
             EffectTrigger.DASH_HIT, EffectTrigger.BREAK, EffectTrigger.REACTION, EffectTrigger.PICKUP,
-            EffectTrigger.HURT,
+            EffectTrigger.HURT, EffectTrigger.RICOCHET, EffectTrigger.SLAM,
         )
     }
 }

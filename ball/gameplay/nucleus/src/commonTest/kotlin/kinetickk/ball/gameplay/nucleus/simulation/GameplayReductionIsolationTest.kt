@@ -803,6 +803,7 @@ class GameplayReductionIsolationTest {
         turnRecoveryCooldown = 0.3f
         turnDirection = -1
         elitesSpawned = 3
+        coreRadius = 17.5f
         enemies.firstOrNull()?.apply {
             characterMarkTime = 0.75f
             lastCharacterDash = 2
@@ -812,6 +813,8 @@ class GameplayReductionIsolationTest {
             shiftUntil = 0.4f
             escortsPending = 2
             lastDamagedAt = 0.3f
+            disabledUntil = 0.35f
+            silencedUntil = 0.45f
             status[StatusCell.STACKS + StatusElement.THERMAL.ordinal] = 2f
             status[StatusCell.DECAY_AT + StatusElement.THERMAL.ordinal] = 0.5f
             status[StatusCell.FREEZE_IMMUNE_UNTIL] = 0.6f
@@ -1108,6 +1111,7 @@ class GameplayReductionIsolationTest {
             float("screenHeight", screenHeight)
             float("coreX", coreX)
             float("coreY", coreY)
+            float("coreRadius", coreRadius)
             float("velocityX", velocityX)
             float("velocityY", velocityY)
             float("cameraX", cameraX)
@@ -1228,6 +1232,8 @@ class GameplayReductionIsolationTest {
                 float("$prefix.shiftUntil", enemy.shiftUntil)
                 value("$prefix.escortsPending", enemy.escortsPending)
                 float("$prefix.lastDamagedAt", enemy.lastDamagedAt)
+                float("$prefix.disabledUntil", enemy.disabledUntil)
+                float("$prefix.silencedUntil", enemy.silencedUntil)
                 floats("$prefix.status", enemy.status)
             }
 

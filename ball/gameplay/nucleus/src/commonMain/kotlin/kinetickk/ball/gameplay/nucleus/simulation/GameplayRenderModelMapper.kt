@@ -333,6 +333,8 @@ internal fun MutableGameState.toRenderModel(
         } ?: buildProjection(),
         discoveredReactionMask = discoveredReactionMask,
         discoveredPairingMask = discoveredPairingMask,
+        coreRadius = coreRadius,
+        abilityPower = abilityPower(),
     )
 }
 

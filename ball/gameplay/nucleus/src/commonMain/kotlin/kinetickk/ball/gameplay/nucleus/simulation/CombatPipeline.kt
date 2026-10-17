@@ -457,7 +457,7 @@ internal fun MutableGameState.basisAmount(basis: DamageBasis, hit: Float, victim
     DamageBasis.HIT -> hit
     DamageBasis.IMPACT -> impactPower(speed)
     DamageBasis.BRAKE -> impactPower(max(brakeShedSpeed, 200f)) * sqrt(runScale())
-    DamageBasis.WEAPON -> 40f * effectiveWeaponPower()
+    DamageBasis.WEAPON -> 40f * abilityPower()
     DamageBasis.FLAT -> runScale() * relicSurge()
     DamageBasis.VICTIM_MAX_HP -> if (victim == null) 0f else victim.maxHp * victimFactor(victim)
     DamageBasis.SHIELD -> shieldCapacity() * sqrt(runScale())

@@ -660,6 +660,7 @@ internal fun canonicalStateFingerprint(state: MutableGameState): Long {
     // Release 0.2.0 changed accepted mechanics. Include their retained facts in the witness;
     // a matching adapter file alone does not make the old gameplay outcome comparable.
     signature = mix(signature, state.coreShape.ordinal)
+    signature = mix(signature, state.coreRadius.toRawBits())
     signature = mix(signature, state.characterRuntime.toString().hashCode())
     signature = mix(signature, state.nextEliteAt.toRawBits())
     signature = mix(signature, state.elitesSpawned)
@@ -712,6 +713,8 @@ internal fun canonicalStateFingerprint(state: MutableGameState): Long {
         signature = mix(signature, it.shiftUntil.toRawBits())
         signature = mix(signature, it.escortsPending)
         signature = mix(signature, it.lastDamagedAt.toRawBits())
+        signature = mix(signature, it.disabledUntil.toRawBits())
+        signature = mix(signature, it.silencedUntil.toRawBits())
         it.status.forEach { cell -> signature = mix(signature, cell.toRawBits()) }
     }
     return mixLong(signature, fixtureFingerprint(state))
@@ -760,10 +763,12 @@ private fun canonicalRenderFingerprint(state: MutableGameState): Long {
     signature = mix(signature, render.rerollsRemaining)
     signature = mix(signature, render.acquiredItemCount)
     signature = mix(signature, render.coreShape.ordinal)
+    signature = mix(signature, render.coreRadius.toRawBits())
     signature = mix(signature, render.characterAbility.toString().hashCode())
     signature = mix(signature, render.pointsOfInterest.toString().hashCode())
     signature = mix(signature, if (render.directedChoice) 1 else 0)
     signature = mix(signature, render.effectiveWeaponPower.toRawBits())
+    signature = mix(signature, render.abilityPower.toRawBits())
     signature = mix(signature, render.runProgress.toRawBits())
     render.itemStacksSnapshot.forEach { stack -> signature = mix(signature, stack) }
     return mixLong(signature, fixtureFingerprint(state))

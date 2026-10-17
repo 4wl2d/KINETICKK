@@ -42,6 +42,10 @@ internal data class Enemy private constructor(
     var escortsPending: Int = 0,
     /** Absolute run time of the last damage the Architect took; it keeps its adds coming while engaged. */
     var lastDamagedAt: Float = Float.NEGATIVE_INFINITY,
+    /** Absolute run time until which the enemy cannot act at all (stun, stop); read through canAct. */
+    var disabledUntil: Float = 0f,
+    /** Absolute run time until which the enemy may move but not attack; read through canAttack. */
+    var silencedUntil: Float = 0f,
     /** Elemental status cells; see [StatusCell]. Copy-on-write so reduction siblings stay isolated. */
     val status: CopyOnWriteFloatArray,
 ) {

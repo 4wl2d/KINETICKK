@@ -5,6 +5,7 @@ package kinetickk.ball.content.impl
 
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.RebirthDirective
+import kinetickk.ball.content.api.RebirthMutator
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.toImmutableList
@@ -47,5 +48,9 @@ private fun defaultRebirthProfile(tier: Int): RebirthProfile {
         maximumActiveEnemies = DEFAULT_MAX_ACTIVE_ENEMIES,
         minimumSpawnIntervalSeconds = DEFAULT_MIN_SPAWN_INTERVAL_SECONDS,
         minimumEliteIntervalSeconds = DEFAULT_MIN_ELITE_INTERVAL_SECONDS,
+        // Tier n activates the first n mutators, in activation order.
+        mutators = RebirthMutator.entries.take(tier).toImmutableList(),
+        packSizeBonus = if (tier >= 1) 1 else 0,
+        obstacleDensityMultiplier = 1f + tier * 0.05f,
     )
 }

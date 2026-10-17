@@ -302,6 +302,11 @@ class ContentBootstrapValidationTest {
         assertFailsWith<IllegalArgumentException> {
             EffectClause(EffectTrigger.WEAPON_HIT, actions = immutableListOf(EffectAction.RefreshWeapon(0.1f)))
         }
+        listOf(EffectTrigger.RICOCHET, EffectTrigger.SLAM).forEach { trigger ->
+            assertFailsWith<IllegalArgumentException>("$trigger") { EffectClause(trigger, actions = heal) }
+            EffectClause(trigger, actions = heal, cooldownSeconds = 0.5f)
+            EffectClause(trigger, actions = heal, everyNth = 2)
+        }
         EffectClause(EffectTrigger.KILL, actions = heal, cooldownSeconds = 0.5f)
         EffectClause(EffectTrigger.IMPACT, actions = heal, everyNth = 2)
         EffectClause(EffectTrigger.DASH, actions = heal)

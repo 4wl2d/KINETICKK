@@ -105,6 +105,20 @@ longer map to the new content. The kill sweep now removes only enemies whose
 death was resolved, so a kill caused during the sweep resolves on the next step
 instead of being dropped.
 
+The 0.4.0 rework lands in stages. Its contract step raises impact run growth
+from `1 + 0.6p` to `1 + 1.2p` (p is progress toward the boss clock) and gives
+character abilities and weapon-based item effects their own ability power: the
+weapon's power, level, mastery, Overdrive and Rebirth factors with ability run
+growth `1 + 1.0p`. Hits of the equipped weapon keep weapon run growth. Reward
+cards price weapon-based effects with the same ability power. The content
+version is `kinetickk-content-3`. Rebirth tiers now carry cumulative mutators,
+a pack-size bonus and an obstacle-density multiplier; the RICOCHET and SLAM
+triggers, enemy disable and silence timers, the hostile-damage helper, the
+variable Core radius (default `16`) and the obstacle queries exist, but no
+gameplay reads or fires them yet. The seeded baseline trace is unchanged; the
+no-POI probe seed `23770` now loses and was replaced by the next winning probe
+seed.
+
 The compact exit workflow removes the old causal-depth assertion that failed
 when a busy Profile refused progress before acceptance. An injected
 persistence callback reproduced that failure on the original source snapshot;

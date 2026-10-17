@@ -178,7 +178,7 @@ class ContentBalanceCharacterizationTest {
         assertEquals(24f, rebirth.minEliteIntervalSeconds)
         assertEquals((0..10).toList(), profiles.map(RebirthProfile::tier))
         assertEquals(
-            "4748c45a6b647fcf",
+            "1bc30ab35636dce9",
             goldenFingerprint {
                 profiles.forEach { profile ->
                     add(profile.tier)
@@ -195,6 +195,10 @@ class ContentBalanceCharacterizationTest {
                     add(profile.playerIntegrityBonus)
                     add(profile.matterGainMultiplier)
                     add(profile.bonusRerolls)
+                    add(profile.mutators.size)
+                    profile.mutators.forEach { mutator -> add(mutator.name) }
+                    add(profile.packSizeBonus)
+                    add(profile.obstacleDensityMultiplier)
                 }
             },
         )

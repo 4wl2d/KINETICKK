@@ -478,6 +478,8 @@ private fun canonicalRenderFingerprint(render: GameplayRenderModel): Long {
     signature = mix(signature, render.weaponBeamEndX.toRawBits())
     signature = mix(signature, render.weaponBeamEndY.toRawBits())
     signature = mix(signature, render.coreShape.ordinal)
+    signature = mix(signature, render.coreRadius.toRawBits())
+    signature = mix(signature, render.abilityPower.toRawBits())
     signature = mixLong(signature, canonicalCharacterAbilityFingerprint(render.characterAbility))
     signature = mix(signature, render.pointsOfInterest.size)
     render.pointsOfInterest.forEach { point ->
