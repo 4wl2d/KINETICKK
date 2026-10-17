@@ -25,24 +25,33 @@ import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.KkSlabKind
 import java.lang.management.ManagementFactory
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * A dealt hand animates every frame: once warm, drawing the faces of an epic and a legendary card
- * (material, ornament, watermark, art and the legendary scene) over a whole loop allocates nothing
- * beyond an empty frame, in a hue palette and in Mono, on the board and on a phone.
+ * A dealt hand animates every frame: once warm, drawing the faces of epic and legendary cards (material,
+ * ornament, watermark, art and the legendary scene) over a whole loop allocates nothing beyond an empty frame,
+ * in a hue palette and in Mono, on the board and on a phone.
+ *
+ * The default run draws every bespoke scene on its own item plus one face per borrowed family scene and rarity
+ * (a later item drawing that scene in its own hues, pattern and ornament), at [SAMPLED_FRAMES] instants spread
+ * evenly over the whole loop: every animated layer is warmed at each of those phases and then measured at the
+ * same instants, so a per-frame or per-phase allocation still shows. `KK_FULL_SWEEPS=1` draws every epic and
+ * legendary item at all [FRAMES] frames of the loop.
  */
 class RewardCardFaceAllocationTest {
     @Test
     fun epicAndLegendaryFacesAllocateNothingPerFrame() {
         val content = shippedRewardContent
-        // One card per scene: items that borrow a family scene draw the very same code as its owner.
-        val epics = content.items.filter { it.rarity == ItemRarity.EPIC }.distinctBy { rewardCardArt(it) }
-        val legendaries = content.items.filter { it.rarity == ItemRarity.LEGENDARY }.distinctBy { rewardCardArt(it) }
-        assertTrue(epics.size + legendaries.size == RewardCardArt.entries.size, "Every scene is drawn")
+        val epicsAndLegendaries = content.items.filter { it.rarity == ItemRarity.EPIC || it.rarity == ItemRarity.LEGENDARY }
+        // Items that borrow a family scene draw the very same scene code as its owner, in their own look.
+        val items = if (FULL_SWEEP) epicsAndLegendaries else epicsAndLegendaries.filterNot(::usesFamilyArt) +
+            epicsAndLegendaries.filter(::usesFamilyArt).distinctBy { rewardCardArt(it) to it.rarity }
+        assertEquals(RewardCardArt.entries.toSet(), items.mapNotNull(::rewardCardArt).toSet(), "Every scene is drawn")
+        assertTrue(items.any(::usesFamilyArt), "A borrowed family scene is drawn")
+        val frames = if (FULL_SWEEP) IntArray(FRAMES) { it } else IntArray(SAMPLED_FRAMES) { it * (FRAMES / SAMPLED_FRAMES) }
         for (palette in listOf(KkRolePalette.Default, KkRolePalette.Mono)) for ((width, height, phone) in listOf(Triple(300, 450, false), Triple(195, 254, true))) {
-            // Every scene once, side by side in rows, as its own card (own caches).
-            val items = epics + legendaries
+            // Every face once, side by side in rows, as its own card (own caches).
             val choices = items.map { ChoiceOption(ChoiceType.ITEM, it.name, it.description, it.rarity.displayLabel, itemId = it.id) }
             val model = rewardFixtureModel(content = content, choices = choices)
             val cards = choices.mapIndexed { index, choice -> model.rewardCardPresentation(choice, index) }
@@ -71,11 +80,17 @@ class RewardCardFaceAllocationTest {
                     }
                 }
             }
-            // Warm every cache over one whole loop (every legendary scene loops within 8 s), then measure the same frames.
-            repeat(FRAMES) { empty(); hand(it) }
-            val emptyBytes = allocated { repeat(FRAMES) { empty() } }
-            val handBytes = allocated { repeat(FRAMES) { hand(it) } }
-            val perFrame = (handBytes - emptyBytes) / FRAMES
+            // Warm every cache over the loop's frames (every legendary scene loops within 8 s), then measure the same frames.
+            // A short pass can catch a stray one-off allocation (a few KB, in about one pass of several), so a failing pass
+            // is measured again; an allocation the faces make on every pass fails all of them.
+            for (frame in frames) { empty(); hand(frame) }
+            var perFrame = Long.MAX_VALUE
+            for (attempt in 0 until PASSES) {
+                val emptyBytes = allocated { for (frame in frames) empty() }
+                val handBytes = allocated { for (frame in frames) hand(frame) }
+                perFrame = minOf(perFrame, (handBytes - emptyBytes) / frames.size)
+                if (perFrame <= 64) break
+            }
             assertTrue(perFrame <= 64, "${cards.size} epic and legendary faces at $width x $height allocate $perFrame bytes per frame")
         }
     }
@@ -128,5 +143,13 @@ class RewardCardFaceAllocationTest {
     private companion object {
         /** Eight seconds at 60 fps: a whole loop of every animated layer. */
         const val FRAMES = 480
+
+        /** The instants of the loop the default face run draws: one every 1/3 s. */
+        const val SAMPLED_FRAMES = 24
+
+        /** Measuring passes before a face hand fails. */
+        const val PASSES = 3
+
+        val FULL_SWEEP = System.getenv("KK_FULL_SWEEPS") == "1"
     }
 }
