@@ -492,6 +492,10 @@ private fun MutableGameState.tetherTick(tether: WeaponEntity, delta: Float) {
         tether.life = 0f
         return
     }
+    // The enemies have moved since the weapon step anchored the tether: its end follows the target to where it is
+    // drawn now (its previous point is the target's own previous point).
+    tether.x = target.x
+    tether.y = target.y
     val runtime = weaponRuntime
     val agonyRank = agonyPower()
     val primary = tether.phase == 0

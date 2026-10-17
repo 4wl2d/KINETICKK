@@ -162,9 +162,10 @@ internal class WeaponRuntime private constructor(
     var readyAt: Float = 0f
     var signatureReadyAt: Float = 0f
     var tetherTargetId: Int = -1
-    var tetherRamp: Float = 0f
+    /** The tether's damage multiplier: 1 at the base, rising while a target is held. */
+    var tetherRamp: Float = 1f
     var secondTetherId: Int = -1
-    var secondTetherRamp: Float = 0f
+    var secondTetherRamp: Float = 1f
     var sweepAngle: Float = 0f
     var shieldWasUp: Boolean = false
     var shieldRestoreReadyAt: Float = 0f
@@ -239,9 +240,9 @@ internal class WeaponRuntime private constructor(
         readyAt = 0f
         signatureReadyAt = 0f
         tetherTargetId = -1
-        tetherRamp = 0f
+        tetherRamp = 1f
         secondTetherId = -1
-        secondTetherRamp = 0f
+        secondTetherRamp = 1f
         sweepAngle = 0f
         // A shield that broke under another weapon is no Aegis break.
         shieldWasUp = false

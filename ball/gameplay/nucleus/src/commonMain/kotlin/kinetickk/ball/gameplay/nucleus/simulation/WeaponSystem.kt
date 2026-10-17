@@ -681,16 +681,14 @@ private fun MutableGameState.syncTetherEntity(slot: Int, target: Enemy?) {
     val tether = existing ?: WeaponEntity(WeaponEntityKind.TETHER, target.x, target.y, 0f, 1f, 1f, phase = slot,
         procKey = WeaponRuntime.sourceKey(slot)).also { addWeaponEntity(it) }
     tether.life = 1f
+    tether.endX = coreX
+    tether.endY = coreY
     if (tether.targetId != target.id) {
         tether.targetId = target.id
         tether.x = target.x
         tether.y = target.y
         tether.settle()
     }
-    tether.x = target.x
-    tether.y = target.y
-    tether.endX = coreX
-    tether.endY = coreY
 }
 
 private fun MutableGameState.deploySentry(power: Float, agonyRank: Int) {

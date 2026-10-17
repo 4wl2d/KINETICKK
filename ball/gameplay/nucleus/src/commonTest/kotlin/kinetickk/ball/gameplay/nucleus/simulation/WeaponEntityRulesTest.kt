@@ -118,6 +118,43 @@ class WeaponEntityRulesTest {
         assertEquals(3f, wellTick(3f) / base, 1e-3f)
     }
 
+    @Test
+    fun aTetherArcEquippedNextToAnEnemyStartsAtItsBaseDamage() {
+        val state = buildTestState(weapon = WeaponId.FLUX_WAKE, shape = CoreShape.HEXAGON)
+        state.critChance = 0f
+        state.equipRunWeapon(WeaponId.TETHER_ARC)
+        val target = state.spawn(EnemyType.DRIFTER, 150f, 0f)
+        // Low enough integrity that one tick reads exactly in Float.
+        target.hp = 1_000f
+        state.stepTethers(seconds = STEP)
+        assertEquals(target.id, state.weaponRuntime.tetherTargetId)
+        assertTrue(state.weaponRuntime.tetherRamp >= 1f, "ramp ${state.weaponRuntime.tetherRamp}")
+        val dealt = 1_000f - target.hp
+        assertTrue(dealt >= TETHER_DPS * STEP * state.effectiveWeaponPower() * 0.999f, "first tick $dealt")
+    }
+
+    @Test
+    fun theTetherEndFollowsItsTargetToWhereItIsDrawn() {
+        val state = buildTestState(weapon = WeaponId.TETHER_ARC, shape = CoreShape.HEXAGON)
+        val target = state.spawn(EnemyType.DRIFTER, 150f, 0f)
+        state.stepTethers(seconds = STEP)
+        // The enemy moves after the weapon step anchored the tether, as it does in a game step.
+        repeat(3) {
+            state.elapsed += STEP
+            state.updateWeapons(STEP)
+            target.previousX = target.x
+            target.previousY = target.y
+            target.x += 6f
+            target.y -= 4f
+            state.resolveWeaponEntityHits(STEP)
+            val tether = state.weaponRuntime.entities.single { it.kind == WeaponEntityKind.TETHER }
+            assertEquals(target.previousX, tether.previousX, 1e-3f)
+            assertEquals(target.previousY, tether.previousY, 1e-3f)
+            assertEquals(target.x, tether.x, 1e-3f)
+            assertEquals(target.y, tether.y, 1e-3f)
+        }
+    }
+
     /** A sturdy [type] at ([x], [y]) from the Core. */
     private fun MutableGameState.spawn(type: EnemyType, x: Float, y: Float): Enemy {
         val enemy = spawnedEnemy(type, coreX + x, coreY + y)
