@@ -50,6 +50,9 @@ import kotlin.test.Test
  *
  * `KK_GALLERY_ONLY` (comma-separated canonical item names) renders only those items: their sheets
  * in every palette, the Russian sheet and their legendary strips.
+ *
+ * Without `KK_SHOTS_OUT` the run is a smoke: one board sheet each of the representative items, the first
+ * relics and the first system cards (on the phone face) renders and nothing is written.
  */
 @OptIn(ExperimentalTestApi::class)
 class RewardCardGalleryShotsTest {
@@ -59,7 +62,7 @@ class RewardCardGalleryShotsTest {
 
     @Test
     fun rendersTheCardGallery() {
-        val folder = output ?: return
+        val folder = output ?: return smoke()
         folder.mkdirs()
         val items = content.items.filter { only == null || it.name in only }
         require(items.isNotEmpty()) { "KK_GALLERY_ONLY matched no shipped item: $only" }
@@ -89,6 +92,12 @@ class RewardCardGalleryShotsTest {
             render(File(folder, "legendary-$slug-strip.png"), List(6) { card }, Board, KkRolePalette.Default, times = List(6) { it.toFloat() })
             render(File(folder, "legendary-$slug-strip-phone.png"), List(6) { card }, Phone, KkRolePalette.Default, times = List(6) { it.toFloat() })
         }
+    }
+
+    private fun smoke() {
+        render(null, itemCards(representativeItems(), AppLanguage.English), Board, KkRolePalette.Default)
+        render(null, relicCards().take(8), Board, KkRolePalette.Default)
+        render(null, systemCards().take(8), Phone, KkRolePalette.Default)
     }
 
     private class CardSize(val width: Int, val height: Int, val phone: Boolean)
@@ -139,8 +148,9 @@ class RewardCardGalleryShotsTest {
         return totems + focus + declines + weapons
     }
 
+    /** Renders [cards] on one sheet and writes it to [file] (nothing is written when it is null). */
     private fun render(
-        file: File,
+        file: File?,
         cards: List<RewardCardPresentation>,
         size: CardSize,
         palette: KkRolePalette,
@@ -172,6 +182,7 @@ class RewardCardGalleryShotsTest {
             }
             waitForIdle()
             val bitmap = onRoot().captureToImage()
+            if (file == null) return@runDesktopComposeUiTest
             val pixels = bitmap.toPixelMap()
             val image = BufferedImage(bitmap.width, bitmap.height, BufferedImage.TYPE_INT_ARGB)
             for (y in 0 until bitmap.height) for (x in 0 until bitmap.width) image.setRGB(x, y, pixels[x, y].toArgb())
