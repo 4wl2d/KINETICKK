@@ -21,7 +21,7 @@ import kinetickk.foundation.common.localization.text
  * and changing numbers resolve to cached strings. All of it is draw-thread confined.
  */
 internal object WorldPaths {
-    private const val CAPACITY = 64
+    private const val CAPACITY = 128
     private val kinds = IntArray(CAPACITY) { -1 }
     private val sizes = FloatArray(CAPACITY)
     private val paths = arrayOfNulls<Path>(CAPACITY)

@@ -367,7 +367,7 @@ private fun DrawScope.drawBossBar(
     val language = measurer.language
     val architect = boss.type == EnemyType.ARCHITECT
     val center = frame.width * 0.5f
-    val name = HudScratch.bossName.of(language, if (architect) 1L else 0L) {
+    val name = HudScratch.bossName.of(language, if (architect) 1L else if (boss.type == EnemyType.HERALD) 2L else 0L) {
         if (architect) language.text(HudRedesignText.ArchitectTitle) else bossDisplayName(boss.type, language)
     }
     val nameSize = HudTopGeometry.bossNameSize(frame, architect)
@@ -557,9 +557,13 @@ private const val RAIL_PRIMED_PULSE = (2.0 * kotlin.math.PI * 4.0).toFloat()
 /** Segments a rail cell shows at most (a stack cap is the threshold plus four). */
 private const val MAX_RAIL_SEGMENTS = 14
 
-/** Display name of a tracked elite: the content phrase for its enemy type ("Elite"). */
+/** Display name of a tracked elite or Herald: the content phrase for its enemy type ("Elite", "Herald"). */
 private fun bossDisplayName(type: EnemyType?, language: AppLanguage): String =
-    (if (type == EnemyType.ELITE) "Elite" else "Architect").localizedContent(language)
+    when (type) {
+        EnemyType.ELITE -> "Elite"
+        EnemyType.HERALD -> "Herald"
+        else -> "Architect"
+    }.localizedContent(language)
 
 /** Matter and key chips (and their phone forms). */
 private fun DrawScope.drawEconomy(engine: GameplayRenderModel, hostMeasurer: TextMeasurer, frame: HudFrame, badgeBottom: Float) {

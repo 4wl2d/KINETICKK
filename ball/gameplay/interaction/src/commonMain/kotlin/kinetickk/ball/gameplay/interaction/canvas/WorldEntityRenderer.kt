@@ -13,14 +13,17 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import kinetickk.ball.gameplay.nucleus.render.EnemyAffinity
+import kinetickk.ball.gameplay.nucleus.render.EnemyBehavior
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.PickupType
+import kinetickk.ball.gameplay.nucleus.render.ProjectileKind
 import kinetickk.ball.gameplay.nucleus.model.clamp
 import kinetickk.ball.gameplay.interaction.fx.InteractionFxLimits
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
@@ -69,10 +72,17 @@ internal fun DrawScope.drawEnemy(
     statusDetail: Boolean = true,
 ) {
     val center = world(engine, enemy.x, enemy.y, shakeX, shakeY)
-    val renderMargin = if (enemy.type == EnemyType.WARDEN) 460f else if (enemy.type == EnemyType.ARCHITECT) 220f else 120f
+    val renderMargin = enemyRenderMargin(enemy)
     if (center.x < -renderMargin || center.y < -renderMargin || center.x > size.width + renderMargin || center.y > size.height + renderMargin) return
     val threat = roles.threat
     drawEnemyTelegraph(engine, enemy, center, shakeX, shakeY, threat)
+    if (enemy.type == EnemyType.PHANTOM && enemy.behavior == EnemyBehavior.PHASED) {
+        // Out of phase: only a faint, turning outline marks where it went.
+        rotate(engine.elapsed * spin(2f), center) {
+            drawCircle(threat.copy(alpha = 0.32f), enemy.radius * 1.2f, center, style = WorldStrokes.dashedThin)
+        }
+        return
+    }
     val affinity = enemy.affinityBits
     val aspect = EnemyAffinity.aspect(affinity)
     val aspectHue = if (aspect >= 0) roles.element(aspect) else threat
@@ -98,10 +108,11 @@ internal fun DrawScope.drawEnemy(
     val silhouette = enemySilhouette(enemy.type)
     val path = WorldPaths.silhouette(silhouette, enemy.radius)
     // A Frozen enemy stops turning under its ice plate and eases back into its turn when it thaws.
-    val degrees = FrozenPoses.rotation(enemy.id, bits and EnemyStatusBits.FROZEN != 0, engine.elapsed,
-        enemyRotation(enemy.type, engine.elapsed, enemy.id))
-    val patterned = statusDetail || enemy.type == EnemyType.ELITE
-    if (enemy.type == EnemyType.ELITE) {
+    val degrees = if (facesAim(enemy.type)) aimDegrees(enemy.facing) else FrozenPoses.rotation(
+        enemy.id, bits and EnemyStatusBits.FROZEN != 0, engine.elapsed, enemyRotation(enemy.type, engine.elapsed, enemy.id),
+    )
+    val patterned = statusDetail || enemy.type == EnemyType.ELITE || enemy.type == EnemyType.HERALD
+    if (enemy.type == EnemyType.ELITE || enemy.type == EnemyType.HERALD) {
         val pulse = (sin(engine.elapsed * 3.2f) + 1f) * 0.5f
         drawCircle(threat.copy(alpha = 0.10f + pulse * 0.06f), enemy.radius * 1.45f, center)
         drawCircle(threat.copy(alpha = 0.05f + pulse * 0.04f), enemy.radius * 1.9f, center)
@@ -126,11 +137,48 @@ internal fun DrawScope.drawEnemy(
         EnemyType.SHOOTER -> drawCircle(threat, max(2.5f, enemy.radius * 0.2f), center)
         EnemyType.WARDEN -> drawCircle(threat, enemy.radius * 0.24f, center, style = kkStroke(2f))
         EnemyType.ELITE -> drawKkIcon(KkIcon.SYSTEM_ELITE, center, enemy.radius * 1.05f, threat)
+        EnemyType.HERALD -> {
+            drawKkIcon(KkIcon.SYSTEM_ELITE, center, enemy.radius * 0.8f, threat)
+            if (enemy.shielded) {
+                val pulse = (sin(engine.elapsed * SHIELD_PULSE) + 1f) * 0.5f
+                val shield = enemy.radius * (1.55f + 0.04f * pulse)
+                drawCircle(Kk.Bone, shield, center, alpha = 0.05f + 0.05f * pulse)
+                drawCircle(Kk.Bone, shield, center, alpha = 0.45f + 0.4f * pulse, style = kkStroke(3f))
+            }
+        }
+        EnemyType.REFLECTOR -> {
+            // The front shield: a bone arc across the 120 degree face it turns toward the Core.
+            val arc = enemy.radius + 7f
+            val start = enemy.facing * RAD_TO_DEG - REFLECTOR_ARC_DEGREES * 0.5f
+            drawArc(Kk.Bone, start, REFLECTOR_ARC_DEGREES, false, Offset(center.x - arc, center.y - arc), Size(arc * 2f, arc * 2f),
+                style = kkStroke(3f))
+        }
+        EnemyType.AEGIS -> drawCircle(Kk.Bone, enemy.radius * 0.18f, center)
+        EnemyType.BROODMOTHER -> drawCircle(threat, enemy.radius * 0.3f, center, style = kkStroke(2f))
         else -> Unit
     }
     if (bits != 0) drawEnemyStatus(engine, center, enemy.radius + STATUS_RING_GAP, enemy.radius, bits, dominant, statusFill, roles, patterned)
     drawWeaknessTab(center, enemy.radius + STATUS_RING_GAP + WEAKNESS_TAB_GAP, EnemyAffinity.weakness(affinity), patterned, roles)
 }
+
+/** How far off screen an enemy still draws: its telegraphs and tethers reach farther than its body. */
+private fun enemyRenderMargin(enemy: EnemyProjection): Float = when (enemy.type) {
+    EnemyType.WARDEN -> 460f
+    EnemyType.ARCHITECT -> 220f
+    EnemyType.HERALD -> 200f
+    EnemyType.BOMBER -> BOMBER_BLAST_REACH + 20f
+    EnemyType.LANCER, EnemyType.SNIPER ->
+        if (enemy.behavior == EnemyBehavior.TELEGRAPH || enemy.behavior == EnemyBehavior.STRIKE) LANCE_LANE_LENGTH + 20f else 120f
+    else -> if (enemy.linkedTo >= 0) AEGIS_TETHER_REACH else 120f
+}
+
+/** Presentation copies of gameplay reaches: the Bomber's blast, the Lancer's lane, an Aegis tether, a mine's trigger. */
+private const val BOMBER_BLAST_REACH = 120f
+private const val LANCE_LANE_LENGTH = 900f
+private const val AEGIS_TETHER_REACH = 240f
+private const val MINE_TRIGGER_REACH = 60f
+private const val MINE_ARMED_LIFE = 7.2f
+private const val REFLECTOR_ARC_DEGREES = 120f
 
 /** Distance of the status ring outside an enemy's silhouette (world units). */
 private const val STATUS_RING_GAP = 4f
@@ -389,7 +437,65 @@ private fun DrawScope.drawEnemyTelegraph(
         EnemyType.ELITE -> if (enemy.actionTimer in 0f..0.28f) {
             drawCircle(threat.copy(alpha = 0.48f), enemy.radius + 20f + enemy.actionTimer * 38f, center, style = kkStroke(1.5f))
         }
-        EnemyType.DRIFTER, EnemyType.SPLITTER, EnemyType.ARCHITECT -> Unit
+        EnemyType.HERALD -> if (enemy.actionTimer in 0f..0.3f) {
+            drawCircle(threat.copy(alpha = 0.5f), enemy.radius + 22f + enemy.actionTimer * 40f, center, style = kkStroke(2f))
+        }
+        EnemyType.BOMBER -> if (enemy.behavior == EnemyBehavior.PRIMED) {
+            // The fuse blinks faster as it burns; the ring shows the blast's reach.
+            val remaining = enemy.behaviorRemaining
+            val blink = if (sin(engine.elapsed * (18f + (0.6f - remaining).coerceAtLeast(0f) * 60f)) > 0f) 1f else 0.35f
+            drawCircle(threat.copy(alpha = 0.10f * blink), BOMBER_BLAST_REACH, center)
+            drawCircle(threat.copy(alpha = 0.75f * blink), BOMBER_BLAST_REACH, center, style = WorldStrokes.dashedMedium)
+            drawCircle(Kk.Bone.copy(alpha = 0.8f * blink), enemy.radius + 5f, center, style = kkStroke(2f))
+        }
+        EnemyType.LANCER -> when (enemy.behavior) {
+            EnemyBehavior.TELEGRAPH -> {
+                val charge = (1f - enemy.behaviorRemaining / 0.7f).coerceIn(0f, 1f)
+                val end = polar(center, LANCE_LANE_LENGTH, enemy.facing)
+                drawLine(threat.copy(alpha = 0.18f + charge * 0.5f), center, end, 2f + charge * 5f)
+                drawLine(threat.copy(alpha = 0.6f + charge * 0.4f), center, end, 1f, pathEffect = WorldStrokes.dashEffect)
+            }
+            EnemyBehavior.STRIKE -> {
+                val tail = polar(center, enemy.radius * 3.5f, enemy.facing + PI.toFloat())
+                drawLine(Kk.Bone.copy(alpha = 0.7f), center, tail, enemy.radius * 0.8f)
+            }
+            else -> Unit
+        }
+        EnemyType.SNIPER -> if (enemy.behavior == EnemyBehavior.TELEGRAPH) {
+            val core = world(engine, engine.coreX, engine.coreY, shakeX, shakeY)
+            val reach = sqrt((core.x - center.x) * (core.x - center.x) + (core.y - center.y) * (core.y - center.y)) + 120f
+            val locked = enemy.behaviorRemaining <= 0.22f
+            val charge = (1f - enemy.behaviorRemaining / 1.1f).coerceIn(0f, 1f)
+            val end = polar(center, reach, enemy.facing)
+            if (locked) drawLine(threat.copy(alpha = 0.95f), center, end, 2.5f)
+            else drawLine(threat.copy(alpha = 0.25f + charge * 0.45f), center, end, 1.2f, pathEffect = WorldStrokes.dashEffect)
+            drawCircle(threat.copy(alpha = 0.6f), enemy.radius + 10f * (1f - charge), center, style = kkStroke(1.5f))
+        }
+        EnemyType.PHANTOM -> if (enemy.behavior == EnemyBehavior.TELEGRAPH) {
+            val charge = (1f - enemy.behaviorRemaining / 0.35f).coerceIn(0f, 1f)
+            val core = world(engine, engine.coreX, engine.coreY, shakeX, shakeY)
+            drawLine(threat.copy(alpha = 0.25f + charge * 0.5f), center, core, 1.5f + charge * 2f)
+            drawCircle(threat.copy(alpha = 0.7f), enemy.radius + 24f * (1f - charge), center, style = WorldStrokes.dashedMedium)
+        }
+        EnemyType.BROODMOTHER -> if (enemy.actionTimer in 0f..0.6f) {
+            drawCircle(threat.copy(alpha = 0.45f), enemy.radius + 10f + enemy.actionTimer * 30f, center, style = WorldStrokes.dashedThin)
+        }
+        EnemyType.DRIFTER, EnemyType.SPLITTER, EnemyType.ARCHITECT, EnemyType.SWARMLING, EnemyType.AEGIS,
+        EnemyType.MINELAYER, EnemyType.REFLECTOR -> Unit
+    }
+    if (enemy.linkedTo >= 0) drawAegisTether(engine, enemy, center, shakeX, shakeY)
+}
+
+/** A tethered ally: a dashed bone line back to its Aegis and a small shield pip on the ally. */
+private fun DrawScope.drawAegisTether(engine: GameplayRenderModel, enemy: EnemyProjection, center: Offset, shakeX: Float, shakeY: Float) {
+    val enemies = engine.enemies
+    for (index in enemies.indices) {
+        val aegis = enemies[index]
+        if (aegis.id != enemy.linkedTo || aegis.dead) continue
+        val from = world(engine, aegis.x, aegis.y, shakeX, shakeY)
+        drawLine(Kk.Bone.copy(alpha = 0.45f), from, center, 1.5f, pathEffect = WorldStrokes.dashEffect)
+        drawCircle(Kk.Bone.copy(alpha = 0.7f), enemy.radius + 3f, center, style = kkStroke(1.5f))
+        return
     }
 }
 
@@ -450,7 +556,9 @@ internal fun DrawScope.drawProjectiles(engine: GameplayRenderModel, shakeX: Floa
         val center = world(engine, projectile.x, projectile.y, shakeX, shakeY)
         if (!isOnScreen(center, projectile.radius + 28f)) continue
         val previous = world(engine, projectile.previousX, projectile.previousY, shakeX, shakeY)
-        if (projectile.hostile) {
+        if (projectile.hostile && projectile.kind == ProjectileKind.MINE) {
+            drawMine(center, projectile.radius, projectile.life, engine.elapsed, roles)
+        } else if (projectile.hostile) {
             val threat = roles.threat
             drawLine(threat.copy(alpha = 0.22f), previous, center, projectile.radius * 1.1f)
             drawCircle(threat.copy(alpha = 0.1f), projectile.radius + 6f, center)
@@ -467,6 +575,19 @@ internal fun DrawScope.drawProjectiles(engine: GameplayRenderModel, shakeX: Floa
             drawCircle(Kk.Bone, max(2f, projectile.radius * 0.8f), center)
         }
     }
+}
+
+/** A mine: a threat diamond with a blinking core; once armed a faint ring shows its trigger reach. */
+private fun DrawScope.drawMine(center: Offset, radius: Float, life: Float, elapsed: Float, roles: KkRolePalette) {
+    val threat = roles.threat
+    val armed = life <= MINE_ARMED_LIFE
+    rotate(45f, center) {
+        drawRect(Kk.Ink1, Offset(center.x - radius, center.y - radius), Size(radius * 2f, radius * 2f))
+        drawRect(threat, Offset(center.x - radius, center.y - radius), Size(radius * 2f, radius * 2f), style = kkStroke(2f))
+    }
+    val blink = if (armed) (if (cos(elapsed * 9f) > 0f) 1f else 0.3f) else 0.25f
+    drawCircle(threat.copy(alpha = blink), radius * 0.4f, center)
+    if (armed) drawCircle(threat.copy(alpha = 0.22f), MINE_TRIGGER_REACH, center, style = WorldStrokes.dashedHair)
 }
 
 internal fun DrawScope.drawPickups(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, roles: KkRolePalette) {

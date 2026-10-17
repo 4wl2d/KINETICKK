@@ -128,7 +128,7 @@ internal fun DrawScope.worldHudKeepOut(engine: GameplayRenderModel, textMeasurer
     val enemies = engine.enemies
     for (index in enemies.indices) {
         val enemy = enemies[index]
-        if (!enemy.dead && (enemy.type == EnemyType.ELITE || enemy.type == EnemyType.ARCHITECT)) boss = true
+        if (!enemy.dead && (enemy.type == EnemyType.ELITE || enemy.type == EnemyType.HERALD || enemy.type == EnemyType.ARCHITECT)) boss = true
     }
     return WorldOverlayScratch.keepOut.update(size.width, size.height, density, textMeasurer.scale, trial, boss)
 }

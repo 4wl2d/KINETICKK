@@ -46,6 +46,8 @@ import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.fx.WeaponArcProjection
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
+import kinetickk.ball.gameplay.nucleus.render.ProjectileKind
+import kinetickk.ball.gameplay.nucleus.render.EnemyBehavior
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
@@ -257,7 +259,19 @@ class WorldHotPathAllocationTest {
                 statusBits = BusyStatuses[index % BusyStatuses.size],
                 // Every type's aspect, weakness and frame, an immune Gravitic elite and a shifting Thermal Architect.
                 affinityBits = runAffinity(type, eliteAspect = StatusElement.GRAVITIC, architectAspect = StatusElement.THERMAL,
-                    architectPhase = 1, shifting = true))
+                    architectPhase = 1, shifting = true),
+                // The 0.4.0 telegraphs: a showing lane, a locked sight line, a burning fuse, a wind-up, a raised
+                // shield, a turned front, and a Drifter tethered to the Aegis.
+                behavior = when (type) {
+                    EnemyType.LANCER, EnemyType.SNIPER, EnemyType.PHANTOM -> EnemyBehavior.TELEGRAPH
+                    EnemyType.BOMBER -> EnemyBehavior.PRIMED
+                    else -> EnemyBehavior.IDLE
+                },
+                behaviorRemaining = if (type == EnemyType.SNIPER) 0.2f else 0.3f,
+                facing = index * 0.4f,
+                linkedTo = if (type == EnemyType.DRIFTER) EnemyType.AEGIS.ordinal + 1 else -1,
+                shielded = type == EnemyType.HERALD,
+            )
         }
         return GameplayRenderModel(
             content = Content, phase = GamePhase.RUNNING, settings = PlayerPreferences(textScale = 1.25f), rebirthLevel = 5,
@@ -275,10 +289,16 @@ class WorldHotPathAllocationTest {
             morningstarY = CORE + 40f, weaponBeamTime = 0f, weaponBeamStartX = 0f, weaponBeamStartY = 0f, weaponBeamEndX = 0f,
             weaponBeamEndY = 0f, totem = TotemProjection(CORE - 1_600f - drift, CORE + 100f + drift * 0.3f, 1f), coreShape = CoreShape.TESSERACT,
             enemies = enemies.toImmutableList(),
-            projectiles = (0 until 12).map { index ->
+            projectiles = ((0 until 12).map { index ->
                 ProjectileProjection(CORE - 200f + index * 25f, CORE + 120f, 0f, 0f, 4.5f, 1f, index % 3 != 0, 1f, 0, 0, null,
                     CORE - 206f + index * 25f, CORE + 123f)
-            }.toImmutableList(),
+            } + listOf(
+                // An armed mine and an arming one.
+                ProjectileProjection(CORE + 120f, CORE - 140f, 0f, 0f, 9f, 5f, true, 14f, 0, 0, null, CORE + 120f, CORE - 140f,
+                    kind = ProjectileKind.MINE),
+                ProjectileProjection(CORE + 160f, CORE - 140f, 0f, 0f, 9f, 7.9f, true, 14f, 0, 0, null, CORE + 160f, CORE - 140f,
+                    kind = ProjectileKind.MINE),
+            )).toImmutableList(),
             pickups = PickupType.entries.mapIndexed { index, type ->
                 PickupProjection(type, CORE - 150f + index * 30f, CORE - 60f, 0f, 0f, 3f, CORE - 155f + index * 30f, CORE - 57f)
             }.toImmutableList(),
