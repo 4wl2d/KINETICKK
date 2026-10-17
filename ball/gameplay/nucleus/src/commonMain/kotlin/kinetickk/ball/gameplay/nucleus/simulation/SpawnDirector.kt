@@ -51,9 +51,10 @@ internal const val CAP_OVERFLOW_COOLDOWN_SECONDS: Float = 20f
 internal const val DIRECTOR_CHECK_SECONDS: Float = 0.4f
 /**
  * Overall budget scale. Packs, flanks and relocated stragglers keep more enemies engaged than single
- * spawns did, so the director banks a little less than one enemy per tempo interval at rate 1.
+ * spawns did, so the director banks a little less than one enemy per tempo interval at rate 1. Tuned
+ * with the no-POI reference bot at tier 0 (its win rate over 40 seeds stays at the 0.3.x level).
  */
-internal const val DIRECTOR_RATE_SCALE: Float = 0.85f
+internal const val DIRECTOR_RATE_SCALE: Float = 0.95f
 /** An event never fires below this share of its planned size. */
 internal const val MINIMUM_EVENT_SHARE: Float = 0.6f
 /** A Swarmling fills this share of an ordinary cap slot and of the spawn budget. */
@@ -489,7 +490,7 @@ internal fun MutableGameState.clearOfAnomalies(angle: Float, distance: Float): F
     return candidate
 }
 
-internal const val POI_SPAWN_CLEARANCE: Float = 420f
+internal const val POI_SPAWN_CLEARANCE: Float = 650f
 private const val ANOMALY_TURN: Float = 45f * DEGREES
 
 /** Distance from the Core to the viewport edge along [angle]. */
