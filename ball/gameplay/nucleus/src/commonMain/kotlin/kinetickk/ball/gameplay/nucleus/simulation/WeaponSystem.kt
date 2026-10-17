@@ -596,7 +596,7 @@ internal fun MutableGameState.firePrismRelay(power: Float, serial: Int = WeaponR
     val bounces = prismRelayBounces()
     repeat(relayCount) { index ->
         val offset = (index - (relayCount - 1) * 0.5f) * 0.075f
-        // The second form's twin (and Agony's extra relay) carry half a relay's damage.
+        // The second form's twin (and Agony's extra relay) carry [PRISM_TWIN_SHARE] of a relay's damage.
         val share = if (index == 0) 1f else PRISM_TWIN_SHARE
         firePlayerProjectile(coreX, coreY, baseAngle + offset, 760f, PRISM_RELAY_DAMAGE * share * power, bounces, 6f, 3, serial)
     }
@@ -613,7 +613,7 @@ private fun MutableGameState.throwGyreDiscs(power: Float, agonyRank: Int) {
     val angle = atan2(lastAimDirectionY, lastAimDirectionX)
     val count = 1 + (if (hasMasteryForm(2)) 1 else 0) + if (agonyRank > 0) 1 else 0
     val damage = GYRE_DAMAGE * power * (1f + 0.1f * agonyRank)
-    val radius = GYRE_RADIUS * if (hasMasteryForm(1)) 1.15f else 1f
+    val radius = GYRE_RADIUS * if (hasMasteryForm(1)) GYRE_RADIUS_FORM else 1f
     for (disc in 0 until count) {
         val discAngle = angle + (disc - (count - 1) * 0.5f) * GYRE_SPREAD
         // The second form's twin (and Agony's extra disc) carry 60 % of a disc's damage.
@@ -801,11 +801,18 @@ internal fun MutableGameState.concussionRadius(impactSpeed: Float, agonyRank: In
 
 private fun MutableGameState.concussionWave(x: Float, y: Float, radius: Float, damage: Float, serial: Int) {
     val knockback = CONCUSSION_KNOCKBACK * if (hasMasteryForm(2)) 1.5f else 1f
+    var caught = 0
+    for (index in enemies.indices) {
+        val enemy = enemies[index]
+        if (enemy.alive && distanceSquared(x, y, enemy.x, enemy.y) <= square(radius + enemy.radius)) caught++
+    }
+    // A wave strikes harder the more enemies it catches: a lone enemy takes the lone share.
+    val struck = damage * CONCUSSION_LONE_SHARE * (1f + CONCUSSION_CROWD_BONUS * min(caught - 1, CONCUSSION_CROWD_CAP))
     var hits = 0
     for (index in enemies.indices) {
         val enemy = enemies[index]
         if (!enemy.alive || distanceSquared(x, y, enemy.x, enemy.y) > square(radius + enemy.radius)) continue
-        val landed = dealWeaponDamage(enemy, damage, canCrit = true, procKey = serial).amount > 0f
+        val landed = dealWeaponDamage(enemy, struck, canCrit = true, procKey = serial).amount > 0f
         if (landed) applyWeaponStatus(enemy, StatusElement.SONIC, 1)
         pushEnemy(enemy, x, y, knockback)
         hits++
@@ -1149,7 +1156,7 @@ internal const val MINE_CHAIN_REACH: Float = 0.9f
 internal const val MINE_WELL_SECONDS: Float = 1.2f
 internal const val MINE_WELL_DPS: Float = 15f
 internal const val MINE_WELL_REACH: Float = 0.7f
-internal const val ION_SWARM_DAMAGE: Float = 6f
+internal const val ION_SWARM_DAMAGE: Float = 4.5f
 internal const val ION_SWARM_COOLDOWN: Float = 0.72f
 internal const val ION_SWARM_PIERCE: Int = 1
 internal const val ION_SWARM_FIRE_RATE_FORM: Float = 1.25f
@@ -1170,7 +1177,7 @@ internal const val SPEAR_BLINK_REACH: Float = 320f
 internal const val SPEAR_SCAR_FUSE: Float = 0.4f
 internal const val SPEAR_SCAR_REACH: Float = 30f
 internal const val PRISM_RELAY_DAMAGE: Float = 18f
-internal const val PRISM_TWIN_SHARE: Float = 0.5f
+internal const val PRISM_TWIN_SHARE: Float = 0.2f
 /** Heading change per dp travelled that counts as a hard turn (60° over 100 dp). */
 internal const val FLUX_TURN_CURVATURE: Float = 0.0105f
 internal const val FLUX_LONG_LIFE: Float = 4f
@@ -1182,7 +1189,9 @@ internal const val GYRE_COOLDOWN: Float = 1.3f
 internal const val GYRE_SPEED: Float = 760f
 internal const val GYRE_RETURN_SPEED: Float = 900f
 internal const val GYRE_REACH: Float = 420f
-internal const val GYRE_RADIUS: Float = 16f
+internal const val GYRE_RADIUS: Float = 11f
+/** The first form's larger disc, as a multiple of [GYRE_RADIUS] (about the size of the disc before the retune). */
+internal const val GYRE_RADIUS_FORM: Float = 1.65f
 internal const val GYRE_SPREAD: Float = 0.45f
 internal const val GYRE_MAX_LIFE: Float = 3f
 internal const val GYRE_ORBIT_BONUS: Float = 1.25f
@@ -1212,8 +1221,8 @@ internal const val TETHER_PULL: Float = 260f
 internal const val SENTRY_INTERVAL: Float = 3f
 internal const val SENTRY_LIMIT: Int = 3
 internal const val SENTRY_LIFE: Float = 10f
-internal const val SENTRY_DAMAGE: Float = 10.8f
-internal const val SENTRY_FIRE_INTERVAL: Float = 1f
+internal const val SENTRY_DAMAGE: Float = 4.8f
+internal const val SENTRY_FIRE_INTERVAL: Float = 0.6f
 internal const val SENTRY_RANGE: Float = 520f
 internal const val SENTRY_RADIUS: Float = 12f
 internal const val SENTRY_SOURCE: Int = 2
@@ -1244,6 +1253,11 @@ internal const val CONCUSSION_MAX_RADIUS: Float = 260f
 internal const val CONCUSSION_KNOCKBACK: Float = 260f
 internal const val CONCUSSION_SHIELD_PER_HIT: Float = 4f
 internal const val CONCUSSION_GHOST_GATE: Float = 0.4f
+/** A wave's damage on a lone enemy, as a share of its full damage. */
+internal const val CONCUSSION_LONE_SHARE: Float = 0.7f
+/** Extra damage (of the lone share) for each other enemy a wave catches, up to [CONCUSSION_CROWD_CAP] of them. */
+internal const val CONCUSSION_CROWD_BONUS: Float = 0.18f
+internal const val CONCUSSION_CROWD_CAP: Int = 4
 
 internal const val GLACIER_DAMAGE: Float = 37f
 internal const val GLACIER_RADIUS: Float = 240f
@@ -1270,14 +1284,16 @@ internal const val LENS_PULL: Float = 240f
 internal const val SOLAR_LENGTH: Float = 240f
 internal const val SOLAR_LENGTH_FORM: Float = 120f
 internal const val SOLAR_ANGULAR_SPEED: Float = 2.2f
-internal const val SOLAR_DPS: Float = 44f
+internal const val SOLAR_DPS: Float = 41f
 internal const val SOLAR_ARC_SECTOR: Float = 0.4f
-internal const val SOLAR_ARC_SHARE: Float = 0.7f
+internal const val SOLAR_ARC_SHARE: Float = 0.9f
+/** The heat a beam keeps for the enemies behind the nearest one in its path. */
+internal const val SOLAR_SHADOW_SHARE: Float = 0.5f
 
 internal const val AEGIS_SHIELD_CAPACITY: Float = 15f
 internal const val AEGIS_SHARDS_BASE: Int = 2
-internal const val AEGIS_PIERCE: Int = 2
-internal const val AEGIS_DAMAGE: Float = 17f
+internal const val AEGIS_PIERCE: Int = 3
+internal const val AEGIS_DAMAGE: Float = 13f
 internal const val AEGIS_COOLDOWN: Float = 1.4f
 internal const val AEGIS_RANGE: Float = 260f
 internal const val AEGIS_BREAK_RANGE: Float = 420f

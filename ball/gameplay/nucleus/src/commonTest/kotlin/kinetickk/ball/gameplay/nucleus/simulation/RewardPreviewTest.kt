@@ -128,17 +128,30 @@ class RewardPreviewTest {
         // The second form twins the relay without another bounce, so the preview lists no ricochet change.
         assertTrue(preview.changes.none { it.name == "Ricochets" })
 
+        // Amplifying to level 3 opens the first form: one more relay bounce.
+        val amplified = engine().apply {
+            weapon = WeaponId.PRISM_RELAY
+            weaponLevel = 2
+            offer(ChoiceOption(ChoiceType.TOTEM, "Amplify", "", "", weaponId = weapon, totemAction = TotemAction.AMPLIFY_CURRENT))
+        }
+        val ricochets = amplified.rewardPreviews().single().changes.single { it.name == "Ricochets" }
+        amplified.choose(0)
+        amplified.addEnemyForTesting(amplified.coreX + 100f, amplified.coreY)
+        amplified.firePrismRelay(1f)
+        assertEquals(amplified.projectiles.first().pierce.toFloat(), ricochets.after)
+        assertTrue(ricochets.after > ricochets.before)
+
+        // The third form makes the bounces burst without another ricochet.
         val ascended = engine().apply {
             weapon = WeaponId.PRISM_RELAY
             weaponLevel = 9
             offer(ChoiceOption(ChoiceType.TOTEM, "Amplify", "", "", weaponId = weapon, totemAction = TotemAction.AMPLIFY_CURRENT))
         }
-        val ricochets = ascended.rewardPreviews().single().changes.single { it.name == "Ricochets" }
+        assertTrue(ascended.rewardPreviews().single().changes.none { it.name == "Ricochets" })
         ascended.choose(0)
         ascended.addEnemyForTesting(ascended.coreX + 100f, ascended.coreY)
         ascended.firePrismRelay(1f)
-        assertEquals(ascended.projectiles.first().pierce.toFloat(), ricochets.after)
-        assertTrue(ricochets.after > ricochets.before)
+        assertEquals(ricochets.after, ascended.projectiles.first().pierce.toFloat())
     }
 
     @Test

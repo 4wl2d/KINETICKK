@@ -562,11 +562,19 @@ private fun MutableGameState.beamTick(beam: WeaponEntity, delta: Float) {
     val outerX = coreX + cosine * (beam.radius + beam.extent)
     val outerY = coreY + sine * (beam.radius + beam.extent)
     val arcs = hasMasteryForm(3)
+    // The nearest enemy in the beam's path burns at full heat; the ones it shadows take [SOLAR_SHADOW_SHARE].
+    var nearestSquared = Float.MAX_VALUE
+    for (index in enemies.indices) {
+        val enemy = enemies[index]
+        if (!enemy.alive || !segmentCircleIntersects(innerX, innerY, outerX, outerY, enemy.x, enemy.y, enemy.radius + SOLAR_REACH)) continue
+        nearestSquared = min(nearestSquared, distanceSquared(coreX, coreY, enemy.x, enemy.y))
+    }
     for (index in enemies.indices) {
         val enemy = enemies[index]
         if (!enemy.alive) continue
         if (segmentCircleIntersects(innerX, innerY, outerX, outerY, enemy.x, enemy.y, enemy.radius + SOLAR_REACH)) {
-            val landed = dealWeaponDamage(enemy, dps * delta, cadence = WeaponHitCadence.CONTINUOUS, procKey = beam.procKey).amount > 0f
+            val heat = if (distanceSquared(coreX, coreY, enemy.x, enemy.y) <= nearestSquared) 1f else SOLAR_SHADOW_SHARE
+            val landed = dealWeaponDamage(enemy, dps * heat * delta, cadence = WeaponHitCadence.CONTINUOUS, procKey = beam.procKey).amount > 0f
             if (landed) weaponElementTick(enemy, StatusElement.THERMAL, SOLAR_SCORCH_INTERVAL)
             continue
         }
@@ -590,13 +598,13 @@ internal const val GYRE_SPIN: Float = 18f
 internal const val SENTRY_SHOT_SPEED: Float = 900f
 internal const val SENTRY_PIERCE: Int = 1
 internal const val SENTRY_SPLASH_RADIUS: Float = 40f
-internal const val SENTRY_SPLASH_SHARE: Float = 0.2f
+internal const val SENTRY_SPLASH_SHARE: Float = 0.32f
 internal const val LENS_THROW: Float = 420f
 internal const val LENS_MASS_INTERVAL: Float = 2.5f
 internal const val HOLLOW_PULL: Float = 320f
 internal const val AEGIS_TURN_RATE: Float = 9f
 /** The share of its damage a shard keeps for each enemy it pierces on to. */
-internal const val AEGIS_PIERCE_SHARE: Float = 0.85f
+internal const val AEGIS_PIERCE_SHARE: Float = 0.9f
 internal const val HUNTER_SEEK_RANGE: Float = 900f
 internal const val HUNTER_ACCELERATION: Float = 900f
 internal const val TETHER_CHARGE_INTERVAL: Float = 0.8f
@@ -724,6 +732,6 @@ internal fun MutableGameState.prismRelayBounced(projectile: Projectile) {
 
 internal const val ION_SWARM_CHARGE_EVERY: Int = 2
 internal const val QUASAR_KNOCKBACK: Float = 220f
-internal const val PRISM_BURST_RADIUS: Float = 50f
-internal const val PRISM_BURST_SHARE: Float = 0.08f
+internal const val PRISM_BURST_RADIUS: Float = 60f
+internal const val PRISM_BURST_SHARE: Float = 0.12f
 internal const val PRISM_LATTICE_SHARE: Float = 0.4f

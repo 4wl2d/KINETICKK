@@ -103,10 +103,10 @@ class WeaponEntityRulesTest {
     }
 
     @Test
-    fun anAegisShardPiercesOnToTwoMoreEnemiesKeepingMostOfItsDamage() {
+    fun anAegisShardPiercesOnToThreeMoreEnemiesKeepingMostOfItsDamage() {
         val state = buildTestState(weapon = WeaponId.AEGIS_SHARDS, shape = CoreShape.HEXAGON)
         state.critChance = 0f
-        val column = List(4) { index -> state.spawn(EnemyType.DRIFTER, 80f + index * 70f, 0f).apply { hp = TARGET_HP } }
+        val column = List(AEGIS_PIERCE + 2) { index -> state.spawn(EnemyType.DRIFTER, 80f + index * 70f, 0f).apply { hp = TARGET_HP } }
         val shard = WeaponEntity(WeaponEntityKind.SHARD, state.coreX, state.coreY, AEGIS_SHARD_RADIUS, AEGIS_SHARD_LIFE, AEGIS_SHARD_LIFE,
             vx = AEGIS_SPEED, damage = 10f, phase = AEGIS_PIERCE, targetId = column.first().id)
         state.weaponRuntime.entities.clear()
@@ -117,10 +117,14 @@ class WeaponEntityRulesTest {
         }
 
         val taken = column.map { TARGET_HP - it.hp }
+        assertEquals(3, AEGIS_PIERCE, "a shard pierces on to three more enemies")
         assertTrue(taken[0] > 0f, "the shard strikes the first enemy")
-        assertEquals(AEGIS_PIERCE_SHARE, taken[1] / taken[0], 1e-4f, "taken $taken")
-        assertEquals(AEGIS_PIERCE_SHARE * AEGIS_PIERCE_SHARE, taken[2] / taken[0], 1e-4f, "taken $taken")
-        assertEquals(0f, taken[3], "the shard ends on its third enemy: taken $taken")
+        var share = 1f
+        for (pierced in 1..AEGIS_PIERCE) {
+            share *= AEGIS_PIERCE_SHARE
+            assertEquals(share, taken[pierced] / taken[0], 1e-4f, "enemy $pierced: taken $taken")
+        }
+        assertEquals(0f, taken.last(), "the shard ends on its fourth enemy: taken $taken")
     }
 
     @Test

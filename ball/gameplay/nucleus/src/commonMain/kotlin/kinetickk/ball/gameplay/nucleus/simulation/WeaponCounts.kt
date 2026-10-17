@@ -38,5 +38,6 @@ internal fun MutableGameState.prismRelayBounces(): Int = when (currentWeaponMast
     WeaponMastery.CALIBRATED -> 2
     WeaponMastery.AMPLIFIED -> 3
     WeaponMastery.RESONANT -> 3
-    WeaponMastery.ASCENDED -> 4
+    // The third form makes the bounces burst instead of adding one.
+    WeaponMastery.ASCENDED -> 3
 } + agonyPower()
