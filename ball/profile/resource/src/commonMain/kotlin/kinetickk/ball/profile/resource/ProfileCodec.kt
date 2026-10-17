@@ -604,6 +604,8 @@ private fun RelicId.wireId(): String = when (this) {
     RelicId.AGONY_SCEPTER -> "AGONY_SCEPTER"
     RelicId.HOLLOW_CROWN -> "HOLLOW_CROWN"
     RelicId.OUROBOROS_SEAL -> "OUROBOROS_SEAL"
+    RelicId.THUNDER_CHOIR -> "THUNDER_CHOIR"
+    RelicId.NULL_COVENANT -> "NULL_COVENANT"
 }
 
 private fun String.relicId(): RelicId = when (this) {
@@ -627,6 +629,8 @@ private fun String.relicId(): RelicId = when (this) {
     "AGONY_SCEPTER" -> RelicId.AGONY_SCEPTER
     "HOLLOW_CROWN" -> RelicId.HOLLOW_CROWN
     "OUROBOROS_SEAL" -> RelicId.OUROBOROS_SEAL
+    "THUNDER_CHOIR" -> RelicId.THUNDER_CHOIR
+    "NULL_COVENANT" -> RelicId.NULL_COVENANT
     else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
 }
 
@@ -641,6 +645,17 @@ private fun ReactionId.wireId(): String = when (this) {
     ReactionId.MAGNETIZE -> "MAGNETIZE"
     ReactionId.FEEDBACK -> "FEEDBACK"
     ReactionId.ROT_WELL -> "ROT_WELL"
+    ReactionId.THUNDERCLAP -> "THUNDERCLAP"
+    ReactionId.SHATTERPOINT -> "SHATTERPOINT"
+    ReactionId.RESONANT_ARC -> "RESONANT_ARC"
+    ReactionId.SEISMIC -> "SEISMIC"
+    ReactionId.FRACTURE -> "FRACTURE"
+    ReactionId.SILENCE -> "SILENCE"
+    ReactionId.BLACKFIRE -> "BLACKFIRE"
+    ReactionId.STASIS -> "STASIS"
+    ReactionId.ANNIHILATE -> "ANNIHILATE"
+    ReactionId.NULL_WELL -> "NULL_WELL"
+    ReactionId.OBLIVION -> "OBLIVION"
 }
 
 private fun String.reactionId(): ReactionId = when (this) {
@@ -654,6 +669,17 @@ private fun String.reactionId(): ReactionId = when (this) {
     "MAGNETIZE" -> ReactionId.MAGNETIZE
     "FEEDBACK" -> ReactionId.FEEDBACK
     "ROT_WELL" -> ReactionId.ROT_WELL
+    "THUNDERCLAP" -> ReactionId.THUNDERCLAP
+    "SHATTERPOINT" -> ReactionId.SHATTERPOINT
+    "RESONANT_ARC" -> ReactionId.RESONANT_ARC
+    "SEISMIC" -> ReactionId.SEISMIC
+    "FRACTURE" -> ReactionId.FRACTURE
+    "SILENCE" -> ReactionId.SILENCE
+    "BLACKFIRE" -> ReactionId.BLACKFIRE
+    "STASIS" -> ReactionId.STASIS
+    "ANNIHILATE" -> ReactionId.ANNIHILATE
+    "NULL_WELL" -> ReactionId.NULL_WELL
+    "OBLIVION" -> ReactionId.OBLIVION
     else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
 }
 

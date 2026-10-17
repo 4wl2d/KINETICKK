@@ -82,8 +82,11 @@ internal object BuildNoticeTitles {
     }
 }
 
-/** Visual reach of each element's Break flash (world units), by status element ordinal. */
-private val BreakBurstRadii = floatArrayOf(90f, 64f, 120f, 150f, 72f)
+/**
+ * Visual reach of each element's Break flash (world units), by status element ordinal: Shatter's
+ * flash spans its 160-unit shockwave, Unmake stays on its target.
+ */
+internal val BreakBurstRadii = floatArrayOf(90f, 64f, 120f, 150f, 72f, 160f, 80f)
 
 /**
  * Interaction-owned reducer for drop-eligible visual state.

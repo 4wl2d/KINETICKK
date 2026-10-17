@@ -324,6 +324,32 @@ private val Drafts: List<ItemDraft> = listOf(
         rules = listOf(ItemRule.ReactionResidue(2)), unlock = 16, rebirth = 4),
     ItemDraft("Volatile Compound", "Stronger reactions, and nothing between you and them.", EPIC, listOf(FORTUNE),
         rules = listOf(ItemRule.ReactionPower(0.8f), ItemRule.ReactionRecoil(5f, 140f)), unlock = 14, risk = true),
+
+    // SONIC (ids 80-84). Item ids are positional: new items are only ever appended.
+    ItemDraft("Tuning Spike", "Every collision rings like a struck bell.", COMMON, listOf(RAM), listOf(StatusElement.SONIC),
+        clauses = listOf(on(EffectTrigger.IMPACT, apply(StatusElement.SONIC, 2)))),
+    ItemDraft("Subwoofer Rounds", "Shots that hum long after they land.", COMMON, listOf(ARSENAL), listOf(StatusElement.SONIC),
+        clauses = listOf(on(EffectTrigger.WEAPON_HIT, apply(StatusElement.SONIC, 1), every = 2)), unlock = 3),
+    ItemDraft("Shockwave Hull", "Strike the hull and the whole field hears it.", UNCOMMON, listOf(BULWARK), listOf(StatusElement.SONIC),
+        clauses = listOf(on(EffectTrigger.HURT, apply(StatusElement.SONIC, 2, 180f), EffectAction.Push(180f, 320f))), unlock = 5),
+    ItemDraft("Sonic Wake", "A Dash leaves a sonic boom in its wake.", UNCOMMON, listOf(DRIVE), listOf(StatusElement.SONIC),
+        clauses = listOf(on(EffectTrigger.DASH, apply(StatusElement.SONIC, 2, 160f))), unlock = 7),
+    ItemDraft("Echo Hammer", "Every Shatter rings out a second time.", UNCOMMON, listOf(RAM), listOf(StatusElement.SONIC),
+        clauses = listOf(on(EffectTrigger.BREAK, EffectAction.Burst(140f, DamageBasis.IMPACT, 0.6f),
+            given = listOf(EffectCondition.ElementIs(StatusElement.SONIC)), cooldown = 0.6f)), unlock = 9),
+
+    // VOID (ids 85-89).
+    ItemDraft("Hollow Point", "Every clean hit leaves an empty space.", COMMON, listOf(PRECISION), listOf(StatusElement.VOID),
+        clauses = listOf(on(EffectTrigger.CRIT, apply(StatusElement.VOID, 2))), unlock = 4),
+    ItemDraft("Null Rounds", "Shots that take a little of the target with them.", COMMON, listOf(ARSENAL), listOf(StatusElement.VOID),
+        clauses = listOf(on(EffectTrigger.WEAPON_HIT, apply(StatusElement.VOID, 1), every = 3)), unlock = 2),
+    ItemDraft("Event Veil", "A failing shield folds the space around it.", UNCOMMON, listOf(BULWARK), listOf(StatusElement.VOID),
+        clauses = listOf(on(EffectTrigger.SHIELD_BREAK, apply(StatusElement.VOID, 3, 220f))), unlock = 6),
+    ItemDraft("Quiet Engine", "The emptiness spreads from the fallen.", UNCOMMON, listOf(CHAIN), listOf(StatusElement.VOID),
+        clauses = listOf(on(EffectTrigger.KILL, apply(StatusElement.VOID, 3, 160f),
+            given = listOf(EffectCondition.TargetHas(StatusElement.VOID)))), unlock = 8),
+    ItemDraft("Abyssal Lens", "Aim for the hole the void left behind.", UNCOMMON, listOf(PRECISION), listOf(StatusElement.VOID),
+        rules = listOf(ItemRule.DamageVersus(EffectCondition.TargetHas(StatusElement.VOID, 3), 0.15f)), unlock = 10),
 )
 
 internal fun defaultItems(): ImmutableList<ItemDefinition> =

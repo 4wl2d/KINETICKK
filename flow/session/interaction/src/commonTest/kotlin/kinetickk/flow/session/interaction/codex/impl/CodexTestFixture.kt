@@ -43,6 +43,8 @@ internal val testRelics: ImmutableList<RelicDefinition> = listOf(
     TestRelic(RelicId.AGONY_SCEPTER, "Agony Scepter", RelicAspect.SOVEREIGN, listOf(RelicKey.ECHO), listOf(BuildTag.ARSENAL), minimumRebirth = 1),
     TestRelic(RelicId.HOLLOW_CROWN, "Hollow Crown", RelicAspect.SOVEREIGN, listOf(RelicKey.VOID), listOf(BuildTag.FORTUNE), minimumRebirth = 3, meldable = false),
     TestRelic(RelicId.OUROBOROS_SEAL, "Ouroboros Seal", RelicAspect.SOVEREIGN, listOf(RelicKey.LIFE, RelicKey.VOID), listOf(BuildTag.BULWARK, BuildTag.FORTUNE), minimumRebirth = 5),
+    TestRelic(RelicId.THUNDER_CHOIR, "Thunder Choir", RelicAspect.SONIC, listOf(RelicKey.ECHO, RelicKey.SHIELD), listOf(BuildTag.RAM, BuildTag.ANCHOR)),
+    TestRelic(RelicId.NULL_COVENANT, "Null Covenant", RelicAspect.VOID, listOf(RelicKey.VOID, RelicKey.SHIELD), listOf(BuildTag.PRECISION, BuildTag.CHAIN)),
 ).toImmutableList()
 
 @Suppress("FunctionName")

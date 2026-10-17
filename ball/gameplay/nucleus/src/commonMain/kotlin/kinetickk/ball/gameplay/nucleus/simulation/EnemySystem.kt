@@ -32,8 +32,8 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
         }
         if (!enemy.alive) continue
         // Frozen enemies stop and never attack; Chill and stasis slow both movement and attack cadence.
-        val scale = enemySpeedScale(enemy)
-        if (scale <= 0f) {
+        val motion = enemyMotionScale(enemy)
+        if (motion <= 0f) {
             enemy.vx = 0f
             enemy.vy = 0f
             continue
@@ -43,10 +43,11 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
             val damping = exp(-6f * delta)
             enemy.vx *= damping
             enemy.vy *= damping
-            enemy.x += enemy.vx * delta * scale
-            enemy.y += enemy.vy * delta * scale
+            enemy.x += enemy.vx * delta * motion
+            enemy.y += enemy.vy * delta * motion
             continue
         }
+        val scale = enemySpeedScale(enemy)
         val dx = coreX - enemy.x
         val dy = coreY - enemy.y
         val distance = max(1f, length(dx, dy))

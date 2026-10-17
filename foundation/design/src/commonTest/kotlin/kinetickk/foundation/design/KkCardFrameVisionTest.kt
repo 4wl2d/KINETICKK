@@ -126,7 +126,7 @@ class KkCardFrameVisionTest {
     private fun frameBreaks(mode: KkVisionMode): List<Break> {
         val palette = mode.palette
         val vision = mode.vision()
-        val tones = (0..5).map { ToneNames[it] to palette.tone(it) } + ("sovereign" to Kk.ASovereign) + ("threat" to palette.threat)
+        val tones = ToneNames.indices.map { ToneNames[it] to palette.tone(it) } + ("sovereign" to Kk.ASovereign) + ("threat" to palette.threat)
         val breaks = mutableListOf<Break>()
         for (material in KkCardMaterial.entries) {
             val frame = material.frame(palette.gold, palette.spectrum)
@@ -157,7 +157,7 @@ class KkCardFrameVisionTest {
 
         /** The lightest a Mono spectrum blend may be seen at L* (luminance alone): above every chrome band tone's middle. */
         const val MONO_MIN_LIGHTNESS = 78.0
-        val ToneNames = listOf("kinetic", "thermal", "cryo", "ion", "gravitic", "entropy")
+        val ToneNames = listOf("kinetic", "thermal", "cryo", "ion", "gravitic", "entropy", "sonic", "void")
 
         /** Every colour a gradient through [stops] (a closed loop) paints, in quarter steps between neighbours. */
         fun paintedBlends(stops: List<Color>): List<Color> = stops.indices.flatMap { index ->

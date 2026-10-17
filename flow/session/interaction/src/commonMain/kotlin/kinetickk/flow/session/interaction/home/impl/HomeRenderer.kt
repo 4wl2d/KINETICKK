@@ -452,14 +452,14 @@ internal fun menuAccent(target: HomeLayoutTarget): Color = when (target) {
     else -> KkHomePalette.START.accent
 }
 
-/** One full sweep of the Codex accent through the five element hues. */
-internal const val HOME_CODEX_SWEEP_SECONDS: Float = 8f
+/** One full sweep of the Codex accent through the seven element hues (about 1.7 s each). */
+internal const val HOME_CODEX_SWEEP_SECONDS: Float = 12f
 
 /**
  * Distinct accents of one sweep (30 per second); each is tinted once and then reused. With the
  * smooth blend below, one step moves a hue change by at most about 5 %, so the sweep reads as a glide.
  */
-internal const val HOME_CODEX_SWEEP_STEPS: Int = 240
+internal const val HOME_CODEX_SWEEP_STEPS: Int = 360
 
 /** Sweep step shown at [seconds] into the sweep. */
 internal fun homeCodexSweepStep(seconds: Float): Int =
@@ -468,7 +468,7 @@ internal fun homeCodexSweepStep(seconds: Float): Int =
 /**
  * Accent at [phase] 0..1 of the Codex sweep: it holds each element hue for 40 % of its share,
  * then glides (a smooth in-and-out, steepest at 1.5 × the linear rate) into the next, wrapping
- * from Entropy back to Thermal.
+ * from Void back to Thermal.
  */
 internal fun homeCodexSweepColor(phase: Float, hues: List<Color> = Kk.Elements): Color {
     val position = phase.mod(1f) * hues.size

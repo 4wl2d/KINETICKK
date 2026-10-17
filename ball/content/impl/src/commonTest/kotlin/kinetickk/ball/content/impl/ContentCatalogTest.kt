@@ -6,6 +6,7 @@ package kinetickk.ball.content.impl
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.ItemRule
@@ -76,10 +77,10 @@ class ContentCatalogTest {
     }
 
     @Test
-    fun itemCatalogContainsEightyDistinctHandAuthoredItemsWithinTheBound() {
+    fun itemCatalogContainsNinetyDistinctHandAuthoredItemsWithinTheBound() {
         val items = gameplay.items
 
-        assertEquals(80, items.size)
+        assertEquals(90, items.size)
         assertTrue(items.size <= ContentBounds.MAX_ITEMS)
         assertEquals((0 until items.size).toList(), items.map(ItemDefinition::id))
         assertEquals(items.size, items.map(ItemDefinition::name).toSet().size)
@@ -129,6 +130,30 @@ class ContentCatalogTest {
         assertEquals(mapOf("Solar Choir" to 2, "Glacial Heart" to 2, "Resonance Fork" to 4), legendaries.associate { it.name to it.minimumRebirth })
         assertTrue(items.filter { it.rarity != ItemRarity.LEGENDARY }.all { it.minimumRebirth == 0 })
         assertTrue(items.filter { it.risk }.all { it.rarity == ItemRarity.EPIC }, "Volatile offers draw from high-risk epics")
+    }
+
+    @Test
+    fun sonicAndVoidItemsAreAppendedUngatedCommonOrUncommonWithoutThresholdCuts() {
+        val items = gameplay.items
+        val sonic = items.subList(80, 85)
+        val void = items.subList(85, 90)
+
+        assertTrue(sonic.all { it.elements.toList() == listOf(StatusElement.SONIC) }, "ids 80-84 are Sonic")
+        assertTrue(void.all { it.elements.toList() == listOf(StatusElement.VOID) }, "ids 85-89 are Void")
+        (sonic + void).forEach { item ->
+            assertTrue(item.rarity == ItemRarity.COMMON || item.rarity == ItemRarity.UNCOMMON, "${item.name} rarity")
+            assertEquals(0, item.minimumRebirth, "${item.name} is ungated")
+            assertFalse(item.rules.any { it is ItemRule.BreakThreshold }, "${item.name} cuts no threshold")
+            assertFalse(item.risk)
+        }
+        assertEquals(1, sonic.count { it.unlockLevel <= 2 }, "one early Sonic enabler")
+        assertEquals(1, void.count { it.unlockLevel <= 2 }, "one early Void enabler")
+        // An enabler applies its element on an event every run sees often, not on a rare one such as a crit.
+        val frequent = setOf(EffectTrigger.IMPACT, EffectTrigger.HURT, EffectTrigger.WEAPON_HIT)
+        listOf(sonic, void).forEach { group ->
+            val enabler = group.single { it.unlockLevel <= 2 }
+            assertTrue(enabler.clauses.any { it.trigger in frequent }, "${enabler.name} applies its element on a frequent event")
+        }
     }
 
     @Test

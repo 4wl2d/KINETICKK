@@ -23,10 +23,10 @@ class RelicCatalogTest {
     private val content = createContentCatalog().gameplayContent()
 
     @Test
-    fun relicCatalogContainsTwentyOrderedRuleRewritesEachWithALiability() {
+    fun relicCatalogContainsTwentyTwoOrderedRuleRewritesEachWithALiability() {
         val relics = content.relics
 
-        assertEquals(20, RelicId.entries.size)
+        assertEquals(22, RelicId.entries.size)
         assertEquals(RelicId.entries.size, relics.size)
         assertTrue(relics.size <= ContentBounds.MAX_RELICS)
         assertEquals(RelicId.entries.toList(), relics.map(RelicDefinition::id))
@@ -46,6 +46,34 @@ class RelicCatalogTest {
             assertTrue(relics.any { it.aspect.element == element }, "$element needs an aspect Relic")
         }
         assertEquals(6, relics.count { it.aspect == RelicAspect.KINETIC })
+    }
+
+    @Test
+    fun sonicAndVoidEachDrawOnOneAspectRelicWithTheirKeysAndRankValues() {
+        val choir = content.relic(RelicId.THUNDER_CHOIR)
+        val covenant = content.relic(RelicId.NULL_COVENANT)
+
+        assertEquals(RelicAspect.SONIC, choir.aspect)
+        assertEquals(StatusElement.SONIC, choir.aspect.element)
+        assertEquals(listOf(RelicKey.ECHO, RelicKey.SHIELD), choir.keys.toList())
+        assertEquals(listOf(kinetickk.ball.content.api.BuildTag.RAM, kinetickk.ball.content.api.BuildTag.ANCHOR), choir.attunedTags.toList())
+        assertEquals(listOf(2f, 3f, 4f), (1..3).map { choir.value(0, it) })
+        assertEquals(listOf(60f, 80f, 100f), (1..3).map { choir.value(1, it) })
+
+        assertEquals(RelicAspect.VOID, covenant.aspect)
+        assertEquals(StatusElement.VOID, covenant.aspect.element)
+        assertEquals(listOf(RelicKey.VOID, RelicKey.SHIELD), covenant.keys.toList())
+        assertEquals(listOf(kinetickk.ball.content.api.BuildTag.PRECISION, kinetickk.ball.content.api.BuildTag.CHAIN), covenant.attunedTags.toList())
+        assertEquals(listOf(40f, 60f, 80f), (1..3).map { covenant.value(0, it) })
+
+        listOf(choir, covenant).forEach { relic ->
+            assertEquals(0, relic.minimumRebirth)
+            assertTrue(relic.meldable)
+            assertFalse(relic.isSovereign)
+        }
+        // Elemental aspects follow element order and Sovereign stays last for ordinal-indexed colors.
+        assertEquals(StatusElement.entries.toList(), RelicAspect.entries.drop(1).dropLast(1).map { it.element })
+        assertEquals(RelicAspect.SOVEREIGN, RelicAspect.entries.last())
     }
 
     @Test

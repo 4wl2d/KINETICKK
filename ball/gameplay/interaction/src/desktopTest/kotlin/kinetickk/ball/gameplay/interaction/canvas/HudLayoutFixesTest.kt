@@ -83,7 +83,7 @@ class HudLayoutFixesTest {
      */
     @Test
     fun bossStatusRailStaysInsideTheBossReserve() {
-        val bits = 7 or (3 shl 8) or (2 shl 12) or (1 shl 21) or (1 shl 22) or (1 shl 23)
+        val bits = 7 or (3 shl 8) or (2 shl 12) or EnemyStatusBits.BRITTLE or EnemyStatusBits.EMBRITTLED or EnemyStatusBits.PRIMED
         for (language in AppLanguage.entries) sizes.forEach { (w, h) ->
             for (textScale in textScales) for (boss in listOf(EnemyType.ELITE, EnemyType.ARCHITECT)) {
                 val model = hudTestModel(w.toFloat(), h.toFloat()).with(

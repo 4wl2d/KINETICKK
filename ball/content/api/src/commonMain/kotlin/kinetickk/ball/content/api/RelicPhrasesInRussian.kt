@@ -151,6 +151,17 @@ internal val RelicPhrasesInRussian: List<Pair<String, String>> = listOf(
         "Получение данных −25 %, пока печать привязана. Сингулярность по-прежнему убивает, а истощённая " +
         "печать блокирует свою ячейку на две минуты.",
 
+    "Thunder Choir" to "Громовой хор",
+    "Shatter also chains to the {0} nearest Resonant enemies within 260 for {1} % of its damage; your knockback +20 %." to
+        "Раскол также перескакивает на {0} ближайших врагов с Резонансом в радиусе 260 и наносит им {1} % своего урона; " +
+        "ваше отбрасывание +20 %.",
+    "You take +15 % knockback from hits." to "Столкновения отбрасывают вас на 15 % сильнее.",
+
+    "Null Covenant" to "Нулевой завет",
+    "Unmake fires immediately and remembers {0} % more; Hollow stacks never decay on Elites." to
+        "Развоплощение срабатывает сразу и запоминает на {0} % больше; слои Опустошения на элитных врагах не спадают.",
+    "Maximum integrity −10 %." to "Максимальная прочность −10 %.",
+
     // Named relic-to-relic pairings.
     "Endless Gyre" to "Бесконечный вихрь",
     "Above 1,200 u/s every turn fires a second, wider ring at 60 % damage a moment later." to

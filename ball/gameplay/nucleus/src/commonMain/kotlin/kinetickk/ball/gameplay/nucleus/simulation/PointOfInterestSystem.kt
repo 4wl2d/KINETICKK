@@ -168,8 +168,7 @@ internal fun MutableGameState.openDirectedReward(reward: DirectedReward) {
     }
     val focuses = when (reward) {
         DirectedReward.WEAPON -> listOf(RewardFocus.MOTION, RewardFocus.CONTROL, RewardFocus.STRIKE)
-        DirectedReward.RELIC -> listOf(RewardFocus.KINETIC, RewardFocus.THERMAL, RewardFocus.CRYO,
-            RewardFocus.ION, RewardFocus.GRAVITIC, RewardFocus.ENTROPY).shuffled(rewardRandom).take(3)
+        DirectedReward.RELIC -> RelicFocuses.shuffled(rewardRandom).take(3)
         DirectedReward.ITEM_AND_REPAIR -> listOf(RewardFocus.OFFENSE, RewardFocus.DEFENSE, RewardFocus.ECONOMY)
     }
     choices = focuses.map { ChoiceOption(activeChoiceType, it.label, "Choose a direction, then one of three matching offers.",
@@ -220,6 +219,12 @@ internal fun MutableGameState.selectRewardFocus(focus: RewardFocus) {
         finishChoice(kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue.LEVEL_UP)
     }
 }
+
+/** Relic directions: Kinetic and one per element, named after their [RelicAspect]. */
+private val RelicFocuses: List<RewardFocus> = listOf(
+    RewardFocus.KINETIC, RewardFocus.THERMAL, RewardFocus.CRYO, RewardFocus.ION, RewardFocus.GRAVITIC,
+    RewardFocus.ENTROPY, RewardFocus.SONIC, RewardFocus.VOID,
+)
 
 internal fun itemRewardFocus(item: ItemDefinition): RewardFocus = when {
     BuildTag.FORTUNE in item.tags -> RewardFocus.ECONOMY

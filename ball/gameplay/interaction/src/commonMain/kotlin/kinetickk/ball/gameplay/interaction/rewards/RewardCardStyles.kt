@@ -444,6 +444,8 @@ internal fun RelicId.watermarkIcon(): KkIcon = when (this) {
     RelicId.AGONY_SCEPTER -> KkIcon.WEAPONS_MORNINGSTAR
     RelicId.HOLLOW_CROWN -> KkIcon.ASPECT_SOVEREIGN
     RelicId.OUROBOROS_SEAL -> KkIcon.SYSTEM_CYCLE_CLOCK
+    RelicId.THUNDER_CHOIR -> KkIcon.ASPECT_SONIC
+    RelicId.NULL_COVENANT -> KkIcon.ASPECT_VOID
 }
 
 /** A weapon's body pattern and frame ornament, from what it is (orbital, aura, lance, mines, drones ...). */

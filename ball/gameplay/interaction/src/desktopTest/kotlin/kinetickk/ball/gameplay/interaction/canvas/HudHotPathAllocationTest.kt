@@ -49,7 +49,8 @@ class HudHotPathAllocationTest {
                     severed = immutableListOf(SeveredRelicProjection(RelicId.EVENT_HORIZON, 21f))),
                 // Shifting into its second phase, hardened against Thermal (weak to Cryo).
                 "enemies" to listOf(EnemyProjection(3, EnemyType.ARCHITECT, 200f, 0f, 0f, 0f, 400f, 1000f, 74f, 0f, 0f, 0f, 0f, 200f, 0f, false,
-                    statusBits = 4 or (2 shl 12) or (6 shl 16) or (1 shl 20) or (1 shl 21),
+                    statusBits = 4 or (2 shl 12) or (6 shl 16) or (3 shl 20) or (2 shl 24) or EnemyStatusBits.FROZEN or
+                        EnemyStatusBits.BRITTLE,
                     affinityBits = bossAffinity(EnemyType.ARCHITECT)))
                     .toImmutableList(),
                 "pointsOfInterest" to listOf(PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f,

@@ -456,7 +456,7 @@ internal fun unknownEntry(key: String, language: AppLanguage): CodexEntry = Code
     discovered = false, help = language.text(SessionText.DISCOVERY_HELP),
 )
 
-/** The five Breaks (the matrix diagonal), then the ten reactions, in matrix reading order. */
+/** One Break per element (the matrix diagonal) and every reaction, in matrix reading order. */
 internal fun codexReactionEntries(model: CodexRenderModel, catalog: UiCatalogSnapshot, language: AppLanguage = AppLanguage.English): List<CodexEntry> =
     CodexMatrix.flatten().map { cell ->
         cell.reaction?.let { codexReactionEntry(it, catalog, model, language) } ?: codexBreakEntry(cell.row, catalog, language)
@@ -677,7 +677,7 @@ internal fun codexKeyEntry(key: RelicKey, catalog: UiCatalogSnapshot, model: Cod
     )
 }
 
-/** Every Tags tab entry: the nine archetypes, the five affinities, then the relic keys in chip order. */
+/** Every Tags tab entry: the nine archetypes, one affinity per element, then the relic keys in chip order. */
 internal fun codexTagsEntries(model: CodexRenderModel, catalog: UiCatalogSnapshot, language: AppLanguage = AppLanguage.English): List<CodexEntry> =
     BuildTag.entries.map { codexTagEntry(it, catalog, model, language) } +
         StatusElement.entries.map { codexAffinityEntry(it, catalog, model, language) } +

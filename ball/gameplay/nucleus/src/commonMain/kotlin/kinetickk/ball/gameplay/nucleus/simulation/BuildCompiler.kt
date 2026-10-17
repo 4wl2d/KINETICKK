@@ -417,6 +417,7 @@ internal fun MutableGameState.recompileBuild() {
         severed = severedRelics.map { it.id },
         spentOuroboros = ouroborosSpent,
     )
+    reconcileIntegrityLiability()
 }
 
 /** True when bound relic liabilities disable every effect of [item] (offers weight it 0; cards strike it). */

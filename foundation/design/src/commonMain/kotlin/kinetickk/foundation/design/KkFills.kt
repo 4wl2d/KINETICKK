@@ -84,6 +84,12 @@ enum class KkFillKind(val periodDp: Float, val markDp: Float, val loopSeconds: F
     /** Random pitting: irregular pits scattered over an 18 px tile (never the halftone grid). */
     PITTING(18f, 1.5f, 0f),
 
+    /** Equalizer bars: three upright bars of different heights in a 9 px tile. */
+    BARS(9f, 1.4f, 0f),
+
+    /** Crosses: two small upright plus signs, staggered on a 10 px tile. */
+    CROSSES(10f, 1.2f, 0f),
+
     // Card materials. The steep diagonals lean like the slash cut (about 27° from vertical), never the
     // 45° of the hatch and stripes.
 
@@ -300,7 +306,7 @@ internal object KkLayers {
 
 /** Small bounded cache of fill tiles; drawing is confined to the UI/draw thread. */
 private object KkTileCache {
-    // Hatch, stripes and halftones in a few colors, the five patterns in each status hue and the
+    // Hatch, stripes and halftones in a few colors, the seven patterns in each status hue and the
     // card materials and faces (hairlines, halftones and patterns) of a dealt hand.
     private const val CAPACITY = 64
     private val kindKeys = LongArray(CAPACITY)
@@ -399,6 +405,23 @@ private object KkTileCache {
                     drawCircle(color, s * 0.17f, center, style = Stroke(width))
                     drawCircle(color, width * 0.6f, center)
                 }
+                kind == KkFillKind.BARS -> {
+                    // Bars at thirds of the width, centred on the middle row so rows and columns tile.
+                    for (bar in 0..2) {
+                        val x = s * (bar + 0.5f) / 3f
+                        val half = h * BarHeights[bar] * 0.5f
+                        drawLine(color, Offset(x, h * 0.5f - half), Offset(x, h * 0.5f + half), width, StrokeCap.Butt)
+                    }
+                }
+                kind == KkFillKind.CROSSES -> {
+                    val arm = s * 0.2f
+                    for (cross in 0..1) {
+                        val cx = s * (0.25f + cross * 0.5f)
+                        val cy = h * (0.25f + cross * 0.5f)
+                        drawLine(color, Offset(cx - arm, cy), Offset(cx + arm, cy), width, StrokeCap.Butt)
+                        drawLine(color, Offset(cx, cy - arm), Offset(cx, cy + arm), width, StrokeCap.Butt)
+                    }
+                }
                 kind == KkFillKind.PITTING -> {
                     // A fixed scatter (not random per run), wrapped across the edges.
                     for (pit in Pits.indices step 3) {
@@ -434,6 +457,9 @@ private object KkTileCache {
         lineTo(left, height)
         lineTo(right, height * 1.5f)
     }
+
+    /** Bar heights of [KkFillKind.BARS] as fractions of the tile height. */
+    private val BarHeights = floatArrayOf(0.34f, 0.72f, 0.5f)
 
     /** Pits as (x, y, size) in tile fractions and multiples of the mark radius. */
     private val Pits = floatArrayOf(

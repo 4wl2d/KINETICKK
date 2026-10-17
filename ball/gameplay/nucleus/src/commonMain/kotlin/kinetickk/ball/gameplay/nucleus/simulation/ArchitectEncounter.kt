@@ -79,7 +79,7 @@ private fun MutableGameState.adaptiveArchitectAspect(phase: Int): Int {
 }
 
 private fun architectEscortCount(aspect: Int): Int = when (aspect) {
-    StatusElement.CRYO.ordinal, StatusElement.ION.ordinal -> 3
+    StatusElement.CRYO.ordinal, StatusElement.ION.ordinal, StatusElement.SONIC.ordinal, StatusElement.VOID.ordinal -> 3
     StatusElement.ENTROPY.ordinal -> 2
     else -> 4
 }
@@ -90,6 +90,8 @@ private fun architectEscort(aspect: Int, index: Int): EnemyType = when (aspect) 
     StatusElement.ION.ordinal -> EnemyType.SHOOTER
     StatusElement.GRAVITIC.ordinal -> if (index == 0) EnemyType.WARDEN else EnemyType.DRIFTER
     StatusElement.ENTROPY.ordinal -> EnemyType.SPLITTER
+    StatusElement.SONIC.ordinal -> EnemyType.CHARGER
+    StatusElement.VOID.ordinal -> EnemyType.WEAVER
     else -> EnemyType.DRIFTER
 }
 

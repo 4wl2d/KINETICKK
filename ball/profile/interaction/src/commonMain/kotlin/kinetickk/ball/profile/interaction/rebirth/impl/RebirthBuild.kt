@@ -398,6 +398,8 @@ internal fun StatusElement.toCanvasGlyphStyle(): CanvasGlyphStyle = when (this) 
     StatusElement.ION -> CanvasGlyphStyle.BOLT
     StatusElement.GRAVITIC -> CanvasGlyphStyle.CONCENTRIC_ORB
     StatusElement.ENTROPY -> CanvasGlyphStyle.LEAF
+    StatusElement.SONIC -> CanvasGlyphStyle.SOUND_WAVES
+    StatusElement.VOID -> CanvasGlyphStyle.HOLLOW_RING
 }
 
 /** Tag glyphs, the same table as the run's item icons. */
@@ -451,6 +453,8 @@ internal fun RelicAspect.runeFrameSides(): Int = when (this) {
     RelicAspect.ION -> 4
     RelicAspect.GRAVITIC -> 5
     RelicAspect.ENTROPY -> 7
+    RelicAspect.SONIC -> 9
+    RelicAspect.VOID -> 12
     RelicAspect.SOVEREIGN -> 10
 }
 
@@ -479,4 +483,6 @@ internal fun RelicId.toCanvasRuneStyle(): CanvasRuneStyle = when (this) {
     RelicId.AGONY_SCEPTER -> CanvasRuneStyle.RADIATING_STAFF
     RelicId.HOLLOW_CROWN -> CanvasRuneStyle.OPEN_DIAL
     RelicId.OUROBOROS_SEAL -> CanvasRuneStyle.RETURN_ARROW
+    RelicId.THUNDER_CHOIR -> CanvasRuneStyle.SPLIT_ARCS
+    RelicId.NULL_COVENANT -> CanvasRuneStyle.OPEN_ELLIPSE_DOT
 }

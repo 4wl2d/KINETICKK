@@ -194,4 +194,28 @@ internal val ItemPhrasesInRussian: List<Pair<String, String>> = listOf(
     "A reaction that rings on after it ends." to "Реакция, которая звучит и после того, как закончилась.",
     "Volatile Compound" to "Летучее соединение",
     "Stronger reactions, and nothing between you and them." to "Реакции сильнее, и ничто не стоит между ними и вами.",
+
+    // Sonic.
+    "Tuning Spike" to "Камертонный шип",
+    "Every collision rings like a struck bell." to "Каждое столкновение звенит, как удар в колокол.",
+    "Subwoofer Rounds" to "Басовые заряды",
+    "Shots that hum long after they land." to "Выстрелы гудят ещё долго после попадания.",
+    "Shockwave Hull" to "Волновой корпус",
+    "Strike the hull and the whole field hears it." to "Ударьте по корпусу, и это услышит всё поле.",
+    "Sonic Wake" to "Звуковой след",
+    "A Dash leaves a sonic boom in its wake." to "Рывок оставляет за собой звуковой удар.",
+    "Echo Hammer" to "Молот эха",
+    "Every Shatter rings out a second time." to "Каждый Раскол отзывается во второй раз.",
+
+    // Void.
+    "Hollow Point" to "Полый наконечник",
+    "Every clean hit leaves an empty space." to "Каждый чистый удар оставляет пустоту.",
+    "Null Rounds" to "Нулевые заряды",
+    "Shots that take a little of the target with them." to "Выстрелы уносят с собой частичку цели.",
+    "Event Veil" to "Покров горизонта",
+    "A failing shield folds the space around it." to "Гаснущий щит сворачивает пространство вокруг себя.",
+    "Quiet Engine" to "Тихий двигатель",
+    "The emptiness spreads from the fallen." to "Пустота расходится от павших.",
+    "Abyssal Lens" to "Линза бездны",
+    "Aim for the hole the void left behind." to "Цельтесь в брешь, оставленную пустотой.",
 )

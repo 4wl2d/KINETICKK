@@ -48,6 +48,8 @@ internal fun DrawScope.drawRelicIcon(
             RelicAspect.ION -> 4
             RelicAspect.GRAVITIC -> 5
             RelicAspect.ENTROPY -> 7
+            RelicAspect.SONIC -> 9
+            RelicAspect.VOID -> 12
             RelicAspect.SOVEREIGN -> 10
         },
         frameRotation = -PI.toFloat() * 0.5f + if (definition.isSovereign) time * 0.08f else 0f,
@@ -75,7 +77,7 @@ internal fun DrawScope.drawUnresolvedRelicIcon(center: Offset, radius: Float, ti
     }
 }
 
-/** One distinct rune per relic, chosen for what the relic does (40 styles serve the 20 relics). */
+/** One distinct rune per relic, chosen for what the relic does (40 styles serve the 22 relics). */
 internal fun RelicId.toCanvasRuneStyle(): CanvasRuneStyle = when (this) {
     RelicId.PERPETUAL_VECTOR -> CanvasRuneStyle.RADIAL_WHEEL
     RelicId.BLINK_DRIVE -> CanvasRuneStyle.OFFSET_CHEVRONS
@@ -97,4 +99,6 @@ internal fun RelicId.toCanvasRuneStyle(): CanvasRuneStyle = when (this) {
     RelicId.AGONY_SCEPTER -> CanvasRuneStyle.RADIATING_STAFF
     RelicId.HOLLOW_CROWN -> CanvasRuneStyle.OPEN_DIAL
     RelicId.OUROBOROS_SEAL -> CanvasRuneStyle.RETURN_ARROW
+    RelicId.THUNDER_CHOIR -> CanvasRuneStyle.SPLIT_ARCS
+    RelicId.NULL_COVENANT -> CanvasRuneStyle.OPEN_ELLIPSE_DOT
 }

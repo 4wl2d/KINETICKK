@@ -7,8 +7,8 @@ import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 
 /**
- * The field a Relic draws on: Kinetic, one of the five elements, or Sovereign. Sovereign stays last;
- * presentation colors map by ordinal.
+ * The field a Relic draws on: Kinetic, one of the seven elements, or Sovereign. Elemental aspects follow
+ * [StatusElement] order and Sovereign stays last; presentation colors map by ordinal.
  */
 enum class RelicAspect(val displayLabel: String, val element: StatusElement?) {
     KINETIC("Kinetic", null),
@@ -17,6 +17,8 @@ enum class RelicAspect(val displayLabel: String, val element: StatusElement?) {
     ION("Ion", StatusElement.ION),
     GRAVITIC("Gravitic", StatusElement.GRAVITIC),
     ENTROPY("Entropy", StatusElement.ENTROPY),
+    SONIC("Sonic", StatusElement.SONIC),
+    VOID("Void", StatusElement.VOID),
     SOVEREIGN("Sovereign", null),
 }
 
@@ -73,6 +75,8 @@ enum class RelicId {
     AGONY_SCEPTER,
     HOLLOW_CROWN,
     OUROBOROS_SEAL,
+    THUNDER_CHOIR,
+    NULL_COVENANT,
 }
 
 /**

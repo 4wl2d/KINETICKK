@@ -32,7 +32,7 @@ import kotlin.math.pow
  * shiver (after-images in an element pair), concentric rings ring out from behind the icon plate
  * (the reaction itself) across the whole face and keep echoing long after the strike, and two
  * standing waves, anchored between gold clamps, cross into a moiré band. The rings and waves cycle
- * through all five element hues (a reaction is an element pair). Every layer is periodic in
+ * through every element hue (a reaction is an element pair). Every layer is periodic in
  * [ResonanceForkLoopSeconds], so the loop has no seam.
  */
 internal fun DrawScope.drawResonanceForkArt(frame: RewardArtFrame, time: Float) {

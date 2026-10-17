@@ -41,7 +41,7 @@ class ContentBootstrapValidationTest {
         val data = defaultContentBootstrapData()
         val gameplay = createContentCatalogForTesting(data).gameplayContent()
 
-        assertEquals(80, gameplay.items.size)
+        assertEquals(90, gameplay.items.size)
         assertEquals(ContentBounds.MAX_WEAPONS, gameplay.weapons.size)
         assertEquals(ContentBounds.MAX_META_UPGRADES, gameplay.metaUpgrades.size)
         assertEquals(RelicId.entries.size, gameplay.relics.size)

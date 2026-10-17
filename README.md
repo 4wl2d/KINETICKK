@@ -34,10 +34,11 @@ profiles start at 1× speed. Pauses and reward choices stop the run clock.
 | `R` | Restart after a completed run |
 
 Six characters share permanent upgrades and can use all twelve weapons.
-Builds combine 80 items, twenty Relics and optional anomaly trials. Items are
+Builds combine 90 items, twenty-two Relics and optional anomaly trials. Items are
 rules, not stat sticks: triggers, conditions and effects over nine archetype
-tags and five elements (Thermal, Cryo, Ion, Gravitic, Entropy) whose statuses
-Break at a threshold and react with each other. Every Relic rewrites a rule and
+tags and seven elements (Thermal, Cryo, Ion, Gravitic, Entropy, Sonic, Void)
+whose statuses Break at a threshold and react with each other: every pair of
+elements has its own reaction, 21 in all. Every Relic rewrites a rule and
 carries a cost; Relic keys predict harmony and dissonance, and the Codex records
 discovered reactions, pairings and known incompatibilities.
 Spend Kinetic Matter in the Lab and Armory between runs. Defeat The Architect

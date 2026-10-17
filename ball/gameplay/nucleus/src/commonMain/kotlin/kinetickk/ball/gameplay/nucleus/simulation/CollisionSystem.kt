@@ -22,6 +22,12 @@ import kotlin.math.sin
 
 
 internal fun MutableGameState.resolveCollisions(delta: Float) {
+    resolveCollisionPasses(delta)
+    // Shots a reaction spent during these passes (Stasis) leave the list only once no pass is walking it.
+    projectiles.removeMatchingStable { projectile -> projectile.spent }
+}
+
+private fun MutableGameState.resolveCollisionPasses(delta: Float) {
     resolveEnemyCoreCollisions()
     if (phase != GamePhase.RUNNING) return
     resolveWeaponDamage(delta)
@@ -120,7 +126,7 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
             screenShake = min(15f, 3f + softVelocity(impactSpeed) * 0.018f)
             val keepsMomentum = tagTier(BuildTag.RAM) >= 3 && speed >= 1_200f
             if (!keepsMomentum) {
-                val recoil = min(220f, softVelocity(impactSpeed) * 0.28f) / max(1f, effectiveMass() / mass)
+                val recoil = min(220f, softVelocity(impactSpeed) * 0.28f) / max(1f, effectiveMass() / mass) * impactRecoilScale()
                 velocityX += dx / distance * recoil
                 velocityY += dy / distance * recoil
             }
@@ -252,6 +258,10 @@ internal fun MutableGameState.resolveProjectileHits() {
             }
             break
         }
+        if (projectile.spent) {
+            hostileIndex++
+            continue
+        }
         if (projectile.kind == ProjectileKind.MINE) {
             if (resolveMine(projectile)) projectiles.removeAt(hostileIndex) else hostileIndex++
             continue
@@ -308,7 +318,7 @@ internal fun MutableGameState.resolveProjectileHits() {
     while (friendlyRemaining > 0) {
         val projectile = projectiles[friendlyIndex]
         friendlyRemaining--
-        if (projectile.hostile) {
+        if (projectile.hostile || projectile.spent) {
             friendlyIndex++
             continue
         }

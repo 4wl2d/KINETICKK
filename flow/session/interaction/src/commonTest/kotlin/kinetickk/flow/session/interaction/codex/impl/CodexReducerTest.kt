@@ -3,6 +3,7 @@
 
 package kinetickk.flow.session.interaction.codex.impl
 
+import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.*
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.profile.api.*
@@ -169,9 +170,10 @@ class CodexReducerTest {
         assertEquals(CodexEmptyState.NO_PAIRINGS, codexEmptyState(CodexTab.PAIRINGS, false, "", 0))
     }
 
-    @Test fun reactionMatrixHoldsTheFiveBreaksOnItsDiagonalAndEveryReactionOnce() {
+    @Test fun reactionMatrixHoldsTheSevenBreaksOnItsDiagonalAndEveryReactionOnce() {
         val cells = CodexMatrix.flatten()
-        assertEquals(15, cells.size)
+        assertEquals(28, cells.size)
+        assertEquals(StatusElement.entries.size, CodexMatrix.size, "a 7 x 7 lower triangle")
         assertEquals(StatusElement.entries, cells.filter { it.isBreak }.map { it.row })
         assertEquals(ReactionId.entries.toSet(), cells.mapNotNull { it.reaction }.toSet())
         assertEquals(ReactionId.entries.size, cells.mapNotNull { it.reaction }.size)
@@ -182,10 +184,30 @@ class CodexReducerTest {
         assertEquals(cells.map { it.key }, entries.map { it.key })
     }
 
+    @Test fun reactionMatrixFitsOneColumnPerElementAcrossPhoneAndDesktopWidths() {
+        assertEquals(StatusElement.entries.size, CODEX_MATRIX_COLUMNS)
+        val narrowest = codexMatrixWidth(CODEX_MATRIX_MIN_CELL).value
+        for (width in listOf(320, 360, 412, 600, 900, 1280)) {
+            for (height in listOf(480, 720, 1080)) {
+                val cell = codexMatrixCell(width.dp, height.dp)
+                assertTrue(cell.value >= 44f, "every cell stays tappable at $width dp (cell ${cell.value} dp)")
+                if (width >= narrowest) {
+                    assertTrue(codexMatrixWidth(cell).value <= width + 0.01f, "the matrix fits $width dp (cell ${cell.value} dp)")
+                } else {
+                    assertEquals(44f, cell.value, "below $narrowest dp the minimum cells scroll sideways")
+                }
+            }
+        }
+        // A wide, tall window still caps the cells.
+        assertEquals(132f, codexMatrixCell(4_000.dp, 4_000.dp).value)
+    }
+
     @Test fun aResidueFeedsEveryReactionThatTakesItsElement() {
-        assertEquals(setOf(ReactionId.THERMAL_SHOCK, ReactionId.PLASMA_BURST, ReactionId.FUSION, ReactionId.WILDFIRE),
-            codexResidueFeeds(StatusElement.THERMAL))
-        StatusElement.entries.forEach { element -> assertEquals(4, codexResidueFeeds(element).size, "$element") }
+        assertEquals(setOf(ReactionId.THERMAL_SHOCK, ReactionId.PLASMA_BURST, ReactionId.FUSION, ReactionId.WILDFIRE,
+            ReactionId.THUNDERCLAP, ReactionId.BLACKFIRE), codexResidueFeeds(StatusElement.THERMAL))
+        assertEquals(setOf(ReactionId.THUNDERCLAP, ReactionId.SHATTERPOINT, ReactionId.RESONANT_ARC, ReactionId.SEISMIC,
+            ReactionId.FRACTURE, ReactionId.SILENCE), codexResidueFeeds(StatusElement.SONIC))
+        StatusElement.entries.forEach { element -> assertEquals(6, codexResidueFeeds(element).size, "$element") }
     }
 
     @Test fun opposedKeysFormChainsAndNoKeyRepeats() {

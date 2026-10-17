@@ -87,8 +87,8 @@ internal const val SPLITTER_FRAGMENT_RADIUS: Float = 12f
 internal const val POINT_DEFENDER_HEALTH_SHARE: Float = 0.4f
 
 /**
- * The one counter rule: Thermal and Cryo counter each other; Ion, Entropy and Gravitic form a cycle.
- * Takes and returns element ordinals, -1 for none.
+ * The one counter rule: Thermal and Cryo counter each other, Sonic and Void counter each other; Ion,
+ * Entropy and Gravitic form a cycle. Takes and returns element ordinals, -1 for none.
  */
 internal fun counterElement(element: Int): Int = when (element) {
     StatusElement.THERMAL.ordinal -> StatusElement.CRYO.ordinal
@@ -96,6 +96,8 @@ internal fun counterElement(element: Int): Int = when (element) {
     StatusElement.ION.ordinal -> StatusElement.ENTROPY.ordinal
     StatusElement.ENTROPY.ordinal -> StatusElement.GRAVITIC.ordinal
     StatusElement.GRAVITIC.ordinal -> StatusElement.ION.ordinal
+    StatusElement.SONIC.ordinal -> StatusElement.VOID.ordinal
+    StatusElement.VOID.ordinal -> StatusElement.SONIC.ordinal
     else -> -1
 }
 

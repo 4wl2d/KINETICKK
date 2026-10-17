@@ -274,6 +274,18 @@ enum class KkIcon(val key: String, val label: String, vararg layerData: KkIconLa
         "Entropy",
         KkIconLayer("M12 4a8 8 0 0 1 8 8M18 17.5a8 8 0 0 1 -9.5 2.5M4.6 15a8 8 0 0 1 2.4 -9.5", KkIconStyle.STROKE),
     ),
+    ASPECT_SONIC(
+        "aspect.sonic",
+        "Sonic",
+        KkIconLayer("M7.5 8.5a5 5 0 0 0 0 7M16.5 8.5a5 5 0 0 1 0 7M4.5 5.5a9 9 0 0 0 0 13M19.5 5.5a9 9 0 0 1 0 13", KkIconStyle.STROKE),
+        KkIconLayer("M10.5 12a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0Z", KkIconStyle.FILL),
+    ),
+    ASPECT_VOID(
+        "aspect.void",
+        "Void",
+        KkIconLayer("M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0Z", KkIconStyle.STROKE_DASHED),
+        KkIconLayer("M9 11a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0Z", KkIconStyle.STROKE),
+    ),
     ASPECT_SOVEREIGN(
         "aspect.sovereign",
         "Sovereign",
@@ -346,11 +358,14 @@ enum class KkIcon(val key: String, val label: String, vararg layerData: KkIconLa
         /** Weapon icons in `icons.json` order. */
         val Weapons: List<KkIcon> = entries.filter { it.key.startsWith("weapons.") }
 
-        /** Aspect icons in relic-aspect order: kinetic, thermal, cryo, ion, gravitic, entropy, sovereign. */
+        /**
+         * Aspect icons in relic-aspect order: kinetic, thermal, cryo, ion, gravitic, entropy, sonic, void,
+         * sovereign.
+         */
         val Aspects: List<KkIcon> = entries.filter { it.key.startsWith("aspect.") }
 
-        /** The five status element glyphs (thermal, cryo, ion, gravitic, entropy). */
-        val Elements: List<KkIcon> = Aspects.subList(1, 6)
+        /** The seven status element glyphs (thermal, cryo, ion, gravitic, entropy, sonic, void). */
+        val Elements: List<KkIcon> = Aspects.subList(1, Aspects.size - 1)
 
         /** Archetype tag glyphs in tag order: ram, drive, anchor, arsenal, precision, bulwark, overclock, chain, fortune. */
         val Tags: List<KkIcon> = entries.filter { it.key.startsWith("tag.") }

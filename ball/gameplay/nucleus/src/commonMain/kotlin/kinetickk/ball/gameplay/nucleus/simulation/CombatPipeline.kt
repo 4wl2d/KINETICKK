@@ -250,6 +250,8 @@ internal fun MutableGameState.vulnerability(enemy: Enemy, source: HitSource): Fl
     var vulnerable = stacks(enemy, StatusElement.ENTROPY) * content.build.element(StatusElement.ENTROPY).perStack *
         build.potency(StatusElement.ENTROPY)
     if (source == HitSource.IMPACT || source == HitSource.DASH) {
+        val resonance = stacks(enemy, StatusElement.SONIC)
+        if (resonance > 0) vulnerable += resonance * RESONANCE_IMPACT_PER_STACK * build.potency(StatusElement.SONIC)
         val gravitic = stacks(enemy, StatusElement.GRAVITIC)
         vulnerable += gravitic * content.build.element(StatusElement.GRAVITIC).perStack * build.potency(StatusElement.GRAVITIC)
         if (gravitic > 0 && build.upside(RelicId.EVENT_HORIZON)) {
@@ -491,6 +493,7 @@ internal fun MutableGameState.damageEnemy(
     }
     if (applied <= 0f) return DamageResult(0f, false)
     damageDealt += minOf(applied, enemy.hp).toDouble()
+    rememberHollowDamage(enemy, applied)
     enemy.hp -= applied
     if (enemy.isBoss) {
         enemy.lastDamagedAt = elapsed
@@ -686,7 +689,7 @@ internal fun MutableGameState.fireRelicProjectile(x: Float, y: Float, target: En
 internal fun MutableGameState.pushEnemies(x: Float, y: Float, radius: Float, strength: Float, inward: Boolean) {
     for (index in enemies.indices) {
         val target = enemies[index]
-        val knockback = target.knockback
+        val knockback = knockbackTaken(target)
         if (!target.alive || knockback <= 0f) continue
         val dx = target.x - x
         val dy = target.y - y

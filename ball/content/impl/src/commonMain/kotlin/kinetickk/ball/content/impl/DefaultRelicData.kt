@@ -198,6 +198,20 @@ internal fun defaultRelics(): ImmutableList<RelicDefinition> = listOf(
         RelicValue(120f, 60f),
         minimumRebirth = 5,
     ),
+    relic(
+        RelicId.THUNDER_CHOIR, "Thunder Choir", RelicAspect.SONIC,
+        listOf(RelicKey.ECHO, RelicKey.SHIELD), listOf(BuildTag.RAM, BuildTag.ANCHOR),
+        "Shatter also chains to the {0} nearest Resonant enemies within 260 for {1} % of its damage; your knockback +20 %.",
+        "You take +15 % knockback from hits.",
+        RelicValue(2f, 1f), RelicValue(60f, 20f),
+    ),
+    relic(
+        RelicId.NULL_COVENANT, "Null Covenant", RelicAspect.VOID,
+        listOf(RelicKey.VOID, RelicKey.SHIELD), listOf(BuildTag.PRECISION, BuildTag.CHAIN),
+        "Unmake fires immediately and remembers {0} % more; Hollow stacks never decay on Elites.",
+        "Maximum integrity −10 %.",
+        RelicValue(40f, 20f),
+    ),
 ).toImmutableList().also(::validateRelics)
 
 private fun validateRelics(relics: List<RelicDefinition>) {

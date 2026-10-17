@@ -76,6 +76,7 @@ internal fun MutableGameState.startRun() {
     freeDashReadyAt = 0f
     comboKillCounter = 0
     glassCharge = 0f
+    integrityLiabilityCut = 0f
     cinderRecoilReadyAt = 0f
     offerPity = 0
     dashHitThisDash = false

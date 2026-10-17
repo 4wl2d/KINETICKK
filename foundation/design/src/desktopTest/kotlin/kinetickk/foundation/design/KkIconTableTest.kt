@@ -94,10 +94,11 @@ class KkIconTableTest {
     @Test
     fun aspectElementAndTagGroupsFollowTheirColorTokensAndIconsJsonOrder() {
         assertEquals(listOf(KkIcon.ASPECT_KINETIC, KkIcon.ASPECT_THERMAL, KkIcon.ASPECT_CRYO, KkIcon.ASPECT_ION,
-            KkIcon.ASPECT_GRAVITIC, KkIcon.ASPECT_ENTROPY, KkIcon.ASPECT_SOVEREIGN), KkIcon.Aspects)
+            KkIcon.ASPECT_GRAVITIC, KkIcon.ASPECT_ENTROPY, KkIcon.ASPECT_SONIC, KkIcon.ASPECT_VOID, KkIcon.ASPECT_SOVEREIGN),
+            KkIcon.Aspects)
         assertEquals(Kk.Aspects.size, KkIcon.Aspects.size, "one glyph per aspect color")
         assertEquals(listOf(KkIcon.ASPECT_THERMAL, KkIcon.ASPECT_CRYO, KkIcon.ASPECT_ION, KkIcon.ASPECT_GRAVITIC,
-            KkIcon.ASPECT_ENTROPY), KkIcon.Elements)
+            KkIcon.ASPECT_ENTROPY, KkIcon.ASPECT_SONIC, KkIcon.ASPECT_VOID), KkIcon.Elements)
         assertEquals(Kk.Elements.size, KkIcon.Elements.size, "one glyph per element color")
         assertEquals(listOf(KkIcon.TAG_RAM, KkIcon.TAG_DRIVE, KkIcon.TAG_ANCHOR, KkIcon.TAG_ARSENAL, KkIcon.TAG_PRECISION,
             KkIcon.TAG_BULWARK, KkIcon.TAG_OVERCLOCK, KkIcon.TAG_CHAIN, KkIcon.TAG_FORTUNE), KkIcon.Tags)

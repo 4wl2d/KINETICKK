@@ -131,39 +131,57 @@ internal data class Enemy private constructor(
 }
 
 /**
- * Layout of [Enemy.status]. Per-element blocks hold five entries in [kinetickk.ball.content.api.StatusElement]
- * order. Timestamps are absolute run seconds, so cells are written on events rather than every step.
+ * Layout of [Enemy.status]. Per-element blocks hold [ELEMENTS] entries in
+ * [kinetickk.ball.content.api.StatusElement] order and the pair block holds [PAIRS] entries in
+ * [kinetickk.ball.content.api.ReactionId] order, so the layout follows the element count. Timestamps
+ * are absolute run seconds, so cells are written on events rather than every step.
  */
 internal object StatusCell {
+    /** Status elements; equals `StatusElement.entries.size` (asserted by the status packing tests). */
+    const val ELEMENTS = 7
+
+    /** Unordered element pairs, one reaction each; equals `ReactionId.entries.size`. */
+    const val PAIRS = ELEMENTS * (ELEMENTS - 1) / 2
+
     const val STACKS = 0
-    const val DECAY_AT = 5
-    const val GENERATION = 10
-    const val REARM_AT = 15
-    const val FROZEN_UNTIL = 20
-    const val FREEZE_IMMUNE_UNTIL = 21
-    const val EMBRITTLED_UNTIL = 22
-    const val BRITTLE = 23
-    const val REACTION_READY_AT = 24
-    const val LAST_REACTION = 25
-    const val LAST_REACTION_AT = 26
-    const val ARC_READY_AT = 27
-    const val CINDER_BANK = 28
-    const val MAX_HP_PROC_READY_AT = 29
-    const val DETONATE_READY_AT = 30
-    const val MARKED_UNTIL = 31
+    const val DECAY_AT = STACKS + ELEMENTS
+    const val GENERATION = DECAY_AT + ELEMENTS
+    const val REARM_AT = GENERATION + ELEMENTS
+    const val FROZEN_UNTIL = REARM_AT + ELEMENTS
+    const val FREEZE_IMMUNE_UNTIL = FROZEN_UNTIL + 1
+    const val EMBRITTLED_UNTIL = FREEZE_IMMUNE_UNTIL + 1
+    const val BRITTLE = EMBRITTLED_UNTIL + 1
+    const val REACTION_READY_AT = BRITTLE + 1
+    const val LAST_REACTION = REACTION_READY_AT + 1
+    const val LAST_REACTION_AT = LAST_REACTION + 1
+    const val ARC_READY_AT = LAST_REACTION_AT + 1
+    const val CINDER_BANK = ARC_READY_AT + 1
+    const val MAX_HP_PROC_READY_AT = CINDER_BANK + 1
+    const val DETONATE_READY_AT = MAX_HP_PROC_READY_AT + 1
+    const val MARKED_UNTIL = DETONATE_READY_AT + 1
     /** 1 + [kinetickk.ball.gameplay.nucleus.simulation.HitSource] ordinal of the last direct hit. */
-    const val LAST_SOURCE = 32
-    /** Ten entries in [kinetickk.ball.content.api.ReactionId] order: when each pair may react again. */
-    const val REACTION_PAIR_READY_AT = 33
+    const val LAST_SOURCE = MARKED_UNTIL + 1
+    /** [PAIRS] entries in [kinetickk.ball.content.api.ReactionId] order: when each pair may react again. */
+    const val REACTION_PAIR_READY_AT = LAST_SOURCE + 1
     /** Half-stack remainder of Cryo landing at half strength during Freeze immunity. */
-    const val CRYO_IMMUNE_CARRY = 43
+    const val CRYO_IMMUNE_CARRY = REACTION_PAIR_READY_AT + PAIRS
     /** Fractional remainder of stacks landing on a resisted aspect element. */
-    const val RESIST_CARRY = 44
+    const val RESIST_CARRY = CRYO_IMMUNE_CARRY + 1
     /** Fractional remainder of stacks landing on the weakness element. */
-    const val WEAK_CARRY = 45
+    const val WEAK_CARRY = RESIST_CARRY + 1
     /** When the next immunity refusal may show its cue. */
-    const val IMMUNE_FX_READY_AT = 46
-    const val COUNT = 47
+    const val IMMUNE_FX_READY_AT = WEAK_CARRY + 1
+    /** Damage the enemy remembered while Hollow (Void); an Unmake releases it. */
+    const val HOLLOW_MEMORY = IMMUNE_FX_READY_AT + 1
+    /** When a pending Unmake strikes (0 when none is pending). */
+    const val UNMAKE_AT = HOLLOW_MEMORY + 1
+    /** Damage of the pending Unmake. */
+    const val UNMAKE_DAMAGE = UNMAKE_AT + 1
+    /** When the Blackfire burn ends. */
+    const val BLACKFIRE_UNTIL = UNMAKE_DAMAGE + 1
+    /** Blackfire damage per second while it burns. */
+    const val BLACKFIRE_DPS = BLACKFIRE_UNTIL + 1
+    const val COUNT = BLACKFIRE_DPS + 1
 }
 
 internal class Projectile(
@@ -198,6 +216,9 @@ internal class Projectile(
             "projectile hit history count exceeds its storage"
         }
     }
+
+    /** A spent shot (its life is over, or a reaction spent it) neither hits nor is caught; it awaits removal. */
+    val spent: Boolean get() = life <= 0f
 
     fun tryRecordEnemyHit(enemyId: Int): Boolean {
         val match = findRecordedEnemyHit(enemyId)
