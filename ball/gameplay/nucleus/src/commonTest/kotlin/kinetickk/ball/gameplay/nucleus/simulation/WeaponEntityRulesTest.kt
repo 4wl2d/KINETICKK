@@ -8,6 +8,7 @@ import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.Enemy
 import kinetickk.ball.gameplay.nucleus.model.WeaponEntity
 import kinetickk.ball.gameplay.nucleus.model.WeaponNode
+import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
@@ -131,6 +132,43 @@ class WeaponEntityRulesTest {
         assertTrue(state.weaponRuntime.tetherRamp >= 1f, "ramp ${state.weaponRuntime.tetherRamp}")
         val dealt = 1_000f - target.hp
         assertTrue(dealt >= TETHER_DPS * STEP * state.effectiveWeaponPower() * 0.999f, "first tick $dealt")
+    }
+
+    @Test
+    fun weaponVisualsAnchoredAtTheCoreJumpWithItsBlink() {
+        for (weapon in listOf(WeaponId.MORNINGSTAR, WeaponId.RIFT_BLADES, WeaponId.AEGIS_SHARDS, WeaponId.SOLAR_SWEEP, WeaponId.TETHER_ARC)) {
+            val state = buildTestState(weapon = weapon, shape = CoreShape.CRESCENT)
+            // A target beside the Blink path stays in tether range on both sides of the jump.
+            if (weapon == WeaponId.TETHER_ARC) state.spawn(EnemyType.DRIFTER, BLINK_RANGE * 0.5f, 120f)
+            state.stepTethers(seconds = STEP * 10f)
+            state.pointerX = state.screenWidth
+            state.pointerY = state.screenHeight * 0.5f
+            val startX = state.coreX
+            state.elapsed += STEP
+            state.ageCharacterStepFlags()
+            state.performDash()
+            assertTrue(state.blinkThisStep)
+            assertEquals(startX + BLINK_RANGE, state.coreX, 0.01f)
+            state.updateWeapons(STEP)
+            state.resolveWeaponEntityHits(STEP)
+
+            // Each visual's travel over the Blink step: one step of orbit or sweep, far below the Blink's range.
+            val travels = buildList<Float> {
+                if (weapon == WeaponId.MORNINGSTAR) {
+                    add(length(state.morningstarX - state.previousMorningstarX, state.morningstarY - state.previousMorningstarY))
+                }
+                state.weaponOrbitals.forEach { add(length(it.x - it.previousX, it.y - it.previousY)) }
+                state.weaponRuntime.entities.forEach { entity ->
+                    when (entity.kind) {
+                        WeaponEntityKind.BEAM -> add(length(entity.x - entity.previousX, entity.y - entity.previousY))
+                        WeaponEntityKind.TETHER -> add(length(entity.endX - entity.previousEndX, entity.endY - entity.previousEndY))
+                        else -> Unit
+                    }
+                }
+            }
+            assertTrue(travels.isNotEmpty(), "$weapon draws a Core-anchored visual")
+            assertTrue(travels.all { it < BLINK_RANGE * 0.1f }, "$weapon travels $travels over a Blink of $BLINK_RANGE")
+        }
     }
 
     @Test

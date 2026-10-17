@@ -32,6 +32,7 @@ internal fun MutableGameState.updateWeapons(delta: Float) {
     val runtime = weaponRuntime
     val dashed = trackWeaponInputs(delta)
     for (index in runtime.entities.indices) runtime.entities[index].capturePrevious()
+    if (blinkThisStep) shiftCoreAnchoredEntities(blinkShiftX(), blinkShiftY())
     val power = effectiveWeaponPower()
     val agonyRank = agonyPower()
     when (weapon) {
@@ -208,6 +209,33 @@ internal fun MutableGameState.sampleFluxTrail() {
     if (agonyRank > 0) agonyMutationCounts[WeaponId.FLUX_WAKE.ordinal]++
 }
 
+/**
+ * How far a Blink moved the Core this step, or 0. Visuals anchored at the Core (the Morningstar, orbitals, solar
+ * beams, the tether's Core end) shift their previous points by it, so they jump with the Core instead of sliding
+ * across the gap between the two draws.
+ */
+private fun MutableGameState.blinkShiftX(): Float = if (blinkThisStep) blinkToX - blinkFromX else 0f
+private fun MutableGameState.blinkShiftY(): Float = if (blinkThisStep) blinkToY - blinkFromY else 0f
+
+/** Moves the previous Core-side points of beams and tethers by a Blink's ([dx], [dy]). */
+private fun MutableGameState.shiftCoreAnchoredEntities(dx: Float, dy: Float) {
+    val entities = weaponRuntime.entities
+    for (index in entities.indices) {
+        val entity = entities[index]
+        when (entity.kind) {
+            WeaponEntityKind.BEAM -> {
+                entity.previousX += dx
+                entity.previousY += dy
+            }
+            WeaponEntityKind.TETHER -> {
+                entity.previousEndX += dx
+                entity.previousEndY += dy
+            }
+            else -> Unit
+        }
+    }
+}
+
 /** Prism signature: damage and size per intact facet. */
 internal fun MutableGameState.morningstarScale(): Float = if (signatureActive()) 1f + 0.1f * intactFacets else 1f
 
@@ -218,8 +246,8 @@ private fun MutableGameState.updateMorningstar(delta: Float, agonyRank: Int) {
     val angularSpeed = (3.2f + softVelocity(speed) / 135f + agonyRank * 0.12f) * continuousWeaponRate()
     morningstarAngle = (morningstarAngle + angularSpeed * delta) % TAU
     val radius = morningstarOrbitRadius()
-    previousMorningstarX = morningstarX
-    previousMorningstarY = morningstarY
+    previousMorningstarX = morningstarX + blinkShiftX()
+    previousMorningstarY = morningstarY + blinkShiftY()
     morningstarX = coreX + cos(morningstarAngle) * radius
     morningstarY = coreY + sin(morningstarAngle) * radius
     if (agonyRank > 0) agonyMutationCounts[WeaponId.MORNINGSTAR.ordinal]++
@@ -354,8 +382,8 @@ internal fun MutableGameState.ensureOrbitals(
     for (index in weaponOrbitals.indices) {
         val orbital = weaponOrbitals[index]
         val angle = runtime.orbitalPhase + orbital.index * TAU / max(1, count)
-        orbital.previousX = orbital.x
-        orbital.previousY = orbital.y
+        orbital.previousX = orbital.x + blinkShiftX()
+        orbital.previousY = orbital.y + blinkShiftY()
         orbital.x = coreX + cos(angle) * orbitRadius
         orbital.y = coreY + sin(angle) * orbitRadius
         // A freshly formed orbital appears on its orbit instead of sweeping out from the Core.
