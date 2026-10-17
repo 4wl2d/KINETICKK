@@ -67,9 +67,9 @@ class PauseTextFitTest {
             listOf(PauseTextKind.MULTIPLIER, PauseTextKind.COST, PauseTextKind.TAG_NAME, PauseTextKind.REACTION).forEach { kind ->
                 assertTrue(records.any { it.kind == kind }, "$scene draws $kind")
             }
-            // The weapon's synergies show on the desktop board at every size and on phones in portrait up to the
-            // default size (a section that no longer fits a phone at a larger size is left out, never cut).
-            if (layout.mode == GameplayLayoutMode.REGULAR || (layout.mode == GameplayLayoutMode.COMPACT_PORTRAIT && textScale <= 1.25f)) {
+            // The weapon's synergies show on the desktop board at every size and on phones up to the default size
+            // (a section that no longer fits a phone at a larger size is left out, never cut).
+            if (layout.mode == GameplayLayoutMode.REGULAR || textScale <= 1.25f) {
                 assertTrue(records.any { it.kind == PauseTextKind.SYNERGY }, "$scene draws the weapon synergies")
             }
             records.forEach { record ->
@@ -228,7 +228,7 @@ class PauseTextFitTest {
 /** Every synergy chip at once: resonance, signature, a harmonizing Relic, an element, scaling and two forms. */
 private val FullSynergy = WeaponSynergyProjection(
     tagPoints = 6, tagBonus = 0.3f, signatureActive = true, harmonizingRelic = RelicId.PERPETUAL_VECTOR,
-    infusionElement = StatusElement.THERMAL, scalingMultiplier = 1.42f, masteryForms = 2, activeMasteryForm = "trail 2.4 s",
+    infusionElement = StatusElement.THERMAL, scalingMultiplier = 1.42f, masteryForms = 2, activeMasteryForm = "The trail lasts 4 s",
 )
 
 /** No line of [layout] is ellipsized and no line ends inside a word. */

@@ -44,6 +44,7 @@ import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.SeveredRelicProjection
+import kinetickk.ball.gameplay.nucleus.render.WeaponSynergyProjection
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
@@ -246,7 +247,10 @@ class RedesignShotsBuildTest {
                 rebornItemIds = immutableListOf(3),
                 reachableReactions = immutableListOf(ReactionId.THERMAL_SHOCK, ReactionId.WILDFIRE, ReactionId.EMBRITTLE, ReactionId.FUSION),
             ),
-        ).with("discoveredReactionMask" to ((1 shl ReactionId.WILDFIRE.ordinal) or (1 shl ReactionId.THERMAL_SHOCK.ordinal)), "maxShield" to 60f)
+        ).with("discoveredReactionMask" to ((1 shl ReactionId.WILDFIRE.ordinal) or (1 shl ReactionId.THERMAL_SHOCK.ordinal)), "maxShield" to 60f,
+            "weaponSynergy" to WeaponSynergyProjection(tagPoints = 6, tagBonus = 0.3f, signatureActive = true,
+                harmonizingRelic = RelicId.PERPETUAL_VECTOR, infusionElement = StatusElement.THERMAL, scalingMultiplier = 1.42f, masteryForms = 2,
+                activeMasteryForm = "The trail lasts 4 s"))
 
     private fun write(bitmap: ImageBitmap, file: File) {
         val pixels = bitmap.toPixelMap()

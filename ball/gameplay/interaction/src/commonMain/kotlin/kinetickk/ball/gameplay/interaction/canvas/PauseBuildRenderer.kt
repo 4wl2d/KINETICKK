@@ -543,8 +543,20 @@ private fun DrawScope.drawCompactBuild(
     if (!portrait) {
         val relicsBottom = drawPauseRelics(overview, ui, x(0f), top, 196f * unit, 30f * unit, 46f * unit, 9f * unit, k, names = false, time = time)
         val chipsTop = drawPauseLabel(overview.reactionsLabel, ui, 11f * k, x(206f), top, (width - 206f) * unit) + 4f * unit
-        drawPauseReactions(overview, ui, x(206f), chipsTop, (width - 206f) * unit, maxOf(relicsBottom, chipsTop + 50f * unit), 22f * unit, 11f * k, k)
-        top = maxOf(relicsBottom, chipsTop + 50f * unit) + gap
+        val besideBottom = maxOf(relicsBottom, chipsTop + 50f * unit)
+        // One row of synergy chips under the reactions, beside the relics, where the reactions leave room (they never give way).
+        val reactionsBottom = pauseReactionsBottom(overview, ui, x(206f), chipsTop, (width - 206f) * unit, besideBottom, 22f * unit, 11f * k, k)
+        val synergyChip = 18f * unit * grow
+        val synergyTop = reactionsBottom + gap
+        val synergyFits = synergyTop + pauseLabelHeight(overview.synergyLabel, ui, 11f * k, (width - 206f) * unit) + 4f * unit + synergyChip <=
+            besideBottom + 0.5f
+        drawPauseReactions(overview, ui, x(206f), chipsTop, (width - 206f) * unit, if (synergyFits) reactionsBottom else besideBottom, 22f * unit,
+            11f * k, k)
+        if (synergyFits) {
+            val synergyChipsTop = drawPauseLabel(overview.synergyLabel, ui, 11f * k, x(206f), synergyTop, (width - 206f) * unit) + 4f * unit
+            drawPauseSynergies(overview, ui, x(206f), synergyChipsTop, (width - 206f) * unit, synergyChipsTop + synergyChip, synergyChip, 10.5f * k, k)
+        }
+        top = besideBottom + gap
         val statRow = 22f * unit * grow
         val elementRow = 12f * unit * grow
         // The seven element meters sit in two columns, so they stand no taller than the three tag rows.
@@ -558,9 +570,21 @@ private fun DrawScope.drawCompactBuild(
         val statsTop = if (showStats) area.bottom - 2f * statRow else area.bottom + gap
         top = drawPauseCosts(overview, ui, x(0f), top, width * unit, statsTop - gap - resonanceHeight - gap, 9.5f * k, k, maxEntries = bound) + gap
         val rowsTop = drawPauseLabel(overview.resonanceLabel, ui, 11f * k, x(0f), top, 236f * unit) + 4f * unit
-        drawPauseTags(overview, ui, x(0f), rowsTop, 236f * unit, tagRow, 2, 10.5f * k, k, maxRows = 3)
+        val tagsBottom = drawPauseTags(overview, ui, x(0f), rowsTop, 236f * unit, tagRow, 2, 10.5f * k, k, maxRows = 3)
         val meterTop = drawPauseLabel(overview.elementsLabel, ui, 11f * k, x(248f), top, (width - 248f) * unit) + 4f * unit
         drawPauseElementRows(overview, ui.roles, x(248f), meterTop, (width - 248f) * unit, elementRow, k, columns = COMPACT_ELEMENT_COLUMNS)
+        // Without room beside the relics, the synergy chips take one row of the space the costs leave above the
+        // stats, if any: the section label, then the chips that fit after it.
+        val resonanceBottom = maxOf(tagsBottom, meterTop + elementRows * elementRow)
+        val synergyLimit = if (showStats) statsTop - gap else area.bottom
+        val lowerTop = resonanceBottom + gap
+        if (!synergyFits && lowerTop + synergyChip <= synergyLimit + 0.5f) {
+            val labelBox = width * unit * 0.4f
+            val label = fitOverlayText(ui, overview.synergyLabel, KkTextRole.LABEL, 11f * k, labelBox, uppercase = true)
+            drawPauseText(PauseTextKind.LABEL, label, x(0f), lowerTop + synergyChip * 0.5f, Kk.Mute, labelBox, valign = KkVAlign.CENTER)
+            val chipsLeft = x(0f) + label.size.width + 10f * unit
+            drawPauseSynergies(overview, ui, chipsLeft, lowerTop, x(width) - chipsLeft, lowerTop + synergyChip, synergyChip, 10.5f * k, k)
+        }
         if (showStats) {
             drawStatRows(overview.stats, ui, display, area, unit, 0f, (statsTop - area.top) / unit, statRow / unit, 2, (width - 20f) / 2f, 8f,
                 15f * k, 12f * k)
