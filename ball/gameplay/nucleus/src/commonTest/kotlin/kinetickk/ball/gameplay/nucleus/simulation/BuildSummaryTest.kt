@@ -13,21 +13,21 @@ import kotlin.test.*
 
 class BuildSummaryTest {
     @Test
-    fun armoryPowerDependsOnRankAndNeverUnlockedWeaponCount() {
+    fun matrixWeaponPowerDependsOnRankAndNeverUnlockedWeaponCount() {
         fun power(allWeapons: Boolean): Float = MutableGameState(canonicalGameplayContent, seed = 11).apply {
-            metaRanks[MetaUpgradeId.ARMORY_LICENSE.ordinal] = 5
+            matrixRanks[MatrixNodeId.WEAPON_CALIBRATION.ordinal] = 3
             if (allWeapons) unlockedWeaponSet.addAll(WeaponId.entries)
             startRun()
         }.weaponPower
-        assertEquals(1.2f, power(false))
+        assertEquals(1.36f, power(false), 0.0001f)
         assertEquals(power(false), power(true))
     }
 
     @Test
     fun coherentBuildReadIsDetachedAndSourceContributionsSumToEffectiveStats() {
         val game = MutableGameState(canonicalGameplayContent, seed = 13).apply {
-            metaRanks[MetaUpgradeId.ARMORY_LICENSE.ordinal] = 4
-            metaRanks[MetaUpgradeId.DASH_CAPACITOR.ordinal] = 2
+            // Every node at its maximum: each stat row then splits into character, Matrix, items and relics.
+            for (index in 0 until matrixRanks.size) matrixRanks[index] = content.matrixNodes[index].maxRanks
             startRun()
             acquireItem(0)
             acquireItem(1)

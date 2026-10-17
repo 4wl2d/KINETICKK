@@ -39,7 +39,7 @@ internal object EnglishProfileText {
         ProfileText.Compact -> "Compact"
         ProfileText.Full -> "Full"
         ProfileText.ArmoryTitle -> "Armory"
-        ProfileText.LabTitle -> "Upgrades"
+        ProfileText.MatrixTitle -> "Matrix"
         ProfileText.MaximumSynchrony -> "Max"
         ProfileText.RebirthTitle -> "Rebirth"
         ProfileText.HostileEscalation -> "Hostile escalation"

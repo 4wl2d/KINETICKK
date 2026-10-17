@@ -92,14 +92,16 @@ internal class MutableGameState(
         })
     internal var unlockedWeaponView: Set<WeaponId> = reductionSource?.unlockedWeaponView
         ?: unlockedWeaponSet.toSet()
-    internal val metaRanks: CopyOnWriteIntArray = reductionSource?.metaRanks?.let {
+    /** Owned Core Matrix ranks by content node index, captured from the profile at bootstrap. */
+    internal val matrixRanks: CopyOnWriteIntArray = reductionSource?.matrixRanks?.let {
         if (shareStableReductionStorage) it else it.fork()
     }
-        ?: CopyOnWriteIntArray(IntArray(content.metaUpgrades.size) { index ->
-            val definition = content.metaUpgrades[index]
-            bootstrapProgress?.labProgress?.ranks?.getOrNull(index)
-                ?.coerceIn(0, definition.maxRanks) ?: 0
+        ?: CopyOnWriteIntArray(IntArray(content.matrixNodes.size) { index ->
+            val definition = content.matrixNodes[index]
+            (bootstrapProgress?.matrix?.rank(definition.id) ?: 0).coerceIn(0, definition.maxRanks)
         })
+    /** Folded Matrix effects of [matrixRanks]; immutable, refolded when a run starts. */
+    internal var matrix: MatrixModifiers = reductionSource?.matrix ?: foldMatrix()
     internal val discoveredItemIds: CopyOnWriteMutableSet<Int> = reductionSource?.discoveredItemIds?.let {
         if (shareStableReductionStorage) it else it.fork()
     }
@@ -194,6 +196,11 @@ internal class MutableGameState(
     internal var glassCharge: Float = reductionSource?.glassCharge ?: 0f
     internal var cinderRecoilReadyAt: Float = reductionSource?.cinderRecoilReadyAt ?: 0f
     internal var offerPity: Int = reductionSource?.offerPity ?: 0
+    /** Item offers opened this run; the Matrix widens every n-th one. */
+    internal var itemOffersOpened: Int = reductionSource?.itemOffersOpened ?: 0
+    internal var secondWindSpent: Boolean = reductionSource?.secondWindSpent ?: false
+    /** When the next heat-free Matrix Dash is ready. */
+    internal var matrixFreeDashReadyAt: Float = reductionSource?.matrixFreeDashReadyAt ?: 0f
     internal var dashHitThisDash: Boolean = reductionSource?.dashHitThisDash ?: false
     internal var clauseDepth: Int = reductionSource?.clauseDepth ?: 0
     internal var arsenalCounter: Int = reductionSource?.arsenalCounter ?: 0
@@ -221,6 +228,17 @@ internal class MutableGameState(
     internal var pendingDashHits: Int = reductionSource?.pendingDashHits ?: 0
     internal var pendingCompletedOrbits: Int = reductionSource?.pendingCompletedOrbits ?: 0
     internal var pendingArchitectDefeatedWith: CoreShape? = reductionSource?.pendingArchitectDefeatedWith
+    /**
+     * Cumulative achievement counters awaiting publication. They ride along with any other progress
+     * update and are otherwise published once the run banks (exit, death, victory), so a kill or a
+     * pickup never forces a Profile write on its own.
+     */
+    internal var pendingTotalKills: Int = reductionSource?.pendingTotalKills ?: 0
+    /** Hard obstacle bounces awaiting publication; the obstacle system counts them. */
+    internal var pendingRicochets: Int = reductionSource?.pendingRicochets ?: 0
+    internal var pendingDataPickups: Int = reductionSource?.pendingDataPickups ?: 0
+    /** The run banked, so the next progress update also publishes the deferred counters. */
+    internal var achievementFlushDue: Boolean = reductionSource?.achievementFlushDue ?: false
     internal var pointsOfInterest: List<PointOfInterestState> = reductionSource?.pointsOfInterest ?: emptyList()
     internal var nextPointOfferIndex: Int = reductionSource?.nextPointOfferIndex ?: 0
     internal var pendingDirectedRewards: List<kinetickk.ball.content.api.DirectedReward> = reductionSource?.pendingDirectedRewards ?: emptyList()

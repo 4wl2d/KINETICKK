@@ -13,6 +13,7 @@ internal enum class SessionRedesignText(
     MATTER("Matter", "Материя"),
     FORM("Form", "Форма"),
     MAXED("Maxed", "На максимуме"),
+    RANKS("Ranks", "Ранги"),
     DIRECTIVE("Directive", "Директива"),
     STATUS("Status", "Статус"),
     READY("Ready", "Готово"),
@@ -21,16 +22,16 @@ internal enum class SessionRedesignText(
     TEXT_SIZE("Text size", "Размер текста"),
 
     LAB_INFO(
-        "Permanent upgrades bought with Matter. Every form shares them, and they stay after every rebirth.",
-        "Постоянные улучшения за материю. Они действуют на все формы и сохраняются после перерождения.",
+        "The Core Matrix: permanent upgrades bought with Matter in four branches. Every form shares them, they stay after every rebirth, and a reset refunds them for free.",
+        "Матрица Ядра: постоянные улучшения за материю в четырёх ветвях. Они действуют на все формы, сохраняются после перерождения, а сброс бесплатно возвращает материю.",
     ),
     ARMORY_INFO(
         "Unlock starting weapons with Matter. Every form can use every weapon.",
         "Открывайте стартовое оружие за материю. Любая форма может использовать любое оружие.",
     ),
     REBIRTH_INFO(
-        "Defeat the Architect to open a harder tier. Your run build resets. Matter, upgrades, unlocked weapons, discoveries and settings are kept.",
-        "Победите Архитектора, чтобы открыть более сложный уровень. Сборка забега сбрасывается. Материя, улучшения, открытое оружие, находки и настройки сохраняются.",
+        "Defeat the Architect to open a harder tier. Your run build resets. Matter, Matrix nodes, unlocked weapons, discoveries and settings are kept.",
+        "Победите Архитектора, чтобы открыть более сложный уровень. Сборка забега сбрасывается. Материя, узлы матрицы, открытое оружие, находки и настройки сохраняются.",
     ),
     CODEX_INFO(
         "Everything you have found in runs: items, weapons, relics, forms, reactions and relic pairings.",

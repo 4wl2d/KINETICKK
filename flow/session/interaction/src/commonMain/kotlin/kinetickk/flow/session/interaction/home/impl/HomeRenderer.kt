@@ -523,15 +523,15 @@ internal fun homeFacts(model: HomeUiModel, target: HomeLayoutTarget, language: A
     return when (target) {
         HomeLayoutTarget.LAB -> HomeFacts(
             label,
-            if (model.labMaxRanks > 0) "${model.labRanks}/${model.labMaxRanks}" else matter,
+            if (model.matrixNodeCount > 0) "${model.matrixOwnedNodes}/${model.matrixNodeCount}" else matter,
             buildList {
                 add(language.text(SessionRedesignText.MATTER) to matter)
-                if (model.labUpgradeCount > 0) {
-                    add(language.text(SessionRedesignText.MAXED) to "${model.labMaxedUpgrades}/${model.labUpgradeCount}")
+                if (model.matrixMaxRanks > 0) {
+                    add(language.text(SessionRedesignText.RANKS) to "${model.matrixRanks}/${model.matrixMaxRanks}")
                 }
             },
             language.text(SessionRedesignText.LAB_INFO),
-            if (model.labMaxRanks > 0) "${model.labRanks}/${model.labMaxRanks}" else null,
+            if (model.matrixNodeCount > 0) "${model.matrixOwnedNodes}/${model.matrixNodeCount}" else null,
             null,
         )
         HomeLayoutTarget.ARMORY -> HomeFacts(

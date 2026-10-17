@@ -3,7 +3,7 @@
 
 package kinetickk.ball.profile.nucleus
 
-import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.profile.api.CollectionProjection
 import kinetickk.ball.profile.api.CollectionEntry
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
@@ -11,9 +11,9 @@ import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.HomeProgressProjection
-import kinetickk.ball.profile.api.LabProgress
-import kinetickk.ball.profile.api.LabProfileSnapshot
-import kinetickk.ball.profile.api.LabProgressProjection
+import kinetickk.ball.profile.api.MatrixProfileSnapshot
+import kinetickk.ball.profile.api.MatrixProgress
+import kinetickk.ball.profile.api.MatrixProgressProjection
 import kinetickk.ball.profile.api.LoadoutProfileSnapshot
 import kinetickk.ball.profile.api.LoadoutProjection
 import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
@@ -47,6 +47,7 @@ import kinetickk.ball.profile.api.ProfileRebirthAdvanced
 import kinetickk.ball.profile.api.ProfileProgressApplied
 import kinetickk.ball.profile.api.RunBootstrapProjection
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
+import kinetickk.ball.profile.api.rank
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
@@ -113,11 +114,15 @@ object ProfileNucleus {
             unlockedCoreShapes = unlockedCoreShapes(state.profile, state.policy),
         )
 
-    fun query(state: ProfileState, query: ProfileQuery.GetLabProgress): LabProgressProjection =
-        LabProgressProjection(
+    fun query(state: ProfileState, query: ProfileQuery.GetMatrixProgress): MatrixProgressProjection =
+        MatrixProgressProjection(
             instanceId = state.instanceId,
             revision = state.revision,
-            snapshot = LabProfileSnapshot(state.profile.economy, state.profile.labProgress),
+            snapshot = MatrixProfileSnapshot(
+                economy = state.profile.economy,
+                progress = state.profile.matrix,
+                rebirthRank = state.profile.rebirthProgress.rank,
+            ),
         )
 
     fun query(state: ProfileState, query: ProfileQuery.GetLoadout): LoadoutProjection =
@@ -151,7 +156,8 @@ object ProfileNucleus {
         pulse: ProfilePulse.Business,
     ): ProfileDecision = when (pulse) {
         is ProfilePulse.AdjustPreference -> adjustPreference(state, pulse.adjustment)
-        is ProfilePulse.PurchaseMetaUpgrade -> purchaseMetaUpgrade(state, pulse.id)
+        is ProfilePulse.PurchaseMatrixNode -> purchaseMatrixNode(state, pulse.id)
+        ProfilePulse.ResetMatrix -> resetMatrix(state)
         is ProfilePulse.PurchaseOrEquipWeapon -> purchaseOrEquipWeapon(state, pulse.id)
         is ProfilePulse.MarkCollectionEntryViewed -> markCollectionEntryViewed(state, pulse.entry)
     }
@@ -255,23 +261,50 @@ object ProfileNucleus {
         )
     }
 
-    private fun purchaseMetaUpgrade(
+    /**
+     * Buys the next rank of [id]: it needs a rank below the maximum, the next price in Matter, any one
+     * prerequisite owned and a Rebirth rank at the node's gate. Gates apply only here, never on load.
+     */
+    private fun purchaseMatrixNode(
         state: ProfileState,
-        id: MetaUpgradeId,
+        id: MatrixNodeId,
     ): ProfileDecision {
-        val definition = state.policy.metaUpgrade(id)
-        val currentRank = state.profile.labProgress.rank(id)
-        if (currentRank >= definition.maxRanks) return rejected(ProfileRejection.MetaUpgradeMaxRank)
+        val definition = state.policy.matrixNode(id)
+        val matrix = state.profile.matrix
+        val currentRank = matrix.rank(id)
+        if (currentRank >= definition.maxRanks) return rejected(ProfileRejection.MatrixNodeMaxRank)
+        if (state.profile.rebirthProgress.rank < definition.minimumRebirth) {
+            return rejected(ProfileRejection.MatrixRebirthLocked)
+        }
+        if (definition.prerequisites.isNotEmpty() && definition.prerequisites.none(matrix::owns)) {
+            return rejected(ProfileRejection.MatrixPrerequisiteMissing)
+        }
         val cost = definition.cost(currentRank).toLong()
         if (state.profile.economy.matter < cost) return rejected(ProfileRejection.InsufficientMatter)
 
-        val ranks = state.profile.labProgress.ranks.toMutableList()
+        val ranks = matrix.ranks.toMutableList()
         ranks[id.ordinal] = currentRank + 1
         return acceptedMutation(
             state = state,
             nextProfile = state.profile.copy(
                 economy = state.profile.economy.copy(matter = state.profile.economy.matter - cost),
-                labProgress = LabProgress(ranks),
+                matrix = MatrixProgress(ranks),
+            ),
+        )
+    }
+
+    /** Refunds the full price of every owned rank and clears the Matrix (free respec). */
+    private fun resetMatrix(state: ProfileState): ProfileDecision {
+        val matrix = state.profile.matrix
+        if (matrix.ownedNodeCount == 0) return rejected(ProfileRejection.NoChange)
+        val refund = matrixSpent(matrix, state.policy)
+        val economy = state.profile.economy
+        val matter = saturatedAdd(economy.matter, refund)
+        return acceptedMutation(
+            state = state,
+            nextProfile = state.profile.copy(
+                economy = PlayerEconomy(matter = matter, lifetimeMatter = max(economy.lifetimeMatter, matter)),
+                matrix = MatrixProgress(),
             ),
         )
     }
@@ -369,6 +402,9 @@ object ProfileNucleus {
             completedOrbits = saturatedAdd(previousAchievements.completedOrbits, update.completedOrbits.toLong()),
             architectVictories = saturatedAdd(previousAchievements.architectVictories, if (update.architectDefeatedWith != null) 1L else 0L),
             victoriousCharacters = (previousAchievements.victoriousCharacters + listOfNotNull(update.architectDefeatedWith)).toImmutableSet(),
+            totalKills = saturatedAdd(previousAchievements.totalKills, update.totalKills.toLong()),
+            ricochets = saturatedAdd(previousAchievements.ricochets, update.ricochets.toLong()),
+            dataPickups = saturatedAdd(previousAchievements.dataPickups, update.dataPickups.toLong()),
         )
         val collection = state.profile.collection
         // A resolved Heirloom offer spends the remembered Relics before a victory in the same
@@ -452,7 +488,9 @@ object ProfileNucleus {
         state: ProfileState,
         update: kinetickk.ball.profile.api.GameplayProgressUpdate,
     ): ProfileGameplayProgressRejection? {
-        if (update.eliteKills < 0 || update.dashHits < 0 || update.completedOrbits < 0) {
+        if (update.eliteKills < 0 || update.dashHits < 0 || update.completedOrbits < 0 ||
+            update.totalKills < 0 || update.ricochets < 0 || update.dataPickups < 0
+        ) {
             return ProfileGameplayProgressRejection.NegativeAchievementProgress
         }
         update.architectDefeatedWith?.let { character ->
@@ -518,7 +556,7 @@ object ProfileNucleus {
         preferences = preferences,
         economy = economy,
         loadout = loadout,
-        labProgress = labProgress,
+        matrix = matrix,
         collection = collection,
         rebirthProgress = rebirthProgress,
     )
@@ -561,8 +599,12 @@ private fun <T> List<T>.firstDuplicateOrNull(): T? {
     return firstOrNull { !seen.add(it) }
 }
 
-private fun saturatedAdd(left: Long, right: Long): Long =
+internal fun saturatedAdd(left: Long, right: Long): Long =
     if (Long.MAX_VALUE - left < right) Long.MAX_VALUE else left + right
 
 private const val DEFAULT_SIMULATION_SPEED_INDEX: Int = 2
 private const val DEFAULT_DAMAGE_THRESHOLD_INDEX: Int = 2
+
+/** Matter paid for every owned Matrix rank under [policy] (saturating). */
+internal fun matrixSpent(matrix: MatrixProgress, policy: kinetickk.ball.content.api.ProfilePolicySnapshot): Long =
+    policy.matrixNodes.fold(0L) { total, definition -> saturatedAdd(total, definition.spent(matrix.rank(definition.id))) }

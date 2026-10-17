@@ -210,7 +210,7 @@ internal fun MutableGameState.updateHeat(delta: Float) {
 /** Furnace Covenant keeps Dash available through overheat; otherwise the usual heat rule applies. */
 internal fun MutableGameState.buildDashReady(): Boolean =
     if (build.upside(RelicId.FURNACE_COVENANT)) true
-    else !overheated && heat <= MutableGameState.MAX_HEAT - effectiveDashHeatCost() * 0.5f
+    else !overheated && (heat <= MutableGameState.MAX_HEAT - effectiveDashHeatCost() * 0.5f || matrixFreeDashReady())
 
 internal fun MutableGameState.performDash() {
     beginCharacterDash()
@@ -228,6 +228,7 @@ internal fun MutableGameState.performDash() {
         freeDashReadyAt = elapsed + build.freeDashCooldown
         cost = 0f
     }
+    if (cost > 0f && spendMatrixFreeDash()) cost = 0f
     if (!relicOnDash(directionX, directionY)) {
         val forwardVelocity = velocityX * directionX + velocityY * directionY
         if (forwardVelocity < 0f) {

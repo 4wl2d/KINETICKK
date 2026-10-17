@@ -3,8 +3,6 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.content.api.MetaUpgradeId
-
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.model.*
@@ -16,6 +14,7 @@ import kotlin.math.max
 
 internal fun MutableGameState.startRun() {
     phase = GamePhase.RUNNING
+    matrix = foldMatrix()
     characterRuntime = CharacterRuntime()
     enemies.clear()
     projectiles.clear()
@@ -78,6 +77,9 @@ internal fun MutableGameState.startRun() {
     glassCharge = 0f
     cinderRecoilReadyAt = 0f
     offerPity = 0
+    itemOffersOpened = 0
+    secondWindSpent = false
+    matrixFreeDashReadyAt = 0f
     dashHitThisDash = false
     clauseDepth = 0
     arsenalCounter = 0
@@ -154,10 +156,10 @@ internal fun MutableGameState.startRun() {
     messageTime = 2.2f
     recentItem = null
     acquiredItemCount = 0
-    rerollsRemaining = 1 + metaLevel(MetaUpgradeId.DATA_ARCHIVE) / 4 + rebirthProfile.bonusRerolls
-    overdriveCharge = 0f
+    rerollsRemaining = 1 + matrix.rerolls + rebirthProfile.bonusRerolls
+    overdriveCharge = matrix.startingOverdrive
     overdriveTime = 0f
-    weaponLevel = 1
+    weaponLevel = 1 + matrix.startingWeaponLevels
     resetRunStats()
     recompileBuild()
     weapon = startingWeapon
@@ -174,25 +176,24 @@ internal fun MutableGameState.startRun() {
     }
 }
 
+/** Character base stats, then the owned Core Matrix effects from content, then Rebirth. */
 internal fun MutableGameState.resetRunStats() {
     mass = 1f
-    damageMultiplier = 1f + metaLevel(MetaUpgradeId.KINETIC_AMPLIFIER) * 0.05f
-    weaponPower = 1f + metaLevel(MetaUpgradeId.ARMORY_LICENSE) * 0.04f
-    coolingRate = 19f * (1f + metaLevel(MetaUpgradeId.CRYO_VENTS) * 0.05f)
-    magnetStrength = 4.65f * (1f + metaLevel(MetaUpgradeId.MAGNETIC_RESONANCE) * 0.04f)
-    dashImpulse = 590f * (1f + metaLevel(MetaUpgradeId.DASH_CAPACITOR) * 0.05f)
+    damageMultiplier = 1f
+    weaponPower = 1f
+    coolingRate = 19f
+    magnetStrength = 4.65f
+    dashImpulse = 590f
     dashHeatCost = 36f
-    maxHp = 100f + metaLevel(MetaUpgradeId.CORE_INTEGRITY) * 10f + rebirthProfile.playerIntegrityBonus
-    hp = maxHp
+    maxHp = 100f + rebirthProfile.playerIntegrityBonus
     regenPerSecond = 0f
     critChance = 0.05f
     critMultiplier = 1.5f
     pickupRadius = 150f
     coreRadius = MutableGameState.CORE_RADIUS
     luck = 0f
-    dataGain = 1f + metaLevel(MetaUpgradeId.DATA_ARCHIVE) * 0.05f
-    matterGain = (1f + metaLevel(MetaUpgradeId.SALVAGE_PROTOCOL) * 0.05f) *
-        rebirthProfile.matterGainMultiplier
+    dataGain = 1f
+    matterGain = 1f
     attackSpeed = 1f
     maxShield = 0f
     shield = 0f
@@ -200,6 +201,11 @@ internal fun MutableGameState.resetRunStats() {
     comboWindow = 2.8f
     overdriveGain = 1f
     dragCoefficient = 0.29f
+    applyMatrixStats()
+    matterGain *= rebirthProfile.matterGainMultiplier
+    dashHeatCost *= matrix.dashHeatMultiplier
+    dragCoefficient *= matrix.dragMultiplier
+    hp = maxHp
     polarityStability = 1f
     shieldRechargeDelay = 0f
     timeSinceDamage = 0f

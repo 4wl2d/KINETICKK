@@ -6,7 +6,7 @@ package kinetickk.ball.profile.interaction.localization
 import kinetickk.foundation.common.localization.TextResource
 
 /**
- * Copy for the redesigned Armory, Lab and Rebirth screens and their shared header. Casing is
+ * Copy for the redesigned Armory, Matrix and Rebirth screens and their shared header. Casing is
  * applied by the text style, so the strings stay in sentence case.
  */
 internal enum class ProfileScreensRedesignText(
@@ -38,16 +38,24 @@ internal enum class ProfileScreensRedesignText(
     MasteryLevel("Lvl {0}", "Ур. {0}"),
     MasteryBase("Base", "База"),
 
-    LabInfo(
-        "All Forms share Lab upgrades. Ranks apply at the start of every run and are kept through death, quitting and every Rebirth.",
-        "Улучшения лаборатории общие для всех форм. Ранги действуют с начала каждого забега и сохраняются после гибели, выхода и перерождения.",
+    MatrixInfo(
+        "The Core Matrix holds permanent upgrades bought with Matter. Every Form shares them and they apply from the start of every run. A node opens once any node joined to it from above is owned; Reset returns all the Matter for free.",
+        "Матрица Ядра хранит постоянные улучшения за материю. Они общие для всех форм и действуют с начала каждого забега. Узел открывается, когда куплен любой связанный с ним узел выше; сброс бесплатно возвращает всю материю.",
     ),
-    UpgradesList("Upgrades", "Улучшения"),
-    Now("Now", "Сейчас"),
-    NextRank("Next rank", "След. ранг"),
+    MatrixNodes("Matrix nodes", "Узлы матрицы"),
     RankOf("Rank {0}/{1}", "Ранг {0}/{1}"),
     BuyRank("Buy rank", "Купить ранг"),
     NoValue("—", "—"),
+    Reset("Reset", "Сброс"),
+    ResetRefund("Reset refunds {0} Matter", "Сброс вернёт {0} материи"),
+    Keystone("Keystone", "Ключевой узел"),
+    RebornLock("Reborn {0}", "Перерождение {0}"),
+    RebornLockDetail("Reach Rebirth rank {0} to open this node.", "Узел откроется на ранге перерождения {0}."),
+    PrerequisiteLock("Locked", "Закрыто"),
+    RequiresNode("Requires {0}.", "Нужен узел «{0}»."),
+    RequiresEitherNode("Requires {0} or {1}.", "Нужен узел «{0}» или «{1}»."),
+    NodeAvailable("Available", "Доступно"),
+    NodeMaxed("Every rank owned.", "Все ранги куплены."),
 
     TierTag("Tier {0}", "Ступень {0}"),
     TierLadder("Rebirth tiers {0} to {1}, current {2}", "Ступени перерождения с {0} по {1}, текущая {2}"),
@@ -56,8 +64,8 @@ internal enum class ProfileScreensRedesignText(
     Locked("Locked", "Закрыто"),
     MaxTier("Max", "Максимум"),
     RebirthKeeps(
-        "Your run build resets. Matter, Lab upgrades, unlocked weapons, discoveries and settings stay.",
-        "Сборка забега сбрасывается. Материя, улучшения лаборатории, открытое оружие, открытия и настройки остаются.",
+        "Your run build resets. Matter, Matrix nodes, unlocked weapons, discoveries and settings stay.",
+        "Сборка забега сбрасывается. Материя, узлы матрицы, открытое оружие, открытия и настройки остаются.",
     ),
     RebirthLocked(
         "Defeat the Architect on tier {0} to advance.",

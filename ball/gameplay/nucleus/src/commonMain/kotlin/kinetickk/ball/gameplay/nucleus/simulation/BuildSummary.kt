@@ -5,7 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ItemDefinition
-import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.StatusElement
@@ -116,49 +116,60 @@ internal fun MutableGameState.buildStats(includeTemporary: Boolean = true): Immu
             BuildStatContribution(BuildStatSource.RELICS, relics),
         ).filter { it.amount != 0f }.toImmutableList())
     }
-    stat("Impact power", damageMultiplier, 1f, metaLevel(MetaUpgradeId.KINETIC_AMPLIFIER) * 0.05f, unit = "×")
+    // Matrix contributions come from the folded content effects, never from duplicated numbers.
+    fun matrixShare(effect: ItemEffect, base: Float): Float = matrix.statValue(effect, base) - base
+    stat("Impact power", damageMultiplier, 1f, matrixShare(ItemEffect.IMPACT_DAMAGE, 1f), unit = "×")
     val globalPower = rebirthProfile.playerPowerMultiplier
     // Run growth reports with mastery: both are progression the run grants, not items.
     val masteryPower = (1f + (weaponLevel - 1) * 0.08f) * (1f + currentWeaponMastery.damageBonus) * weaponRunGrowth()
     val permanentPower = weaponPower * globalPower * masteryPower
     val effectivePower = permanentPower * if (includeTemporary && overdriveTime > 0f) 1.45f else 1f
+    val matrixWeaponPower = matrixShare(ItemEffect.WEAPON_POWER, 1f)
     rows += BuildStatSummary("Weapon power", effectivePower, "×", listOf(
         BuildStatContribution(BuildStatSource.CHARACTER, 1f),
-        BuildStatContribution(BuildStatSource.LAB, metaLevel(MetaUpgradeId.ARMORY_LICENSE) * 0.04f + weaponPower * (globalPower - 1f)),
-        BuildStatContribution(BuildStatSource.ITEMS, weaponPower - 1f - metaLevel(MetaUpgradeId.ARMORY_LICENSE) * 0.04f),
+        BuildStatContribution(BuildStatSource.LAB, matrixWeaponPower + weaponPower * (globalPower - 1f)),
+        BuildStatContribution(BuildStatSource.ITEMS, weaponPower - 1f - matrixWeaponPower),
         BuildStatContribution(BuildStatSource.MASTERY, weaponPower * globalPower * (masteryPower - 1f)),
         BuildStatContribution(BuildStatSource.TEMPORARY, effectivePower - permanentPower),
     ).filter { it.amount != 0f }.toImmutableList())
     val masterySpeed = attackSpeed * (1f + currentWeaponMastery.activationSpeedBonus)
     val buildSpeed = masterySpeed * buildActivationBonus()
     val effectiveSpeed = buildSpeed * if (includeTemporary && overdriveTime > 0f) 1.35f else 1f
+    val matrixSpeed = matrixShare(ItemEffect.ATTACK_SPEED, 1f)
     rows += BuildStatSummary("Activation speed", effectiveSpeed, "×", listOf(
         BuildStatContribution(BuildStatSource.CHARACTER, 1f),
-        BuildStatContribution(BuildStatSource.ITEMS, attackSpeed - 1f),
+        BuildStatContribution(BuildStatSource.LAB, matrixSpeed),
+        BuildStatContribution(BuildStatSource.ITEMS, attackSpeed - 1f - matrixSpeed),
         BuildStatContribution(BuildStatSource.MASTERY, masterySpeed - attackSpeed),
         BuildStatContribution(BuildStatSource.SYNERGIES, buildSpeed - masterySpeed),
         BuildStatContribution(BuildStatSource.TEMPORARY, effectiveSpeed - buildSpeed),
     ).filter { it.amount != 0f }.toImmutableList())
-    stat("Integrity", maxHp, 100f, metaLevel(MetaUpgradeId.CORE_INTEGRITY) * 10f + rebirthProfile.playerIntegrityBonus)
-    stat("Shield", shieldCapacity(), 0f, relics = shieldCapacity() - maxShield)
-    stat("Damage reduction", effectiveDamageReduction() * 100f, 0f, relics = (effectiveDamageReduction() - damageReduction) * 100f, unit = "%")
-    stat("Regeneration", regenPerSecond, 0f, unit = "/s")
-    stat("Mass", effectiveMass(), 1f, relics = effectiveMass() - mass)
-    stat("Magnetism", effectiveMagnetism(), 4.65f, 4.65f * metaLevel(MetaUpgradeId.MAGNETIC_RESONANCE) * 0.04f,
+    stat("Integrity", maxHp, 100f, matrixShare(ItemEffect.MAX_INTEGRITY, 100f) + rebirthProfile.playerIntegrityBonus)
+    stat("Shield", shieldCapacity(), 0f, matrixShare(ItemEffect.SHIELD_CAPACITY, 0f), relics = shieldCapacity() - maxShield)
+    stat("Damage reduction", effectiveDamageReduction() * 100f, 0f, matrixShare(ItemEffect.DAMAGE_REDUCTION, 0f) * 100f,
+        relics = (effectiveDamageReduction() - damageReduction) * 100f, unit = "%")
+    stat("Regeneration", regenPerSecond, 0f, matrixShare(ItemEffect.REGEN, 0f), unit = "/s")
+    stat("Mass", effectiveMass(), 1f, matrixShare(ItemEffect.MASS, 1f), relics = effectiveMass() - mass)
+    stat("Magnetism", effectiveMagnetism(), 4.65f, matrixShare(ItemEffect.MAGNETISM, 4.65f),
         relics = effectiveMagnetism() - magnetStrength)
-    stat("Cooling", effectiveCooling(), 19f, 19f * metaLevel(MetaUpgradeId.CRYO_VENTS) * 0.05f,
+    stat("Cooling", effectiveCooling(), 19f, matrixShare(ItemEffect.COOLING, 19f),
         relics = effectiveCooling() - coolingRate, unit = "/s")
-    stat("Dash impulse", effectiveDashImpulse(), 590f, 590f * metaLevel(MetaUpgradeId.DASH_CAPACITOR) * 0.05f,
+    stat("Dash impulse", effectiveDashImpulse(), 590f, matrixShare(ItemEffect.DASH_POWER, 590f),
         relics = effectiveDashImpulse() - dashImpulse)
-    stat("Dash heat", effectiveDashHeatCost(), 36f, relics = effectiveDashHeatCost() - dashHeatCost)
-    stat("Critical chance", effectiveCritChance() * 100f, 5f, relics = (effectiveCritChance() - critChance) * 100f, unit = "%")
-    stat("Critical power", critMultiplier, 1.5f, unit = "×")
-    stat("Pickup radius", effectivePickupRadius(), 150f, relics = effectivePickupRadius() - pickupRadius)
-    stat("Luck", effectiveLuck(), 0f, relics = effectiveLuck() - luck)
-    stat("Data gain", dataGain, 1f, metaLevel(MetaUpgradeId.DATA_ARCHIVE) * 0.05f, unit = "×")
-    stat("Matter gain", matterGain, 1f, (1f + metaLevel(MetaUpgradeId.SALVAGE_PROTOCOL) * 0.05f) * rebirthProfile.matterGainMultiplier - 1f, unit = "×")
+    stat("Dash heat", effectiveDashHeatCost(), 36f, 36f * (matrix.dashHeatMultiplier - 1f),
+        relics = effectiveDashHeatCost() - dashHeatCost)
+    stat("Critical chance", effectiveCritChance() * 100f, 5f, matrixShare(ItemEffect.CRIT_CHANCE, 0.05f) * 100f,
+        relics = (effectiveCritChance() - critChance) * 100f, unit = "%")
+    stat("Critical power", critMultiplier, 1.5f, matrixShare(ItemEffect.CRIT_DAMAGE, 1.5f), unit = "×")
+    stat("Pickup radius", effectivePickupRadius(), 150f, matrixShare(ItemEffect.PICKUP_RADIUS, 150f),
+        relics = effectivePickupRadius() - pickupRadius)
+    stat("Luck", effectiveLuck(), 0f, matrixShare(ItemEffect.LUCK, 0f), relics = effectiveLuck() - luck)
+    stat("Data gain", dataGain, 1f, matrixShare(ItemEffect.DATA_GAIN, 1f), unit = "×")
+    stat("Matter gain", matterGain, 1f,
+        (1f + matrixShare(ItemEffect.MATTER_GAIN, 1f)) * rebirthProfile.matterGainMultiplier - 1f, unit = "×")
     stat("Combo window", effectiveComboWindow(), 2.8f, relics = effectiveComboWindow() - comboWindow, unit = "s")
-    stat("Overdrive gain", overdriveGainFactor(), 1f, relics = overdriveGainFactor() - overdriveGain, unit = "×")
+    stat("Overdrive gain", overdriveGainFactor(), 1f, matrixShare(ItemEffect.OVERDRIVE_GAIN, 1f),
+        relics = overdriveGainFactor() - overdriveGain, unit = "×")
     return rows.toImmutableList()
 }
 

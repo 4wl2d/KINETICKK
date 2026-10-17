@@ -20,26 +20,23 @@ import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.test.v2.runSkikoComposeUiTest
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import kinetickk.ball.content.api.ItemEffect
-import kinetickk.ball.content.api.ItemModifier
-import kinetickk.ball.content.api.MetaUpgradeDefinition
-import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
-import kinetickk.ball.profile.api.LabProfileSnapshot
-import kinetickk.ball.profile.api.LabProgress
+import kinetickk.ball.profile.api.MatrixProfileSnapshot
+import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.interaction.armory.api.ArmoryRenderModel
 import kinetickk.ball.profile.interaction.armory.impl.ArmoryContent
 import kinetickk.ball.profile.interaction.armory.impl.ArmoryLayoutHolder
 import kinetickk.ball.profile.interaction.armory.impl.ArmoryViewState
-import kinetickk.ball.profile.interaction.lab.impl.LabContent
-import kinetickk.ball.profile.interaction.lab.impl.LabPurchaseFlash
-import kinetickk.ball.profile.interaction.lab.impl.LabState
-import kinetickk.ball.profile.interaction.lab.impl.toRenderModel
+import kinetickk.ball.profile.interaction.matrix.impl.MatrixContent
+import kinetickk.ball.profile.interaction.matrix.impl.MatrixPurchaseFlash
+import kinetickk.ball.profile.interaction.matrix.impl.MatrixState
+import kinetickk.ball.profile.interaction.matrix.impl.toRenderModel
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthRenderModel
 import kinetickk.ball.profile.interaction.rebirth.impl.RebirthContent
 import kinetickk.foundation.collections.toImmutableList
@@ -129,39 +126,37 @@ class RedesignShotsProfileTest {
     }
 
     @Test
-    fun lab() {
-        val ranks = listOf(4, 5, 8, 2, 1, 2, 0, 1)
-        val model = LabProfileSnapshot(PlayerEconomy(matter = 1_284L), LabProgress(ranks)).toRenderModel(MetaUpgrades)
+    fun matrix() {
+        val ranks = MatrixNodeId.entries.map { id ->
+            when (id) {
+                MatrixNodeId.IMPACT_DRIVER, MatrixNodeId.REINFORCED_HULL, MatrixNodeId.MAGNET_ARRAY -> 3
+                MatrixNodeId.CRITICAL_LATTICE, MatrixNodeId.SALVAGE_PROTOCOL, MatrixNodeId.CRYO_LOOP -> 1
+                else -> 0
+            }
+        }
+        val model = MatrixProfileSnapshot(PlayerEconomy(matter = 1_284L), MatrixProgress(ranks), rebirthRank = 1)
+            .toRenderModel(CatalogMatrixNodes)
         for ((scale, suffix) in scales) {
-            shoot("lab", "affordable$suffix") { LabContent(LabState(model, MetaUpgradeId.CORE_INTEGRITY), scale, remember { ScrollState(0) }) {} }
-            shoot("lab", "maxed$suffix") { LabContent(LabState(model, MetaUpgradeId.MAGNETIC_RESONANCE), scale, remember { ScrollState(0) }) {} }
-            shoot("lab", "selected-last$suffix") { LabContent(LabState(model, MetaUpgradeId.ARMORY_LICENSE), scale, remember { ScrollState(0) }) {} }
+            shoot("matrix", "affordable$suffix") { MatrixContent(MatrixState(model, MatrixNodeId.WEAPON_CALIBRATION), scale, remember { ScrollState(0) }) {} }
+            shoot("matrix", "maxed$suffix") { MatrixContent(MatrixState(model, MatrixNodeId.IMPACT_DRIVER), scale, remember { ScrollState(0) }) {} }
+            shoot("matrix", "reborn-locked$suffix") { MatrixContent(MatrixState(model, MatrixNodeId.GLASS_ENGINE), scale, remember { ScrollState(0) }) {} }
+            shoot("matrix", "prerequisite$suffix") { MatrixContent(MatrixState(model, MatrixNodeId.WIDE_OFFER), scale, remember { ScrollState(0) }) {} }
         }
-        shoot("lab", "short") {
-            val poor = LabProfileSnapshot(PlayerEconomy(matter = 40L), LabProgress(ranks)).toRenderModel(MetaUpgrades)
-            LabContent(LabState(poor, MetaUpgradeId.ARMORY_LICENSE), 1.25f, remember { ScrollState(0) }) {}
+        shoot("matrix", "short") {
+            val poor = MatrixProfileSnapshot(PlayerEconomy(matter = 40L), MatrixProgress(ranks), rebirthRank = 1).toRenderModel(CatalogMatrixNodes)
+            MatrixContent(MatrixState(poor, MatrixNodeId.NANOFORGE), 1.25f, remember { ScrollState(0) }) {}
         }
-        shoot("lab", "flash-invert", advanceMs = 16) {
-            LabContent(LabState(model, MetaUpgradeId.CORE_INTEGRITY, LabPurchaseFlash(MetaUpgradeId.CORE_INTEGRITY, 1)), 1.25f,
+        shoot("matrix", "reset-armed") {
+            MatrixContent(MatrixState(model, MatrixNodeId.IMPACT_DRIVER, resetArmed = true), 1.25f, remember { ScrollState(0) }) {}
+        }
+        shoot("matrix", "flash-invert", advanceMs = 16) {
+            MatrixContent(MatrixState(model, MatrixNodeId.CRYO_LOOP, flash = MatrixPurchaseFlash(MatrixNodeId.CRYO_LOOP, 1)), 1.25f,
                 remember { ScrollState(0) }) {}
         }
-        shoot("lab", "flash-nudge", advanceMs = 150) {
-            LabContent(LabState(model, MetaUpgradeId.CORE_INTEGRITY, LabPurchaseFlash(MetaUpgradeId.CORE_INTEGRITY, 1)), 1.25f,
-                remember { ScrollState(0) }) {}
-        }
-        shoot("lab", "text100") { LabContent(LabState(model, MetaUpgradeId.KINETIC_AMPLIFIER), 1f, remember { ScrollState(0) }) {} }
-        shoot("lab", "text175") { LabContent(LabState(model, MetaUpgradeId.KINETIC_AMPLIFIER), 1.75f, remember { ScrollState(0) }) {} }
-        shoot("lab", "text150") { LabContent(LabState(model, MetaUpgradeId.KINETIC_AMPLIFIER), 1.5f, remember { ScrollState(0) }) {} }
-        // Keyboard focus on a row of an overflowing list (ring beside the scroll bar), at the list's
-        // start and end, on desktop and phones at 175 % and on phones at the default 125 %.
-        val phones = listOf(844 to 390, 390 to 844, 360 to 640)
-        for ((id, name) in listOf(MetaUpgradeId.CORE_INTEGRITY to "first", MetaUpgradeId.ARMORY_LICENSE to "last")) {
-            shoot("lab", "focused-$name-text175", at = listOf(1440 to 810) + phones, focus = "profile-lab-buy-$id") {
-                LabContent(LabState(model, id), 1.75f, remember { ScrollState(0) }) {}
-            }
-            shoot("lab", "focused-$name", at = phones, focus = "profile-lab-buy-$id") {
-                LabContent(LabState(model, id), 1.25f, remember { ScrollState(0) }) {}
-            }
+        shoot("matrix", "text100") { MatrixContent(MatrixState(model, MatrixNodeId.PERPETUAL_DRIFT), 1f, remember { ScrollState(0) }) {} }
+        val phones = listOf(844 to 390, 390 to 844)
+        shoot("matrix", "focused-last", at = phones, focus = "profile-matrix-node-${MatrixNodeId.PROSPECTOR}") {
+            MatrixContent(MatrixState(model, MatrixNodeId.PROSPECTOR), 1.25f, remember { ScrollState(0) }) {}
         }
     }
 
@@ -223,17 +218,6 @@ private val Weapons = listOf(
     WeaponDefinition(WeaponId.ENTROPY_FIELD, "Entropy Field", "A widening decay field slows hostile motion and deals escalating damage over time.", listOf("AURA", "DECAY", "SLOW"), 860),
     WeaponDefinition(WeaponId.SINGULARITY_SPEAR, "Singularity Spear", "Every overdrive cycle forges a boss-piercing spear from condensed kinetic matter.", listOf("ULTIMATE", "OVERDRIVE", "BOSS"), 1_200),
     WeaponDefinition(WeaponId.PRISM_RELAY, "Prism Relay", "Launches a seeking light shard that refracts between targets; mastery adds ricochets and twin relays.", listOf("SEEKING", "RICOCHET", "REFRACTION"), 1_650),
-).toImmutableList()
-
-private val MetaUpgrades = listOf(
-    MetaUpgradeDefinition(MetaUpgradeId.CORE_INTEGRITY, "Core Integrity", "+10 maximum integrity at the start of every run.", 10, 18, ItemModifier(ItemEffect.MAX_INTEGRITY, 10f)),
-    MetaUpgradeDefinition(MetaUpgradeId.KINETIC_AMPLIFIER, "Kinetic Amplifier", "+5% collision damage at the start of every run.", 10, 22, ItemModifier(ItemEffect.IMPACT_DAMAGE, 0.05f)),
-    MetaUpgradeDefinition(MetaUpgradeId.MAGNETIC_RESONANCE, "Magnetic Resonance", "+4% magnetic pull strength at the start of every run.", 8, 24, ItemModifier(ItemEffect.MAGNETISM, 0.04f)),
-    MetaUpgradeDefinition(MetaUpgradeId.CRYO_VENTS, "Cryo Vents", "+5% heat dissipation at the start of every run.", 8, 26, ItemModifier(ItemEffect.COOLING, 0.05f)),
-    MetaUpgradeDefinition(MetaUpgradeId.DASH_CAPACITOR, "Dash Capacitor", "+5% dash impulse at the start of every run.", 8, 30, ItemModifier(ItemEffect.DASH_POWER, 0.05f)),
-    MetaUpgradeDefinition(MetaUpgradeId.SALVAGE_PROTOCOL, "Salvage Protocol", "+5% Kinetic Matter gained during runs.", 10, 34, ItemModifier(ItemEffect.MATTER_GAIN, 0.05f)),
-    MetaUpgradeDefinition(MetaUpgradeId.DATA_ARCHIVE, "Data Archive", "+5% Data gained during runs.", 10, 38, ItemModifier(ItemEffect.DATA_GAIN, 0.05f)),
-    MetaUpgradeDefinition(MetaUpgradeId.ARMORY_LICENSE, "Armory License", "+4% weapon power per rank.", 12, 45, ItemModifier(ItemEffect.WEAPON_POWER, 0.04f)),
 ).toImmutableList()
 
 /** Mirrors the game's default Rebirth data (content impl) for realistic captures. */

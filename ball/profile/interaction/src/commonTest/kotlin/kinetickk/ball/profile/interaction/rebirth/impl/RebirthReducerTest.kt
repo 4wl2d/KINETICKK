@@ -8,7 +8,7 @@ import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.CollectionProjection
 import kinetickk.ball.profile.api.HomeProgressProjection
-import kinetickk.ball.profile.api.LabProgressProjection
+import kinetickk.ball.profile.api.MatrixProgressProjection
 import kinetickk.ball.profile.api.LoadoutProjection
 import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PreferencesProjection
@@ -223,7 +223,7 @@ private object UnusedProfilePort : ProfilePort {
     override fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection = error("unused")
     override fun query(query: ProfileQuery.GetPreferences): PreferencesProjection = error("unused")
     override fun query(query: ProfileQuery.GetHomeProgress): HomeProgressProjection = error("unused")
-    override fun query(query: ProfileQuery.GetLabProgress): LabProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetMatrixProgress): MatrixProgressProjection = error("unused")
     override fun query(query: ProfileQuery.GetLoadout): LoadoutProjection = error("unused")
     override fun query(query: ProfileQuery.GetCollection): CollectionProjection = error("unused")
     override fun query(query: ProfileQuery.GetRebirthProgress): RebirthProgressProjection = error("unused")

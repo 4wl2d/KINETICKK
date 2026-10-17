@@ -27,6 +27,9 @@ internal fun MutableGameState.onEnemyKilled(enemy: Enemy) {
     if (enemy.type == EnemyType.ELITE) pendingEliteKills++
     enemy.dead = true
     kills++
+    pendingTotalKills++
+    // Elite Bounty queues one more item offer; it opens with the next pending choice.
+    if (enemy.type == EnemyType.ELITE && matrix.eliteBounty) pendingLevelChoices++
     combo++
     bestCombo = maxOf(bestCombo, combo)
     if (enemy.type == EnemyType.ELITE) eliteKills++
@@ -92,7 +95,7 @@ internal fun MutableGameState.spawnSplitterFragments(enemy: Enemy) {
     repeat(fragmentCount) { index ->
         if (enemies.size >= content.rebirth.maxActiveEnemies) return@repeat
         val angle = gameplayRandom.nextFloat() * TAU + index * TAU * 0.5f
-        val fragmentHp = rebirthProfile.enemyHealth(SPLITTER_FRAGMENT_HEALTH * difficulty)
+        val fragmentHp = rebirthProfile.enemyHealth(SPLITTER_FRAGMENT_HEALTH * difficulty) * matrix.enemyIntegrityMultiplier
         val fragmentSpeed = 175f * rebirthProfile.enemySpeedMultiplier
         enemies += Enemy(
             id = nextEntityId++,

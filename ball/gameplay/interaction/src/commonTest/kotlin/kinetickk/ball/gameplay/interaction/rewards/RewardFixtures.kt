@@ -16,12 +16,9 @@ import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
-import kinetickk.ball.content.api.ItemModifier
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
-import kinetickk.ball.content.api.MetaUpgradeDefinition
-import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.RebirthPolicySnapshot
@@ -200,9 +197,6 @@ internal val rewardFixtureContent: GameplayContentSnapshot = GameplayContentSnap
         WeaponDefinition(WeaponId.PRISM_RELAY, "Prism Relay", "Launches a seeking light shard that refracts between targets.", listOf("SEEKING", "RICOCHET", "REFRACTION"), 1_650),
     ).toImmutableList(),
     weaponMasteries = WeaponMastery.entries.toImmutableList(),
-    metaUpgrades = MetaUpgradeId.entries.map { id ->
-        MetaUpgradeDefinition(id, "Fixture", "Fixture", 1, 1, ItemModifier(ItemEffect.MAX_INTEGRITY, 1f))
-    }.toImmutableList(),
     relics = rewardFixtureRelics.toImmutableList(),
     rebirth = RebirthPolicySnapshot(
         minimumLevel = 0, maximumLevel = 0,

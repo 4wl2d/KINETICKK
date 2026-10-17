@@ -28,12 +28,12 @@ import androidx.compose.ui.test.v2.runSkikoComposeUiTest
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
 import kinetickk.ball.content.api.localizedContent
-import kinetickk.ball.profile.api.LabProfileSnapshot
-import kinetickk.ball.profile.api.LabProgress
+import kinetickk.ball.profile.api.MatrixProfileSnapshot
+import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.interaction.armory.api.ArmoryRenderModel
 import kinetickk.ball.profile.interaction.armory.impl.ArmoryContent
@@ -41,10 +41,10 @@ import kinetickk.ball.profile.interaction.armory.impl.ArmoryLayout
 import kinetickk.ball.profile.interaction.armory.impl.ArmoryLayoutHolder
 import kinetickk.ball.profile.interaction.armory.impl.ArmoryViewState
 import kinetickk.ball.profile.interaction.armory.impl.armoryLadderCellsTop
-import kinetickk.ball.profile.interaction.lab.impl.LabContent
-import kinetickk.ball.profile.interaction.lab.impl.LabLayoutHolder
-import kinetickk.ball.profile.interaction.lab.impl.LabState
-import kinetickk.ball.profile.interaction.lab.impl.toRenderModel
+import kinetickk.ball.profile.interaction.matrix.impl.MatrixContent
+import kinetickk.ball.profile.interaction.matrix.impl.MatrixLayoutHolder
+import kinetickk.ball.profile.interaction.matrix.impl.MatrixState
+import kinetickk.ball.profile.interaction.matrix.impl.toRenderModel
 import kinetickk.ball.profile.interaction.localization.ProfileScreensRedesignText
 import kinetickk.ball.profile.interaction.localization.ProfileText
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthRenderModel
@@ -76,7 +76,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * Renders the Armory, Lab and Rebirth screens with the bundled fonts and the game's copy at the
+ * Renders the Armory, Matrix and Rebirth screens with the bundled fonts and the game's copy at the
  * three reference frames, in English and Russian, at text sizes 100 %, 125 % (default) and
  * 175 %, and checks every text they draw: nothing is clipped, ellipsized or split inside a word,
  * and the reviewed layouts keep their text whole and in place.
@@ -217,42 +217,46 @@ class ProfileTextFitTest {
     }
 
     @Test
-    fun labTextsStayWholeAndTheMaxStampClearsTheValues() {
-        val model = LabProfileSnapshot(PlayerEconomy(matter = 1_284L), LabProgress(listOf(4, 5, 8, 2, 1, 2, 0, 1)))
-            .toRenderModel(CatalogMetaUpgrades)
+    fun matrixTextsStayWholeInsideTheirTilesAndTheDetailPanel() {
+        val ranks = MatrixNodeId.entries.map { id -> if (id.ordinal % 3 == 0) 1 else 0 }
+        val model = MatrixProfileSnapshot(PlayerEconomy(matter = 1_284L), MatrixProgress(ranks), rebirthRank = 2)
+            .toRenderModel(CatalogMatrixNodes)
+        // One node per status and branch: maxed, available, short of Matter, prerequisite, Reborn-locked, keystone.
+        val selections = listOf(MatrixNodeId.CRITICAL_LATTICE, MatrixNodeId.WEAPON_CALIBRATION, MatrixNodeId.REINFORCED_HULL,
+            MatrixNodeId.HARDLIGHT_RESERVE, MatrixNodeId.OVERCLOCKED_REFLEXES, MatrixNodeId.HEIRLOOM_VAULT, MatrixNodeId.PROSPECTOR)
         for ((width, height) in sizes) {
-            val holders = HashMap<Scene<MetaUpgradeId>, LabLayoutHolder>()
-            val rowNames = HashMap<Triple<AppLanguage, Float, Any?>, Float>()
-            render(width, height, scenes(CatalogMetaUpgrades.map { it.id }), content = { scene ->
-                LabContent(LabState(model, scene.item), scene.setting, remember { ScrollState(0) }, holders.getOrPut(scene) { LabLayoutHolder() }) {}
+            val holders = HashMap<Scene<MatrixNodeId>, MatrixLayoutHolder>()
+            val tileNames = HashMap<Triple<AppLanguage, Float, Any?>, Float>()
+            render(width, height, scenes(selections), content = { scene ->
+                MatrixContent(MatrixState(model, scene.item), scene.setting, remember { ScrollState(0) }, holders.getOrPut(scene) { MatrixLayoutHolder() }) {}
             }) { scene, frame ->
                 val context = "${width}x$height $scene"
                 assertWhole(frame, context)
                 assertTrue(frame.of("header.title").isNotEmpty(), "$context header title")
                 val layout = assertNotNull(holders[scene]?.layout, context)
-                val columns = layout.columns
-                val stamps = frame.of("lab.row.stamp")
-                assertEquals(1, stamps.map { it.owner }.toSet().size, "$context one maxed upgrade")
-                for (stamp in stamps) {
-                    // The stamp fits the cost column and, rotated −6°, stays clear of the value.
-                    assertTrue(stamp.box.width <= columns.costRight - columns.costLeft + 0.5f, "$context stamp ${stamp.box.width}")
-                    val stampBounds = rotatedBounds(stamp.box, -6f)
-                    frame.of("lab.row.value").filter { it.owner == stamp.owner }.forEach {
-                        assertFalse(stampBounds.overlaps(it.box), "$context stamp $stampBounds covers the value ${it.box}")
+                // Every tile name and status line stays inside its own tile.
+                frame.of("matrix.tile").forEach { tile ->
+                    val names = frame.of("matrix.tile.name").filter { it.owner == tile.owner }
+                    val statuses = frame.of("matrix.tile.status").filter { it.owner == tile.owner }
+                    assertEquals(1, names.size, "$context ${tile.owner} name")
+                    assertEquals(1, statuses.size, "$context ${tile.owner} status")
+                    (names + statuses).forEach {
+                        assertTrue(it.box.left >= -0.5f && it.box.right <= tile.box.right + 0.5f && it.box.bottom <= tile.box.bottom + 0.5f,
+                            "$context ${it.role} ${it.box} outside tile ${tile.box}")
                     }
+                    val pips = frame.of("matrix.tile.pips").single { it.owner == tile.owner }
+                    assertTrue(names.single().box.bottom <= pips.box.top + 0.5f,
+                        "$context ${tile.owner} name ${names.single().box} runs into its pips ${pips.box}")
+                    assertTrue(pips.box.bottom <= statuses.single().box.top + 0.5f, "$context ${tile.owner} pips run into the status")
                 }
-                // The description slot is the wrapped text: no blank lines push the panels down.
-                val description = frame.of("lab.detail.description").single()
+                // The description slot is the wrapped text and the status sits under the rank line.
+                val description = frame.of("matrix.detail.description").single()
                 assertEquals(assertNotNull(description.layout).kkBoxHeight, layout.description.height, 0.5f, context)
-                // At rest at 175 % on the landscape phone the Now and Next values are visible.
-                if (width == 844 && scene.setting == 1.75f) {
-                    val values = frame.of("lab.panel.value")
-                    assertEquals(2, values.size, context)
-                    values.forEach { assertTrue(it.box.bottom <= layout.detailViewport.bottom, "$context value ${it.box} under the pinned action") }
-                }
-                frame.of("lab.row.name").forEach { rowNames[Triple(scene.language, scene.setting, it.owner)] = fontSize(it) }
+                val status = frame.of("matrix.detail.status").single()
+                assertTrue(status.box.top >= layout.rank.bottom - 0.5f, "$context status ${status.box} over the rank ${layout.rank}")
+                frame.of("matrix.tile.name").forEach { tileNames[Triple(scene.language, scene.setting, it.owner)] = fontSize(it) }
             }
-            assertLargeTextNotSmaller(rowNames, "lab rows ${width}x$height")
+            assertLargeTextNotSmaller(tileNames, "matrix tiles ${width}x$height")
         }
     }
 

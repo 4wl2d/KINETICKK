@@ -178,7 +178,7 @@ internal class FakeProfileCapabilities(
 
     override fun query(query: ProfileQuery.GetHomeProgress): kinetickk.ball.profile.api.HomeProgressProjection = error("unused")
     override fun query(query: ProfileQuery.GetCollection): kinetickk.ball.profile.api.CollectionProjection = error("unused")
-    override fun query(query: ProfileQuery.GetLabProgress): kinetickk.ball.profile.api.LabProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetMatrixProgress): kinetickk.ball.profile.api.MatrixProgressProjection = error("unused")
     override fun query(query: ProfileQuery.GetLoadout): kinetickk.ball.profile.api.LoadoutProjection = error("unused")
 
     private fun canAdvanceRebirth(): Boolean =
@@ -297,7 +297,7 @@ internal fun PlayerProfile.toGameplaySnapshot(): GameplayProfileSnapshot = Gamep
     preferences = preferences,
     economy = economy,
     loadout = loadout,
-    labProgress = labProgress,
+    matrix = matrix,
     collection = collection,
     rebirthProgress = rebirthProgress,
 )

@@ -32,7 +32,7 @@ internal fun MutableGameState.offerableItems(): List<ItemDefinition> {
 
 /** Number of item cards in an offer (Gambler's Ledger adds one, never above the choice bound). */
 internal fun MutableGameState.itemOfferSize(): Int =
-    min(MAX_GENERATED_REWARD_CHOICES, 3 + if (build.offerCards > 0) 1 else 0)
+    min(MAX_GENERATED_REWARD_CHOICES, 3 + (if (build.offerCards > 0) 1 else 0) + (if (matrixWidensItemOffer()) 1 else 0))
 
 /** Points the build has in [item]'s tags and elements; reaction items count the reaction pseudo-tag. */
 private fun MutableGameState.fit(item: ItemDefinition): Float {
@@ -70,7 +70,7 @@ internal fun MutableGameState.buildItemChoices() {
     val lanes = OfferLane.entries
     val size = itemOfferSize()
     var rareOrBetter = false
-    val pityDue = offerPity >= PITY_OFFERS
+    val pityDue = offerPity >= pityOffers()
     for (cardIndex in 0 until size) {
         val lane = lanes[cardIndex.coerceAtMost(lanes.lastIndex)]
         val available = pool.filter { candidate -> selected.none { it.id == candidate.id } }
@@ -126,6 +126,7 @@ internal fun MutableGameState.rebornChance(): Float {
     val policy = content.build.policy
     var chance = policy.rebornChance(rebirthLevel)
     if (tagTier(BuildTag.FORTUNE) >= 3) chance += 0.1f
+    chance += matrix.rebornChanceBonus
     return chance.coerceIn(0f, 0.5f)
 }
 
@@ -247,7 +248,8 @@ internal fun MutableGameState.openHeirloomChoice() {
         if (heirloomCandidates.isNotEmpty()) pendingHeirloomResolved = true
         return
     }
-    val count = content.relicPolicy.heirloomOffers(rebirthLevel)
+    // The decline card keeps one choice slot.
+    val count = min(content.relicPolicy.heirloomOffers(rebirthLevel) + matrix.extraHeirloomOffers, MutableGameState.MAX_CHOICES - 1)
     val offered = candidates.shuffled(rewardRandom).take(count)
     activeChoiceType = ChoiceType.RELIC
     heirloomOfferActive = true

@@ -11,7 +11,7 @@ sealed interface ProfileQuery {
     data object GetRunBootstrap : ProfileQuery
     data object GetPreferences : ProfileQuery
     data object GetHomeProgress : ProfileQuery
-    data object GetLabProgress : ProfileQuery
+    data object GetMatrixProgress : ProfileQuery
     data object GetLoadout : ProfileQuery
     data object GetCollection : ProfileQuery
     data object GetRebirthProgress : ProfileQuery
@@ -23,9 +23,11 @@ sealed interface ProfileProjection {
     val revision: ProfileRevision
 }
 
-data class LabProfileSnapshot(
+data class MatrixProfileSnapshot(
     val economy: PlayerEconomy,
-    val progress: LabProgress,
+    val progress: MatrixProgress,
+    /** Rebirth rank the Matrix gates compare against. */
+    val rebirthRank: Int = 0,
 )
 
 data class LoadoutProfileSnapshot(
@@ -41,7 +43,7 @@ data class GameplayProfileSnapshot(
     val preferences: PlayerPreferences,
     val economy: PlayerEconomy,
     val loadout: PlayerLoadout,
-    val labProgress: LabProgress,
+    val matrix: MatrixProgress,
     val collection: PlayerCollection,
     val rebirthProgress: RebirthProgress,
 )
@@ -75,10 +77,10 @@ data class HomeProgressProjection(
     val unlockedCoreShapes: ImmutableSet<CoreShape> = immutableSetOf(CoreShape.ORB),
 ) : ProfileProjection
 
-data class LabProgressProjection(
+data class MatrixProgressProjection(
     override val instanceId: ProfileInstanceId,
     override val revision: ProfileRevision,
-    val snapshot: LabProfileSnapshot,
+    val snapshot: MatrixProfileSnapshot,
 ) : ProfileProjection
 
 data class LoadoutProjection(
@@ -115,7 +117,7 @@ interface ProfileReadPort {
     fun query(query: ProfileQuery.GetHomeProgress): HomeProgressProjection
     fun query(query: ProfileQuery.GetCollection): CollectionProjection
     fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection
-    fun query(query: ProfileQuery.GetLabProgress): LabProgressProjection
+    fun query(query: ProfileQuery.GetMatrixProgress): MatrixProgressProjection
     fun query(query: ProfileQuery.GetLoadout): LoadoutProjection
     fun query(query: ProfileQuery.GetRebirthProgress): RebirthProgressProjection
     fun query(query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection

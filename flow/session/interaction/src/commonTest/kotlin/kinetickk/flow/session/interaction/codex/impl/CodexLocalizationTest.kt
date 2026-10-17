@@ -33,7 +33,7 @@ class CodexLocalizationTest {
         assertEquals("Круг", russian.single().title)
         assertEquals("Circle", english.single().title)
         assertEquals("Открыто", russian.single().status)
-        assertTrue(russian.single().help.orEmpty().contains("Улучшения лаборатории"))
+        assertTrue(russian.single().help.orEmpty().contains("Матрица Ядра"))
         assertEquals("Unlocked", english.single().status)
     }
 

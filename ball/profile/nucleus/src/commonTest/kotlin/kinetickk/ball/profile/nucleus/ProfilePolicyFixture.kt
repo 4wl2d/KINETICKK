@@ -16,17 +16,6 @@ private fun profilePolicyFixture(): ProfilePolicySnapshot = ProfilePolicySnapsho
         .mapIndexed { index, cost ->
             WeaponDefinition(WeaponId.entries[index], "Weapon $index", "Test weapon $index", listOf("TEST"), cost)
         }.toImmutableList(),
-    metaUpgrades = listOf(10 to 18, 10 to 22, 8 to 24, 8 to 26, 8 to 30, 10 to 34, 10 to 38, 12 to 45)
-        .mapIndexed { index, (maxRanks, baseCost) ->
-            MetaUpgradeDefinition(
-                MetaUpgradeId.entries[index],
-                "Upgrade $index",
-                "Test upgrade $index",
-                maxRanks,
-                baseCost,
-                ItemModifier(ItemEffect.MAX_INTEGRITY, 1f),
-            )
-        }.toImmutableList(),
     rebirth = testRebirthPolicy(),
 )
 

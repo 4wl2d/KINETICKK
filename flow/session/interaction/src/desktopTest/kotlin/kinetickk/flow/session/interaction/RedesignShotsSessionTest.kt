@@ -25,7 +25,7 @@ import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.gameplay.interaction.GameplayPresentation
 import kinetickk.ball.profile.api.*
 import kinetickk.ball.profile.interaction.armory.api.*
-import kinetickk.ball.profile.interaction.lab.api.*
+import kinetickk.ball.profile.interaction.matrix.api.*
 import kinetickk.ball.profile.interaction.rebirth.api.*
 import kinetickk.ball.profile.interaction.settings.api.*
 import kinetickk.flow.session.api.*
@@ -464,8 +464,8 @@ private val ShotRun: CodexRunStacks by lazy {
 internal class ShotProfile(private val coreShape: CoreShape = CoreShape.PRISM, private val textScale: Float = 1.25f, private val canRebirth: Boolean = false) : ProfileReadPort {
     override val instanceId = LOCAL_PROFILE_INSTANCE_ID
     override fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection = error("unused")
-    override fun query(query: ProfileQuery.GetLabProgress) = LabProgressProjection(instanceId, ProfileRevision.ZERO,
-        LabProfileSnapshot(PlayerEconomy(1_284), LabProgress(MetaUpgradeId.entries.mapIndexed { index, _ -> index % 4 })))
+    override fun query(query: ProfileQuery.GetMatrixProgress) = MatrixProgressProjection(instanceId, ProfileRevision.ZERO,
+        MatrixProfileSnapshot(PlayerEconomy(1_284), MatrixProgress(MatrixNodeId.entries.mapIndexed { index, _ -> index % 2 })))
     override fun query(query: ProfileQuery.GetLoadout): LoadoutProjection = error("unused")
     override fun query(query: ProfileQuery.GetRebirthProgress): RebirthProgressProjection = error("unused")
     override fun query(query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection = error("unused")
@@ -512,8 +512,8 @@ private fun ShotShell(port: ShotSessionPort, language: AppLanguage) {
         settingsFeature = object : SettingsFeature {
             @Composable override fun Content(routeToken: Long, onOutput: (SettingsOutput) -> Unit) = Unit
         },
-        labFeature = object : LabFeature {
-            @Composable override fun Content(routeToken: Long, onOutput: (LabOutput) -> Unit) = Unit
+        matrixFeature = object : MatrixFeature {
+            @Composable override fun Content(routeToken: Long, onOutput: (MatrixOutput) -> Unit) = Unit
         },
         armoryFeature = object : ArmoryFeature {
             @Composable override fun Content(activeRunWeapon: WeaponId?, onOutput: (ArmoryOutput) -> Unit) = Unit

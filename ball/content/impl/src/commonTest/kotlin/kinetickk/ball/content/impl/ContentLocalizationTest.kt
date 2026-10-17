@@ -7,6 +7,7 @@ import kinetickk.ball.content.api.BuffStat
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.ItemEffect
+import kinetickk.ball.content.api.MatrixBranch
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.RebirthMutator
 import kinetickk.ball.content.api.RelicAspect
@@ -35,7 +36,8 @@ class ContentLocalizationTest {
         val phrases = buildList {
             content.items.forEach { addAll(listOf(it.name, it.description)) }
             content.weapons.forEach { addAll(listOf(it.name, it.description)); addAll(it.tags) }
-            content.metaUpgrades.forEach { addAll(listOf(it.name, it.description)) }
+            content.matrixNodes.forEach { addAll(listOf(it.name, it.description)) }
+            addAll(MatrixBranch.entries.map { it.displayLabel })
             content.relics.forEach { addAll(listOf(it.name, it.upside, it.liability)) }
             content.coreShapes.forEach { addAll(listOf(it.displayName, it.mechanicDescription, it.unlockDescription)) }
             content.pointsOfInterest.definitions.forEach { addAll(listOf(it.name, it.instruction)) }

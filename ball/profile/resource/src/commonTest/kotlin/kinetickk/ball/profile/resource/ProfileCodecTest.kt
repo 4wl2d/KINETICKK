@@ -5,7 +5,7 @@ package kinetickk.ball.profile.resource
 
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
@@ -14,7 +14,7 @@ import kinetickk.ball.profile.api.ColorVision
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
-import kinetickk.ball.profile.api.LabProgress
+import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.profile.api.PlayerCollection
@@ -65,9 +65,10 @@ class ProfileCodecTest {
         val profile = decoded.profile
         assertEquals(2_718L, decoded.revision.value)
         assertEquals(PlayerCollection(), profile.collection)
-        assertEquals(PlayerEconomy(4_321L, 98_765L), profile.economy)
+        // The retired Lab ranks come back as Matter (387) and the Matrix starts empty.
+        assertEquals(PlayerEconomy(4_708L, 98_765L), profile.economy)
         assertEquals(PlayerLoadout(CoreShape.RING, WeaponId.ARC_COIL, setOf(WeaponId.ARC_COIL, WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR)), profile.loadout)
-        assertEquals(LabProgress(listOf(0, 1, 2, 0, 1, 2, 0, 1)), profile.labProgress)
+        assertEquals(MatrixProgress(), profile.matrix)
         assertEquals(RebirthProgress(4, 3), profile.rebirthProgress)
         assertEquals(
             kinetickk.ball.profile.api.CharacterAchievementProgress(12L, 340L, 5L, 2L, kinetickk.foundation.collections.immutableSetOf(CoreShape.ORB, CoreShape.RING)),
@@ -401,7 +402,7 @@ class ProfileCodecTest {
     }
 
     @Test
-    fun currentSchemaMaximumUnlockedWeaponsLabRanksAndDiscoveriesRoundTripWithoutLoss() {
+    fun currentSchemaMaximumUnlockedWeaponsMatrixRanksAndDiscoveriesRoundTripWithoutLoss() {
         val profile = PlayerProfile(
             preferences = PlayerPreferences(
                 soundEnabled = false,
@@ -422,7 +423,7 @@ class ProfileCodecTest {
                 selectedWeapon = WeaponId.SINGULARITY_SPEAR,
                 unlockedWeapons = WeaponId.entries.reversed().toSet(),
             ),
-            labProgress = LabProgress(MetaUpgradeId.entries.map { 1 }),
+            matrix = MatrixProgress(MatrixNodeId.entries.map { ContentBounds.MAX_MATRIX_NODE_RANKS }),
             collection = PlayerCollection(
                 (0 until ContentBounds.MAX_ITEMS).reversed().toSet(),
                 discoveredRelicIds = RelicId.entries.reversed().toSet(),
@@ -441,7 +442,7 @@ class ProfileCodecTest {
 
         assertEquals(snapshot, decoded.snapshot)
         assertEquals(ContentBounds.MAX_WEAPONS, decoded.snapshot.profile.loadout.unlockedWeapons.size)
-        assertEquals(ContentBounds.MAX_META_UPGRADES, decoded.snapshot.profile.labProgress.ranks.size)
+        assertEquals(MatrixNodeId.entries.size, decoded.snapshot.profile.matrix.ownedNodeCount)
         assertEquals(ContentBounds.MAX_ITEMS, decoded.snapshot.profile.collection.discoveredItemIds.size)
         assertEquals(
             WeaponId.entries.map(WeaponId::name).sorted(),
@@ -456,7 +457,7 @@ class ProfileCodecTest {
             encoded.extractStringArray("heirloomRelicIds"),
         )
         assertEquals(
-            MetaUpgradeId.entries.map { it.name }.sorted(),
+            MatrixNodeId.entries.map { it.name }.sorted(),
             RANK_ID.findAll(encoded).map { it.groupValues[1] }.toList(),
         )
     }
@@ -559,7 +560,7 @@ class ProfileCodecTest {
             PlayerProfile(collection = PlayerCollection(setOf(-1))),
         )
         val incompleteRanks = testSnapshot(
-            PlayerProfile(labProgress = LabProgress(List(MetaUpgradeId.entries.size - 1) { 0 })),
+            PlayerProfile(matrix = MatrixProgress(List(MatrixNodeId.entries.size - 1) { 0 })),
         )
         assertEncodeRejection(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE, invalidRange)
         assertEncodeRejection(ProfileSnapshotRejection.INCONSISTENT_PROFILE, inconsistentLoadout)
@@ -620,13 +621,18 @@ class ProfileCodecTest {
     }
 
     @Test
-    fun outboundLabRanksAndDiscoveriesRejectFirstNPlusOne() {
+    fun outboundMatrixRanksAndDiscoveriesRejectFirstNPlusOne() {
         assertEncodeRejection(
             ProfileSnapshotRejection.INCONSISTENT_PROFILE,
             testSnapshot(
-                PlayerProfile(labProgress = LabProgress(List(MetaUpgradeId.entries.size + 1) { 0 })),
+                PlayerProfile(matrix = MatrixProgress(List(MatrixNodeId.entries.size + 1) { 0 })),
             ),
         )
+        fun ranked(rank: Int) = testSnapshot(PlayerProfile(matrix = MatrixProgress(MatrixNodeId.entries.map { if (it.ordinal == 0) rank else 0 })))
+        val rankAtBound = ranked(ContentBounds.MAX_MATRIX_NODE_RANKS)
+        assertEquals(rankAtBound, assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(requireEncoded(rankAtBound))).snapshot)
+        assertEncodeRejection(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE, ranked(ContentBounds.MAX_MATRIX_NODE_RANKS + 1))
+        assertEncodeRejection(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE, ranked(-1))
         assertEncodeRejection(
             ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
             testSnapshot(
@@ -688,6 +694,92 @@ class ProfileCodecTest {
         assertEquals(ProfileSnapshotRejection.INCONSISTENT_PROFILE, decodeRejection(inconsistent))
     }
 
+    @Test
+    fun labEraSavesRefundTheirWholeSpendAndReEncodeWithoutTheLab() {
+        val refunded = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(LAB_REPRESENTATIVE_GOLDEN)).snapshot
+        assertEquals(PlayerEconomy(4_321L + 387L, 98_765L), refunded.profile.economy)
+        assertEquals(MatrixProgress(), refunded.profile.matrix)
+        assertEquals(assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(REPRESENTATIVE_GOLDEN)).snapshot, refunded)
+        assertEquals(REPRESENTATIVE_GOLDEN, requireEncoded(refunded))
+
+        val labDefault = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(LAB_DEFAULT_GOLDEN)).snapshot
+        assertEquals(testSnapshot(), labDefault)
+        assertEquals(DEFAULT_GOLDEN, requireEncoded(labDefault))
+
+        // Lifetime Matter never ends below the refunded balance, and the refund saturates.
+        val lifetimeAtBalance = LAB_REPRESENTATIVE_GOLDEN.replace("\"lifetimeMatter\":\"98765\"", "\"lifetimeMatter\":\"4321\"")
+        assertEquals(PlayerEconomy(4_708L, 4_708L), decoded(lifetimeAtBalance).profile.economy)
+        val nearlyFull = LAB_REPRESENTATIVE_GOLDEN
+            .replace("\"matter\":\"4321\"", "\"matter\":\"${Long.MAX_VALUE - 10}\"")
+            .replace("\"lifetimeMatter\":\"98765\"", "\"lifetimeMatter\":\"${Long.MAX_VALUE}\"")
+        assertEquals(PlayerEconomy(Long.MAX_VALUE, Long.MAX_VALUE), decoded(nearlyFull).profile.economy)
+
+        // Every Lab rank at its maximum returns the whole 88 690 Matter the Lab ever cost.
+        val maxed = LAB_DEFAULT_GOLDEN.replace(LAB_ZERO_RANKS, LAB_MAX_RANKS)
+        assertEquals(PlayerEconomy(88_690L, 88_690L), decoded(maxed).profile.economy)
+    }
+
+    @Test
+    fun theRetiredLabKeepsItsFrozenValidationAndNeverSharesASaveWithTheMatrix() {
+        val labRanks = "{\"id\":\"ARMORY_LICENSE\",\"rank\":0}"
+        listOf(
+            LAB_DEFAULT_GOLDEN.replace(labRanks, "{\"id\":\"ARMORY_LICENSE\",\"rank\":13}") to ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+            LAB_DEFAULT_GOLDEN.replace(labRanks, "{\"id\":\"ARMORY_LICENSE\",\"rank\":-1}") to ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+            LAB_DEFAULT_GOLDEN.replace(labRanks, "{\"id\":\"ARMORY_LICENSES\",\"rank\":0}") to ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
+            LAB_DEFAULT_GOLDEN.replace("$labRanks,", "") to ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
+            LAB_DEFAULT_GOLDEN.replace("$labRanks,", "").replace("{\"id\":\"SALVAGE_PROTOCOL\",\"rank\":0}",
+                "{\"id\":\"SALVAGE_PROTOCOL\",\"rank\":0},$labRanks") to ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
+        ).forEach { (payload, expected) -> assertEquals(expected, decodeRejection(payload), payload) }
+        // The rank at each frozen maximum is still accepted.
+        assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(LAB_DEFAULT_GOLDEN.replace(labRanks, "{\"id\":\"ARMORY_LICENSE\",\"rank\":12}")))
+
+        val both = LAB_DEFAULT_GOLDEN.replace(
+            "\"collection\":",
+            "\"matrix\":{\"ranks\":[{\"id\":\"IMPACT_DRIVER\",\"rank\":1}]},\"collection\":",
+        )
+        assertEquals(ProfileSnapshotRejection.INCONSISTENT_PROFILE, decodeRejection(both))
+    }
+
+    @Test
+    fun matrixRanksAndCountersHaveACanonicalGoldenAndStrictIngress() {
+        val snapshot = decoded(MATRIX_GOLDEN)
+        val profile = snapshot.profile
+        assertEquals(3, profile.matrix.rank(MatrixNodeId.IMPACT_DRIVER))
+        assertEquals(1, profile.matrix.rank(MatrixNodeId.DATA_ARCHIVE))
+        assertEquals(1, profile.matrix.rank(MatrixNodeId.SECOND_WIND))
+        assertEquals(3, profile.matrix.ownedNodeCount)
+        assertEquals(1_500L, profile.characterAchievements.totalKills)
+        assertEquals(40L, profile.characterAchievements.ricochets)
+        assertEquals(9_001L, profile.characterAchievements.dataPickups)
+        assertEquals(MATRIX_GOLDEN, requireEncoded(snapshot))
+
+        val ranks = "[{\"id\":\"DATA_ARCHIVE\",\"rank\":1},{\"id\":\"IMPACT_DRIVER\",\"rank\":3},{\"id\":\"SECOND_WIND\",\"rank\":1}]"
+        listOf(
+            "[{\"id\":\"DATA_ARCHIVE\",\"rank\":0},{\"id\":\"IMPACT_DRIVER\",\"rank\":3},{\"id\":\"SECOND_WIND\",\"rank\":1}]" to
+                ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+            "[{\"id\":\"DATA_ARCHIVE\",\"rank\":1},{\"id\":\"IMPACT_DRIVER\",\"rank\":${ContentBounds.MAX_MATRIX_NODE_RANKS + 1}},{\"id\":\"SECOND_WIND\",\"rank\":1}]" to
+                ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+            "[{\"id\":\"IMPACT_DRIVER\",\"rank\":3},{\"id\":\"DATA_ARCHIVE\",\"rank\":1},{\"id\":\"SECOND_WIND\",\"rank\":1}]" to
+                ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
+            "[{\"id\":\"DATA_ARCHIVE\",\"rank\":1},{\"id\":\"DATA_ARCHIVE\",\"rank\":1},{\"id\":\"SECOND_WIND\",\"rank\":1}]" to
+                ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
+            "[{\"id\":\"DATA_ARCHIVE\",\"rank\":1},{\"id\":\"IMPACT_DRIVER\",\"rank\":3},{\"id\":\"SECOND_WINDS\",\"rank\":1}]" to
+                ProfileSnapshotRejection.INVALID_STABLE_ID,
+            "[]" to ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD,
+        ).forEach { (replacement, expected) ->
+            assertEquals(expected, decodeRejection(MATRIX_GOLDEN.replace(ranks, replacement)), replacement)
+        }
+        // A zero counter is never written, so an explicit "0" is not canonical; negatives are not decimals here.
+        assertEquals(ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD,
+            decodeRejection(MATRIX_GOLDEN.replace("\"ricochets\":\"40\"", "\"ricochets\":\"0\"")))
+        assertEquals(ProfileSnapshotRejection.INVALID_DECIMAL,
+            decodeRejection(MATRIX_GOLDEN.replace("\"ricochets\":\"40\"", "\"ricochets\":\"-40\"")))
+        // Saves from before the counters keep their bytes and read as zero.
+        assertEquals(0L, decoded(DEFAULT_GOLDEN).profile.characterAchievements.totalKills)
+    }
+
+    private fun decoded(payload: String) = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(payload)).snapshot
+
     private fun decodeRejection(payload: String): ProfileSnapshotRejection =
         assertIs<ProfileDecodeResult.Rejected>(
             ProfileCodec.decode(payload),
@@ -720,7 +812,23 @@ private fun String.extractIntArray(field: String): List<Int> {
 
 private val RANK_ID = Regex("\\{\\\"id\\\":\\\"([^\\\"]+)\\\",\\\"rank\\\":")
 
+/** A fresh profile: the retired Lab is never written and an empty Matrix and zero counters are omitted. */
 private const val DEFAULT_GOLDEN: String =
+    "{\"revision\":\"0\",\"profile\":{" +
+        "\"preferences\":{\"soundEnabled\":true,\"musicEnabled\":true,\"masterVolumePercent\":65," +
+        "\"simulationSpeedPercent\":100,\"textScalePercent\":125,\"screenShake\":true," +
+        "\"particleDensityId\":\"NORMAL\",\"damageNumbers\":true,\"damageNumberSizeId\":\"NORMAL\"," +
+        "\"damageNumberFormatId\":\"COMPACT\",\"damageNumberTierThreshold\":50,\"languageCode\":\"ru\",\"runStatisticsOnLeft\":false}," +
+        "\"economy\":{\"matter\":\"0\",\"lifetimeMatter\":\"0\"}," +
+        "\"loadout\":{\"coreShapeId\":\"ORB\",\"selectedWeaponId\":\"FLUX_WAKE\"," +
+        "\"unlockedWeaponIds\":[\"FLUX_WAKE\"]}," +
+        "\"collection\":{\"itemCatalogEpoch\":2,\"discoveredItemIds\":[]}," +
+        "\"rebirthProgress\":{\"level\":0,\"highestCleared\":-1}," +
+        "\"characterAchievements\":{\"eliteKills\":\"0\",\"dashHits\":\"0\",\"completedOrbits\":\"0\"," +
+        "\"architectVictories\":\"0\",\"victoriousCharacterIds\":[]}}}"
+
+/** Byte-exact default save of the current catalog written before the Core Matrix (it carries the Lab). */
+private const val LAB_DEFAULT_GOLDEN: String =
     "{\"revision\":\"0\",\"profile\":{" +
         "\"preferences\":{\"soundEnabled\":true,\"musicEnabled\":true,\"masterVolumePercent\":65," +
         "\"simulationSpeedPercent\":100,\"textScalePercent\":125,\"screenShake\":true," +
@@ -746,8 +854,44 @@ private const val REPRESENTATIVE_COLLECTION: String =
         "\"discoveredReactionIds\":[\"EMBRITTLE\",\"THERMAL_SHOCK\"],\"discoveredPairingIds\":[\"HEAVY_BLINK\"]," +
         "\"heirloomRelicIds\":[\"GLASS_COMET\",\"BLINK_DRIVE\"]}"
 
-/** A current-catalog save without Color vision; it must stay readable and byte-identical. */
+/** [LAB_REPRESENTATIVE_GOLDEN] after its Lab refund: the same player, 4321 + 387 = 4708 Matter, no Matrix yet. */
 private const val REPRESENTATIVE_GOLDEN: String =
+    "{\"revision\":\"2718\",\"profile\":{" +
+        "\"preferences\":{\"soundEnabled\":false,\"musicEnabled\":true,\"masterVolumePercent\":37," +
+        "\"simulationSpeedPercent\":135,\"textScalePercent\":150,\"screenShake\":false," +
+        "\"particleDensityId\":\"LOW\",\"damageNumbers\":true,\"damageNumberSizeId\":\"HUGE\"," +
+        "\"damageNumberFormatId\":\"FULL\",\"damageNumberTierThreshold\":2500,\"languageCode\":\"en\",\"runStatisticsOnLeft\":true}," +
+        "\"economy\":{\"matter\":\"4708\",\"lifetimeMatter\":\"98765\"}," +
+        "\"loadout\":{\"coreShapeId\":\"RING\",\"selectedWeaponId\":\"ARC_COIL\"," +
+        "\"unlockedWeaponIds\":[\"ARC_COIL\",\"FLUX_WAKE\",\"MORNINGSTAR\"]}," +
+        REPRESENTATIVE_COLLECTION + "," +
+        "\"rebirthProgress\":{\"level\":4,\"highestCleared\":3}," +
+        "\"characterAchievements\":{\"eliteKills\":\"12\",\"dashHits\":\"340\",\"completedOrbits\":\"5\"," +
+        "\"architectVictories\":\"2\",\"victoriousCharacterIds\":[\"ORB\",\"RING\"]}}}"
+
+/** A current save with Matrix ranks (sorted by wire id, owned nodes only) and the cumulative counters. */
+private const val MATRIX_GOLDEN: String =
+    "{\"revision\":\"31\",\"profile\":{" +
+        "\"preferences\":{\"soundEnabled\":true,\"musicEnabled\":true,\"masterVolumePercent\":65," +
+        "\"simulationSpeedPercent\":100,\"textScalePercent\":125,\"screenShake\":true," +
+        "\"particleDensityId\":\"NORMAL\",\"damageNumbers\":true,\"damageNumberSizeId\":\"NORMAL\"," +
+        "\"damageNumberFormatId\":\"COMPACT\",\"damageNumberTierThreshold\":50,\"languageCode\":\"ru\",\"runStatisticsOnLeft\":false}," +
+        "\"economy\":{\"matter\":\"55\",\"lifetimeMatter\":\"2000\"}," +
+        "\"loadout\":{\"coreShapeId\":\"ORB\",\"selectedWeaponId\":\"FLUX_WAKE\"," +
+        "\"unlockedWeaponIds\":[\"FLUX_WAKE\"]}," +
+        "\"matrix\":{\"ranks\":[{\"id\":\"DATA_ARCHIVE\",\"rank\":1},{\"id\":\"IMPACT_DRIVER\",\"rank\":3}," +
+        "{\"id\":\"SECOND_WIND\",\"rank\":1}]}," +
+        "\"collection\":{\"itemCatalogEpoch\":2,\"discoveredItemIds\":[]}," +
+        "\"rebirthProgress\":{\"level\":1,\"highestCleared\":0}," +
+        "\"characterAchievements\":{\"eliteKills\":\"0\",\"dashHits\":\"0\",\"completedOrbits\":\"0\"," +
+        "\"architectVictories\":\"0\",\"victoriousCharacterIds\":[],\"totalKills\":\"1500\",\"ricochets\":\"40\"," +
+        "\"dataPickups\":\"9001\"}}}"
+
+/**
+ * Byte-exact current-catalog save written before the Core Matrix and before Color vision. Its Lab
+ * ranks (Armory 1, Dash 1, Kinetic 1, Magnetic 2, Salvage 2) refund 45 + 30 + 22 + 120 + 170 = 387 Matter.
+ */
+private const val LAB_REPRESENTATIVE_GOLDEN: String =
     "{\"revision\":\"2718\",\"profile\":{" +
         "\"preferences\":{\"soundEnabled\":false,\"musicEnabled\":true,\"masterVolumePercent\":37," +
         "\"simulationSpeedPercent\":135,\"textScalePercent\":150,\"screenShake\":false," +
@@ -819,3 +963,15 @@ private val RETIRED_RELIC_IDS: List<String> = listOf(
     "RETURN_CIRCUIT", "SCAR_TISSUE", "SECOND_HAND", "SLIPSTREAM_RELAY", "SPECTRAL_FAN",
     "SPLIT_HORIZON", "STATIC_CHORUS", "STORM_INDEX", "TIDAL_LOCK", "VOLTAIC_FILAMENT",
 )
+
+private const val LAB_ZERO_RANKS: String =
+    "{\"id\":\"ARMORY_LICENSE\",\"rank\":0},{\"id\":\"CORE_INTEGRITY\",\"rank\":0}," +
+        "{\"id\":\"CRYO_VENTS\",\"rank\":0},{\"id\":\"DASH_CAPACITOR\",\"rank\":0}," +
+        "{\"id\":\"DATA_ARCHIVE\",\"rank\":0},{\"id\":\"KINETIC_AMPLIFIER\",\"rank\":0}," +
+        "{\"id\":\"MAGNETIC_RESONANCE\",\"rank\":0},{\"id\":\"SALVAGE_PROTOCOL\",\"rank\":0}"
+
+private const val LAB_MAX_RANKS: String =
+    "{\"id\":\"ARMORY_LICENSE\",\"rank\":12},{\"id\":\"CORE_INTEGRITY\",\"rank\":10}," +
+        "{\"id\":\"CRYO_VENTS\",\"rank\":8},{\"id\":\"DASH_CAPACITOR\",\"rank\":8}," +
+        "{\"id\":\"DATA_ARCHIVE\",\"rank\":10},{\"id\":\"KINETIC_AMPLIFIER\",\"rank\":10}," +
+        "{\"id\":\"MAGNETIC_RESONANCE\",\"rank\":8},{\"id\":\"SALVAGE_PROTOCOL\",\"rank\":10}"

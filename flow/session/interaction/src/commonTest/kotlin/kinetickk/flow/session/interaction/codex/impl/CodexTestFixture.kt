@@ -14,7 +14,7 @@ import kinetickk.flow.session.interaction.testItems
 internal fun codexTestCatalog(count: Int = TEST_ITEM_COUNT): UiCatalogSnapshot = UiCatalogSnapshot(
     version = ContentVersion("test-v1"), items = testItems(count),
     weapons = WeaponId.entries.map { WeaponDefinition(it, it.name, "Full weapon description for ${it.name}", listOf("test"), 10) }.toImmutableList(),
-    weaponMasteries = WeaponMastery.entries.toImmutableList(), metaUpgrades = immutableListOf(),
+    weaponMasteries = WeaponMastery.entries.toImmutableList(),
     relics = testRelics, coreShapes = TestCoreShapes, rebirth = TestRebirthPolicy, relicPolicy = RelicPolicy(4, 3),
 )
 

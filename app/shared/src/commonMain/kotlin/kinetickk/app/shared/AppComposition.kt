@@ -21,8 +21,8 @@ import kinetickk.ball.profile.impl.ProfilePersistenceCapability
 import kinetickk.ball.profile.impl.createProfileComponent
 import kinetickk.ball.profile.interaction.armory.api.ArmoryFeature
 import kinetickk.ball.profile.interaction.armory.impl.DefaultArmoryFeature
-import kinetickk.ball.profile.interaction.lab.api.LabFeature
-import kinetickk.ball.profile.interaction.lab.impl.DefaultLabFeature
+import kinetickk.ball.profile.interaction.matrix.api.MatrixFeature
+import kinetickk.ball.profile.interaction.matrix.impl.DefaultMatrixFeature
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthFeature
 import kinetickk.ball.profile.interaction.rebirth.impl.DefaultRebirthFeature
 import kinetickk.ball.profile.interaction.settings.api.SettingsFeature
@@ -61,7 +61,7 @@ internal class AppCompositionOwner(
     appSessionComponent: AppSessionPort? = null,
     homeFeature: HomeFeature? = null,
     settingsFeature: SettingsFeature? = null,
-    labFeature: LabFeature? = null,
+    matrixFeature: MatrixFeature? = null,
     armoryFeature: ArmoryFeature? = null,
     rebirthFeature: RebirthFeature? = null,
     codexFeature: CodexFeature? = null,
@@ -98,9 +98,9 @@ internal class AppCompositionOwner(
         this.profilePort,
         this.audioService,
     )
-    private val labFeature: LabFeature = labFeature ?: DefaultLabFeature(
+    private val matrixFeature: MatrixFeature = matrixFeature ?: DefaultMatrixFeature(
         profilePort = this.profilePort,
-        metaUpgrades = uiCatalog.metaUpgrades,
+        matrixNodes = uiCatalog.matrixNodes,
         audioService = this.audioService,
     )
     private val armoryFeature: ArmoryFeature = armoryFeature ?: DefaultArmoryFeature(
@@ -151,7 +151,7 @@ internal class AppCompositionOwner(
             gameplayPresentation = gameplayComponent,
             homeFeature = homeFeature,
             settingsFeature = settingsFeature,
-            labFeature = labFeature,
+            matrixFeature = matrixFeature,
             armoryFeature = armoryFeature,
             rebirthFeature = rebirthFeature,
             codexFeature = codexFeature,

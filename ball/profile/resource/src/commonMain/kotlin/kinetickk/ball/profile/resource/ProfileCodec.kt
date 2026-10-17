@@ -5,7 +5,7 @@ package kinetickk.ball.profile.resource
 
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
@@ -17,7 +17,7 @@ import kinetickk.ball.profile.api.ColorVision
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
-import kinetickk.ball.profile.api.LabProgress
+import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.profile.api.PlayerCollection
@@ -128,12 +128,20 @@ private data class ProfileSnapshotDto(
     val profile: PlayerProfileDto,
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 private data class PlayerProfileDto(
     val preferences: PlayerPreferencesDto,
     val economy: PlayerEconomyDto,
     val loadout: PlayerLoadoutDto,
-    val labProgress: LabProgressDto,
+    // The retired Lab: only saves written before the Core Matrix carry it. Decoding refunds its ranks
+    // (see RetiredLabRefund); encoding never writes it.
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val labProgress: LabProgressDto? = null,
+    // Owned Core Matrix ranks; absent when no node is owned, so a fresh profile keeps its bytes (and an
+    // explicit empty list is not canonical).
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val matrix: MatrixProgressDto = MatrixProgressDto(emptyList()),
     val collection: PlayerCollectionDto,
     val rebirthProgress: RebirthProgressDto,
     val characterAchievements: CharacterAchievementProgressDto,
@@ -189,6 +197,17 @@ private data class MetaUpgradeRankDto(
     val rank: Int,
 )
 
+@Serializable
+private data class MatrixProgressDto(
+    val ranks: List<MatrixNodeRankDto>,
+)
+
+@Serializable
+private data class MatrixNodeRankDto(
+    val id: String,
+    val rank: Int,
+)
+
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
 private data class PlayerCollectionDto(
@@ -212,6 +231,7 @@ private data class RebirthProgressDto(
     val highestCleared: Int,
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 private data class CharacterAchievementProgressDto(
     val eliteKills: String,
@@ -219,6 +239,11 @@ private data class CharacterAchievementProgressDto(
     val completedOrbits: String,
     val architectVictories: String,
     val victoriousCharacterIds: List<String>,
+    // Written only when non-zero: absence means 0, so saves from before these counters keep their bytes
+    // (and an explicit "0" is not canonical).
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val totalKills: String = "0",
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val ricochets: String = "0",
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val dataPickups: String = "0",
 )
 
 private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
@@ -226,14 +251,10 @@ private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
     rejectUnless(revision.value >= 0L, ProfileSnapshotRejection.INVALID_DECIMAL)
 
     val preferences = profile.preferences
-    val ranks = MetaUpgradeId.entries
-        .map { id ->
-            MetaUpgradeRankDto(
-                id = id.wireId(),
-                rank = profile.labProgress.rank(id),
-            )
-        }
-        .sortedBy(MetaUpgradeRankDto::id)
+    val matrixRanks = MatrixNodeId.entries
+        .filter { id -> profile.matrix.rank(id) > 0 }
+        .map { id -> MatrixNodeRankDto(id = id.wireId(), rank = profile.matrix.rank(id)) }
+        .sortedBy(MatrixNodeRankDto::id)
 
     return ProfileSnapshotDto(
         revision = revision.value.toString(),
@@ -265,7 +286,7 @@ private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
                     .map(WeaponId::wireId)
                     .sorted(),
             ),
-            labProgress = LabProgressDto(ranks),
+            matrix = MatrixProgressDto(matrixRanks),
             collection = PlayerCollectionDto(
                 itemCatalogEpoch = ContentBounds.COLLECTION_GENERATION,
                 discoveredItemIds = profile.collection.discoveredItemIds.sorted(),
@@ -282,6 +303,9 @@ private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
                 completedOrbits = profile.characterAchievements.completedOrbits.toString(),
                 architectVictories = profile.characterAchievements.architectVictories.toString(),
                 victoriousCharacterIds = profile.characterAchievements.victoriousCharacters.map(CoreShape::wireId).sorted(),
+                totalKills = profile.characterAchievements.totalKills.toString(),
+                ricochets = profile.characterAchievements.ricochets.toString(),
+                dataPickups = profile.characterAchievements.dataPickups.toString(),
             ),
             rebirthProgress = RebirthProgressDto(
                 level = profile.rebirthProgress.level,
@@ -295,12 +319,10 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
     val revisionValue = revision.parseCanonicalNonNegativeLong()
     val retiredCatalog = profile.collection.isFromRetiredCatalog()
 
-    val expectedRankIds = MetaUpgradeId.entries.map { it.wireId() }.sorted()
-    val actualRankIds = profile.labProgress.ranks.map(MetaUpgradeRankDto::id)
-    rejectUnless(
-        actualRankIds.isStrictlySorted() && actualRankIds == expectedRankIds,
-        ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
-    )
+    val legacyLab = profile.labProgress
+    rejectUnless(legacyLab == null || profile.matrix.ranks.isEmpty(), ProfileSnapshotRejection.INCONSISTENT_PROFILE)
+    val labRefund = legacyLab?.let(RetiredLabRefund::refund) ?: 0L
+    val matrixRanks = profile.matrix.toRanks()
     rejectUnless(
         profile.loadout.unlockedWeaponIds.isStrictlySorted(),
         ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
@@ -325,11 +347,12 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
         ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
     )
 
-    val metaRanks = MutableList(MetaUpgradeId.entries.size) { 0 }
-    profile.labProgress.ranks.forEach { record ->
-        val id = record.id.metaUpgradeId()
-        metaRanks[id.ordinal] = record.rank
-    }
+    val storedMatter = profile.economy.matter.parseCanonicalNonNegativeLong()
+    val storedLifetimeMatter = profile.economy.lifetimeMatter.parseCanonicalNonNegativeLong()
+    rejectUnless(storedLifetimeMatter >= storedMatter, ProfileSnapshotRejection.INCONSISTENT_PROFILE)
+    // A Lab refund returns the whole spend; lifetime Matter never falls below the balance it produced.
+    val matter = saturatedAdd(storedMatter, labRefund)
+    val lifetimeMatter = maxOf(storedLifetimeMatter, matter)
 
     val decoded = PlayerProfile(
         preferences = PlayerPreferences(
@@ -348,16 +371,13 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
             runStatisticsOnLeft = profile.preferences.runStatisticsOnLeft ?: false,
             colorVision = profile.preferences.colorVisionId?.colorVision() ?: ColorVision.DEFAULT,
         ),
-        economy = PlayerEconomy(
-            matter = profile.economy.matter.parseCanonicalNonNegativeLong(),
-            lifetimeMatter = profile.economy.lifetimeMatter.parseCanonicalNonNegativeLong(),
-        ),
+        economy = PlayerEconomy(matter = matter, lifetimeMatter = lifetimeMatter),
         loadout = PlayerLoadout(
             coreShape = profile.loadout.coreShapeId.coreShape(),
             selectedWeapon = profile.loadout.selectedWeaponId.weaponId(),
             unlockedWeapons = profile.loadout.unlockedWeaponIds.mapTo(mutableSetOf()) { it.weaponId() },
         ),
-        labProgress = LabProgress(metaRanks),
+        matrix = MatrixProgress(matrixRanks),
         collection = if (retiredCatalog) PlayerCollection() else profile.collection.toCollection(),
         characterAchievements = CharacterAchievementProgress(
             eliteKills = profile.characterAchievements.eliteKills.parseCanonicalNonNegativeLong(),
@@ -365,6 +385,9 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
             completedOrbits = profile.characterAchievements.completedOrbits.parseCanonicalNonNegativeLong(),
             architectVictories = profile.characterAchievements.architectVictories.parseCanonicalNonNegativeLong(),
             victoriousCharacters = profile.characterAchievements.victoriousCharacterIds.map { it.coreShape() }.toImmutableSet(),
+            totalKills = profile.characterAchievements.totalKills.parseCanonicalNonNegativeLong(),
+            ricochets = profile.characterAchievements.ricochets.parseCanonicalNonNegativeLong(),
+            dataPickups = profile.characterAchievements.dataPickups.parseCanonicalNonNegativeLong(),
         ),
         rebirthProgress = RebirthProgress(
             level = profile.rebirthProgress.level,
@@ -372,9 +395,6 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
         ),
     )
     validateProfile(decoded)
-    profile.labProgress.ranks.forEach { record ->
-        rejectUnless(record.rank >= 0, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
-    }
 
     return ProfileSnapshot(
         revision = ProfileRevision(revisionValue),
@@ -428,6 +448,7 @@ private fun validateProfile(profile: PlayerProfile) {
     rejectUnless(
         achievements.eliteKills >= 0L && achievements.dashHits >= 0L &&
             achievements.completedOrbits >= 0L && achievements.architectVictories >= 0L &&
+            achievements.totalKills >= 0L && achievements.ricochets >= 0L && achievements.dataPickups >= 0L &&
             achievements.victoriousCharacters.size <= CoreShape.entries.size &&
             achievements.victoriousCharacters.size.toLong() <= achievements.architectVictories,
         ProfileSnapshotRejection.INCONSISTENT_PROFILE,
@@ -458,11 +479,14 @@ private fun validateProfile(profile: PlayerProfile) {
     )
 
     rejectUnless(
-        profile.labProgress.ranks.size == MetaUpgradeId.entries.size &&
-            profile.labProgress.ranks.size == ContentBounds.MAX_META_UPGRADES,
+        profile.matrix.ranks.size == MatrixNodeId.entries.size &&
+            profile.matrix.ranks.size <= ContentBounds.MAX_MATRIX_NODES,
         ProfileSnapshotRejection.INCONSISTENT_PROFILE,
     )
-    rejectUnless(profile.labProgress.ranks.all { it >= 0 }, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+    rejectUnless(
+        profile.matrix.ranks.all { it in 0..ContentBounds.MAX_MATRIX_NODE_RANKS },
+        ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+    )
 
     rejectUnless(
         profile.collection.discoveredItemIds.size <= ContentBounds.MAX_ITEMS &&
@@ -558,29 +582,77 @@ private fun String.weaponId(): WeaponId = when (this) {
     else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
 }
 
-private fun MetaUpgradeId.wireId(): String = when (this) {
-    MetaUpgradeId.CORE_INTEGRITY -> "CORE_INTEGRITY"
-    MetaUpgradeId.KINETIC_AMPLIFIER -> "KINETIC_AMPLIFIER"
-    MetaUpgradeId.MAGNETIC_RESONANCE -> "MAGNETIC_RESONANCE"
-    MetaUpgradeId.CRYO_VENTS -> "CRYO_VENTS"
-    MetaUpgradeId.DASH_CAPACITOR -> "DASH_CAPACITOR"
-    MetaUpgradeId.SALVAGE_PROTOCOL -> "SALVAGE_PROTOCOL"
-    MetaUpgradeId.DATA_ARCHIVE -> "DATA_ARCHIVE"
-    MetaUpgradeId.ARMORY_LICENSE -> "ARMORY_LICENSE"
+/** Core Matrix wire ids: stable names, never renamed or reused. */
+private fun MatrixNodeId.wireId(): String = when (this) {
+    MatrixNodeId.IMPACT_DRIVER -> "IMPACT_DRIVER"
+    MatrixNodeId.WEAPON_CALIBRATION -> "WEAPON_CALIBRATION"
+    MatrixNodeId.CRITICAL_LATTICE -> "CRITICAL_LATTICE"
+    MatrixNodeId.ARMED_START -> "ARMED_START"
+    MatrixNodeId.CATALYST_CORE -> "CATALYST_CORE"
+    MatrixNodeId.OVERDRIVE_COIL -> "OVERDRIVE_COIL"
+    MatrixNodeId.REBORN_ARSENAL -> "REBORN_ARSENAL"
+    MatrixNodeId.GLASS_ENGINE -> "GLASS_ENGINE"
+    MatrixNodeId.REINFORCED_HULL -> "REINFORCED_HULL"
+    MatrixNodeId.HARDLIGHT_RESERVE -> "HARDLIGHT_RESERVE"
+    MatrixNodeId.IMPACT_DAMPERS -> "IMPACT_DAMPERS"
+    MatrixNodeId.SECOND_WIND -> "SECOND_WIND"
+    MatrixNodeId.NANOFORGE -> "NANOFORGE"
+    MatrixNodeId.BASTION_PROTOCOL -> "BASTION_PROTOCOL"
+    MatrixNodeId.AEGIS_LATTICE -> "AEGIS_LATTICE"
+    MatrixNodeId.JUGGERNAUT -> "JUGGERNAUT"
+    MatrixNodeId.MAGNET_ARRAY -> "MAGNET_ARRAY"
+    MatrixNodeId.CRYO_LOOP -> "CRYO_LOOP"
+    MatrixNodeId.VECTOR_THRUSTERS -> "VECTOR_THRUSTERS"
+    MatrixNodeId.NEAR_MISS -> "NEAR_MISS"
+    MatrixNodeId.RICOCHET_RIG -> "RICOCHET_RIG"
+    MatrixNodeId.OVERCLOCKED_REFLEXES -> "OVERCLOCKED_REFLEXES"
+    MatrixNodeId.GRAVITY_SURFER -> "GRAVITY_SURFER"
+    MatrixNodeId.PERPETUAL_DRIFT -> "PERPETUAL_DRIFT"
+    MatrixNodeId.SALVAGE_PROTOCOL -> "SALVAGE_PROTOCOL"
+    MatrixNodeId.DATA_ARCHIVE -> "DATA_ARCHIVE"
+    MatrixNodeId.REROLL_CACHE -> "REROLL_CACHE"
+    MatrixNodeId.WIDE_OFFER -> "WIDE_OFFER"
+    MatrixNodeId.LUCKY_CHARM -> "LUCKY_CHARM"
+    MatrixNodeId.ELITE_BOUNTY -> "ELITE_BOUNTY"
+    MatrixNodeId.HEIRLOOM_VAULT -> "HEIRLOOM_VAULT"
+    MatrixNodeId.PROSPECTOR -> "PROSPECTOR"
 }
 
-private fun String.metaUpgradeId(): MetaUpgradeId = when (this) {
-    "CORE_INTEGRITY" -> MetaUpgradeId.CORE_INTEGRITY
-    "KINETIC_AMPLIFIER" -> MetaUpgradeId.KINETIC_AMPLIFIER
-    "MAGNETIC_RESONANCE" -> MetaUpgradeId.MAGNETIC_RESONANCE
-    "CRYO_VENTS" -> MetaUpgradeId.CRYO_VENTS
-    "DASH_CAPACITOR" -> MetaUpgradeId.DASH_CAPACITOR
-    "SALVAGE_PROTOCOL" -> MetaUpgradeId.SALVAGE_PROTOCOL
-    "DATA_ARCHIVE" -> MetaUpgradeId.DATA_ARCHIVE
-    "ARMORY_LICENSE" -> MetaUpgradeId.ARMORY_LICENSE
+private fun String.matrixNodeId(): MatrixNodeId = when (this) {
+    "IMPACT_DRIVER" -> MatrixNodeId.IMPACT_DRIVER
+    "WEAPON_CALIBRATION" -> MatrixNodeId.WEAPON_CALIBRATION
+    "CRITICAL_LATTICE" -> MatrixNodeId.CRITICAL_LATTICE
+    "ARMED_START" -> MatrixNodeId.ARMED_START
+    "CATALYST_CORE" -> MatrixNodeId.CATALYST_CORE
+    "OVERDRIVE_COIL" -> MatrixNodeId.OVERDRIVE_COIL
+    "REBORN_ARSENAL" -> MatrixNodeId.REBORN_ARSENAL
+    "GLASS_ENGINE" -> MatrixNodeId.GLASS_ENGINE
+    "REINFORCED_HULL" -> MatrixNodeId.REINFORCED_HULL
+    "HARDLIGHT_RESERVE" -> MatrixNodeId.HARDLIGHT_RESERVE
+    "IMPACT_DAMPERS" -> MatrixNodeId.IMPACT_DAMPERS
+    "SECOND_WIND" -> MatrixNodeId.SECOND_WIND
+    "NANOFORGE" -> MatrixNodeId.NANOFORGE
+    "BASTION_PROTOCOL" -> MatrixNodeId.BASTION_PROTOCOL
+    "AEGIS_LATTICE" -> MatrixNodeId.AEGIS_LATTICE
+    "JUGGERNAUT" -> MatrixNodeId.JUGGERNAUT
+    "MAGNET_ARRAY" -> MatrixNodeId.MAGNET_ARRAY
+    "CRYO_LOOP" -> MatrixNodeId.CRYO_LOOP
+    "VECTOR_THRUSTERS" -> MatrixNodeId.VECTOR_THRUSTERS
+    "NEAR_MISS" -> MatrixNodeId.NEAR_MISS
+    "RICOCHET_RIG" -> MatrixNodeId.RICOCHET_RIG
+    "OVERCLOCKED_REFLEXES" -> MatrixNodeId.OVERCLOCKED_REFLEXES
+    "GRAVITY_SURFER" -> MatrixNodeId.GRAVITY_SURFER
+    "PERPETUAL_DRIFT" -> MatrixNodeId.PERPETUAL_DRIFT
+    "SALVAGE_PROTOCOL" -> MatrixNodeId.SALVAGE_PROTOCOL
+    "DATA_ARCHIVE" -> MatrixNodeId.DATA_ARCHIVE
+    "REROLL_CACHE" -> MatrixNodeId.REROLL_CACHE
+    "WIDE_OFFER" -> MatrixNodeId.WIDE_OFFER
+    "LUCKY_CHARM" -> MatrixNodeId.LUCKY_CHARM
+    "ELITE_BOUNTY" -> MatrixNodeId.ELITE_BOUNTY
+    "HEIRLOOM_VAULT" -> MatrixNodeId.HEIRLOOM_VAULT
+    "PROSPECTOR" -> MatrixNodeId.PROSPECTOR
     else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
 }
-
 
 /** Wire ids of the current Relic catalog; retired names are never mapped (see isFromRetiredCatalog). */
 private fun RelicId.wireId(): String = when (this) {
@@ -765,6 +837,59 @@ private fun String.appLanguage(): AppLanguage = when (this) {
     "en" -> AppLanguage.English
     else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
 }
+
+/**
+ * Strict mapping of a Core Matrix record list: strictly sorted by wire id (no duplicates), every id
+ * known and every rank within 1..MAX_MATRIX_NODE_RANKS (a zero rank is never written).
+ */
+private fun MatrixProgressDto.toRanks(): List<Int> {
+    rejectUnless(ranks.map(MatrixNodeRankDto::id).isStrictlySorted(), ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE)
+    rejectUnless(ranks.size <= MatrixNodeId.entries.size, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+    val result = MutableList(MatrixNodeId.entries.size) { 0 }
+    ranks.forEach { record ->
+        val id = record.id.matrixNodeId()
+        rejectUnless(record.rank in 1..ContentBounds.MAX_MATRIX_NODE_RANKS, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+        result[id.ordinal] = record.rank
+    }
+    return result
+}
+
+/**
+ * The retired Lab, frozen as it shipped: eight upgrades priced `baseCost × rank²` for each rank.
+ * A legacy save must list exactly these wire ids in sorted order with ranks in 0..maxRanks; its
+ * refund is the full price of every owned rank, so veterans keep their whole spend.
+ */
+private object RetiredLabRefund {
+    private class LegacyUpgrade(val wireId: String, val maxRanks: Int, val baseCost: Long)
+
+    private val upgrades: List<LegacyUpgrade> = listOf(
+        LegacyUpgrade("ARMORY_LICENSE", maxRanks = 12, baseCost = 45),
+        LegacyUpgrade("CORE_INTEGRITY", maxRanks = 10, baseCost = 18),
+        LegacyUpgrade("CRYO_VENTS", maxRanks = 8, baseCost = 26),
+        LegacyUpgrade("DASH_CAPACITOR", maxRanks = 8, baseCost = 30),
+        LegacyUpgrade("DATA_ARCHIVE", maxRanks = 10, baseCost = 38),
+        LegacyUpgrade("KINETIC_AMPLIFIER", maxRanks = 10, baseCost = 22),
+        LegacyUpgrade("MAGNETIC_RESONANCE", maxRanks = 8, baseCost = 24),
+        LegacyUpgrade("SALVAGE_PROTOCOL", maxRanks = 10, baseCost = 34),
+    )
+
+    fun refund(lab: LabProgressDto): Long {
+        rejectUnless(
+            lab.ranks.map(MetaUpgradeRankDto::id) == upgrades.map(LegacyUpgrade::wireId),
+            ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
+        )
+        var total = 0L
+        lab.ranks.forEachIndexed { index, record ->
+            val upgrade = upgrades[index]
+            rejectUnless(record.rank in 0..upgrade.maxRanks, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+            for (rank in 1..record.rank) total += upgrade.baseCost * rank * rank
+        }
+        return total
+    }
+}
+
+private fun saturatedAdd(left: Long, right: Long): Long =
+    if (Long.MAX_VALUE - left < right) Long.MAX_VALUE else left + right
 
 private class ProfileCodecRejection(
     val reason: ProfileSnapshotRejection,

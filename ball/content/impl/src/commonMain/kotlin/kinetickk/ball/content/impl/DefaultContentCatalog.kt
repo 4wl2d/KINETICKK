@@ -13,8 +13,9 @@ import kinetickk.ball.content.api.CoreShapeDefinition
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
-import kinetickk.ball.content.api.MetaUpgradeDefinition
-import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.MatrixNodeDefinition
+import kinetickk.ball.content.api.MatrixNodeId
+import kinetickk.ball.content.api.defaultMatrixNodes
 import kinetickk.ball.content.api.ProfilePolicySnapshot
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
@@ -38,7 +39,7 @@ internal data class ContentBootstrapData(
     val items: List<ItemDefinition>,
     val weapons: List<WeaponDefinition>,
     val weaponMasteries: List<WeaponMastery>,
-    val metaUpgrades: List<MetaUpgradeDefinition>,
+    val matrixNodes: List<MatrixNodeDefinition>,
     val relics: List<RelicDefinition>,
     val coreShapes: List<CoreShapeDefinition>,
     val rebirthProfiles: List<RebirthProfile>,
@@ -55,7 +56,7 @@ internal fun defaultContentBootstrapData(): ContentBootstrapData = ContentBootst
     items = defaultItems(),
     weapons = defaultWeapons(),
     weaponMasteries = WeaponMastery.entries,
-    metaUpgrades = defaultMetaUpgrades(),
+    matrixNodes = defaultMatrixNodes(),
     relics = defaultRelics(),
     coreShapes = defaultCoreShapeDefinitions(),
     rebirthProfiles = defaultRebirthProfiles(),
@@ -78,7 +79,7 @@ private class DefaultContentCatalog(data: ContentBootstrapData) : ContentCatalog
     private val items = data.items.toImmutableList()
     private val weapons = data.weapons.toImmutableList()
     private val weaponMasteries = data.weaponMasteries.toImmutableList()
-    private val metaUpgrades = data.metaUpgrades.toImmutableList()
+    private val matrixNodes = data.matrixNodes.toImmutableList()
     private val relics = data.relics.toImmutableList()
     private val coreShapes = data.coreShapes.toImmutableList()
     private val rebirthProfiles = data.rebirthProfiles.toImmutableList()
@@ -97,8 +98,8 @@ private class DefaultContentCatalog(data: ContentBootstrapData) : ContentCatalog
         itemCount = items.size,
         coreShapes = coreShapes,
         weapons = weapons,
-        metaUpgrades = metaUpgrades,
         rebirth = rebirth,
+        matrixNodes = matrixNodes,
     )
 
     private val gameplayContent = GameplayContentSnapshot(
@@ -106,13 +107,13 @@ private class DefaultContentCatalog(data: ContentBootstrapData) : ContentCatalog
         items = items,
         weapons = weapons,
         weaponMasteries = weaponMasteries,
-        metaUpgrades = metaUpgrades,
         relics = relics,
         rebirth = rebirth,
         relicPolicy = data.relicPolicy,
         tempo = data.tempo,
         build = data.build,
         coreShapes = coreShapes,
+        matrixNodes = matrixNodes,
     )
 
     private val uiCatalog = UiCatalogSnapshot(
@@ -120,13 +121,13 @@ private class DefaultContentCatalog(data: ContentBootstrapData) : ContentCatalog
         items = items,
         weapons = weapons,
         weaponMasteries = weaponMasteries,
-        metaUpgrades = metaUpgrades,
         relics = relics,
         coreShapes = coreShapes,
         rebirth = rebirth,
         relicPolicy = data.relicPolicy,
         tempo = data.tempo,
         build = data.build,
+        matrixNodes = matrixNodes,
     )
 
     override fun profilePolicy(): ProfilePolicySnapshot = profilePolicy
@@ -153,11 +154,12 @@ private fun validateBootstrap(data: ContentBootstrapData) {
         "Weapon ids must match the stable WeaponId order"
     }
 
-    requireBound("meta upgrades", data.metaUpgrades.size, ContentBounds.MAX_META_UPGRADES)
-    requireUniqueIds("meta-upgrade", data.metaUpgrades.map(MetaUpgradeDefinition::id))
-    require(data.metaUpgrades.map(MetaUpgradeDefinition::id) == MetaUpgradeId.entries.toList()) {
-        "Meta-upgrade ids must match the stable MetaUpgradeId order"
+    requireBound("matrix nodes", data.matrixNodes.size, ContentBounds.MAX_MATRIX_NODES)
+    requireUniqueIds("matrix-node", data.matrixNodes.map(MatrixNodeDefinition::id))
+    require(data.matrixNodes.map(MatrixNodeDefinition::id) == MatrixNodeId.entries.toList()) {
+        "Matrix node ids must match the stable MatrixNodeId order"
     }
+    validateMatrix(data.matrixNodes)
 
     requireBound("relics", data.relics.size, ContentBounds.MAX_RELICS)
     requireUniqueIds("relic", data.relics.map(RelicDefinition::id))
@@ -201,6 +203,26 @@ private fun validateBootstrap(data: ContentBootstrapData) {
 
     require(data.relicPolicy.maxSlots <= data.relics.size) {
         "Relic maxSlots must not exceed the relic catalog size"
+    }
+}
+
+/**
+ * Every prerequisite is a node of the same branch on an earlier row, and a node's row is one below its
+ * deepest prerequisite, so each branch is a tree its screen column can draw top to bottom.
+ */
+private fun validateMatrix(nodes: List<MatrixNodeDefinition>) {
+    val byId = nodes.associateBy(MatrixNodeDefinition::id)
+    require(nodes.map(MatrixNodeDefinition::name).toSet().size == nodes.size) { "Matrix node names must be unique" }
+    nodes.forEach { node ->
+        val prerequisites = node.prerequisites.map { id ->
+            requireNotNull(byId[id]) { "Matrix node ${node.id} requires unknown node $id" }
+        }
+        require(prerequisites.all { it.branch == node.branch }) { "Matrix node ${node.id} requires a node of another branch" }
+        if (prerequisites.isNotEmpty()) {
+            require(node.row == prerequisites.maxOf(MatrixNodeDefinition::row) + 1) {
+                "Matrix node ${node.id} must sit one row below its deepest prerequisite"
+            }
+        }
     }
 }
 

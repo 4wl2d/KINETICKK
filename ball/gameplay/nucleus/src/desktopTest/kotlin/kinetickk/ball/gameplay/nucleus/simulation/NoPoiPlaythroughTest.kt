@@ -26,7 +26,7 @@ class NoPoiPlaythroughTest {
             assertEquals(1f, state.settings.simulationSpeed)
             assertEquals(CoreShape.ORB, state.coreShape)
             assertEquals(WeaponId.FLUX_WAKE, state.weapon)
-            assertTrue(MetaUpgradeId.entries.all { state.metaLevel(it) == 0 })
+            assertTrue((0 until state.matrixRanks.size).all { state.matrixRanks[it] == 0 })
             assertEquals(0, state.rebirthLevel)
             val bot = NoPoiBot()
             var minute = 0

@@ -132,6 +132,8 @@ internal class CompiledBuild private constructor(
             equipped: List<EquippedRelic>,
             severed: List<RelicId>,
             spentOuroboros: Boolean,
+            statusPotencyBonus: Float = 0f,
+            reactionPowerBonus: Float = 0f,
         ): CompiledBuild {
             val policy = content.build.policy
             val itemCount = content.items.size
@@ -214,13 +216,13 @@ internal class CompiledBuild private constructor(
             }
 
             val clauseBuffers = Array(EffectTrigger.entries.size) { ArrayList<Int>() }
-            val potency = FloatArray(StatusElement.entries.size) { 1f }
+            val potency = FloatArray(StatusElement.entries.size) { 1f + statusPotencyBonus }
             val duration = FloatArray(StatusElement.entries.size) { 1f }
             val cuts = IntArray(StatusElement.entries.size)
             val breakPower = FloatArray(StatusElement.entries.size) { 1f }
             val spreadStacks = IntArray(StatusElement.entries.size)
             val spreadRadius = FloatArray(StatusElement.entries.size)
-            var reactionPower = 1f
+            var reactionPower = 1f + reactionPowerBonus
             var residue = 0
             var recoil = 0f
             var recoilRadius = 0f
@@ -416,6 +418,8 @@ internal fun MutableGameState.recompileBuild() {
         equipped = equippedRelics,
         severed = severedRelics.map { it.id },
         spentOuroboros = ouroborosSpent,
+        statusPotencyBonus = matrix.statusPotencyBonus,
+        reactionPowerBonus = matrix.reactionPowerBonus,
     )
 }
 

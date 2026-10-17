@@ -222,18 +222,7 @@ internal class GameReducer {
     private fun MutableGameState.hasPendingReductionOutputs(): Boolean =
         soundCues.isNotEmpty() ||
             !visualFxCues.isEmpty() ||
-            pendingBankedMatter != 0L ||
-            pendingDiscoveredItemIds.isNotEmpty() ||
-            pendingDiscoveredRelicMask != 0L ||
-            pendingClearedRebirthLevel != null ||
-            pendingEliteKills != 0 ||
-            pendingDashHits != 0 ||
-            pendingCompletedOrbits != 0 ||
-            pendingArchitectDefeatedWith != null ||
-            pendingDiscoveredReactionMask != 0 ||
-            pendingDiscoveredPairingMask != 0 ||
-            pendingVictoryRelics != null ||
-            pendingHeirloomResolved
+            hasPublishableProgress()
 
     private fun Float.sameBitsAs(other: Float): Boolean = toBits() == other.toBits()
 }

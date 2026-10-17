@@ -327,6 +327,10 @@ private fun MutableGameState.gyreRing(radius: Float, damage: Float) {
 /** Ouroboros only answers integrity deaths; the singularity still ends the run directly. */
 internal fun MutableGameState.resolveLethal() {
     if (hp > 0f) return
+    if (trySecondWind()) {
+        emitSound(GameplayAudioCue.RECOVERED)
+        return
+    }
     if (build.upside(RelicId.OUROBOROS_SEAL) && !ouroborosSpent) {
         ouroborosSpent = true
         ouroborosLockedUntil = elapsed + OUROBOROS_LOCK_SECONDS

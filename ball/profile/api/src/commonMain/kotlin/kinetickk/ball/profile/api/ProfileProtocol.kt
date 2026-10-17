@@ -4,7 +4,7 @@
 package kinetickk.ball.profile.api
 
 import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
@@ -71,6 +71,12 @@ data class GameplayProgressUpdate(
     val victoryRelicIds: ImmutableList<RelicId>? = null,
     /** The run resolved its Heirloom offer (taken or declined), so the remembered Heirlooms are spent. */
     val heirloomResolved: Boolean = false,
+    /** Enemies destroyed since the last update. */
+    val totalKills: Int = 0,
+    /** Hard obstacle bounces since the last update. */
+    val ricochets: Int = 0,
+    /** Data pickups collected since the last update. */
+    val dataPickups: Int = 0,
 ) {
     constructor(
         bankedMatter: Long = 0L,
@@ -85,11 +91,14 @@ data class GameplayProgressUpdate(
         discoveredPairingIds: Set<RelicPairingId> = emptySet(),
         victoryRelicIds: List<RelicId>? = null,
         heirloomResolved: Boolean = false,
+        totalKills: Int = 0,
+        ricochets: Int = 0,
+        dataPickups: Int = 0,
     ) : this(
         bankedMatter, discoveredItemIds.toImmutableSet(), clearedRebirthLevel,
         eliteKills, dashHits, completedOrbits, architectDefeatedWith, discoveredRelicIds.toImmutableSet(),
         discoveredReactionIds.toImmutableSet(), discoveredPairingIds.toImmutableSet(),
-        victoryRelicIds?.toImmutableList(), heirloomResolved,
+        victoryRelicIds?.toImmutableList(), heirloomResolved, totalKills, ricochets, dataPickups,
     )
 
     /** True when the update carries no fact for Profile to apply, so no command needs to be sent. */
@@ -97,7 +106,7 @@ data class GameplayProgressUpdate(
         get() = bankedMatter == 0L && discoveredItemIds.isEmpty() && clearedRebirthLevel == null &&
             eliteKills == 0 && dashHits == 0 && completedOrbits == 0 && architectDefeatedWith == null &&
             discoveredRelicIds.isEmpty() && discoveredReactionIds.isEmpty() && discoveredPairingIds.isEmpty() &&
-            victoryRelicIds == null && !heirloomResolved
+            victoryRelicIds == null && !heirloomResolved && totalKills == 0 && ricochets == 0 && dataPickups == 0
 }
 
 sealed interface CollectionEntry {
@@ -118,9 +127,13 @@ sealed interface ProfilePulse {
         val adjustment: ProfilePreferenceAdjustment,
     ) : Business
 
-    data class PurchaseMetaUpgrade(
-        val id: MetaUpgradeId,
+    /** Buys the next rank of a Core Matrix node. */
+    data class PurchaseMatrixNode(
+        val id: MatrixNodeId,
     ) : Business
+
+    /** Refunds every owned Core Matrix rank (a free respec). */
+    data object ResetMatrix : Business
 
     data class PurchaseOrEquipWeapon(
         val id: WeaponId,
@@ -147,7 +160,11 @@ sealed interface ProfileRejection {
     data object BootstrapNotReady : ProfileRejection
     data object NoChange : ProfileRejection
     data object InsufficientMatter : ProfileRejection
-    data object MetaUpgradeMaxRank : ProfileRejection
+    data object MatrixNodeMaxRank : ProfileRejection
+    /** None of the node's prerequisites is owned. */
+    data object MatrixPrerequisiteMissing : ProfileRejection
+    /** The node needs a higher Rebirth rank. */
+    data object MatrixRebirthLocked : ProfileRejection
     data object CoreShapeLocked : ProfileRejection
     data object RebirthMaximumReached : ProfileRejection
     data object RebirthLevelNotCleared : ProfileRejection

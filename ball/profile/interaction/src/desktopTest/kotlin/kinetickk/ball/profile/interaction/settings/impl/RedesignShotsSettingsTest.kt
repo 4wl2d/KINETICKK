@@ -26,7 +26,7 @@ import kinetickk.ball.profile.api.CollectionProjection
 import kinetickk.ball.profile.api.ColorVision
 import kinetickk.ball.profile.api.HomeProgressProjection
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
-import kinetickk.ball.profile.api.LabProgressProjection
+import kinetickk.ball.profile.api.MatrixProgressProjection
 import kinetickk.ball.profile.api.LoadoutProjection
 import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PlayerPreferences
@@ -187,7 +187,7 @@ private class ShotProfilePort(initial: PlayerPreferences) : ProfilePort {
     override fun query(query: ProfileQuery.GetHomeProgress): HomeProgressProjection = error("Unused")
     override fun query(query: ProfileQuery.GetCollection): CollectionProjection = error("Unused")
     override fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection = error("Unused")
-    override fun query(query: ProfileQuery.GetLabProgress): LabProgressProjection = error("Unused")
+    override fun query(query: ProfileQuery.GetMatrixProgress): MatrixProgressProjection = error("Unused")
     override fun query(query: ProfileQuery.GetLoadout): LoadoutProjection = error("Unused")
     override fun query(query: ProfileQuery.GetRebirthProgress): RebirthProgressProjection = error("Unused")
     override fun query(query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection = error("Unused")

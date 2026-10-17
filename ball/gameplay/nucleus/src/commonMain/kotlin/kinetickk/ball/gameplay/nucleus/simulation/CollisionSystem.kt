@@ -394,7 +394,8 @@ internal fun MutableGameState.resolvePickupCollection() {
             pickupsCollected++
             when (pickup.type) {
                 PickupType.DATA -> {
-                    gainData(dataGain * content.tempo.dataPickupMultiplier)
+                    pendingDataPickups++
+                    gainData(dataGain * content.tempo.dataPickupMultiplier * (1f + matrix.pickupValueBonus))
                     fireClauses(EffectTrigger.PICKUP)
                 }
                 PickupType.KEY -> {
@@ -433,7 +434,9 @@ internal fun MutableGameState.gainData(rawAmount: Float) {
         pendingLevelChoices++
         onLevelUp()
         nextLevelData = content.tempo.dataRequiredForLevel(level)
-        if (content.tempo.grantsWeaponAmplification(level) && weaponLevel < content.tempo.maximumAutomaticWeaponLevel) {
+        if (content.tempo.grantsWeaponAmplification(level) &&
+            weaponLevel < content.tempo.maximumAutomaticWeaponLevel + matrix.startingWeaponLevels
+        ) {
             val before = captureBuildChange()
             amplifyCurrentWeapon()
             emitBuildChange(before, currentWeaponDefinition.name + " mastery advanced")

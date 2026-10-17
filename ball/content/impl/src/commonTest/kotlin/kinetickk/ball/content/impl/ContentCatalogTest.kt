@@ -7,11 +7,14 @@ import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.ItemDefinition
+import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
-import kinetickk.ball.content.api.MetaUpgradeDefinition
-import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.MatrixBranch
+import kinetickk.ball.content.api.MatrixEffect
+import kinetickk.ball.content.api.MatrixNodeDefinition
+import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponDefinition
@@ -56,7 +59,7 @@ class ContentCatalogTest {
         assertFalse((gameplay.items as Any) is MutableList<*>)
         assertFalse((gameplay.weapons as Any) is MutableList<*>)
         assertFalse((gameplay.weaponMasteries as Any) is MutableList<*>)
-        assertFalse((gameplay.metaUpgrades as Any) is MutableList<*>)
+        assertFalse((gameplay.matrixNodes as Any) is MutableList<*>)
         assertFalse((gameplay.relics as Any) is MutableList<*>)
         assertFalse((gameplay.clauseOffsets as Any) is MutableList<*>)
         assertFalse((gameplay.build.pairings as Any) is MutableList<*>)
@@ -235,22 +238,59 @@ class ContentCatalogTest {
     }
 
     @Test
-    fun metaUpgradeCatalogContainsEightOrderedUpgradesWithValidCosts() {
-        val upgrades = profile.metaUpgrades
+    fun matrixHasFourBranchesOfEightOrderedNodesEachEndingInOneKeystone() {
+        val nodes = profile.matrixNodes
 
-        assertEquals(ContentBounds.MAX_META_UPGRADES, MetaUpgradeId.entries.size)
-        assertEquals(ContentBounds.MAX_META_UPGRADES, upgrades.size)
-        assertEquals(MetaUpgradeId.entries.toList(), upgrades.map(MetaUpgradeDefinition::id))
-        assertEquals(upgrades.size, upgrades.map(MetaUpgradeDefinition::id).toSet().size)
-        assertEquals(upgrades.size, upgrades.map(MetaUpgradeDefinition::name).toSet().size)
+        assertEquals(32, MatrixNodeId.entries.size)
+        assertTrue(MatrixNodeId.entries.size <= ContentBounds.MAX_MATRIX_NODES)
+        assertEquals(MatrixNodeId.entries.toList(), nodes.map(MatrixNodeDefinition::id))
+        assertEquals(nodes.size, nodes.map(MatrixNodeDefinition::name).toSet().size)
+        assertSame(nodes, gameplay.matrixNodes)
+        assertSame(nodes, ui.matrixNodes)
+        MatrixBranch.entries.forEach { branch ->
+            val inBranch = nodes.filter { it.branch == branch }
+            assertEquals(8, inBranch.size, "$branch")
+            assertEquals(1, inBranch.count(MatrixNodeDefinition::keystone), "$branch keystone")
+            assertEquals(listOf(0, 1, 2, 3), inBranch.map(MatrixNodeDefinition::row).distinct().sorted(), "$branch rows")
+            assertTrue(inBranch.single(MatrixNodeDefinition::keystone).row == 3, "$branch keystone is last")
+        }
+        nodes.forEach { node ->
+            assertEquals(node, profile.matrixNode(node.id))
+            assertEquals(node.maxRanks, node.costs.size)
+            assertTrue(node.costs.zipWithNext().all { (left, right) -> right > left }, "${node.id} costs rise")
+            assertFailsWith<IllegalArgumentException> { node.cost(-1) }
+            assertFailsWith<IllegalArgumentException> { node.cost(node.maxRanks) }
+            assertEquals(node.costs.sumOf { it.toLong() }, node.spent(node.maxRanks))
+        }
+    }
 
-        upgrades.forEach { upgrade ->
-            assertEquals(upgrade, profile.metaUpgrade(upgrade.id))
-            val costs = (0 until upgrade.maxRanks).map(upgrade::cost)
-            assertEquals(upgrade.baseCost, costs.first())
-            assertTrue(costs.zipWithNext().all { (left, right) -> right > left })
-            assertFailsWith<IllegalArgumentException> { upgrade.cost(-1) }
-            assertFailsWith<IllegalArgumentException> { upgrade.cost(upgrade.maxRanks) }
+    @Test
+    fun everyPureStatNodeMovesItsStatByANoticeableShareAtRankOne() {
+        val percentEffects = setOf(
+            ItemEffect.IMPACT_DAMAGE, ItemEffect.WEAPON_POWER, ItemEffect.COOLING, ItemEffect.DASH_POWER,
+            ItemEffect.ATTACK_SPEED, ItemEffect.DATA_GAIN, ItemEffect.MATTER_GAIN, ItemEffect.OVERDRIVE_GAIN,
+        )
+        profile.matrixNodes.forEach { node ->
+            val stats = node.effects.filterIsInstance<MatrixEffect.Stat>().map { it.delta }
+            val behaviors = node.effects.filterNot { it is MatrixEffect.Stat }
+            if (behaviors.isEmpty()) {
+                // A pure stat node: a positive percent stat of at least 12 % (weapon power and attack
+                // speed; the rest give 15 %), or a flat stat worth more than 15 % of the Core's starting
+                // value (25 of 100 integrity, 20 shield, 70 pickup radius, 0.5 luck).
+                assertTrue(stats.any { delta ->
+                    delta.amount > 0f && (delta.effect !in percentEffects || delta.amount >= 0.12f - 1e-4f)
+                }, "${node.id} must change its stat noticeably")
+            }
+        }
+    }
+
+    @Test
+    fun matrixNodesOnlySpendMoreForLaterRowsAndLaterGates() {
+        MatrixBranch.entries.forEach { branch ->
+            val inBranch = profile.matrixNodes.filter { it.branch == branch }
+            val firstRankByRow = (0..3).map { row -> inBranch.filter { it.row == row }.minOf { it.costs.first() } }
+            assertTrue(firstRankByRow.zipWithNext().all { (upper, lower) -> lower >= upper }, "$branch first ranks by row")
+            inBranch.filter { it.row == 0 }.forEach { assertEquals(0, it.minimumRebirth, "${it.id} is open from the start") }
         }
     }
 

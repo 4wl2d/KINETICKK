@@ -78,7 +78,7 @@ class DefaultHomeFeature(
         rebirthPolicy = uiCatalog.rebirth,
         weapons = uiCatalog.weapons,
         relicCount = uiCatalog.relics.size,
-        metaUpgrades = uiCatalog.metaUpgrades,
+        matrixNodes = uiCatalog.matrixNodes,
     )
     private val audioExecutor = SessionAudioExecutor(audioService)
 
@@ -108,7 +108,7 @@ class DefaultHomeFeature(
         revisionValue
         val uiModel = reducer.uiModel(
             profilePort.query(ProfileQuery.GetHomeProgress),
-            profilePort.query(ProfileQuery.GetLabProgress).snapshot.progress,
+            profilePort.query(ProfileQuery.GetMatrixProgress).snapshot.progress,
         )
         val textScale = profilePort.query(ProfileQuery.GetPreferences).preferences.textScale
         val typography = rememberInterfaceTypography()

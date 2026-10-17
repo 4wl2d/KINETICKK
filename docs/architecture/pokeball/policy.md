@@ -128,11 +128,12 @@ remain independently enforced.
 | Desktop synthesis samples / PCM bytes per tone | 22050 / 44100 | validated one-second maximum buffer shape |
 | Android audio workers / queued tasks | 1 / 24 | fixed executor and discard-oldest queue policy |
 | Android synthesis samples / PCM bytes per tone | 22050 / 44100 | validated one-second maximum PCM16 buffer shape |
-| items / weapons / upgrades / Relics / named pairings / reactions | 96 / 12 / 8 / 24 / 32 / 10 (current catalog 80 / 12 / 8 / 20 / 20 / 10) | Content bootstrap validation, including key-consistent pairings, declared elements and Break floors |
+| items / weapons / Matrix nodes / Relics / named pairings / reactions | 96 / 12 / 40 / 24 / 32 / 10 (current catalog 80 / 12 / 32 / 20 / 20 / 10) | Content bootstrap validation, including key-consistent pairings, declared elements, Break floors and Matrix prerequisites within their branch one row above the node |
+| Matrix node ranks / rows / effects per node | 5 / 8 / 4 | Content definition construction; every node lists one price per rank |
 | Rebirth level | `0..10` | Content typed policy plus Profile/Gameplay validation |
 | equipped Relic slots / rank | 4 / `1..3` (generic Meld reaches 2) | captured Content Relic policy plus Gameplay retention/saturation |
-| Profile retained Lab rank slots / each rank | captured upgrade count (at most 8) / `0..captured maxRanks` | Profile bootstrap compatibility plus policy-free Resource schema validation |
-| Profile character achievement totals / distinct winners | non-negative saturating `Long` / six stable character IDs | Profile validates deltas, persists cumulative progress and owns unlock evaluation |
+| Profile retained Matrix node ranks / each rank | one slot per stable MatrixNodeId (at most 40) / `0..5` on the wire, clamped to the captured `maxRanks` on load with the excess refunded | Profile bootstrap compatibility plus policy-free Resource schema validation; prerequisites and Rebirth gates apply only at purchase |
+| Profile character achievement totals (including total kills, ricochets and Data pickups) / distinct winners | non-negative saturating `Long` / six stable character IDs | Profile validates deltas, persists cumulative progress and owns unlock evaluation |
 | Profile retained discoveries | items: captured `itemCount` (at most 96); Relics 24; reactions 10; pairings 32; heirloom Relics 4 | Profile bootstrap compatibility plus policy-free Resource schema validation; legacy (pre-epoch) lists up to 400 items / 40 Relics are discarded at decode |
 | Profile master volume / text scale | `0..1` / `1..1.75` | Profile and Gameplay normalized compatibility plus Resource ingress validation |
 | Profile simulation speed / damage-tier threshold | exact declared option sets | API declarations consumed by Profile Nucleus, Gameplay Nucleus, and Resource validation |
@@ -159,16 +160,16 @@ copying modes or source-body expectations is a policy requirement.
 |---|---:|---|
 | `gameplay.item-indexed-state` | item arrays, Reborn flags, status accumulators and discoveries <=96; clause timers/counters <= 96 x 2 | validated contiguous Item IDs; pending is a subset; cardinality-stable COW |
 | `gameplay.weapon-indexed-state` | unlocked weapons/mutation counters <=12 | closed WeaponId bootstrap; invariant-preserving COW |
-| `gameplay.meta-indexed-state` | rank slots <=8 | validated closed MetaUpgradeId catalog sizes the array |
+| `gameplay.matrix-indexed-state` | rank slots <=40; folded run modifiers fixed-size | validated closed MatrixNodeId catalog sizes the array; one immutable fold per run start |
 | `gameplay.relic-indexed-state` | state arrays <=24; enemy status cells <=120 x 47 | validated RelicId catalog; fixed per-enemy status layout times the enemy cap |
 | `gameplay.collision-live-enemy-ids` | <=120 | lazy compact sorted array from bounded live enemies |
 | `gameplay.reducer-copy-collections` | equal to bounded committed source cardinality | isolated candidate storage; immutable sharing or owned copies; bounded pending outputs |
 | `gameplay.render-projection-collections` | equal to bounded source cardinality | verified predecessor provenance; identity/storage reuse or exact ordered fallback |
 | `gameplay.stable-compaction` | retained cardinality <= bounded source; stable survivor order | forward survivor compaction/reverse-tail deletion or index-stable removal |
-| `profile.codec-temporary-collections` | unlocked <=12; ranks =8; discoveries <=400 legacy / <=96 current | materialized after schema validation |
+| `profile.codec-temporary-collections` | unlocked <=12; Matrix ranks <=40; retired Lab ranks =8; discoveries <=400 legacy / <=96 current | materialized after schema validation |
 | `session.shell-entries` | 1..2 | one base plus one nullable overlay |
 | `content.closed-ui-catalogs` | CoreShape 6 / WeaponMastery 4 | bootstrap requires exact stable order |
-| `ui.catalog-backed-sources` | Codex items <=96; Armory weapons <=12; Lab upgrades <=8; mastery closed | validated immutable Content plus bounded Profile state |
+| `ui.catalog-backed-sources` | Codex items <=96; Armory weapons <=12; Matrix nodes <=40; mastery closed | validated immutable Content plus bounded Profile state |
 | `audio.music-notes` | 8 | fixed literal array with modulo-only indexing |
 | `foundation.immutable-set-copy` | list = input cardinality; set <= input cardinality | safe immutable reuse or owned copy; stable first-occurrence set semantics |
 
@@ -243,9 +244,20 @@ or migration path.
 
 The collection carries one optional `itemCatalogEpoch`. Encoders always write
 the current epoch; a payload without it (or with an older epoch) comes from the
-retired 400-item / 40-Relic catalog, so decode keeps every economy, Lab,
+retired 400-item / 40-Relic catalog, so decode keeps every economy, Matrix,
 loadout, Rebirth, achievement and preference value and discards only the item
-and Relic discovery lists before validation. Discovered reactions, discovered
+and Relic discovery lists before validation.
+
+The retired Lab stays readable as one optional `labProgress` field at its old
+position. A payload that carries it must list exactly the eight frozen upgrade
+wire ids in sorted order with ranks inside their frozen maxima; decode refunds
+the full price of every owned rank (the sum of `baseCost × k²` for each owned
+rank k) into Matter, raises lifetime Matter to at least the new balance and
+starts an empty Matrix. Encoders never write the Lab. The optional `matrix`
+field lists only owned nodes, strictly sorted by wire id with ranks `1..5`; a
+payload holding both fields is inconsistent. The cumulative `totalKills`,
+`ricochets` and `dataPickups` achievement counters are written only when
+non-zero. Discovered reactions, discovered
 pairings and heirloom Relics are optional sorted stable-ID lists (heirlooms keep
 slot order) written only when non-empty. Unknown stable IDs in a current-epoch
 payload still fail closed.

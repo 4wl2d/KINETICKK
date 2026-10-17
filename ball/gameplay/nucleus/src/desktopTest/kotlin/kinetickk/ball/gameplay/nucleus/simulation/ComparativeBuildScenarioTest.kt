@@ -139,7 +139,7 @@ class ComparativeBuildScenarioTest {
     }
 }
 
-private enum class ProfileCondition(val labRank: Int, val rebirth: Int) { FRESH(0, 0), LAB(6, 0), REBIRTH(6, 3) }
+private enum class ProfileCondition(val matrixRank: Int, val rebirth: Int) { FRESH(0, 0), MATRIX(6, 0), REBIRTH(6, 3) }
 /** Each direction commits its relics and twelve elemental or archetype items; no named relic pairing. */
 private enum class BuildDirection(val weapon: WeaponId, val relics: List<RelicId>, val items: List<Pair<String, Int>>) {
     KINETIC(WeaponId.MORNINGSTAR,
@@ -178,7 +178,7 @@ private fun runEncounter(
     val game = MutableGameState(canonicalGameplayContent, seed = 73_199, initialRebirthLevel = profile.rebirth).apply {
         coreShape = shape
         startingWeapon = weaponOverride
-        metaRanks.fill(profile.labRank)
+        matrixRanks.fill(profile.matrixRank)
         startRun()
         settings = settings.copy(simulationSpeed = 1f)
         if (encounter == Encounter.BOSS) {
