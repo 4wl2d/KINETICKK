@@ -3,6 +3,10 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.DamageBasis
+import kinetickk.ball.content.api.EffectAction
+import kinetickk.ball.content.api.EffectClause
+import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.MatrixEffect
@@ -78,6 +82,27 @@ class MatrixEffectsTest {
             assertTrue(base > 0f, "path $index")
             assertEquals(base * 1.35f, dealt(true, hit), base * 1e-4f, "path $index")
         }
+    }
+
+    @Test
+    fun damageMultiplierAppliesOnceToProcsDerivedFromAHit() {
+        // Calibrated Coil answers every weapon hit with a full-hit Strike and a half-hit Burst around the target.
+        val coil = contentWithClauses("Calibrated Coil", EffectClause(EffectTrigger.WEAPON_HIT,
+            actions = immutableListOf(EffectAction.Strike(DamageBasis.HIT, 1f), EffectAction.Burst(160f, DamageBasis.HIT, 0.5f))))
+        fun dealt(withMatrix: Boolean): Pair<Float, Float> {
+            val game = isolated(MatrixEffect.DamageMultiplier(0.35f), withMatrix, base = coil)
+            game.own("Calibrated Coil")
+            val target = game.addEnemyForTesting(game.coreX + 300f, game.coreY, hp = 100_000f)
+            val bystander = game.addEnemyForTesting(game.coreX + 380f, game.coreY, hp = 100_000f)
+            game.dealHit(target, 50f, HitSource.WEAPON, canCrit = false)
+            return (target.maxHp - target.hp) to (bystander.maxHp - bystander.hp)
+        }
+        val (targetBase, bystanderBase) = dealt(false)
+        val (targetBoosted, bystanderBoosted) = dealt(true)
+        assertTrue(bystanderBase > 0f, "the Burst must reach the bystander")
+        // Hit, Strike and Burst each take the multiplier once, not once more through the hit they measure.
+        assertEquals(targetBase * 1.35f, targetBoosted, targetBase * 1e-4f)
+        assertEquals(bystanderBase * 1.35f, bystanderBoosted, bystanderBase * 1e-4f)
     }
 
     @Test
@@ -391,9 +416,10 @@ class MatrixEffectsTest {
         rank: Int = 1,
         seed: Int = 77,
         rebirth: Int = 0,
+        base: GameplayContentSnapshot = canonicalGameplayContent,
         setup: MutableGameState.() -> Unit = {},
     ): MutableGameState {
-        val content = if (effect == null) canonicalGameplayContent else canonicalGameplayContent.withEffect(node, effect)
+        val content = if (effect == null) base else base.withEffect(node, effect)
         return MutableGameState(content, seed = seed, initialRebirthLevel = rebirth).apply {
             if (withMatrix) matrixRanks[content.matrixNodes.indexOfFirst { it.id == node }] = rank
             setup()

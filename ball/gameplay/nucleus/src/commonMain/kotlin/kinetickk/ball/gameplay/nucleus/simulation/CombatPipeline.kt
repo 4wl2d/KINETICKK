@@ -375,7 +375,8 @@ internal fun MutableGameState.dealWeaponDamage(
 
 /**
  * Item and relic proc damage. [amount] is already measured against its basis; [rescale] adds target
- * vulnerability and liabilities. An element-picked proc carries its [element]. A [shareCapped] kill proc
+ * vulnerability and liabilities. The Matrix damage multiplier always applies here, once: hit bases are
+ * measured without it. An element-picked proc carries its [element]. A [shareCapped] kill proc
  * takes at most [KILL_PROC_SHARE_CAP] of the target's weighted integrity. Proc kills never fire kill clauses.
  */
 internal fun MutableGameState.dealProcDamage(
