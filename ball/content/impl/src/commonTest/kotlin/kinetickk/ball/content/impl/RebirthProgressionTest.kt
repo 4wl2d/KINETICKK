@@ -166,3 +166,26 @@ class RebirthProgressionTest {
         }
     }
 }
+
+class RebirthRankUnlocksTest {
+    private val ui = createContentCatalog().uiCatalog()
+
+    private fun unlocks(rank: Int) = kinetickk.ball.content.api.rebirthRankUnlocks(
+        rank, ui.weapons, ui.coreShapes, ui.relics, ui.items, ui.matrixNodes, ui.enemies,
+    )
+
+    @Test
+    fun everyRankFromOneOpensContentAndEveryGatedPieceOpensAtExactlyOneRank() {
+        assertTrue(unlocks(0).isEmpty)
+        (1..10).forEach { rank -> assertFalse(unlocks(rank).isEmpty, "rank $rank opens nothing") }
+        val all = (1..10).map(::unlocks)
+        assertEquals(ui.weapons.count { it.minimumRebirth > 0 }, all.sumOf { it.weapons.size })
+        assertEquals(ui.items.count { it.minimumRebirth > 0 }, all.sumOf { it.items.size })
+        assertEquals(ui.relics.count { it.minimumRebirth > 0 }, all.sumOf { it.relics.size })
+        assertEquals(ui.matrixNodes.count { it.minimumRebirth > 0 }, all.sumOf { it.matrixNodes.size })
+        assertEquals(ui.enemies.count { it.minimumRebirth > 0 }, all.sumOf { it.enemies.size })
+        // Spiral (rank 1), Pentagon (3), Crescent (5) and Hexagon (7) are the Reborn-rank characters.
+        assertEquals(listOf(1, 3, 5, 7), (1..10).filter { rank -> unlocks(rank).characters.isNotEmpty() })
+        assertEquals(listOf("Glacier Bell"), unlocks(1).weapons.map { it.name })
+    }
+}

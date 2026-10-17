@@ -165,6 +165,8 @@ internal data class TerminalPresentation(
     val recapTags: List<TerminalTag> = emptyList(),
     val dominant: TerminalElement? = null,
     val reactions: List<TerminalReaction> = emptyList(),
+    /** What a Victory earns on the Rebirth ladder (null for a defeat or a replayed cleared tier). */
+    val rebirthEarned: ReportRebirthLines? = null,
 )
 
 /** A leading archetype of the run: the tag, its name and the resonance tier it reached. */
@@ -235,6 +237,7 @@ internal fun GameplayRenderModel.terminalPresentation(
         reactions = ReactionId.entries.filter { reactionsThisRun and (1 shl it.ordinal) != 0 }.map {
             TerminalReaction(it, content.build.reaction(it).name.localizedContent(language), discoveredThisRun and (1 shl it.ordinal) != 0)
         },
+        rebirthEarned = reportRebirthLines(language),
     )
 }
 
@@ -601,6 +604,10 @@ private fun ColumnScope.ReportSummary(
     Box(Modifier.zIndex(1f).enter(scene, 0.3f)) {
         OverlayStamp(stamp, Modifier.testTag("kinetickk.gameplay.results.cause"),
             if (presentation.victory) KkStampVariant.YOU else KkStampVariant.THREAT, fontSize = stampSize * k, textScale = text)
+    }
+    presentation.rebirthEarned?.let { earned ->
+        Spacer(Modifier.height(gap(14f)))
+        ReportRebirthEarned(earned, sp(15f), sp(12f), Modifier.zIndex(1f).enter(scene, 0.35f))
     }
     if (inlineShatter) {
         Canvas(Modifier.fillMaxWidth().height(230.dp).clearAndSetSemantics { }) {

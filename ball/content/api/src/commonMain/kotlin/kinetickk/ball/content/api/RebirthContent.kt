@@ -139,3 +139,46 @@ fun defaultRebirthProfile(
         obstacleDensityMultiplier = 1f + t * 0.05f,
     )
 }
+
+/**
+ * Content a Rebirth rank opens, derived from the content gates: weapons, characters (a Reborn-rank
+ * unlock target), Relics, items and Core Matrix nodes become available at [rank], and the enemy types
+ * gated at that tier join the roster when it is selected. Each list keeps catalog order.
+ */
+data class RebirthRankUnlocks(
+    val rank: Int,
+    val weapons: List<WeaponDefinition>,
+    val characters: List<CoreShapeDefinition>,
+    val relics: List<RelicDefinition>,
+    val items: List<ItemDefinition>,
+    val matrixNodes: List<MatrixNodeDefinition>,
+    val enemies: List<EnemyDefinition>,
+) {
+    val isEmpty: Boolean
+        get() = weapons.isEmpty() && characters.isEmpty() && relics.isEmpty() && items.isEmpty() &&
+            matrixNodes.isEmpty() && enemies.isEmpty()
+}
+
+/** What reaching [rank] opens in these catalogs; rank 0 opens nothing (it is the start). */
+fun rebirthRankUnlocks(
+    rank: Int,
+    weapons: List<WeaponDefinition>,
+    coreShapes: List<CoreShapeDefinition>,
+    relics: List<RelicDefinition>,
+    items: List<ItemDefinition>,
+    matrixNodes: List<MatrixNodeDefinition>,
+    enemies: List<EnemyDefinition>,
+): RebirthRankUnlocks {
+    if (rank <= 0) return RebirthRankUnlocks(rank, emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
+    return RebirthRankUnlocks(
+        rank = rank,
+        weapons = weapons.filter { it.minimumRebirth == rank },
+        characters = coreShapes.filter {
+            it.unlockRequirement == CharacterUnlockRequirement.REBIRTH_RANK && it.unlockTarget == rank
+        },
+        relics = relics.filter { it.minimumRebirth == rank },
+        items = items.filter { it.minimumRebirth == rank },
+        matrixNodes = matrixNodes.filter { it.minimumRebirth == rank },
+        enemies = enemies.filter { it.minimumRebirth == rank },
+    )
+}

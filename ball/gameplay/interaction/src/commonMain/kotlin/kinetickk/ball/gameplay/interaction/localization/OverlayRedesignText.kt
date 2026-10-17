@@ -69,6 +69,13 @@ internal enum class OverlayRedesignText(
     Upside("Upside", "Преимущество"),
     Attuned("Attuned", "Созвучие"),
     RebirthTag("Rebirth {0}", "Перерождение {0}"),
+    // The Victory report's Rebirth line: the rank this clear earns and what it opens, or Ascendant.
+    RebornRankEarned("Reborn rank {0} earned", "Получен ранг перерождения {0}"),
+    AscendantCleared("Tier 10 cleared, Ascendant", "Ступень 10 пройдена, Вознесённый"),
+    RebirthUnlocked("Unlocked: {0}", "Открыто: {0}"),
+    UnlockedItems("{0} items", "предметов: {0}"),
+    UnlockedMatrixNodes("{0} Matrix nodes", "узлов Матрицы: {0}"),
+    UnlockedEnemies("new enemies {0}", "новые враги: {0}"),
     VictoryTitleTop("Architect", "Архитектор"),
     VictoryTitleBottom("Dismantled", "Разобран"),
     DefeatTitleTop("Core", "Ядро"),
