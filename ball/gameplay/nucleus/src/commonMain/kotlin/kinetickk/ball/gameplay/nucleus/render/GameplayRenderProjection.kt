@@ -213,7 +213,8 @@ data class ObstacleProjection(
     val shapeSeed: Int,
 )
 
-data class TrailPointProjection(val x: Float, val y: Float, val age: Float)
+/** A trail sample [age] seconds old that burns for [life] seconds (render fades it out after) at [scale] strength. */
+data class TrailPointProjection(val x: Float, val y: Float, val age: Float, val life: Float = 1.8f, val scale: Float = 1f)
 data class TotemProjection(val x: Float, val y: Float, val pulse: Float)
 
 data class WeaponNodeProjection(

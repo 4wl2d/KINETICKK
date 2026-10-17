@@ -255,9 +255,11 @@ internal fun MutableGameState.toRenderModel(
             ?: trail.reuseProjectionIfContentEqual(reusableCollections?.trail) { value, previous ->
                 value.x.sameBitsAs(previous.x) &&
                     value.y.sameBitsAs(previous.y) &&
-                    value.age.sameBitsAs(previous.age)
+                    value.age.sameBitsAs(previous.age) &&
+                    value.life.sameBitsAs(previous.life) &&
+                    value.scale.sameBitsAs(previous.scale)
             }
-            ?: trail.mapToImmutableList { value -> TrailPointProjection(value.x, value.y, value.age) },
+            ?: trail.mapToImmutableList { value -> TrailPointProjection(value.x, value.y, value.age, value.life, value.scale) },
         weaponNodes = weaponNodes.reuseEmptyProjection(reusableCollections?.weaponNodes)
             ?: weaponNodes.reuseIfIdentical(
                 identitySource?.weaponNodes,

@@ -23,6 +23,7 @@ import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.render.BuildProjection
 import kinetickk.ball.gameplay.nucleus.render.SeveredRelicProjection
+import kinetickk.ball.gameplay.nucleus.render.WeaponSynergyProjection
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
@@ -65,6 +66,11 @@ class PauseTextFitTest {
             val layout = pauseLayoutGeometry(width.toFloat(), height.toFloat(), 1f)
             listOf(PauseTextKind.MULTIPLIER, PauseTextKind.COST, PauseTextKind.TAG_NAME, PauseTextKind.REACTION).forEach { kind ->
                 assertTrue(records.any { it.kind == kind }, "$scene draws $kind")
+            }
+            // The weapon's synergies show on the desktop board at every size and on phones in portrait up to the
+            // default size (a section that no longer fits a phone at a larger size is left out, never cut).
+            if (layout.mode == GameplayLayoutMode.REGULAR || (layout.mode == GameplayLayoutMode.COMPACT_PORTRAIT && textScale <= 1.25f)) {
+                assertTrue(records.any { it.kind == PauseTextKind.SYNERGY }, "$scene draws the weapon synergies")
             }
             records.forEach { record ->
                 val text = record.layout.layoutInput.text.text
@@ -194,7 +200,7 @@ class PauseTextFitTest {
         val model = rewardFixtureModel(phase = GamePhase.PAUSED, relics = relics, language = language,
             width = width.toFloat(), height = height.toFloat(), textScale = textScale, build = build,
             discoveredPairings = setOf(RelicPairingId.ENDLESS_GYRE), itemStacks = listOf(1, 1, 1, 2, 2))
-            .with("discoveredReactionMask" to (1 shl ReactionId.WILDFIRE.ordinal))
+            .with("discoveredReactionMask" to (1 shl ReactionId.WILDFIRE.ordinal), "weaponSynergy" to FullSynergy)
         val records = mutableListOf<PauseTextRecord>()
         PauseTextProbe.records = records
         try {
@@ -218,6 +224,12 @@ class PauseTextFitTest {
         return records.toList()
     }
 }
+
+/** Every synergy chip at once: resonance, signature, a harmonizing Relic, an element, scaling and two forms. */
+private val FullSynergy = WeaponSynergyProjection(
+    tagPoints = 6, tagBonus = 0.3f, signatureActive = true, harmonizingRelic = RelicId.PERPETUAL_VECTOR,
+    infusionElement = StatusElement.THERMAL, scalingMultiplier = 1.42f, masteryForms = 2, activeMasteryForm = "trail 2.4 s",
+)
 
 /** No line of [layout] is ellipsized and no line ends inside a word. */
 private fun assertWhole(layout: TextLayoutResult, scene: String) {

@@ -39,6 +39,14 @@ internal enum class HudRedesignText(
     NoReactions("No element pair yet", "Пока нет пары стихий"),
     NoItems("No items yet", "Пока нет предметов"),
     HollowSlot("Hollow slot", "Пустая ячейка"),
+    WeaponSynergy("Weapon synergy", "Синергия оружия"),
+    SynergyTags("Tags +{0}%", "Теги +{0}%"),
+    SynergySignature("Signature {0}", "Сигнатура {0}"),
+    SynergyHarmony("Harmony: {0}", "Гармония: {0}"),
+    SynergyElement("Element: {0}", "Стихия: {0}"),
+    SynergyScaling("{0} {1}", "{0} {1}"),
+    SynergyForms("Form {0}/3", "Форма {0}/3"),
+    NoSynergy("No synergy yet", "Синергии пока нет"),
 
     // Run report build recap.
     TopTags("Archetype", "Архетип"),

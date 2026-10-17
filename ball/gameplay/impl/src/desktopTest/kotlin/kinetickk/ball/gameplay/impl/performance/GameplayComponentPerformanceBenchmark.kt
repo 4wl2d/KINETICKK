@@ -680,6 +680,8 @@ private fun appendRenderCollections(initial: Long, render: GameplayRenderModel):
         signature = mix(signature, point.x.toRawBits())
         signature = mix(signature, point.y.toRawBits())
         signature = mix(signature, point.age.toRawBits())
+        signature = mix(signature, point.life.toRawBits())
+        signature = mix(signature, point.scale.toRawBits())
     }
     signature = mix(signature, render.weaponNodes.size)
     render.weaponNodes.forEach { node ->
@@ -699,6 +701,34 @@ private fun appendRenderCollections(initial: Long, render: GameplayRenderModel):
         signature = mix(signature, orbital.previousX.toRawBits())
         signature = mix(signature, orbital.previousY.toRawBits())
     }
+    signature = mix(signature, render.weaponEntities.size)
+    render.weaponEntities.forEach { entity ->
+        signature = mix(signature, entity.kind.ordinal)
+        signature = mix(signature, entity.x.toRawBits())
+        signature = mix(signature, entity.y.toRawBits())
+        signature = mix(signature, entity.previousX.toRawBits())
+        signature = mix(signature, entity.previousY.toRawBits())
+        signature = mix(signature, entity.endX.toRawBits())
+        signature = mix(signature, entity.endY.toRawBits())
+        signature = mix(signature, entity.previousEndX.toRawBits())
+        signature = mix(signature, entity.previousEndY.toRawBits())
+        signature = mix(signature, entity.angle.toRawBits())
+        signature = mix(signature, entity.previousAngle.toRawBits())
+        signature = mix(signature, entity.radius.toRawBits())
+        signature = mix(signature, entity.extent.toRawBits())
+        signature = mix(signature, entity.life.toRawBits())
+        signature = mix(signature, entity.maxLife.toRawBits())
+        signature = mix(signature, entity.phase)
+    }
+    val synergy = render.weaponSynergy
+    signature = mix(signature, synergy.tagPoints)
+    signature = mix(signature, synergy.tagBonus.toRawBits())
+    signature = mix(signature, if (synergy.signatureActive) 1 else 0)
+    signature = mix(signature, synergy.harmonizingRelic?.ordinal ?: -1)
+    signature = mix(signature, synergy.infusionElement?.ordinal ?: -1)
+    signature = mix(signature, synergy.scalingMultiplier.toRawBits())
+    signature = mix(signature, synergy.masteryForms)
+    signature = mix(signature, synergy.activeMasteryForm?.hashCode() ?: 0)
     val totem = render.totem
     signature = mix(signature, if (totem == null) 0 else 1)
     if (totem != null) {
