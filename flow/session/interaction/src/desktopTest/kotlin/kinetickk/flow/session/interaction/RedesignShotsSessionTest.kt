@@ -47,7 +47,13 @@ import java.io.File
 import javax.imageio.ImageIO
 import kotlin.test.Test
 
-/** Local visual QA harness (not committed): renders session screens to build/redesign-shots/session. */
+/**
+ * Local visual QA harness: renders session screens to build/redesign-shots/session.
+ *
+ * With `KK_SHOTS=1` every state renders at every size and in both languages and is written as a PNG. Otherwise
+ * the run is a smoke: each screen state renders once (at the first size and language it is requested in) with
+ * its interactions and nothing is written, so a state that fails to compose, lay out or draw still fails.
+ */
 @OptIn(ExperimentalTestApi::class)
 class RedesignShotsSessionTest {
     private val sizes = listOf(1440 to 810, 844 to 390, 390 to 844)
@@ -412,22 +418,33 @@ class RedesignShotsSessionTest {
         interact: ComposeUiTest.() -> Unit,
         density: Float = 1f,
         content: @Composable () -> Unit,
-    ) = androidx.compose.ui.test.v2.runDesktopComposeUiTest((w * density).toInt(), (h * density).toInt()) {
-        mainClock.autoAdvance = false
-        setContent {
-            CompositionLocalProvider(LocalDensity provides Density(density, 1f), LocalAppLanguage provides language) {
-                Box(Modifier.requiredSize(w.dp, h.dp)) { content() }
+    ) {
+        if (!FullShots && !SmokeStates.add("$screen/$state")) return
+        androidx.compose.ui.test.v2.runDesktopComposeUiTest((w * density).toInt(), (h * density).toInt()) {
+            mainClock.autoAdvance = false
+            setContent {
+                CompositionLocalProvider(LocalDensity provides Density(density, 1f), LocalAppLanguage provides language) {
+                    Box(Modifier.requiredSize(w.dp, h.dp)) { content() }
+                }
             }
+            mainClock.advanceTimeByFrame()
+            interact()
+            mainClock.advanceTimeByFrame()
+            val bitmap = onRoot().captureToImage()
+            if (!FullShots) return@runDesktopComposeUiTest
+            val pixels = bitmap.toPixelMap()
+            val image = BufferedImage(bitmap.width, bitmap.height, BufferedImage.TYPE_INT_ARGB)
+            for (y in 0 until bitmap.height) for (x in 0 until bitmap.width) image.setRGB(x, y, pixels[x, y].toArgb())
+            val folder = File("build/redesign-shots/session").apply { mkdirs() }
+            ImageIO.write(image, "png", File(folder, "$screen-$state-${w}x$h${if (density != 1f) "@${density.toInt()}x" else ""}-${language.code}.png"))
         }
-        mainClock.advanceTimeByFrame()
-        interact()
-        mainClock.advanceTimeByFrame()
-        val bitmap = onRoot().captureToImage()
-        val pixels = bitmap.toPixelMap()
-        val image = BufferedImage(bitmap.width, bitmap.height, BufferedImage.TYPE_INT_ARGB)
-        for (y in 0 until bitmap.height) for (x in 0 until bitmap.width) image.setRGB(x, y, pixels[x, y].toArgb())
-        val folder = File("build/redesign-shots/session").apply { mkdirs() }
-        ImageIO.write(image, "png", File(folder, "$screen-$state-${w}x$h${if (density != 1f) "@${density.toInt()}x" else ""}-${language.code}.png"))
+    }
+
+    private companion object {
+        val FullShots = System.getenv("KK_SHOTS") == "1"
+
+        /** The states the smoke has rendered in this run (each once across the class). */
+        val SmokeStates = HashSet<String>()
     }
 }
 

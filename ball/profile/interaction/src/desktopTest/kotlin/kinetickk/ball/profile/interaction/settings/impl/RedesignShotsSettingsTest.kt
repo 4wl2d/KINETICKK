@@ -49,14 +49,22 @@ import org.jetbrains.skia.Image
 import java.io.File
 import kotlin.test.Test
 
-/** Visual QA harness (not committed): renders every Settings tab and state to PNG. */
+/**
+ * Visual QA harness: renders every Settings tab and state to PNG.
+ *
+ * With `KK_SHOTS=1` every state renders at every size in both languages into build/redesign-shots/settings.
+ * Otherwise the run is a smoke: each state renders once (at the first size and language it is requested in) with
+ * its presses and nothing is written, so a state that fails to compose, lay out or draw still fails.
+ */
 @OptIn(ExperimentalTestApi::class)
 class RedesignShotsSettingsTest {
+    private val fullShots = System.getenv("KK_SHOTS") == "1"
+    private val smokeStates = HashSet<String>()
     private val sizes = listOf(1440 to 810, 844 to 390, 390 to 844)
 
     @Test
     fun renderSettingsStates() {
-        val output = File("build/redesign-shots/settings").apply { mkdirs() }
+        val output = File("build/redesign-shots/settings").apply { if (fullShots) mkdirs() }
         for ((width, height) in sizes) for (language in AppLanguage.entries) {
             shot(output, width, height, language, "game", "game", PlayerPreferences(language = language))
             shot(output, width, height, language, "sound", "sound", PlayerPreferences(language = language, masterVolume = 0.8f))
@@ -101,7 +109,7 @@ class RedesignShotsSettingsTest {
     /** (!) explanations opened by a press (touch), including those near the Compose volume strip. */
     @Test
     fun renderInfoStates() {
-        val output = File("build/redesign-shots/settings").apply { mkdirs() }
+        val output = File("build/redesign-shots/settings").apply { if (fullShots) mkdirs() }
         for ((width, height) in sizes) for (language in AppLanguage.entries) for (scale in listOf(1.25f, 1.75f)) {
             val suffix = if (scale == 1.25f) "" else "-text175"
             val prefs = PlayerPreferences(language = language, masterVolume = 0.8f, textScale = scale)
@@ -130,39 +138,43 @@ class RedesignShotsSettingsTest {
         focusTag: String? = null,
         pressTag: String? = null,
         thenPressTag: String? = null,
-    ) = runSkikoComposeUiTest(size = Size(width.toFloat(), height.toFloat()), density = Density(1f)) {
-        mainClock.autoAdvance = false
-        val port = ShotProfilePort(preferences)
-        val feature = DefaultSettingsFeature(port, ShotSilentAudio)
-        setContent {
-            CompositionLocalProvider(
-                LocalAppLanguage provides language,
-                LocalKkRolePalette provides preferences.colorVision.previewPalette(),
-            ) {
-                Box(Modifier.requiredSize(width.dp, height.dp)) {
-                    feature.Content(routeToken = 1L) { }
+    ) {
+        if (!fullShots && !smokeStates.add(state)) return
+        runSkikoComposeUiTest(size = Size(width.toFloat(), height.toFloat()), density = Density(1f)) {
+            mainClock.autoAdvance = false
+            val port = ShotProfilePort(preferences)
+            val feature = DefaultSettingsFeature(port, ShotSilentAudio)
+            setContent {
+                CompositionLocalProvider(
+                    LocalAppLanguage provides language,
+                    LocalKkRolePalette provides preferences.colorVision.previewPalette(),
+                ) {
+                    Box(Modifier.requiredSize(width.dp, height.dp)) {
+                        feature.Content(routeToken = 1L) { }
+                    }
                 }
             }
-        }
-        mainClock.advanceTimeBy(100)
-        if (tab != "game") {
-            onNodeWithTag("kinetickk.settings.group.$tab").performClick()
             mainClock.advanceTimeBy(100)
-        }
-        if (focusTag != null) {
-            onNodeWithTag(focusTag).performSemanticsAction(SemanticsActions.RequestFocus)
-        }
-        if (pressTag != null) {
-            if (onAllNodesWithTag(pressTag).fetchSemanticsNodes().isEmpty()) return@runSkikoComposeUiTest
-            onNodeWithTag(pressTag).performTouchInput { click() }
-            mainClock.advanceTimeBy(300)
-            if (thenPressTag != null) onNodeWithTag(thenPressTag).performTouchInput { click() }
-        }
-        mainClock.advanceTimeBy(1_100)
-        val image = onRoot().captureToImage()
-        val name = "settings-$state-${width}x$height-${language.code}.png"
-        Image.makeFromBitmap(image.asSkiaBitmap()).use { skia ->
-            skia.encodeToData()!!.use { File(output, name).writeBytes(it.bytes) }
+            if (tab != "game") {
+                onNodeWithTag("kinetickk.settings.group.$tab").performClick()
+                mainClock.advanceTimeBy(100)
+            }
+            if (focusTag != null) {
+                onNodeWithTag(focusTag).performSemanticsAction(SemanticsActions.RequestFocus)
+            }
+            if (pressTag != null) {
+                if (onAllNodesWithTag(pressTag).fetchSemanticsNodes().isEmpty()) return@runSkikoComposeUiTest
+                onNodeWithTag(pressTag).performTouchInput { click() }
+                mainClock.advanceTimeBy(300)
+                if (thenPressTag != null) onNodeWithTag(thenPressTag).performTouchInput { click() }
+            }
+            mainClock.advanceTimeBy(1_100)
+            val image = onRoot().captureToImage()
+            if (!fullShots) return@runSkikoComposeUiTest
+            val name = "settings-$state-${width}x$height-${language.code}.png"
+            Image.makeFromBitmap(image.asSkiaBitmap()).use { skia ->
+                skia.encodeToData()!!.use { File(output, name).writeBytes(it.bytes) }
+            }
         }
     }
 }
