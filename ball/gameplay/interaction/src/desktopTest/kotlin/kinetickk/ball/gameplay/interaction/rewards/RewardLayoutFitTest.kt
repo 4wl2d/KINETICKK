@@ -101,6 +101,26 @@ class RewardLayoutFitTest {
     }
 
     /**
+     * A totem row's meta (equipped, the weapon's family and tags) beside the kind and the Signature badge never
+     * shrinks below 70 % of its 9 sp phone size: it shows readable or not at all (its row's state description keeps it).
+     */
+    @Test
+    fun totemMetaBesideTheSignatureBadgeStaysReadableOrStepsAside() {
+        forEachScene(::directedTotem, frames = listOf(844 to 390, 390 to 844)) { scene, model ->
+            val floor = 0.7f * 9f * overlayUiTextScale(model.settings.textScale)
+            model.choices.indices.forEach { index ->
+                textsUnder("kinetickk.gameplay.choice.${index + 1}.meta").forEach { (_, layout) ->
+                    val size = layout.layoutInput.style.fontSize.value
+                    assertTrue(size >= floor - 0.01f, "$scene: row ${index + 1} meta \"${layout.layoutInput.text}\" at $size sp under $floor")
+                    assertTrue(!layout.isCut() && layout.lineCount == 1, "$scene: row ${index + 1} meta \"${layout.layoutInput.text}\" is cut")
+                }
+            }
+            // The equipped weapon's row (no badge beside its kind) keeps its meta.
+            assertTrue(textsUnder("kinetickk.gameplay.choice.1.meta").isNotEmpty(), "$scene: the Amplify row shows its Equipped meta")
+        }
+    }
+
+    /**
      * The relic row's names share one size, keep 8 dp clear of their neighbours and sit in one box
      * height, so every rank label shares one baseline; the ranks stay inside the matrix and 16 dp
      * above the preview column's heading when it sits below the row (portrait).

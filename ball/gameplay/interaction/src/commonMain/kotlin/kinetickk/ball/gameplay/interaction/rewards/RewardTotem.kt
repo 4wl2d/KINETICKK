@@ -425,7 +425,12 @@ private fun TotemRow(
                         OverlayTag(badge, variant = KkTagVariant.LINE, foreground = if (selected) Kk.Ink else roles.you, textScale = frame.textScale,
                             modifier = Modifier.testTag("kinetickk.gameplay.choice.${index + 1}.signature"))
                     }
-                    row.meta?.let { OverlayFitText(it, typography.monoStyle(frame.sp(11f, 9f), color = fg.copy(alpha = 0.7f)), uppercase = true, maxLines = 1) }
+                    // The meta (equipped, the weapon's family and tags) takes what the kind and badge leave, never below
+                    // 70 % of its size; where that cannot hold it, it stays in the row's state description only.
+                    row.meta?.let {
+                        OverlayFitTextOrNothing(it, typography.monoStyle(frame.sp(11f, 9f), color = fg.copy(alpha = 0.7f)),
+                            Modifier.weight(1f, fill = false).testTag("kinetickk.gameplay.choice.${index + 1}.meta"), uppercase = true)
+                    }
                 }
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
                     // The offering name is large display type (44 px on the board): the text-size

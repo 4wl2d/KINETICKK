@@ -310,6 +310,38 @@ internal fun OverlayFitText(
     }
 }
 
+/**
+ * [text] at the largest size, down to [minScale] of [style], at which it fits its width in [maxLines] lines without
+ * breaking inside a word; nothing at all where even [minScale] cannot hold it (the caller keeps the text in a state
+ * description). It never shrinks below [minScale].
+ */
+@Composable
+internal fun OverlayFitTextOrNothing(
+    text: String,
+    style: TextStyle,
+    modifier: Modifier = Modifier,
+    uppercase: Boolean = false,
+    maxLines: Int = 1,
+    minScale: Float = 0.7f,
+) {
+    val measurer = rememberTextMeasurer(cacheSize = 16)
+    val shown = if (uppercase) text.uppercase() else text
+    val probe = LocalOverlayTextProbe.current
+    BoxWithConstraints(modifier) {
+        val width = if (constraints.hasBoundedWidth) constraints.maxWidth.toFloat() else Float.POSITIVE_INFINITY
+        val fitted = remember(shown, style, width, maxLines, minScale) {
+            val candidate = fitTextStyle(measurer, shown, style, width, maxLines, minScale)
+            val layout = measurer.measure(shown, candidate, softWrap = maxLines > 1, maxLines = maxLines + 1,
+                constraints = Constraints(maxWidth = width.coerceAtMost(Constraints.Infinity.toFloat()).toInt().coerceAtLeast(1)))
+            val whole = layout.lineCount <= maxLines && !layout.didOverflowWidth && layout.size.width <= width
+            candidate.takeIf { whole && it.fontSize.value >= style.fontSize.value * minScale - 0.01f }
+        }
+        if (fitted != null) {
+            if (probe != null) OverlayProbeText(probe, shown, fitted, Modifier) else BasicText(shown, style = fitted, maxLines = maxLines)
+        }
+    }
+}
+
 /** Resolves a reward tone to its color; [fixed] is used for [RewardTone.FIXED]. */
 internal fun RewardTone.color(roles: KkRolePalette, fixed: Color): Color = when (this) {
     RewardTone.FIXED -> fixed
