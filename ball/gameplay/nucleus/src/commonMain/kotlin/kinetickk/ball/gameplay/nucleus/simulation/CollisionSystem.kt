@@ -110,8 +110,7 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
             dealHit(enemy, damage, HitSource.IMPACT, canCrit = true)
             // A fast impact destroys an unprimed Bomber outright, before it can prime, even through a tether.
             if (defusable && enemy.alive && coreImpactSpeed >= BOMBER_DEFUSE_SPEED) {
-                val outright = if (isLinked(enemy)) enemy.hp / (1f - AEGIS_LINK_REDUCTION) else enemy.hp
-                damageEnemy(enemy, outright, killEligible = true, source = HitSource.IMPACT)
+                executeEnemy(enemy, HitSource.IMPACT)
             }
             if (newDashContact) onDashHit(enemy, damage)
             if (dashPhaseTime <= 0f) onCharacterPrimaryHit(enemy)
@@ -215,10 +214,10 @@ internal fun MutableGameState.resolveWeaponDamage(delta: Float) {
             val enemy = enemies[enemyIndex]
             val radius = 170f + weaponLevel * 5f + agonyRank * 18f
             if (distanceSquared(coreX, coreY, enemy.x, enemy.y) <= square(radius + enemy.radius)) {
-                // Agony's collapse executes outright, past every multiplier; the Architect only takes the field.
+                // Agony's collapse executes outright, past every multiplier and tether; bosses only take the field.
                 val collapse = agonyRank > 0 && !enemy.isBoss && !enemy.isMiniBoss && enemy.hp <= enemy.maxHp * (0.06f + agonyRank * 0.015f)
                 if (collapse) {
-                    damageEnemy(enemy, enemy.hp, killEligible = true, source = HitSource.WEAPON)
+                    executeEnemy(enemy, HitSource.WEAPON)
                 } else {
                     dealWeaponDamage(enemy, 24f * delta * power * (1f + agonyRank * 0.08f), cadence = WeaponHitCadence.CONTINUOUS)
                 }

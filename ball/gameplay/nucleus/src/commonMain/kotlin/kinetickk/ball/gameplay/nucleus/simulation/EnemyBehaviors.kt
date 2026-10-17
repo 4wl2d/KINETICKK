@@ -575,23 +575,33 @@ internal fun MutableGameState.updateHerald(enemy: Enemy, dx: Float, dy: Float, d
     if (elapsed >= enemy.abilityAt && enemy.shieldUntil <= elapsed) {
         enemy.shieldUntil = elapsed + HERALD_SHIELD_SECONDS
         enemy.abilityAt = elapsed + HERALD_SHIELD_INTERVAL_SECONDS
-        enemy.escortsPending += HERALD_ESCORTS
+        // Its arrival escorts belong to the encounter; repeat summons, like a brood, only fill free ordinary room.
+        enemy.escortsPending += heraldSummonsWithinCap()
         shockwave(enemy.x, enemy.y, 0.45f, enemy.radius * 2.6f, 3)
     }
 }
 
 /**
- * Applies the receiver's own guards to [amount]: a Herald shield stops everything but impacts (an impact
- * breaks it) and an Aegis tether removes [AEGIS_LINK_REDUCTION] of the rest.
+ * Escorts one Herald shield cycle summons: [HERALD_ESCORTS], cut to the whole ordinary cap slots still free
+ * (escorts share the Herald's aspect, so none is a Swarmling and each fills a full slot).
  */
-internal fun MutableGameState.guardedDamage(enemy: Enemy, amount: Float, source: HitSource?): Float {
+internal fun MutableGameState.heraldSummonsWithinCap(): Int {
+    val room = ordinaryEnemyCap() - ordinaryCapLoad()
+    return min(HERALD_ESCORTS, max(0, (room + 1e-4f).toInt()))
+}
+
+/**
+ * Applies the receiver's own guards to [amount]: a Herald shield stops everything but impacts (an impact
+ * breaks it) and an Aegis tether removes [AEGIS_LINK_REDUCTION] of the rest, except from an [execute].
+ */
+internal fun MutableGameState.guardedDamage(enemy: Enemy, amount: Float, source: HitSource?, execute: Boolean = false): Float {
     var guarded = amount
     if (enemy.shieldUntil > elapsed) {
         if (source != HitSource.IMPACT && source != HitSource.DASH) return 0f
         enemy.shieldUntil = elapsed
         shockwave(enemy.x, enemy.y, 0.4f, enemy.radius * 2.4f, 3)
     }
-    if (isLinked(enemy)) guarded *= 1f - AEGIS_LINK_REDUCTION
+    if (!execute && isLinked(enemy)) guarded *= 1f - AEGIS_LINK_REDUCTION
     return guarded
 }
 

@@ -102,23 +102,62 @@ class SpawnDirectorTest {
     fun swarmlingPicksBecomeSwarmsAndSwarmlingsCostAThirdOfABudgetSlot() {
         val state = directorState(seed = 17)
         state.elapsed = 600f
+        var walls = 0
         repeat(400) {
             state.directorPhase = SpawnDirectorPhase.BUILD.ordinal
             state.planSpawnEvent()
             val kind = SpawnEventKind.entries[state.pendingEventKind]
-            if (kind == SpawnEventKind.SINGLE || kind == SpawnEventKind.PACK) {
+            if (kind == SpawnEventKind.SINGLE || kind == SpawnEventKind.PACK || kind == SpawnEventKind.WALL) {
                 assertNotEquals(EnemyType.SWARMLING.ordinal, state.pendingEventType)
             }
+            if (kind == SpawnEventKind.WALL) walls++
             if (kind == SpawnEventKind.SWARM) {
                 assertEquals(EnemyType.SWARMLING.ordinal, state.pendingEventType)
                 assertTrue(state.pendingEventSize in 6..10)
             }
         }
+        assertTrue(walls > 0, "The draw covered walls")
         state.plan(SpawnEventKind.SWARM, size = 9, type = EnemyType.SWARMLING)
         state.spawnBudget = 3f
         state.fireNow(budget = 3f)
         assertEquals(9, state.lastSpawnEventSpawned, "Nine Swarmlings cost three")
         assertEquals(0f, state.spawnBudget, 0.05f, "Only the step's own accrual is left")
+    }
+
+    @Test
+    fun mixedEventsNeverBringSwarmlingsAtFullCost() {
+        val state = directorState(seed = 29)
+        state.elapsed = 600f
+        state.nextEliteAt = Float.MAX_VALUE
+        var spawned = 0
+        repeat(40) { round ->
+            state.enemies.clear()
+            val kind = if (round % 2 == 0) SpawnEventKind.FLANK else SpawnEventKind.ENCIRCLE
+            state.pendingEventKind = kind.ordinal
+            state.pendingEventSize = if (kind == SpawnEventKind.FLANK) 6 else 8
+            state.pendingEventType = -1
+            state.fireNow()
+            assertEquals(kind.ordinal, state.lastSpawnEventKind)
+            assertTrue(state.enemies.none { it.type == EnemyType.SWARMLING }, "Round $round ($kind) spawned Swarmlings")
+            spawned += state.enemies.size
+        }
+        assertEquals(20 * 6 + 20 * 8, spawned)
+    }
+
+    @Test
+    fun multiMemberEventsNeverStackWardensPastTheCap() {
+        for (kind in listOf(SpawnEventKind.PACK, SpawnEventKind.WALL, SpawnEventKind.AMBUSH)) {
+            val state = directorState(seed = 31)
+            state.elapsed = 300f
+            state.nextEliteAt = Float.MAX_VALUE
+            state.enemies += state.spawnedEnemy(EnemyType.WARDEN, state.coreX + 2_000f, state.coreY)
+            assertEquals(2, state.wardenCap())
+            state.plan(kind, size = 6, type = EnemyType.WARDEN)
+            state.fireNow()
+            assertEquals(6, state.lastSpawnEventSpawned, "$kind keeps its size")
+            assertEquals(state.wardenCap(), state.enemies.count { it.type == EnemyType.WARDEN }, "$kind stops at the cap")
+            assertEquals(5, state.enemies.count { it.type == EnemyType.WEAVER }, "$kind fills the rest with Weavers")
+        }
     }
 
     @Test

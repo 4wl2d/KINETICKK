@@ -122,7 +122,7 @@ internal data class Enemy private constructor(
     /** The run's final boss only: hit cap, encounter lookup and victory. */
     val isBoss: Boolean get() = type == EnemyType.ARCHITECT
     val isElite: Boolean get() = type == EnemyType.ELITE
-    /** The scheduled Herald: Elite victim factor, freeze immunity, leash exemption, outside the ordinary cap. */
+    /** The scheduled Herald: Elite victim factor, freeze and stop immunity, leash exemption, outside the ordinary cap. */
     val isMiniBoss: Boolean get() = type == EnemyType.HERALD
     val alive: Boolean get() = !dead && hp > 0f
 

@@ -50,11 +50,10 @@ internal const val WALL_COOLDOWN_SECONDS: Float = 30f
 internal const val CAP_OVERFLOW_COOLDOWN_SECONDS: Float = 20f
 internal const val DIRECTOR_CHECK_SECONDS: Float = 0.4f
 /**
- * Overall budget scale. Packs, flanks and relocated stragglers keep more enemies engaged than single
- * spawns did, so the director banks a little less than one enemy per tempo interval at rate 1. Tuned
- * with the no-POI reference bot at tier 0 (its win rate over 40 seeds stays at the 0.3.x level).
+ * Overall budget scale: at 1 the director banks one enemy per tempo interval at phase rate 1. The tuning
+ * knob for the no-POI reference bot at tier 0 (its win rate over 40 seeds stays at the 0.3.x level).
  */
-internal const val DIRECTOR_RATE_SCALE: Float = 0.95f
+internal const val DIRECTOR_RATE_SCALE: Float = 1f
 /** An event never fires below this share of its planned size. */
 internal const val MINIMUM_EVENT_SHARE: Float = 0.6f
 /** A Swarmling fills this share of an ordinary cap slot and of the spawn budget. */
@@ -160,7 +159,7 @@ internal fun MutableGameState.spawnOpeningPacks() {
     for (pack in 0 until packs) {
         val size = remaining / (packs - pack)
         remaining -= size
-        val type = pickEnemyType(weakOnly = true)
+        val type = pickEnemyType(weakOnly = true, excludeSwarmling = true)
         val angle = heading + sectorOffset()
         val distance = viewportEdgeDistance(angle) + 80f + spawnRandom.nextFloat() * 180f
         spawnCluster(type, size, coreX + cos(angle) * distance, coreY + sin(angle) * distance)
@@ -192,14 +191,17 @@ private fun MutableGameState.ambushReady(): Boolean =
         pendingEventKind != SpawnEventKind.AMBUSH.ordinal
 
 private fun MutableGameState.planAmbush() {
-    val type = pickEnemyType()
+    val type = pickEnemyType(excludeSwarmling = true)
     pendingEventKind = SpawnEventKind.AMBUSH.ordinal
     pendingEventSize = rangeInclusive(3, 5)
     pendingEventType = type.ordinal
     ambushReadyAt = elapsed + AMBUSH_COOLDOWN_SECONDS
 }
 
-/** Chooses the next event's kind and size; SINGLE and PACK also fix their type, promoting Swarmlings to a SWARM. */
+/**
+ * Chooses the next event's kind and size; SINGLE and PACK also fix their type, promoting Swarmlings to a
+ * SWARM. Every other kind leaves Swarmlings out, so an event's budget and cap unit always match its members.
+ */
 internal fun MutableGameState.planSpawnEvent() {
     var kind = rollEventKind()
     var type = -1
@@ -222,7 +224,7 @@ internal fun MutableGameState.planSpawnEvent() {
             type = picked.ordinal
         }
         SpawnEventKind.SWARM -> type = EnemyType.SWARMLING.ordinal
-        SpawnEventKind.WALL, SpawnEventKind.AMBUSH -> type = pickEnemyType().ordinal
+        SpawnEventKind.WALL, SpawnEventKind.AMBUSH -> type = pickEnemyType(excludeSwarmling = true).ordinal
         SpawnEventKind.FLANK, SpawnEventKind.ENCIRCLE -> Unit
     }
     pendingEventKind = kind.ordinal
@@ -340,57 +342,61 @@ private fun MutableGameState.tryFireSpawnEvent(bossFight: Boolean) {
     pendingEventType = -1
 }
 
-/** Places [count] members of the pending event; returns the bit mask of the types it spawned. */
+/**
+ * Places [count] members of the pending event; returns the bit mask of the types it spawned. Only SWARM
+ * spawns Swarmlings; the Warden cap holds for every member, not only for the pick.
+ */
 private fun MutableGameState.spawnEvent(kind: SpawnEventKind, count: Int): Int {
     val heading = movementAngle()
     val fixedType = if (pendingEventType >= 0) EnemyType.entries[pendingEventType] else null
     return when (kind) {
         SpawnEventKind.SINGLE, SpawnEventKind.PACK, SpawnEventKind.SWARM -> {
-            val type = fixedType ?: pickEnemyType()
+            val type = fixedType ?: pickEnemyType(excludeSwarmling = true)
             val rolled = heading + sectorOffset()
             val distance = viewportEdgeDistance(rolled) + 80f + spawnRandom.nextFloat() * 180f
             val angle = clearOfAnomalies(rolled, distance)
             spawnCluster(type, count, coreX + cos(angle) * distance, coreY + sin(angle) * distance)
-            typeBit(type)
         }
         SpawnEventKind.AMBUSH -> {
-            val type = fixedType ?: pickEnemyType()
+            val type = fixedType ?: pickEnemyType(excludeSwarmling = true)
             val angle = heading + (spawnRandom.nextFloat() * 2f - 1f) * 25f * DEGREES
             val distance = viewportEdgeDistance(angle) + 80f + spawnRandom.nextFloat() * 80f
             spawnCluster(type, count, coreX + cos(angle) * distance, coreY + sin(angle) * distance)
-            typeBit(type)
         }
         SpawnEventKind.FLANK -> {
             val first = (count + 1) / 2
             var mask = 0
             for (side in 0 until 2) {
-                val type = pickEnemyType()
+                val type = pickEnemyType(excludeSwarmling = true)
                 val sign = if (side == 0) 1f else -1f
                 val rolled = heading + sign * (70f + spawnRandom.nextFloat() * 40f) * DEGREES
                 val distance = viewportEdgeDistance(rolled) + 80f + spawnRandom.nextFloat() * 180f
                 val angle = clearOfAnomalies(rolled, distance)
-                spawnCluster(type, if (side == 0) first else count - first, coreX + cos(angle) * distance, coreY + sin(angle) * distance)
-                mask = mask or typeBit(type)
+                val members = if (side == 0) first else count - first
+                mask = mask or spawnCluster(type, members, coreX + cos(angle) * distance, coreY + sin(angle) * distance)
             }
             mask
         }
         SpawnEventKind.WALL -> {
-            val type = fixedType ?: pickEnemyType()
+            val type = fixedType ?: pickEnemyType(excludeSwarmling = true)
             val distance = viewportEdgeDistance(heading) + 120f + spawnRandom.nextFloat() * 80f
             val centerX = coreX + cos(heading) * distance
             val centerY = coreY + sin(heading) * distance
             val tangentX = -sin(heading)
             val tangentY = cos(heading)
             val spacing = 64f + type.profile.radius * 1.6f
+            var mask = 0
             for (index in 0 until count) {
                 val lateral = (index - (count - 1) * 0.5f) * spacing
-                spawnMember(type, centerX + tangentX * lateral, centerY + tangentY * lateral)
+                val member = withinWardenCap(type)
+                spawnMember(member, centerX + tangentX * lateral, centerY + tangentY * lateral)
+                mask = mask or typeBit(member)
             }
-            typeBit(type)
+            mask
         }
         SpawnEventKind.ENCIRCLE -> {
-            val first = pickEnemyType(weakOnly = true)
-            val second = pickEnemyType(weakOnly = true)
+            val first = pickEnemyType(weakOnly = true, excludeSwarmling = true)
+            val second = pickEnemyType(weakOnly = true, excludeSwarmling = true)
             val radius = sqrt(screenWidth * screenWidth + screenHeight * screenHeight) * 0.5f + 90f
             val phase = spawnRandom.nextFloat() * TAU
             for (index in 0 until count) {
@@ -404,14 +410,21 @@ private fun MutableGameState.spawnEvent(kind: SpawnEventKind, count: Int): Int {
 
 private fun typeBit(type: EnemyType): Int = 1 shl type.ordinal
 
-/** Members on a golden-angle spiral around the anchor, so a pack reads as one group without overlapping. */
-private fun MutableGameState.spawnCluster(type: EnemyType, count: Int, anchorX: Float, anchorY: Float) {
+/**
+ * Members on a golden-angle spiral around the anchor, so a pack reads as one group without overlapping;
+ * members past the Warden cap take the Warden's stand-in. Returns the bit mask of the types spawned.
+ */
+private fun MutableGameState.spawnCluster(type: EnemyType, count: Int, anchorX: Float, anchorY: Float): Int {
     val spread = 14f + type.profile.radius * 1.4f
+    var mask = 0
     for (index in 0 until count) {
         val radius = spread * sqrt(index.toFloat())
         val angle = index * GOLDEN_ANGLE
-        spawnMember(type, anchorX + cos(angle) * radius, anchorY + sin(angle) * radius)
+        val member = withinWardenCap(type)
+        spawnMember(member, anchorX + cos(angle) * radius, anchorY + sin(angle) * radius)
+        mask = mask or typeBit(member)
     }
+    return mask
 }
 
 private const val GOLDEN_ANGLE: Float = 2.399963f
@@ -542,10 +555,16 @@ internal fun MutableGameState.pickEnemyType(weakOnly: Boolean = false, excludeSw
         roll -= weight
         if (roll < 0f) break
     }
-    if (picked == EnemyType.WARDEN && countLive(EnemyType.WARDEN) >= 2 + min(4, rebirthLevel / 3)) {
-        return if (typeWeight(content.enemy(EnemyType.WEAVER), weakOnly = false, recency = false) > 0f) EnemyType.WEAVER else EnemyType.DRIFTER
-    }
-    return picked
+    return withinWardenCap(picked)
+}
+
+/** Live Wardens the director allows at once: two, plus one per three Rebirth tiers, at most six. */
+internal fun MutableGameState.wardenCap(): Int = 2 + min(4, rebirthLevel / 3)
+
+/** [type], or its stand-in (a Weaver once eligible, otherwise a Drifter) while it is a Warden and the cap is full. */
+private fun MutableGameState.withinWardenCap(type: EnemyType): EnemyType {
+    if (type != EnemyType.WARDEN || countLive(EnemyType.WARDEN) < wardenCap()) return type
+    return if (typeWeight(content.enemy(EnemyType.WEAVER), weakOnly = false, recency = false) > 0f) EnemyType.WEAVER else EnemyType.DRIFTER
 }
 
 private fun MutableGameState.countLive(type: EnemyType): Int {

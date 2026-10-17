@@ -4,7 +4,9 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.EffectCondition
+import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.Enemy
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.impactTaken
@@ -157,6 +159,21 @@ class EnemyRosterBehaviorTest {
         slow.setVelocityForTesting(300f, 0f)
         slow.resolveEnemyCoreCollisions()
         assertTrue(sturdy.alive)
+    }
+
+    @Test
+    fun agonyCollapseExecutesATetheredEnemyInsideTheField() {
+        val state = buildTestState(RelicId.AGONY_SCEPTER, rebirth = 1)
+        assertEquals(1, state.agonyPower())
+        state.equipWeaponForTesting(WeaponId.ENTROPY_FIELD)
+        val aegis = state.spawn(EnemyType.AEGIS, 900f, 0f)
+        val victim = state.addEnemyForTesting(state.coreX + 60f, state.coreY, hp = 1_000f)
+        victim.hp = 50f
+        victim.linkedBy = aegis.id
+        victim.linkedUntil = state.elapsed + 1f
+        assertTrue(state.isLinked(victim))
+        state.resolveWeaponDamage(FIXED)
+        assertFalse(victim.alive, "A tether cannot soften the collapse")
     }
 
     @Test
@@ -379,6 +396,45 @@ class EnemyRosterBehaviorTest {
         state.updateEnemies(FIXED)
         assertTrue(state.shielded(herald))
         assertEquals(HERALD_ESCORTS, herald.escortsPending)
+    }
+
+    @Test
+    fun heraldRepeatSummonsOnlyFillFreeOrdinaryRoom() {
+        val state = quietState()
+        val herald = state.spawn(EnemyType.HERALD, 300f, 0f, hp = 100_000f)
+        val cap = state.ordinaryEnemyCap().toInt()
+        while (state.ordinaryCapLoad() < cap) state.spawn(EnemyType.DRIFTER, 900f + state.enemies.size * 40f, 0f)
+        herald.escortsPending = 0
+        herald.abilityAt = 0f
+        herald.shieldUntil = 0f
+        state.updateEnemies(FIXED)
+        assertTrue(state.shielded(herald), "The shield still cycles")
+        assertEquals(0, herald.escortsPending, "A full ordinary cap leaves no room for repeat escorts")
+
+        state.enemies.remove(state.enemies.last { it.type == EnemyType.DRIFTER })
+        herald.abilityAt = 0f
+        herald.shieldUntil = 0f
+        state.updateEnemies(FIXED)
+        assertEquals(1, herald.escortsPending, "One free slot takes one escort")
+        state.spawnPendingEscorts()
+        assertEquals(cap.toFloat(), state.ordinaryCapLoad(), 1e-4f)
+    }
+
+    @Test
+    fun bossesShrugOffStopAndStunButNotSilence() {
+        val state = quietState()
+        val herald = state.spawn(EnemyType.HERALD, 300f, 0f, hp = 100_000f).apply { actionTimer = 0f }
+        herald.disabledUntil = state.elapsed + 5f
+        assertTrue(state.canAct(herald))
+        state.updateEnemies(FIXED)
+        assertTrue(state.projectiles.isNotEmpty(), "A disabled Herald keeps firing its volley")
+
+        val architect = state.addEnemyForTesting(900f, 0f, type = EnemyType.ARCHITECT)
+        architect.disabledUntil = state.elapsed + 5f
+        assertTrue(state.canAct(architect))
+
+        herald.silencedUntil = state.elapsed + 5f
+        assertFalse(state.canAttack(herald), "Silence still holds a boss's attacks")
     }
 
     @Test
