@@ -142,7 +142,7 @@ class ReactionSystemTest {
         val fork = buildTestState(rebirth = 4).apply { own("Resonance Fork") }
         val forked = fork.dummy()
         shockDamage(fork, forked)
-        assertEquals(2, forked.stacksOf(StatusElement.CRYO), "Resonance Fork leaves the incoming element behind")
+        assertEquals(3, forked.stacksOf(StatusElement.CRYO), "Resonance Fork leaves the incoming element behind")
         assertEquals(1, forked.generationOf(StatusElement.CRYO))
 
         val volatile = buildTestState().apply { own("Volatile Compound") }

@@ -260,7 +260,7 @@ class ClauseSystemTest {
         state.fireClauses(EffectTrigger.DASH_HIT, target, hit = 10f, source = HitSource.DASH)
         assertEquals(0, target.stacksOf(StatusElement.THERMAL))
         assertEquals(0, target.stacksOf(StatusElement.ENTROPY))
-        assertEquals(target.maxHp - remaining * 1.5f * state.runScale(), target.hp, 0.05f)
+        assertEquals(target.maxHp - remaining * 2f * state.runScale(), target.hp, 0.05f)
 
         target.status[StatusCell.STACKS + StatusElement.THERMAL.ordinal] = 4f
         state.fireClauses(EffectTrigger.DASH_HIT, target, hit = 10f, source = HitSource.DASH)

@@ -369,8 +369,8 @@ class SonicVoidElementTest {
         val state = buildTestState().apply { own("Null Rounds") }
         val target = state.dummy(x = state.coreX + 400f, y = state.coreY)
         state.applyStatus(target, StatusElement.CRYO, 3, generation = 0)
-        // Two weapon hits wind Null Rounds up, so the shot below lands its third hit and the Void.
-        repeat(2) { state.fireClauses(EffectTrigger.WEAPON_HIT, target, hit = 20f, source = HitSource.WEAPON) }
+        // One weapon hit winds Null Rounds up, so the shot below lands its second hit and the Void.
+        repeat(1) { state.fireClauses(EffectTrigger.WEAPON_HIT, target, hit = 20f, source = HitSource.WEAPON) }
         val before = hostileShot(target.x + 40f, target.y)
         val shot = weaponShot(state, target.x, target.y)
         val bystander = weaponShot(state, state.coreX - 600f, state.coreY)
@@ -610,8 +610,8 @@ class SonicVoidElementTest {
         for ((item, trigger, element, stacks, every) in listOf(
             ItemCase("Tuning Spike", EffectTrigger.IMPACT, StatusElement.SONIC, 2, 1),
             ItemCase("Subwoofer Rounds", EffectTrigger.WEAPON_HIT, StatusElement.SONIC, 1, 2),
-            ItemCase("Hollow Point", EffectTrigger.CRIT, StatusElement.VOID, 2, 1),
-            ItemCase("Null Rounds", EffectTrigger.WEAPON_HIT, StatusElement.VOID, 1, 3),
+            ItemCase("Hollow Point", EffectTrigger.CRIT, StatusElement.VOID, 3, 1),
+            ItemCase("Null Rounds", EffectTrigger.WEAPON_HIT, StatusElement.VOID, 2, 2),
         )) {
             val state = fresh(item)
             val target = state.dummy()
@@ -654,7 +654,8 @@ class SonicVoidElementTest {
         val hollow = engine.dummy(x = 1_400f).apply { status[StatusCell.STACKS + StatusElement.VOID.ordinal] = 1f }
         val neighbor = engine.dummy(x = hollow.x + 80f)
         engine.fireClauses(EffectTrigger.KILL, hollow)
-        assertEquals(3, neighbor.stacksOf(StatusElement.VOID), "Quiet Engine spreads three Hollow")
+        assertEquals(4, neighbor.stacksOf(StatusElement.VOID), "Quiet Engine spreads four Hollow")
+        assertTrue(neighbor.hp < neighbor.maxHp, "and the fallen collapses on its neighbors")
 
         // Abyssal Lens: +15 % damage against an enemy with at least three Hollow.
         val lens = fresh("Abyssal Lens")
