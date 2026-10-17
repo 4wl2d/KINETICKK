@@ -156,7 +156,8 @@ internal fun MutableGameState.toRenderModel(
                     behaviorRemaining(value).sameBitsAs(previous.behaviorRemaining) &&
                     value.facing.sameBitsAs(previous.facing) &&
                     linkedTo(value) == previous.linkedTo &&
-                    shielded(value) == previous.shielded
+                    shielded(value) == previous.shielded &&
+                    value.armorIntact == previous.armored
             }
             ?: enemies.mapToImmutableList { value ->
                 EnemyProjection(
@@ -183,6 +184,7 @@ internal fun MutableGameState.toRenderModel(
                     facing = value.facing,
                     linkedTo = linkedTo(value),
                     shielded = shielded(value),
+                    armored = value.armorIntact,
                 )
             },
         projectiles = projectiles.reuseEmptyProjection(reusableCollections?.projectiles)
@@ -348,6 +350,8 @@ internal fun MutableGameState.toRenderModel(
         viewportDensity = viewportDensity,
         obstacles = obstacleProjection(reusableCollections?.obstacles, identitySource?.obstacleField),
         minimapRange = minimapRange(),
+        rebirthRank = rebirthRank,
+        volatileBursts = volatileBursts,
     )
 }
 

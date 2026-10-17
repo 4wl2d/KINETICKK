@@ -290,7 +290,7 @@ private fun MutableGameState.resolveCrit(enemy: Enemy, source: HitSource, canCri
     if (build.pairing(RelicPairingId.COLD_VERDICT) && stacks(enemy, StatusElement.CRYO) >= 4) forced = true
     if (build.guaranteedCritAfter > 0 && critMissStreak >= build.guaranteedCritAfter) forced = true
     val critical = if (executioner) {
-        forced || belowExecutionLine(enemy, 0.35f) || isFrozen(enemy) || enemy.status[StatusCell.BRITTLE] > 0f ||
+        forced || belowExecutionLine(enemy, 0.35f, architectFinalPhase()) || isFrozen(enemy) || enemy.status[StatusCell.BRITTLE] > 0f ||
             statusNearBreak(enemy, 0.75f)
     } else {
         val effectiveChance = if (build.critConversionRate > 0f) min(chance, 0.3f) else chance
@@ -454,7 +454,7 @@ internal const val KILL_PROC_SHARE_CAP: Float = 0.4f
 internal fun receivedScale(enemy: Enemy, source: HitSource, element: StatusElement?): Float = when {
     element != null -> if (enemy.aspectIsImmune && enemy.aspectElement == element.ordinal) 0f else 1f
     source == HitSource.IMPACT || source == HitSource.DASH -> enemy.impactTaken
-    else -> enemy.weaponTaken
+    else -> enemy.weaponTaken * armorWeaponFactor(enemy, source)
 }
 
 private fun MutableGameState.dealReceived(
@@ -516,6 +516,7 @@ internal fun MutableGameState.damageEnemy(
     damageDealt += minOf(applied, enemy.hp).toDouble()
     rememberHollowDamage(enemy, applied)
     enemy.hp -= applied
+    crackArmor(enemy, source)
     if (enemy.isBoss) {
         enemy.lastDamagedAt = elapsed
         onArchitectDamaged(enemy)
@@ -552,8 +553,9 @@ internal fun MutableGameState.executeEnemy(enemy: Enemy, source: HitSource, tone
 
 internal enum class HealSource { REGENERATION, REPAIR, ITEM, LEVEL, VERDANT, RELIC }
 
-internal fun MutableGameState.heal(amount: Float, source: HealSource) {
-    if (amount <= 0f) return
+internal fun MutableGameState.heal(requested: Float, source: HealSource) {
+    if (requested <= 0f) return
+    val amount = requested * entropyTideHealing()
     if (build.liability(RelicId.VERDANT_ROT) && source != HealSource.VERDANT) return
     if (build.upside(RelicId.AEGIS_INVERSION) || build.liability(RelicId.AEGIS_INVERSION)) {
         if (build.liability(RelicId.GLASS_COMET)) {

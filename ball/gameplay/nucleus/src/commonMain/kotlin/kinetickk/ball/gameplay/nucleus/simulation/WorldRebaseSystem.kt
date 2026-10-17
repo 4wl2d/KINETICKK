@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
+import kinetickk.foundation.collections.toImmutableList
 
 internal fun MutableGameState.rebaseWorldIfNeeded() {
     if (kotlin.math.abs(coreX) < 250_000f && kotlin.math.abs(coreY) < 250_000f) return
@@ -64,6 +65,9 @@ internal fun MutableGameState.rebaseWorldIfNeeded() {
     pointsOfInterest = pointsOfInterest.map { it.copy(x = it.x - shiftX, y = it.y - shiftY) }
     rebaseCombatFields(shiftX, shiftY)
     totem?.let { it.x -= shiftX; it.y -= shiftY }
+    if (volatileBursts.isNotEmpty()) {
+        volatileBursts = volatileBursts.map { it.copy(x = it.x - shiftX, y = it.y - shiftY) }.toImmutableList()
+    }
     morningstarX -= shiftX
     morningstarY -= shiftY
     previousMorningstarX -= shiftX

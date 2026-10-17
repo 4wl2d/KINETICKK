@@ -66,6 +66,10 @@ internal data class Enemy private constructor(
     var thrownUntil: Float = 0f,
     /** Absolute run time before which the enemy cannot slam again. */
     var slamReadyAt: Float = 0f,
+    /** Spawned with an Armored Vanguard plate (Rebirth R8): weapon hits deal less until an impact cracks it. */
+    var armored: Boolean = false,
+    /** The plate cracked under an impact; weapons deal full damage from then on. */
+    var armorCracked: Boolean = false,
     /** Elemental status cells; see [StatusCell]. Copy-on-write so reduction siblings stay isolated. */
     val status: CopyOnWriteFloatArray,
 ) {

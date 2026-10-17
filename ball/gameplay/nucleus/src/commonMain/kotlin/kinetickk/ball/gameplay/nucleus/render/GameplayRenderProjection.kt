@@ -153,6 +153,8 @@ data class EnemyProjection(
     val linkedTo: Int = -1,
     /** True while a Herald's shield holds. */
     val shielded: Boolean = false,
+    /** True while an Armored Vanguard plate (Rebirth R8) still blunts weapon hits; an impact cracks it. */
+    val armored: Boolean = false,
 )
 
 /** Behavior steps published in [EnemyProjection.behavior]; meaning depends on the enemy type. */
@@ -196,6 +198,18 @@ data class PickupProjection(
     val life: Float,
     val previousX: Float,
     val previousY: Float,
+)
+
+/**
+ * A Volatile Remains burst (Rebirth R4) armed at [armedAt] where an ordinary enemy died; it detonates
+ * at [detonatesAt] (run seconds) inside the [radius] telegraph ring. Static, so rebases move it.
+ */
+data class VolatileBurstProjection(
+    val x: Float,
+    val y: Float,
+    val radius: Float,
+    val armedAt: Float,
+    val detonatesAt: Float,
 )
 
 /** A static world obstacle; [id] is stable across rebases, [shapeSeed] picks its outline. */
@@ -361,6 +375,10 @@ class GameplayRenderModel(
     val obstacles: ImmutableList<ObstacleProjection> = kinetickk.foundation.collections.immutableListOf(),
     /** World distance from the Core to the minimap's edge (dp). */
     val minimapRange: Float = DEFAULT_MINIMAP_RANGE,
+    /** Rebirth rank (one above the highest clear) the run started with; the Victory screen names what it earns. */
+    val rebirthRank: Int = rebirthLevel,
+    /** Volatile Remains bursts waiting to detonate (Rebirth R4). */
+    val volatileBursts: ImmutableList<VolatileBurstProjection> = kinetickk.foundation.collections.immutableListOf(),
 ) {
     val speed: Float get() = vectorLength(velocityX, velocityY)
     val runProgress: Float get() = content.tempo.progress(elapsed)

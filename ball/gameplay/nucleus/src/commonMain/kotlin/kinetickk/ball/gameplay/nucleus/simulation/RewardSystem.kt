@@ -58,6 +58,7 @@ internal fun MutableGameState.onEnemyKilled(enemy: Enemy) {
     }
     // A Splitter crushed by Mass or a fresh Collapse leaves no fragments.
     if (enemy.type == EnemyType.SPLITTER && !splitterCrushed(enemy)) spawnSplitterFragments(enemy)
+    queueVolatileRemains(enemy)
     shockwave(
         enemy.x,
         enemy.y,

@@ -159,6 +159,7 @@ internal fun MutableGameState.simulateStep(delta: Float) {
     emitVisualFx(VisualFxCue.EffectsAdvanced(delta))
     spawnWave(delta)
     resolveCollisions(delta)
+    updateVolatileRemains()
     if (phase != GamePhase.RUNNING) return
     rebaseWorldIfNeeded()
 
@@ -172,6 +173,7 @@ internal fun MutableGameState.simulateStep(delta: Float) {
         // The terminal boss has priority over the oldest ordinary enemy at the hard cap.
         if (enemies.size >= content.rebirth.maxActiveEnemies) enemies.removeAt(0)
         spawnEnemy(EnemyType.ARCHITECT)
+        spawnSingularityEscort()
     }
 }
 
@@ -188,7 +190,7 @@ internal fun MutableGameState.updateSurvival(delta: Float) {
         // Overfilled shield (Hardlight Weave) decays back toward capacity.
         shield = max(capacity, shield - 3f * delta)
     } else if (capacity > 0f && shieldRechargeDelay <= 0f && !build.liability(RelicId.AEGIS_INVERSION)) {
-        shield = min(capacity, shield + max(2f, capacity * 0.09f) * delta)
+        shield = min(capacity, shield + max(2f, capacity * 0.09f) * entropyTideShieldRegen() * delta)
         if (shield >= capacity * 0.5f) shieldBreakArmed = true
     }
     if (shield > capacity * (if (build.overhealOverfill > 0f) build.overhealOverfill else 1f)) {

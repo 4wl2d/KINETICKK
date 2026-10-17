@@ -535,6 +535,7 @@ class GameplayRenderModelMapperTest {
                 it.hp.toRawBits(), it.maxHp.toRawBits(), it.radius.toRawBits(), it.actionTimer.toRawBits(),
                 it.flash.toRawBits(), it.contactCooldown.toRawBits(), it.weaponCooldown.toRawBits(),
                 it.previousX.toRawBits(), it.previousY.toRawBits(), it.dead, it.statusBits, it.affinityBits,
+                it.armored,
             )
         },
         "projectiles" to projectiles.map {
@@ -582,6 +583,8 @@ class GameplayRenderModelMapperTest {
         "abilityPower" to abilityPower.toRawBits(),
         "obstacles" to obstacles.toList(),
         "minimapRange" to minimapRange.toRawBits(),
+        "rebirthRank" to rebirthRank,
+        "volatileBursts" to volatileBursts.toList(),
     )
 
     private class ReadGuardList<Element>(

@@ -280,6 +280,7 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Hyper" to "Гиперскорость",
     "DRIFT PHASE" to "ФАЗА ДРЕЙФА",
     "THE ARCHITECT" to "АРХИТЕКТОР",
+    "THE ARCHITECT ENRAGES" to "АРХИТЕКТОР В ЯРОСТИ",
     "KINETIC OVERDRIVE" to "КИНЕТИЧЕСКАЯ ПЕРЕГРУЗКА",
     "DASH ONLINE" to "РЫВОК ГОТОВ",
     "OVERHEAT" to "ПЕРЕГРЕВ",
