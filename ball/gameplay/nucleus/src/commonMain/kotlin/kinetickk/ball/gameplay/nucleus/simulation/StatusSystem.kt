@@ -187,6 +187,7 @@ internal fun assignAspect(enemy: Enemy, element: Int, immune: Boolean) {
         enemy.status[StatusCell.STACKS + element] = 0f
         enemy.status[StatusCell.GENERATION + element] = 0f
         enemy.status[StatusCell.DECAY_AT + element] = 0f
+        forgetHollowWhenEmpty(enemy)
     }
     enemy.status[StatusCell.RESIST_CARRY] = 0f
     enemy.status[StatusCell.WEAK_CARRY] = 0f
@@ -453,6 +454,14 @@ private fun MutableGameState.strikeUnmake(enemy: Enemy, damage: Float) {
 }
 
 /**
+ * Memory belongs to Hollow: once the last Void stack is gone (decayed, spent by a reaction or refused by an
+ * immune aspect), nothing is remembered. Every writer that can empty the Void stacks calls this after it.
+ */
+internal fun forgetHollowWhenEmpty(enemy: Enemy) {
+    if (stacks(enemy, StatusElement.VOID) <= 0) enemy.status[StatusCell.HOLLOW_MEMORY] = 0f
+}
+
+/**
  * Hollow (Void) memory: while the enemy carries Hollow it remembers a share of every damage it takes,
  * bounded by its maximum integrity. Called by the single enemy-integrity writer.
  */
@@ -565,8 +574,7 @@ internal fun MutableGameState.updateStatuses(delta: Float) {
                 count--
                 enemy.status[cell] = count.toFloat()
                 enemy.status[decayCell] = elapsed + decaySeconds(element)
-                // Memory belongs to Hollow: once the last stack fades, nothing is remembered.
-                if (count <= 0 && element == StatusElement.VOID) enemy.status[StatusCell.HOLLOW_MEMORY] = 0f
+                if (element == StatusElement.VOID) forgetHollowWhenEmpty(enemy)
                 if (count <= 0) continue
             }
         }

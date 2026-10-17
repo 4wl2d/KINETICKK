@@ -194,21 +194,29 @@ internal fun MutableGameState.impactRecoilScale(): Float =
     if (build.liability(RelicId.THUNDER_CHOIR)) 1f + THUNDER_CHOIR_RECOIL else 1f
 
 /**
- * Null Covenant's liability: maximum integrity −10 % while it is bound or lingering. The cut is taken
- * once from the ceiling at that moment and returned in full when the liability ends; integrity above
- * the lowered ceiling is lost, and returning the ceiling heals nothing.
+ * Null Covenant's liability: maximum integrity −10 % while it is bound or lingering. The cut stays 10 % of
+ * the whole ceiling (the lowered one plus the cut), so later raises pay their share too, and it is returned
+ * in full when the liability ends; integrity above the lowered ceiling is lost, and returning the ceiling
+ * heals nothing.
  */
 internal fun MutableGameState.reconcileIntegrityLiability() {
     val active = build.liability(RelicId.NULL_COVENANT)
-    if (active && integrityLiabilityCut == 0f) {
-        val cut = maxHp * NULL_COVENANT_INTEGRITY_CUT
-        integrityLiabilityCut = cut
-        maxHp -= cut
-        hp = min(hp, maxHp)
-    } else if (!active && integrityLiabilityCut != 0f) {
-        maxHp += integrityLiabilityCut
-        integrityLiabilityCut = 0f
-    }
+    if (!active && integrityLiabilityCut == 0f) return
+    val ceiling = maxHp + integrityLiabilityCut
+    val cut = if (active) ceiling * NULL_COVENANT_INTEGRITY_CUT else 0f
+    integrityLiabilityCut = cut
+    maxHp = ceiling - cut
+    hp = min(hp, maxHp)
+}
+
+/**
+ * The ceiling has just moved from [before] by [nominal]: Null Covenant's liability takes its share of the
+ * new ceiling, and the change that actually reached the ceiling is returned (exactly [nominal] without it).
+ */
+internal fun MutableGameState.ceilingChangeAfterLiability(before: Float, nominal: Float): Float {
+    if (integrityLiabilityCut == 0f) return nominal
+    reconcileIntegrityLiability()
+    return maxHp - before
 }
 
 /** Integrity loss that is not an incoming hit (no shields, no triggers). */

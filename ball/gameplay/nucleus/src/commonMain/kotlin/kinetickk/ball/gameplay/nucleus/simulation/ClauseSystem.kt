@@ -367,8 +367,10 @@ internal const val LEVEL_INTEGRITY: Float = 2f
 internal const val LEVEL_REPAIR: Float = 6f
 
 internal fun MutableGameState.onLevelUp() {
+    val ceiling = maxHp
     maxHp += LEVEL_INTEGRITY
-    if (build.liability(kinetickk.ball.content.api.RelicId.AEGIS_INVERSION)) hp = minOf(hp, maxHp) else hp += LEVEL_INTEGRITY
+    val gained = ceilingChangeAfterLiability(ceiling, LEVEL_INTEGRITY)
+    if (build.liability(kinetickk.ball.content.api.RelicId.AEGIS_INVERSION)) hp = minOf(hp, maxHp) else hp += gained
     heal(LEVEL_REPAIR, HealSource.LEVEL)
     fireClauses(EffectTrigger.LEVEL_UP)
     if (tagTier(BuildTag.FORTUNE) >= 2 && level % 4 == 0) rerollsRemaining++

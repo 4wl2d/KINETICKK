@@ -43,6 +43,7 @@ internal fun MutableGameState.tryReact(enemy: Enemy, incoming: StatusElement, in
     val b = min(3, stacks(enemy, incoming))
     enemy.status[StatusCell.STACKS + older.ordinal] = 0f
     enemy.status[StatusCell.STACKS + incoming.ordinal] = (stacks(enemy, incoming) - b).toFloat()
+    if (older == StatusElement.VOID || incoming == StatusElement.VOID) forgetHollowWhenEmpty(enemy)
     enemy.status[StatusCell.REACTION_READY_AT] = elapsed + content.build.policy.reactionCooldownSeconds
     enemy.status[StatusCell.LAST_REACTION] = (reaction.ordinal + 1).toFloat()
     enemy.status[StatusCell.LAST_REACTION_AT] = elapsed
@@ -212,8 +213,7 @@ private fun MutableGameState.resolveReaction(
             val target = enemies[index]
             if (!target.alive || distanceSquared(x, y, target.x, target.y) > square(definition.radius + target.radius)) continue
             dealStatusDamage(target, magnitude, StatusElement.VOID, ignoresAffinity = true)
-            val seconds = if (target.isBossClass) SILENCE_BOSS_SECONDS else SILENCE_SECONDS
-            if (target.alive) target.silencedUntil = max(target.silencedUntil, elapsed + seconds)
+            if (target.alive) silence(target)
         }
         ReactionId.BLACKFIRE -> {
             enemy.status[StatusCell.BLACKFIRE_UNTIL] = elapsed + BLACKFIRE_SECONDS
@@ -290,12 +290,28 @@ internal const val SEISMIC_STUN_SECONDS: Float = 0.6f
 internal const val SILENCE_SECONDS: Float = 2f
 /** Bosses fall silent briefly, so chained Silences cannot keep the Architect from ever attacking. */
 internal const val SILENCE_BOSS_SECONDS: Float = 0.75f
+/** After a Silence ends, a boss ignores further Silences for this long, whichever enemy sets them off. */
+internal const val SILENCE_BOSS_GRACE_SECONDS: Float = 2f
 internal const val BLACKFIRE_SECONDS: Float = 3f
 internal const val STASIS_STOP_SECONDS: Float = 1f
 internal const val NULL_WELL_SECONDS: Float = 1.6f
 internal const val NULL_WELL_PULL: Float = 240f
 internal const val OBLIVION_LINE: Float = 0.12f
 internal const val OBLIVION_ELITE_LINE: Float = 0.06f
+
+/**
+ * Silence stops [target]'s attacks. A boss falls silent for [SILENCE_BOSS_SECONDS] and is then out of reach
+ * for [SILENCE_BOSS_GRACE_SECONDS]: per-enemy reaction cooldowns cannot stop several reactors from chaining
+ * Silences, so the lockout belongs to the boss.
+ */
+private fun MutableGameState.silence(target: Enemy) {
+    if (!target.isBossClass) {
+        target.silencedUntil = max(target.silencedUntil, elapsed + SILENCE_SECONDS)
+        return
+    }
+    if (target.silencedUntil > 0f && elapsed < target.silencedUntil + SILENCE_BOSS_GRACE_SECONDS) return
+    target.silencedUntil = elapsed + SILENCE_BOSS_SECONDS
+}
 
 /** Ordinary enemies take stuns and stops; Elites and bosses shrug them off. */
 private fun isOrdinary(enemy: Enemy): Boolean = !enemy.isEliteClass

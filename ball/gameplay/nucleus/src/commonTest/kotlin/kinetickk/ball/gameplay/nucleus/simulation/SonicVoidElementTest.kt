@@ -5,18 +5,23 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.DirectedReward
 import kinetickk.ball.content.api.EffectTrigger
+import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.model.Enemy
 import kinetickk.ball.gameplay.nucleus.model.Projectile
+import kinetickk.ball.gameplay.nucleus.model.TAU
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
 import kinetickk.ball.gameplay.nucleus.model.counterElement
 import kinetickk.ball.gameplay.nucleus.model.weaknessElement
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.render.EnemyAffinity
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
+import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.sin
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -240,6 +245,74 @@ class SonicVoidElementTest {
     }
 
     @Test
+    fun hollowMemoryEndsWhenAReactionOrAnImmuneAspectTakesTheLastVoidStack() {
+        val state = buildTestState()
+        // Hollow as the older element: Blackfire spends every Void stack.
+        val older = state.dummy(hp = 10_000f)
+        state.applyStatus(older, StatusElement.VOID, 3, generation = 0)
+        state.damageEnemy(older, 1_000f)
+        assertTrue(older.status[StatusCell.HOLLOW_MEMORY] > 0f)
+        state.applyStatus(older, StatusElement.THERMAL, 1, generation = 0)
+        assertEquals(ReactionId.BLACKFIRE.ordinal + 1, older.status[StatusCell.LAST_REACTION].toInt())
+        assertEquals(0, older.stacksOf(StatusElement.VOID))
+        assertEquals(0f, older.status[StatusCell.HOLLOW_MEMORY], "Blackfire spends the Hollow and what it remembered")
+
+        // Hollow as the incoming element: the reaction takes the remembered stack together with the new one.
+        val incoming = state.dummy(x = -400f, hp = 10_000f)
+        state.applyStatus(incoming, StatusElement.VOID, 1, generation = 0)
+        state.damageEnemy(incoming, 1_000f)
+        state.applyStatus(incoming, StatusElement.THERMAL, 3, generation = 0)
+        assertTrue(incoming.status[StatusCell.HOLLOW_MEMORY] > 0f)
+        state.applyStatus(incoming, StatusElement.VOID, 1, generation = 0)
+        assertEquals(ReactionId.BLACKFIRE.ordinal + 1, incoming.status[StatusCell.LAST_REACTION].toInt())
+        assertEquals(0, incoming.stacksOf(StatusElement.VOID))
+        assertEquals(0f, incoming.status[StatusCell.HOLLOW_MEMORY])
+
+        // A later Hollow window starts empty, so its Unmake releases only what that window remembered.
+        state.applyStatus(older, StatusElement.VOID, 3, generation = 0)
+        state.damageEnemy(older, 100f)
+        assertEquals(100f * 3 * HOLLOW_MEMORY_PER_STACK, older.status[StatusCell.HOLLOW_MEMORY], 0.001f)
+
+        // An immune Void aspect strips the stacks and the memory with them.
+        val elite = state.dummy(x = 900f, hp = 10_000f, type = EnemyType.ELITE)
+        state.applyStatus(elite, StatusElement.VOID, 3, generation = 0)
+        state.damageEnemy(elite, 1_000f)
+        assertTrue(elite.status[StatusCell.HOLLOW_MEMORY] > 0f)
+        assignAspect(elite, StatusElement.VOID.ordinal, immune = true)
+        assertEquals(0f, elite.status[StatusCell.HOLLOW_MEMORY])
+    }
+
+    @Test
+    fun nullCovenantKeepsTakingATenthOfARisingCeiling() {
+        val state = buildTestState()
+        state.acquireRelic(RelicId.NULL_COVENANT)
+        assertEquals(90f, state.maxHp, 0.001f)
+        state.hp = state.maxHp
+
+        state.applyStatDelta(ItemEffect.MAX_INTEGRITY, 100f)
+        assertEquals(0.9f * 200f, state.maxHp, 0.01f, "the cut stays 10 % of the uncut 200")
+        assertEquals(20f, state.integrityLiabilityCut, 0.01f)
+        assertEquals(state.maxHp, state.hp, 0.01f, "integrity rises by the ceiling actually gained")
+
+        state.onLevelUp()
+        assertEquals(0.9f * (200f + LEVEL_INTEGRITY), state.maxHp, 0.01f)
+
+        // Ending the liability returns the whole cut and heals nothing.
+        val integrity = state.hp
+        state.replaceRelic(0, RelicId.PERPETUAL_VECTOR)
+        state.elapsed += state.content.build.policy.severanceSeconds + 1f
+        state.updateRelicRuntime(MutableGameState.FIXED_STEP)
+        assertEquals(200f + LEVEL_INTEGRITY, state.maxHp, 0.01f)
+        assertEquals(0f, state.integrityLiabilityCut)
+        assertEquals(integrity, state.hp)
+
+        // Without the relic every raise reaches the ceiling whole.
+        val plain = buildTestState()
+        plain.applyStatDelta(ItemEffect.MAX_INTEGRITY, 100f)
+        assertEquals(200f, plain.maxHp)
+    }
+
+    @Test
     fun seismicAndStasisStopOrdinaryEnemiesWhileElitesAndBossesShrugThemOff() {
         for (reaction in listOf(ReactionId.SEISMIC, ReactionId.STASIS)) {
             val state = buildTestState()
@@ -330,6 +403,48 @@ class SonicVoidElementTest {
         assertFalse(state.canAttack(target))
         assertEquals(state.elapsed + SILENCE_SECONDS, target.silencedUntil, 0.0001f)
         assertEquals(state.elapsed + SILENCE_BOSS_SECONDS, boss.silencedUntil, 0.0001f)
+    }
+
+    @Test
+    fun chainedSilencesFromManyReactorsStillLeaveTheArchitectAttackWindows() {
+        val state = buildTestState()
+        state.bossSpawned = true
+        val boss = state.addEnemyForTesting(400f, 0f, hp = 100_000f, radius = 74f, type = EnemyType.ARCHITECT)
+        val reactors = List(4) { index ->
+            val angle = index * TAU / 4f
+            state.dummy(x = 400f + 120f * cos(angle), y = 120f * sin(angle))
+        }
+        val start = state.elapsed
+        var nextSilenceAt = start
+        var fired = 0
+        var steps = 0
+        var quietSteps = 0
+        var quietRun = 0
+        var longestQuiet = 0
+        // Each reactor respects its own cooldowns, but together they set off a Silence every 0.6 s.
+        while (state.elapsed < start + 12f) {
+            if (state.elapsed >= nextSilenceAt) {
+                val source = reactors[fired % reactors.size]
+                state.applyStatus(source, StatusElement.SONIC, 3, generation = 0)
+                state.applyStatus(source, StatusElement.VOID, 1, generation = 0)
+                assertEquals(ReactionId.SILENCE.ordinal + 1, source.status[StatusCell.LAST_REACTION].toInt())
+                assertEquals(state.elapsed, source.status[StatusCell.LAST_REACTION_AT], "Silence $fired fires")
+                fired++
+                nextSilenceAt += 0.6f
+            }
+            if (state.canAttack(boss)) {
+                quietRun = 0
+            } else {
+                quietSteps++
+                quietRun++
+                longestQuiet = max(longestQuiet, quietRun)
+            }
+            steps++
+            state.elapsed += MutableGameState.FIXED_STEP
+        }
+        assertTrue(quietSteps > 0, "Silence still reaches the Architect")
+        assertTrue(longestQuiet * MutableGameState.FIXED_STEP <= SILENCE_BOSS_SECONDS + 0.02f, "no Silence is extended")
+        assertTrue(quietSteps < steps * 0.4f, "the Architect attacks most of the time ($quietSteps of $steps steps silent)")
     }
 
     @Test

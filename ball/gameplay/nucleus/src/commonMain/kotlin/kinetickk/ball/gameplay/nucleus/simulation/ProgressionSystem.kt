@@ -359,10 +359,12 @@ internal fun MutableGameState.applyStatDelta(effect: ItemEffect, amount: Float) 
         ItemEffect.MAGNETISM -> magnetStrength *= max(0.2f, 1f + amount)
         ItemEffect.COOLING -> coolingRate *= max(0.2f, 1f + amount)
         ItemEffect.MAX_INTEGRITY -> {
+            val ceiling = maxHp
             maxHp = max(10f, maxHp + amount)
+            val gained = ceilingChangeAfterLiability(ceiling, amount)
             // Aegis Inversion (bound or lingering) never restores integrity, only raises the ceiling.
             val sealed = build.liability(kinetickk.ball.content.api.RelicId.AEGIS_INVERSION)
-            hp = if (amount > 0f && !sealed) hp + amount else min(hp, maxHp)
+            hp = if (gained > 0f && !sealed) hp + gained else min(hp, maxHp)
         }
         ItemEffect.REGEN -> regenPerSecond = max(0f, regenPerSecond + amount)
         ItemEffect.DASH_POWER -> dashImpulse *= max(0.2f, 1f + amount)
