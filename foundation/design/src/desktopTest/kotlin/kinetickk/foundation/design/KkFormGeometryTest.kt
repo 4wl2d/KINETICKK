@@ -47,4 +47,13 @@ class KkFormGeometryTest {
         assertFailsWith<IllegalArgumentException> { KkFormGeometry.build(Path(), KkFormGeometry.COUNT, 0f, 0f, 1f) }
         assertFailsWith<IllegalArgumentException> { KkFormGeometry.build(Path(), -1, 0f, 0f, 1f) }
     }
+
+    @Test
+    fun cachedFormPathsAreOriginCenteredAndReusedForTheSameFormAndRadius() {
+        val star = KkFormPaths.of(KkFormGeometry.STAR, 12f)
+        assertTrue(star === KkFormPaths.of(KkFormGeometry.STAR, 12f), "an unchanged form is served from the cache")
+        val bounds = star.getBounds()
+        assertTrue(kotlin.math.abs(bounds.center.x) < 3f && kotlin.math.abs(bounds.center.y) < 3f, "centred on the origin: $bounds")
+        assertTrue(KkFormPaths.of(KkFormGeometry.STAR, 13f) !== KkFormPaths.of(KkFormGeometry.HEXAGON, 13f))
+    }
 }

@@ -545,7 +545,6 @@ internal fun canonicalChoiceFingerprint(choice: ChoiceOption): Long {
 
 internal fun canonicalCharacterAbilityFingerprint(ability: CharacterAbilityProjection): Long {
     var signature = mix(0L, ability.charge.toRawBits())
-    signature = mix(signature, ability.barrier.toRawBits())
     signature = mix(signature, ability.ringRadius.toRawBits())
     signature = mix(signature, ability.parryWindow.toRawBits())
     signature = mix(signature, ability.lattice.size)
@@ -553,7 +552,41 @@ internal fun canonicalCharacterAbilityFingerprint(ability: CharacterAbilityProje
         signature = mix(signature, point.x.toRawBits())
         signature = mix(signature, point.y.toRawBits())
     }
-    return signature
+    signature = mix(signature, ability.facets)
+    signature = mix(signature, ability.facetProgress.toRawBits())
+    signature = mix(signature, ability.edge)
+    signature = mix(signature, ability.stellarMass)
+    signature = mix(signature, ability.novaFlash.toRawBits())
+    signature = mix(signature, ability.haloBurstFlash.toRawBits())
+    signature = mix(signature, ability.polarity)
+    signature = mix(signature, ability.polarityFlash.toRawBits())
+    signature = mix(signature, ability.beatPeriod.toRawBits())
+    signature = mix(signature, ability.beatWindow.toRawBits())
+    signature = mix(signature, ability.beatStreak)
+    signature = mix(signature, ability.blinkCharges)
+    signature = mix(signature, ability.blinkRecharge.toRawBits())
+    signature = mix(signature, ability.scars.size)
+    ability.scars.forEach { scar ->
+        signature = mix(signature, scar.x0.toRawBits())
+        signature = mix(signature, scar.y0.toRawBits())
+        signature = mix(signature, scar.x1.toRawBits())
+        signature = mix(signature, scar.y1.toRawBits())
+        signature = mix(signature, scar.fuse.toRawBits())
+        signature = mix(signature, scar.fade.toRawBits())
+    }
+    signature = mix(signature, ability.drones.size)
+    ability.drones.forEach { drone ->
+        signature = mix(signature, drone.x.toRawBits())
+        signature = mix(signature, drone.y.toRawBits())
+        signature = mix(signature, drone.previousX.toRawBits())
+        signature = mix(signature, drone.previousY.toRawBits())
+        signature = mix(signature, if (drone.darting) 1 else 0)
+    }
+    signature = mix(signature, if (ability.ghostActive) 1 else 0)
+    signature = mix(signature, ability.ghostX.toRawBits())
+    signature = mix(signature, ability.ghostY.toRawBits())
+    signature = mix(signature, ability.previousGhostX.toRawBits())
+    return mix(signature, ability.previousGhostY.toRawBits())
 }
 
 internal fun canonicalPointOfInterestFingerprint(point: PointOfInterestProjection): Long {

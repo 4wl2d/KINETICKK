@@ -41,6 +41,10 @@ import kinetickk.ball.gameplay.interaction.fx.ParticleProjection
 import kinetickk.ball.gameplay.interaction.fx.ShockwaveProjection
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.fx.WeaponArcProjection
+import kinetickk.ball.gameplay.nucleus.render.CharacterAbilityProjection
+import kinetickk.ball.gameplay.nucleus.render.CharacterDroneProjection
+import kinetickk.ball.gameplay.nucleus.render.CharacterLatticePoint
+import kinetickk.ball.gameplay.nucleus.render.CharacterScarProjection
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.ProjectileKind
@@ -85,6 +89,15 @@ class WorldHotPathAllocationTest {
     }
 
     @Test
+    fun everyCharacterDrawsItsCoreAndMechanicWithoutAllocating() {
+        // Each form's silhouette, marks and world visuals (halo band, ghost, drones, scars, polarity ring,
+        // beat pulse, facet ring, nova glow, lattice) on a busy frame.
+        for (shape in CoreShape.entries) {
+            assertFrameIsAllocationFree(KkRolePalette.Default, WeaponId.MORNINGSTAR, shape, warmFrames = 80, measuredFrames = 60)
+        }
+    }
+
+    @Test
     fun worldColorsFollowTheRolePalette() {
         val model = busyModel(WeaponId.ARC_COIL)
         val fx = busyFx()
@@ -103,15 +116,21 @@ class WorldHotPathAllocationTest {
         }
     }
 
-    private fun assertFrameIsAllocationFree(roles: KkRolePalette, weapon: WeaponId) {
+    private fun assertFrameIsAllocationFree(
+        roles: KkRolePalette,
+        weapon: WeaponId,
+        shape: CoreShape = CoreShape.TESSERACT,
+        warmFrames: Int = 200,
+        measuredFrames: Int = MEASURED_FRAMES,
+    ) {
         // The off-screen totem and sealed-anomaly offer move every frame, so their edge-marker
         // distances change every frame: they must be drawn from cached digit layouts, never
         // measured as text. Warm-up frames draw distances from a range the measured frames never
         // use, and every measured frame draws two distances no earlier frame drew (more distinct
         // values than the layout memo holds), so measuring a distance string would allocate.
-        val warm = Array(37) { frame -> busyModel(weapon, drift = WARM_DRIFT + frame * 23f) }
-        val measured = Array(MEASURED_FRAMES) { frame -> busyModel(weapon, drift = frame * 20f) }
-        check(measured.map { roundedDistance(edgeDistance(it)) }.toSet().size == MEASURED_FRAMES)
+        val warm = Array(37) { frame -> busyModel(weapon, drift = WARM_DRIFT + frame * 23f, shape = shape) }
+        val measured = Array(measuredFrames) { frame -> busyModel(weapon, drift = frame * 20f, shape = shape) }
+        check(measured.map { roundedDistance(edgeDistance(it)) }.toSet().size == measuredFrames)
         check(measured.maxOf(::edgeDistance) < warm.minOf(::edgeDistance))
         val fx = busyFx()
         val measurer = measurer(roles)
@@ -122,10 +141,10 @@ class WorldHotPathAllocationTest {
         fun bytesPerFrame(block: DrawScope.(GameplayRenderModel) -> Unit): Long {
             fun frame(model: GameplayRenderModel) =
                 scope.draw(Density(1f), LayoutDirection.Ltr, canvas, Size(WIDTH.toFloat(), HEIGHT.toFloat())) { block(model) }
-            repeat(200) { frame(warm[it % warm.size]) }
+            repeat(warmFrames) { frame(warm[it % warm.size]) }
             val before = threads.getThreadAllocatedBytes(thread)
             measured.forEach { frame(it) }
-            return (threads.getThreadAllocatedBytes(thread) - before) / MEASURED_FRAMES
+            return (threads.getThreadAllocatedBytes(thread) - before) / measuredFrames
         }
         val baseline = bytesPerFrame { }
         val world = bytesPerFrame { model ->
@@ -133,7 +152,7 @@ class WorldHotPathAllocationTest {
             drawWorld(model, fx, 1.5f, -1f, measurer)
             drawScreenFx(model, 2f, roles)
         }
-        assertTrue(world - baseline < 96, "A busy world frame allocates ${world - baseline} bytes above the $baseline byte baseline")
+        assertTrue(world - baseline < 96, "A busy $shape world frame allocates ${world - baseline} bytes above the $baseline byte baseline")
     }
 
     /** The larger of the two edge-marker distances (totem, sealed-anomaly offer) in [model]. */
@@ -247,7 +266,28 @@ class WorldHotPathAllocationTest {
         reactionStamps = immutableListOf(ReactionStampProjection(CORE + 40f, CORE - 40f, 0, 0.5f, 0.9f)),
     )
 
-    private fun busyModel(weapon: WeaponId, drift: Float = 0f): GameplayRenderModel {
+    /** Every mechanic's projected state at once; the renderer draws only the active character's. */
+    private fun busyAbility(drift: Float): CharacterAbilityProjection = CharacterAbilityProjection(
+        charge = 0.6f, ringRadius = 120f, parryWindow = 0.1f,
+        lattice = immutableListOf(CharacterLatticePoint(CORE - 120f, CORE - 90f), CharacterLatticePoint(CORE + 140f, CORE - 80f),
+            CharacterLatticePoint(CORE + 60f, CORE + 150f)),
+        facets = 2, facetProgress = 0.4f, edge = 3, stellarMass = 12, novaFlash = 0.4f, haloBurstFlash = 0.5f,
+        polarity = 1, polarityFlash = 0.5f, beatPeriod = 0.75f, beatWindow = 0.11f, beatStreak = 3,
+        blinkCharges = 1, blinkRecharge = 0.5f,
+        scars = immutableListOf(
+            CharacterScarProjection(CORE - 200f, CORE + 40f, CORE - 20f, CORE + 60f, fuse = 0.5f, fade = 0f),
+            CharacterScarProjection(CORE + 30f, CORE - 200f, CORE + 210f, CORE - 160f, fuse = 1f, fade = 0.1f),
+        ),
+        drones = immutableListOf(
+            CharacterDroneProjection(CORE + 70f, CORE, CORE + 68f, CORE - 4f, darting = false),
+            CharacterDroneProjection(CORE - 35f, CORE + 60f, CORE - 30f, CORE + 62f, darting = true),
+            CharacterDroneProjection(CORE - 35f, CORE - 60f, CORE - 37f, CORE - 58f, darting = false),
+        ),
+        ghostActive = true, ghostX = CORE - 160f + drift * 0.01f, ghostY = CORE + 30f,
+        previousGhostX = CORE - 165f + drift * 0.01f, previousGhostY = CORE + 28f,
+    )
+
+    private fun busyModel(weapon: WeaponId, drift: Float = 0f, shape: CoreShape = CoreShape.TESSERACT): GameplayRenderModel {
         val enemies = EnemyType.entries.mapIndexed { index, type ->
             val angle = index * 0.7f
             val distance = if (type == EnemyType.ARCHITECT) 260f else 180f + index * 12f
@@ -284,7 +324,7 @@ class WorldHotPathAllocationTest {
             weapon = weapon, weaponLevel = 3, overdriveCharge = 10f, overdriveTime = 0f, rerollsRemaining = 1, acquiredItemCount = 0,
             recentItem = null, equippedRelics = immutableListOf(), morningstarAngle = 0.3f, morningstarX = CORE + 60f,
             morningstarY = CORE + 40f, weaponBeamTime = 0f, weaponBeamStartX = 0f, weaponBeamStartY = 0f, weaponBeamEndX = 0f,
-            weaponBeamEndY = 0f, totem = TotemProjection(CORE - 1_600f - drift, CORE + 100f + drift * 0.3f, 1f), coreShape = CoreShape.TESSERACT,
+            weaponBeamEndY = 0f, totem = TotemProjection(CORE - 1_600f - drift, CORE + 100f + drift * 0.3f, 1f), coreShape = shape,
             enemies = enemies.toImmutableList(),
             projectiles = ((0 until 12).map { index ->
                 ProjectileProjection(CORE - 200f + index * 25f, CORE + 120f, 0f, 0f, 4.5f, 1f, index % 3 != 0, 1f, 0, 0, null,
@@ -313,6 +353,7 @@ class WorldHotPathAllocationTest {
                 PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed", CORE + 900f + drift, CORE - 300f, false, 20f, 1, 0f,
                     immutableListOf(), 0f, 0f),
             ),
+            characterAbility = busyAbility(drift),
         )
     }
 
