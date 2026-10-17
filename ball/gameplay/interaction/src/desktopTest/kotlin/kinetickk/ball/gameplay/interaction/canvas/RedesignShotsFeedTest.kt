@@ -71,22 +71,31 @@ import kotlin.math.hypot
 import kotlin.math.sin
 import kotlin.test.Test
 
-/** Local, uncommitted visual QA harness for the in-run feed (SPEC §12), at the default and the largest text size. */
+/**
+ * Local visual QA harness for the in-run feed (SPEC §12). With `KK_SHOTS=1` every state draws at every size, in both
+ * languages and at the default and the largest text size into build/redesign-shots/feed. Otherwise the run is a
+ * smoke: each state draws once (the first size, Russian, text size 125 %) and nothing is written, so a state that
+ * fails to draw still fails.
+ */
 class RedesignShotsFeedTest {
+    private val fullShots = System.getenv("KK_SHOTS") == "1"
+
+    /** The whole list with `KK_SHOTS=1`, else its first entry. */
+    private fun <T> List<T>.matrix(): List<T> = if (fullShots) this else take(1)
+
     private val root = generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "settings.gradle.kts").isFile }
     private val output = File(root, "ball/gameplay/interaction/build/redesign-shots/feed")
 
     @Test
     fun renderHudStates() {
-        if (System.getenv("KK_SHOTS") != "1") return
-        output.mkdirs()
-        val sizes = System.getenv("KK_SHOTS_SIZES")?.split(',')?.map { it.substringBefore('x').toInt() to it.substringAfter('x').toInt() }
-            ?: listOf(1440 to 810, 844 to 390, 390 to 844)
+        if (fullShots) output.mkdirs()
+        val sizes = (System.getenv("KK_SHOTS_SIZES")?.split(',')?.map { it.substringBefore('x').toInt() to it.substringAfter('x').toInt() }
+            ?: listOf(1440 to 810, 844 to 390, 390 to 844)).matrix()
         val only = System.getenv("KK_SHOTS_ONLY")
         for ((width, height) in sizes) {
             val base = baseModel(width, height)
-            val scales = System.getenv("KK_SHOTS_SCALES")?.split(',')?.map { it.toFloat() } ?: listOf(1.25f, 1.75f)
-            for (language in AppLanguage.entries) for (textScale in scales) {
+            val scales = (System.getenv("KK_SHOTS_SCALES")?.split(',')?.map { it.toFloat() } ?: listOf(1.25f, 1.75f)).matrix()
+            for (language in AppLanguage.entries.matrix()) for (textScale in scales) {
                 val measurer = CanvasTextMeasurer(
                     TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr, cacheSize = 64),
                     textScale, language, typography.copy(localeList = language.localeList()), KkRolePalette.Default,
@@ -262,6 +271,7 @@ class RedesignShotsFeedTest {
     }
 
     private fun write(bitmap: ImageBitmap, file: File) {
+        if (!fullShots) return
         val pixels = bitmap.toPixelMap()
         val image = BufferedImage(bitmap.width, bitmap.height, BufferedImage.TYPE_INT_ARGB)
         for (y in 0 until bitmap.height) for (x in 0 until bitmap.width) image.setRGB(x, y, pixels[x, y].toArgb())

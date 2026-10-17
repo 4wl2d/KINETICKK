@@ -58,11 +58,16 @@ import kotlin.test.Test
 private const val FocusDescription = "Choose a direction, then one of three matching offers."
 
 /**
- * Local visual QA harness (gated by `KK_SHOTS=1`): renders every overlay state for board comparison. Writes PNGs to
- * `KK_SHOTS_OUT` (default `build/redesign-shots/overlays`).
+ * Local visual QA harness: renders every overlay state for board comparison.
+ *
+ * With `KK_SHOTS=1` every scene renders at each size, in both languages and at each text size, and is written as a
+ * PNG to `KK_SHOTS_OUT` (default `build/redesign-shots/overlays`). Otherwise the run is a smoke: each scene renders
+ * once with its hover and settles past the card entrance (844 x 390, the tightest landscape layout, English, the
+ * default 125 % text size) and nothing is written, so a scene that fails to compose, lay out or draw still fails.
  */
 @OptIn(ExperimentalTestApi::class)
 class RedesignShotsOverlaysTest {
+    private val fullShots = System.getenv("KK_SHOTS") == "1"
     private val sizes = listOf(1440 to 810, 844 to 390, 390 to 844)
     private val languages = listOf(AppLanguage.English to "en", AppLanguage.Russian to "ru")
     private val output = File(System.getenv("KK_SHOTS_OUT") ?: "build/redesign-shots/overlays")
@@ -72,9 +77,8 @@ class RedesignShotsOverlaysTest {
 
     @Test
     fun rendersOverlays() {
-        if (System.getenv("KK_SHOTS") != "1") return
-        output.mkdirs()
-        for ((width, height) in sizes) for ((language, tag) in languages) for ((textScale, suffix) in textScales) {
+        if (fullShots) output.mkdirs()
+        for ((width, height) in if (fullShots) sizes else listOf(sizes[1])) for ((language, tag) in languages.matrix()) for ((textScale, suffix) in textScales.matrix()) {
             runDesktopComposeUiTest(width, height) {
                 val scene = mutableStateOf<Scene?>(null)
                 setContent {
@@ -90,6 +94,7 @@ class RedesignShotsOverlaysTest {
                     mainClock.advanceTimeBy(2_000)
                     waitForIdle()
                     val bitmap = onNodeWithTag("shot").captureToImage()
+                    if (!fullShots) return@forEach
                     val pixels = bitmap.toPixelMap()
                     val image = BufferedImage(bitmap.width, bitmap.height, BufferedImage.TYPE_INT_ARGB)
                     for (y in 0 until bitmap.height) for (x in 0 until bitmap.width) image.setRGB(x, y, pixels[x, y].toArgb())
@@ -98,6 +103,9 @@ class RedesignShotsOverlaysTest {
             }
         }
     }
+
+    /** The whole list with `KK_SHOTS=1`, else its first entry. */
+    private fun <T> List<T>.matrix(): List<T> = if (fullShots) this else take(1)
 
     private class Scene(val name: String, val hover: String? = null, val content: @Composable (Float, Float, AppLanguage) -> Unit)
 

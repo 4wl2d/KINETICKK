@@ -75,14 +75,24 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.test.Test
 
-/** Local visual QA harness (SPEC §12): not committed. Writes build/redesign-shots/world/. */
+/**
+ * Local visual QA harness (SPEC §12). With `KK_SHOTS=1` it draws every scene and strip at every size in both
+ * languages and writes build/redesign-shots/world/. Otherwise the run is a smoke: each scene draws once (the
+ * first size, English), as do the marker strips, one flight and one shake strip, and nothing is written, so a
+ * scene that fails to draw still fails.
+ */
 class RedesignShotsWorldTest {
+    private val fullShots = System.getenv("KK_SHOTS") == "1"
+
+    /** The whole list with `KK_SHOTS=1`, else its first entry. */
+    private fun <T> List<T>.matrix(): List<T> = if (fullShots) this else take(1)
+
     @Test
     fun rendersWorldStates() {
         val sizes = listOf(1440 to 810, 844 to 390, 390 to 844)
         val languages = listOf(AppLanguage.English to "en", AppLanguage.Russian to "ru")
         val scenes = scenes()
-        for ((width, height) in sizes) for ((language, code) in languages) for (scene in scenes) {
+        for ((width, height) in sizes.matrix()) for ((language, code) in languages.matrix()) for (scene in scenes) {
             val roles = scene.roles
             val measurer = CanvasTextMeasurer(
                 ComposeTextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr),
@@ -113,7 +123,7 @@ class RedesignShotsWorldTest {
     fun rendersMarkerStrips() {
         val sizes = listOf(Triple(1440, 810, 272f), Triple(844, 390, 336f), Triple(390, 844, 302.5f))
         val languages = listOf(AppLanguage.English to "en", AppLanguage.Russian to "ru")
-        for ((width, height, from) in sizes) for ((language, code) in languages) {
+        for ((width, height, from) in sizes.matrix()) for ((language, code) in languages.matrix()) {
             val measurer = CanvasTextMeasurer(
                 ComposeTextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr),
                 1.25f, language, Fonts.typography, KkRolePalette.Default,
@@ -186,7 +196,7 @@ class RedesignShotsWorldTest {
             }
             writeStrip(strip, File("build/redesign-shots/world/$file"), crop)
         }
-        for (course in listOf(75, 85)) {
+        if (fullShots) for (course in listOf(75, 85)) {
             val radians = Math.toRadians(course.toDouble()).toFloat()
             val kept = if (course == 75) 188..200 else 482..499
             strip(1440, 810, AppLanguage.Russian, kept.last + 1, kept, intArrayOf(420, 20, 1020, 180),
@@ -197,7 +207,7 @@ class RedesignShotsWorldTest {
                 Triple(model, 0f, 0f)
             }
         }
-        strip(844, 390, AppLanguage.English, 2_484, 2_474..2_483, intArrayOf(0, 0, 844, 140), "world-fix3-flyby-844x390-en.png") { frame ->
+        if (fullShots) strip(844, 390, AppLanguage.English, 2_484, 2_474..2_483, intArrayOf(0, 0, 844, 140), "world-fix3-flyby-844x390-en.png") { frame ->
             val x = -4_000f + 3f * frame
             val model = model(844f, 390f, points = listOf(point(PointOfInterestKind.SEALED_ANOMALY, -150f to -1_400f),
                 point(PointOfInterestKind.COLLAPSING_ORBIT, 0f to -1_450f)), totem = TotemProjection(150f, -1_400f, 1f))
@@ -216,7 +226,7 @@ class RedesignShotsWorldTest {
             // 366 -> 228 -> 366 fourteen frames later).
             Flight(844, 390, AppLanguage.English, true, 2.495924f, 1, 4.5f, 201..212, intArrayOf(300, 20, 700, 130), "switch-844x390-en"),
             Flight(390, 844, AppLanguage.Russian, true, 5.6731505f, 11, 4.5f, 414..434, intArrayOf(0, 100, 390, 260), "switch-390x844-ru"),
-        )) {
+        ).matrix()) {
             val points = List(2) { side ->
                 val angle = flight.heading + if (side == 0) -1f else 1f
                 point(PointOfInterestKind.entries[(flight.course + side) % PointOfInterestKind.entries.size], 560f * cos(angle) to 560f * sin(angle))
@@ -232,7 +242,7 @@ class RedesignShotsWorldTest {
         }
         // Fifth pass, the curved flight (844x390 RU, near totem, R=300 turning left, start 7): 9d051c5
         // flashed the totem to the right edge for one frame at f282.
-        run {
+        if (fullShots) run {
             val heading = 7 * 45f * Math.PI.toFloat() / 180f + 0.2f
             val points = List(2) { side ->
                 val angle = heading + if (side == 0) -1f else 1f
@@ -253,7 +263,7 @@ class RedesignShotsWorldTest {
         }
         // The game's shake at its strongest, targets 150 px past the edge 12 degrees apart.
         for ((size, language, direction) in listOf(Triple(1440 to 810, AppLanguage.English, 150f), Triple(844 to 390, AppLanguage.English, 348f),
-            Triple(390 to 844, AppLanguage.Russian, 300f))) {
+            Triple(390 to 844, AppLanguage.Russian, 300f)).matrix()) {
             val (width, height) = size
             val targets = listOf(direction - 12f, direction, direction + 12f).map { degrees ->
                 val radians = Math.toRadians(degrees.toDouble()).toFloat()
@@ -279,6 +289,7 @@ class RedesignShotsWorldTest {
 
     /** [frames] cropped to [crop] (left, top, right, bottom) and stacked top to bottom with a 4 px mute rule between them. */
     private fun writeStrip(frames: List<ImageBitmap>, file: File, crop: IntArray) {
+        if (!fullShots) return
         val width = crop[2] - crop[0]
         val height = crop[3] - crop[1]
         val image = BufferedImage(width, frames.size * (height + 4) - 4, BufferedImage.TYPE_INT_ARGB)
@@ -295,6 +306,7 @@ class RedesignShotsWorldTest {
 
     /** [frames] stacked top to bottom with a 4 px mute rule between them. */
     private fun writeStrip(frames: List<ImageBitmap>, file: File) {
+        if (!fullShots) return
         val width = frames.first().width
         val height = frames.first().height
         val image = BufferedImage(width, frames.size * (height + 4) - 4, BufferedImage.TYPE_INT_ARGB)
@@ -659,6 +671,7 @@ class RedesignShotsWorldTest {
     }
 
     private fun write(bitmap: ImageBitmap, file: File) {
+        if (!fullShots) return
         val map = bitmap.toPixelMap()
         val image = BufferedImage(bitmap.width, bitmap.height, BufferedImage.TYPE_INT_ARGB)
         for (y in 0 until bitmap.height) for (x in 0 until bitmap.width) image.setRGB(x, y, map[x, y].toArgb())

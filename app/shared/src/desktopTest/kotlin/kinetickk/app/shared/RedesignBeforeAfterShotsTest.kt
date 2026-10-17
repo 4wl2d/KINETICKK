@@ -31,15 +31,21 @@ import org.jetbrains.skia.Image
 import java.io.File
 import kotlin.test.Test
 
-/** Local, uncommitted: the same app-level captures on the base and the redesign branch. */
+/**
+ * Local: the same app-level captures on the base and the redesign branch, written to `KK_BA_DIR` at three sizes
+ * in both languages. Without it the run is a smoke of the same flow (1440 x 810, English, nothing written): the
+ * composed app opens every screen by its key, starts a run and pauses it without failing.
+ */
 @OptIn(ExperimentalTestApi::class)
 class RedesignBeforeAfterShotsTest {
     @Test
     fun captureAppScreens() {
-        val directory = System.getenv("KK_BA_DIR") ?: return
+        val directory = System.getenv("KK_BA_DIR")
         enableKinetickkComposeRuntimeOptimizations()
-        for ((width, height) in listOf(1440 to 810, 844 to 390, 390 to 844)) {
-            for (language in listOf(AppLanguage.English, AppLanguage.Russian)) runDesktopComposeUiTest(width, height) {
+        val sizes = listOf(1440 to 810, 844 to 390, 390 to 844).let { if (directory != null) it else it.take(1) }
+        val languages = listOf(AppLanguage.English, AppLanguage.Russian).let { if (directory != null) it else it.take(1) }
+        for ((width, height) in sizes) {
+            for (language in languages) runDesktopComposeUiTest(width, height) {
                 mainClock.autoAdvance = false
                 val catalog = createContentCatalog()
                 val profile = createProfileComponent(BaPersistence(), catalog.profilePolicy())
@@ -60,9 +66,11 @@ class RedesignBeforeAfterShotsTest {
                 fun shot(name: String, advance: Long = 900) {
                     mainClock.advanceTimeBy(advance)
                     waitForIdle()
+                    val capture = onNodeWithTag("ba").captureToImage()
+                    if (directory == null) return
                     val output = File(directory, "$name-${width}x$height-${language.code}.png")
                     output.parentFile.mkdirs()
-                    Image.makeFromBitmap(onNodeWithTag("ba").captureToImage().asSkiaBitmap()).use { image ->
+                    Image.makeFromBitmap(capture.asSkiaBitmap()).use { image ->
                         image.encodeToData()!!.use { output.writeBytes(it.bytes) }
                     }
                 }

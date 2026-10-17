@@ -70,25 +70,34 @@ import kotlin.math.hypot
 import kotlin.math.sin
 import kotlin.test.Test
 
-/** Local, uncommitted visual QA harness for the in-run HUD (SPEC §12). */
+/**
+ * Local visual QA harness for the in-run HUD (SPEC §12). With `KK_SHOTS=1` every state draws at every size, language,
+ * text size and colour-vision palette into build/redesign-shots/hud. Otherwise the run is a smoke: each state draws
+ * once (1440 × 810, Russian, text size 125 %, Default palette) and nothing is written, so a state that fails to draw
+ * still fails.
+ */
 class RedesignShotsHudTest {
+    private val fullShots = System.getenv("KK_SHOTS") == "1"
+
+    /** The whole list with `KK_SHOTS=1`, else its first entry. */
+    private fun <T> List<T>.matrix(): List<T> = if (fullShots) this else take(1)
+
     private val root = generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "settings.gradle.kts").isFile }
     private val output = File(root, "ball/gameplay/interaction/build/redesign-shots/hud")
 
     @Test
     fun renderHudStates() {
-        if (System.getenv("KK_SHOTS") != "1") return
-        output.mkdirs()
-        val sizes = listOf(1440 to 810, 844 to 390, 390 to 844)
+        if (fullShots) output.mkdirs()
+        val sizes = listOf(1440 to 810, 844 to 390, 390 to 844).matrix()
         val only = System.getenv("KK_SHOTS_ONLY")
         // The game's default text size (1.25) and the setting's maximum (1.75, suffix -175).
-        val scales = (System.getenv("KK_SHOTS_SCALES") ?: "1.25,1.75").split(',').map { it.toFloat() }
+        val scales = (System.getenv("KK_SHOTS_SCALES") ?: "1.25,1.75").split(',').map { it.toFloat() }.matrix()
         // Color vision palettes for the threat-meter states (suffix -mono / -protan), at the default size.
-        val palettes = listOf("" to KkRolePalette.Default, "-mono" to KkRolePalette.Mono, "-protan" to KkRolePalette.Protan)
+        val palettes = listOf("" to KkRolePalette.Default, "-mono" to KkRolePalette.Mono, "-protan" to KkRolePalette.Protan).matrix()
         val paletteStates = setOf(Shot.CRITICAL, Shot.OVERHEAT, Shot.ELITE, Shot.ARCHITECT, Shot.POLARITY, Shot.DASH)
         for ((width, height) in sizes) {
             val base = baseModel(width, height)
-            for (language in AppLanguage.entries) for (textScale in scales) for ((suffix, roles) in palettes) {
+            for (language in AppLanguage.entries.matrix()) for (textScale in scales) for ((suffix, roles) in palettes) {
                 if (roles != KkRolePalette.Default && textScale != 1.25f) continue
                 val measurer = CanvasTextMeasurer(
                     TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr, cacheSize = 64),
@@ -289,6 +298,7 @@ class RedesignShotsHudTest {
     }
 
     private fun write(bitmap: ImageBitmap, file: File) {
+        if (!fullShots) return
         val pixels = bitmap.toPixelMap()
         val image = BufferedImage(bitmap.width, bitmap.height, BufferedImage.TYPE_INT_ARGB)
         for (y in 0 until bitmap.height) for (x in 0 until bitmap.width) image.setRGB(x, y, pixels[x, y].toArgb())

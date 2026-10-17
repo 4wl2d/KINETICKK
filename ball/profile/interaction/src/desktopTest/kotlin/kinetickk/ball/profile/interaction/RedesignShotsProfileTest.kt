@@ -47,12 +47,19 @@ import org.jetbrains.skia.Image
 import java.io.File
 import kotlin.test.Test
 
-/** Local visual QA harness (not committed): renders every D2 screen state for board comparison. */
+/**
+ * Local visual QA harness: renders every D2 screen state for board comparison.
+ *
+ * With `KK_SHOTS=1` every state renders at each of its sizes in both languages into build/redesign-shots/profile.
+ * Otherwise the run is a smoke: each state renders once (its first size, English) and nothing is written, so a
+ * state that fails to compose, lay out or draw still fails.
+ */
 @OptIn(ExperimentalTestApi::class)
 class RedesignShotsProfileTest {
+    private val fullShots = System.getenv("KK_SHOTS") == "1"
     private val sizes = listOf(1440 to 810, 844 to 390, 390 to 844)
     private val languages = listOf(AppLanguage.English to "en", AppLanguage.Russian to "ru")
-    private val out = File("build/redesign-shots/profile").apply { mkdirs() }
+    private val out by lazy { File("build/redesign-shots/profile").apply { mkdirs() } }
 
     private fun shoot(
         screen: String,
@@ -62,7 +69,7 @@ class RedesignShotsProfileTest {
         focus: String? = null,
         content: @Composable () -> Unit,
     ) {
-        for ((w, h) in at) for ((language, code) in languages) {
+        for ((w, h) in if (fullShots) at else at.take(1)) for ((language, code) in if (fullShots) languages else languages.take(1)) {
             runSkikoComposeUiTest(Size(w.toFloat(), h.toFloat()), Density(1f)) {
                 mainClock.autoAdvance = false
                 setContent {
@@ -77,6 +84,7 @@ class RedesignShotsProfileTest {
                 }
                 waitForIdle()
                 val image = onNodeWithTag("shot").captureToImage()
+                if (!fullShots) return@runSkikoComposeUiTest
                 val file = File(out, "$screen-$state-${w}x$h-$code.png")
                 Image.makeFromBitmap(image.asSkiaBitmap()).encodeToData()!!.use { file.writeBytes(it.bytes) }
             }

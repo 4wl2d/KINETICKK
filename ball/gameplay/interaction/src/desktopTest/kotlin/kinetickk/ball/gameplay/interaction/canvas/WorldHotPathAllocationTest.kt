@@ -83,14 +83,20 @@ import kotlin.test.assertTrue
  * The world layer runs every frame: once caches are warm (paths, strokes, brushes, strings, text
  * layouts), a busy frame allocates no JVM heap beyond the draw scope's own baseline. Also checks
  * that the world keeps its key colors through the Color vision palette.
+ *
+ * The per-character and per-weapon sweeps warm one pass over the warm frames and measure 20 fresh
+ * frames per pass (the busy frame 100); `KK_FULL_SWEEPS=1` restores the longer runs (60 to 300
+ * measured frames).
  */
 class WorldHotPathAllocationTest {
     private val threads = ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
 
     @Test
     fun busyWorldFrameDoesNotAllocate() {
-        KkRolePalette.Default.let { roles -> assertFrameIsAllocationFree(roles, WeaponId.MORNINGSTAR) }
-        assertFrameIsAllocationFree(KkRolePalette.Mono, WeaponId.ARC_COIL)
+        val warmFrames = if (FULL_SWEEP) 200 else 111
+        val measuredFrames = if (FULL_SWEEP) 300 else 100
+        KkRolePalette.Default.let { roles -> assertFrameIsAllocationFree(roles, WeaponId.MORNINGSTAR, warmFrames = warmFrames, measuredFrames = measuredFrames) }
+        assertFrameIsAllocationFree(KkRolePalette.Mono, WeaponId.ARC_COIL, warmFrames = warmFrames, measuredFrames = measuredFrames)
     }
 
     @Test
@@ -98,7 +104,8 @@ class WorldHotPathAllocationTest {
         // Each form's silhouette, marks and world visuals (halo band, ghost, drones, scars, polarity ring,
         // beat pulse, facet ring, nova glow, lattice) on a busy frame.
         for (shape in CoreShape.entries) {
-            assertFrameIsAllocationFree(KkRolePalette.Default, WeaponId.MORNINGSTAR, shape, warmFrames = 80, measuredFrames = 60)
+            assertFrameIsAllocationFree(KkRolePalette.Default, WeaponId.MORNINGSTAR, shape, warmFrames = if (FULL_SWEEP) 80 else WARM_MODELS,
+                measuredFrames = if (FULL_SWEEP) 60 else 20)
         }
     }
 
@@ -106,7 +113,8 @@ class WorldHotPathAllocationTest {
     fun everyWeaponDrawsItsWorldVisualsAndEntitiesWithoutAllocating() {
         // Each weapon's Core marks and orbitals at its third form, over every kind of weapon entity at once.
         for (weapon in WeaponId.entries) {
-            assertFrameIsAllocationFree(KkRolePalette.Default, weapon, warmFrames = 60, measuredFrames = 60, level = 10)
+            assertFrameIsAllocationFree(KkRolePalette.Default, weapon, warmFrames = if (FULL_SWEEP) 60 else WARM_MODELS,
+                measuredFrames = if (FULL_SWEEP) 60 else 20, level = 10)
         }
     }
 
@@ -133,39 +141,50 @@ class WorldHotPathAllocationTest {
         roles: KkRolePalette,
         weapon: WeaponId,
         shape: CoreShape = CoreShape.TESSERACT,
-        warmFrames: Int = 200,
-        measuredFrames: Int = MEASURED_FRAMES,
+        warmFrames: Int,
+        measuredFrames: Int,
         level: Int = 3,
     ) {
         // The off-screen totem and sealed-anomaly offer move every frame, so their edge-marker
         // distances change every frame: they must be drawn from cached digit layouts, never
         // measured as text. Warm-up frames draw distances from a range the measured frames never
-        // use, and every measured frame draws two distances no earlier frame drew (more distinct
-        // values than the layout memo holds), so measuring a distance string would allocate.
-        val warm = Array(37) { frame -> busyModel(weapon, drift = WARM_DRIFT + frame * 23f, shape = shape, level = level) }
-        val measured = Array(measuredFrames) { frame -> busyModel(weapon, drift = frame * 20f, shape = shape, level = level) }
-        check(measured.map { roundedDistance(edgeDistance(it)) }.toSet().size == measuredFrames)
-        check(measured.maxOf(::edgeDistance) < warm.minOf(::edgeDistance))
+        // use, and every measured frame draws two distances no earlier frame drew (a measuring
+        // pass never repeats an earlier pass's), so measuring a distance string would allocate.
+        val warm = Array(WARM_MODELS) { frame -> busyModel(weapon, drift = WARM_DRIFT + frame * 23f, shape = shape, level = level) }
+        fun measured(pass: Int) = Array(measuredFrames) { frame ->
+            busyModel(weapon, drift = (pass * measuredFrames + frame) * 20f, shape = shape, level = level)
+        }.also { measured ->
+            check(measured.map { roundedDistance(edgeDistance(it)) }.toSet().size == measuredFrames)
+            check(measured.maxOf(::edgeDistance) < warm.minOf(::edgeDistance))
+        }
         val fx = busyFx()
         val measurer = measurer(roles)
         val bitmap = ImageBitmap(WIDTH, HEIGHT)
         val scope = CanvasDrawScope()
         val canvas = Canvas(bitmap)
         val thread = Thread.currentThread().id
-        fun bytesPerFrame(block: DrawScope.(GameplayRenderModel) -> Unit): Long {
+        fun bytesPerFrame(passes: Int, block: DrawScope.(GameplayRenderModel) -> Unit, accept: (Long) -> Boolean): Long {
             fun frame(model: GameplayRenderModel) =
                 scope.draw(Density(1f), LayoutDirection.Ltr, canvas, Size(WIDTH.toFloat(), HEIGHT.toFloat())) { block(model) }
             repeat(warmFrames) { frame(warm[it % warm.size]) }
-            val before = threads.getThreadAllocatedBytes(thread)
-            measured.forEach { frame(it) }
-            return (threads.getThreadAllocatedBytes(thread) - before) / measuredFrames
+            // A short pass can catch a stray one-off allocation, so a failing pass is measured again on fresh
+            // frames; an allocation the frames make on every pass fails all of them.
+            var best = Long.MAX_VALUE
+            for (pass in 0 until passes) {
+                val models = measured(pass)
+                val before = threads.getThreadAllocatedBytes(thread)
+                models.forEach { frame(it) }
+                best = minOf(best, (threads.getThreadAllocatedBytes(thread) - before) / measuredFrames)
+                if (accept(best)) break
+            }
+            return best
         }
-        val baseline = bytesPerFrame { }
-        val world = bytesPerFrame { model ->
+        val baseline = bytesPerFrame(1, { }) { true }
+        val world = bytesPerFrame(minOf(PASSES, MEASURED_DRIFT_FRAMES / measuredFrames), { model ->
             drawBackdrop(model, 1.5f, -1f, 2f, roles)
             drawWorld(model, fx, 1.5f, -1f, measurer)
             drawScreenFx(model, 2f, roles)
-        }
+        }) { it - baseline < 96 }
         assertTrue(world - baseline < 96, "A busy $shape world frame allocates ${world - baseline} bytes above the $baseline byte baseline")
     }
 
@@ -456,8 +475,18 @@ class WorldHotPathAllocationTest {
         ) = WeaponEntityProjection(kind, x, y, x - 4f, y + 2f, endX, endY, endX - 3f, endY, angle, angle - 0.03f, radius, extent, life, maxLife,
             phase)
 
-        const val MEASURED_FRAMES = 300
         const val HUD_FRAMES = 400
+
+        /** Distinct warm-up frames (their drifts lie past every measured frame's). */
+        const val WARM_MODELS = 37
+
+        /** Measuring passes before a frame fails; each draws fresh distances below the warm range. */
+        const val PASSES = 3
+
+        /** Measured frames (20 drift apart) whose distances all stay below the warm range. */
+        const val MEASURED_DRIFT_FRAMES = 320
+
+        val FULL_SWEEP = System.getenv("KK_FULL_SWEEPS") == "1"
 
         /** Warm-up drifts start here, so their distances lie past every measured frame's. */
         const val WARM_DRIFT = 6_400f

@@ -137,6 +137,16 @@ sessions continue on their selected release; reopen the game to update.
 CHROME_BIN=/path/to/chrome ./gradlew wasmJsBrowserTest wasmJsBrowserDistribution --max-workers=1
 ```
 
+Without switches, `desktopTest` runs the screenshot harnesses (`RedesignShots*`
+and the before/after captures) as smokes that render every screen state at least
+once (the World marker flights only in part) without writing files, renders one
+reward card gallery sheet per card kind, and samples the longest allocation and
+layout sweeps. `KK_SHOTS=1` renders the full size and language matrix of the
+`RedesignShots*` harnesses to PNGs under each module's `build/redesign-shots/`
+(or `KK_SHOTS_OUT` where a harness reads it). The card gallery writes only when
+`KK_SHOTS_OUT` names a folder, and the before/after captures only into `KK_BA_DIR`.
+`KK_FULL_SWEEPS=1` runs every sweep in full.
+
 Architecture checks require a clean Pokeball checkout at
 `b4a8219ecb70ae5e81214edd6b509b61d9db0637`:
 

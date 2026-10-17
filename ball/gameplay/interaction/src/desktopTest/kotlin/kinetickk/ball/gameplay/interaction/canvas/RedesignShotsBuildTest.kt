@@ -60,13 +60,20 @@ import kotlin.math.sin
 import kotlin.test.Test
 
 /**
- * Local visual QA of the build system's in-run surfaces (gated by `KK_SHOTS=1`): enemy statuses,
- * Break and reaction flashes, the crowded level of detail, the HUD relic row with gauges, the
- * boss status rail and discovery toasts, the pause build view and the report recap. Writes PNGs
- * to `KK_SHOTS_OUT` (default `build/redesign-shots/build`).
+ * Local visual QA of the build system's in-run surfaces: enemy statuses, Break and reaction flashes, the
+ * crowded level of detail, the HUD relic row with gauges, the boss status rail and discovery toasts, the
+ * pause build view and the report recap. With `KK_SHOTS=1` every surface draws at every size and in both
+ * languages (plus Protan and the largest pause text size) and is written to `KK_SHOTS_OUT` (default
+ * `build/redesign-shots/build`). Otherwise the run is a smoke: each surface draws once (1440 × 810, Russian,
+ * Default palette, text size 125 %) and nothing is written, so a surface that fails to draw still fails.
  */
 @OptIn(ExperimentalTestApi::class)
 class RedesignShotsBuildTest {
+    private val fullShots = System.getenv("KK_SHOTS") == "1"
+
+    /** The whole list with `KK_SHOTS=1`, else its first entry. */
+    private fun <T> List<T>.matrix(): List<T> = if (fullShots) this else take(1)
+
     private val root = generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "settings.gradle.kts").isFile }
     private val output = File(System.getenv("KK_SHOTS_OUT") ?: File(root, "ball/gameplay/interaction/build/redesign-shots/build").path)
     private val sizes = listOf(1440 to 810, 844 to 390, 390 to 844)
@@ -76,11 +83,10 @@ class RedesignShotsBuildTest {
 
     @Test
     fun renderBuildSurfaces() {
-        if (System.getenv("KK_SHOTS") != "1") return
-        output.mkdirs()
-        for ((width, height) in sizes) for (language in AppLanguage.entries) {
+        if (fullShots) output.mkdirs()
+        for ((width, height) in sizes.matrix()) for (language in AppLanguage.entries.matrix()) {
             val lang = if (language == AppLanguage.English) "en" else "ru"
-            for ((suffix, roles) in listOf("" to KkRolePalette.Default, "-protan" to KkRolePalette.Protan)) {
+            for ((suffix, roles) in listOf("" to KkRolePalette.Default, "-protan" to KkRolePalette.Protan).matrix()) {
                 if (roles != KkRolePalette.Default && (language != AppLanguage.English || width != 1440)) continue
                 val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr, cacheSize = 64), 1.25f,
                     language, HudTestFonts.typography.copy(localeList = language.localeList()), roles)
@@ -96,7 +102,7 @@ class RedesignShotsBuildTest {
                     drawGameplay(model, hudFx(), measurer, 3.37f, null, hudMemory = memory)
                 }
             }
-            for (textScale in listOf(1.25f, 1.75f)) {
+            for (textScale in listOf(1.25f, 1.75f).matrix()) {
                 if (!wanted("pause-build")) continue
                 val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr, cacheSize = 64), textScale,
                     language, HudTestFonts.typography.copy(localeList = language.localeList()))
@@ -253,6 +259,7 @@ class RedesignShotsBuildTest {
                 activeMasteryForm = "The trail lasts 4 s"))
 
     private fun write(bitmap: ImageBitmap, file: File) {
+        if (!fullShots) return
         val pixels = bitmap.toPixelMap()
         val image = BufferedImage(bitmap.width, bitmap.height, BufferedImage.TYPE_INT_ARGB)
         for (y in 0 until bitmap.height) for (x in 0 until bitmap.width) image.setRGB(x, y, pixels[x, y].toArgb())

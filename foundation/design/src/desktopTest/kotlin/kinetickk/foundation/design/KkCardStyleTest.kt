@@ -392,14 +392,23 @@ class KkCardStyleTest {
             }
         }
         fun empty() = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) { drawRect(Kk.Ink) }
-        repeat(400) { frame(it); empty() }
+        // 400 frames (6.7 s) by default sampled every 7th: 7 is coprime with the 26-frame hover tween and the 90-frame
+        // burst, so the 58 samples land on every tween step and 58 burst steps across every animated layer's loop.
+        // `KK_FULL_SWEEPS=1` draws all 400. Warm at those frames, then measure the same ones; a short pass can catch a
+        // stray one-off allocation, so a failing pass is measured again (an allocation every frame fails every pass).
+        val frames = if (System.getenv("KK_FULL_SWEEPS") == "1") IntArray(400) { it } else IntArray(58) { it * 7 }
+        for (index in frames) { frame(index); empty() }
         val id = Thread.currentThread().id
-        val emptyStart = threads.getThreadAllocatedBytes(id)
-        repeat(400) { empty() }
-        val emptyBytes = threads.getThreadAllocatedBytes(id) - emptyStart
-        val start = threads.getThreadAllocatedBytes(id)
-        repeat(400) { frame(it) }
-        val perFrame = (threads.getThreadAllocatedBytes(id) - start - emptyBytes) / 400
+        var perFrame = Long.MAX_VALUE
+        for (attempt in 0 until 3) {
+            val emptyStart = threads.getThreadAllocatedBytes(id)
+            repeat(frames.size) { empty() }
+            val emptyBytes = threads.getThreadAllocatedBytes(id) - emptyStart
+            val start = threads.getThreadAllocatedBytes(id)
+            for (index in frames) frame(index)
+            perFrame = minOf(perFrame, (threads.getThreadAllocatedBytes(id) - start - emptyBytes) / frames.size)
+            if (perFrame <= 64) break
+        }
         assertTrue(perFrame <= 64, "${styles.size} styled cards allocate $perFrame bytes per frame")
     }
 

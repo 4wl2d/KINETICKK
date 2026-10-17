@@ -45,12 +45,33 @@ import kinetickk.resource.audio.api.*
 import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
+import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertTrue
 
-/** Local visual QA harness (not committed): renders session screens to build/redesign-shots/session. */
+/**
+ * Local visual QA harness: renders session screens to build/redesign-shots/session.
+ *
+ * With `KK_SHOTS=1` every state renders at every size and in both languages and is written as a PNG. Otherwise
+ * the run is a smoke and nothing is written: within each test method a request renders only when its state or its
+ * viewport (size and density) is new for that screen, so every state and every viewport each render at least once
+ * (in the first language requested, Russian for the loops over [AppLanguage.entries]) with their interactions, and
+ * a state or viewport that fails to compose, lay out or draw still fails.
+ */
 @OptIn(ExperimentalTestApi::class)
 class RedesignShotsSessionTest {
     private val sizes = listOf(1440 to 810, 844 to 390, 390 to 844)
+
+    // What this method's smoke has rendered. JUnit creates an instance per test method, so a method never skips a
+    // request because another method rendered the same state name at a different viewport.
+    private val smokeStates = HashSet<String>()
+    private val smokeViewports = HashSet<String>()
+    private var rendered = 0
+
+    @AfterTest fun everyMethodRenders() {
+        assertTrue(rendered > 0, "a screenshot harness method rendered nothing")
+    }
+
     @Test fun home() {
         val targets = listOf("start", "lab", "armory", "rebirth", "codex", "settings", "hangar")
         for ((w, h) in sizes) for (language in AppLanguage.entries) {
@@ -244,10 +265,11 @@ class RedesignShotsSessionTest {
             for (state in listOf("default", "selected")) shotCodex("$state-text100", 1440, 810, language, scale = 1f) { codexState(state) }
             shotCodex("default-text175", 1280, 720, language, scale = 1.75f) { codexState("default") }
         }
-        codexItemsShots()
+        // The smoke renders the Items matrix once, in [codexItems].
+        if (FullShots) codexItemsShots()
     }
 
-    /** The Items matrix alone (also part of [codex]). */
+    /** The Items matrix alone (also part of [codex] with `KK_SHOTS=1`). */
     @Test fun codexItems() = codexItemsShots()
 
     /** The Items matrix: each sort, a previewed cell's row and column, and a fresh profile's hatches. */
@@ -412,22 +434,35 @@ class RedesignShotsSessionTest {
         interact: ComposeUiTest.() -> Unit,
         density: Float = 1f,
         content: @Composable () -> Unit,
-    ) = androidx.compose.ui.test.v2.runDesktopComposeUiTest((w * density).toInt(), (h * density).toInt()) {
-        mainClock.autoAdvance = false
-        setContent {
-            CompositionLocalProvider(LocalDensity provides Density(density, 1f), LocalAppLanguage provides language) {
-                Box(Modifier.requiredSize(w.dp, h.dp)) { content() }
-            }
+    ) {
+        if (!FullShots) {
+            val newState = smokeStates.add("$screen/$state")
+            val newViewport = smokeViewports.add("$screen/${w}x$h@$density")
+            if (!newState && !newViewport) return
         }
-        mainClock.advanceTimeByFrame()
-        interact()
-        mainClock.advanceTimeByFrame()
-        val bitmap = onRoot().captureToImage()
-        val pixels = bitmap.toPixelMap()
-        val image = BufferedImage(bitmap.width, bitmap.height, BufferedImage.TYPE_INT_ARGB)
-        for (y in 0 until bitmap.height) for (x in 0 until bitmap.width) image.setRGB(x, y, pixels[x, y].toArgb())
-        val folder = File("build/redesign-shots/session").apply { mkdirs() }
-        ImageIO.write(image, "png", File(folder, "$screen-$state-${w}x$h${if (density != 1f) "@${density.toInt()}x" else ""}-${language.code}.png"))
+        rendered++
+        androidx.compose.ui.test.v2.runDesktopComposeUiTest((w * density).toInt(), (h * density).toInt()) {
+            mainClock.autoAdvance = false
+            setContent {
+                CompositionLocalProvider(LocalDensity provides Density(density, 1f), LocalAppLanguage provides language) {
+                    Box(Modifier.requiredSize(w.dp, h.dp)) { content() }
+                }
+            }
+            mainClock.advanceTimeByFrame()
+            interact()
+            mainClock.advanceTimeByFrame()
+            val bitmap = onRoot().captureToImage()
+            if (!FullShots) return@runDesktopComposeUiTest
+            val pixels = bitmap.toPixelMap()
+            val image = BufferedImage(bitmap.width, bitmap.height, BufferedImage.TYPE_INT_ARGB)
+            for (y in 0 until bitmap.height) for (x in 0 until bitmap.width) image.setRGB(x, y, pixels[x, y].toArgb())
+            val folder = File("build/redesign-shots/session").apply { mkdirs() }
+            ImageIO.write(image, "png", File(folder, "$screen-$state-${w}x$h${if (density != 1f) "@${density.toInt()}x" else ""}-${language.code}.png"))
+        }
+    }
+
+    private companion object {
+        val FullShots = System.getenv("KK_SHOTS") == "1"
     }
 }
 

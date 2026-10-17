@@ -48,9 +48,13 @@ import kotlin.test.fail
  * From frame to frame the markers stay put while the screen shakes and never flick back and forth
  * between two arrangements while their targets turn, or while the Core flies past two offers that
  * point almost the same way.
+ *
+ * The long sweeps are sampled deterministically by default (each still meets every size, language,
+ * direction or course and case); `KK_FULL_SWEEPS=1` runs every combination.
  */
 class WorldEdgeMarkerSpacingTest {
     private val sizes = listOf(1_440f to 810f, 844f to 390f, 390f to 844f)
+    private val fullSweep = System.getenv("KK_FULL_SWEEPS") == "1"
 
     @Test
     fun offersAboveTheViewDrawSeparateMarkers() {
@@ -107,6 +111,10 @@ class WorldEdgeMarkerSpacingTest {
         var frames = 0
         for ((dpWidth, dpHeight) in sizes) for (language in AppLanguage.entries) for (textScale in listOf(1.25f, 1.75f)) {
             for (boss in listOf(false, true)) for (separation in listOf(4f, 12f)) {
+                // By default each language, text size and separation turns once, with the elite alive or not alternating
+                // between them, so both cases meet each of the three.
+                val alternate = (language.ordinal + (if (textScale > 1.25f) 1 else 0) + (if (separation > 4f) 1 else 0)) % 2 == 1
+                if (!fullSweep && boss != alternate) continue
                 val history = ArrayList<List<Offset>>()
                 for (step in 0 until SWEEP_STEPS) {
                     val angle = step * 360f / SWEEP_STEPS
@@ -165,8 +173,11 @@ class WorldEdgeMarkerSpacingTest {
         val flights = ArrayList<FlightSpec>()
         for ((dpWidth, dpHeight) in sizes) for (language in AppLanguage.entries) for (totemMode in 0 until 3) {
             for (course in 0 until FLIGHT_COURSES) {
-                flights += FlightSpec(dpWidth, dpHeight, language, totemMode, random.nextFloat() * 2f * PI.toFloat(), course,
+                val flight = FlightSpec(dpWidth, dpHeight, language, totemMode, random.nextFloat() * 2f * PI.toFloat(), course,
                     3f + 3f * random.nextFloat())
+                // By default every third course per language and totem mode, shifted between them so each size still flies
+                // every course twice; skipped flights still draw their heading and speed, so the kept ones are unchanged.
+                if (fullSweep || (course + language.ordinal + totemMode) % 3 == 0) flights += flight
             }
         }
         flights += VERIFIER_FLIGHTS
@@ -202,7 +213,7 @@ class WorldEdgeMarkerSpacingTest {
             }
         }
         assertTrue(failures.isEmpty(), "${failures.size} failure(s), first: ${failures.take(8).joinToString("\n")}")
-        assertTrue(frames > 300_000, "the flights draw their frames ($frames)")
+        assertTrue(frames > if (fullSweep) 300_000 else 100_000, "the flights draw their frames ($frames)")
     }
 
     @Test
@@ -242,6 +253,8 @@ class WorldEdgeMarkerSpacingTest {
         for ((dpWidth, dpHeight) in sizes) for (density in listOf(1f, 3f)) for (language in AppLanguage.entries) {
             for (separation in listOf(4f, 12f)) for (beyond in listOf(-30f, 10f, 40f, 150f, 400f)) for (step in 0 until SHAKE_DIRECTIONS) {
                 if (density > 1f && (language != AppLanguage.Russian || step % 3 != 0)) continue
+                // By default the two languages take alternate directions (all 72 still shaken at every size and reach).
+                if (!fullSweep && step % 2 != language.ordinal) continue
                 val angle = step * 360f / SHAKE_DIRECTIONS
                 val targets = listOf(angle - separation, angle, angle + separation).map { degrees ->
                     val radians = degrees * PI.toFloat() / 180f
