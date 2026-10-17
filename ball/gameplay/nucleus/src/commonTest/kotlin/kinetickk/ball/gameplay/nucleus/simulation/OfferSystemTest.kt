@@ -36,6 +36,9 @@ private const val OFFER_SAMPLES = 4_000
 /** Largest gap between two card shares that a correct offer keeps equal (about four standard deviations at 12,000 cards). */
 private const val SHARE_TOLERANCE = 0.025
 
+/** Seeds per pity sweep here; OfferPitySweepTest (desktop) runs the long 20,000-seed sweeps. */
+private const val PITY_SWEEP_SEEDS = 500
+
 /** An unlock level no run reaches, which keeps an item out of every ordinary offer. */
 private const val NEVER_UNLOCKED = Int.MAX_VALUE
 
@@ -174,12 +177,13 @@ class OfferSystemTest {
         assertTrue(seeds.all { hasRare(PITY_OFFERS, it) })
         assertFalse(seeds.all { hasRare(PITY_OFFERS - 1, it) }, "Without pity some offers carry no Rare card")
 
-        // Pity holds even when the rolled rarity has nothing to offer (no Legendary before Rebirth 2).
+        // Pity holds even when the rolled rarity has nothing to offer (no Legendary before Rebirth 2). A short sweep
+        // keeps this test fast on Wasm; OfferPitySweepTest (desktop) repeats it over 20,000 seeds.
         val sweep = buildTestState().apply {
             level = 20
             lifetimeMatter = 4_000L
         }
-        val misses = (1..20_000).count { seed ->
+        val misses = (1..PITY_SWEEP_SEEDS).count { seed ->
             sweep.rewardRandom = kinetickk.foundation.random.CloneableXorWowRandom(seed)
             sweep.offerPity = PITY_OFFERS
             sweep.buildItemChoices()
@@ -330,7 +334,7 @@ class OfferSystemTest {
         )
         assertEquals(1, scenarios.getValue("a single Rare or better").offerableItems().count(rareOrBetter))
         scenarios.forEach { (name, state) ->
-            val offers = state.sampleOffers(seeds = 1..20_000, pity = PITY_OFFERS)
+            val offers = state.sampleOffers(seeds = 1..PITY_SWEEP_SEEDS, pity = PITY_OFFERS)
             assertEquals(0, offers.count { offer -> offer.none(rareOrBetter) }, "Offers without a Rare or better ($name)")
             assertTrue(offers.all { offer -> offer.map { it.id }.toSet().size == offer.size }, "An offer never repeats a card ($name)")
         }
