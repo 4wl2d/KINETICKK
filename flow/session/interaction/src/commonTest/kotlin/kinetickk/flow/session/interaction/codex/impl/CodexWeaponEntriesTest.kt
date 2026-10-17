@@ -23,10 +23,12 @@ import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.flow.session.interaction.codex.api.CodexRenderModel
 import kinetickk.flow.session.interaction.codex.api.CodexRunStacks
+import kinetickk.flow.session.interaction.localization.CodexText
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.immutableSetOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.text
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -124,11 +126,64 @@ class CodexWeaponEntriesTest {
         assertTrue(detail.signatureActive)
         assertEquals(listOf(RelicId.EVENT_HORIZON), detail.bound.map { it.id })
         assertEquals(5, detail.tagPoints, "Anchor 3 + Chain 2; Ram is not its tag")
+        assertEquals(mapOf(BuildTag.ANCHOR to 3, BuildTag.CHAIN to 2), detail.tagPointsByTag)
         assertEquals(25, codexResonancePercent(5))
         assertEquals(50, codexResonancePercent(14))
         assertEquals(0, codexResonancePercent(-1))
         // The Build tab lists it too.
         assertTrue(codexBuildEntries(running, catalog, codexTestProgress()).any { it.key == "weapon/EVENT_LENS" && it.detail is CodexDetail.Weapon })
+        // Points in only one of its tags light that tag alone: Chain has none (and no row at all).
+        val anchorOnly = running.copy(runStacks = CodexRunStacks(build = build.copy(tags = immutableListOf(BuildTagSummary(BuildTag.ANCHOR, 3, 1)))))
+        val oneTag = assertIs<CodexDetail.Weapon>(codexWeaponEntry(lens, anchorOnly, codexTestProgress(), catalog).detail)
+        assertEquals(3, oneTag.tagPointsByTag?.get(BuildTag.ANCHOR))
+        assertEquals(0, oneTag.tagPointsByTag?.get(BuildTag.CHAIN))
+        assertEquals(3, oneTag.tagPoints)
+    }
+
+    @Test
+    fun inARunOnlyTheEquippedWeaponIsLitAndTheHeirloomChoiceIsGone() {
+        // The Dipole runs Flux Wake with Event Horizon (a Gravity carrier) bound and Anchor points; the Profile still lists
+        // Neutron Heart (Gravity) among its heirloom candidates.
+        val progress = codexTestProgress().let { base ->
+            base.copy(collection = base.collection.copy(heirloomRelicIds = immutableListOf(RelicId.NEUTRON_HEART)))
+        }
+        val build = GameplayBuildSummaryProjection(
+            GameplayInstanceId(RunId(1)), GameplayRevision.ZERO, immutableListOf(), character = CoreShape.DIPOLE, weapon = WeaponId.FLUX_WAKE,
+            weaponLevel = 2, relics = immutableListOf(EquippedRelic(RelicId.EVENT_HORIZON, 1)),
+            tags = immutableListOf(BuildTagSummary(BuildTag.ANCHOR, 4, 1)),
+        )
+        val running = CodexRenderModel(immutableSetOf(), CodexRunStacks(build = build), catalog.items)
+        // Event Lens is the Dipole's signature, but it is not the run's weapon: nothing about it is active.
+        val other = assertIs<CodexDetail.Weapon>(codexWeaponEntry(lens, running, progress, catalog).detail)
+        assertFalse(other.signatureActive)
+        assertTrue(other.bound.isEmpty())
+        assertTrue(other.heirlooms.isEmpty(), "the heirloom choice is no longer offered mid-run")
+        assertNull(other.tagPointsByTag)
+        assertNull(other.tagPoints)
+        // Equipped, it reads the run: with no bound carrier of its key it shows no harmony and still offers no heirloom.
+        fun lensIn(relics: List<RelicId>): CodexDetail.Weapon {
+            val equipped = build.copy(weapon = WeaponId.EVENT_LENS, relics = relics.map { EquippedRelic(it, 1) }.toImmutableList())
+            val model = running.copy(runStacks = CodexRunStacks(build = equipped))
+            return assertIs<CodexDetail.Weapon>(codexWeaponEntry(lens, model, progress, catalog).detail)
+        }
+        val bare = lensIn(listOf(RelicId.FURNACE_COVENANT))
+        assertTrue(bare.signatureActive)
+        assertTrue(bare.bound.isEmpty())
+        assertTrue(bare.heirlooms.isEmpty())
+        assertEquals(mapOf(BuildTag.ANCHOR to 4, BuildTag.CHAIN to 0), bare.tagPointsByTag)
+        assertEquals(listOf(RelicId.EVENT_HORIZON), lensIn(listOf(RelicId.EVENT_HORIZON)).bound.map { it.id })
+    }
+
+    @Test
+    fun theHarmonyCopyGrantsTheWeaponItsPowerOnceHoweverManyRelicsCarryTheKey() {
+        AppLanguage.entries.forEach { language ->
+            val two = language.text(CodexText.WEAPON_HARMONY_BOUND, "Charge", "Stormheart Capacitor, Aegis Inversion")
+            val weaponClaims = two.split('.', ';').filter { "20%" in it }
+            assertEquals(1, weaponClaims.size, "$language: $two")
+            assertFalse(weaponClaims.single().contains("Each", ignoreCase = true) || weaponClaims.single().contains("Кажд", ignoreCase = true),
+                "$language ties the weapon's 20% to each Relic: $two")
+            assertTrue("10%" in two, "$language: $two")
+        }
     }
 
     @Test

@@ -25,7 +25,10 @@ import androidx.compose.ui.test.v2.runSkikoComposeUiTest
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.RelicAspect
+import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RelicKey
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
 import kinetickk.ball.content.api.defaultCoreShapeDefinitions
@@ -52,6 +55,7 @@ import kinetickk.ball.profile.api.RebirthProgressProjection
 import kinetickk.ball.profile.api.RunBootstrapProjection
 import kinetickk.ball.profile.interaction.CatalogRebirthRelics
 import kinetickk.ball.profile.interaction.CatalogWeapons
+import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.common.localization.AppLanguage
@@ -76,13 +80,14 @@ class ArmoryComposeTest {
         port: ArmoryTestPort,
         width: Float = 390f,
         height: Float = 844f,
+        relics: List<RelicDefinition> = CatalogRebirthRelics,
         test: ComposeUiTest.() -> Unit,
     ) = runSkikoComposeUiTest(Size(width, height), Density(1f)) {
         setContent {
             CompositionLocalProvider(LocalAppLanguage provides AppLanguage.English) {
                 Box(Modifier.requiredSize(width.dp, height.dp)) {
                     DefaultArmoryFeature(port, CatalogWeapons, WeaponMastery.entries.toImmutableList(), ArmorySilentAudio,
-                        defaultCoreShapeDefinitions(), CatalogRebirthRelics).Content(activeRunWeapon = null) {}
+                        defaultCoreShapeDefinitions(), relics.toImmutableList()).Content(activeRunWeapon = null) {}
                 }
             }
         }
@@ -150,9 +155,12 @@ class ArmoryComposeTest {
 
     @Test
     fun theDetailPanelReadsTheSignatureCharacterAndTheHeirloomHarmony() {
-        // Ion Swarm: Hexagon's signature, key Charge, carried by the Stormheart Capacitor heirloom.
-        val port = ArmoryTestPort(character = CoreShape.HEXAGON, heirlooms = listOf(RelicId.STORMHEART_CAPACITOR, RelicId.FURNACE_COVENANT))
-        run(port, width = 1440f, height = 810f) {
+        // Ion Swarm: Hexagon's signature, key Charge, carried by two heirloom candidates (Stormheart Capacitor, Aegis Inversion).
+        val port = ArmoryTestPort(character = CoreShape.HEXAGON,
+            heirlooms = listOf(RelicId.STORMHEART_CAPACITOR, RelicId.FURNACE_COVENANT, RelicId.AEGIS_INVERSION))
+        val aegis = RelicDefinition(RelicId.AEGIS_INVERSION, "Aegis Inversion", RelicAspect.ION, immutableListOf(RelicKey.CHARGE, RelicKey.LIFE),
+            immutableListOf(), "Aegis Inversion upside", "Aegis Inversion liability", immutableListOf())
+        run(port, width = 1440f, height = 810f, relics = CatalogRebirthRelics + aegis) {
             onNodeWithTag(tile(WeaponId.ION_SWARM)).assert(stateContains("Signature of your character"))
             onNodeWithTag(tile(WeaponId.FLUX_WAKE)).assert(SemanticsMatcher("no signature mark") { node ->
                 node.config.getOrNull(SemanticsProperties.StateDescription)?.contains("Signature") != true
@@ -162,8 +170,17 @@ class ArmoryComposeTest {
             val detail = onNodeWithTag("profile-armory-detail")
             detail.assert(descendantDescriptionContains("Signature of Hexagon"))
             detail.assert(descendantDescriptionContains("Active with your character"))
-            detail.assert(descendantDescriptionContains("Stormheart Capacitor"))
+            detail.assert(descendantDescriptionContains("Stormheart Capacitor, Aegis Inversion"))
             detail.assert(descendantDescriptionContains("Charge"))
+            // Only one heirloom is chosen per run: two carriers still grant the weapon its 20% once.
+            detail.assert(descendantDescriptionContains("Choosing one adds 20% weapon power"))
+            detail.assert(SemanticsMatcher("no per-Relic weapon power") { node ->
+                fun visit(current: androidx.compose.ui.semantics.SemanticsNode): Boolean =
+                    current.config.getOrNull(SemanticsProperties.ContentDescription)
+                        ?.any { text -> text.split('.', ';').any { "20%" in it && it.contains("each", ignoreCase = true) } } == true ||
+                        current.children.any(::visit)
+                !visit(node)
+            })
             detail.assert(descendantDescriptionContains("Each point in Arsenal or Chain adds 5% weapon power"))
             // Another character's weapon names who it belongs to and how to get the bonus.
             onNodeWithTag(tile(WeaponId.MORNINGSTAR)).performClick()

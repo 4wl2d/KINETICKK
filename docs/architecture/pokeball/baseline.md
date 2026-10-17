@@ -349,11 +349,13 @@ refuses; neither reaches the Profile unless the screen believes it can succeed.
 The Hangar's signature row lists the shown character's two weapons with their
 owned, starter, Rebirth or price state and any heirloom harmony. Codex weapons
 are always named, an unowned one keeping the locked look, with their facts, cost
-and Rebirth rank; the detail reads the run's character, bound Relics and tag
-points, or outside a run the next character and the heirloom candidates. Weapon
+and Rebirth rank; during a run the detail reads the run's character, bound
+Relics and per-tag points as active only for the equipped weapon, and outside a
+run the next character and the heirloom candidates. Weapon
 offer cards and Totem weapon rows name the family, element and tags and mark the
 run character's signature weapon. The synergy figures these screens quote
-(+20 % for the signature and for harmony, +5 % per tag point up to +50 %) are
+(+20 % once for the signature and once for harmony, +10 % for each harmonized
+Relic, +5 % per tag point up to +50 %) are
 presentation copy; Gameplay owns the arithmetic. The policy row for the Armory
 now names that grid (one tile per catalog weapon, at most 24) in place of the
 old three-tile page slice.

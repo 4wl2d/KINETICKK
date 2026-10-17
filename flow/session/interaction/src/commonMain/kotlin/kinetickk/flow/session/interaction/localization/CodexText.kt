@@ -193,8 +193,8 @@ internal enum class CodexText(
     WEAPON_TWIST("Signature twist", "Фирменный эффект"),
     WEAPON_FORMS("Mastery forms", "Формы мастерства"),
     WEAPON_HARMONY_BOUND(
-        "Bound Relics carrying the {0} key: {1}. Each adds 20% weapon power and grows 10% stronger itself.",
-        "Привязанные реликвии с ключом «{0}»: {1}. Каждая даёт +20% мощности оружия и сама усиливается на 10%.",
+        "Bound Relics carrying the {0} key: {1}. The weapon gains 20% power; each of these Relics grows 10% stronger.",
+        "Привязанные реликвии с ключом «{0}»: {1}. Оружие получает +20% мощности; каждая из этих реликвий усиливается на 10%.",
     ),
     WEAPON_HARMONY_HEIRLOOM(
         "Heirloom candidates carrying the {0} key: {1}. Choosing one adds 20% weapon power.",

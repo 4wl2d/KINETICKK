@@ -104,7 +104,7 @@ internal fun CodexDetailBody(
 }
 
 /**
- * A weapon's sheet: its element, tags and Relic key as chips (the run's tags lit), its description,
+ * A weapon's sheet: its element, tags and Relic key as chips (each tag the run has points in lit), its description,
  * the three mastery forms by level, the signature character and twist (lit when active), the Relics
  * that carry its key and its tag resonance.
  */
@@ -124,7 +124,7 @@ private fun CodexWeaponDetail(detail: CodexDetail.Weapon, ui: Float, panel: Colo
         }
         weapon.tags.forEach { tag ->
             CodexGlyphChip(tag.glyph(), tag.displayLabel.localizedContent(language), ui,
-                underline = if ((detail.tagPoints ?: 0) > 0) roles.you else Color.Unspecified)
+                underline = if ((detail.tagPointsByTag?.get(tag) ?: 0) > 0) roles.you else Color.Unspecified)
         }
         CodexGlyphChip(null, weapon.key.displayLabel.localizedContent(language), ui, rim = Kk.Bone2)
         if (detail.rebirthLocked) {

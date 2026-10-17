@@ -133,8 +133,9 @@ internal sealed interface CodexDetail {
 
     /**
      * A weapon's typed sheet: its mastery forms at [formLevels], its [signature] character (active
-     * with the run's character, or the next run's outside a run) and twist, the Relics that carry
-     * its key ([bound] this run, else the [heirlooms] candidates) and the run's points in its tags.
+     * with the run's character on the equipped weapon, or the next run's outside a run) and twist,
+     * the Relics that carry its key ([bound] to the equipped weapon this run, else outside a run the
+     * [heirlooms] candidates) and the run's points in each of its tags ([tagPointsByTag], equipped only).
      */
     data class Weapon(
         val weapon: WeaponDefinition,
@@ -143,9 +144,12 @@ internal sealed interface CodexDetail {
         val formLevels: List<Int>,
         val bound: List<RelicDefinition>,
         val heirlooms: List<RelicDefinition>,
-        val tagPoints: Int?,
+        val tagPointsByTag: Map<BuildTag, Int>?,
         val rebirthLocked: Boolean,
-    ) : CodexDetail
+    ) : CodexDetail {
+        /** The run's points across both tags (the resonance input), or null when no run lights them. */
+        val tagPoints: Int? get() = tagPointsByTag?.values?.sum()
+    }
 }
 
 /** A reaction a residue can feed next; [name] is null until that reaction is discovered. */
@@ -281,8 +285,8 @@ internal fun codexLockedEntry(key: String, rebirth: Int, language: AppLanguage):
  * A weapon, always named with its typed facts (family, element, Relic key, scaling input, cadence,
  * signature character) and, while not owned, its unlock cost and Rebirth rank; an unowned weapon
  * keeps the locked look. The detail reads its live synergy from the run (its character, bound
- * Relics and tag points) or, outside a run, from the Profile (the next run's character and the
- * heirloom candidates).
+ * Relics and tag points, active on the equipped weapon only) or, outside a run, from the Profile
+ * (the next run's character and the heirloom candidates).
  */
 internal fun codexWeaponEntry(
     weapon: WeaponDefinition,
@@ -320,20 +324,25 @@ internal fun codexWeaponEntry(
         add(CodexFact(language.text(CodexText.WEAPON_CADENCE), codexCadenceLabel(weapon.cadence, language)))
         add(CodexFact(language.text(CodexText.WEAPON_SIGNATURE), signature))
     }
-    // The run's character and bound Relics while one runs; the next run's character and the heirloom candidates otherwise.
-    val character = build?.character ?: progress.loadout.coreShape
-    val bound = build?.relics.orEmpty().mapNotNull { slot -> catalog.relics.firstOrNull { it.id == slot.id } }
+    // While a run is on, Gameplay applies these bonuses to the equipped weapon alone: its character, bound
+    // Relics and tag points light only that weapon, and the heirloom choice is no longer the sheet's to offer.
+    // Outside a run: the next run's character and the heirloom candidates.
+    val lit = build?.takeIf { equipped }
+    val character = if (build == null) progress.loadout.coreShape else lit?.character
+    val bound = lit?.relics.orEmpty().mapNotNull { slot -> catalog.relics.firstOrNull { it.id == slot.id } }
         .filter { weapon.key in it.keys }
-    val heirlooms = progress.collection.heirloomRelicIds.distinct().mapNotNull { id -> catalog.relics.firstOrNull { it.id == id } }
-        .filter { weapon.key in it.keys }
-    val tagPoints = build?.let { summary -> summary.tags.filter { it.tag in weapon.tags }.sumOf { it.points } }
+    val heirlooms = if (build != null) emptyList() else {
+        progress.collection.heirloomRelicIds.distinct().mapNotNull { id -> catalog.relics.firstOrNull { it.id == id } }
+            .filter { weapon.key in it.keys }
+    }
+    val tagPointsByTag = lit?.let { summary -> weapon.tags.associateWith { tag -> summary.tags.filter { it.tag == tag }.sumOf { it.points } } }
     val formLevels = catalog.weaponMasteries.map { it.minimumLevel }.filter { it > 1 }.sorted().take(weapon.masteryForms.size)
         .takeIf { it.size == weapon.masteryForms.size } ?: listOf(3, 6, 10).take(weapon.masteryForms.size)
     return CodexEntry("weapon/${weapon.id}", weapon.name.localizedContent(language), weapon.description.localizedContent(language),
         language.text(SessionText.WEAPON), if (equipped && build != null) language.text(SessionText.LEVEL_SHORT, build.weaponLevel) else CODEX_NONE,
         facts, CodexIcon.Weapon(weapon.id), Kk.Bone, owned,
         help = language.text(if (owned) SessionText.WEAPON_HELP else SessionText.WEAPON_LOCKED_HELP), active = equipped,
-        detail = CodexDetail.Weapon(weapon, signature, character == weapon.signature, formLevels, bound, heirlooms, tagPoints, rebirthLocked))
+        detail = CodexDetail.Weapon(weapon, signature, character == weapon.signature, formLevels, bound, heirlooms, tagPointsByTag, rebirthLocked))
 }
 
 /** A weapon's element as the Codex names it: its element, or Kinetic. */

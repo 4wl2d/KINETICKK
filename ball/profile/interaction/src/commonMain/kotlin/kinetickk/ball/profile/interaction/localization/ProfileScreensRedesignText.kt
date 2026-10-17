@@ -51,8 +51,8 @@ internal enum class ProfileScreensRedesignText(
     ArmoryTwist("Signature twist", "Фирменный эффект"),
     ArmoryHarmony("Harmony with the {0} key", "Гармония ключа «{0}»"),
     ArmoryHarmonyCandidates(
-        "Heirloom candidates carrying it: {0}. Each adds 20% weapon power and grows 10% stronger itself.",
-        "Его несут реликвии наследия: {0}. Каждая даёт +20% мощности оружия и сама усиливается на 10%.",
+        "Heirloom candidates carrying it: {0}. Choosing one adds 20% weapon power, and it grows 10% stronger itself.",
+        "Его несут реликвии наследия: {0}. Выбор одной из них даёт +20% мощности оружия, и она сама усиливается на 10%.",
     ),
     ArmoryHarmonyNone(
         "No heirloom candidate carries it. A Relic with this key, chosen as heirloom or bound in a run, adds 20% weapon power.",
