@@ -3,9 +3,11 @@
 
 package kinetickk.ball.profile.nucleus
 
+import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.ProfilePolicySnapshot
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
-import kinetickk.ball.profile.api.LabProgress
+import kinetickk.ball.profile.api.MatrixProgress
+import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
 import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.api.PlayerProfile
@@ -75,7 +77,7 @@ private fun constructInitialProfileState(
         )
         is ProfileSnapshotReadResult.Observed -> {
             val snapshot = result.snapshot
-            val loaded = snapshot?.profile?.withCatalogDiscoveries(policy)
+            val loaded = snapshot?.profile?.withCatalogDiscoveries(policy)?.withMatrixPolicy(policy)
             when {
                 snapshot == null || loaded == null -> state(
                     revision = ProfileRevision(1L),
@@ -118,6 +120,28 @@ private fun PlayerProfile.withCatalogDiscoveries(policy: ProfilePolicySnapshot):
 }
 
 /**
+ * Matrix ranks above a node's current maximum (a rebalance lowered it) are clamped on load and
+ * their price is refunded; prerequisites and Rebirth gates are purchase rules only, so a profile
+ * that owns a node whose gate moved keeps it. The next accepted write persists the clamped ranks.
+ */
+private fun PlayerProfile.withMatrixPolicy(policy: ProfilePolicySnapshot): PlayerProfile {
+    if (matrix.ranks.size != MatrixNodeId.entries.size) return this
+    var refund = 0L
+    val ranks = matrix.ranks.mapIndexed { index, rank ->
+        val definition = policy.matrixNodes.firstOrNull { it.id.ordinal == index } ?: return@mapIndexed rank
+        if (rank <= definition.maxRanks) return@mapIndexed rank
+        refund = saturatedAdd(refund, definition.spent(rank) - definition.spent(definition.maxRanks))
+        definition.maxRanks
+    }
+    if (refund == 0L && ranks == matrix.ranks) return this
+    val matter = saturatedAdd(economy.matter, refund)
+    return copy(
+        economy = PlayerEconomy(matter = matter, lifetimeMatter = maxOf(economy.lifetimeMatter, matter)),
+        matrix = MatrixProgress(ranks),
+    )
+}
+
+/**
  * Loading advances once, and one complete mutation advances for acceptance and write completion.
  * Snapshots above this boundary cannot support that smallest useful current-schema lifecycle.
  */
@@ -143,6 +167,7 @@ private fun isPolicyCompatibleAtConstruction(
     val achievements = profile.characterAchievements
     if (achievements.eliteKills < 0L || achievements.dashHits < 0L ||
         achievements.completedOrbits < 0L || achievements.architectVictories < 0L ||
+        achievements.totalKills < 0L || achievements.ricochets < 0L || achievements.dataPickups < 0L ||
         achievements.victoriousCharacters.size > achievements.architectVictories
     ) return false
     val allowedShapes = policy.coreShapes.map { it.id }
@@ -158,9 +183,10 @@ private fun isPolicyCompatibleAtConstruction(
         profile.loadout.unlockedWeapons.size > policy.weapons.size ||
         profile.loadout.unlockedWeapons.any { it !in allowedWeapons }
     ) return false
-    if (profile.labProgress.ranks.size != policy.metaUpgrades.size) return false
-    policy.metaUpgrades.forEach { definition ->
-        if (profile.labProgress.rank(definition.id) !in 0..definition.maxRanks) return false
+    val matrix = profile.matrix
+    if (matrix.ranks.size != MatrixNodeId.entries.size || matrix.ranks.any { it < 0 }) return false
+    policy.matrixNodes.forEach { definition ->
+        if (matrix.rank(definition.id) > definition.maxRanks) return false
     }
     val heirlooms = profile.collection.heirloomRelicIds
     if (
@@ -186,7 +212,7 @@ internal fun defaultPlayerProfile(policy: ProfilePolicySnapshot): PlayerProfile 
             selectedWeapon = defaultWeapon,
             unlockedWeapons = immutableSetOf(defaultWeapon),
         ),
-        labProgress = LabProgress(List(policy.metaUpgrades.size) { 0 }),
+        matrix = MatrixProgress(),
         rebirthProgress = RebirthProgress(
             level = policy.rebirth.minimumLevel,
             highestCleared = -1,

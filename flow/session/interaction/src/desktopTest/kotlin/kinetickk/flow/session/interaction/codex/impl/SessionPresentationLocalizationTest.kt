@@ -182,8 +182,8 @@ class SessionPresentationLocalizationTest {
 private class LocalizationProfilePort : ProfileReadPort {
     override val instanceId = LOCAL_PROFILE_INSTANCE_ID
     override fun query(query: ProfileQuery.GetRunBootstrap): kinetickk.ball.profile.api.RunBootstrapProjection = error("unused")
-    override fun query(query: ProfileQuery.GetLabProgress) = LabProgressProjection(instanceId, ProfileRevision.ZERO,
-        LabProfileSnapshot(PlayerEconomy(), LabProgress()))
+    override fun query(query: ProfileQuery.GetMatrixProgress) = MatrixProgressProjection(instanceId, ProfileRevision.ZERO,
+        MatrixProfileSnapshot(PlayerEconomy(), MatrixProgress()))
     override fun query(query: ProfileQuery.GetLoadout): kinetickk.ball.profile.api.LoadoutProjection = error("unused")
     override fun query(query: ProfileQuery.GetRebirthProgress): kinetickk.ball.profile.api.RebirthProgressProjection = error("unused")
     override fun query(query: ProfileQuery.GetPersistenceStatus): kinetickk.ball.profile.api.PersistenceStatusProjection = error("unused")

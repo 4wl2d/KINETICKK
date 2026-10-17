@@ -5,12 +5,9 @@ package kinetickk.ball.profile.interaction
 
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ItemDefinition
-import kinetickk.ball.content.api.ItemEffect
-import kinetickk.ball.content.api.ItemModifier
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.ItemRule
-import kinetickk.ball.content.api.MetaUpgradeDefinition
-import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.MatrixNodeDefinition
 import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
@@ -22,21 +19,13 @@ import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
+import kinetickk.ball.content.api.defaultMatrixNodes
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 
-internal val TestMetaUpgrades: ImmutableList<MetaUpgradeDefinition> =
-    MetaUpgradeId.entries.mapIndexed { index, id ->
-        MetaUpgradeDefinition(
-            id = id,
-            name = "Test ${id.name}",
-            description = "Injected test upgrade $index",
-            maxRanks = index + 2,
-            baseCost = (index + 1) * 100,
-            modifierPerRank = ItemModifier(ItemEffect.MAX_INTEGRITY, 1f),
-        )
-    }.toImmutableList()
+/** The shipped Core Matrix (content API data), as the Matrix screen receives it. */
+internal val TestMatrixNodes: ImmutableList<MatrixNodeDefinition> = defaultMatrixNodes()
 
 internal val TestWeapons: ImmutableList<WeaponDefinition> = WeaponId.entries.mapIndexed { index, id ->
     WeaponDefinition(

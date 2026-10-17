@@ -18,7 +18,7 @@ import kinetickk.ball.gameplay.api.GameplayRunStarted
 import kinetickk.ball.gameplay.api.GameplayOverlayPaused
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
-import kinetickk.ball.profile.api.LabProgress
+import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
@@ -754,7 +754,7 @@ private fun profileSnapshot(
     preferences = preferences,
     economy = PlayerEconomy(),
     loadout = PlayerLoadout(),
-    labProgress = LabProgress(),
+    matrix = MatrixProgress(),
     collection = PlayerCollection(),
     rebirthProgress = rebirthProgress,
 )

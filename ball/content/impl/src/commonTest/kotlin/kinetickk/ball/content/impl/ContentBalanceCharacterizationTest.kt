@@ -11,7 +11,8 @@ import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.ItemRule
-import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.MatrixEffect
+import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
@@ -108,7 +109,7 @@ class ContentBalanceCharacterizationTest {
     }
 
     @Test
-    fun weaponAndMetaUpgradeEconomyPoliciesAreGolden() {
+    fun weaponAndMatrixEconomyPoliciesAreGolden() {
         assertEquals(
             listOf(
                 WeaponId.FLUX_WAKE to 0,
@@ -128,21 +129,43 @@ class ContentBalanceCharacterizationTest {
         )
         assertEquals(
             listOf(
-                MetaPolicy(MetaUpgradeId.CORE_INTEGRITY, maxRanks = 10, baseCost = 18),
-                MetaPolicy(MetaUpgradeId.KINETIC_AMPLIFIER, maxRanks = 10, baseCost = 22),
-                MetaPolicy(MetaUpgradeId.MAGNETIC_RESONANCE, maxRanks = 8, baseCost = 24),
-                MetaPolicy(MetaUpgradeId.CRYO_VENTS, maxRanks = 8, baseCost = 26),
-                MetaPolicy(MetaUpgradeId.DASH_CAPACITOR, maxRanks = 8, baseCost = 30),
-                MetaPolicy(MetaUpgradeId.SALVAGE_PROTOCOL, maxRanks = 10, baseCost = 34),
-                MetaPolicy(MetaUpgradeId.DATA_ARCHIVE, maxRanks = 10, baseCost = 38),
-                MetaPolicy(MetaUpgradeId.ARMORY_LICENSE, maxRanks = 12, baseCost = 45),
+                MatrixNodeId.IMPACT_DRIVER to listOf(150, 400, 900),
+                MatrixNodeId.WEAPON_CALIBRATION to listOf(200, 500, 1_000),
+                MatrixNodeId.CRITICAL_LATTICE to listOf(600, 1_400),
+                MatrixNodeId.ARMED_START to listOf(800, 2_000),
+                MatrixNodeId.CATALYST_CORE to listOf(1_600),
+                MatrixNodeId.OVERDRIVE_COIL to listOf(1_800),
+                MatrixNodeId.REBORN_ARSENAL to listOf(4_200),
+                MatrixNodeId.GLASS_ENGINE to listOf(3_500),
+                MatrixNodeId.REINFORCED_HULL to listOf(120, 350, 800),
+                MatrixNodeId.HARDLIGHT_RESERVE to listOf(300, 800),
+                MatrixNodeId.IMPACT_DAMPERS to listOf(400, 1_000),
+                MatrixNodeId.SECOND_WIND to listOf(2_200),
+                MatrixNodeId.NANOFORGE to listOf(700, 1_600),
+                MatrixNodeId.BASTION_PROTOCOL to listOf(2_600),
+                MatrixNodeId.AEGIS_LATTICE to listOf(4_500),
+                MatrixNodeId.JUGGERNAUT to listOf(3_800),
+                MatrixNodeId.MAGNET_ARRAY to listOf(100, 300, 700),
+                MatrixNodeId.CRYO_LOOP to listOf(250, 700),
+                MatrixNodeId.VECTOR_THRUSTERS to listOf(400, 1_000),
+                MatrixNodeId.NEAR_MISS to listOf(900),
+                MatrixNodeId.RICOCHET_RIG to listOf(1_500),
+                MatrixNodeId.OVERCLOCKED_REFLEXES to listOf(1_200, 2_600),
+                MatrixNodeId.GRAVITY_SURFER to listOf(5_000),
+                MatrixNodeId.PERPETUAL_DRIFT to listOf(4_000),
+                MatrixNodeId.SALVAGE_PROTOCOL to listOf(150, 400, 900),
+                MatrixNodeId.DATA_ARCHIVE to listOf(150, 400, 900),
+                MatrixNodeId.REROLL_CACHE to listOf(500, 1_500),
+                MatrixNodeId.WIDE_OFFER to listOf(1_200),
+                MatrixNodeId.LUCKY_CHARM to listOf(800, 2_000),
+                MatrixNodeId.ELITE_BOUNTY to listOf(2_400),
+                MatrixNodeId.HEIRLOOM_VAULT to listOf(3_000),
+                MatrixNodeId.PROSPECTOR to listOf(3_200),
             ),
-            ui.metaUpgrades.map { upgrade ->
-                MetaPolicy(upgrade.id, upgrade.maxRanks, upgrade.baseCost)
-            },
+            ui.matrixNodes.map { node -> node.id to node.costs.toList() },
         )
         assertEquals(
-            "4542ace8c0367bdd",
+            "75db0a6d325eea71",
             goldenFingerprint {
                 add("weapons")
                 ui.weapons.forEach { weapon ->
@@ -153,15 +176,19 @@ class ContentBalanceCharacterizationTest {
                     weapon.tags.forEach(::add)
                     add(weapon.permanentUnlockCost)
                 }
-                add("meta-upgrades")
-                ui.metaUpgrades.forEach { upgrade ->
-                    add(upgrade.id.name)
-                    add(upgrade.name)
-                    add(upgrade.description)
-                    add(upgrade.maxRanks)
-                    add(upgrade.baseCost)
-                    add(upgrade.modifierPerRank.effect.name)
-                    add(upgrade.modifierPerRank.amount)
+                add("matrix")
+                ui.matrixNodes.forEach { node ->
+                    add(node.id.name)
+                    add(node.name)
+                    add(node.description)
+                    add(node.branch.name)
+                    add(node.row)
+                    add(node.maxRanks)
+                    node.costs.forEach(::add)
+                    node.prerequisites.forEach { add(it.name) }
+                    add(node.minimumRebirth)
+                    add(node.keystone)
+                    node.effects.forEach { addMatrixEffect(it) }
                 }
             },
         )
@@ -239,11 +266,38 @@ class ContentBalanceCharacterizationTest {
     }
 }
 
-private data class MetaPolicy(
-    val id: MetaUpgradeId,
-    val maxRanks: Int,
-    val baseCost: Int,
-)
+/** Every Matrix effect kind with its numbers; floats enter by bits, so JVM and Wasm agree. */
+private fun GoldenFingerprint.addMatrixEffect(effect: MatrixEffect) {
+    when (effect) {
+        is MatrixEffect.Stat -> { add("stat"); add(effect.delta.effect.name); add(effect.delta.amount) }
+        is MatrixEffect.DamageMultiplier -> { add("damage"); add(effect.fraction) }
+        is MatrixEffect.ReactionPower -> { add("reaction"); add(effect.fraction) }
+        is MatrixEffect.StatusPotency -> { add("potency"); add(effect.fraction) }
+        is MatrixEffect.DashHeat -> { add("dash-heat"); add(effect.multiplier) }
+        is MatrixEffect.Drag -> { add("drag"); add(effect.multiplier) }
+        is MatrixEffect.StartingWeaponLevel -> { add("weapon-level"); add(effect.levels) }
+        is MatrixEffect.StartingOverdrive -> { add("overdrive"); add(effect.charge) }
+        is MatrixEffect.SecondWind -> { add("second-wind"); add(effect.integrityFraction); add(effect.invulnerableSeconds) }
+        is MatrixEffect.ObstacleGuard -> { add("obstacle-guard"); add(effect.damageMultiplier); add(effect.lethalSpeedBonus) }
+        is MatrixEffect.RicochetRig -> { add("ricochet-rig"); add(effect.restitution); add(effect.burstRadius) }
+        is MatrixEffect.NearMiss -> {
+            add("near-miss"); add(effect.distance); add(effect.minSpeed); add(effect.overdrive); add(effect.cooldown)
+        }
+        is MatrixEffect.OfferCards -> { add("offer-cards"); add(effect.everyNthOffer) }
+        is MatrixEffect.RarityPity -> { add("pity"); add(effect.offers) }
+        is MatrixEffect.PickupValue -> { add("pickup-value"); add(effect.fraction) }
+        MatrixEffect.EliteBounty -> add("elite-bounty")
+        is MatrixEffect.HeirloomOffers -> { add("heirlooms"); add(effect.extra) }
+        is MatrixEffect.RebornChance -> { add("reborn"); add(effect.bonus) }
+        is MatrixEffect.EnemyIntegrity -> { add("enemy-integrity"); add(effect.multiplier) }
+        is MatrixEffect.ContactDamage -> { add("contact"); add(effect.multiplier) }
+        is MatrixEffect.FreeDashInterval -> { add("free-dash"); add(effect.seconds) }
+        is MatrixEffect.Rerolls -> { add("rerolls"); add(effect.count) }
+        is MatrixEffect.WeaponRunGrowth -> { add("weapon-growth"); add(effect.bonusPerProgress) }
+        is MatrixEffect.ShieldRegenDelay -> { add("shield-delay"); add(effect.multiplier) }
+        is MatrixEffect.RicochetPhase -> { add("ricochet-phase"); add(effect.seconds) }
+    }
+}
 
 private fun GoldenFingerprint.addItem(item: ItemDefinition) {
     add(item.id)

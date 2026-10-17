@@ -23,7 +23,10 @@ object ContentBounds {
     const val MAX_ITEMS: Int = 96
     const val MAX_COMBAT_FIELDS: Int = 16
     const val MAX_WEAPONS: Int = 12
-    const val MAX_META_UPGRADES: Int = 8
+    const val MAX_MATRIX_NODES: Int = 40
+    const val MAX_MATRIX_NODE_RANKS: Int = 5
+    const val MAX_MATRIX_ROWS: Int = 8
+    const val MAX_MATRIX_NODE_EFFECTS: Int = 4
     const val MAX_RELICS: Int = 24
     const val MAX_RELIC_PAIRINGS: Int = 32
     const val MAX_RELIC_VALUES: Int = 4

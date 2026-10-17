@@ -28,7 +28,7 @@ profiles start at 1× speed. Pauses and reward choices stop the run clock.
 | `P` / `Esc` | Pause or return |
 | `1`–`4` | Select a reward |
 | `Q` | Reroll an item or weapon choice |
-| `L` / `A` / `B` / `C` or `I` / `S` | Lab, Armory, Rebirth, Codex, Settings |
+| `L` / `A` / `B` / `C` or `I` / `S` | Core Matrix, Armory, Rebirth, Codex, Settings |
 | `M` | Toggle sound and music |
 | `F3` | Toggle and reset the performance HUD |
 | `R` | Restart after a completed run |
@@ -41,7 +41,7 @@ whose statuses Break at a threshold and react with each other: every pair of
 elements has its own reaction, 21 in all. Every Relic rewrites a rule and
 carries a cost; Relic keys predict harmony and dissonance, and the Codex records
 discovered reactions, pairings and known incompatibilities.
-Spend Kinetic Matter in the Lab and Armory between runs. Defeat The Architect
+Spend Kinetic Matter in the Core Matrix and Armory between runs. Defeat The Architect
 to unlock the next Rebirth tier while keeping permanent progression.
 
 ## Build and run

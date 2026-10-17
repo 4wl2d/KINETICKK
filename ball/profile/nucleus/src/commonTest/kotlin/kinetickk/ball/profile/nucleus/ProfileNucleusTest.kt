@@ -4,7 +4,7 @@
 package kinetickk.ball.profile.nucleus
 
 import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
@@ -17,7 +17,8 @@ import kinetickk.ball.profile.api.GameplayProgressUpdate
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kinetickk.ball.profile.api.HomeProgressProjection
-import kinetickk.ball.profile.api.LabProgressProjection
+import kinetickk.ball.profile.api.MatrixProgress
+import kinetickk.ball.profile.api.MatrixProgressProjection
 import kinetickk.ball.profile.api.LoadoutProjection
 import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
 import kinetickk.ball.profile.api.PersistenceStatusProjection
@@ -205,7 +206,7 @@ class ProfileNucleusTest {
         assertEquals(policy.coreShapes.first().id, profile.loadout.coreShape)
         assertEquals(policy.weapons.first().id, profile.loadout.selectedWeapon)
         assertEquals(setOf(policy.weapons.first().id), profile.loadout.unlockedWeapons)
-        assertEquals(policy.metaUpgrades.size, profile.labProgress.ranks.size)
+        assertEquals(MatrixProgress(), profile.matrix)
         assertEquals(policy.rebirth.minimumLevel, profile.rebirthProgress.level)
     }
 
@@ -218,7 +219,7 @@ class ProfileNucleusTest {
         )
         val intents: List<ProfilePulse.Business> = listOf(
             ProfilePulse.AdjustPreference(ProfilePreferenceAdjustment.ToggleSoundEffects),
-            ProfilePulse.PurchaseMetaUpgrade(MetaUpgradeId.CORE_INTEGRITY),
+            ProfilePulse.PurchaseMatrixNode(MatrixNodeId.REINFORCED_HULL),
             ProfilePulse.PurchaseOrEquipWeapon(WeaponId.MORNINGSTAR),
         )
 
@@ -271,7 +272,7 @@ class ProfileNucleusTest {
             ProfileNucleus.decide(
                 state,
                 ProfileNucleusPulse.Intent(
-                    ProfilePulse.PurchaseMetaUpgrade(MetaUpgradeId.CORE_INTEGRITY),
+                    ProfilePulse.PurchaseMatrixNode(MatrixNodeId.REINFORCED_HULL),
                 ),
             ).rejection(),
         )
@@ -501,7 +502,7 @@ class ProfileNucleusTest {
         val catalogEnd = TestProfilePolicy.itemCount
         val profile = defaultPlayerProfile(TestProfilePolicy).copy(
             economy = PlayerEconomy(matter = 640L, lifetimeMatter = 9_000L),
-            labProgress = kinetickk.ball.profile.api.LabProgress(MetaUpgradeId.entries.map { 2 }),
+            matrix = MatrixProgress(MatrixNodeId.entries.map { if (it.ordinal < 3) 1 else 0 }),
             rebirthProgress = RebirthProgress(3, 2),
             collection = PlayerCollection(
                 discoveredItemIds = setOf(1, catalogEnd - 1, catalogEnd, 399),
@@ -618,7 +619,7 @@ class ProfileNucleusTest {
             ProfileNucleus.query(state, ProfileQuery.GetRunBootstrap),
             ProfileNucleus.query(state, ProfileQuery.GetPreferences),
             ProfileNucleus.query(state, ProfileQuery.GetHomeProgress),
-            ProfileNucleus.query(state, ProfileQuery.GetLabProgress),
+            ProfileNucleus.query(state, ProfileQuery.GetMatrixProgress),
             ProfileNucleus.query(state, ProfileQuery.GetLoadout),
             ProfileNucleus.query(state, ProfileQuery.GetCollection),
             ProfileNucleus.query(state, ProfileQuery.GetRebirthProgress),
@@ -633,7 +634,8 @@ class ProfileNucleusTest {
         )
         assertEquals(state.profile.preferences, assertIs<PreferencesProjection>(projections[1]).preferences)
         assertTrue(assertIs<HomeProgressProjection>(projections[2]).canAdvanceRebirth)
-        assertEquals(state.profile.labProgress, assertIs<LabProgressProjection>(projections[3]).snapshot.progress)
+        assertEquals(state.profile.matrix, assertIs<MatrixProgressProjection>(projections[3]).snapshot.progress)
+        assertEquals(1, assertIs<MatrixProgressProjection>(projections[3]).snapshot.rebirthRank)
         assertEquals(state.profile.loadout, assertIs<LoadoutProjection>(projections[4]).snapshot.loadout)
         assertEquals(state.profile.collection, assertIs<CollectionProjection>(projections[5]).collection)
         assertTrue(assertIs<RebirthProgressProjection>(projections[6]).canAdvance)
@@ -675,6 +677,9 @@ class ProfileNucleusTest {
             GameplayProgressUpdate(eliteKills = -1),
             GameplayProgressUpdate(dashHits = -1),
             GameplayProgressUpdate(completedOrbits = -1),
+            GameplayProgressUpdate(totalKills = -1),
+            GameplayProgressUpdate(ricochets = -1),
+            GameplayProgressUpdate(dataPickups = -1),
         ).forEach { update ->
             assertEquals(
                 ProfileRejection.InvalidGameplayProgress(ProfileGameplayProgressRejection.NegativeAchievementProgress),
@@ -697,12 +702,18 @@ class ProfileNucleusTest {
                 eliteKills = Long.MAX_VALUE - 1,
                 dashHits = Long.MAX_VALUE - 1,
                 completedOrbits = Long.MAX_VALUE - 1,
+                totalKills = Long.MAX_VALUE - 1,
+                ricochets = Long.MAX_VALUE - 1,
+                dataPickups = Long.MAX_VALUE - 1,
             ),
         ))
         val update = GameplayProgressUpdate(
             eliteKills = Int.MAX_VALUE,
             dashHits = Int.MAX_VALUE,
             completedOrbits = Int.MAX_VALUE,
+            totalKills = Int.MAX_VALUE,
+            ricochets = Int.MAX_VALUE,
+            dataPickups = Int.MAX_VALUE,
         )
         val first = applyGameplayProgress(state, update).acceptedFrame()
         val second = applyGameplayProgress(state, update).acceptedFrame()
@@ -714,6 +725,9 @@ class ProfileNucleusTest {
         assertEquals(Long.MAX_VALUE, first.nextState.profile.characterAchievements.eliteKills)
         assertEquals(Long.MAX_VALUE, first.nextState.profile.characterAchievements.dashHits)
         assertEquals(Long.MAX_VALUE, first.nextState.profile.characterAchievements.completedOrbits)
+        assertEquals(Long.MAX_VALUE, first.nextState.profile.characterAchievements.totalKills)
+        assertEquals(Long.MAX_VALUE, first.nextState.profile.characterAchievements.ricochets)
+        assertEquals(Long.MAX_VALUE, first.nextState.profile.characterAchievements.dataPickups)
         assertEquals(Long.MAX_VALUE - 1, state.profile.characterAchievements.eliteKills)
     }
 

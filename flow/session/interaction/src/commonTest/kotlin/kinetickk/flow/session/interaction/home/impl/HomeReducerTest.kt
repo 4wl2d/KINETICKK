@@ -4,9 +4,12 @@
 package kinetickk.flow.session.interaction.home.impl
 
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.MatrixNodeId
+import kinetickk.ball.content.api.defaultMatrixNodes
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.profile.api.HomeProgressProjection
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
+import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerLoadout
@@ -16,6 +19,7 @@ import kinetickk.flow.session.interaction.audio.SessionAudioCue
 import kinetickk.flow.session.interaction.home.api.HomeOutput
 import kinetickk.flow.session.interaction.TestCoreShapes
 import kinetickk.flow.session.interaction.TestRebirthPolicy
+import kinetickk.foundation.common.localization.AppLanguage
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -59,6 +63,39 @@ class HomeReducerTest {
         assertEquals(2, model.unlockedWeaponCount)
         assertFalse(model.canRebirth)
         assertTrue(model.isCoreShapeUnlocked(CoreShape.SHARD))
+    }
+
+    @Test
+    fun matrixTileShowsOwnedNodesOverAllNodesAndOwnedRanksOverAllRanks() {
+        val nodes = defaultMatrixNodes()
+        val owned = mapOf(
+            MatrixNodeId.IMPACT_DRIVER to 3, MatrixNodeId.WEAPON_CALIBRATION to 1, MatrixNodeId.REINFORCED_HULL to 2,
+            MatrixNodeId.HARDLIGHT_RESERVE to 1, MatrixNodeId.MAGNET_ARRAY to 1, MatrixNodeId.SALVAGE_PROTOCOL to 2,
+            MatrixNodeId.DATA_ARCHIVE to 1,
+        )
+        val matrix = MatrixProgress(MatrixNodeId.entries.map { owned[it] ?: 0 })
+        val reducer = HomeReducer(TestCoreShapes, 80, 12, TestRebirthPolicy, matrixNodes = nodes)
+        val projection = homeProjection(economy = PlayerEconomy(matter = 640, lifetimeMatter = 900))
+
+        val model = reducer.uiModel(projection, matrix)
+        assertEquals(7, model.matrixOwnedNodes)
+        assertEquals(32, model.matrixNodeCount)
+        assertEquals(11, model.matrixRanks)
+        assertEquals(nodes.sumOf { it.maxRanks }, model.matrixMaxRanks)
+
+        val english = homeFacts(model, HomeLayoutTarget.LAB, AppLanguage.English, 1f)
+        assertEquals("Matrix", english.label)
+        assertEquals("7/32", english.big)
+        assertEquals("7/32", english.sub)
+        assertTrue("Ranks" to "11/${model.matrixMaxRanks}" in english.facts, english.facts.toString())
+        val russian = homeFacts(model, HomeLayoutTarget.LAB, AppLanguage.Russian, 1f)
+        assertEquals("Матрица", russian.label)
+        assertEquals("7/32", russian.big)
+
+        // Before the Matrix is read the tile falls back to the Matter balance and claims no count.
+        val unread = homeFacts(reducer.uiModel(projection), HomeLayoutTarget.LAB, AppLanguage.English, 1f)
+        assertEquals(null, unread.sub)
+        assertTrue(unread.facts.none { it.first == "Ranks" })
     }
 
     @Test

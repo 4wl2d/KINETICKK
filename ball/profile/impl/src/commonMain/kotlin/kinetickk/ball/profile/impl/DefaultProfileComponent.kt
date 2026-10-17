@@ -7,7 +7,7 @@ import kinetickk.ball.content.api.ProfilePolicySnapshot
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.profile.api.CollectionProjection
 import kinetickk.ball.profile.api.HomeProgressProjection
-import kinetickk.ball.profile.api.LabProgressProjection
+import kinetickk.ball.profile.api.MatrixProgressProjection
 import kinetickk.ball.profile.api.LoadoutProjection
 import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PreferencesProjection
@@ -100,7 +100,7 @@ internal class DefaultProfileComponent(
     override fun query(query: ProfileQuery.GetHomeProgress): HomeProgressProjection =
         ProfileNucleus.query(committedState, query)
 
-    override fun query(query: ProfileQuery.GetLabProgress): LabProgressProjection =
+    override fun query(query: ProfileQuery.GetMatrixProgress): MatrixProgressProjection =
         ProfileNucleus.query(committedState, query)
 
     override fun query(query: ProfileQuery.GetLoadout): LoadoutProjection =

@@ -4,7 +4,7 @@
 package kinetickk.ball.profile.api
 
 import kinetickk.ball.content.api.ContentBounds
-import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
@@ -50,14 +50,16 @@ class ProfileApiContractTest {
     fun localIntentPayloadsRemainTyped() {
         val intents: List<ProfilePulse.Business> = listOf(
             ProfilePulse.AdjustPreference(ProfilePreferenceAdjustment.ToggleSoundEffects),
-            ProfilePulse.PurchaseMetaUpgrade(MetaUpgradeId.CORE_INTEGRITY),
+            ProfilePulse.PurchaseMatrixNode(MatrixNodeId.IMPACT_DRIVER),
+            ProfilePulse.ResetMatrix,
             ProfilePulse.PurchaseOrEquipWeapon(WeaponId.MORNINGSTAR),
         )
 
-        assertEquals(3, intents.size)
+        assertEquals(4, intents.size)
         assertIs<ProfilePulse.AdjustPreference>(intents[0])
-        assertIs<ProfilePulse.PurchaseMetaUpgrade>(intents[1])
-        assertIs<ProfilePulse.PurchaseOrEquipWeapon>(intents[2])
+        assertEquals(MatrixNodeId.IMPACT_DRIVER, assertIs<ProfilePulse.PurchaseMatrixNode>(intents[1]).id)
+        assertIs<ProfilePulse.ResetMatrix>(intents[2])
+        assertIs<ProfilePulse.PurchaseOrEquipWeapon>(intents[3])
     }
 
     @Test
@@ -161,7 +163,27 @@ class ProfileApiContractTest {
             // An empty victory list still replaces the remembered Heirlooms.
             GameplayProgressUpdate(discoveredItemIds = emptySet(), victoryRelicIds = emptyList()),
             GameplayProgressUpdate(heirloomResolved = true),
+            GameplayProgressUpdate(totalKills = 1),
+            GameplayProgressUpdate(ricochets = 1),
+            GameplayProgressUpdate(dataPickups = 1),
         )
         carriers.forEach { update -> assertFalse(update.isEmpty, update.toString()) }
+    }
+
+    @Test
+    fun matrixProgressIsIndexedByNodeOrdinalAndCountsOwnedNodes() {
+        val progress = MatrixProgress()
+        assertEquals(MatrixNodeId.entries.size, progress.ranks.size)
+        assertEquals(0, progress.ownedNodeCount)
+        val ranks = MutableList(MatrixNodeId.entries.size) { 0 }
+        ranks[MatrixNodeId.SECOND_WIND.ordinal] = 1
+        ranks[MatrixNodeId.IMPACT_DRIVER.ordinal] = 3
+        val owned = MatrixProgress(ranks)
+        assertEquals(3, owned.rank(MatrixNodeId.IMPACT_DRIVER))
+        assertTrue(owned.owns(MatrixNodeId.SECOND_WIND))
+        assertFalse(owned.owns(MatrixNodeId.PROSPECTOR))
+        assertEquals(2, owned.ownedNodeCount)
+        assertEquals(0L, CharacterAchievementProgress().totalKills + CharacterAchievementProgress().ricochets +
+            CharacterAchievementProgress().dataPickups)
     }
 }

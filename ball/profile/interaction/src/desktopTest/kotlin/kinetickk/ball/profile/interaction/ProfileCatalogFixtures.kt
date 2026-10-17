@@ -6,12 +6,9 @@ package kinetickk.ball.profile.interaction
 import kinetickk.ball.content.api.BuildPolicy
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ItemDefinition
-import kinetickk.ball.content.api.ItemEffect
-import kinetickk.ball.content.api.ItemModifier
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.ItemRule
-import kinetickk.ball.content.api.MetaUpgradeDefinition
-import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.MatrixNodeDefinition
 import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicAspect
@@ -22,6 +19,7 @@ import kinetickk.ball.content.api.RelicValue
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.defaultMatrixNodes
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthBuildModel
 import kinetickk.ball.profile.interaction.rebirth.impl.RebirthBuildContent
 import kinetickk.foundation.collections.ImmutableList
@@ -29,7 +27,7 @@ import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 
 /*
- * The game's shipped copy for text-fit tests: mirrors `defaultWeapons()` and `defaultMetaUpgrades()`
+ * The game's shipped copy for text-fit tests: mirrors `defaultWeapons()`
  * in ball/content/impl DefaultCatalogData.kt and DefaultRebirthData.kt, and the Rebirth-gated
  * Relics and items with a few Heirloom candidates from DefaultRelicData.kt and DefaultItemData.kt
  * (names, aspects, rarities, tags, elements and gates as shipped; the interaction module
@@ -52,16 +50,8 @@ internal val CatalogWeapons: ImmutableList<WeaponDefinition> = listOf(
     WeaponDefinition(WeaponId.PRISM_RELAY, "Prism Relay", "Launches a seeking light shard that refracts between targets; mastery adds ricochets and twin relays.", listOf("SEEKING", "RICOCHET", "REFRACTION"), 1_650),
 ).toImmutableList()
 
-internal val CatalogMetaUpgrades: ImmutableList<MetaUpgradeDefinition> = listOf(
-    MetaUpgradeDefinition(MetaUpgradeId.CORE_INTEGRITY, "Core Integrity", "+10 maximum integrity at the start of every run.", 10, 18, ItemModifier(ItemEffect.MAX_INTEGRITY, 10f)),
-    MetaUpgradeDefinition(MetaUpgradeId.KINETIC_AMPLIFIER, "Kinetic Amplifier", "+5% collision damage at the start of every run.", 10, 22, ItemModifier(ItemEffect.IMPACT_DAMAGE, 0.05f)),
-    MetaUpgradeDefinition(MetaUpgradeId.MAGNETIC_RESONANCE, "Magnetic Resonance", "+4% magnetic pull strength at the start of every run.", 8, 24, ItemModifier(ItemEffect.MAGNETISM, 0.04f)),
-    MetaUpgradeDefinition(MetaUpgradeId.CRYO_VENTS, "Cryo Vents", "+5% heat dissipation at the start of every run.", 8, 26, ItemModifier(ItemEffect.COOLING, 0.05f)),
-    MetaUpgradeDefinition(MetaUpgradeId.DASH_CAPACITOR, "Dash Capacitor", "+5% dash impulse at the start of every run.", 8, 30, ItemModifier(ItemEffect.DASH_POWER, 0.05f)),
-    MetaUpgradeDefinition(MetaUpgradeId.SALVAGE_PROTOCOL, "Salvage Protocol", "+5% Kinetic Matter gained during runs.", 10, 34, ItemModifier(ItemEffect.MATTER_GAIN, 0.05f)),
-    MetaUpgradeDefinition(MetaUpgradeId.DATA_ARCHIVE, "Data Archive", "+5% Data gained during runs.", 10, 38, ItemModifier(ItemEffect.DATA_GAIN, 0.05f)),
-    MetaUpgradeDefinition(MetaUpgradeId.ARMORY_LICENSE, "Armory License", "+4% weapon power per rank.", 12, 45, ItemModifier(ItemEffect.WEAPON_POWER, 0.04f)),
-).toImmutableList()
+/** The shipped Core Matrix: its data lives in the content API, so the fixture is the real catalog. */
+internal val CatalogMatrixNodes: ImmutableList<MatrixNodeDefinition> = defaultMatrixNodes()
 
 internal fun catalogRebirthProfile(tier: Int): RebirthProfile {
     val swarmRanks = (tier + 2) / 3

@@ -323,4 +323,5 @@ internal fun MutableGameState.spawnedEnemy(type: EnemyType, x: Float, y: Float):
 
 /** Spawn integrity of [type] at the current run time; the Architect follows the same curve. */
 internal fun MutableGameState.spawnIntegrity(type: EnemyType): Float =
-    rebirthProfile.enemyHealth(type.profile.baseHealth * content.tempo.enemyHealthMultiplier(elapsed))
+    rebirthProfile.enemyHealth(type.profile.baseHealth * content.tempo.enemyHealthMultiplier(elapsed)) *
+        matrix.enemyIntegrityMultiplier

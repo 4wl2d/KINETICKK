@@ -6,7 +6,7 @@ package kinetickk.flow.session.interaction
 import androidx.compose.ui.input.key.Key
 import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.profile.interaction.armory.api.ArmoryOutput
-import kinetickk.ball.profile.interaction.lab.api.LabOutput
+import kinetickk.ball.profile.interaction.matrix.api.MatrixOutput
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthOutput
 import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
 import kinetickk.flow.session.api.AppDestination
@@ -52,8 +52,8 @@ internal fun SettingsOutput.toSessionPulse(): SessionInteractionPulse? = when (t
     SettingsOutput.Back -> SessionInteractionPulse.CloseOverlay
 }
 
-internal fun LabOutput.toSessionPulse(): SessionInteractionPulse = when (this) {
-    LabOutput.Back -> SessionInteractionPulse.CloseOverlay
+internal fun MatrixOutput.toSessionPulse(): SessionInteractionPulse = when (this) {
+    MatrixOutput.Back -> SessionInteractionPulse.CloseOverlay
 }
 
 internal fun ArmoryOutput.toSessionPulse(): SessionInteractionPulse = when (this) {

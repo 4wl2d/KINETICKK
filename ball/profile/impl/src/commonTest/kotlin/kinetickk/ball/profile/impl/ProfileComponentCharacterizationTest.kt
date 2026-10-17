@@ -6,14 +6,14 @@ package kinetickk.ball.profile.impl
 import kinetickk.ball.content.api.ContentVersion
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.CoreShapeDefinition
-import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.ProfilePolicySnapshot
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
 import kinetickk.ball.profile.api.GameplayProgressUpdate
-import kinetickk.ball.profile.api.LabProgress
+import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerProfile
@@ -91,7 +91,7 @@ class ProfileComponentCharacterizationTest {
     }
 
     @Test
-    fun allMetaUpgradePurchasesUsePolicyOrderAndCurrentRankPrices() {
+    fun firstRowMatrixPurchasesUsePolicyPricesAndResetRefundsThemAll() {
         val initialMatter = 1_000_000L
         val initial = testDefaultProfile().copy(
             economy = PlayerEconomy(initialMatter, initialMatter),
@@ -99,21 +99,28 @@ class ProfileComponentCharacterizationTest {
         val resource = loadedResource(initial)
         val component = testProfileComponent(resource)
         var expectedMatter = initialMatter
+        val firstRow = TestProfilePolicy.matrixNodes.filter { it.row == 0 }
 
-        MetaUpgradeId.entries.forEach { id ->
-            expectedMatter -= TestProfilePolicy.metaUpgrade(id).cost(level = 0)
+        firstRow.forEach { node ->
+            expectedMatter -= node.cost(owned = 0)
             assertAcceptedAndWritten(
                 component,
                 resource,
-                ProfileTestOperation.Local(ProfilePulse.PurchaseMetaUpgrade(id)),
+                ProfileTestOperation.Local(ProfilePulse.PurchaseMatrixNode(node.id)),
             )
-            val lab = component.query(ProfileQuery.GetLabProgress).snapshot
-            assertEquals(1, lab.progress.rank(id))
-            assertEquals(expectedMatter, lab.economy.matter)
+            val matrix = component.query(ProfileQuery.GetMatrixProgress).snapshot
+            assertEquals(1, matrix.progress.rank(node.id))
+            assertEquals(expectedMatter, matrix.economy.matter)
         }
 
-        assertEquals(List(MetaUpgradeId.entries.size) { 1 }, queriedProfile(component).labProgress.ranks)
-        assertEquals(MetaUpgradeId.entries.size, resource.writes.size)
+        assertEquals(firstRow.size, queriedProfile(component).matrix.ownedNodeCount)
+        assertEquals(firstRow.size, resource.writes.size)
+
+        assertAcceptedAndWritten(component, resource, ProfileTestOperation.Local(ProfilePulse.ResetMatrix))
+        val reset = component.query(ProfileQuery.GetMatrixProgress).snapshot
+        assertEquals(MatrixProgress(), reset.progress)
+        assertEquals(initialMatter, reset.economy.matter)
+        assertEquals(firstRow.size + 1, resource.writes.size)
     }
 
     @Test
@@ -204,7 +211,7 @@ class ProfileComponentCharacterizationTest {
         assertEquals(afterRun.preferences, advanced.preferences)
         assertEquals(afterRun.economy, advanced.economy)
         assertEquals(afterRun.loadout, advanced.loadout)
-        assertEquals(afterRun.labProgress, advanced.labProgress)
+        assertEquals(afterRun.matrix, advanced.matrix)
         assertEquals(afterRun.collection, advanced.collection)
         assertEquals(RebirthProgress(level = 3, highestCleared = 2), advanced.rebirthProgress)
         assertEquals(2, resource.writes.size)
@@ -212,9 +219,9 @@ class ProfileComponentCharacterizationTest {
 
     @Test
     fun everyRejectionLeavesStateRevisionAndEffectsUntouched() {
-        val maxedRanks = List(MetaUpgradeId.entries.size) { index ->
-            if (index == MetaUpgradeId.CORE_INTEGRITY.ordinal) {
-                TestProfilePolicy.metaUpgrade(MetaUpgradeId.CORE_INTEGRITY).maxRanks
+        val maxedRanks = List(MatrixNodeId.entries.size) { index ->
+            if (index == MatrixNodeId.REINFORCED_HULL.ordinal) {
+                TestProfilePolicy.matrixNode(MatrixNodeId.REINFORCED_HULL).maxRanks
             } else {
                 0
             }
@@ -228,19 +235,41 @@ class ProfileComponentCharacterizationTest {
             RejectionCase(
                 profile = testDefaultProfile(),
                 operation = ProfileTestOperation.Local(
-                    ProfilePulse.PurchaseMetaUpgrade(MetaUpgradeId.CORE_INTEGRITY),
+                    ProfilePulse.PurchaseMatrixNode(MatrixNodeId.REINFORCED_HULL),
                 ),
                 reason = ProfileRejection.InsufficientMatter,
             ),
             RejectionCase(
                 profile = testDefaultProfile().copy(
                     economy = PlayerEconomy(10_000L, 10_000L),
-                    labProgress = LabProgress(maxedRanks),
+                    matrix = MatrixProgress(maxedRanks),
                 ),
                 operation = ProfileTestOperation.Local(
-                    ProfilePulse.PurchaseMetaUpgrade(MetaUpgradeId.CORE_INTEGRITY),
+                    ProfilePulse.PurchaseMatrixNode(MatrixNodeId.REINFORCED_HULL),
                 ),
-                reason = ProfileRejection.MetaUpgradeMaxRank,
+                reason = ProfileRejection.MatrixNodeMaxRank,
+            ),
+            RejectionCase(
+                profile = testDefaultProfile().copy(economy = PlayerEconomy(10_000L, 10_000L)),
+                operation = ProfileTestOperation.Local(
+                    ProfilePulse.PurchaseMatrixNode(MatrixNodeId.NANOFORGE),
+                ),
+                reason = ProfileRejection.MatrixPrerequisiteMissing,
+            ),
+            RejectionCase(
+                profile = testDefaultProfile().copy(
+                    economy = PlayerEconomy(10_000L, 10_000L),
+                    matrix = MatrixProgress(maxedRanks),
+                ),
+                operation = ProfileTestOperation.Local(
+                    ProfilePulse.PurchaseMatrixNode(MatrixNodeId.SECOND_WIND),
+                ),
+                reason = ProfileRejection.MatrixRebirthLocked,
+            ),
+            RejectionCase(
+                profile = testDefaultProfile(),
+                operation = ProfileTestOperation.Local(ProfilePulse.ResetMatrix),
+                reason = ProfileRejection.NoChange,
             ),
             RejectionCase(
                 profile = testDefaultProfile().copy(economy = PlayerEconomy(0L, 24L)),
@@ -316,7 +345,7 @@ class ProfileComponentCharacterizationTest {
                     definition
                 }
             }.toImmutableList(),
-            metaUpgrades = TestProfilePolicy.metaUpgrades,
+            matrixNodes = TestProfilePolicy.matrixNodes,
             rebirth = testRebirthPolicy(minimumLevel = 2, maximumLevel = 3),
         )
         val resource = RecordingProfileResource()

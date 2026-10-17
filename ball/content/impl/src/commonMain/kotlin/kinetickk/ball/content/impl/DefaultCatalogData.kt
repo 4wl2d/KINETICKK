@@ -3,10 +3,6 @@
 
 package kinetickk.ball.content.impl
 
-import kinetickk.ball.content.api.ItemEffect
-import kinetickk.ball.content.api.ItemModifier
-import kinetickk.ball.content.api.MetaUpgradeDefinition
-import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.foundation.collections.ImmutableList
@@ -36,26 +32,4 @@ private fun validateWeapons(weapons: List<WeaponDefinition>) {
     }
     check(weapons.map { it.id }.toSet().size == weapons.size) { "Weapon ids must be unique" }
     check(weapons.map { it.name }.toSet().size == weapons.size) { "Weapon names must be unique" }
-}
-
-internal fun defaultMetaUpgrades(): ImmutableList<MetaUpgradeDefinition> =
-    listOf(
-        MetaUpgradeDefinition(MetaUpgradeId.CORE_INTEGRITY, "Core Integrity", "+10 maximum integrity at the start of every run.", 10, 18, ItemModifier(ItemEffect.MAX_INTEGRITY, 10f)),
-        MetaUpgradeDefinition(MetaUpgradeId.KINETIC_AMPLIFIER, "Kinetic Amplifier", "+5% collision damage at the start of every run.", 10, 22, ItemModifier(ItemEffect.IMPACT_DAMAGE, 0.05f)),
-        MetaUpgradeDefinition(MetaUpgradeId.MAGNETIC_RESONANCE, "Magnetic Resonance", "+4% magnetic pull strength at the start of every run.", 8, 24, ItemModifier(ItemEffect.MAGNETISM, 0.04f)),
-        MetaUpgradeDefinition(MetaUpgradeId.CRYO_VENTS, "Cryo Vents", "+5% heat dissipation at the start of every run.", 8, 26, ItemModifier(ItemEffect.COOLING, 0.05f)),
-        MetaUpgradeDefinition(MetaUpgradeId.DASH_CAPACITOR, "Dash Capacitor", "+5% dash impulse at the start of every run.", 8, 30, ItemModifier(ItemEffect.DASH_POWER, 0.05f)),
-        MetaUpgradeDefinition(MetaUpgradeId.SALVAGE_PROTOCOL, "Salvage Protocol", "+5% Kinetic Matter gained during runs.", 10, 34, ItemModifier(ItemEffect.MATTER_GAIN, 0.05f)),
-        MetaUpgradeDefinition(MetaUpgradeId.DATA_ARCHIVE, "Data Archive", "+5% Data gained during runs.", 10, 38, ItemModifier(ItemEffect.DATA_GAIN, 0.05f)),
-        MetaUpgradeDefinition(MetaUpgradeId.ARMORY_LICENSE, "Armory License", "+4% weapon power per rank.", 12, 45, ItemModifier(ItemEffect.WEAPON_POWER, 0.04f)),
-    ).toImmutableList().also(::validateMetaUpgrades)
-
-private fun validateMetaUpgrades(upgrades: List<MetaUpgradeDefinition>) {
-    check(MetaUpgradeId.entries.size == 8) { "MetaUpgradeId must contain exactly 8 upgrades" }
-    check(upgrades.size == 8) { "Meta-upgrade catalog must contain exactly 8 upgrades" }
-    check(upgrades.withIndex().all { (index, upgrade) -> upgrade.id.ordinal == index }) {
-        "Meta-upgrade catalog order must match MetaUpgradeId order"
-    }
-    check(upgrades.map { it.id }.toSet().size == upgrades.size) { "Meta-upgrade ids must be unique" }
-    check(upgrades.map { it.name }.toSet().size == upgrades.size) { "Meta-upgrade names must be unique" }
 }

@@ -6,12 +6,12 @@ package kinetickk.flow.session.interaction.home.impl
 import kinetickk.ball.content.api.CharacterUnlockRequirement
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.CoreShapeDefinition
-import kinetickk.ball.content.api.MetaUpgradeDefinition
+import kinetickk.ball.content.api.MatrixNodeDefinition
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.profile.api.CharacterAchievementProgress
 import kinetickk.ball.profile.api.HomeProgressProjection
-import kinetickk.ball.profile.api.LabProgress
+import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.flow.session.interaction.audio.SessionAudioCue
 import kinetickk.flow.session.interaction.home.api.HomeOutput
 import kinetickk.flow.session.interaction.home.api.HomeUiModel
@@ -44,10 +44,10 @@ internal class HomeReducer(
     private val rebirthPolicy: RebirthPolicySnapshot,
     private val weapons: ImmutableList<WeaponDefinition> = immutableListOf(),
     private val relicCount: Int = 0,
-    private val metaUpgrades: ImmutableList<MetaUpgradeDefinition> = immutableListOf(),
+    private val matrixNodes: ImmutableList<MatrixNodeDefinition> = immutableListOf(),
 ) {
-    /** Maps the authoritative Home projection (and, when read, Lab ranks) into render facts. */
-    fun uiModel(projection: HomeProgressProjection, lab: LabProgress? = null): HomeUiModel = HomeUiModel(
+    /** Maps the authoritative Home projection (and, when read, the Matrix ranks) into render facts. */
+    fun uiModel(projection: HomeProgressProjection, matrix: MatrixProgress? = null): HomeUiModel = HomeUiModel(
         coreShape = projection.loadout.coreShape,
         totalMatter = projection.economy.matter,
         lifetimeMatter = projection.economy.lifetimeMatter,
@@ -68,14 +68,12 @@ internal class HomeReducer(
             weapon.id !in projection.loadout.unlockedWeapons &&
                 projection.economy.matter >= weapon.permanentUnlockCost.toLong()
         },
-        labRanks = lab?.let { progress ->
-            metaUpgrades.sumOf { upgrade -> progress.rank(upgrade.id).coerceIn(0, upgrade.maxRanks) }
+        matrixRanks = matrix?.let { progress ->
+            matrixNodes.sumOf { node -> progress.rank(node.id).coerceIn(0, node.maxRanks) }
         } ?: 0,
-        labMaxRanks = if (lab == null) 0 else metaUpgrades.sumOf { it.maxRanks },
-        labMaxedUpgrades = lab?.let { progress ->
-            metaUpgrades.count { upgrade -> progress.rank(upgrade.id) >= upgrade.maxRanks }
-        } ?: 0,
-        labUpgradeCount = if (lab == null) 0 else metaUpgrades.size,
+        matrixMaxRanks = if (matrix == null) 0 else matrixNodes.sumOf { it.maxRanks },
+        matrixOwnedNodes = matrix?.let { progress -> matrixNodes.count { node -> progress.rank(node.id) > 0 } } ?: 0,
+        matrixNodeCount = if (matrix == null) 0 else matrixNodes.size,
     )
 
     fun reduce(action: HomeAction): HomeReduction = when (action) {

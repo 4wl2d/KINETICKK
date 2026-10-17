@@ -11,7 +11,7 @@ import kinetickk.ball.profile.api.ProfileRefusal
 import kinetickk.ball.profile.api.GameplayProgressUpdate
 import kinetickk.ball.gameplay.api.GameplayRunExited
 
-import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.api.GameplayAcceptance
 import kinetickk.ball.gameplay.api.GameplayExitProgressResult
@@ -30,8 +30,7 @@ import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.profile.api.CollectionProjection
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.HomeProgressProjection
-import kinetickk.ball.profile.api.LabProgressProjection
-import kinetickk.ball.profile.api.LabProgress
+import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.LoadoutProjection
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.PersistenceStatusProjection
@@ -817,7 +816,7 @@ private fun resilientLocalDispatchProfile(): GameplayProfileSnapshot = PlayerPro
         selectedWeapon = WeaponId.PRISM_RELAY,
         unlockedWeapons = setOf(WeaponId.FLUX_WAKE, WeaponId.PRISM_RELAY),
     ),
-    labProgress = LabProgress(List(MetaUpgradeId.entries.size) { 10 }),
+    matrix = MatrixProgress(MatrixNodeId.entries.map { 1 }),
 ).toGameplaySnapshot()
 
 private val LocalDispatchGameplayContent by lazy {
@@ -883,7 +882,7 @@ private class TestProfilePort(private val eventSink: (String) -> Unit = {}) : Pr
 
     override fun query(query: ProfileQuery.GetHomeProgress): kinetickk.ball.profile.api.HomeProgressProjection = error("unused")
     override fun query(query: ProfileQuery.GetCollection): kinetickk.ball.profile.api.CollectionProjection = error("unused")
-    override fun query(query: ProfileQuery.GetLabProgress): kinetickk.ball.profile.api.LabProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetMatrixProgress): kinetickk.ball.profile.api.MatrixProgressProjection = error("unused")
     override fun query(query: ProfileQuery.GetLoadout): kinetickk.ball.profile.api.LoadoutProjection = error("unused")
     override fun query(query: ProfileQuery.GetRebirthProgress): kinetickk.ball.profile.api.RebirthProgressProjection = error("unused")
     override fun query(query: ProfileQuery.GetPersistenceStatus): kinetickk.ball.profile.api.PersistenceStatusProjection = error("unused")
@@ -1002,7 +1001,7 @@ private fun PlayerProfile.toGameplaySnapshot(): GameplayProfileSnapshot = Gamepl
     preferences,
     economy,
     loadout,
-    labProgress,
+    matrix,
     collection,
     rebirthProgress,
 )

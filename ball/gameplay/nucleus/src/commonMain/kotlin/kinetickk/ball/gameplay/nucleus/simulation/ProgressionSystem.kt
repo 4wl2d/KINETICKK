@@ -13,9 +13,7 @@ import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
-import kinetickk.ball.content.api.ItemModifier
 import kinetickk.ball.content.api.ItemRarity
-import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
@@ -41,6 +39,7 @@ internal const val WEAPON_OFFER_CHOICES: Int = 3
 
 internal fun MutableGameState.openItemChoice() {
     activeChoiceType = ChoiceType.ITEM
+    itemOffersOpened++
     buildItemChoices()
     if (choices.isEmpty()) {
         grantMatter(8f)
@@ -388,7 +387,6 @@ internal fun MutableGameState.applyStatDelta(effect: ItemEffect, amount: Float) 
 
 internal fun MutableGameState.itemStack(itemId: Int): Int = itemStacks.getOrElse(itemId) { 0 }
 internal fun MutableGameState.isItemDiscovered(itemId: Int): Boolean = itemId in discoveredItemIds
-internal fun MutableGameState.metaLevel(id: MetaUpgradeId): Int = metaRanks[id.ordinal]
 internal fun MutableGameState.equipRunWeapon(id: WeaponId) {
     weapon = id
     resetWeaponRuntime()
@@ -426,6 +424,7 @@ internal fun MutableGameState.grantMatter(base: Float) {
 
 /** Banks run Matter not banked yet; idempotent, and Matter granted after a terminal bank still counts. */
 internal fun MutableGameState.bankRunMatter() {
+    achievementFlushDue = true
     val fresh = runMatter - bankedRunMatter
     if (fresh <= 0L) return
     bankedRunMatter = runMatter
@@ -435,16 +434,9 @@ internal fun MutableGameState.bankRunMatter() {
 }
 
 internal fun MutableGameState.takeProgressUpdate(): GameplayProgressUpdate? {
-    if (
-        pendingBankedMatter == 0L &&
-        pendingDiscoveredItemIds.isEmpty() && pendingDiscoveredRelicMask == 0L &&
-        pendingDiscoveredReactionMask == 0 && pendingDiscoveredPairingMask == 0 &&
-        pendingVictoryRelics == null && !pendingHeirloomResolved &&
-        pendingClearedRebirthLevel == null && pendingEliteKills == 0 && pendingDashHits == 0 &&
-        pendingCompletedOrbits == 0 && pendingArchitectDefeatedWith == null
-    ) {
-        return null
-    }
+    val flushCounters = achievementFlushDue
+    achievementFlushDue = false
+    if (!hasUrgentProgress() && !(flushCounters && hasPendingAchievementCounters())) return null
     val update = GameplayProgressUpdate(
         bankedMatter = pendingBankedMatter,
         discoveredItemIds = pendingDiscoveredItemIds.toImmutableSet(),
@@ -456,6 +448,9 @@ internal fun MutableGameState.takeProgressUpdate(): GameplayProgressUpdate? {
         discoveredPairingIds = RelicPairingId.entries.filter { pendingDiscoveredPairingMask and (1 shl it.ordinal) != 0 }.toImmutableSet(),
         victoryRelicIds = pendingVictoryRelics?.toImmutableList(),
         heirloomResolved = pendingHeirloomResolved,
+        totalKills = pendingTotalKills,
+        ricochets = pendingRicochets,
+        dataPickups = pendingDataPickups,
     )
     pendingBankedMatter = 0L
     pendingDiscoveredItemIds.clear()
@@ -469,8 +464,27 @@ internal fun MutableGameState.takeProgressUpdate(): GameplayProgressUpdate? {
     pendingDiscoveredPairingMask = 0
     pendingVictoryRelics = null
     pendingHeirloomResolved = false
+    pendingTotalKills = 0
+    pendingRicochets = 0
+    pendingDataPickups = 0
     return update
 }
+
+/** Progress that is published by the next reduction. */
+internal fun MutableGameState.hasUrgentProgress(): Boolean =
+    pendingBankedMatter != 0L ||
+        pendingDiscoveredItemIds.isNotEmpty() || pendingDiscoveredRelicMask != 0L ||
+        pendingDiscoveredReactionMask != 0 || pendingDiscoveredPairingMask != 0 ||
+        pendingVictoryRelics != null || pendingHeirloomResolved ||
+        pendingClearedRebirthLevel != null || pendingEliteKills != 0 || pendingDashHits != 0 ||
+        pendingCompletedOrbits != 0 || pendingArchitectDefeatedWith != null
+
+internal fun MutableGameState.hasPendingAchievementCounters(): Boolean =
+    pendingTotalKills != 0 || pendingRicochets != 0 || pendingDataPickups != 0
+
+/** True when [takeProgressUpdate] would publish an update now. */
+internal fun MutableGameState.hasPublishableProgress(): Boolean =
+    hasUrgentProgress() || achievementFlushDue && hasPendingAchievementCounters()
 
 internal fun MutableGameState.takeSoundCues(): ImmutableList<GameplayAudioCue> {
     if (soundCues.isEmpty()) return immutableListOf()

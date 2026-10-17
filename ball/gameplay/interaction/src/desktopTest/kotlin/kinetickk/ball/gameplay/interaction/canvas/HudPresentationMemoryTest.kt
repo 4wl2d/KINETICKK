@@ -7,11 +7,8 @@ import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
-import kinetickk.ball.content.api.ItemModifier
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
-import kinetickk.ball.content.api.MetaUpgradeDefinition
-import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.PointOfInterestKind
 import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.RebirthPolicySnapshot
@@ -244,7 +241,7 @@ internal fun hudTestState(width: Float = 1_440f, height: Float = 810f): Gameplay
         GameplayNucleusPulse.StartRun,
         GameplayContext(start = GameplayStartContext.Ready(GameplayStartInputs(
             content,
-            GameplayProfileSnapshot(profile.preferences, profile.economy, profile.loadout, profile.labProgress, profile.collection, profile.rebirthProgress),
+            GameplayProfileSnapshot(profile.preferences, profile.economy, profile.loadout, profile.matrix, profile.collection, profile.rebirthProgress),
             seed = 731_991,
         ))),
     ) as GameplayDecision.Accepted).frame.nextState
@@ -266,9 +263,6 @@ private fun memoryFixtureContent() = GameplayContentSnapshot(
     ),
     weapons = WeaponId.entries.map { WeaponDefinition(it, it.name, "Fixture.", listOf("TRAIL"), 0) }.toImmutableList(),
     weaponMasteries = WeaponMastery.entries.toImmutableList(),
-    metaUpgrades = MetaUpgradeId.entries.map { id ->
-        MetaUpgradeDefinition(id, "Fixture", "Fixture", 1, 1, ItemModifier(ItemEffect.MAX_INTEGRITY, 1f))
-    }.toImmutableList(),
     relics = rewardFixtureRelics.toImmutableList(),
     rebirth = RebirthPolicySnapshot(
         minimumLevel = 0, maximumLevel = 0,

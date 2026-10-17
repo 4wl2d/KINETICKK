@@ -20,7 +20,7 @@ bottom once, then use it as a reference per screen.
 
 **In scope:** every pixel the player sees — HUD, world rendering style (enemies, Core,
 singularity, projectiles, pickups, damage numbers, kill/hit effects), in-run overlays (rewards,
-pause, points of interest, terminal/report), all menus (Home, Armory, Lab, Rebirth, Codex,
+pause, points of interest, terminal/report), all menus (Home, Armory, Core Matrix, Rebirth, Codex,
 Settings, profile-unavailable), phone layouts, typography, color, iconography, motion.
 
 **Also in scope (the only non-visual additions):**
@@ -280,13 +280,13 @@ The game's Home hosts **both** the menu (START/LAB/ARMORY/REBIRTH/CODEX/SETTINGS
 ### 7.7 Armory — `ball/profile/interaction/armory/impl/*`
 `Armory.png`: header (Home button, title, "7/12"-style count from data, (!) info), 4-column weapon tiles (status STARTER/OWNED or cost with gem; icon; name; tags as separate words), right detail panel (icon plate, wide name, description, tag list, Mastery ladder with Lvl 1/3/6/10 milestones and their bonuses, (!) info), primary Unlock with cost / Set as starter / disabled with "Need N more" in hazard. No footer.
 
-### 7.8 Lab — `lab/impl/*` (`LabRenderer.kt`, `LabState.kt`, `LabPointerResolver.kt`)
-`Lab.png`: rows (icon, name, rank pips = sheared cells: owned volt, next outlined, empty line), current value (cond), cost with gem or Max stamp; right detail (icon, wide name, description, Now / Next rank panels, "Rank N/M", Buy rank primary button with cost). Purchase feedback: row flashes (invert 1 frame) and nudges 8 px (Pull). Header total "N/76" from data + (!) info. No footer, no key hints.
+### 7.8 Core Matrix — `matrix/impl/*` (`MatrixRenderer.kt`, `MatrixState.kt`, `MatrixLayout.kt`)
+Replaces the Lab (route and L key unchanged). Four branch columns (Kinetic, Bulwark, Systems, Fortune; role-coloured headers with icon and owned/total count) of `.tile` node tiles, two lanes per branch and one row per prerequisite depth; elbow prerequisite lines (bone when the prerequisite is owned, line-2 otherwise) bend in the gap above the node. A tile shows the name, rank pips (owned in the branch colour, next outlined when affordable), and the next price with a gem, `Max`, or the lock reason with the lock glyph (`Reborn N`, `Locked`); owned nodes carry a branch-coloured bar, keystones a gem. Right detail (phones: docked below the scrolling grid): branch / keystone / Rebirth tag, wide name, description, `Rank N/M` with pips, the status sentence (what is missing), Buy rank primary button with cost. Header: owned/total nodes + (!) info and a two-press `Reset` (ghost, then hazard `Confirm`) that refunds every rank. Hover or keyboard focus selects, a press or Enter on the selected tile buys, arrows move between tiles. Purchase feedback: the tile flashes (invert 1 frame) and nudges (Pull). No footer, no key hints.
 
 ### 7.9 Rebirth — `rebirth/impl/*` (`RebirthRenderer.kt`, `RebirthState.kt`, `RebirthPointerResolver.kt`)
 `Rebirth.png`, `states/Rebirth--tierNN*.png`, `Rebirth-Tiers.png`, `Rebirth-X.png`, `Rebirth-Advance.png`, `boards/Rebirth.dc.html`:
 - Theme per tier from `tokens.json rebirthTiers` (index = target tier), background tint, halftone density, orbit ring count, hazard band from tier 5, streaks; tier 10 = pure black, grayscale, animated black hole (lensing disk, photon ring, event horizon, infalling sparks — see `.bh` in kk.css).
-- Big tier numeral (wide 300; 230 at tier 10), direction name (use the game's tier modifier names/data), tier ladder 0–10 (cleared = tier color, current = bone, next = outlined in its color, 10 = striped b/w), comparison table (hostile vs for-you modifiers, current vs next; increases in hazard), Advance button in the tier color with armed (two-press or the game's existing confirm) and locked states; (!) info: "Your run build resets. Matter, Lab upgrades, unlocked weapons, discoveries and settings stay." (adapt to what the game actually keeps).
+- Big tier numeral (wide 300; 230 at tier 10), direction name (use the game's tier modifier names/data), tier ladder 0–10 (cleared = tier color, current = bone, next = outlined in its color, 10 = striped b/w), comparison table (hostile vs for-you modifiers, current vs next; increases in hazard), Advance button in the tier color with armed (two-press or the game's existing confirm) and locked states; (!) info: "Your run build resets. Matter, Matrix nodes, unlocked weapons, discoveries and settings stay." (adapt to what the game actually keeps).
 - Advance animation (`Rebirth-Advance.png`, keyframes `kk-adv-*` in kk.css): whole sequence 1.6 s — shutter slabs at −27° sweep across in 620 ms (Snap, staggered), stepped hazard flash, old screen dims from 30%, new numeral slams from scale 2.6 / −10° after 28% (Pull), short shake at 30–62%, then the Start button. Nothing lingers after 1.6 s.
 - Also theme the in-run arena lightly by rebirth tier (`rebirthLevel` is in the render model): grid tint and halftone color only.
 
@@ -399,7 +399,7 @@ CHROME_BIN=/path/to/chrome ./gradlew wasmJsBrowserTest wasmJsBrowserDistribution
 | Home, Mobile-Home, states/Home--*, states/Mobile-Home--* | 7.6 |
 | Deploy, states/Deploy--* | 7.6 (form choice on Home) |
 | Armory | 7.7 |
-| Lab | 7.8 |
+| Core Matrix (Lab route) | 7.8 |
 | Rebirth, Rebirth-X, Rebirth-Advance, Rebirth-Tiers, states/Rebirth--* | 7.9 |
 | Codex | 7.10 |
 | Settings, states/Settings--* | 7.11 (+ §9) |

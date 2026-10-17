@@ -48,6 +48,7 @@ internal fun MutableGameState.takeDamage(
     val incoming = kind != IncomingDamage.SELF
     if ((incoming && hurtCooldown > 0f) || invulnerableUntil > elapsed) return
     var amount = rawAmount * rebirthProfile.incomingDamageMultiplier
+    if (kind == IncomingDamage.CONTACT) amount *= matrix.contactDamageMultiplier
     var taken = 1f + buffAmount(BuffStat.DAMAGE_TAKEN) + whileAmount(BuffStat.DAMAGE_TAKEN, null)
     if (build.liability(RelicId.HOLLOW_CROWN)) taken += 0.1f * emptyRelicSlots()
     if (build.liability(RelicId.VERDANT_ROT)) {
@@ -97,7 +98,7 @@ internal fun MutableGameState.takeDamage(
         }
     }
     timeSinceDamage = 0f
-    shieldRechargeDelay = if (tagTier(BuildTag.BULWARK) >= 2) 2.2f else 4f
+    shieldRechargeDelay = (if (tagTier(BuildTag.BULWARK) >= 2) 2.2f else 4f) * matrix.shieldRegenDelayMultiplier
     if (incoming) hurtCooldown = 0.14f
     damageFlash = 1f
     shockwave(coreX, coreY, 0.3f, 90f, 4)

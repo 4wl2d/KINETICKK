@@ -695,6 +695,16 @@ internal fun canonicalStateFingerprint(state: MutableGameState): Long {
     signature = mix(signature, state.pendingDashHits)
     signature = mix(signature, state.pendingCompletedOrbits)
     signature = mix(signature, state.pendingArchitectDefeatedWith?.ordinal ?: -1)
+    // Core Matrix: folded run modifiers, per-run Matrix runtime and the achievement counters.
+    signature = mix(signature, state.matrix.hashCode())
+    state.matrixRanks.forEach { signature = mix(signature, it) }
+    signature = mix(signature, state.itemOffersOpened)
+    signature = mix(signature, if (state.secondWindSpent) 1 else 0)
+    signature = mix(signature, state.matrixFreeDashReadyAt.toRawBits())
+    signature = mix(signature, state.pendingTotalKills)
+    signature = mix(signature, state.pendingRicochets)
+    signature = mix(signature, state.pendingDataPickups)
+    signature = mix(signature, if (state.achievementFlushDue) 1 else 0)
     signature = mix(signature, state.pointsOfInterest.toString().hashCode())
     signature = mix(signature, state.nextPointOfferIndex)
     signature = mix(signature, state.pendingDirectedRewards.toString().hashCode())

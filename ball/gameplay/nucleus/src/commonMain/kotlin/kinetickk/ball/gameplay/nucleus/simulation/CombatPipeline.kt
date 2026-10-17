@@ -42,8 +42,9 @@ internal fun MutableGameState.runScale(): Float =
 /** Impact growth through the run. */
 internal fun MutableGameState.impactRunGrowth(): Float = content.tempo.impactRunGrowth(elapsed)
 
-/** Weapon growth through the run; effectiveWeaponPower and the build summary share it. */
-internal fun MutableGameState.weaponRunGrowth(): Float = content.tempo.weaponRunGrowth(elapsed)
+/** Weapon growth through the run (plus the Matrix bonus); effectiveWeaponPower and the build summary share it. */
+internal fun MutableGameState.weaponRunGrowth(): Float =
+    content.tempo.weaponRunGrowth(elapsed) + matrix.weaponRunGrowthBonus * runProgress
 
 /** Scale of damage the build deals to the Core itself; it never follows the enemy curve. */
 internal fun MutableGameState.selfDamageScale(): Float =
@@ -330,7 +331,7 @@ internal fun MutableGameState.dealHit(
     }
     val crit = resolveCrit(enemy, source, canCrit)
     var amount = base * (1f + itemAmplification(enemy, source)) * relicSurge() * crit.multiplier *
-        (1f + vulnerability(enemy, source)) * damageLiability(source, crit.critical)
+        (1f + vulnerability(enemy, source)) * damageLiability(source, crit.critical) * matrix.damageMultiplier
     if (enemy.status[StatusCell.BRITTLE] > 0f) enemy.status[StatusCell.BRITTLE] = 0f
     val shatter = build.upside(RelicId.ABSOLUTE_ZERO) && isFrozen(enemy)
     if (shatter) {
@@ -376,7 +377,8 @@ internal fun MutableGameState.dealWeaponDamage(
 
 /**
  * Item and relic proc damage. [amount] is already measured against its basis; [rescale] adds target
- * vulnerability and liabilities. An element-picked proc carries its [element]. A [shareCapped] kill proc
+ * vulnerability and liabilities. The Matrix damage multiplier always applies here, once: hit bases are
+ * measured without it. An element-picked proc carries its [element]. A [shareCapped] kill proc
  * takes at most [KILL_PROC_SHARE_CAP] of the target's weighted integrity. Proc kills never fire kill clauses.
  */
 internal fun MutableGameState.dealProcDamage(
@@ -389,7 +391,8 @@ internal fun MutableGameState.dealProcDamage(
 ): DamageResult {
     if (amount <= 0f || !enemy.alive) return DamageResult(0f, false)
     if (isShifting(enemy)) return DamageResult(0f, false)
-    var scaled = if (rescale) amount * (1f + vulnerability(enemy, HitSource.PROC)) * damageLiability(HitSource.PROC, false) else amount
+    var scaled = (if (rescale) amount * (1f + vulnerability(enemy, HitSource.PROC)) * damageLiability(HitSource.PROC, false) else amount) *
+        matrix.damageMultiplier
     if (shareCapped) scaled = min(scaled, KILL_PROC_SHARE_CAP * enemy.maxHp * victimFactor(enemy))
     return dealReceived(enemy, scaled, HitSource.PROC, element, critical = false, killEligible = false, tone = tone)
 }
@@ -408,7 +411,7 @@ internal fun MutableGameState.dealStatusDamage(
     if (amount <= 0f || !enemy.alive) return DamageResult(0f, false)
     if (isShifting(enemy)) return DamageResult(0f, false)
     val scaled = amount * relicSurge() * (1f + vulnerability(enemy, HitSource.STATUS)) *
-        damageLiability(HitSource.STATUS, false)
+        damageLiability(HitSource.STATUS, false) * matrix.damageMultiplier
     val tone = element?.let { it.ordinal + 1 } ?: 0
     if (ignoresAffinity) {
         return damageEnemy(enemy, scaled, false, killEligible = true, tone = tone, showNumber = showNumber, source = HitSource.STATUS)
@@ -420,7 +423,8 @@ internal fun MutableGameState.dealStatusDamage(
 /** Character abilities bypass the build pipeline but still meet the receiver's kinetic frame. */
 internal fun MutableGameState.dealCharacterDamage(enemy: Enemy, amount: Float): DamageResult {
     if (amount <= 0f || !enemy.alive) return DamageResult(0f, false)
-    return damageEnemy(enemy, amount * enemy.weaponTaken, unmitigated = amount)
+    val scaled = amount * matrix.damageMultiplier
+    return damageEnemy(enemy, scaled * enemy.weaponTaken, unmitigated = scaled)
 }
 
 /** Final share of a victim's weighted integrity a kill proc may take from any one other enemy. */

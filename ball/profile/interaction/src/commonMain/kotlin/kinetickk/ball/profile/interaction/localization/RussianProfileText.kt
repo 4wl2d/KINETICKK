@@ -39,7 +39,7 @@ internal object RussianProfileText {
         ProfileText.Compact -> "Кратко"
         ProfileText.Full -> "Полно"
         ProfileText.ArmoryTitle -> "Арсенал"
-        ProfileText.LabTitle -> "Улучшения"
+        ProfileText.MatrixTitle -> "Матрица"
         ProfileText.MaximumSynchrony -> "Максимум"
         ProfileText.RebirthTitle -> "Перерождение"
         ProfileText.HostileEscalation -> "Усиление врагов"

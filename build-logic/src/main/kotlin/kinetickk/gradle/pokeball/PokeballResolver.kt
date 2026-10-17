@@ -505,7 +505,7 @@ internal fun foundationAndRegistryViolations(sources: List<SourceDocument>): Lis
             "ItemEffect",
             "ItemRarity",
             "WeaponId",
-            "MetaUpgradeId",
+            "MatrixNodeId",
             "RelicId",
             "StatusElement",
             "BuildTag",

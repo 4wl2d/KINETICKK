@@ -271,12 +271,12 @@ class CodexComposeTest {
         onNodeWithTag("codex-stats").performClick()
         onNodeWithTag("codex-grid").performScrollToKey("stat/Impact")
         onNodeWithTag("codex-stat-Impact").performClick()
-        onAllNodesWithText("Lab / Rebirth  2.0%").assertCountEquals(1)
+        onAllNodesWithText("Matrix / Rebirth  2.0%").assertCountEquals(1)
         restoration.emulateSaveAndRestore()
         onNodeWithTag("codex-stats").assertIsSelected()
         onNodeWithTag("codex-stat-Impact").assertIsSelected()
         onNodeWithTag("codex-stat-Cooling").assertIsNotSelected()
-        onAllNodesWithText("Lab / Rebirth  2.0%").assertCountEquals(1)
+        onAllNodesWithText("Matrix / Rebirth  2.0%").assertCountEquals(1)
     }
 
     @Test fun phonePortraitLandscapeAndDesktopKeepGridAndSheetUsableAtEveryTextScale() = runComposeUiTest {

@@ -53,7 +53,7 @@ internal val runtimeBehaviorEvidence = listOf(
         setOf(
             "exactCatalogBoundsAreAccepted",
             "itemBoundRejectsNPlusOne",
-            "metaUpgradeBoundRejectsNPlusOne",
+            "matrixNodeBoundRejectsNPlusOne",
             "rebirthBoundRejectsLevelEleven",
             "relicBoundRejectsNPlusOne",
             "synergyBoundRejectsNPlusOne",
@@ -302,9 +302,9 @@ internal val runtimeBehaviorEvidence = listOf(
         ),
     ),
     BehaviorEvidence(
-        ":ball:profile:interaction", "kinetickk.ball.profile.interaction.lab.impl.LabReducerTest",
+        ":ball:profile:interaction", "kinetickk.ball.profile.interaction.matrix.impl.MatrixReducerTest",
         setOf(
-            "snapshotMapsEightOrderedUpgradesAndExactNextCost",
+            "snapshotMapsEveryOrderedNodeWithItsStatusAndExactNextCost",
         ),
     ),
     BehaviorEvidence(
@@ -320,9 +320,9 @@ internal val runtimeBehaviorEvidence = listOf(
         ":ball:profile:resource", "kinetickk.ball.profile.resource.ProfileCodecTest",
         setOf(
             "byteLimitAndUtf8AreCheckedBeforeJsonDecode",
-            "currentSchemaMaximumUnlockedWeaponsLabRanksAndDiscoveriesRoundTripWithoutLoss",
+            "currentSchemaMaximumUnlockedWeaponsMatrixRanksAndDiscoveriesRoundTripWithoutLoss",
             "everyCharacterAndCumulativeAchievementRoundTripsAndRejectsInvalidProgress",
-            "outboundLabRanksAndDiscoveriesRejectFirstNPlusOne",
+            "outboundMatrixRanksAndDiscoveriesRejectFirstNPlusOne",
             "preferenceConfigurationAcceptsExactMaximaAndRejectsAdjacentOverflowOrNonMembers",
             "preferenceIngressAcceptsMembersAndRejectsAdjacentInRangeNonMembers",
         ),

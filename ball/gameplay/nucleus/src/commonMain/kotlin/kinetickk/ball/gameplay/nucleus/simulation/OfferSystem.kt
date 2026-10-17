@@ -32,7 +32,7 @@ internal fun MutableGameState.offerableItems(): List<ItemDefinition> {
 
 /** Number of item cards in an offer (Gambler's Ledger adds one, never above the choice bound). */
 internal fun MutableGameState.itemOfferSize(): Int =
-    min(MAX_GENERATED_REWARD_CHOICES, 3 + if (build.offerCards > 0) 1 else 0)
+    min(MAX_GENERATED_REWARD_CHOICES, 3 + (if (build.offerCards > 0) 1 else 0) + (if (matrixWidensItemOffer()) 1 else 0))
 
 /** Points the build has in [item]'s tags and elements; reaction items count the reaction pseudo-tag. */
 private fun MutableGameState.fit(item: ItemDefinition): Float {
@@ -70,7 +70,7 @@ internal fun MutableGameState.buildItemChoices() {
     val lanes = OfferLane.entries
     val size = itemOfferSize()
     var rareOrBetter = false
-    val pityDue = offerPity >= PITY_OFFERS
+    val pityDue = offerPity >= pityOffers()
     for (cardIndex in 0 until size) {
         val lane = lanes[cardIndex.coerceAtMost(lanes.lastIndex)]
         val available = pool.filter { candidate -> selected.none { it.id == candidate.id } }
@@ -126,6 +126,7 @@ internal fun MutableGameState.rebornChance(): Float {
     val policy = content.build.policy
     var chance = policy.rebornChance(rebirthLevel)
     if (tagTier(BuildTag.FORTUNE) >= 3) chance += 0.1f
+    chance += matrix.rebornChanceBonus
     return chance.coerceIn(0f, 0.5f)
 }
 
@@ -239,15 +240,36 @@ internal fun MutableGameState.canMeld(id: RelicId): Boolean =
     content.relic(id).meldable && relicRank(id) < min(2, content.relicPolicy.maxRank) &&
         !(id == RelicId.OUROBOROS_SEAL && ouroborosSpent)
 
+/** Carried Relics the Heirloom offer may still show: known to content and not bound this run. */
+private fun MutableGameState.openHeirloomCandidates(): List<RelicId> =
+    heirloomCandidates.filter { id -> content.relics.any { it.id == id } && relicRank(id) == 0 }
+
+/**
+ * Heirloom cards for [candidates] carried Relics: the policy count plus [extra], never more than the
+ * carried Relics or the choice bound, where the decline card keeps one slot.
+ */
+private fun MutableGameState.heirloomCardCount(candidates: Int, extra: Int): Int =
+    min(content.relicPolicy.heirloomOffers(rebirthLevel) + extra, min(candidates, MutableGameState.MAX_CHOICES - 1))
+
+/**
+ * Matrix extra Heirloom cards the open offer cannot show (it already shows every carried Relic or fills
+ * the bound). Each one raises the taken Heirloom a rank instead, so the extra is never lost.
+ */
+internal fun MutableGameState.heirloomRankBonus(): Int {
+    val candidates = openHeirloomCandidates().size
+    val extra = matrix.extraHeirloomOffers
+    return extra - (heirloomCardCount(candidates, extra) - heirloomCardCount(candidates, 0))
+}
+
 /** The Heirloom offer opens a Reborn run with relics carried over from the last victory. */
 internal fun MutableGameState.openHeirloomChoice() {
-    val candidates = heirloomCandidates.filter { id -> content.relics.any { it.id == id } && relicRank(id) == 0 }
+    val candidates = openHeirloomCandidates()
     heirloomPending = false
     if (candidates.isEmpty() || rebirthLevel < 1) {
         if (heirloomCandidates.isNotEmpty()) pendingHeirloomResolved = true
         return
     }
-    val count = content.relicPolicy.heirloomOffers(rebirthLevel)
+    val count = heirloomCardCount(candidates.size, matrix.extraHeirloomOffers)
     val offered = candidates.shuffled(rewardRandom).take(count)
     activeChoiceType = ChoiceType.RELIC
     heirloomOfferActive = true

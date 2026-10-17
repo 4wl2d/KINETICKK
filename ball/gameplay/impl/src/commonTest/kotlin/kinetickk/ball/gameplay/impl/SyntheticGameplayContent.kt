@@ -48,12 +48,6 @@ private fun syntheticGameplayContent(): GameplayContentSnapshot {
             WeaponDefinition(id, "Weapon $index", "Synthetic weapon $index", listOf("TEST"), 0)
         }.toImmutableList(),
         weaponMasteries = WeaponMastery.entries.toImmutableList(),
-        metaUpgrades = MetaUpgradeId.entries.mapIndexed { index, id ->
-            MetaUpgradeDefinition(
-                id, "Upgrade $index", "Synthetic upgrade $index", 10, 1,
-                ItemModifier(ItemEffect.MAX_INTEGRITY, 1f),
-            )
-        }.toImmutableList(),
         relics = RelicId.entries.mapIndexed { index, id ->
             RelicDefinition(
                 id = id,

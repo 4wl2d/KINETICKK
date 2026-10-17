@@ -270,7 +270,7 @@ private object BenchmarkProfilePort : ProfileReadPort, ProfileProgress {
         preferences = profile.preferences,
         economy = profile.economy,
         loadout = profile.loadout,
-        labProgress = profile.labProgress,
+        matrix = profile.matrix,
         collection = profile.collection,
         rebirthProgress = profile.rebirthProgress,
     )
@@ -284,7 +284,7 @@ private object BenchmarkProfilePort : ProfileReadPort, ProfileProgress {
 
     override fun query(query: ProfileQuery.GetHomeProgress): kinetickk.ball.profile.api.HomeProgressProjection = error("unused")
     override fun query(query: ProfileQuery.GetCollection): kinetickk.ball.profile.api.CollectionProjection = error("unused")
-    override fun query(query: ProfileQuery.GetLabProgress): kinetickk.ball.profile.api.LabProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetMatrixProgress): kinetickk.ball.profile.api.MatrixProgressProjection = error("unused")
     override fun query(query: ProfileQuery.GetLoadout): kinetickk.ball.profile.api.LoadoutProjection = error("unused")
     override fun query(query: ProfileQuery.GetRebirthProgress): kinetickk.ball.profile.api.RebirthProgressProjection = error("unused")
     override fun query(query: ProfileQuery.GetPersistenceStatus): kinetickk.ball.profile.api.PersistenceStatusProjection = error("unused")

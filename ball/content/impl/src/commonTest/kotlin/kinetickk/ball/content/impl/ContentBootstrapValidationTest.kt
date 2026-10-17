@@ -18,7 +18,8 @@ import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
-import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.MatrixNodeDefinition
+import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicKey
 import kinetickk.ball.content.api.RelicPairingId
@@ -43,7 +44,7 @@ class ContentBootstrapValidationTest {
 
         assertEquals(90, gameplay.items.size)
         assertEquals(ContentBounds.MAX_WEAPONS, gameplay.weapons.size)
-        assertEquals(ContentBounds.MAX_META_UPGRADES, gameplay.metaUpgrades.size)
+        assertEquals(MatrixNodeId.entries.size, gameplay.matrixNodes.size)
         assertEquals(RelicId.entries.size, gameplay.relics.size)
         assertEquals(20, gameplay.build.pairings.size)
         assertEquals(
@@ -78,11 +79,27 @@ class ContentBootstrapValidationTest {
     }
 
     @Test
-    fun metaUpgradeBoundRejectsNPlusOne() {
+    fun matrixNodeBoundRejectsNPlusOne() {
         val data = defaultContentBootstrapData()
-        val extra = data.metaUpgrades.first().copy(id = MetaUpgradeId.CORE_INTEGRITY)
+        val filler = (data.matrixNodes.size until ContentBounds.MAX_MATRIX_NODES).map { data.matrixNodes.first() }
 
-        assertRejected(data.copy(metaUpgrades = data.metaUpgrades + extra), "meta upgrades size 9")
+        // At the bound only the stable-id rule refuses the duplicates; one past it the bound refuses first.
+        assertRejected(data.copy(matrixNodes = data.matrixNodes + filler), "matrix-node ids must be unique")
+        assertRejected(data.copy(matrixNodes = data.matrixNodes + filler + data.matrixNodes.first()), "matrix nodes size 41")
+    }
+
+    @Test
+    fun matrixPrerequisitesStayInTheirBranchOneRowAboveTheNode() {
+        val data = defaultContentBootstrapData()
+        fun replaced(node: MatrixNodeDefinition) = data.copy(matrixNodes = data.matrixNodes.map { if (it.id == node.id) node else it })
+        val criticalLattice = data.matrixNodes.first { it.id == MatrixNodeId.CRITICAL_LATTICE }
+
+        assertRejected(replaced(criticalLattice.copy(prerequisites = immutableListOf(MatrixNodeId.REINFORCED_HULL))), "another branch")
+        assertRejected(replaced(criticalLattice.copy(row = 2)), "one row below")
+        assertRejected(
+            replaced(criticalLattice.copy(name = data.matrixNodes.first().name)),
+            "Matrix node names must be unique",
+        )
     }
 
     @Test
@@ -170,11 +187,11 @@ class ContentBootstrapValidationTest {
         )
         assertRejected(
             data.copy(
-                metaUpgrades = data.metaUpgrades.replaceLast(
-                    data.metaUpgrades.last().copy(id = MetaUpgradeId.CORE_INTEGRITY),
+                matrixNodes = data.matrixNodes.replaceLast(
+                    data.matrixNodes.last().copy(id = MatrixNodeId.IMPACT_DRIVER),
                 ),
             ),
-            "meta-upgrade ids must be unique",
+            "matrix-node ids must be unique",
         )
         assertRejected(
             data.copy(relics = data.relics.replaceLast(data.relics.last().copy(id = RelicId.PERPETUAL_VECTOR))),

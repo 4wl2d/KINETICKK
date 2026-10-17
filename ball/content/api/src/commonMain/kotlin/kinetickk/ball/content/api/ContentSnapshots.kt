@@ -38,8 +38,9 @@ data class ProfilePolicySnapshot(
     val itemCount: Int,
     val coreShapes: ImmutableList<CoreShapeDefinition>,
     val weapons: ImmutableList<WeaponDefinition>,
-    val metaUpgrades: ImmutableList<MetaUpgradeDefinition>,
     val rebirth: RebirthPolicySnapshot,
+    /** Core Matrix nodes in [MatrixNodeId] order. */
+    val matrixNodes: ImmutableList<MatrixNodeDefinition> = defaultMatrixNodes(),
 ) {
     init {
         require(itemCount >= 0) { "Item count must be non-negative" }
@@ -53,8 +54,8 @@ data class ProfilePolicySnapshot(
     fun weapon(id: WeaponId): WeaponDefinition =
         weapons.first { definition -> definition.id == id }
 
-    fun metaUpgrade(id: MetaUpgradeId): MetaUpgradeDefinition =
-        metaUpgrades.first { definition -> definition.id == id }
+    fun matrixNode(id: MatrixNodeId): MatrixNodeDefinition =
+        matrixNodes.first { definition -> definition.id == id }
 }
 
 data class GameplayContentSnapshot(
@@ -62,7 +63,6 @@ data class GameplayContentSnapshot(
     val items: ImmutableList<ItemDefinition>,
     val weapons: ImmutableList<WeaponDefinition>,
     val weaponMasteries: ImmutableList<WeaponMastery>,
-    val metaUpgrades: ImmutableList<MetaUpgradeDefinition>,
     val relics: ImmutableList<RelicDefinition>,
     val rebirth: RebirthPolicySnapshot,
     val relicPolicy: RelicPolicy,
@@ -72,6 +72,8 @@ data class GameplayContentSnapshot(
     val coreShapes: ImmutableList<CoreShapeDefinition> = defaultCoreShapeDefinitions(),
     /** Enemy roster in [EnemyType] order; the spawn director reads gates and weights from it. */
     val enemies: ImmutableList<EnemyDefinition> = defaultEnemyDefinitions(),
+    /** Core Matrix nodes in [MatrixNodeId] order; a run applies their effects from the profile ranks. */
+    val matrixNodes: ImmutableList<MatrixNodeDefinition> = defaultMatrixNodes(),
 ) {
     init {
         require(enemies.size == EnemyType.entries.size && enemies.withIndex().all { (index, enemy) -> enemy.type.ordinal == index }) {
@@ -104,8 +106,8 @@ data class GameplayContentSnapshot(
     fun weaponMasteryAfter(level: Int): WeaponMastery? =
         weaponMasteries.firstOrNull { mastery -> level < mastery.minimumLevel }
 
-    fun metaUpgrade(id: MetaUpgradeId): MetaUpgradeDefinition =
-        metaUpgrades.first { definition -> definition.id == id }
+    fun matrixNode(id: MatrixNodeId): MatrixNodeDefinition =
+        matrixNodes.first { definition -> definition.id == id }
 
     fun relic(id: RelicId): RelicDefinition =
         relics.first { definition -> definition.id == id }
@@ -116,7 +118,6 @@ data class UiCatalogSnapshot(
     val items: ImmutableList<ItemDefinition>,
     val weapons: ImmutableList<WeaponDefinition>,
     val weaponMasteries: ImmutableList<WeaponMastery>,
-    val metaUpgrades: ImmutableList<MetaUpgradeDefinition>,
     val relics: ImmutableList<RelicDefinition>,
     val coreShapes: ImmutableList<CoreShapeDefinition>,
     val rebirth: RebirthPolicySnapshot,
@@ -126,6 +127,8 @@ data class UiCatalogSnapshot(
     val build: BuildCatalog = defaultBuildCatalog(),
     /** Enemy roster in [EnemyType] order, for the Codex. */
     val enemies: ImmutableList<EnemyDefinition> = defaultEnemyDefinitions(),
+    /** Core Matrix nodes in [MatrixNodeId] order. */
+    val matrixNodes: ImmutableList<MatrixNodeDefinition> = defaultMatrixNodes(),
 ) {
     fun item(id: Int): ItemDefinition? = items.getOrNull(id)?.takeIf { item -> item.id == id }
 
@@ -140,8 +143,8 @@ data class UiCatalogSnapshot(
     fun weaponMasteryAfter(level: Int): WeaponMastery? =
         weaponMasteries.firstOrNull { mastery -> level < mastery.minimumLevel }
 
-    fun metaUpgrade(id: MetaUpgradeId): MetaUpgradeDefinition =
-        metaUpgrades.first { definition -> definition.id == id }
+    fun matrixNode(id: MatrixNodeId): MatrixNodeDefinition =
+        matrixNodes.first { definition -> definition.id == id }
 
     fun relic(id: RelicId): RelicDefinition =
         relics.first { definition -> definition.id == id }

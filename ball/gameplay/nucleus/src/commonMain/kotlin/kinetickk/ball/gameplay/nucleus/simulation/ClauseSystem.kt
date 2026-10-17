@@ -284,8 +284,9 @@ internal fun WeaponId.isContinuous(): Boolean =
 /** After a direct hit landed: clauses, statuses from resonance, Ion arcs and relic rules. */
 internal fun MutableGameState.onDirectHit(enemy: Enemy, result: DamageResult, source: HitSource, sourceWeapon: WeaponId?) {
     enemy.status[StatusCell.LAST_SOURCE] = (source.ordinal + 1).toFloat()
-    // Derived damage measures the hit before the receiver's own multipliers, so armour never leaks to others.
-    val basis = result.unmitigated
+    // Derived damage measures the hit before the receiver's own multipliers, so armour never leaks to others,
+    // and before the Matrix damage multiplier, which every proc, status and field applies once itself.
+    val basis = result.unmitigated / matrix.damageMultiplier
     when (source) {
         HitSource.IMPACT -> fireClauses(EffectTrigger.IMPACT, enemy, basis, source)
         HitSource.WEAPON -> {

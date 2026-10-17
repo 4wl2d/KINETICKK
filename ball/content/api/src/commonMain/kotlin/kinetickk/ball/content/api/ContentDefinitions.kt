@@ -52,17 +52,6 @@ enum class ItemRarity(
     LEGENDARY("Legendary", 5),
 }
 
-data class ItemModifier(
-    val effect: ItemEffect,
-    val amount: Float,
-) {
-    init {
-        require(amount.isFinite() && amount > 0f) {
-            "Item modifier amount must be finite and positive"
-        }
-    }
-}
-
 /**
  * A hand-authored item. Passive [stats] apply per stack; [clauses] are Trigger–Condition–Effect
  * rules; [rules] modify whole systems while the item is owned. Ids are dense catalog indices.
@@ -178,42 +167,4 @@ class WeaponDefinition(
     override fun toString(): String =
         "WeaponDefinition(id=$id, name=$name, description=$description, " +
             "tags=$tags, permanentUnlockCost=$permanentUnlockCost)"
-}
-
-enum class MetaUpgradeId {
-    CORE_INTEGRITY,
-    KINETIC_AMPLIFIER,
-    MAGNETIC_RESONANCE,
-    CRYO_VENTS,
-    DASH_CAPACITOR,
-    SALVAGE_PROTOCOL,
-    DATA_ARCHIVE,
-    ARMORY_LICENSE,
-}
-
-data class MetaUpgradeDefinition(
-    val id: MetaUpgradeId,
-    val name: String,
-    val description: String,
-    val maxRanks: Int,
-    val baseCost: Int,
-    val modifierPerRank: ItemModifier,
-) {
-    init {
-        require(name.isNotBlank()) { "Meta-upgrade name must not be blank" }
-        require(description.isNotBlank()) { "Meta-upgrade description must not be blank" }
-        require(maxRanks > 0) { "Meta-upgrade maxRanks must be positive" }
-        require(baseCost > 0) { "Meta-upgrade baseCost must be positive" }
-    }
-
-    /** Returns the price of the next rank when [level] ranks are already owned. */
-    fun cost(level: Int): Int {
-        require(level in 0 until maxRanks) {
-            "level must be between 0 and ${maxRanks - 1}"
-        }
-        val rank = level.toLong() + 1L
-        return (baseCost.toLong() * rank * rank)
-            .coerceAtMost(Int.MAX_VALUE.toLong())
-            .toInt()
-    }
 }

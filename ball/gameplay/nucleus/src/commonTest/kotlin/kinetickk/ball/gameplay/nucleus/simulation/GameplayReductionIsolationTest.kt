@@ -107,7 +107,7 @@ class GameplayReductionIsolationTest {
         ).apply {
             unlockedWeaponSet += WeaponId.MORNINGSTAR
             unlockedWeaponView = unlockedWeaponSet.toSet()
-            metaRanks[0] = 1
+            matrixRanks[0] = 1
             discoveredItemIds += 17
             itemStacks[0] = 2
             rebornItems[0] = 1
@@ -178,7 +178,7 @@ class GameplayReductionIsolationTest {
         ).apply {
             unlockedWeaponSet += WeaponId.MORNINGSTAR
             unlockedWeaponView = unlockedWeaponSet.toSet()
-            metaRanks[0] = 1
+            matrixRanks[0] = 1
             discoveredItemIds += 17
             itemStacks[0] = 2
             rebornItems[0] = 1
@@ -248,7 +248,7 @@ class GameplayReductionIsolationTest {
 
         // These assertions prove the test actually traverses the optimized scalar-COW path.
         assertSame(source.gameplayRandom, pointerBranch.model.gameplayRandom)
-        assertSame(source.metaRanks, pointerBranch.model.metaRanks)
+        assertSame(source.matrixRanks, pointerBranch.model.matrixRanks)
         assertSame(source.enemies, pointerBranch.model.enemies)
         assertSame(source.projectiles, pointerBranch.model.projectiles)
         assertSame(source.enemies, siblingBranch.model.enemies)
@@ -263,7 +263,7 @@ class GameplayReductionIsolationTest {
         ).state.model
 
         assertNotSame(pointerBranch.model.gameplayRandom, isolated.gameplayRandom)
-        assertNotSame(pointerBranch.model.metaRanks, isolated.metaRanks)
+        assertNotSame(pointerBranch.model.matrixRanks, isolated.matrixRanks)
         assertNotSame(pointerBranch.model.enemies, isolated.enemies)
         assertNotSame(pointerBranch.model.projectiles, isolated.projectiles)
         assertNotSame(pointerBranch.model.totem, isolated.totem)
@@ -271,7 +271,7 @@ class GameplayReductionIsolationTest {
         // Mutate every mutable storage family that the scalar COW path is allowed to share.
         isolated.gameplayRandom.nextInt()
         isolated.unlockedWeaponSet.clear()
-        isolated.metaRanks[0] = 91
+        isolated.matrixRanks[0] = 91
         isolated.discoveredItemIds.clear()
         isolated.itemStacks[0] = 92
         isolated.rebornItems[0] = 0
@@ -304,7 +304,7 @@ class GameplayReductionIsolationTest {
             assertEquals(expectedNextRandom, retained.gameplayRandom.copy().nextInt())
             assertTrue(WeaponId.FLUX_WAKE in retained.unlockedWeaponSet)
             assertTrue(WeaponId.MORNINGSTAR in retained.unlockedWeaponSet)
-            assertEquals(1, retained.metaRanks[0])
+            assertEquals(1, retained.matrixRanks[0])
             assertTrue(17 in retained.discoveredItemIds)
             assertEquals(2, retained.itemStacks[0])
             assertEquals(1, retained.rebornItems[0])
@@ -364,7 +364,7 @@ class GameplayReductionIsolationTest {
 
         reductions.forEach { reduction ->
             assertFalse(reduction.state.model.hasPendingReductionOutputs())
-            assertSame(source.metaRanks, reduction.state.model.metaRanks)
+            assertSame(source.matrixRanks, reduction.state.model.matrixRanks)
             assertSame(source.enemies, reduction.state.model.enemies)
             assertEquals(
                 listOf(
@@ -514,6 +514,32 @@ class GameplayReductionIsolationTest {
         assertNotSame(candidate.enemies, stepped.enemies)
         assertEquals(retained, committed.exactSimulationFingerprint())
         assertEquals(retainedCandidate, candidate.exactSimulationFingerprint())
+    }
+
+    @Test
+    fun achievementCountersWaitForTheBankAndNeverForceAnIdleFrameToPublish() {
+        val source = MutableGameState(canonicalGameplayContent, seed = 6_104).apply {
+            pendingTotalKills = 5
+            pendingRicochets = 6
+            pendingDataPickups = 7
+        }
+        val reducer = GameReducer()
+        val pointer = GameplayInteractionPulse.PointerMoved.fromValidated(source.pointerX, source.pointerY, source.pointerActive)
+        val idle = assertIs<GameReductionResult.Accepted>(reducer.reduce(EngineState(source), pointer))
+        assertNull(idle.outputs.progressUpdate)
+        assertSame(source, idle.state.model, "counters alone leave an unchanged input unreduced")
+
+        val banked = source.copyForReduction().apply { bankRunMatter() }
+        val update = assertNotNull(banked.takeProgressUpdate())
+        assertEquals(5, update.totalKills)
+        assertEquals(6, update.ricochets)
+        assertEquals(7, update.dataPickups)
+        assertFalse(banked.hasPendingReductionOutputs())
+        assertEquals(5, source.pendingTotalKills, "the committed source keeps its counters")
+
+        // Any other progress carries the counters along without waiting for the bank.
+        val elite = source.copyForReduction().apply { pendingEliteKills = 1 }
+        assertEquals(5, assertNotNull(elite.takeProgressUpdate()).totalKills)
     }
 
     @Test
@@ -761,6 +787,10 @@ class GameplayReductionIsolationTest {
         pendingDashHits = 3
         pendingCompletedOrbits = 4
         pendingArchitectDefeatedWith = CoreShape.PRISM
+        pendingTotalKills = 5
+        pendingRicochets = 6
+        pendingDataPickups = 7
+        achievementFlushDue = true
         pointsOfInterest = listOf(
             PointOfInterestState(
                 offerId = 1,
@@ -819,6 +849,9 @@ class GameplayReductionIsolationTest {
         integrityLiabilityCut = 9f
         critMissStreak = 2
         offerPity = 4
+        itemOffersOpened = 3
+        secondWindSpent = true
+        matrixFreeDashReadyAt = 0.65f
         // Every forked build scalar holds a distinct non-default value, so a fork that drops one copy
         // (resetting it to its initial value) diverges from its source. Several expire inside the trace.
         rebornItems[0] = 1
@@ -940,6 +973,7 @@ class GameplayReductionIsolationTest {
             pendingDashHits != 0 ||
             pendingCompletedOrbits != 0 ||
             pendingArchitectDefeatedWith != null ||
+            achievementFlushDue && (pendingTotalKills != 0 || pendingRicochets != 0 || pendingDataPickups != 0) ||
             pendingDiscoveredRelicMask != 0L ||
             pendingDiscoveredReactionMask != 0 ||
             pendingDiscoveredPairingMask != 0 ||
@@ -979,7 +1013,8 @@ class GameplayReductionIsolationTest {
             value("activeRebirthProfile", activeRebirthProfile)
             value("unlockedWeaponSet", unlockedWeaponSet.toList())
             value("unlockedWeaponView", unlockedWeaponView.toList())
-            ints("metaRanks", metaRanks)
+            ints("matrixRanks", matrixRanks)
+            value("matrix", matrix)
             value("discoveredItemIds", discoveredItemIds.toList())
             value("pendingDiscoveredItemIds", pendingDiscoveredItemIds.toList())
             ints("itemStacks", itemStacks)
@@ -1064,6 +1099,9 @@ class GameplayReductionIsolationTest {
             float("integrityLiabilityCut", integrityLiabilityCut)
             float("cinderRecoilReadyAt", cinderRecoilReadyAt)
             value("offerPity", offerPity)
+            value("itemOffersOpened", itemOffersOpened)
+            value("secondWindSpent", secondWindSpent)
+            float("matrixFreeDashReadyAt", matrixFreeDashReadyAt)
             value("dashHitThisDash", dashHitThisDash)
             value("clauseDepth", clauseDepth)
             value("arsenalCounter", arsenalCounter)
@@ -1081,6 +1119,10 @@ class GameplayReductionIsolationTest {
             value("pendingDashHits", pendingDashHits)
             value("pendingCompletedOrbits", pendingCompletedOrbits)
             value("pendingArchitectDefeatedWith", pendingArchitectDefeatedWith)
+            value("pendingTotalKills", pendingTotalKills)
+            value("pendingRicochets", pendingRicochets)
+            value("pendingDataPickups", pendingDataPickups)
+            value("achievementFlushDue", achievementFlushDue)
             float("characterRuntime.charge", characterRuntime.charge)
             float("characterRuntime.barrier", characterRuntime.barrier)
             float("characterRuntime.barrierTime", characterRuntime.barrierTime)

@@ -11,7 +11,7 @@ import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
@@ -111,12 +111,18 @@ data class PlayerLoadout(
     ) : this(coreShape, selectedWeapon, unlockedWeapons.toImmutableSet())
 }
 
-data class LabProgress(
-    val ranks: ImmutableList<Int> = ImmutableList.copyOf(List(MetaUpgradeId.entries.size) { 0 }),
+/** Owned Core Matrix ranks indexed by [MatrixNodeId.ordinal]; a node at 0 is not owned. */
+data class MatrixProgress(
+    val ranks: ImmutableList<Int> = ImmutableList.copyOf(List(MatrixNodeId.entries.size) { 0 }),
 ) {
     constructor(ranks: List<Int>) : this(ranks.toImmutableList())
 
-    fun rank(id: MetaUpgradeId): Int = ranks.getOrElse(id.ordinal) { 0 }
+    fun rank(id: MatrixNodeId): Int = ranks.getOrElse(id.ordinal) { 0 }
+
+    fun owns(id: MatrixNodeId): Boolean = rank(id) > 0
+
+    /** Nodes with at least one rank. */
+    val ownedNodeCount: Int get() = ranks.count { it > 0 }
 }
 
 /** Relics remembered as Heirlooms: at most one per Relic slot bound at the Architect victory. */
@@ -166,20 +172,26 @@ val RebirthProgress.rank: Int
 val RebirthProgress.isAscendant: Boolean
     get() = highestCleared >= ContentBounds.MAX_REBIRTH_LEVEL
 
-/** Cumulative Profile-owned achievements shared by every run and Lab loadout. */
+/** Cumulative Profile-owned achievements shared by every run and Matrix loadout. */
 data class CharacterAchievementProgress(
     val eliteKills: Long = 0L,
     val dashHits: Long = 0L,
     val completedOrbits: Long = 0L,
     val architectVictories: Long = 0L,
     val victoriousCharacters: ImmutableSet<CoreShape> = immutableSetOf(),
+    /** Enemies destroyed across every run. */
+    val totalKills: Long = 0L,
+    /** Hard obstacle bounces across every run. */
+    val ricochets: Long = 0L,
+    /** Data pickups collected across every run. */
+    val dataPickups: Long = 0L,
 )
 
 data class PlayerProfile(
     val preferences: PlayerPreferences = PlayerPreferences(),
     val economy: PlayerEconomy = PlayerEconomy(),
     val loadout: PlayerLoadout = PlayerLoadout(),
-    val labProgress: LabProgress = LabProgress(),
+    val matrix: MatrixProgress = MatrixProgress(),
     val collection: PlayerCollection = PlayerCollection(),
     val rebirthProgress: RebirthProgress = RebirthProgress(),
     val characterAchievements: CharacterAchievementProgress = CharacterAchievementProgress(),

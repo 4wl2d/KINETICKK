@@ -51,13 +51,13 @@ Lab, Armory, Rebirth, Codex (C or I), mute, back, and contextual enter.
 ### Profile
 
 The full `PlayerProfile` remains the canonical source for preferences, economy,
-loadout, Lab ranks, collection, and Rebirth progress. All accepted mutations
+loadout, Core Matrix ranks, collection, and Rebirth progress. All accepted mutations
 publish their complete next value before persistence is attempted. Persistence
 failure or uncertainty never rolls an accepted value back and does not cause an
 automatic new write. Rejections change neither state nor persistence.
 
 The frozen mutation matrix covers preference normalization, sound/music mute,
-Lab purchases, core-shape selection, weapon purchase/equip, Rebirth advance,
+Matrix purchases and reset, core-shape selection, weapon purchase/equip, Rebirth advance,
 gameplay-progress merge, bootstrap, and the test-only replacement seam.
 The target removes production arbitrary replacement but preserves validated
 bootstrap semantics.
@@ -75,7 +75,7 @@ and counter-thrust remain available at exhaustion. Gameplay owns six character
 abilities, optional world-fixed trials and bounded relic synergies. Codex reads
 one coherent immutable build summary and preserves pause/reward selection.
 
-The catalog has 90 hand-authored items, 12 weapons, 8 meta upgrades, 22 Relics,
+The catalog has 90 hand-authored items, 12 weapons, 32 Core Matrix nodes, 22 Relics,
 six characters, and Rebirth levels `0..10` (see the build-system intentional
 delta below). Existing stable declaration order is captured as
 explicit stable IDs during the migration; consumers receive immutable versioned
@@ -177,6 +177,20 @@ a nominal step boundary lands on the same step at 30, 60, 144 and 240 Hz; at
 also shift pickup, camera, Morningstar and orbital previous positions. The
 120 Hz step, the 48-step cap and the `0.1` / `0.3` s clamps are unchanged; the
 version is `0.4.0`.
+
+The Core Matrix replaces the Lab (the Lab route, the L key and the screen slot
+stay). Its 32 nodes in four branches carry per-rank prices, any-of
+prerequisites, Rebirth-rank gates and typed effects that every run applies from
+content at start; the Lab's hard-coded run multipliers and its hidden extra
+reroll per four Data Archive ranks are gone. Purchases check the rank maximum,
+the Rebirth rank, the prerequisites and Matter in that order; Reset refunds every
+rank. Loading checks only node membership and rank maxima, clamping ranks above
+a lowered maximum and refunding them, so a rebalance never wipes a save. A save
+that still carries Lab ranks decodes with their full spend refunded into Matter
+and an empty Matrix. Total kills, ricochets and Data pickups join the cumulative
+Profile achievements; Gameplay publishes them with any other progress or when
+the run banks. A profile without Matrix ranks starts runs exactly as before, so
+the seeded baseline trace is unchanged.
 
 The compact exit workflow removes the old causal-depth assertion that failed
 when a busy Profile refused progress before acceptance. An injected

@@ -416,8 +416,8 @@ class SettingsNavigationComposeTest {
                     key(shortcut, destination)
                     when (destination) {
                         AppDestination.Lab -> {
-                            scrollProfileToEnd("profile-lab-scroll")
-                            onNodeWithTag("profile-lab-buy-${kinetickk.ball.content.api.MetaUpgradeId.entries.last()}").assertIsDisplayed()
+                            scrollProfileToEnd("profile-matrix-scroll")
+                            onNodeWithTag("profile-matrix-node-${kinetickk.ball.content.api.MatrixNodeId.entries.last()}").assertIsDisplayed()
                         }
                         AppDestination.Rebirth -> {
                             scrollProfileToEnd("profile-rebirth-scroll")

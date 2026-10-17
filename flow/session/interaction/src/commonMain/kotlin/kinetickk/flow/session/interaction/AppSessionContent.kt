@@ -44,7 +44,7 @@ import androidx.compose.ui.input.key.type
 import kinetickk.ball.gameplay.api.GameplayQuery
 import kinetickk.ball.gameplay.interaction.GameplayPresentation
 import kinetickk.ball.profile.interaction.armory.api.ArmoryFeature
-import kinetickk.ball.profile.interaction.lab.api.LabFeature
+import kinetickk.ball.profile.interaction.matrix.api.MatrixFeature
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthFeature
 import kinetickk.ball.profile.interaction.settings.api.SettingsFeature
 import kinetickk.flow.session.api.AppDestination
@@ -69,7 +69,7 @@ fun AppSessionContent(
     gameplayPresentation: GameplayPresentation,
     homeFeature: HomeFeature,
     settingsFeature: SettingsFeature,
-    labFeature: LabFeature,
+    matrixFeature: MatrixFeature,
     armoryFeature: ArmoryFeature,
     rebirthFeature: RebirthFeature,
     codexFeature: CodexFeature,
@@ -222,7 +222,7 @@ fun AppSessionContent(
                         }
                     },
                 )
-                AppDestination.Lab -> labFeature.Content(
+                AppDestination.Lab -> matrixFeature.Content(
                     routeToken = shellValue.routeToken.value,
                     onOutput = { output -> dispatch(output.toSessionPulse()) },
                 )

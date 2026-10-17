@@ -43,7 +43,7 @@ class ProfilePerformanceBenchmarkTest {
         assertEquals(
             CharacterAchievementProgress(
                 Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE,
-                CoreShape.entries.toImmutableSet(),
+                CoreShape.entries.toImmutableSet(), Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE,
             ),
             snapshot.profile.characterAchievements,
         )
@@ -71,6 +71,12 @@ class ProfilePerformanceBenchmarkTest {
             profile.copy(characterAchievements = CharacterAchievementProgress(dashHits = 1)),
             profile.copy(characterAchievements = CharacterAchievementProgress(completedOrbits = 1)),
             profile.copy(characterAchievements = CharacterAchievementProgress(architectVictories = 1)),
+            profile.copy(characterAchievements = CharacterAchievementProgress(totalKills = 1)),
+            profile.copy(characterAchievements = CharacterAchievementProgress(ricochets = 1)),
+            profile.copy(characterAchievements = CharacterAchievementProgress(dataPickups = 1)),
+            profile.copy(matrix = kinetickk.ball.profile.api.MatrixProgress(
+                kinetickk.ball.content.api.MatrixNodeId.entries.map { if (it.ordinal == 0) 1 else 0 },
+            )),
             profile.copy(characterAchievements = CharacterAchievementProgress(
                 victoriousCharacters = setOf(CoreShape.SHARD).toImmutableSet(),
             )),

@@ -22,11 +22,8 @@ import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
-import kinetickk.ball.content.api.ItemModifier
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
-import kinetickk.ball.content.api.MetaUpgradeDefinition
-import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.PointOfInterestKind
 import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.RebirthPolicySnapshot
@@ -677,7 +674,6 @@ class RedesignShotsWorldTest {
                 maxStacks = 3, unlockLevel = 1)).toImmutableList(),
             weapons = WeaponId.entries.map { WeaponDefinition(it, it.name, "Fixture", listOf("TAG"), 0) }.toImmutableList(),
             weaponMasteries = WeaponMastery.entries.toImmutableList(),
-            metaUpgrades = MetaUpgradeId.entries.map { id -> MetaUpgradeDefinition(id, "F", "F", 1, 1, ItemModifier(ItemEffect.MAX_INTEGRITY, 1f)) }.toImmutableList(),
             relics = rewardFixtureRelics.toImmutableList(),
             rebirth = RebirthPolicySnapshot(
                 minimumLevel = 0, maximumLevel = 0,

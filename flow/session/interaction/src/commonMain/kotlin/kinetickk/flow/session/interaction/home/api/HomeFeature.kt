@@ -32,10 +32,11 @@ data class HomeUiModel(
     val startingWeaponName: String? = null,
     /** True when Matter covers the unlock cost of at least one locked weapon. */
     val weaponUnlockAffordable: Boolean = false,
-    val labRanks: Int = 0,
-    val labMaxRanks: Int = 0,
-    val labMaxedUpgrades: Int = 0,
-    val labUpgradeCount: Int = 0,
+    /** Owned Core Matrix ranks over all ranks, and owned nodes over all nodes (0 while unread). */
+    val matrixRanks: Int = 0,
+    val matrixMaxRanks: Int = 0,
+    val matrixOwnedNodes: Int = 0,
+    val matrixNodeCount: Int = 0,
 ) {
     fun coreShape(shape: CoreShape): CoreShapeDefinition =
         coreShapes.first { definition -> definition.id == shape }

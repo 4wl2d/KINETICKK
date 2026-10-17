@@ -15,7 +15,7 @@ import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
-import kinetickk.ball.profile.api.LabProgress
+import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerLoadout
@@ -402,7 +402,7 @@ class OfferSystemTest {
             preferences = PlayerPreferences(),
             economy = PlayerEconomy(),
             loadout = PlayerLoadout(),
-            labProgress = LabProgress(),
+            matrix = MatrixProgress(),
             collection = PlayerCollection(heirloomRelicIds = heirlooms.toImmutableList()),
             rebirthProgress = RebirthProgress(level = rebirth),
         )

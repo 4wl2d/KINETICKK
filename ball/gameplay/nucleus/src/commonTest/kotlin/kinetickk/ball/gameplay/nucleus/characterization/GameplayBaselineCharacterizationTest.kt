@@ -396,7 +396,7 @@ private fun PlayerProfile.toGameplaySnapshot(): GameplayProfileSnapshot = Gamepl
     preferences,
     economy,
     loadout,
-    labProgress,
+    matrix,
     collection,
     rebirthProgress,
 )

@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.nucleus
 
 import kinetickk.ball.gameplay.nucleus.simulation.buildSummary
 
+import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.gameplay.api.GameplayActiveWeaponProjection
 import kinetickk.ball.gameplay.api.GameplayBuildSummaryProjection
 import kinetickk.ball.gameplay.api.GameplayConfigurationRejection
@@ -368,12 +369,12 @@ object GameplayNucleus {
         if (profile.loadout.selectedWeapon !in profile.loadout.unlockedWeapons) {
             return GameplayConfigurationRejection.STARTING_WEAPON_LOCKED
         }
-        if (profile.labProgress.ranks.size != content.metaUpgrades.size) {
-            return GameplayConfigurationRejection.META_RANK_COUNT_MISMATCH
+        if (profile.matrix.ranks.size != MatrixNodeId.entries.size) {
+            return GameplayConfigurationRejection.MATRIX_RANK_COUNT_MISMATCH
         }
-        content.metaUpgrades.forEachIndexed { index, definition ->
-            if (profile.labProgress.ranks[index] !in 0..definition.maxRanks) {
-                return GameplayConfigurationRejection.META_RANK_OUT_OF_RANGE
+        content.matrixNodes.forEach { definition ->
+            if (profile.matrix.rank(definition.id) !in 0..definition.maxRanks) {
+                return GameplayConfigurationRejection.MATRIX_RANK_OUT_OF_RANGE
             }
         }
         if (profile.collection.discoveredItemIds.any { content.item(it) == null }) {
