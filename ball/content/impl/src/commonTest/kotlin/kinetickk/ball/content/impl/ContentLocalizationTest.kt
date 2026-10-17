@@ -3,6 +3,7 @@
 
 package kinetickk.ball.content.impl
 
+import kinetickk.ball.content.api.EnemyType
 import kinetickk.ball.content.api.BuffStat
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.EffectTrigger
@@ -208,12 +209,25 @@ class ContentLocalizationTest {
         listOf(
             "DRIFT", "SURGE", "HYPER", "OVERDRIVE", "TRANSCENDENT", "Overdrive",
             "DRIFTER", "SHOOTER", "CHARGER", "INTERCEPTOR", "WEAVER", "WARDEN", "SPLITTER", "ELITE", "ARCHITECT",
+            "SWARMLING", "BOMBER", "LANCER", "SNIPER", "AEGIS", "MINELAYER", "PHANTOM", "BROODMOTHER", "REFLECTOR", "HERALD",
             "DRIFT PHASE", "THE ARCHITECT", "KINETIC OVERDRIVE", "DASH ONLINE", "OVERHEAT",
             "SINGULARITY CONTACT", "POLARITY FIELD STRAIN", "ARCHITECT DISMANTLED",
             "CATALOG COMPLETE // MATTER SALVAGED", "CORE FRACTURED", "ELITE KEY ACQUIRED",
-            "RELIC RESONANCE", "TOTEM DETECTED", "ELITE SIGNAL",
+            "RELIC RESONANCE", "TOTEM DETECTED", "ELITE SIGNAL", "HERALD APPROACHES",
             "TWO ANOMALIES DETECTED // CHOOSE A COURSE", "ANOMALY LOST", "ANOMALY RESOLVED",
         ).forEach(::assertFullyLocalized)
+    }
+
+    @Test
+    fun everyEnemyNameAndDescriptionIsLocalizedAndDistinct() {
+        val roster = createContentCatalog().uiCatalog().enemies
+        assertEquals(EnemyType.entries.toList(), roster.map { it.type })
+        roster.forEach { enemy ->
+            assertFullyLocalized(enemy.name)
+            assertFullyLocalized(enemy.description)
+        }
+        assertDistinctInRussian(roster.map { it.name })
+        assertDistinctInRussian(roster.map { it.description })
     }
 
     private fun assertFullyLocalized(source: String) {

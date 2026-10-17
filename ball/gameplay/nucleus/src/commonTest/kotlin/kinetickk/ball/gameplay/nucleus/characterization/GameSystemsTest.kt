@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.nucleus.characterization
 
 import kinetickk.ball.content.api.*
+import kinetickk.ball.content.api.EnemyType
 
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.render.*
@@ -307,7 +308,7 @@ class GameSystemsTest {
         val engine = runningEngine(seed = 47)
         engine.enemies.clear()
         engine.updatePointer(640f, 360f)
-        repeat(2) { engine.projectiles += Projectile(0f, 0f, 0f, 0f, 6f, 1f) }
+        repeat(2) { engine.projectiles += Projectile(0f, 0f, 0f, 0f, 6f, 1f, damage = 12f) }
 
         engine.update(GameScenario.FIXED_STEP)
 
@@ -328,7 +329,8 @@ class GameSystemsTest {
             val directionY = kotlin.math.abs(enemy.y / distance)
             val edgeDistance = minOf(640f / maxOf(0.001f, directionX), 360f / maxOf(0.001f, directionY))
             val overscan = distance - edgeDistance
-            assertTrue(overscan in 89f..241f, "Unexpected spawn overscan: $overscan")
+            // Packs land 80-260 beyond the edge around their anchor; no member is ever closer than 40.
+            assertTrue(overscan in 39.9f..400f, "Unexpected spawn overscan: $overscan")
         }
     }
 
@@ -337,13 +339,24 @@ class GameSystemsTest {
         val engine = runningEngine(seed = 49)
         engine.enemies.clear()
         val nearby = engine.addEnemyForTesting(220f, 0f)
-        val farAway = engine.addEnemyForTesting(10_000f, 0f)
+        val farAway = engine.addEnemyForTesting(10_000f, 0f, hp = 700f)
+        farAway.hp = 450f
         val killsBefore = engine.kills
 
         engine.update(GameScenario.FIXED_STEP)
 
         assertTrue(nearby in engine.enemies)
-        assertTrue(farAway !in engine.enemies)
+        // A straggler is brought back to spawn distance with its integrity, not deleted or rewarded.
+        assertTrue(farAway in engine.enemies)
+        val leash = maxOf(engine.screenWidth, engine.screenHeight) * 1.15f + 360f
+        val distance = kotlin.math.sqrt(
+            (farAway.x - engine.coreX) * (farAway.x - engine.coreX) + (farAway.y - engine.coreY) * (farAway.y - engine.coreY),
+        )
+        assertTrue(distance < leash, "Relocated straggler still beyond the leash: $distance")
+        assertTrue(kotlin.math.abs(farAway.x) > 640f || kotlin.math.abs(farAway.y) > 360f, "Relocated into view")
+        assertEquals(450f, farAway.hp)
+        assertEquals(farAway.x, farAway.previousX)
+        assertEquals(farAway.y, farAway.previousY)
         assertEquals(killsBefore, engine.kills)
     }
 

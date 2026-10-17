@@ -58,6 +58,7 @@ import kinetickk.ball.gameplay.api.BuildStatSource
 import kinetickk.ball.profile.api.CollectionEntry
 import kinetickk.ball.profile.api.ProfileCollectionVisits
 import kinetickk.ball.profile.api.HomeProgressProjection
+import kinetickk.ball.profile.api.rank
 import kinetickk.ball.profile.api.ProfileReadPort
 import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.flow.session.interaction.audio.SessionAudioCue
@@ -262,7 +263,9 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
         0 -> catalog.items.count { model.isDiscovered(it.id) } to catalog.items.size
         1 -> catalog.weapons.count { it.id in progress.loadout.unlockedWeapons } to catalog.weapons.size
         2 -> catalog.relics.count { model.isRelicDiscovered(it.id) } to catalog.relics.size
-        else -> progress.unlockedCoreShapes.size to catalog.coreShapes.size
+        3 -> progress.unlockedCoreShapes.size to catalog.coreShapes.size
+        // Enemies the current Rebirth rank lets into runs, out of the whole roster.
+        else -> catalog.enemies.count { it.minimumRebirth <= progress.rebirthProgress.rank } to catalog.enemies.size
     }
     val (collectionDiscovered, collectionTotal) = categoryCounts(category)
     // Rebirth locks alone leave the collection empty: the notice shows above them (and above the Items matrix's hatches).
@@ -305,7 +308,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
     }
     LaunchedEffect(Unit) { listFocus.requestFocus() }
     val categoryTitles = listOf(SessionText.ITEMS_TITLE, SessionText.WEAPONS_TITLE, SessionText.RELICS_TITLE, SessionText.FORMS_TITLE)
-        .map { language.text(it) }
+        .map { language.text(it) } + language.text(CodexText.ENEMIES_TITLE)
     val filterTitles = listOf(0 to SessionText.FILTER_ALL, 2 to SessionText.FILTER_BUILD)
     val policy = catalog.build.policy
     val onSelection: ((CodexSelection) -> CodexSelection) -> Unit = { change ->
@@ -813,6 +816,8 @@ private fun CodexEntry.cellBadge(): String? = when (val icon = icon) {
     is CodexIcon.Item -> quantity.takeIf { icon.stack > 0 }
     is CodexIcon.Relic -> quantity.takeIf { icon.rank != null }
     is CodexIcon.Weapon -> quantity.takeIf { it != CODEX_NONE }
+    // An enemy's threat out of five.
+    is CodexIcon.Enemy -> quantity
     else -> null
 }
 
@@ -1201,10 +1206,10 @@ private fun CodexNavigationTabs(tab: CodexTab, controlScale: Float, compact: Boo
 }
 
 /**
- * Smallest scale tabs shrink to before their row scrolls instead: Russian categories at 175 % still
- * fit a 360 dp phone (their labels stay above 16 px).
+ * Smallest scale tabs shrink to before their row scrolls instead: the five Russian categories at
+ * 175 % still fit a 360 dp phone beside the filters (their labels stay near 14 px).
  */
-internal const val CODEX_TAB_MIN_SCALE = 0.55f
+internal const val CODEX_TAB_MIN_SCALE = 0.45f
 
 /** Common scale for a row of tabs of [natural] widths (dp) so they fit [available] dp (1 when they fit). */
 internal fun codexTabScale(natural: List<Float>, available: Float): Float =
@@ -1312,10 +1317,10 @@ internal fun codexNavTitleSize(measurer: CanvasTextMeasurer, titles: List<String
 }
 
 /**
- * Section row height (dp) for the [controlScale]: 46 dp at the design size, growing more slowly
- * than the text so the whole nav (rows, search, filters, legend) fits a 810 dp tall window at 175 %.
+ * Section row height (dp) for the [controlScale]: 46 dp at the design size, growing far more slowly
+ * than the text so the whole nav (five rows, search, filters, legend) fits a 810 dp tall window at 175 %.
  */
-internal fun codexNavRowHeight(controlScale: Float): Float = 46f + 16f * (controlScale - 1f)
+internal fun codexNavRowHeight(controlScale: Float): Float = 46f + 2f * (controlScale - 1f)
 
 /** Section row (`.lrow`) with a mono count, as a tab of the collection, its title at the shared [titleSize]. */
 @Composable

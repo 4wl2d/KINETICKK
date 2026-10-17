@@ -10,6 +10,8 @@ import kinetickk.ball.content.api.ContentVersion
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.defaultCoreShapeDefinitions
 import kinetickk.ball.content.api.CoreShapeDefinition
+import kinetickk.ball.content.api.EnemyDefinition
+import kinetickk.ball.content.api.EnemyType
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
@@ -27,6 +29,7 @@ import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
 import kinetickk.ball.content.api.RunTempoProfile
 import kinetickk.ball.content.api.defaultBuildCatalog
+import kinetickk.ball.content.api.defaultEnemyDefinitions
 import kinetickk.foundation.collections.toImmutableList
 
 /** Creates the query-only Content authority that application composition owns for its lifetime. */
@@ -48,6 +51,7 @@ internal data class ContentBootstrapData(
     val minEliteIntervalSeconds: Float,
     val tempo: RunTempoProfile = RunTempoProfile(),
     val build: BuildCatalog = defaultBuildCatalog(),
+    val enemies: List<EnemyDefinition> = defaultEnemyDefinitions(),
 )
 
 internal fun defaultContentBootstrapData(): ContentBootstrapData = ContentBootstrapData(
@@ -82,6 +86,7 @@ private class DefaultContentCatalog(data: ContentBootstrapData) : ContentCatalog
     private val relics = data.relics.toImmutableList()
     private val coreShapes = data.coreShapes.toImmutableList()
     private val rebirthProfiles = data.rebirthProfiles.toImmutableList()
+    private val enemies = data.enemies.toImmutableList()
 
     private val rebirth = RebirthPolicySnapshot(
         minimumLevel = ContentBounds.MIN_REBIRTH_LEVEL,
@@ -113,6 +118,7 @@ private class DefaultContentCatalog(data: ContentBootstrapData) : ContentCatalog
         tempo = data.tempo,
         build = data.build,
         coreShapes = coreShapes,
+        enemies = enemies,
     )
 
     private val uiCatalog = UiCatalogSnapshot(
@@ -127,6 +133,7 @@ private class DefaultContentCatalog(data: ContentBootstrapData) : ContentCatalog
         relicPolicy = data.relicPolicy,
         tempo = data.tempo,
         build = data.build,
+        enemies = enemies,
     )
 
     override fun profilePolicy(): ProfilePolicySnapshot = profilePolicy
@@ -199,6 +206,8 @@ private fun validateBootstrap(data: ContentBootstrapData) {
         "Every Rebirth profile must capture the published Rebirth policy limits"
     }
 
+    validateEnemies(data.enemies)
+
     require(data.relicPolicy.maxSlots <= data.relics.size) {
         "Relic maxSlots must not exceed the relic catalog size"
     }
@@ -210,4 +219,32 @@ private fun requireBound(name: String, size: Int, maximum: Int) {
 
 private fun requireUniqueIds(name: String, ids: List<*>) {
     require(ids.toSet().size == ids.size) { "$name ids must be unique" }
+}
+
+/**
+ * The roster follows [EnemyType] order exactly; the Architect is the only boss and the Herald the only
+ * mini-boss, the Elite the only scheduled Elite, and every other kind has ordinary spawn weight.
+ */
+private fun validateEnemies(enemies: List<EnemyDefinition>) {
+    requireBound("enemies", enemies.size, ContentBounds.MAX_ENEMY_TYPES)
+    requireUniqueIds("enemy", enemies.map(EnemyDefinition::type))
+    require(enemies.map(EnemyDefinition::type) == EnemyType.entries.toList()) {
+        "Enemy types must match the stable EnemyType order"
+    }
+    require(enemies.filter(EnemyDefinition::isBoss).map(EnemyDefinition::type) == listOf(EnemyType.ARCHITECT)) {
+        "The Architect must be the only boss"
+    }
+    require(enemies.filter(EnemyDefinition::isMiniBoss).map(EnemyDefinition::type) == listOf(EnemyType.HERALD)) {
+        "The Herald must be the only mini-boss"
+    }
+    require(enemies.filter(EnemyDefinition::isElite).map(EnemyDefinition::type) == listOf(EnemyType.ELITE)) {
+        "The Elite must be the only scheduled Elite"
+    }
+    require(enemies.filterNot(EnemyDefinition::isScheduled).all { it.weight > 0f }) {
+        "Every ordinary enemy must carry spawn weight"
+    }
+    require(enemies.any { !it.isScheduled && it.timeGateSeconds <= 0f && it.minimumRebirth == 0 }) {
+        "At least one ordinary enemy must be available from the first second at tier 0"
+    }
+    require(enemies.map(EnemyDefinition::name).toSet().size == enemies.size) { "Enemy names must be unique" }
 }

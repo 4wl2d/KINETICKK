@@ -109,7 +109,7 @@ class ReworkContractHelpersTest {
         state.previousCoreX = state.coreX
         state.previousCoreY = state.coreY
         // 25 units out with radius 4: outside the default 16 + 4 contact, inside 30 + 4.
-        state.projectiles += Projectile(state.coreX + 25f, state.coreY, 0f, 0f, radius = 4f, life = 1f)
+        state.projectiles += Projectile(state.coreX + 25f, state.coreY, 0f, 0f, radius = 4f, life = 1f, damage = 12f)
 
         state.resolveProjectileHits()
         assertEquals(1, state.projectiles.size)

@@ -165,7 +165,7 @@ internal fun MutableGameState.holds(
         null -> totalStacks(target) >= condition.stacks
         else -> stacks(target, element) >= condition.stacks
     }
-    EffectCondition.TargetElite -> target != null && (target.isElite || target.isBoss)
+    EffectCondition.TargetElite -> target != null && (target.isElite || target.isBoss || target.isMiniBoss)
     EffectCondition.TargetFrozen -> target != null && (isFrozen(target) || target.id == shatteringEnemyId)
     is EffectCondition.TargetBelow -> target != null && target.hp < target.maxHp * condition.fraction
     EffectCondition.SourceImpact -> source == HitSource.IMPACT || source == HitSource.DASH
@@ -479,9 +479,16 @@ internal fun MutableGameState.damageEnemy(
     showNumber: Boolean = true,
     source: HitSource? = null,
     unmitigated: Float = amount,
+    execute: Boolean = false,
 ): DamageResult {
     if (amount <= 0f || !enemy.alive) return DamageResult(0f, false)
-    val applied = if (enemy.isBoss) gateArchitectDamage(enemy, amount) else amount
+    // Herald shields and Aegis tethers guard the receiver; a phased Phantom takes nothing at all.
+    val guarded = guardedDamage(enemy, amount, source, execute)
+    val applied = when {
+        enemy.isBoss -> gateArchitectDamage(enemy, guarded)
+        isShifting(enemy) -> 0f
+        else -> guarded
+    }
     if (applied <= 0f) return DamageResult(0f, false)
     damageDealt += minOf(applied, enemy.hp).toDouble()
     enemy.hp -= applied
@@ -508,6 +515,13 @@ internal fun MutableGameState.damageEnemy(
     }
     return DamageResult(applied, critical, unmitigated)
 }
+
+/**
+ * Destroys [enemy] outright with its remaining integrity: an Aegis tether cannot soften an execute, while
+ * the Architect's gate and a phased Phantom's untargetability still apply. Callers keep bosses out.
+ */
+internal fun MutableGameState.executeEnemy(enemy: Enemy, source: HitSource): DamageResult =
+    damageEnemy(enemy, enemy.hp, killEligible = true, source = source, execute = true)
 
 // ---------------------------------------------------------------------------------------------
 // Healing and shields: one path, so conversions and blocks apply everywhere.

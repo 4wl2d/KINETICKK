@@ -151,4 +151,22 @@ internal enum class CodexText(
     /** Two names read together (accessibility summaries of pairs and reaction inputs). */
     BOTH("{0} and {1}", "{0} и {1}"),
     SECONDS("{0} s", "{0} с"),
+    ENEMIES_TITLE("Enemies", "Враги"),
+    ENEMY_KIND("Enemy", "Враг"),
+    ELITE_KIND("Elite", "Элита"),
+    MINI_BOSS_KIND("Mini-boss", "Мини-босс"),
+    BOSS_KIND("Boss", "Босс"),
+    THREAT("Threat", "Угроза"),
+    APPEARS("Appears", "Появляется"),
+    FROM_TIME("From {0}", "С {0}"),
+    REBORN_GATE("Reborn {0}", "Перерождение {0}"),
+    IN_ROSTER("In the roster", "В составе"),
+    ENEMY_HELP(
+        "An enemy joins the waves once the run clock, plus the Rebirth tier's head start, reaches its time, and only from its Rebirth rank.",
+        "Враг входит в волны, когда время забега с форой уровня перерождения достигает его срока, и только с его ранга перерождения.",
+    ),
+    ENEMY_LOCKED_HELP(
+        "Reach this Rebirth rank to meet this enemy in runs.",
+        "Достигните этого ранга перерождения, чтобы встретить этого врага в забегах.",
+    ),
 }

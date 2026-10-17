@@ -117,6 +117,20 @@ class HudPresentationMemoryTest {
     }
 
     @Test
+    fun bossTargetTracksAHeraldOverElitesAndUnderTheArchitect() {
+        val boss = BossTarget()
+        val elite = enemy(7, EnemyType.ELITE, 0.5f)
+        val herald = enemy(8, EnemyType.HERALD, 0.75f)
+        val architect = enemy(9, EnemyType.ARCHITECT, 0.25f)
+        val drifter = enemy(6, EnemyType.DRIFTER, 1f)
+        val tracked = boss.select(base.with("enemies" to listOf(drifter, elite, herald).toImmutableList()))
+        assertEquals(8, tracked.id)
+        assertEquals(EnemyType.HERALD, tracked.type)
+        assertEquals(0.75f, tracked.integrity, 0.0001f)
+        assertEquals(9, boss.select(base.with("enemies" to listOf(herald, architect, elite).toImmutableList())).id)
+    }
+
+    @Test
     fun bossTargetCarriesTheTrackedBossesAffinity() {
         val boss = BossTarget()
         val shifting = bossAffinity(EnemyType.ARCHITECT)

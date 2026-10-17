@@ -66,7 +66,7 @@ class CodexComposeTest {
                     onRoot().captureToImage()
                 }
                 drawCurrentGrid()
-                for ((category, prefix) in listOf("item", "weapon", "relic", "shape").withIndex()) {
+                for ((category, prefix) in listOf("item", "weapon", "relic", "shape", "enemy").withIndex()) {
                     onNodeWithTag("codex-category-$category").performClick()
                     drawCurrentGrid()
                     assertTrue(onAllNodes(hasTestTagPrefix("codex-slot-$prefix/")).fetchSemanticsNodes().isNotEmpty())
@@ -348,7 +348,7 @@ class CodexComposeTest {
                     val range = row.config.getOrNull(SemanticsProperties.HorizontalScrollAxisRange)
                     assertTrue(range == null || range.maxValue() == 0f, "${row.config[SemanticsProperties.TestTag]} scrolls at rest at $where")
                 }
-                ((0..4).map { "codex-tab-$it" } + (0..3).map { "codex-category-$it" } + listOf("codex-filter-0", "codex-filter-2") +
+                ((0..4).map { "codex-tab-$it" } + (0..4).map { "codex-category-$it" } + listOf("codex-filter-0", "codex-filter-2") +
                     (0..2).map { "codex-sort-$it" })
                     .forEach { tag ->
                         val bounds = onNodeWithTag(tag).getUnclippedBoundsInRoot()
@@ -386,10 +386,10 @@ class CodexComposeTest {
             "the overflowing row must scroll"
         }
         assertTrue(range.maxValue() > 0f && range.value() == 0f)
-        assertTrue(onNodeWithTag("codex-category-3").getUnclippedBoundsInRoot().right > box.right, "the last tab starts beyond the edge")
-        onNodeWithTag("codex-category-3").performScrollTo().performClick()
-        onNodeWithTag("codex-category-3").assertIsSelected()
-        val shown = onNodeWithTag("codex-category-3").getUnclippedBoundsInRoot()
+        assertTrue(onNodeWithTag("codex-category-4").getUnclippedBoundsInRoot().right > box.right, "the last tab starts beyond the edge")
+        onNodeWithTag("codex-category-4").performScrollTo().performClick()
+        onNodeWithTag("codex-category-4").assertIsSelected()
+        val shown = onNodeWithTag("codex-category-4").getUnclippedBoundsInRoot()
         assertTrue(shown.left >= box.left - 0.5.dp && shown.right <= box.right + 0.5.dp, "scrolling brings the last tab in: $shown in $box")
     }
 

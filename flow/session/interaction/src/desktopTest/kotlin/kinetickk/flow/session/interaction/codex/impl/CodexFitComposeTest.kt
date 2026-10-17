@@ -31,6 +31,7 @@ import kinetickk.ball.gameplay.api.*
 import kinetickk.flow.session.interaction.codex.api.CodexRenderModel
 import kinetickk.flow.session.interaction.codex.api.CodexRunStacks
 import kinetickk.flow.session.interaction.localization.SessionText
+import kinetickk.flow.session.interaction.localization.CodexText
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.immutableSetOf
 import kinetickk.foundation.collections.toImmutableList
@@ -136,10 +137,11 @@ class CodexFitComposeTest {
         }
         waitForIdle()
         // The widest counts the collection can show.
-        val counts = listOf("400/400", "12/12", "40/40", "6/6")
+        val counts = listOf("400/400", "12/12", "40/40", "6/6", "24/24")
         measurers.forEach { (key, measurer) ->
             val (language, scale) = key
-            val titles = listOf(SessionText.ITEMS_TITLE, SessionText.WEAPONS_TITLE, SessionText.RELICS_TITLE, SessionText.FORMS_TITLE).map { language.text(it) }
+            val titles = listOf(SessionText.ITEMS_TITLE, SessionText.WEAPONS_TITLE, SessionText.RELICS_TITLE, SessionText.FORMS_TITLE)
+                .map { language.text(it) } + language.text(CodexText.ENEMIES_TITLE)
             // The nav is min(250 dp, 22 % of the width) on wide screens (900 dp and up).
             for (row in listOf(250f, 198f)) {
                 val size = codexNavTitleSize(measurer, titles, counts, row, 1f)
@@ -153,8 +155,9 @@ class CodexFitComposeTest {
         }
         // The case of the finding: the Russian Items title did not fit a 250 dp row at 175 %.
         val russian = measurers.getValue(AppLanguage.Russian to 1.75f)
-        val titles = listOf(SessionText.ITEMS_TITLE, SessionText.WEAPONS_TITLE, SessionText.RELICS_TITLE, SessionText.FORMS_TITLE).map { AppLanguage.Russian.text(it) }
-        assertTrue(codexNavTitleSize(russian, titles, listOf("216/400", "7/12", "23/40", "5/6"), 250f, 1f) < 24f)
+        val titles = listOf(SessionText.ITEMS_TITLE, SessionText.WEAPONS_TITLE, SessionText.RELICS_TITLE, SessionText.FORMS_TITLE)
+            .map { AppLanguage.Russian.text(it) } + AppLanguage.Russian.text(CodexText.ENEMIES_TITLE)
+        assertTrue(codexNavTitleSize(russian, titles, listOf("216/400", "7/12", "23/40", "5/6", "16/19"), 250f, 1f) < 24f)
     }
 
     @Test fun collectionNavFitsA1440x810WindowAtEveryTextSizeAndScrollsWithACueWhenShorter() {

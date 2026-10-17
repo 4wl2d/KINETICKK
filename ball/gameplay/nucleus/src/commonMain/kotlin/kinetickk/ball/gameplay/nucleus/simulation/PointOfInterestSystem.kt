@@ -149,11 +149,12 @@ internal fun MutableGameState.recordPointDefenderKilled(enemy: Enemy) {
 private fun MutableGameState.fireOrbitVolley(point: PointOfInterestState) {
     val dx = cos(point.volleyAngle)
     val dy = sin(point.volleyAngle)
+    val damage = hostileDamage(null, 12f)
     repeat(3) { lane ->
         val lateral = (lane - 1) * 60f
         addProjectile(Projectile(point.x - dx * 320f - dy * lateral,
             point.y - dy * 320f + dx * lateral, dx * 460f, dy * 460f,
-            radius = 7f, life = 1.5f, hostile = true, damage = 12f))
+            radius = 7f, life = 1.5f, hostile = true, damage = damage))
     }
 }
 

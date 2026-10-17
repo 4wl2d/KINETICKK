@@ -24,39 +24,27 @@ internal fun MutableGameState.onEnemyKilled(enemy: Enemy) {
     val victory = enemy.type == EnemyType.ARCHITECT && phase == GamePhase.RUNNING
     if (victory) phase = GamePhase.VICTORY
     recordPointDefenderKilled(enemy)
-    if (enemy.type == EnemyType.ELITE) pendingEliteKills++
+    // The Herald pays out like an Elite: a Key, a Relic and an Elite kill.
+    val eliteReward = enemy.isElite || enemy.isMiniBoss
+    if (eliteReward) pendingEliteKills++
     enemy.dead = true
     kills++
     combo++
     bestCombo = maxOf(bestCombo, combo)
-    if (enemy.type == EnemyType.ELITE) eliteKills++
+    if (eliteReward) eliteKills++
     comboTime = effectiveComboWindow()
     onBuildKill(enemy)
-    val baseMatter = when (enemy.type) {
-        EnemyType.ELITE -> 4f
-        EnemyType.ARCHITECT -> 30f
-        else -> 1f
-    }
+    val profile = enemy.type.profile
     val comboMultiplier = 1f + min(combo, 50) * 0.01f + velocityTier * 0.15f
-    grantMatter(baseMatter * comboMultiplier * content.tempo.matterRewardMultiplier)
-    val dataCount = when (enemy.type) {
-        EnemyType.DRIFTER -> 1
-        EnemyType.SHOOTER -> 2
-        EnemyType.CHARGER -> 3
-        EnemyType.INTERCEPTOR -> 3
-        EnemyType.WEAVER -> 3
-        EnemyType.WARDEN -> 5
-        EnemyType.SPLITTER -> 4
-        EnemyType.ELITE -> 8
-        EnemyType.ARCHITECT -> 20
-    }
+    grantMatter(profile.matterReward * comboMultiplier * content.tempo.matterRewardMultiplier)
+    val dataCount = profile.dataDrops
     gainOverdrive(dataCount * 1.8f)
     repeat(dataCount) {
         val angle = gameplayRandom.nextFloat() * TAU
         val pickupSpeed = 28f + gameplayRandom.nextFloat() * 70f
         addPickup(Pickup(PickupType.DATA, enemy.x, enemy.y, cos(angle) * pickupSpeed, sin(angle) * pickupSpeed))
     }
-    if (enemy.type == EnemyType.ELITE) {
+    if (eliteReward) {
         addPickup(Pickup(PickupType.KEY, enemy.x, enemy.y))
         addPickup(Pickup(PickupType.RELIC, enemy.x + 15f, enemy.y - 8f))
     }
@@ -68,11 +56,11 @@ internal fun MutableGameState.onEnemyKilled(enemy: Enemy) {
     shockwave(
         enemy.x,
         enemy.y,
-        if (enemy.type == EnemyType.ARCHITECT) 0.8f else 0.3f,
+        if (enemy.type == EnemyType.ARCHITECT || enemy.isMiniBoss) 0.8f else 0.3f,
         enemy.radius * if (enemy.type == EnemyType.ARCHITECT) 4.5f else 2.7f,
-        if (enemy.type == EnemyType.ELITE) 3 else 1,
+        if (eliteReward) 3 else 1,
     )
-    burst(enemy.x, enemy.y, if (enemy.type == EnemyType.ARCHITECT) 60 else 12, if (enemy.type == EnemyType.ELITE) 3 else 1)
+    burst(enemy.x, enemy.y, if (enemy.type == EnemyType.ARCHITECT) 60 else if (enemy.isMiniBoss) 40 else 12, if (eliteReward) 3 else 1)
     emitSound(GameplayAudioCue.ENEMY_DESTROYED)
     if (victory) {
         message = "ARCHITECT DISMANTLED"

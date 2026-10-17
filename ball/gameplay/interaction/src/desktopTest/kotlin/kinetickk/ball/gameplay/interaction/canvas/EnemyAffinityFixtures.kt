@@ -27,13 +27,22 @@ internal fun runAffinity(
         EnemyType.WEAVER -> StatusElement.CRYO
         EnemyType.WARDEN -> StatusElement.GRAVITIC
         EnemyType.SPLITTER -> StatusElement.ENTROPY
-        EnemyType.ELITE -> eliteAspect
+        EnemyType.ELITE, EnemyType.HERALD -> eliteAspect
         EnemyType.ARCHITECT -> architectAspect
+        EnemyType.SWARMLING, EnemyType.PHANTOM, EnemyType.REFLECTOR -> null
+        EnemyType.BOMBER -> StatusElement.THERMAL
+        EnemyType.LANCER -> StatusElement.ION
+        EnemyType.SNIPER -> StatusElement.CRYO
+        EnemyType.AEGIS, EnemyType.BROODMOTHER -> StatusElement.GRAVITIC
+        EnemyType.MINELAYER -> StatusElement.ENTROPY
     }
-    val armored = type in setOf(EnemyType.CHARGER, EnemyType.WARDEN, EnemyType.SPLITTER, EnemyType.ELITE, EnemyType.ARCHITECT)
+    val armored = type in setOf(
+        EnemyType.CHARGER, EnemyType.WARDEN, EnemyType.SPLITTER, EnemyType.ELITE, EnemyType.ARCHITECT,
+        EnemyType.LANCER, EnemyType.AEGIS, EnemyType.BROODMOTHER, EnemyType.HERALD,
+    )
     return EnemyAffinity.encode(
         aspect = aspect?.ordinal ?: EnemyAffinity.NONE,
-        immune = type == EnemyType.WARDEN || type == EnemyType.ELITE,
+        immune = type == EnemyType.WARDEN || type == EnemyType.ELITE || type == EnemyType.HERALD,
         weakness = aspect?.let(::counterOf)?.ordinal ?: EnemyAffinity.NONE,
         armored = armored,
         fragile = type == EnemyType.INTERCEPTOR,

@@ -137,10 +137,19 @@ internal class BossTarget {
         statusBits = 0
         affinityBits = 0
         val enemies = engine.enemies
+        // The Architect outranks a Herald, a Herald outranks Elites; the first of a rank stays tracked.
+        var rank = 0
         for (index in enemies.indices) {
             val enemy = enemies[index]
             if (enemy.dead || enemy.hp <= 0f) continue
-            if (enemy.type == EnemyType.ARCHITECT || (enemy.type == EnemyType.ELITE && id < 0)) {
+            val candidate = when (enemy.type) {
+                EnemyType.ARCHITECT -> 3
+                EnemyType.HERALD -> 2
+                EnemyType.ELITE -> 1
+                else -> 0
+            }
+            if (candidate > rank) {
+                rank = candidate
                 id = enemy.id
                 type = enemy.type
                 integrity = (enemy.hp / enemy.maxHp.coerceAtLeast(1f)).coerceIn(0f, 1f)

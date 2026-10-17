@@ -100,6 +100,7 @@ remain independently enforced.
 | Gameplay sound cues / weapon nodes / orbitals / choices | 32 / 8 / 8 / 4 | Gameplay-owned bounded insertion or atomic validation |
 | Arc Coil targets / generated item, weapon, or Relic reward choices | 6 / 4 | deployed weapon; item offers 3 (4 with an offer-card rule), Relic offers 3 plus Meld or Decline |
 | POI offered / active / defenders | 2 / 1 / 3 inside the existing enemy cap | closed two-point construction, activation replaces the offer pair, defender pre-reservation |
+| enemy roster / spawn budget / event members / live mines / Aegis links / Heralds per run | 19 (Content bound 24) / 14 / 10 / 10 / 3 per Aegis / 2 | bootstrap requires the exact EnemyType order; the director clamps its bank, plans sizes up to 10 (a pack 6 plus the Pack Hunters bonus) and never exceeds the hard enemy cap; Minelayers stop at ten live mines; an Aegis renews its three nearest allies; Heralds are scheduled at 360 s and 540 s |
 | POI directed rewards | 6 per run | six Content schedule windows and checked queue growth before candidate publication |
 | Character lattice | 4 collapse vertices / at most 3 retained | fourth distinct Dash position collapses the lattice; nearby positions add nothing |
 | combat fields / active buffs / severed Relics | 12 (Content bound 16) / 16 / 4 | `addField` and buff insertion reject at capacity; severance keeps the newest four |
@@ -167,8 +168,8 @@ copying modes or source-body expectations is a policy requirement.
 | `gameplay.stable-compaction` | retained cardinality <= bounded source; stable survivor order | forward survivor compaction/reverse-tail deletion or index-stable removal |
 | `profile.codec-temporary-collections` | unlocked <=12; ranks =8; discoveries <=400 legacy / <=96 current | materialized after schema validation |
 | `session.shell-entries` | 1..2 | one base plus one nullable overlay |
-| `content.closed-ui-catalogs` | CoreShape 6 / WeaponMastery 4 | bootstrap requires exact stable order |
-| `ui.catalog-backed-sources` | Codex items <=96; Armory weapons <=12; Lab upgrades <=8; mastery closed | validated immutable Content plus bounded Profile state |
+| `content.closed-ui-catalogs` | CoreShape 6 / WeaponMastery 4 / EnemyType 19 | bootstrap requires exact stable order |
+| `ui.catalog-backed-sources` | Codex items <=96; Codex enemies <=24; Armory weapons <=12; Lab upgrades <=8; mastery closed | validated immutable Content plus bounded Profile state |
 | `audio.music-notes` | 8 | fixed literal array with modulo-only indexing |
 | `foundation.immutable-set-copy` | list = input cardinality; set <= input cardinality | safe immutable reuse or owned copy; stable first-occurrence set semantics |
 

@@ -219,19 +219,32 @@ class ArchitectEncounterTest {
     fun ordinaryAddsArriveThinnerAndOnlyWhileALiveArchitectExists() {
         val state = buildTestState().apply {
             bossSpawned = true
-            spawnClock = 0f
             nextEliteAt = 0f
         }
+        state.primeDirector()
         state.spawnWave(MutableGameState.FIXED_STEP)
         assertTrue(state.enemies.isEmpty(), "No adds without a live Architect")
 
         val boss = state.architect()
         state.damageEnemy(boss, 1f)
+        state.primeDirector()
         state.spawnWave(MutableGameState.FIXED_STEP)
-        assertEquals(2, state.enemies.size)
+        assertTrue(state.enemies.size > 1, "An engaged fight calls adds")
         assertTrue(state.enemies.none { it.isElite }, "No Elites during the fight")
-        val interval = state.rebirthProfile.spawnInterval(state.content.tempo.spawnIntervalSeconds(state.elapsed))
-        assertEquals(1.4f * interval, state.spawnClock, 0.0001f)
+
+        // Adds accrue budget at 1 / 1.4 of the ordinary rate.
+        fun accrued(fight: Boolean): Float {
+            val probe = buildTestState().apply { elapsed = state.elapsed }
+            if (fight) {
+                probe.bossSpawned = true
+                probe.damageEnemy(probe.architect(), 1f)
+            }
+            probe.spawnBudget = 0f
+            probe.spawnClock = Float.MAX_VALUE
+            probe.spawnWave(0.5f)
+            return probe.spawnBudget
+        }
+        assertEquals(accrued(fight = false) / ARCHITECT_ADD_INTERVAL_SCALE, accrued(fight = true), 1e-4f)
 
         val ordinaryCap = min(
             state.content.rebirth.maxActiveEnemies,
@@ -239,14 +252,18 @@ class ArchitectEncounterTest {
         )
         val fightCap = (ordinaryCap * ARCHITECT_ADD_CAP_SHARE).toInt()
         assertTrue(fightCap in 2 until ordinaryCap)
-        while (state.enemies.size < fightCap) state.dummy(x = 400f * state.enemies.size)
-        state.spawnClock = 0f
-        state.spawnWave(MutableGameState.FIXED_STEP)
-        assertEquals(fightCap, state.enemies.size, "The fight keeps a smaller cap")
+        state.enemies.retainAll { it === boss }
+        // The Architect sits outside the ordinary cap.
+        while (state.enemies.size < fightCap + 1) state.dummy(x = 400f * state.enemies.size)
+        repeat(20) {
+            state.primeDirector()
+            state.spawnWave(MutableGameState.FIXED_STEP)
+        }
+        assertEquals(fightCap + 1, state.enemies.size, "The fight keeps a smaller cap and never overflows it")
 
         boss.hp = 0f
         state.enemies.retainAll { it === boss }
-        state.spawnClock = 0f
+        state.primeDirector()
         state.spawnWave(MutableGameState.FIXED_STEP)
         assertEquals(listOf(boss), state.enemies, "A fallen Architect ends the adds")
     }
@@ -257,16 +274,16 @@ class ArchitectEncounterTest {
         val boss = state.architect()
         fun adds(): Int {
             state.enemies.retainAll { it === boss }
-            state.spawnClock = 0f
+            state.primeDirector()
             state.spawnWave(MutableGameState.FIXED_STEP)
             return state.enemies.size - 1
         }
         assertEquals(0, adds(), "An Architect nobody has hit calls no adds")
 
         state.damageEnemy(boss, 10f)
-        assertEquals(1, adds())
+        assertTrue(adds() > 0)
         state.elapsed += ARCHITECT_ADD_ENGAGEMENT_SECONDS - 0.1f
-        assertEquals(1, adds(), "The fight stays engaged inside the window")
+        assertTrue(adds() > 0, "The fight stays engaged inside the window")
 
         // A stalled fight: a minute without a hit calls nothing, however long the spawn clock runs.
         state.elapsed += 0.2f
@@ -280,9 +297,16 @@ class ArchitectEncounterTest {
 
         // A shift takes no damage but keeps the adds coming.
         boss.shiftUntil = state.elapsed + 1f
-        assertEquals(1, adds())
+        assertTrue(adds() > 0)
         state.elapsed = boss.shiftUntil
         assertEquals(0, adds())
+    }
+
+    /** A full budget, no planned event and a check due now. */
+    private fun MutableGameState.primeDirector() {
+        spawnBudget = MAX_SPAWN_BUDGET
+        pendingEventKind = -1
+        spawnClock = 0f
     }
 
     @Test

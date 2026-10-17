@@ -64,7 +64,7 @@ internal fun MutableGameState.enemySpeedScale(enemy: Enemy): Float {
     val chill = stacks(enemy, StatusElement.CRYO)
     if (chill > 0) {
         val slow = min(0.63f, chill * content.build.element(StatusElement.CRYO).perStack * build.potency(StatusElement.CRYO))
-        scale *= 1f - if (enemy.isBoss) slow * 0.5f else slow
+        scale *= 1f - if (enemy.isBoss || enemy.isMiniBoss) slow * 0.5f else slow
     }
     if (stasisActive() && distanceSquared(enemy.x, enemy.y, coreX, coreY) <= square(stasisRadius())) {
         scale *= 1f - stasisSlow()
@@ -252,7 +252,8 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
                 enemy.isElite -> ELITE_FREEZE_IMMUNITY_SECONDS
                 else -> FREEZE_IMMUNITY_SECONDS
             }
-            val duration = if (enemy.isBoss) 0.5f else min(2f, power)
+            // The Herald never freezes; its Break still rearms and leaves it Brittle.
+            val duration = if (enemy.isMiniBoss) 0f else if (enemy.isBoss) 0.5f else min(2f, power)
             enemy.status[StatusCell.FROZEN_UNTIL] = elapsed + duration
             enemy.status[StatusCell.FREEZE_IMMUNE_UNTIL] = elapsed + duration + immunity
             enemy.status[StatusCell.REARM_AT + element.ordinal] = elapsed + duration + BREAK_REARM_SECONDS
@@ -325,7 +326,7 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
 
 internal fun maxHpProcCooldown(enemy: Enemy): Float = when {
     enemy.isBoss -> 4f
-    enemy.isElite -> 2f
+    enemy.isElite || enemy.isMiniBoss -> 2f
     else -> 1f
 }
 
@@ -544,7 +545,7 @@ internal fun MutableGameState.affinityBits(enemy: Enemy): Int {
         armored = impact < 1f,
         fragile = impact > 1f,
         shifting = isShifting(enemy),
-        phase = if (enemy.isBoss) enemy.phase else 0,
+        phase = if (enemy.isBoss || enemy.isMiniBoss) enemy.phase else 0,
     )
 }
 

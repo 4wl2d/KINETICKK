@@ -296,10 +296,10 @@ class RelicRulesTest {
     fun stillWatersShotsDealElementlessDamageAndApplyCryoAfterIt() {
         val state = buildTestState(RelicId.STASIS_ANCHOR, RelicId.ABSOLUTE_ZERO)
         assertTrue(state.build.pairing(RelicPairingId.STILL_WATERS))
-        // The second Elite of a run is immune to Cryo.
-        state.elitesSpawned = 1
+        // An Elite immune to Cryo.
         assertTrue(state.spawnEnemy(EnemyType.ELITE))
         val elite = state.enemies.last()
+        assignAspect(elite, StatusElement.CRYO.ordinal, immune = true)
         val drifter = state.dummy(x = elite.x + 2_000f, y = elite.y)
         fun shootAt(target: kinetickk.ball.gameplay.nucleus.model.Enemy): Float {
             state.projectiles.clear()
@@ -326,9 +326,10 @@ class RelicRulesTest {
     fun theGyreRingDealsElementlessImpactDamageAndCarriesTheDominantElementAsARider() {
         val state = buildTestState(RelicId.GYRE_ENGINE).apply { own("Igniter") }
         assertEquals(StatusElement.THERMAL, state.build.dominant)
-        // The first Elite of a run is immune to Thermal.
+        // An Elite immune to Thermal.
         assertTrue(state.spawnEnemy(EnemyType.ELITE))
         val elite = state.enemies.last().apply { x = state.coreX + 100f; y = state.coreY }
+        assignAspect(elite, StatusElement.THERMAL.ordinal, immune = true)
         val drifter = state.dummy(x = state.coreX - 100f, y = state.coreY)
         val ring = state.impactPower(state.speed) * state.relicValue(RelicId.GYRE_ENGINE, 0) / 100f
         state.relicOnTurn()

@@ -15,6 +15,7 @@ import kinetickk.foundation.design.KkIcon
 import kinetickk.foundation.design.KkRebirthTiers
 import kinetickk.foundation.design.KkRolePalette
 import kotlin.math.max
+import kotlin.math.PI
 import kotlin.math.sin
 
 /**
@@ -159,9 +160,10 @@ internal fun weaponIcon(id: WeaponId): KkIcon = when (id) {
 
 /**
  * Enemy outlines on the 24-unit icon grid (`HUD.dc.html`): the five basic shapes of the boards,
- * the elite octagon and a split diamond. The board's dart is drawn as the pentagon (SPEC hard rule 3).
+ * the elite octagon and a split diamond, then the 0.4.0 roster's outlines. The board's dart is drawn
+ * as the pentagon (SPEC hard rule 3). Public so other screens (the Codex) draw enemies the same way.
  */
-internal enum class EnemySilhouette(vararg contours: FloatArray) {
+enum class EnemySilhouette(vararg contours: FloatArray) {
     TRIANGLE(floatArrayOf(12f, 3f, 21f, 20f, 3f, 20f)),
     SQUARE(floatArrayOf(4f, 4f, 20f, 4f, 20f, 20f, 4f, 20f)),
     PENTAGON(floatArrayOf(12f, 3f, 21f, 10f, 17.5f, 21f, 6.5f, 21f, 3f, 10f)),
@@ -169,6 +171,26 @@ internal enum class EnemySilhouette(vararg contours: FloatArray) {
     HEXAGON(floatArrayOf(7f, 3f, 17f, 3f, 22f, 12f, 17f, 21f, 7f, 21f, 2f, 12f)),
     OCTAGON(floatArrayOf(7.2f, 1f, 16.8f, 1f, 23f, 7.2f, 23f, 16.8f, 16.8f, 23f, 7.2f, 23f, 1f, 16.8f, 1f, 7.2f)),
     SPLIT_DIAMOND(floatArrayOf(12f, 2f, 21.5f, 11f, 2.5f, 11f), floatArrayOf(2.5f, 13f, 21.5f, 13f, 12f, 22f)),
+    /** Swarmling: a small notched dart. */
+    DART(floatArrayOf(12f, 2f, 21f, 21f, 12f, 15.5f, 3f, 21f)),
+    /** Bomber: a four-point star. */
+    STAR(floatArrayOf(12f, 1f, 15f, 9f, 23f, 12f, 15f, 15f, 12f, 23f, 9f, 15f, 1f, 12f, 9f, 9f)),
+    /** Lancer: a long blade pointing along its lane. */
+    LANCE(floatArrayOf(12f, 1f, 16f, 13f, 12f, 23f, 8f, 13f)),
+    /** Sniper: a narrow needle pointing along its sight line. */
+    NEEDLE(floatArrayOf(12f, 1f, 17f, 22f, 12f, 19f, 7f, 22f)),
+    /** Aegis: a cross. */
+    CROSS(floatArrayOf(9f, 2f, 15f, 2f, 15f, 9f, 22f, 9f, 22f, 15f, 15f, 15f, 15f, 22f, 9f, 22f, 9f, 15f, 2f, 15f, 2f, 9f, 9f, 9f)),
+    /** Minelayer: a trapezoid. */
+    TRAPEZOID(floatArrayOf(6f, 4f, 18f, 4f, 22f, 20f, 2f, 20f)),
+    /** Phantom: an inverted triangle. */
+    WEDGE(floatArrayOf(3f, 4f, 21f, 4f, 12f, 21f)),
+    /** Broodmother: a ten-sided hull. */
+    DECAGON(floatArrayOf(12f, 1f, 18.5f, 3.1f, 22.5f, 8.6f, 22.5f, 15.4f, 18.5f, 20.9f, 12f, 23f, 5.5f, 20.9f, 1.5f, 15.4f, 1.5f, 8.6f, 5.5f, 3.1f)),
+    /** Reflector: a flat shield front with a rounded back. */
+    SHIELD(floatArrayOf(3f, 5f, 21f, 5f, 21f, 12f, 18f, 18f, 12f, 22f, 6f, 18f, 3f, 12f)),
+    /** Herald: a six-point star. */
+    HEXAGRAM(floatArrayOf(12f, 1f, 15f, 7f, 22f, 7f, 18f, 12f, 22f, 17f, 15f, 17f, 12f, 23f, 9f, 17f, 2f, 17f, 6f, 12f, 2f, 7f, 9f, 7f)),
     ;
 
     /** Closed polygons as x, y pairs on the 24 grid, centered at (12, 12). */
@@ -176,7 +198,7 @@ internal enum class EnemySilhouette(vararg contours: FloatArray) {
 }
 
 /** How each enemy type reads in the world; the Architect has its own frame (see drawEnemy). */
-internal fun enemySilhouette(type: EnemyType): EnemySilhouette = when (type) {
+fun enemySilhouette(type: EnemyType): EnemySilhouette = when (type) {
     EnemyType.DRIFTER -> EnemySilhouette.TRIANGLE
     EnemyType.SHOOTER -> EnemySilhouette.SQUARE
     EnemyType.CHARGER -> EnemySilhouette.PENTAGON
@@ -186,7 +208,27 @@ internal fun enemySilhouette(type: EnemyType): EnemySilhouette = when (type) {
     EnemyType.SPLITTER -> EnemySilhouette.SPLIT_DIAMOND
     EnemyType.ELITE -> EnemySilhouette.OCTAGON
     EnemyType.ARCHITECT -> EnemySilhouette.TRIANGLE
+    EnemyType.SWARMLING -> EnemySilhouette.DART
+    EnemyType.BOMBER -> EnemySilhouette.STAR
+    EnemyType.LANCER -> EnemySilhouette.LANCE
+    EnemyType.SNIPER -> EnemySilhouette.NEEDLE
+    EnemyType.AEGIS -> EnemySilhouette.CROSS
+    EnemyType.MINELAYER -> EnemySilhouette.TRAPEZOID
+    EnemyType.PHANTOM -> EnemySilhouette.WEDGE
+    EnemyType.BROODMOTHER -> EnemySilhouette.DECAGON
+    EnemyType.REFLECTOR -> EnemySilhouette.SHIELD
+    EnemyType.HERALD -> EnemySilhouette.HEXAGRAM
 }
+
+/**
+ * Kinds whose outline points along their aim (the Lancer's lane, the Sniper's sight line, the
+ * Reflector's shield) instead of turning on a clock.
+ */
+internal fun facesAim(type: EnemyType): Boolean =
+    type == EnemyType.LANCER || type == EnemyType.SNIPER || type == EnemyType.REFLECTOR
+
+/** Degrees that turn a grid outline (pointing up) toward [facing] radians. */
+internal fun aimDegrees(facing: Float): Float = facing * (180f / PI.toFloat()) + 90f
 
 /** Only shooters carry the threat core dot (`HUD.dc.html`: squares with a centered dot). */
 internal fun enemyHasCoreDot(type: EnemyType): Boolean = type == EnemyType.SHOOTER
@@ -227,7 +269,15 @@ internal fun enemyRotation(type: EnemyType, elapsed: Float, id: Int): Float {
         EnemyType.WARDEN -> -5f
         EnemyType.SPLITTER -> 7f
         EnemyType.ELITE -> 360f / 20f
+        EnemyType.SWARMLING -> 40f
+        EnemyType.BOMBER -> 30f
+        EnemyType.AEGIS -> -8f
+        EnemyType.MINELAYER -> 14f
+        EnemyType.PHANTOM -> 9f
+        EnemyType.BROODMOTHER -> 4f
+        EnemyType.HERALD -> 360f / 18f
         EnemyType.SHOOTER, EnemyType.INTERCEPTOR, EnemyType.ARCHITECT -> 0f // held above; the Architect turns its own frames
+        EnemyType.LANCER, EnemyType.SNIPER, EnemyType.REFLECTOR -> 0f // they point along their aim (aimDegrees)
     }
     return elapsed * degreesPerSecond + (id * 37 % 360)
 }

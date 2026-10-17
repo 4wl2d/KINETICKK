@@ -19,6 +19,7 @@ import kinetickk.ball.gameplay.nucleus.model.CombatFieldKind
 import kinetickk.ball.gameplay.nucleus.model.Enemy
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
 import kinetickk.ball.gameplay.nucleus.model.WeaponNode
+import kinetickk.ball.gameplay.nucleus.model.counterElement
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.render.EnemyAffinity
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
@@ -83,10 +84,10 @@ class EnemyAffinityTest {
     fun anImmuneAspectRefusesItsElementBeforeAnySideEffect() {
         val state = buildTestState(RelicId.FURNACE_COVENANT, RelicId.ABSOLUTE_ZERO)
         assertTrue(state.build.pairing(RelicPairingId.THERMAL_PARADOX))
-        // The second Elite of a run carries an immune Cryo aspect.
-        state.elitesSpawned = 1
+        // An Elite with an immune Cryo aspect.
         assertTrue(state.spawnEnemy(EnemyType.ELITE))
         val elite = state.enemies.last()
+        assignAspect(elite, StatusElement.CRYO.ordinal, immune = true)
         elite.status[StatusCell.STACKS + StatusElement.ION.ordinal] = 3f
         state.heat = 50f
         state.statusCuesThisStep = 0
@@ -477,38 +478,41 @@ class EnemyAffinityTest {
     }
 
     @Test
-    fun eliteAspectsRotateWithTheSpawnCountWithoutRandomDraws() {
+    fun eliteAspectsComeFromTheSpawnStreamWithoutGameplayDraws() {
         val state = buildTestState()
         assertEquals(0, state.elitesSpawned)
-        val elites = List(6) {
-            // Position only: an angle and a distance, as before aspects existed.
-            val expected = state.gameplayRandom.copy().apply { nextFloat(); nextFloat() }.snapshot()
+        val gameplayBefore = state.gameplayRandom.snapshot()
+        val elites = List(40) {
             assertTrue(state.spawnEnemy(EnemyType.ELITE))
-            assertEquals(expected, state.gameplayRandom.snapshot())
             state.enemies.last()
         }
-        val order = listOf(StatusElement.THERMAL, StatusElement.CRYO, StatusElement.ION, StatusElement.GRAVITIC,
-            StatusElement.ENTROPY, StatusElement.THERMAL)
-        assertEquals(order.map { it.ordinal }, elites.map { EnemyAffinity.aspect(state.affinityBits(it)) })
+        // Spawning never touches the crit and proc stream.
+        assertEquals(gameplayBefore, state.gameplayRandom.snapshot())
+        val aspects = elites.map { EnemyAffinity.aspect(state.affinityBits(it)) }
+        assertEquals(StatusElement.entries.map { it.ordinal }.toSet(), aspects.toSet(), "Aspects cover every element")
         assertTrue(elites.all { EnemyAffinity.immune(state.affinityBits(it)) })
-        val weaknesses = listOf(StatusElement.CRYO, StatusElement.THERMAL, StatusElement.ENTROPY, StatusElement.ION,
-            StatusElement.GRAVITIC, StatusElement.CRYO)
-        assertEquals(weaknesses.map { it.ordinal }, elites.map { EnemyAffinity.weakness(state.affinityBits(it)) })
-        assertEquals(6, state.elitesSpawned)
+        assertEquals(
+            aspects.map { counterElement(it) },
+            elites.map { EnemyAffinity.weakness(state.affinityBits(it)) },
+        )
+        assertEquals(40, state.elitesSpawned)
 
-        // A refused spawn skips no aspect.
+        // The same seed rolls the same aspects.
+        val twin = buildTestState()
+        assertEquals(aspects, List(40) { twin.spawnEnemy(EnemyType.ELITE); EnemyAffinity.aspect(twin.affinityBits(twin.enemies.last())) })
+
+        // A refused spawn draws nothing.
         val crowded = buildTestState(content = canonicalGameplayContent.copy(
             rebirth = canonicalGameplayContent.rebirth.copy(maxActiveEnemies = 3),
         ))
         repeat(3) { index -> crowded.dummy(x = 400f * (index + 1)) }
+        val spawnBefore = crowded.spawnRandom.snapshot()
         assertFalse(crowded.spawnEnemy(EnemyType.ELITE))
         assertEquals(0, crowded.elitesSpawned)
-        crowded.enemies.clear()
-        assertTrue(crowded.spawnEnemy(EnemyType.ELITE))
-        assertEquals(StatusElement.THERMAL.ordinal, EnemyAffinity.aspect(crowded.affinityBits(crowded.enemies.single())))
+        assertEquals(spawnBefore, crowded.spawnRandom.snapshot())
 
         state.startRun()
-        assertEquals(0, state.elitesSpawned, "Every run starts the rotation again")
+        assertEquals(0, state.elitesSpawned, "Every run starts the count again")
     }
 
     @Test

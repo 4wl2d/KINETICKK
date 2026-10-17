@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.nucleus.model
 
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.PickupType
+import kinetickk.ball.gameplay.nucleus.render.ProjectileKind
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
 import kinetickk.ball.content.api.WeaponId
 
@@ -46,6 +47,21 @@ internal data class Enemy private constructor(
     var disabledUntil: Float = 0f,
     /** Absolute run time until which the enemy may move but not attack; read through canAttack. */
     var silencedUntil: Float = 0f,
+    /** Type-specific behavior step (approach, telegraph, strike, recovery, phased, primed); 0 is the default. */
+    var mode: Int = 0,
+    /** Absolute run time at which the current [mode] ends. */
+    var modeUntil: Float = 0f,
+    /** Aim or shield direction in radians: the Lancer's lane, the Sniper's sight line, the Reflector's shield. */
+    var facing: Float = 0f,
+    /** True while the Reflector's shield faces the Core; front hits meet its reduced frame. */
+    var guarded: Boolean = false,
+    /** Id of the Aegis tethering this enemy, or -1; the link holds while [linkedUntil] is ahead. */
+    var linkedBy: Int = -1,
+    var linkedUntil: Float = 0f,
+    /** Absolute run time until which the Herald's shield holds; only impacts reach it meanwhile. */
+    var shieldUntil: Float = 0f,
+    /** Absolute run time at which the type's next ability (lance, shot, phase, brood, shield, reflection) is ready. */
+    var abilityAt: Float = 0f,
     /** Elemental status cells; see [StatusCell]. Copy-on-write so reduction siblings stay isolated. */
     val status: CopyOnWriteFloatArray,
 ) {
@@ -103,8 +119,11 @@ internal data class Enemy private constructor(
         status = CopyOnWriteFloatArray(status),
     )
 
+    /** The run's final boss only: hit cap, encounter lookup and victory. */
     val isBoss: Boolean get() = type == EnemyType.ARCHITECT
     val isElite: Boolean get() = type == EnemyType.ELITE
+    /** The scheduled Herald: Elite victim factor, freeze and stop immunity, leash exemption, outside the ordinary cap. */
+    val isMiniBoss: Boolean get() = type == EnemyType.HERALD
     val alive: Boolean get() = !dead && hp > 0f
 
     /** Copies mutable scalar state while sharing the status cells until their first changed write. */
@@ -165,6 +184,8 @@ internal class Projectile(
     private var recordedHitEnemyCount: Int = 0,
     /** Status element ordinal applied by a relic or item projectile on hit, or -1. */
     val statusElement: Int = -1,
+    /** Hostile shots are bolts; a Minelayer's mine sits still, arms and detonates near the Core. */
+    val kind: ProjectileKind = ProjectileKind.BOLT,
 ) {
     init {
         require((recordedHitEnemyIds?.size ?: 0) <= MAX_HIT_ENEMY_IDS) {
@@ -250,6 +271,7 @@ internal class Projectile(
         recordedHitEnemyIds = recordedHitEnemyIds?.copyOf(recordedHitEnemyCount),
         recordedHitEnemyCount = recordedHitEnemyCount,
         statusElement = statusElement,
+        kind = kind,
     )
 
     private fun findRecordedEnemyHit(enemyId: Int): Int {

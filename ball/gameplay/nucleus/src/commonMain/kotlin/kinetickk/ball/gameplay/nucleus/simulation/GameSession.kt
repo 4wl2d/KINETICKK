@@ -89,6 +89,7 @@ internal fun MutableGameState.startRun() {
     spawnClock = 0.2f
     nextEliteAt = rebirthProfile.eliteInterval(content.tempo.firstEliteAtSeconds)
     elitesSpawned = 0
+    resetSpawnDirector()
     bossSpawned = false
     accumulator = 0f
     coreX = 0f
@@ -164,14 +165,7 @@ internal fun MutableGameState.startRun() {
     resetWeaponRuntime()
     resetPointsOfInterest()
     emitSound(GameplayAudioCue.UI_CLICK)
-    repeat(rebirthProfile.openingEnemyCount) {
-        val openingType = if (rebirthLevel == 0) {
-            EnemyType.DRIFTER
-        } else {
-            enemyTypeForElapsed(threatElapsed, gameplayRandom.nextFloat(), content.tempo)
-        }
-        spawnEnemy(openingType)
-    }
+    spawnOpeningPacks()
 }
 
 internal fun MutableGameState.resetRunStats() {

@@ -18,19 +18,12 @@ import kotlin.math.sqrt
 
 enum class GamePhase { RUNNING, PAUSED, CHOICE, GAME_OVER, VICTORY }
 
-enum class EnemyType {
-    DRIFTER,
-    SHOOTER,
-    CHARGER,
-    INTERCEPTOR,
-    WEAVER,
-    WARDEN,
-    SPLITTER,
-    ELITE,
-    ARCHITECT,
-}
+/** Content owns the roster; gameplay keeps this name so render and simulation code read unchanged. */
+typealias EnemyType = kinetickk.ball.content.api.EnemyType
 
 enum class PickupType { DATA, KEY, REPAIR, RELIC }
+/** A hostile [BOLT] flies; a [MINE] stays put, arms and detonates when the Core comes close. */
+enum class ProjectileKind { BOLT, MINE }
 enum class ChoiceType { ITEM, TOTEM, WEAPON, RELIC, RELIC_BIND }
 enum class TotemAction { AMPLIFY_CURRENT, CHANGE_WEAPON }
 enum class RelicChoiceAction { ACQUIRE, MELD, REPLACE, MELD_TARGET, DECLINE }
@@ -98,7 +91,32 @@ data class EnemyProjection(
     val statusBits: Int = 0,
     /** Aspect, weakness, frame and Architect shift state; decode with [EnemyAffinity]. */
     val affinityBits: Int = 0,
+    /** Type-specific behavior step; see [EnemyBehavior]. */
+    val behavior: Int = 0,
+    /** Seconds left in [behavior] (telegraphs fill as it runs out). */
+    val behaviorRemaining: Float = 0f,
+    /** Aim or shield direction in radians. */
+    val facing: Float = 0f,
+    /** Id of the Aegis tethering this enemy, or -1. */
+    val linkedTo: Int = -1,
+    /** True while a Herald's shield holds. */
+    val shielded: Boolean = false,
 )
+
+/** Behavior steps published in [EnemyProjection.behavior]; meaning depends on the enemy type. */
+object EnemyBehavior {
+    const val IDLE: Int = 0
+    /** Charger and Phantom strike, Lancer lance. */
+    const val STRIKE: Int = 1
+    /** Lancer line and Sniper sight line before the attack; Phantom wind-up after it reappears. */
+    const val TELEGRAPH: Int = 2
+    /** Lancer recovery after a lance. */
+    const val RECOVERY: Int = 3
+    /** Phantom out of phase: untargetable. */
+    const val PHASED: Int = 4
+    /** Bomber about to explode. */
+    const val PRIMED: Int = 5
+}
 
 data class ProjectileProjection(
     val x: Float,
@@ -114,6 +132,7 @@ data class ProjectileProjection(
     val sourceWeapon: WeaponId?,
     val previousX: Float,
     val previousY: Float,
+    val kind: ProjectileKind = ProjectileKind.BOLT,
 )
 
 data class PickupProjection(

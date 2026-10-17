@@ -588,6 +588,11 @@ private fun appendRenderCollections(initial: Long, render: GameplayRenderModel):
         signature = mix(signature, enemy.previousX.toRawBits())
         signature = mix(signature, enemy.previousY.toRawBits())
         signature = mix(signature, enemy.dead.asInt())
+        signature = mix(signature, enemy.behavior)
+        signature = mix(signature, enemy.behaviorRemaining.toRawBits())
+        signature = mix(signature, enemy.facing.toRawBits())
+        signature = mix(signature, enemy.linkedTo)
+        signature = mix(signature, enemy.shielded.asInt())
     }
     signature = mix(signature, render.projectiles.size)
     render.projectiles.forEach { projectile ->
@@ -604,6 +609,7 @@ private fun appendRenderCollections(initial: Long, render: GameplayRenderModel):
         signature = mix(signature, projectile.sourceWeapon?.ordinal ?: -1)
         signature = mix(signature, projectile.previousX.toRawBits())
         signature = mix(signature, projectile.previousY.toRawBits())
+        signature = mix(signature, projectile.kind.ordinal)
     }
     signature = mix(signature, render.pickups.size)
     render.pickups.forEach { pickup ->

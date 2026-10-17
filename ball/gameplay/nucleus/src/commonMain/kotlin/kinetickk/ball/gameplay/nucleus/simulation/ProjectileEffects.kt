@@ -54,12 +54,21 @@ internal fun MutableGameState.firePlayerProjectile(
     ))
 }
 
-internal fun MutableGameState.fireSpread(x: Float, y: Float, angle: Float, count: Int, spacing: Float, projectileSpeed: Float) {
+/** Aimed hostile fan; [damage] comes from [hostileDamage] when the volley is fired. */
+internal fun MutableGameState.fireSpread(
+    x: Float,
+    y: Float,
+    angle: Float,
+    count: Int,
+    spacing: Float,
+    projectileSpeed: Float,
+    damage: Float,
+) {
     val scaledSpeed = projectileSpeed * rebirthProfile.enemySpeedMultiplier
     val offset = (count - 1) * spacing * 0.5f
     repeat(count) { index ->
         val shotAngle = angle - offset + index * spacing
-        addProjectile(Projectile(x, y, cos(shotAngle) * scaledSpeed, sin(shotAngle) * scaledSpeed, 5f, 6f))
+        addProjectile(Projectile(x, y, cos(shotAngle) * scaledSpeed, sin(shotAngle) * scaledSpeed, 5f, 6f, damage = damage))
     }
 }
 
@@ -70,6 +79,7 @@ internal fun MutableGameState.fireProjectileWall(
     count: Int,
     spacing: Float,
     projectileSpeed: Float,
+    damage: Float,
 ) {
     val scaledSpeed = projectileSpeed * rebirthProfile.enemySpeedMultiplier
     val directionX = cos(angle)
@@ -86,6 +96,7 @@ internal fun MutableGameState.fireProjectileWall(
             vy = directionY * scaledSpeed,
             radius = 5f,
             life = 6f,
+            damage = damage,
         ))
     }
 }
@@ -96,12 +107,13 @@ internal fun MutableGameState.fireRadial(
     count: Int,
     projectileSpeed: Float,
     rotation: Float,
+    damage: Float,
     life: Float = 8f,
 ) {
     val scaledSpeed = projectileSpeed * rebirthProfile.enemySpeedMultiplier
     repeat(count) { index ->
         val angle = rotation + index * TAU / count
-        addProjectile(Projectile(x, y, cos(angle) * scaledSpeed, sin(angle) * scaledSpeed, 5f, life))
+        addProjectile(Projectile(x, y, cos(angle) * scaledSpeed, sin(angle) * scaledSpeed, 5f, life, damage = damage))
     }
 }
 

@@ -157,7 +157,12 @@ internal fun MutableGameState.toRenderModel(
                     value.previousY.sameBitsAs(previous.previousY) &&
                     value.dead == previous.dead &&
                     statusBits(value) == previous.statusBits &&
-                    affinityBits(value) == previous.affinityBits
+                    affinityBits(value) == previous.affinityBits &&
+                    value.mode == previous.behavior &&
+                    behaviorRemaining(value).sameBitsAs(previous.behaviorRemaining) &&
+                    value.facing.sameBitsAs(previous.facing) &&
+                    linkedTo(value) == previous.linkedTo &&
+                    shielded(value) == previous.shielded
             }
             ?: enemies.mapToImmutableList { value ->
                 EnemyProjection(
@@ -179,6 +184,11 @@ internal fun MutableGameState.toRenderModel(
                     dead = value.dead,
                     statusBits = statusBits(value),
                     affinityBits = affinityBits(value),
+                    behavior = value.mode,
+                    behaviorRemaining = behaviorRemaining(value),
+                    facing = value.facing,
+                    linkedTo = linkedTo(value),
+                    shielded = shielded(value),
                 )
             },
         projectiles = projectiles.reuseEmptyProjection(reusableCollections?.projectiles)
@@ -201,7 +211,8 @@ internal fun MutableGameState.toRenderModel(
                     value.colorIndex == previous.colorIndex &&
                     value.sourceWeapon == previous.sourceWeapon &&
                     value.previousX.sameBitsAs(previous.previousX) &&
-                    value.previousY.sameBitsAs(previous.previousY)
+                    value.previousY.sameBitsAs(previous.previousY) &&
+                    value.kind == previous.kind
             }
             ?: projectiles.mapToImmutableList { value ->
                 ProjectileProjection(
@@ -218,6 +229,7 @@ internal fun MutableGameState.toRenderModel(
                     sourceWeapon = value.sourceWeapon,
                     previousX = value.previousX,
                     previousY = value.previousY,
+                    kind = value.kind,
                 )
             },
         pickups = pickups.reuseEmptyProjection(reusableCollections?.pickups)
