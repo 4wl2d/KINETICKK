@@ -125,8 +125,9 @@ enemy's damage output falls and it remembers a share of damage taken; Unmake:
 the remembered damage strikes again ×1.6 after `0.35s`, capped at 40 % of
 maximum integrity, a weighted share for bosses). Eleven reactions cover the new
 pairs, so every one of the 21 element pairs reacts; Seismic and Stasis stun or
-stop ordinary enemies, Silence stops attacks, Oblivion executes weakened
-non-boss enemies. Thunder Choir (Sonic) and Null Covenant (Void) join the
+stop ordinary enemies, Silence stops attacks (`2s`, `0.75s` on bosses so
+chained Silences cannot keep the Architect from attacking), Oblivion executes
+weakened non-boss enemies, and Hollow never cuts an enemy's damage below half. Thunder Choir (Sonic) and Null Covenant (Void) join the
 Relics, items `80..89` are appended, Elites rotate through seven aspects and
 the enemy status layout grows to 71 cells. Seeded runs therefore differ; the
 no-POI probe counts only victories that skip every POI (eight of ten seeds win,
