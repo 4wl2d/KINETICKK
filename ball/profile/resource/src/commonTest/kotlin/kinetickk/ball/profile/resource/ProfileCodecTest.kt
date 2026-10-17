@@ -582,6 +582,35 @@ class ProfileCodecTest {
     }
 
     @Test
+    fun ascendantCharactersAreWrittenOnlyOnceOneClearsTheFinalTier() {
+        val representative = "\"rebirthProgress\":{\"level\":4,\"highestCleared\":3}"
+        fun with(progress: String) = REPRESENTATIVE_GOLDEN.replace(representative, "\"rebirthProgress\":$progress")
+        // Older saves (no field) keep their exact bytes and have no Ascendant character.
+        val plain = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(REPRESENTATIVE_GOLDEN)).snapshot
+        assertTrue(plain.profile.rebirthProgress.ascendedCharacters.isEmpty())
+        assertEquals(REPRESENTATIVE_GOLDEN, requireEncoded(plain))
+
+        val ascendant = with("{\"level\":4,\"highestCleared\":10,\"ascendedCharacterIds\":[\"ORB\",\"RING\"]}")
+        val decoded = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(ascendant)).snapshot
+        assertEquals(setOf(CoreShape.ORB, CoreShape.RING), decoded.profile.rebirthProgress.ascendedCharacters)
+        assertEquals(ascendant, requireEncoded(decoded))
+        // Cleared tier 10 without an Ascendant character recorded (a pre-0.4 clear) is still canonical.
+        val cleared = with("{\"level\":10,\"highestCleared\":10}")
+        assertEquals(cleared, requireEncoded(assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(cleared)).snapshot))
+
+        assertEquals(ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
+            decodeRejection(with("{\"level\":4,\"highestCleared\":10,\"ascendedCharacterIds\":[\"RING\",\"ORB\"]}")))
+        assertEquals(ProfileSnapshotRejection.INCONSISTENT_PROFILE,
+            decodeRejection(with("{\"level\":4,\"highestCleared\":10,\"ascendedCharacterIds\":[\"DIAMOND\"]}")))
+        assertEquals(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+            decodeRejection(with("{\"level\":4,\"highestCleared\":9,\"ascendedCharacterIds\":[\"ORB\"]}")))
+        assertEquals(ProfileSnapshotRejection.INVALID_STABLE_ID,
+            decodeRejection(with("{\"level\":4,\"highestCleared\":10,\"ascendedCharacterIds\":[\"NONAGON\"]}")))
+        assertEquals(ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD,
+            decodeRejection(with("{\"level\":4,\"highestCleared\":10,\"ascendedCharacterIds\":[]}")))
+    }
+
+    @Test
     fun byteLimitAndUtf8AreCheckedBeforeJsonDecode() {
         assertEquals(
             ProfileSnapshotRejection.MALFORMED_JSON,

@@ -164,6 +164,8 @@ data class PlayerCollection(
 data class RebirthProgress(
     val level: Int = 0,
     val highestCleared: Int = -1,
+    /** Characters that cleared the final Rebirth tier (Ascendant runs); empty until the first one does. */
+    val ascendedCharacters: ImmutableSet<CoreShape> = immutableSetOf(),
 )
 
 /** Highest Rebirth tier this profile may select: one above the highest cleared tier, within content bounds. */
@@ -185,7 +187,8 @@ fun RebirthProgress.rankWithin(minimumLevel: Int, maximumLevel: Int): Int =
  * is valid.
  */
 fun RebirthProgress.isWithinRebirthBounds(minimumLevel: Int, maximumLevel: Int): Boolean =
-    highestCleared in -1..maximumLevel && level in minimumLevel..rankWithin(minimumLevel, maximumLevel)
+    highestCleared in -1..maximumLevel && level in minimumLevel..rankWithin(minimumLevel, maximumLevel) &&
+        (ascendedCharacters.isEmpty() || isAscendant)
 
 /** Cumulative Profile-owned achievements shared by every run and Matrix loadout. */
 data class CharacterAchievementProgress(

@@ -3,6 +3,7 @@
 
 package kinetickk.ball.profile.nucleus
 
+import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.profile.api.CollectionProjection
 import kinetickk.ball.profile.api.CollectionEntry
@@ -430,8 +431,13 @@ object ProfileNucleus {
             addAll(update.discoveredItemIds)
         }
         val rebirth = update.clearedRebirthLevel?.let { cleared ->
-            state.profile.rebirthProgress.copy(
-                highestCleared = max(state.profile.rebirthProgress.highestCleared, cleared),
+            // Clearing the final tier makes the victorious character Ascendant.
+            val ascended = update.architectDefeatedWith?.takeIf { cleared >= ContentBounds.MAX_REBIRTH_LEVEL }
+            val progress = state.profile.rebirthProgress
+            progress.copy(
+                highestCleared = max(progress.highestCleared, cleared),
+                ascendedCharacters = if (ascended == null) progress.ascendedCharacters
+                else (progress.ascendedCharacters + ascended).toImmutableSet(),
             )
         } ?: state.profile.rebirthProgress
         val previousAchievements = state.profile.characterAchievements

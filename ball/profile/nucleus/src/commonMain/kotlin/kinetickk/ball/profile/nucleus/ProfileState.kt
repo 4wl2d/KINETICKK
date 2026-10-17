@@ -202,6 +202,7 @@ private fun isPolicyCompatibleAtConstruction(
     if (!profile.rebirthProgress.isWithinRebirthBounds(policy.rebirth.minimumLevel, policy.rebirth.maximumLevel)) {
         return false
     }
+    if (!achievements.victoriousCharacters.containsAll(profile.rebirthProgress.ascendedCharacters)) return false
     return true
 }
 

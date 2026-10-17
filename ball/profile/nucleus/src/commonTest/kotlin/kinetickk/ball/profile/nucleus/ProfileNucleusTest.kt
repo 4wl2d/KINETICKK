@@ -48,6 +48,7 @@ import kinetickk.ball.profile.api.ProfileWriteOutcomeUnknownReason
 import kinetickk.ball.profile.api.ProfileWriteResult
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.RebirthProgressProjection
+import kinetickk.ball.profile.api.isAscendant
 import kinetickk.ball.profile.api.rank
 import kinetickk.ball.profile.api.RunBootstrapProjection
 import kinetickk.foundation.collections.toImmutableList
@@ -900,6 +901,31 @@ class ProfileNucleusTest {
             applyGameplayProgress(constructed, GameplayProgressUpdate(bankedMatter = 1L, clearedRebirthLevel = 2)),
         )
         assertEquals(4, lower.frame.nextState.profile.rebirthProgress.highestCleared)
+    }
+
+    @Test
+    fun aFinalTierClearMakesTheVictoriousCharacterAscendant() {
+        val nine = readyState(PlayerProfile(rebirthProgress = RebirthProgress(level = 9, highestCleared = 8)))
+        val clearedNine = applyGameplayProgress(nine,
+            GameplayProgressUpdate(clearedRebirthLevel = 9, architectDefeatedWith = CoreShape.ORB)).acceptedFrame().nextState
+        assertEquals(9, clearedNine.profile.rebirthProgress.highestCleared)
+        assertTrue(clearedNine.profile.rebirthProgress.ascendedCharacters.isEmpty())
+
+        val ten = readyState(PlayerProfile(rebirthProgress = RebirthProgress(level = 10, highestCleared = 9)))
+        val ascended = applyGameplayProgress(ten,
+            GameplayProgressUpdate(clearedRebirthLevel = 10, architectDefeatedWith = CoreShape.ORB)).acceptedFrame().nextState
+        assertEquals(RebirthProgress(10, 10, kinetickk.foundation.collections.immutableSetOf(CoreShape.ORB)),
+            ascended.profile.rebirthProgress)
+        assertTrue(ascended.profile.rebirthProgress.isAscendant)
+        // A later tier-10 clear with the same character changes nothing in the set; the record never drops.
+        val again = applyGameplayProgress(ascended.copy(persistence = ten.persistence),
+            GameplayProgressUpdate(bankedMatter = 1L, clearedRebirthLevel = 10, architectDefeatedWith = CoreShape.ORB))
+            .acceptedFrame().nextState
+        assertEquals(setOf(CoreShape.ORB), again.profile.rebirthProgress.ascendedCharacters)
+        // An Ascendant set the victories do not back is not a valid save.
+        val forged = constructedProfile(PlayerProfile(rebirthProgress = RebirthProgress(10, 10,
+            kinetickk.foundation.collections.immutableSetOf(CoreShape.ORB))))
+        assertTrue(forged.profile.rebirthProgress.ascendedCharacters.isEmpty())
     }
 
     private fun readyState(
