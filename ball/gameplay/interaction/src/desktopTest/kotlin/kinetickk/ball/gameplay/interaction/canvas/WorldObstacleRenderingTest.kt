@@ -7,6 +7,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.toPixelMap
@@ -36,6 +37,32 @@ class WorldObstacleRenderingTest {
         val corners = (0 until 200).map { ObstaclePaths.corners(it * 7_919 - 300_000) }
         assertTrue(corners.all { it in 8..12 })
         assertEquals((8..12).toSet(), corners.toSet())
+    }
+
+    /**
+     * Collisions use the full radius, so the drawn rim must lie on or just outside that circle: no edge may
+     * sag inside it (a hidden shell would hit a Core that visibly clears the rock), and no corner may poke
+     * far past it. Samples the drawn path itself.
+     */
+    @Test
+    fun outlinesHugTheCollisionCircle() {
+        val radius = 100f
+        val measure = PathMeasure()
+        var closest = Float.MAX_VALUE
+        var farthest = 0f
+        for (index in 0 until 600) {
+            val seed = index * 104_729 - 31_000_000
+            measure.setPath(ObstaclePaths.outline(seed, radius), forceClosed = true)
+            val length = measure.length
+            for (sample in 0 until 720) {
+                val point = measure.getPosition(length * sample / 720f)
+                val distance = point.getDistance()
+                closest = minOf(closest, distance)
+                farthest = maxOf(farthest, distance)
+            }
+        }
+        assertTrue(closest >= radius * 0.97f, "an edge sags inside the collision circle: $closest")
+        assertTrue(farthest <= radius * ObstaclePaths.OUTLINE_MAX_REACH, "a corner reaches too far past it: $farthest")
     }
 
     @Test

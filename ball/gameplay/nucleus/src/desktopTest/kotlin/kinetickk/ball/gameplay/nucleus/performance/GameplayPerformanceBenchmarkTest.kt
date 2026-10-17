@@ -18,6 +18,7 @@ import kinetickk.ball.gameplay.nucleus.model.Obstacle
 import kinetickk.ball.gameplay.nucleus.model.ObstacleField
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
+import kinetickk.ball.gameplay.nucleus.render.ObstacleProjection
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.model.SeveredRelic
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
@@ -125,6 +126,7 @@ class GameplayPerformanceBenchmarkTest {
             { destroyedObstacleIds = listOf(9L) },
             { obstacleHitReadyAt = 1f },
             { nearMissReadyAt = 1f },
+            { reviveInvulnerableUntil = 1f },
             { pickups += Pickup(PickupType.DATA, 5f, 5f, attracted = true) },
             { enemies.first().thrownUntil = 1f },
             { enemies.first().slamReadyAt = 1f },
@@ -135,5 +137,26 @@ class GameplayPerformanceBenchmarkTest {
             assertEquals(canonicalStateFingerprint(changed), canonicalStateFingerprint(changed.copyForReduction()))
             assertEquals(original, canonicalStateFingerprint(source))
         }
+    }
+
+    /**
+     * The published outcome must compare across JVM processes. An enum's `hashCode()` is an identity hash that
+     * changes between processes (and with unrelated hashing earlier on the thread), so obstacle witnesses pin
+     * to a constant: any identity hash in them would miss it.
+     */
+    @Test
+    fun obstacleWitnessesArePinnedAcrossProcesses() {
+        val obstacles = listOf(
+            Obstacle(id = 1L, kind = ObstacleKind.ASTEROID, x = 120.5f, y = -40f, radius = 60f, shapeSeed = 4),
+            Obstacle(id = 2L, kind = ObstacleKind.BUMPER, x = -300f, y = 75.25f, radius = 34f, shapeSeed = -9, ricochetReadyAt = 1.5f),
+            Obstacle(id = 3L, kind = ObstacleKind.UNSTABLE, x = 900f, y = 900f, radius = 150f, shapeSeed = 123_456),
+        )
+        assertEquals(-757_718_850_270_372_542L, obstacleFieldFingerprint(17L, obstacles))
+        val projections = obstacles.map { ObstacleProjection(it.id, it.kind, it.x, it.y, it.radius, it.shapeSeed) }
+        assertEquals(2_368_442_101_832_176_810L, obstacleProjectionFingerprint(17L, projections))
+        val rekinded = obstacles.mapIndexed { index, obstacle -> if (index == 0) obstacle.copy(kind = ObstacleKind.UNSTABLE) else obstacle }
+        assertNotEquals(obstacleFieldFingerprint(17L, obstacles), obstacleFieldFingerprint(17L, rekinded))
+        val rearmed = obstacles.mapIndexed { index, obstacle -> if (index == 1) obstacle.copy(ricochetReadyAt = 3f) else obstacle }
+        assertNotEquals(obstacleFieldFingerprint(17L, obstacles), obstacleFieldFingerprint(17L, rearmed))
     }
 }

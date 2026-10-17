@@ -110,7 +110,7 @@ internal fun MutableGameState.spawnWave(delta: Float) {
         if (!architectEngaged(boss)) return
     }
     advanceDirectorPhase()
-    if (speed > obstacleDamageStartSpeedAhead() * AMBUSH_SPEED_FRACTION) ambushSpeedSeconds += delta else ambushSpeedSeconds = 0f
+    if (speed > obstacleDamageStartSpeed() * AMBUSH_SPEED_FRACTION) ambushSpeedSeconds += delta else ambushSpeedSeconds = 0f
     val phase = SpawnDirectorPhase.entries[directorPhase]
     // The Rebirth interval keeps the published minimum spawn interval as the fastest one-enemy cadence.
     var rate = phase.rate * DIRECTOR_RATE_SCALE / rebirthProfile.spawnInterval(content.tempo.spawnIntervalSeconds(elapsed))

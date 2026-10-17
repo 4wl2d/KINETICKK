@@ -15,14 +15,17 @@ import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.isOnScreen
 import kinetickk.foundation.design.kkStroke
 import kotlin.math.cos
+import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
- * World obstacles, drawn over the backdrop and under everything else: an asteroid is a jagged ink
- * polygon (8 to 12 corners from its shape seed) with a bone rim, an unstable asteroid adds heat
- * cracks and a pulsing core, and a bumper is a glowing polarity ring. Outlines are cached per shape
- * and radius and drawn translated; obstacles off the view are skipped. Allocation-free per frame.
+ * World obstacles, drawn over the backdrop and under everything else: an asteroid is an irregular ink
+ * polygon (8 to 12 corners from its shape seed) with a bone rim whose edges hug its collision circle, an
+ * unstable asteroid adds heat cracks and a pulsing core, and a bumper is a glowing polarity ring.
+ * Outlines are cached per shape and radius and drawn translated; obstacles off the view are skipped.
+ * Allocation-free per frame.
  */
 internal fun DrawScope.drawObstacles(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, roles: KkRolePalette) {
     val obstacles = engine.obstacles
@@ -31,7 +34,7 @@ internal fun DrawScope.drawObstacles(engine: GameplayRenderModel, shakeX: Float,
     for (index in obstacles.indices) {
         val obstacle = obstacles[index]
         val center = world(engine, obstacle.x, obstacle.y, shakeX, shakeY)
-        if (!isOnScreen(center, obstacle.radius + 8f)) continue
+        if (!isOnScreen(center, obstacle.radius * ObstaclePaths.OUTLINE_MAX_REACH + 8f)) continue
         when (obstacle.kind) {
             ObstacleKind.BUMPER -> drawBumper(center, obstacle.radius, time, roles)
             ObstacleKind.ASTEROID, ObstacleKind.UNSTABLE -> drawAsteroid(obstacle, center, time, roles)
@@ -107,17 +110,52 @@ internal object ObstaclePaths {
         return path
     }
 
+    /**
+     * Collisions test the full circle of the obstacle's radius, so the outline must not cut inside it: an
+     * edge inside the circle would hide a shell the Core hits while it visibly clears the rock. The
+     * jittered corners are scaled so the closest edge lies at [INSCRIBED_SHARE] of the radius; the
+     * corners then reach at most [OUTLINE_MAX_REACH] (an 8-gon whose edges touch a circle already puts
+     * its corners at 1.08 radii).
+     */
     private fun buildOutline(path: Path, seed: Int, radius: Float) {
         val corners = corners(seed)
         val step = TWO_PI / corners
+        var closest = Float.MAX_VALUE
         for (corner in 0 until corners) {
-            val angle = corner * step + (unit(seed, corner * 2) - 0.5f) * step * 0.6f
-            val reach = radius * (0.84f + 0.16f * unit(seed, corner * 2 + 1))
+            val next = (corner + 1) % corners
+            val angle = cornerAngle(seed, corner, step)
+            val reach = cornerReach(seed, corner)
+            val nextAngle = cornerAngle(seed, next, step)
+            val nextReach = cornerReach(seed, next)
+            closest = min(
+                closest,
+                distanceToSegment(cos(angle) * reach, sin(angle) * reach, cos(nextAngle) * nextReach, sin(nextAngle) * nextReach),
+            )
+        }
+        val scale = radius * INSCRIBED_SHARE / closest
+        for (corner in 0 until corners) {
+            val angle = cornerAngle(seed, corner, step)
+            val reach = cornerReach(seed, corner) * scale
             val x = cos(angle) * reach
             val y = sin(angle) * reach
             if (corner == 0) path.moveTo(x, y) else path.lineTo(x, y)
         }
         path.close()
+    }
+
+    private fun cornerAngle(seed: Int, corner: Int, step: Float): Float =
+        corner * step + (unit(seed, corner * 2) - 0.5f) * step * ANGLE_JITTER
+
+    private fun cornerReach(seed: Int, corner: Int): Float = 1f + REACH_JITTER * unit(seed, corner * 2 + 1)
+
+    /** Distance from the origin to the segment ([x0], [y0])–([x1], [y1]). */
+    private fun distanceToSegment(x0: Float, y0: Float, x1: Float, y1: Float): Float {
+        val dx = x1 - x0
+        val dy = y1 - y0
+        val t = (-(x0 * dx + y0 * dy) / (dx * dx + dy * dy)).coerceIn(0f, 1f)
+        val x = x0 + dx * t
+        val y = y0 + dy * t
+        return sqrt(x * x + y * y)
     }
 
     private fun buildCracks(path: Path, seed: Int, radius: Float) {
@@ -140,4 +178,16 @@ internal object ObstaclePaths {
     }
 
     private const val TWO_PI: Float = 6.2831855f
+
+    /** Corner angles wander by at most ±10 % of the corner spacing. */
+    private const val ANGLE_JITTER: Float = 0.2f
+
+    /** Corners reach out up to 4 % further than the outline's least reach. */
+    private const val REACH_JITTER: Float = 0.04f
+
+    /** The closest outline edge to the centre, as a share of the collision radius. */
+    const val INSCRIBED_SHARE: Float = 0.98f
+
+    /** Farthest an outline corner reaches, as a share of the collision radius (culling margin). */
+    const val OUTLINE_MAX_REACH: Float = 1.15f
 }

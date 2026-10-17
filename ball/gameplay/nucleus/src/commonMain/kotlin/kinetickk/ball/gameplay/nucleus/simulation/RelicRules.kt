@@ -361,6 +361,7 @@ private fun MutableGameState.gyreRing(radius: Float, damage: Float) {
 internal fun MutableGameState.resolveLethal(reason: String = "CORE FRACTURED") {
     if (hp > 0f) return
     if (trySecondWind()) {
+        reviveInvulnerableUntil = invulnerableUntil
         emitSound(GameplayAudioCue.RECOVERED)
         return
     }
@@ -376,6 +377,7 @@ internal fun MutableGameState.resolveLethal(reason: String = "CORE FRACTURED") {
         val nova = relicValue(RelicId.OUROBOROS_SEAL, 0) * runScale() * if (fragile) 2f else 1f
         areaDamage(coreX, coreY, 400f, nova, rescale = false)
         invulnerableUntil = elapsed + 2f * build.relicUpside(RelicId.OUROBOROS_SEAL)
+        reviveInvulnerableUntil = invulnerableUntil
         runGrace = max(runGrace, 2f)
         message = "OUROBOROS // REBORN"
         messageTime = 2.4f

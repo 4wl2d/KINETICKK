@@ -210,22 +210,27 @@ The second wave adds world obstacles, a minimap and a wider Data magnet.
   rebase origin keeps chunks stable across rebases); the first 900 units around
   the run origin stay clear. The Core sweeps against them right after it moves.
   The collision bands are cursor reach, not fixed speeds: a collision starts to
-  hurt at the steady speed that cursor reach `0.45` sustains in the direction of
-  travel and is lethal at the speed of reach `0.72` (Matrix lethal bonuses on
-  top); tier 0 starts 80 faster and deals 70 % (both fade by tier 3). Measured
-  flight puts reach `0.35` below the band, `0.6` inside it and `0.79` past it on
-  1280×800 and 412×915 along both axes; holding the cursor near the edge no
-  longer flies free. Collision damage is a share of maximum integrity, grows
-  `1 + 0.04t` instead of the Rebirth incoming-damage multiplier, ignores damage
-  reduction, is absorbed by shields and is never cancelled by facets; a lethal
-  collision zeroes integrity past shields unless Second Wind or the Ouroboros
-  Seal answers it; Glass Comet's liability doubles collision damage and keeps
-  shields out. A bumper throw stays below 90 % of the lethal speed of its new
-  heading. Hard bounces and bumper bounces count ricochets and fire
-  RICOCHET; enemies slide around obstacles, are pushed out of them and take slam
-  damage (firing SLAM) when thrown into them or into each other; asteroids stop
-  shots; spawns, totems and anomalies move clear. The ambush waits for 75 % of
-  the damage-start speed along the heading.
+  hurt at the steady speed that cursor reach `0.45` of the viewport's long axis
+  sustains and is lethal at the speed of reach `0.72` (Matrix lethal bonuses on
+  top), whatever the heading; tier 0 starts 80 faster and deals 70 % (both fade
+  by tier 3). Measured flight along the long axis puts reach `0.35` below the
+  band, `0.6` inside it and `0.79` past it on 1280×800 and 412×915; the short
+  axis only flies slower, and holding the cursor near the edge no longer flies
+  free. The lethal speed never drops below a Dash from a reach-`0.35` cruise
+  plus 60, so such a Dash can hurt but never kills. Collision damage is a share
+  of maximum integrity, grows `1 + 0.04t` instead of the Rebirth
+  incoming-damage multiplier, ignores damage reduction, is absorbed by shields
+  and is never cancelled by facets; a lethal collision zeroes integrity past
+  shields unless Second Wind or the Ouroboros Seal answers it (only a revive's
+  own invulnerability holds it off, and the 0.25 s hit cooldown never does);
+  Glass Comet's liability doubles collision damage and keeps shields out. A
+  bumper throw stays below 90 % of the lethal speed. Bounces at the
+  damage-start speed or faster count ricochets and fire RICOCHET (a bumper at
+  most once per 1.5 s); enemies slide around obstacles, are pushed out of them
+  and take slam damage (firing SLAM) when thrown into them or into each other;
+  asteroids stop shots; spawns, totems and anomalies move clear. The ambush
+  waits for 75 % of the damage-start speed. A drawn asteroid's edges lie on its
+  collision circle.
 - **Minimap.** The HUD shows a north-up minimap around the Core (a Settings
   toggle, on by default; Blackout halves its range). The world keep-out reserves
   it in every layout.

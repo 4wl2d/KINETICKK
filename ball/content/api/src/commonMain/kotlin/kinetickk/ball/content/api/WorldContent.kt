@@ -9,8 +9,9 @@ package kinetickk.ball.content.api
  *
  * The collision bands are expressed as cursor reach, the same normalized center-to-edge measure as
  * [FatigueTuning.edgeStrainStart]: a Core speed is compared with the steady speed that holding the
- * cursor at that reach sustains in the direction of travel. Steady speed grows with the viewport, so
- * fixed speeds would make a wide window lethal at a gentle reach and a phone safe at the edge.
+ * cursor at that reach along the viewport's long axis sustains. Steady speed grows with the viewport, so
+ * fixed speeds would make a wide window lethal at a gentle reach and a phone safe at the edge; the long
+ * axis keeps the bands the same for every heading.
  */
 data class ObstacleTuning(
     /** Side of one generation chunk. */
@@ -38,6 +39,12 @@ data class ObstacleTuning(
     val damageStartReach: Float = 0.45f,
     /** Cursor reach whose steady speed makes a collision lethal. */
     val lethalReach: Float = 0.72f,
+    /**
+     * A Dash from a cruise at this reach is never lethal: the lethal speed stays at least
+     * [dashLethalMargin] above that cruise speed plus the Dash impulse.
+     */
+    val dashSafeReach: Float = 0.35f,
+    val dashLethalMargin: Float = 60f,
     /** At tier 0 collisions start hurting this much faster, shrinking linearly to 0 at [forgivingTiers]. */
     val forgivingStartBonus: Float = 80f,
     /** At tier 0 collision damage is multiplied by this, rising linearly to 1 at [forgivingTiers]. */
@@ -101,6 +108,8 @@ data class ObstacleTuning(
         require(damageStartReach > 0f && lethalReach > damageStartReach && lethalReach < 1f) {
             "Collision reaches must satisfy 0 < damage start < lethal < 1"
         }
+        require(dashSafeReach > 0f && dashSafeReach <= damageStartReach) { "A safe Dash cruise must stay below the damage start" }
+        require(dashLethalMargin.isFinite() && dashLethalMargin >= 0f)
         require(forgivingStartBonus.isFinite() && forgivingStartBonus >= 0f)
         require(forgivingDamageScale in 0f..1f && forgivingTiers >= 1)
         require(damageShare.isFinite() && damageShare > 0f && damageExponent.isFinite() && damageExponent > 0f)

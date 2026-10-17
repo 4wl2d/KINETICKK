@@ -14,6 +14,7 @@ import kinetickk.ball.gameplay.nucleus.GameplayNucleusPulse
 import kinetickk.ball.gameplay.nucleus.GameplayOutput
 import kinetickk.ball.gameplay.nucleus.GameplayState
 import kinetickk.ball.gameplay.nucleus.characterization.gameScenario
+import kinetickk.ball.gameplay.nucleus.model.Obstacle
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.TrailPoint
@@ -23,6 +24,8 @@ import kinetickk.ball.gameplay.nucleus.reducer.GameReductionResult
 import kinetickk.ball.gameplay.nucleus.protocol.SimulationOutput
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
+import kinetickk.ball.gameplay.nucleus.render.ObstacleProjection
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.simulation.MutableGameState
 import kinetickk.ball.gameplay.nucleus.simulation.addEnemyForTesting
@@ -750,10 +753,11 @@ internal fun canonicalStateFingerprint(state: MutableGameState): Long {
     signature = mixLong(signature, state.worldOriginY.toRawBits())
     signature = mix(signature, state.obstacleField.centerChunkX)
     signature = mix(signature, state.obstacleField.centerChunkY)
-    signature = mix(signature, state.obstacleField.obstacles.hashCode())
+    signature = obstacleFieldFingerprint(signature, state.obstacleField.obstacles)
     signature = mix(signature, state.destroyedObstacleIds.hashCode())
     signature = mix(signature, state.obstacleHitReadyAt.toRawBits())
     signature = mix(signature, state.nearMissReadyAt.toRawBits())
+    signature = mix(signature, state.reviveInvulnerableUntil.toRawBits())
     state.pickups.forEach { signature = mix(signature, if (it.attracted) 1 else 0) }
     state.enemies.forEach {
         signature = mix(signature, it.characterMarkTime.toRawBits())
@@ -839,7 +843,7 @@ private fun canonicalRenderFingerprint(state: MutableGameState): Long {
     signature = mix(signature, render.previousMorningstarX.toRawBits())
     signature = mix(signature, render.previousMorningstarY.toRawBits())
     signature = mix(signature, render.viewportDensity.toRawBits())
-    signature = mix(signature, render.obstacles.hashCode())
+    signature = obstacleProjectionFingerprint(signature, render.obstacles)
     signature = mix(signature, render.minimapRange.toRawBits())
     render.itemStacksSnapshot.forEach { stack -> signature = mix(signature, stack) }
     return mixLong(signature, fixtureFingerprint(state))
@@ -992,6 +996,39 @@ private fun baseMetadata(seed: Int, vararg values: Pair<String, String>): Map<St
     put("simulationHz", "120")
     put("gameplayContract", "release-0.2.0")
     putAll(values)
+}
+
+/**
+ * The obstacle window field by field. `hashCode()` of an [Obstacle] mixes its [ObstacleKind] identity hash,
+ * which differs between JVM processes, so the published outcome would not compare across forks; the kind
+ * contributes its ordinal instead.
+ */
+internal fun obstacleFieldFingerprint(current: Long, obstacles: List<Obstacle>): Long {
+    var signature = mix(current, obstacles.size)
+    obstacles.forEach { obstacle ->
+        signature = mixLong(signature, obstacle.id)
+        signature = mix(signature, obstacle.kind.ordinal)
+        signature = mix(signature, obstacle.x.toRawBits())
+        signature = mix(signature, obstacle.y.toRawBits())
+        signature = mix(signature, obstacle.radius.toRawBits())
+        signature = mix(signature, obstacle.shapeSeed)
+        signature = mix(signature, obstacle.ricochetReadyAt.toRawBits())
+    }
+    return signature
+}
+
+/** Projected obstacles field by field, for the same reason as [obstacleFieldFingerprint]. */
+internal fun obstacleProjectionFingerprint(current: Long, obstacles: List<ObstacleProjection>): Long {
+    var signature = mix(current, obstacles.size)
+    obstacles.forEach { obstacle ->
+        signature = mixLong(signature, obstacle.id)
+        signature = mix(signature, obstacle.kind.ordinal)
+        signature = mix(signature, obstacle.x.toRawBits())
+        signature = mix(signature, obstacle.y.toRawBits())
+        signature = mix(signature, obstacle.radius.toRawBits())
+        signature = mix(signature, obstacle.shapeSeed)
+    }
+    return signature
 }
 
 private fun mix(current: Long, value: Int): Long =

@@ -37,6 +37,9 @@ class WorldContentTest {
         assertFailsWith<IllegalArgumentException> { ObstacleTuning(maximumPerChunk = 6) }
         assertFailsWith<IllegalArgumentException> { ObstacleTuning(windowChunks = 4) }
         assertFailsWith<IllegalArgumentException> { ObstacleTuning(damageStartReach = 0.8f, lethalReach = 0.7f) }
+        assertEquals(0.45f, ObstacleTuning(dashSafeReach = 0.45f).dashSafeReach)
+        assertFailsWith<IllegalArgumentException> { ObstacleTuning(dashSafeReach = 0.46f) }
+        assertFailsWith<IllegalArgumentException> { ObstacleTuning(dashLethalMargin = -1f) }
         assertFailsWith<IllegalArgumentException> { ObstacleTuning(restitution = 1.01f) }
         assertEquals(1f, ObstacleTuning(restitution = 1f).restitution)
         assertEquals(0.9f, ObstacleTuning().bumperLethalShare)

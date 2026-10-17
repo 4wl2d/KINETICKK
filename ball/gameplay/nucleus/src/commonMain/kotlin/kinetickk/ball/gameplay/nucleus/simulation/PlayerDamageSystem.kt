@@ -158,11 +158,12 @@ private fun MutableGameState.takeObstacleDamage(rawAmount: Float) {
 }
 
 /**
- * A collision at or above the lethal speed: integrity drops to zero past shields, then Second Wind or
- * the Ouroboros Seal may still answer it. Invulnerability (Second Wind, Ouroboros) still protects.
+ * A collision at or above the lethal speed: integrity drops to zero past shields, then only Second Wind
+ * or the Ouroboros Seal may answer it. Only the invulnerability a revive granted protects (the Core may
+ * still be flying into the same rock); Glass Comet's and Bulwark's windows do not.
  */
 internal fun MutableGameState.takeLethalObstacleHit() {
-    if (invulnerableUntil > elapsed) return
+    if (reviveInvulnerableUntil > elapsed) return
     damageTaken += hp.coerceAtLeast(0f).toDouble()
     hp = 0f
     noteObstacleHurt()

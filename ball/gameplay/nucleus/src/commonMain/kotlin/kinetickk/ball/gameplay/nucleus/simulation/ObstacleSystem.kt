@@ -18,7 +18,6 @@ import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.render.ProjectileKind
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
-import kotlin.math.atan2
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
@@ -154,6 +153,7 @@ internal fun MutableGameState.resetObstacles() {
     destroyedObstacleIds = emptyList()
     obstacleHitReadyAt = 0f
     nearMissReadyAt = 0f
+    reviveInvulnerableUntil = 0f
     refreshObstacleWindow()
 }
 
@@ -350,35 +350,43 @@ private class ChunkRandom(private var state: Long) {
 // Collision speeds.
 
 /**
- * Steady Core speed that holding the cursor at [reach] toward [angle] sustains with the base movement
- * stats: thrust `pull + magnetism × offset` against drag and the camera's lag `speed / followRate`.
+ * Steady Core speed that holding the cursor at [reach] along the viewport's long axis sustains with the
+ * base movement stats: thrust `pull + magnetism × offset` against drag and the camera's lag
+ * `speed / followRate`. The long half-axis is the farthest the cursor sits from the centre along a screen
+ * axis (the edge run's axis); measuring there keeps the collision bands independent of the heading, so a
+ * turn never moves them and turning a phone leaves them in place.
  */
-internal fun MutableGameState.steadyCursorSpeed(reach: Float, angle: Float): Float {
-    val offset = reach * viewportEdgeDistance(angle)
-    return (CORE_BASE_PULL + BASE_MAGNET_STRENGTH * offset) /
+internal fun MutableGameState.steadyCursorSpeed(reach: Float): Float =
+    steadyCursorSpeedAtOffset(reach * max(screenWidth, screenHeight) * 0.5f)
+
+/** Steady Core speed with the cursor held [offset] dp from the screen centre (base movement stats). */
+internal fun steadyCursorSpeedAtOffset(offset: Float): Float =
+    (CORE_BASE_PULL + BASE_MAGNET_STRENGTH * offset) /
         (BASE_DRAG_COEFFICIENT + BASE_MAGNET_STRENGTH / CAMERA_FOLLOW_RATE)
-}
 
 /** Share of the way from tier 0 to the end of collision forgiveness. */
 private fun MutableGameState.obstacleForgiveness(): Float =
     (rebirthLevel.toFloat() / content.obstacles.forgivingTiers).coerceIn(0f, 1f)
 
-/** Normal speed toward [angle] at which an asteroid collision starts to hurt. */
-internal fun MutableGameState.obstacleDamageStartSpeed(angle: Float): Float {
+/** Normal speed at which an asteroid collision starts to hurt. */
+internal fun MutableGameState.obstacleDamageStartSpeed(): Float {
     val tuning = content.obstacles
-    return steadyCursorSpeed(tuning.damageStartReach, angle) + tuning.forgivingStartBonus * (1f - obstacleForgiveness())
+    return steadyCursorSpeed(tuning.damageStartReach) + tuning.forgivingStartBonus * (1f - obstacleForgiveness())
 }
 
-/** Normal speed toward [angle] at which an asteroid collision is lethal (Matrix bonuses included). */
-internal fun MutableGameState.obstacleLethalSpeed(angle: Float): Float =
-    max(
-        obstacleDamageStartSpeed(angle) + 1f,
-        steadyCursorSpeed(content.obstacles.lethalReach, angle) + matrix.obstacleLethalSpeedBonus,
+/**
+ * Normal speed at which an asteroid collision is lethal (Matrix bonuses included). A Dash adds its impulse
+ * on top of the cruise speed, so the lethal speed never drops below a Dash from a cruise at
+ * [kinetickk.ball.content.api.ObstacleTuning.dashSafeReach] plus a margin: a Dash from a gentle cruise can
+ * hurt but never kills.
+ */
+internal fun MutableGameState.obstacleLethalSpeed(): Float {
+    val tuning = content.obstacles
+    return max(
+        max(obstacleDamageStartSpeed() + 1f, steadyCursorSpeed(tuning.lethalReach) + matrix.obstacleLethalSpeedBonus),
+        steadyCursorSpeed(tuning.dashSafeReach) + effectiveDashImpulse() + tuning.dashLethalMargin,
     )
-
-/** Damage-start speed along the current heading; the spawn director's ambush reads it. */
-internal fun MutableGameState.obstacleDamageStartSpeedAhead(): Float =
-    obstacleDamageStartSpeed(atan2(velocityY, velocityX))
+}
 
 /**
  * Damage of an asteroid collision at normal speed [normalSpeed] inside the damage band: a share of
@@ -523,8 +531,7 @@ private fun MutableGameState.respondToObstacle(
         bounceOffBumper(index, obstacle, nx, ny, normalSpeed, contactX, contactY)
         return false
     }
-    val heading = atan2(velocityY, velocityX)
-    val start = obstacleDamageStartSpeed(heading)
+    val start = obstacleDamageStartSpeed()
     if (obstacle.kind == ObstacleKind.UNSTABLE && normalSpeed >= start) {
         explodeUnstable(index, obstacle, normalSpeed)
         return true
@@ -533,9 +540,11 @@ private fun MutableGameState.respondToObstacle(
     val elasticity = if (normalSpeed < tuning.slideSpeed) 0f else restitution
     velocityX += (1f + elasticity) * normalSpeed * nx
     velocityY += (1f + elasticity) * normalSpeed * ny
-    if (normalSpeed < start || obstacleHitReadyAt > elapsed) return false
+    if (normalSpeed < start) return false
+    val lethal = obstacleLethalSpeed()
+    // The cooldown spaces band damage; a lethal hit lands even right after a band hit.
+    if (normalSpeed < lethal && obstacleHitReadyAt > elapsed) return false
     obstacleHitReadyAt = elapsed + tuning.hitCooldownSeconds
-    val lethal = obstacleLethalSpeed(heading)
     screenShake = max(screenShake, min(16f, 6f + normalSpeed * 0.004f))
     shockwave(contactX - nx * coreRadius, contactY - ny * coreRadius, 0.3f, 120f, 4)
     directionalBurst(contactX - nx * coreRadius, contactY - ny * coreRadius, 10, 4, nx, ny)
@@ -561,7 +570,8 @@ private fun MutableGameState.onRicochet(x: Float, y: Float, normalSpeed: Float) 
 
 /**
  * Elastic throw: the Core leaves at 1.05 × its speed, held to the bumper band and below the lethal
- * collision speed of its new heading (on a narrow viewport that speed can lie inside the band); never hurts.
+ * collision speed (on a small viewport that speed can lie inside the band); never hurts. Like an asteroid
+ * bounce it is a ricochet only at the damage-start speed or faster, at most once per cooldown per bumper.
  */
 private fun MutableGameState.bounceOffBumper(
     index: Int,
@@ -580,13 +590,13 @@ private fun MutableGameState.bounceOffBumper(
     val directionX = if (current > 0.001f) velocityX / current else nx
     val directionY = if (current > 0.001f) velocityY / current else ny
     val band = max(tuning.bumperMinimumExitSpeed, min(tuning.bumperGain * incoming, tuning.bumperMaximumExitSpeed))
-    val exit = min(band, obstacleLethalSpeed(atan2(directionY, directionX)) * tuning.bumperLethalShare)
+    val exit = min(band, obstacleLethalSpeed() * tuning.bumperLethalShare)
     velocityX = directionX * exit
     velocityY = directionY * exit
     shockwave(obstacle.x, obstacle.y, 0.25f, obstacle.radius * 2.4f, 2)
     emitSound(GameplayAudioCue.IMPACT)
     screenShake = max(screenShake, 4f)
-    if (normalSpeed < tuning.slideSpeed || obstacle.ricochetReadyAt > elapsed) return
+    if (normalSpeed < obstacleDamageStartSpeed() || obstacle.ricochetReadyAt > elapsed) return
     obstacleField = obstacleField.replaced(index, obstacle.copy(ricochetReadyAt = elapsed + tuning.bumperRicochetCooldownSeconds))
     pendingRicochets++
     onRicochet(contactX - nx * coreRadius, contactY - ny * coreRadius, normalSpeed)

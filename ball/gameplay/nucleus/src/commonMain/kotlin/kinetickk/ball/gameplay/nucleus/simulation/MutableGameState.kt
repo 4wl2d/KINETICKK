@@ -300,6 +300,11 @@ internal class MutableGameState(
     internal var obstacleHitReadyAt: Float = reductionSource?.obstacleHitReadyAt ?: 0f
     /** Run time before which Near Miss grants no further Overdrive. */
     internal var nearMissReadyAt: Float = reductionSource?.nearMissReadyAt ?: 0f
+    /**
+     * End of the invulnerability a revive (Second Wind, Ouroboros) granted: the only window a lethal
+     * collision honours; other invulnerability (Glass Comet, Bulwark) does not stop it.
+     */
+    internal var reviveInvulnerableUntil: Float = reductionSource?.reviveInvulnerableUntil ?: 0f
     internal var dashBufferTime: Float = reductionSource?.dashBufferTime ?: 0f
     internal var bossSpawned: Boolean = reductionSource?.bossSpawned ?: false
     internal var keyboardBrakeActive: Boolean = reductionSource?.keyboardBrakeActive ?: false

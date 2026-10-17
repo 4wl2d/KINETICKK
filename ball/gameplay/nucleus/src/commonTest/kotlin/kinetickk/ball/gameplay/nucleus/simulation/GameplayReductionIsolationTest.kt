@@ -923,6 +923,7 @@ class GameplayReductionIsolationTest {
         destroyedObstacleIds = listOf(3L, 4L)
         obstacleHitReadyAt = 0.6f
         nearMissReadyAt = 0.7f
+        reviveInvulnerableUntil = 0.8f
         pickups.firstOrNull()?.attracted = true
         enemies.firstOrNull()?.apply {
             characterMarkTime = 0.75f
@@ -1229,6 +1230,7 @@ class GameplayReductionIsolationTest {
             value("destroyedObstacleIds", destroyedObstacleIds.toList())
             float("obstacleHitReadyAt", obstacleHitReadyAt)
             float("nearMissReadyAt", nearMissReadyAt)
+            float("reviveInvulnerableUntil", reviveInvulnerableUntil)
             float("dashBufferTime", dashBufferTime)
             value("bossSpawned", bossSpawned)
             value("keyboardBrakeActive", keyboardBrakeActive)
