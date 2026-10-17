@@ -34,6 +34,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 /*
  * The twelve character mechanics. Every one reads accepted movement, combat and pickups inside the fixed
@@ -763,20 +764,26 @@ private fun MutableGameState.updatePolarity(ability: CharacterRuntime, delta: Fl
     // Thrown enemies meeting obstacles slam in the obstacle pass (resolveEnemyObstacles), at their
     // normal speed and through the same applySlamDamage, so each contact is found once. Here they
     // slam into each other.
+    // Bounded like the obstacle pass: at most MAX_POLARITY_THROWN_CHECKS_PER_STEP thrown enemies look for a
+    // partner each step, and a pair is rejected on its squared distance before any root.
     var slams = 0
+    var thrownVisited = 0
     for (index in enemies.indices) {
-        if (slams >= MAX_SLAMS_PER_STEP) break
+        if (slams >= MAX_SLAMS_PER_STEP || thrownVisited >= MAX_POLARITY_THROWN_CHECKS_PER_STEP) break
         val thrown = enemies[index]
         // A phased Phantom is intangible: nothing slams into it and it slams into nothing.
         if (!thrown.alive || thrown.characterMarkTime <= 0f || isPhasedPhantom(thrown)) continue
+        thrownVisited++
         for (otherIndex in enemies.indices) {
             if (otherIndex == index) continue
             val other = enemies[otherIndex]
             if (!other.alive || isPhasedPhantom(other)) continue
             val dx = other.x - thrown.x
             val dy = other.y - thrown.y
-            val distance = length(dx, dy)
-            if (distance < 0.5f || distance > thrown.radius + other.radius) continue
+            val reach = thrown.radius + other.radius
+            val distanceSquared = dx * dx + dy * dy
+            if (distanceSquared < 0.25f || distanceSquared > reach * reach) continue
+            val distance = sqrt(distanceSquared)
             val closing = ((thrown.vx - other.vx) * dx + (thrown.vy - other.vy) * dy) / distance
             if (closing < SLAM_MIN_SPEED) continue
             thrown.characterMarkTime = 0f
@@ -1156,6 +1163,9 @@ internal const val THROW_MIN_SPEED: Float = SLAM_MIN_SPEED
 internal const val SLAM_BASE_DAMAGE: Float = 120f
 internal const val SLAM_DAMAGE_PER_SPEED: Float = 0.25f
 private const val MAX_SLAMS_PER_STEP: Int = 8
+
+/** Thrown enemies that look for a slam partner in one step (the obstacle pass uses the same bound). */
+private const val MAX_POLARITY_THROWN_CHECKS_PER_STEP: Int = 24
 
 internal const val BEAT_PERIOD: Float = 0.75f
 internal const val BEAT_WINDOW: Float = 0.11f
