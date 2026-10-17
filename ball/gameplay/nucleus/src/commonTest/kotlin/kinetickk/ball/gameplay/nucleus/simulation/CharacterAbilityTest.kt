@@ -94,25 +94,34 @@ class CharacterAbilityTest {
     }
 
     @Test fun theEchoGhostJumpsABlinkDriveTeleportWithoutStrikingAlongIt() {
-        val game = buildTestState(RelicId.BLINK_DRIVE, shape = CoreShape.SPIRAL)
-        repeat(CharacterRuntime.GHOST_SAMPLES) { game.moveAt(400f, 0f) }
+        // Real fixed steps: the Blink happens in the heat pass and the Core keeps moving after it in the
+        // same step, so the teleport cannot be told from the positions alone.
+        val emptyWorld = canonicalGameplayContent.copy(obstacles = canonicalGameplayContent.obstacles.copy(meanPerChunk = 0f))
+        val game = buildTestState(RelicId.BLINK_DRIVE, shape = CoreShape.SPIRAL, content = emptyWorld)
+        game.runGrace = 10f
+        game.updatePointer(game.screenWidth * 0.5f + 400f, game.screenHeight * 0.5f)
+        repeat(CharacterRuntime.GHOST_SAMPLES) { game.simulateStep(MutableGameState.FIXED_STEP) }
+        assertTrue(game.ghostActive)
         val fromX = game.coreX
-        val alongPath = (1..3).map { game.addEnemyForTesting(fromX + it * 55f, game.coreY, hp = 5_000f) }
-        game.cameraX = game.coreX; game.cameraY = game.coreY
-        game.pointerX = game.screenWidth * 0.5f + 600f; game.pointerY = game.screenHeight * 0.5f
-        assertTrue(game.relicOnDash(1f, 0f), "Blink Drive teleports along the aim")
+        game.dashBufferTime = MutableGameState.DASH_INPUT_BUFFER_SECONDS
+        game.simulateStep(MutableGameState.FIXED_STEP)
         val toX = game.coreX
-        assertTrue(toX - fromX > 3 * 55f, "the Blink crosses every enemy")
-        game.step()
-        // The Blink's own strike is the relic's; the ghost must not repeat it along the gap a second later.
-        val afterBlink = alongPath.map { it.hp }
-        repeat(CharacterRuntime.GHOST_DELAY_STEPS - 1) { game.moveAt(0f, -400f) }
-        assertEquals(fromX, game.ghostX, 0.5f, "the ghost stands where the Blink began")
-        game.moveAt(0f, -400f)
+        val gap = toX - fromX
+        assertTrue(gap > 150f, "Blink Drive teleported along the aim: $gap")
+        assertTrue(game.characterRuntime.ghostSampleTeleported(0), "the Blink's sample is a teleport")
+        assertEquals(GamePhase.RUNNING, game.phase)
+        repeat(CharacterRuntime.GHOST_DELAY_STEPS - 1) { game.simulateStep(MutableGameState.FIXED_STEP) }
+        assertTrue(game.ghostX < fromX + 30f, "the ghost has not reached the gap yet")
+        // Enemies inside the gap, clear of both ends, placed just before the ghost replays it (the Blink's own
+        // strike was the relic's).
+        val alongGap = (1..3).map { game.addEnemyForTesting(fromX + gap * it / 4f, game.coreY, hp = 5_000f) }
+        val abilityDamage = game.characterRuntime.abilityDamage
+        game.simulateStep(MutableGameState.FIXED_STEP)
         assertEquals(toX, game.ghostX, 0.5f, "the ghost jumps the gap")
         assertEquals(0f, game.ghostSpeed, "a replayed teleport is not ghost speed")
-        assertEquals(afterBlink, alongPath.map { it.hp }, "the ghost never travelled the gap")
-        assertEquals(0.0, game.characterRuntime.abilityDamage)
+        // The Flux Wake still trails the Core's path; only a ghost strike marks an enemy and counts as ability damage.
+        assertTrue(alongGap.all { it.characterMarkTime == 0f }, "the ghost never travelled the gap")
+        assertEquals(abilityDamage, game.characterRuntime.abilityDamage, "the ghost struck nothing")
     }
 
     @Test fun traitsApplyWhenTheRunStarts() {

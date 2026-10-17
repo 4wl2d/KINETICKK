@@ -298,8 +298,14 @@ deals one slam and fires SLAM once; thrown enemies meet obstacles only in the
 obstacle pass, at their normal speed. REPEL-thrown enemies no longer slide
 around rocks, and a landed obstacle slam ends the throw. A collision pauses
 facet regeneration and costs Stellar Mass like any other hit, while no facet
-ever cancels it. A Crescent Blink stops before an obstacle on its line, and
-every spawn point is nudged clear of obstacles. In the combined game the
+ever cancels it. Every Blink (the Crescent's, and Blink Drive's on any
+character) stops before an obstacle on its line and marks its step as a
+teleport, so the Spiral's echo jumps it, and every spawn point is nudged clear
+of obstacles. A phased Phantom takes part in no slam and a shifting enemy fires
+no SLAM; a slam whose Data opens a level-up choice ends the fixed step. The
+asteroid Dash floor counts the stronger on-beat Pentagon Dash, and a Dash's
+Tesseract origin and Pentagon beat end with its phase, so a Gravity Surfer
+phase never revives them. In the combined game the
 Orb's baseline damage in the impact encounters rose and two crit-damage items
 fell under the 5 % floor, so Weakpoint Scanner (`+120 %` against any status)
 and Harmonic Lens (`+125 %` against Sonic) gained crit damage; the impact

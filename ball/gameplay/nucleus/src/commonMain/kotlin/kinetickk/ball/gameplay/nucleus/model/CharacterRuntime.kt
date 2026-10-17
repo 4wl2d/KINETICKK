@@ -98,7 +98,7 @@ internal class CharacterRuntime private constructor(
     /** Eclipse (Crescent): Blink charges, seconds toward the next charge and the last Blink segment. */
     var blinkCharges: Int = MAX_BLINK_CHARGES
     var blinkRecharge: Float = 0f
-    /** Steps the last Blink stays observable; see `blinkThisStep`. */
+    /** Steps the last Blink (the Crescent's or Blink Drive's) stays observable; see `blinkThisStep`. */
     var blinkFlagSteps: Int = 0
     var blinkFromX: Float = 0f
     var blinkFromY: Float = 0f

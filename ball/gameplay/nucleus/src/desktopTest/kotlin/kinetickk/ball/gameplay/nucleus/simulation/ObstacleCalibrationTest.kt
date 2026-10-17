@@ -30,9 +30,16 @@ class ObstacleCalibrationTest {
 
     private class Measured(val speed: Float, val start: Float, val lethal: Float)
 
-    /** A quiet run with the cursor held at [reach] toward +x ([horizontal]) or +y. */
-    private fun cruise(width: Float, height: Float, reach: Float, horizontal: Boolean, tier: Int): MutableGameState =
-        buildTestState(content = emptyWorld, rebirth = tier).apply {
+    /** A quiet run of [shape] with the cursor held at [reach] toward +x ([horizontal]) or +y. */
+    private fun cruise(
+        width: Float,
+        height: Float,
+        reach: Float,
+        horizontal: Boolean,
+        tier: Int,
+        shape: CoreShape = CoreShape.ORB,
+    ): MutableGameState =
+        buildTestState(content = emptyWorld, rebirth = tier, shape = shape).apply {
             resize(width, height)
             startRun()
             enemies.clear()
@@ -133,22 +140,50 @@ class ObstacleCalibrationTest {
         }
     }
 
-    @Test
-    fun aDashFromAGentleCruiseIntoAnAsteroidNeverKills() {
-        for ((width, height) in viewports) for (horizontal in listOf(true, false)) for (tier in listOf(0, 3)) {
-            val label = "${width.toInt()}x${height.toInt()} ${if (horizontal) "x" else "y"} tier $tier"
-            val state = cruise(width, height, 0.35f, horizontal, tier)
+    /** True when a fixed step that ends at [time] falls inside a Pentagon beat window. */
+    private fun onBeatAt(time: Float): Boolean {
+        val offset = time % BEAT_PERIOD
+        return time >= BEAT_PERIOD - BEAT_WINDOW && min(offset, BEAT_PERIOD - offset) <= BEAT_WINDOW
+    }
+
+    /**
+     * Dashes from a cruise at reach 0.35 into an asteroid on each of [sizes], both axes, tiers 0 and 3: the
+     * Dash hurts along the long axis but never kills. With [onBeat] the Dash leaves on a Pentagon beat.
+     */
+    private fun assertAGentleDashNeverKills(sizes: List<Pair<Float, Float>>, shape: CoreShape, onBeat: Boolean) {
+        for ((width, height) in sizes) for (horizontal in listOf(true, false)) for (tier in listOf(0, 3)) {
+            val label = "$shape ${width.toInt()}x${height.toInt()} ${if (horizontal) "x" else "y"} tier $tier"
+            val state = cruise(width, height, 0.35f, horizontal, tier, shape)
             state.fly(20f)
+            // The Dash leaves in the next fixed step: wait until that step lands on a beat.
+            if (onBeat) while (!onBeatAt(state.elapsed + step)) state.fly(step)
             val cruiseSpeed = state.speed
             state.heat = 0f
             state.placeAsteroidAhead(gap = 60f)
             state.requestDash()
+            state.runGrace = 1f
+            state.simulateStep(step)
+            assertEquals(onBeat, state.characterRuntime.dashOnBeat, "$label: the Dash left on a beat: $onBeat")
             val impact = state.flyIntoTheAsteroid()
             assertTrue(impact > cruiseSpeed + state.effectiveDashImpulse() * 0.5f, "$label: the Dash landed ($cruiseSpeed -> $impact)")
             assertEquals(GamePhase.RUNNING, state.phase, "$label: a Dash from reach 0.35 at $impact must not kill")
             assertTrue(impact < state.obstacleLethalSpeed(), "$label: $impact below ${state.obstacleLethalSpeed()}")
             if (horizontal == width >= height) assertTrue(state.hp < state.maxHp, "$label: along the long axis it hurts ($impact)")
         }
+    }
+
+    @Test
+    fun aDashFromAGentleCruiseIntoAnAsteroidNeverKills() {
+        assertAGentleDashNeverKills(viewports, CoreShape.ORB, onBeat = false)
+    }
+
+    /**
+     * An on-beat Pentagon Dash pushes harder, so its lethal floor counts the stronger impulse. The floor sets the
+     * lethal speed on the 360×640 phone and the 720×540 desktop minimum window.
+     */
+    @Test
+    fun anOnBeatPentagonDashFromAGentleCruiseIntoAnAsteroidNeverKills() {
+        assertAGentleDashNeverKills(listOf(360f to 640f, 720f to 540f) + viewports, CoreShape.PENTAGON, onBeat = true)
     }
 
     @Test

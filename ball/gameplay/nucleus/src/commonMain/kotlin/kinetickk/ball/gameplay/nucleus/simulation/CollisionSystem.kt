@@ -86,7 +86,7 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
         val enemy = enemies[index]
         if (phase != GamePhase.RUNNING) return
         // A Phantom out of phase is not there to hit.
-        if (enemy.type == EnemyType.PHANTOM && isShifting(enemy)) continue
+        if (isPhasedPhantom(enemy)) continue
         val combined = coreRadius + enemy.radius
         val sweptHit = segmentCircleIntersects(
             previousCoreX - enemy.previousX,

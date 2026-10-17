@@ -291,6 +291,8 @@ internal fun MutableGameState.relicOnDash(directionX: Float, directionY: Float):
     val along = targetX - coreX
     val ahead = (along * directionX + (targetY - coreY) * directionY)
     if (ahead > 0f) range = min(range, max(0f, toSingularity - 60f))
+    // Stop short of obstacles too, as the Crescent's Blink does: the Core never lands in or past a rock.
+    range = blinkRangeClearOfObstacles(directionX, directionY, range)
     if (range < 30f) return false
     val startX = coreX
     val startY = coreY
@@ -318,6 +320,7 @@ internal fun MutableGameState.relicOnDash(directionX: Float, directionY: Float):
     previousCoreY = endY
     previousSingularityX = targetX
     previousSingularityY = targetY
+    markBlink(startX, startY, endX, endY)
     val keep = if (build.pairing(RelicPairingId.FOLD_VECTOR)) 0.55f else 0.35f
     velocityX *= keep
     velocityY *= keep

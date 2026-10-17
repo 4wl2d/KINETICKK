@@ -103,7 +103,10 @@ internal fun MutableGameState.simulateStep(delta: Float) {
     statusCuesThisStep = 0
     if (runGrace.toRawBits() != 0) runGrace = max(0f, runGrace - delta)
     if (hurtCooldown.toRawBits() != 0) hurtCooldown = max(0f, hurtCooldown - delta)
-    if (dashPhaseTime.toRawBits() != 0) dashPhaseTime = max(0f, dashPhaseTime - delta)
+    if (dashPhaseTime.toRawBits() != 0) {
+        dashPhaseTime = max(0f, dashPhaseTime - delta)
+        if (dashPhaseTime.toRawBits() == 0) endCharacterDash()
+    }
     if (screenShake.toRawBits() != 0) screenShake = max(0f, screenShake - delta * 18f)
     if (lastImpactTime.toRawBits() != 0) lastImpactTime = max(0f, lastImpactTime - delta)
     if (damageFlash.toRawBits() != 0) damageFlash = max(0f, damageFlash - delta * 3.4f)
@@ -138,10 +141,13 @@ internal fun MutableGameState.simulateStep(delta: Float) {
     updateBuildEdges(delta)
     if (phase != GamePhase.RUNNING) return
     updateCharacterRuntime(delta)
+    // A slam can level up through a Data clause and open a choice: nothing else acts once it is open.
+    if (phase != GamePhase.RUNNING) return
     updateCamera(delta)
     updatePointsOfInterest(delta)
     updateWeapons(delta)
     updateEnemies(delta)
+    if (phase != GamePhase.RUNNING) return
     updateBossEncounter()
     updateStatuses(delta)
     updateCombatFields(delta)
@@ -276,7 +282,7 @@ internal fun MutableGameState.performDash() {
             velocityX -= directionX * reverseAssist
             velocityY -= directionY * reverseAssist
         }
-        val impulse = effectiveDashImpulse() * if (onBeat) BEAT_DASH_IMPULSE else 1f
+        val impulse = effectiveDashImpulse() * characterDashImpulseMultiplier(onBeat)
         velocityX += directionX * impulse
         velocityY += directionY * impulse
     }

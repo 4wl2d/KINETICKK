@@ -13,7 +13,6 @@ import kinetickk.ball.gameplay.nucleus.model.distanceSquared
 import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.model.lerp
 import kinetickk.ball.gameplay.nucleus.render.EnemyBehavior
-import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.render.ProjectileKind
@@ -71,8 +70,8 @@ internal fun MutableGameState.obstacleBlocksSegment(x0: Float, y0: Float, x1: Fl
  * the contact normal, and fires the SLAM trigger with it as the target. A [polarity] slam (an enemy the
  * Dipole threw, or the one it struck) takes the Dipole's slam speed and damage instead of the obstacle
  * slam's. Both rules share the enemy's slam cooldown, so one contact deals one slam and fires SLAM once,
- * whichever pass meets it first. Below the slam speed, or within the cooldown, nothing happens.
- * Returns true when the slam landed.
+ * whichever pass meets it first. Below the slam speed, within the cooldown, or on a shifting enemy (which no
+ * damage reaches), nothing happens. Returns true when the slam landed.
  */
 internal fun MutableGameState.applySlamDamage(
     enemy: Enemy,
@@ -81,7 +80,7 @@ internal fun MutableGameState.applySlamDamage(
 ): Boolean {
     val tuning = content.obstacles
     val slamSpeed = if (polarity) SLAM_MIN_SPEED else tuning.slamSpeed
-    if (normalSpeed < slamSpeed || !enemy.alive || enemy.slamReadyAt > elapsed) return false
+    if (normalSpeed < slamSpeed || !enemy.alive || enemy.slamReadyAt > elapsed || isShifting(enemy)) return false
     enemy.slamReadyAt = elapsed + tuning.slamCooldownSeconds
     val damage = if (polarity) {
         polaritySlam(enemy, normalSpeed)
@@ -389,7 +388,8 @@ internal fun MutableGameState.obstacleDamageStartSpeed(): Float {
 
 /**
  * Normal speed at which an asteroid collision is lethal (Matrix bonuses included). A Dash adds its impulse
- * on top of the cruise speed, so the lethal speed never drops below a Dash from a cruise at
+ * on top of the cruise speed, so the lethal speed never drops below the strongest Dash the character can
+ * make (an on-beat Pentagon Dash pushes harder) from a cruise at
  * [kinetickk.ball.content.api.ObstacleTuning.dashSafeReach] plus a margin: a Dash from a gentle cruise can
  * hurt but never kills.
  */
@@ -397,7 +397,8 @@ internal fun MutableGameState.obstacleLethalSpeed(): Float {
     val tuning = content.obstacles
     return max(
         max(obstacleDamageStartSpeed() + 1f, steadyCursorSpeed(tuning.lethalReach) + matrix.obstacleLethalSpeedBonus),
-        steadyCursorSpeed(tuning.dashSafeReach) + effectiveDashImpulse() + tuning.dashLethalMargin,
+        steadyCursorSpeed(tuning.dashSafeReach) + effectiveDashImpulse() * maxCharacterDashImpulseMultiplier() +
+            tuning.dashLethalMargin,
     )
 }
 
@@ -663,7 +664,7 @@ internal fun MutableGameState.resolveEnemyObstacles() {
         val largest = max(tuning.asteroidMaximumRadius, tuning.bumperRadius)
         for (enemyIndex in enemies.indices) {
             val enemy = enemies[enemyIndex]
-            if (!enemy.alive || (enemy.type == EnemyType.PHANTOM && isShifting(enemy))) continue
+            if (!enemy.alive || isPhasedPhantom(enemy)) continue
             val avoidReach = (enemy.radius + largest) * tuning.avoidanceRange - largest
             forEachObstacleNear(enemy.x, enemy.y, avoidReach) { _, obstacle ->
                 resolveEnemyObstacle(enemy, obstacle)
@@ -719,12 +720,12 @@ private fun MutableGameState.resolveThrownEnemySlams() {
     for (thrownIndex in enemies.indices) {
         if (slams >= tuning.maximumEnemySlamsPerStep || thrownVisited >= MAX_THROWN_CHECKS_PER_STEP) return
         val thrown = enemies[thrownIndex]
-        if (thrown.thrownUntil <= elapsed || !thrown.alive) continue
+        if (thrown.thrownUntil <= elapsed || !thrown.alive || isPhasedPhantom(thrown)) continue
         thrownVisited++
         for (otherIndex in enemies.indices) {
             if (otherIndex == thrownIndex) continue
             val other = enemies[otherIndex]
-            if (!other.alive || (other.type == EnemyType.PHANTOM && isShifting(other))) continue
+            if (!other.alive || isPhasedPhantom(other)) continue
             val dx = thrown.x - other.x
             val dy = thrown.y - other.y
             val combined = thrown.radius + other.radius

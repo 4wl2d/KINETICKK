@@ -35,6 +35,9 @@ private const val ARCHITECT_GATE_TOLERANCE: Float = 1e-5f
 
 internal fun MutableGameState.isShifting(enemy: Enemy): Boolean = enemy.shiftUntil > elapsed
 
+/** A Phantom out of phase: intangible, so neither the Core nor a slam meets it. */
+internal fun MutableGameState.isPhasedPhantom(enemy: Enemy): Boolean = enemy.type == EnemyType.PHANTOM && isShifting(enemy)
+
 /** Integrity at which the current phase ends: the boss bar's thirds. */
 private fun architectGate(enemy: Enemy): Float = enemy.maxHp * (ARCHITECT_FINAL_PHASE - enemy.phase) / 3f
 

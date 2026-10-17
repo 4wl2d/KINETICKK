@@ -134,6 +134,15 @@ internal fun MutableGameState.beginCharacterDash() {
     ability.dashRecorded = false
 }
 
+/**
+ * The Dash phase ran out. What belongs to that Dash (the Tesseract's origin, the Pentagon's beat) ends with
+ * it, so a later phase that no Dash started (Gravity Surfer's ricochet) never revives it.
+ */
+internal fun MutableGameState.endCharacterDash() {
+    characterRuntime.hasDashOrigin = false
+    characterRuntime.dashOnBeat = false
+}
+
 /** A Dash's first contact with [enemy]: counts the Dash hit and marks it for the Shard. */
 internal fun MutableGameState.onCharacterDashContact(enemy: Enemy) {
     if (dashPhaseTime <= 0f || enemy.lastCharacterDash == characterRuntime.dashSequence || enemy.dead || enemy.hp <= 0f) return
@@ -394,6 +403,13 @@ internal fun MutableGameState.onCharacterDashDeparture(): Boolean {
     return onBeat
 }
 
+/** The character's multiplier on the Dash impulse: an on-beat Pentagon Dash pushes [BEAT_DASH_IMPULSE] harder. */
+internal fun MutableGameState.characterDashImpulseMultiplier(onBeat: Boolean): Float =
+    if (onBeat && coreShape == CoreShape.PENTAGON) BEAT_DASH_IMPULSE else 1f
+
+/** The largest [characterDashImpulseMultiplier] this character's Dash can reach. */
+internal fun MutableGameState.maxCharacterDashImpulseMultiplier(): Float = characterDashImpulseMultiplier(onBeat = true)
+
 /** Crescent Dashes need a Blink charge instead of heat. */
 internal fun MutableGameState.characterDashReady(): Boolean? =
     if (coreShape == CoreShape.CRESCENT) characterRuntime.blinkCharges > 0 else null
@@ -423,7 +439,7 @@ internal fun MutableGameState.consumeMark(enemy: Enemy): Boolean {
 /** True from a parry until the end of the next fixed step, so weapon updates of that step can react. */
 internal val MutableGameState.parriedThisStep: Boolean get() = characterRuntime.parryFlagSteps > 0
 
-/** True for the rest of the fixed step in which the Crescent blinked. */
+/** True for the rest of the fixed step in which the Core blinked (the Crescent's Blink or Blink Drive's). */
 internal val MutableGameState.blinkThisStep: Boolean get() = characterRuntime.blinkFlagSteps > 0
 internal val MutableGameState.blinkFromX: Float get() = characterRuntime.blinkFromX
 internal val MutableGameState.blinkFromY: Float get() = characterRuntime.blinkFromY
@@ -658,10 +674,9 @@ private fun MutableGameState.supernova() {
 }
 
 private fun MutableGameState.updateEcho(ability: CharacterRuntime, delta: Float) {
-    // A teleport (Blink Drive or any other) sets the previous position to the arrival point on its
-    // step: a gap from the last sample that this step did not travel is flagged, never replayed as motion.
-    val teleported = ability.ghostSamples > 0 && previousCoreX == coreX && previousCoreY == coreY &&
-        (ability.ghostSampleX(0) != coreX || ability.ghostSampleY(0) != coreY)
+    // A Blink is a teleport: the sample it reached is flagged and never replayed as motion. The flag is
+    // explicit because the Core keeps moving after the Blink in the same step.
+    val teleported = ability.ghostSamples > 0 && blinkThisStep
     ability.recordGhostSample(coreX, coreY, teleported)
     if (ability.ghostSamples < CharacterRuntime.GHOST_SAMPLES) {
         ability.charge = ability.ghostSamples / CharacterRuntime.GHOST_SAMPLES.toFloat()
@@ -733,11 +748,12 @@ private fun MutableGameState.updatePolarity(ability: CharacterRuntime, delta: Fl
     for (index in enemies.indices) {
         if (slams >= MAX_SLAMS_PER_STEP) break
         val thrown = enemies[index]
-        if (!thrown.alive || thrown.characterMarkTime <= 0f) continue
+        // A phased Phantom is intangible: nothing slams into it and it slams into nothing.
+        if (!thrown.alive || thrown.characterMarkTime <= 0f || isPhasedPhantom(thrown)) continue
         for (otherIndex in enemies.indices) {
             if (otherIndex == index) continue
             val other = enemies[otherIndex]
-            if (!other.alive) continue
+            if (!other.alive || isPhasedPhantom(other)) continue
             val dx = other.x - thrown.x
             val dy = other.y - thrown.y
             val distance = length(dx, dy)
@@ -833,9 +849,7 @@ internal fun MutableGameState.crescentBlink(directionX: Float, directionY: Float
     val targetY = cameraY + pointerY - screenHeight * 0.5f
     val ahead = (targetX - coreX) * directionX + (targetY - coreY) * directionY
     if (ahead > 0f) range = min(range, max(0f, length(targetX - coreX, targetY - coreY) - BLINK_SINGULARITY_GAP))
-    while (range > 0f && obstacleBlocksSegment(coreX, coreY, coreX + directionX * range, coreY + directionY * range, coreRadius)) {
-        range = max(0f, range - BLINK_OBSTACLE_STEP)
-    }
+    range = blinkRangeClearOfObstacles(directionX, directionY, range)
     val startX = coreX
     val startY = coreY
     val endX = coreX + directionX * range
@@ -868,11 +882,7 @@ internal fun MutableGameState.crescentBlink(directionX: Float, directionY: Float
     previousSingularityY = targetY
     velocityX *= BLINK_SPEED_RETENTION
     velocityY *= BLINK_SPEED_RETENTION
-    ability.blinkFlagSteps = 1
-    ability.blinkFromX = startX
-    ability.blinkFromY = startY
-    ability.blinkToX = endX
-    ability.blinkToY = endY
+    markBlink(startX, startY, endX, endY)
     if (ability.scarCount >= CharacterRuntime.MAX_SCARS) {
         // The oldest scar detonates early rather than being dropped.
         if (ability.scarValue(0, SCAR_AGE) < 0f) detonateScar(0)
@@ -887,6 +897,28 @@ internal fun MutableGameState.crescentBlink(directionX: Float, directionY: Float
     ability.scars[base + SCAR_AGE] = -1f
     ability.scarCount++
     shockwave(endX, endY, 0.25f, 110f, 0)
+}
+
+/**
+ * [range] of a Blink from the Core along (directionX, directionY), shortened in [BLINK_OBSTACLE_STEP] steps
+ * until the path clears every obstacle: a Blink stops short of a rock, never lands in or past it.
+ */
+internal fun MutableGameState.blinkRangeClearOfObstacles(directionX: Float, directionY: Float, range: Float): Float {
+    var clear = range
+    while (clear > 0f && obstacleBlocksSegment(coreX, coreY, coreX + directionX * clear, coreY + directionY * clear, coreRadius)) {
+        clear = max(0f, clear - BLINK_OBSTACLE_STEP)
+    }
+    return clear
+}
+
+/** Records a Blink from (startX, startY) to (endX, endY) for the rest of the step (see [blinkThisStep]). */
+internal fun MutableGameState.markBlink(startX: Float, startY: Float, endX: Float, endY: Float) {
+    val ability = characterRuntime
+    ability.blinkFlagSteps = 1
+    ability.blinkFromX = startX
+    ability.blinkFromY = startY
+    ability.blinkToX = endX
+    ability.blinkToY = endY
 }
 
 private fun MutableGameState.detonateScar(index: Int) {

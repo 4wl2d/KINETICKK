@@ -727,6 +727,50 @@ class ObstacleSystemTest {
     }
 
     @Test
+    fun aDipoleThrowPassesThroughAPhasedPhantomWithoutASlam() {
+        val state = repellingDipole()
+        state.clearObstaclesForTesting()
+        val thrown = state.dummy(x = state.coreX + 400f, y = state.coreY, hp = 10_000f)
+        val phantom = state.dummy(x = state.coreX + 430f, y = state.coreY, hp = 10_000f, type = EnemyType.PHANTOM)
+        phantom.shiftUntil = state.elapsed + 1f
+        thrown.vx = 600f
+        thrown.characterMarkTime = THROW_SECONDS
+        state.elapsed += MutableGameState.FIXED_STEP
+        state.updateCharacterRuntime(MutableGameState.FIXED_STEP)
+        assertEquals(thrown.maxHp, thrown.hp, "no slam on the thrown enemy")
+        assertEquals(phantom.maxHp, phantom.hp, "no slam on the phased Phantom")
+        assertEquals(600f, thrown.vx, "no momentum shared with an intangible Phantom")
+        assertTrue(state.isThrownByPolarity(thrown), "the throw flies on")
+        assertEquals(0, state.slamTriggers())
+        // No slam reaches a shifting enemy from any pass, so it never counts as a SLAM either.
+        assertFalse(state.applySlamDamage(phantom, 900f))
+        assertEquals(0, state.slamTriggers())
+    }
+
+    @Test
+    fun aSlamThatOpensALevelUpChoiceEndsTheStep() {
+        val content = contentWithClauses("Calibrated Coil",
+            EffectClause(EffectTrigger.SLAM, actions = immutableListOf(EffectAction.GainData(5f))))
+        val state = buildTestState(shape = CoreShape.DIPOLE, content = content).apply {
+            own("Calibrated Coil")
+            characterRuntime.polarity = Polarity.REPEL
+        }
+        state.clearObstaclesForTesting()
+        state.data = state.nextLevelData - 1
+        val thrown = state.dummy(x = state.coreX + 400f, y = state.coreY, hp = 10_000f)
+        state.dummy(x = state.coreX + 430f, y = state.coreY, hp = 10_000f)
+        thrown.vx = 600f
+        thrown.characterMarkTime = THROW_SECONDS
+        val bystander = state.dummy(x = state.coreX - 400f, y = state.coreY, hp = 10_000f)
+        bystander.vx = 50f
+        val bystanderX = bystander.x
+        state.simulateStep(MutableGameState.FIXED_STEP)
+        assertTrue(thrown.hp < thrown.maxHp, "the pair slammed")
+        assertEquals(GamePhase.CHOICE, state.phase, "the slam's Data opened the level-up choice")
+        assertEquals(bystanderX, bystander.x, "no enemy acts once the choice is open")
+    }
+
+    @Test
     fun anOrdinaryThrowStillTakesTheObstacleSlamUnderTheDipole() {
         // Only REPEL throws use the Dipole slam; a player-thrown enemy meets the obstacle rule.
         val state = repellingDipole()
@@ -758,6 +802,52 @@ class ObstacleSystemTest {
         // The next fixed step meets no rock: the blink never lands the Core inside one.
         state.updateObstacles()
         assertEquals(state.maxHp, state.hp)
+    }
+
+    @Test
+    fun aBlinkDriveBlinkStopsShortOfAnAsteroidOnItsPath() {
+        // Any character's Blink Drive follows the Crescent's rule.
+        val state = buildTestState(RelicId.BLINK_DRIVE)
+        state.heat = 0f
+        // The rock's surface sits 150 ahead of the Core's leading edge, inside the Blink Drive range.
+        val rockX = state.coreX + state.coreRadius + 150f + 60f
+        state.placeObstaclesForTesting(testObstacle(rockX, state.coreY, radius = 60f))
+        state.setVelocityForTesting(500f, 0f)
+        state.pointerX = state.screenWidth
+        state.pointerY = state.screenHeight * 0.5f
+        val startX = state.coreX
+        state.performDash()
+        assertTrue(state.coreX > startX + 100f, "it still blinks most of the way: ${state.coreX - startX}")
+        assertTrue(state.coreX + state.coreRadius < rockX - 60f, "it stops before the rock: ${state.coreX}")
+        assertFalse(state.obstacleBlocksSegment(startX, state.coreY, state.coreX, state.coreY, state.coreRadius))
+        assertEquals(state.coreX, state.previousCoreX, "a blink is a teleport")
+        assertTrue(state.blinkThisStep, "the rest of the step sees the Blink")
+        // The next fixed step meets no rock: the Core neither lands inside one nor comes out past it.
+        state.updateObstacles()
+        assertEquals(state.maxHp, state.hp)
+        assertTrue(state.coreX < rockX, "the Core stays on its side of the rock")
+    }
+
+    @Test
+    fun aGravitySurferPhaseNeverRevivesAnEarlierDash() {
+        val state = buildTestState(shape = CoreShape.TESSERACT).apply { matrix = matrix.copy(ricochetPhaseSeconds = 0.4f) }
+        // A Dash that ends near its origin (straight into a rock, say) records no lattice node.
+        state.beginCharacterDash()
+        state.dashPhaseTime = DASH_PHASE_SECONDS
+        while (state.dashPhaseTime > 0f) state.simulateStep(MutableGameState.FIXED_STEP)
+        assertEquals(0, state.latticeNodeCount)
+        // Far from that origin, a ricochet's dash phase is no Dash: the old origin never becomes a node.
+        state.ramAsteroid(state.bandSpeed(0.2f))
+        assertEquals(0.4f, state.dashPhaseTime, 0.001f)
+        state.updateCharacterRuntime(MutableGameState.FIXED_STEP)
+        assertEquals(0, state.latticeNodeCount, "the ricochet phase recorded no node")
+
+        // The Pentagon's on-beat Dash ends with its phase, so a later ricochet phase is not on the beat.
+        val pentagon = buildTestState(shape = CoreShape.PENTAGON)
+        pentagon.characterRuntime.dashOnBeat = true
+        pentagon.dashPhaseTime = DASH_PHASE_SECONDS
+        while (pentagon.dashPhaseTime > 0f) pentagon.simulateStep(MutableGameState.FIXED_STEP)
+        assertFalse(pentagon.characterRuntime.dashOnBeat)
     }
 
     @Test
