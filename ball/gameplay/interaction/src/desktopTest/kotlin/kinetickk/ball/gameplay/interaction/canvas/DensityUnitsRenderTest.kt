@@ -109,7 +109,7 @@ class DensityUnitsRenderTest {
         val memory = HudPresentationMemory()
         val boss = BossTarget()
         val steady = base.with("polarityStability" to 0.5f)
-        val drained = base.with("polarityStability" to 0.4f)
+        val drained = base.with("polarityStability" to 0.4f, "elapsed" to base.elapsed + 0.05f)
         memory.observe(steady, 0f, boss.select(steady))
         memory.observe(drained, 0.05f, boss.select(drained))
         val width = (DP_WIDTH * 2f).toInt()

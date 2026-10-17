@@ -21,6 +21,7 @@ import kinetickk.ball.gameplay.nucleus.render.SeveredRelicProjection
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
+import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
@@ -69,6 +70,7 @@ class HudHotPathAllocationTest {
                 model.with(
                     "velocityX" to 300f + frame * 7.3f,
                     "polarityStability" to 0.24f - frame * 0.0005f,
+                    "elapsed" to frame * GameplayRenderModel.FIXED_STEP,
                     "hp" to 36f - frame * 0.05f,
                     "combo" to 14 + frame,
                     "pointsOfInterest" to listOf(PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f,
@@ -116,7 +118,9 @@ class HudHotPathAllocationTest {
                 AppLanguage.English)
             val memory = HudPresentationMemory()
             // 21 % down to 10 % every hundred frames (each step a visible drain).
-            val frames = List(FRAMES) { frame -> model.with("polarityStability" to 0.215f - (frame % 100) * 0.0011f) }
+            val frames = List(FRAMES) { frame ->
+                model.with("polarityStability" to 0.215f - (frame % 100) * 0.0011f, "elapsed" to frame * GameplayRenderModel.FIXED_STEP)
+            }
             val bitmap = ImageBitmap(844, 390)
             val canvas = Canvas(bitmap)
             val scope = CanvasDrawScope()

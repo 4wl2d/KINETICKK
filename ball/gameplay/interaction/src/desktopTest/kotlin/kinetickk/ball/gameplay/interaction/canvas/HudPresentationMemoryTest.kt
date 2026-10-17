@@ -41,6 +41,7 @@ import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
+import kotlin.math.floor
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -88,17 +89,54 @@ class HudPresentationMemoryTest {
     fun polarityPulsesOnlyWhileItDrains() {
         val memory = HudPresentationMemory()
         val boss = BossTarget()
-        val steady = base.with("polarityStability" to 0.5f)
+        val steady = base.with("polarityStability" to 0.5f, "elapsed" to 4f)
         memory.observe(steady, 0f, boss.select(steady))
-        memory.observe(steady, 0.1f, boss.select(steady))
+        val held = steady.with("elapsed" to 4.1f)
+        memory.observe(held, 0.1f, boss.select(held))
         assertFalse(memory.polarityDraining(0.1f))
-        val drained = base.with("polarityStability" to 0.48f)
+        val drained = steady.with("polarityStability" to 0.48f, "elapsed" to 4.2f)
         memory.observe(drained, 0.2f, boss.select(drained))
         assertTrue(memory.polarityDraining(0.2f))
         // A repeated draw of the same frame keeps the pulse briefly, then it settles.
         memory.observe(drained, 0.3f, boss.select(drained))
         assertTrue(memory.polarityDraining(0.3f))
         assertFalse(memory.polarityDraining(1f))
+        // A new run restarts the clock: its full polarity re-arms the memory without a pulse.
+        val restarted = base.with("polarityStability" to 1f, "elapsed" to 0f)
+        memory.observe(restarted, 1.1f, boss.select(restarted))
+        assertFalse(memory.polarityDraining(1.1f))
+    }
+
+    /**
+     * Polarity changes only on 120 Hz steps, so a frame holds 0..n steps of drain depending on the
+     * frame rate. The cue follows the drain per simulated second: one edge strain shows it (or not)
+     * identically at 30, 60, 144 and 240 frames per second.
+     */
+    @Test
+    fun polarityCueFollowsTheDrainRateAtAnyFrameRate() {
+        val drainPerSecond = base.content.tempo.fatigue.edgeDrainPerSecond
+        listOf(30, 60, 144, 240).forEach { fps ->
+            // Strain 0.1 drains 0.04 per second: the cue shows from the first drained step on (the
+            // first frame only arms the memory), between steps too.
+            assertEquals(listOf(false) + List(fps - 1) { true }, drainFrames(fps, drainPerSecond * 0.1f), "strain 0.1 at $fps fps")
+            // Strain 0.05 drains 0.02 per second: below the cue, so it never shows.
+            assertEquals(List(fps) { false }, drainFrames(fps, drainPerSecond * 0.05f), "strain 0.05 at $fps fps")
+        }
+    }
+
+    /** One second of a 120 Hz run draining at [rate] per second, drawn at [fps]: the cue per frame. */
+    private fun drainFrames(fps: Int, rate: Float): List<Boolean> {
+        val memory = HudPresentationMemory()
+        val boss = BossTarget()
+        val step = GameplayRenderModel.FIXED_STEP
+        return List(fps) { frame ->
+            val renderTime = (frame + 1) / fps.toFloat()
+            // Whole steps the simulation has run by this frame (the remainder is interpolation).
+            val elapsed = floor(renderTime / step + 1e-3f) * step
+            val model = base.with("elapsed" to elapsed, "polarityStability" to 0.9f - rate * elapsed)
+            memory.observe(model, renderTime, boss.select(model))
+            memory.polarityDraining(renderTime)
+        }
     }
 
     @Test

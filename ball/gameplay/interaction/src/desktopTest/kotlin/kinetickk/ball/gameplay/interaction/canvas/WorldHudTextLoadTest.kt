@@ -53,6 +53,7 @@ class WorldHudTextLoadTest {
             base.with(
                 "velocityX" to 300f + frame * 37.3f,
                 "polarityStability" to 0.24f - frame * 0.004f,
+                "elapsed" to frame * GameplayRenderModel.FIXED_STEP,
                 "hp" to 36f - frame * 0.7f,
                 "combo" to 12 + frame,
             )

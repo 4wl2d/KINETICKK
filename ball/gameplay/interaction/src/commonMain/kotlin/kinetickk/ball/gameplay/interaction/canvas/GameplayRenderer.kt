@@ -34,7 +34,7 @@ internal fun DrawScope.drawGameplay(
 ) {
     drawRect(Kk.Ink)
     val shake = if (engine.settings.screenShake && engine.phase == GamePhase.RUNNING) {
-        screenShakeOffset(engine.screenShake, engine.elapsed, d(MAX_SCREEN_SHAKE_DP))
+        screenShakeOffset(engine.screenShake, engine.renderElapsed, d(MAX_SCREEN_SHAKE_DP))
     } else {
         Offset.Zero
     }

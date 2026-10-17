@@ -214,7 +214,7 @@ class RedesignShotsHudTest {
         val memory = HudPresentationMemory()
         val boss = BossTarget()
         val pre = when (shot) {
-            Shot.POLARITY -> model.with("polarityStability" to v.polarity + 0.02f)
+            Shot.POLARITY -> model.with("polarityStability" to v.polarity + 0.02f, "elapsed" to v.time - 0.2f)
             Shot.OVERDRIVE -> model.with("overdriveTime" to 7f)
             Shot.CRITICAL -> model.with("hp" to 30f)
             Shot.CRUISE -> model.with("hp" to 151f)

@@ -98,11 +98,11 @@ internal fun DrawScope.drawEnemy(
     val silhouette = enemySilhouette(enemy.type)
     val path = WorldPaths.silhouette(silhouette, enemy.radius)
     // A Frozen enemy stops turning under its ice plate and eases back into its turn when it thaws.
-    val degrees = FrozenPoses.rotation(enemy.id, bits and EnemyStatusBits.FROZEN != 0, engine.elapsed,
-        enemyRotation(enemy.type, engine.elapsed, enemy.id))
+    val degrees = FrozenPoses.rotation(enemy.id, bits and EnemyStatusBits.FROZEN != 0, engine.renderElapsed,
+        enemyRotation(enemy.type, engine.renderElapsed, enemy.id))
     val patterned = statusDetail || enemy.type == EnemyType.ELITE
     if (enemy.type == EnemyType.ELITE) {
-        val pulse = (sin(engine.elapsed * 3.2f) + 1f) * 0.5f
+        val pulse = (sin(engine.renderElapsed * 3.2f) + 1f) * 0.5f
         drawCircle(threat.copy(alpha = 0.10f + pulse * 0.06f), enemy.radius * 1.45f, center)
         drawCircle(threat.copy(alpha = 0.05f + pulse * 0.04f), enemy.radius * 1.9f, center)
     }
@@ -247,7 +247,7 @@ private fun DrawScope.drawEnemyStatus(
     if (dominant >= 0) {
         val color = roles.element(dominant)
         val primed = engine.primedElement(bits, dominant)
-        val wave = (sin(engine.elapsed * PRIMED_PULSE) + 1f) * 0.5f
+        val wave = (sin(engine.renderElapsed * PRIMED_PULSE) + 1f) * 0.5f
         val topLeft = Offset(center.x - ring, center.y - ring)
         val box = Size(ring * 2f, ring * 2f)
         drawCircle(color, ring, center, alpha = 0.16f, style = kkStroke(1f))
@@ -370,18 +370,18 @@ private fun DrawScope.drawEnemyTelegraph(
         }
         EnemyType.WEAVER -> {
             repeat(2) { index ->
-                val orbitAngle = engine.elapsed * 2.7f + enemy.id + index * PI.toFloat()
+                val orbitAngle = engine.renderElapsed * 2.7f + enemy.id + index * PI.toFloat()
                 drawCircle(threat.copy(alpha = 0.8f), 2.5f, polar(center, enemy.radius + 10f, orbitAngle))
             }
             if (enemy.actionTimer in 0f..0.34f) {
-                val angle = engine.elapsed * 0.2f + enemy.id
+                val angle = engine.renderElapsed * 0.2f + enemy.id
                 drawLine(threat.copy(alpha = 0.48f), polar(center, enemy.radius + 19f, angle),
                     polar(center, enemy.radius + 19f, angle + PI.toFloat()), 2f)
             }
         }
         EnemyType.WARDEN -> {
             // The gravity well's reach, kept to a hairline so several wardens never tint the arena.
-            val gravityPulse = (sin(engine.elapsed * 2.2f + enemy.id) + 1f) * 0.5f
+            val gravityPulse = (sin(engine.renderElapsed * 2.2f + enemy.id) + 1f) * 0.5f
             drawCircle(threat.copy(alpha = 0.12f + gravityPulse * 0.08f), 440f, center, style = WorldStrokes.dashedHair)
             if (enemy.actionTimer in 0f..0.38f) {
                 drawCircle(threat.copy(alpha = 0.52f), enemy.radius + 18f + enemy.actionTimer * 50f, center, style = kkStroke(2f))
@@ -414,13 +414,13 @@ private fun DrawScope.drawArchitect(
     val inner = radius * 1.22f
     val aspect = EnemyAffinity.aspect(enemy.affinityBits)
     val frame = if (aspect >= 0) roles.element(aspect) else threat
-    rotate(-engine.elapsed * spin(40f), center) {
+    rotate(-engine.renderElapsed * spin(40f), center) {
         drawCircle(threat.copy(alpha = 0.4f), radius * 2.57f, center, style = WorldStrokes.dashedHair)
     }
-    rotate(engine.elapsed * spin(18f) + 12f, center) {
+    rotate(engine.renderElapsed * spin(18f) + 12f, center) {
         drawRect(frame, Offset(center.x - outer, center.y - outer), Size(outer * 2f, outer * 2f), style = kkStroke(2f))
     }
-    rotate(-engine.elapsed * spin(12f) - 6f, center) {
+    rotate(-engine.renderElapsed * spin(12f) - 6f, center) {
         drawRect(frame.copy(alpha = 0.6f), Offset(center.x - inner, center.y - inner), Size(inner * 2f, inner * 2f), style = kkStroke(2f))
     }
     val triangle = WorldPaths.architectTriangle(radius)
@@ -434,7 +434,7 @@ private fun DrawScope.drawArchitect(
         drawCircle(threat, radius * 0.174f, Offset(0f, radius * 0.174f))
     }
     if (EnemyAffinity.shifting(enemy.affinityBits)) {
-        val pulse = (sin(engine.elapsed * SHIELD_PULSE) + 1f) * 0.5f
+        val pulse = (sin(engine.renderElapsed * SHIELD_PULSE) + 1f) * 0.5f
         val shield = radius * (ARCHITECT_SHIELD + 0.04f * pulse)
         drawCircle(Kk.Bone, shield, center, alpha = 0.05f + 0.05f * pulse)
         drawCircle(Kk.Bone, shield, center, alpha = 0.45f + 0.4f * pulse, style = kkStroke(3f))
@@ -502,7 +502,7 @@ internal fun DrawScope.drawPickups(engine: GameplayRenderModel, shakeX: Float, s
             }
             PickupType.RELIC -> {
                 drawLine(Kk.RLegend.copy(alpha = 0.3f), previous, center, 2.5f)
-                drawUnresolvedRelicIcon(center, 11f, engine.elapsed)
+                drawUnresolvedRelicIcon(center, 11f, engine.renderElapsed)
             }
         }
     }
@@ -571,7 +571,7 @@ internal fun DrawScope.drawTotem(engine: GameplayRenderModel, shakeX: Float, sha
     val location = world(engine, totem.x, totem.y, shakeX, shakeY)
     if (!isOnScreen(steady(location, shakeX, shakeY), 60f)) return // decided unshaken, as its edge marker
     val pulse = (sin(totem.pulse) + 1f) * 0.5f
-    rotate(engine.elapsed * spin(24f), location) {
+    rotate(engine.renderElapsed * spin(24f), location) {
         drawCircle(roles.you.copy(alpha = 0.45f), 45f, location, style = WorldStrokes.dashedThin)
     }
     drawCircle(roles.you.copy(alpha = 0.05f + pulse * 0.04f), 45f, location)
