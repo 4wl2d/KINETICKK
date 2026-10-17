@@ -1022,7 +1022,7 @@ private const val FLASH_DECAY: Float = 2.5f
 
 // Ability damage is calibrated by CharacterBalanceTest: averaged over its seeded 90 s fights (packs at
 // random bearings, content bolt damage, exact and jittered timing) every offensive character's ability
-// output stays within 40 % of their median (Orbit 56, Puncture 180, Halo 12/s and 16, Lattice 7 + 3.5
+// output stays within 40 % of their median (Orbit 70, Puncture 180, Halo 12/s and 16, Lattice 7 + 3.5
 // per node, slams 120 + 0.25 per u/s from 100 u/s, Pulse burst 40, scars 45, drones 9).
 
 private const val ORBIT_ARC: Float = 0.698f
