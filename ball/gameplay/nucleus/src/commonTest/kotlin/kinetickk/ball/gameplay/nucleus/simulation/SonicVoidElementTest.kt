@@ -321,6 +321,22 @@ class SonicVoidElementTest {
     }
 
     @Test
+    fun resonantArcReachesFartherTheMoreResonanceItConsumes() {
+        fun reaches(older: StatusElement, incoming: StatusElement, olderStacks: Int): Boolean {
+            val state = buildTestState()
+            val target = state.dummy(x = 400f)
+            val far = state.dummy(x = 400f + 320f)
+            state.applyStatus(target, older, olderStacks, generation = 0)
+            state.applyStatus(target, incoming, 1, generation = 0)
+            assertTrue(target.hp < target.maxHp, "Resonant Arc strikes its target")
+            return far.hp < far.maxHp
+        }
+        // Base reach 220 + 25 per consumed Resonance stack: one stack reaches 245, five reach 345.
+        assertFalse(reaches(StatusElement.ION, StatusElement.SONIC, 5), "one Resonance stack falls short of 320")
+        assertTrue(reaches(StatusElement.SONIC, StatusElement.ION, 5), "five Resonance stacks reach 320")
+    }
+
+    @Test
     fun annihilateAlsoStrikesTheToughestEnemyWithinReach() {
         val state = buildTestState()
         val target = state.dummy(x = 400f)

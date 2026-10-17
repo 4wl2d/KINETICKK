@@ -159,11 +159,14 @@ private fun MutableGameState.resolveReaction(
             damagePerSecond = magnitude, element = StatusElement.ENTROPY, stacksPerTick = 1,
             generation = residueGeneration, pull = 180f,
         ))
-        ReactionId.THUNDERCLAP -> for (index in enemies.indices) {
-            val target = enemies[index]
-            if (!target.alive || distanceSquared(x, y, target.x, target.y) > square(definition.radius + target.radius)) continue
-            dealStatusDamage(target, magnitude, StatusElement.THERMAL, ignoresAffinity = true)
-            hurl(x, y, target, THUNDERCLAP_THROW_SPEED)
+        ReactionId.THUNDERCLAP -> {
+            for (index in enemies.indices) {
+                val target = enemies[index]
+                if (!target.alive || distanceSquared(x, y, target.x, target.y) > square(definition.radius + target.radius)) continue
+                dealStatusDamage(target, magnitude, StatusElement.THERMAL, ignoresAffinity = true)
+                hurl(x, y, target, THUNDERCLAP_THROW_SPEED)
+            }
+            shockwave(x, y, 0.32f, definition.radius, 3)
         }
         ReactionId.SHATTERPOINT -> {
             repeat(SHATTERPOINT_SHARDS) { shard ->
@@ -190,11 +193,14 @@ private fun MutableGameState.resolveReaction(
                 dealStatusDamage(target, magnitude, StatusElement.ION, ignoresAffinity = true)
             }
         }
-        ReactionId.SEISMIC -> for (index in enemies.indices) {
-            val target = enemies[index]
-            if (!target.alive || distanceSquared(x, y, target.x, target.y) > square(definition.radius + target.radius)) continue
-            dealStatusDamage(target, magnitude, StatusElement.GRAVITIC, ignoresAffinity = true)
-            if (target.alive && isOrdinary(target)) target.disabledUntil = max(target.disabledUntil, elapsed + SEISMIC_STUN_SECONDS)
+        ReactionId.SEISMIC -> {
+            for (index in enemies.indices) {
+                val target = enemies[index]
+                if (!target.alive || distanceSquared(x, y, target.x, target.y) > square(definition.radius + target.radius)) continue
+                dealStatusDamage(target, magnitude, StatusElement.GRAVITIC, ignoresAffinity = true)
+                if (target.alive && isOrdinary(target)) target.disabledUntil = max(target.disabledUntil, elapsed + SEISMIC_STUN_SECONDS)
+            }
+            shockwave(x, y, 0.4f, definition.radius, 3)
         }
         ReactionId.FRACTURE -> for (index in enemies.indices) {
             val target = enemies[index]
@@ -226,6 +232,7 @@ private fun MutableGameState.resolveReaction(
             }
             val reach = square(definition.radius)
             projectiles.removeMatchingStable { it.hostile && distanceSquared(x, y, it.x, it.y) <= reach }
+            shockwave(x, y, 0.45f, definition.radius, 1)
         }
         ReactionId.ANNIHILATE -> {
             dealStatusDamage(enemy, magnitude, StatusElement.VOID, ignoresAffinity = true)

@@ -371,7 +371,7 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
                 throwFrom(enemy, target)
             }
             if (build.upside(RelicId.THUNDER_CHOIR)) thunderChoir(enemy, damage)
-            shockwave(enemy.x, enemy.y, 0.34f, radius, 5)
+            shockwave(enemy.x, enemy.y, 0.34f, radius, 3)
         }
         StatusElement.VOID -> {
             var remembered = enemy.status[StatusCell.HOLLOW_MEMORY]
@@ -387,7 +387,7 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
                     enemy.status[StatusCell.UNMAKE_DAMAGE] = enemy.status[StatusCell.UNMAKE_DAMAGE] + damage
                 }
             }
-            shockwave(enemy.x, enemy.y, 0.3f, enemy.radius * 2.6f, 6)
+            shockwave(enemy.x, enemy.y, 0.3f, enemy.radius * 2.6f, 2)
         }
     }
     if (affinityTier(element) >= 3) applyStatusAround(enemy.x, enemy.y, 130f, element, 2f, outputGeneration, enemy.id)
@@ -415,7 +415,9 @@ private fun MutableGameState.throwFrom(center: Enemy, target: Enemy) {
  * shattered one, nearest first, without scratch storage (each pick is the next one by distance, then id).
  */
 private fun MutableGameState.thunderChoir(origin: Enemy, shatterDamage: Float) {
-    val links = relicValue(RelicId.THUNDER_CHOIR, 0).toInt().coerceIn(0, MAX_CHAIN_TARGETS)
+    // The link count is the rank's own number; harmony and dissonance scale only the damage share.
+    val links = content.relic(RelicId.THUNDER_CHOIR).value(0, relicRank(RelicId.THUNDER_CHOIR)).toInt()
+        .coerceIn(0, MAX_CHAIN_TARGETS)
     val share = relicValue(RelicId.THUNDER_CHOIR, 1) / 100f
     val rangeSquared = square(THUNDER_CHOIR_RADIUS)
     var lastDistance = -1f
@@ -447,7 +449,7 @@ private fun MutableGameState.thunderChoir(origin: Enemy, shatterDamage: Float) {
 /** Releases an Unmake: the remembered damage strikes as Void status damage. */
 private fun MutableGameState.strikeUnmake(enemy: Enemy, damage: Float) {
     dealStatusDamage(enemy, damage, StatusElement.VOID)
-    burst(enemy.x, enemy.y, 6, 4)
+    burst(enemy.x, enemy.y, 6, 2)
 }
 
 /**
