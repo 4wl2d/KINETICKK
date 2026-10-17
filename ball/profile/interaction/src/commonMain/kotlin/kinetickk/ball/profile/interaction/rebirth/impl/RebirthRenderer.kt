@@ -295,7 +295,8 @@ private fun RebirthActionRow(
         size = if (frame.regular) KkButtonSize.LG else KkButtonSize.MD,
         fontSize = type.action,
         enabled = state == RebirthActionState.READY || state == RebirthActionState.ARMED,
-        locked = state == RebirthActionState.LOCKED,
+        // A closed shell (UNAVAILABLE) reads "Locked" too, so it shows the same inert lock face.
+        locked = state == RebirthActionState.LOCKED || state == RebirthActionState.UNAVAILABLE,
         armed = state == RebirthActionState.ARMED,
         textScale = scale,
         contentDescription = "$label ${language.text(ProfileScreensRedesignText.TierTag, model.focus.tier)}",
