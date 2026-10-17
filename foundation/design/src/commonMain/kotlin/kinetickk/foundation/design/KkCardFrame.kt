@@ -395,12 +395,18 @@ internal fun insetSlab(bounds: Rect, cut: Float, inset: Float): Path {
  * covers their inner half): white round chrome, the spectrum round a prismatic card, gold round gold.
  * [scale] shrinks its reach (12 dp at 1; a phone card's is 0.75).
  */
-internal fun DrawScope.drawCardHalo(face: Path, bounds: Rect, frame: KkCardFrame, scale: Float = if (frameScale(bounds) < 0.9f) 0.75f else 1f) {
+internal fun DrawScope.drawCardHalo(
+    face: Path,
+    bounds: Rect,
+    frame: KkCardFrame,
+    scale: Float = if (frameScale(bounds) < 0.9f) 0.75f else 1f,
+    gain: Float = 1f,
+) {
     if (frame.haloStrength <= 0f) return
     val prism = frame.prism
     val brush = if (prism != null) spectrumSweep(bounds, prism) else null
     for (index in 0 until HaloSteps) {
-        val alpha = (HaloAlphas[index] * frame.haloStrength).coerceAtMost(1f)
+        val alpha = (HaloAlphas[index] * frame.haloStrength * gain).coerceAtMost(1f)
         val width = d(GlowWidths[index]) * scale
         if (brush != null) drawPath(face, brush, alpha = alpha, style = kkStroke(width))
         else drawPath(face, frame.halo[0], alpha = alpha, style = kkStroke(width))

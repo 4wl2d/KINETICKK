@@ -27,7 +27,10 @@ class KkRarityTileTest {
         // Each step dresses the tile more, as each preset is seen (lightness alone in Mono), on a grid
         // tile and on a legend swatch: its pixels stand a tenth or more further from the ink they lie on
         // (the tile's face, the screen round it), or it changes a tenth or more of the tile more (the
-        // legendary rays spread over the face where the epic rim is brighter).
+        // legendary rays spread over the face where the epic rim is brighter). The pixel count holds with
+        // [ROUNDING] to spare: the higher step counts only pixels that clear the bar by that much, the lower
+        // one every pixel within that much of it, so a faint fringe sitting on the bar (which one rasterizer
+        // draws a level brighter than another) cannot decide a step.
         val failures = ArrayList<String>()
         for (mode in KkVisionMode.entries) for (side in listOf(84, 26)) {
             val palette = mode.palette
@@ -42,7 +45,7 @@ class KkRarityTileTest {
             }
             for (index in 1 until looks.size) {
                 val (salience, coverage) = looks[index]
-                val (lower, lowerCoverage) = looks[index - 1]
+                val (lower, _, lowerCoverage) = looks[index - 1]
                 if (salience <= lower * 1.1 && coverage <= lowerCoverage * 1.1) {
                     failures += "$mode ${side}dp: ${ladder[index]} ($salience, $coverage px) under ${ladder[index - 1]} ($lower, $lowerCoverage px) + 10 %"
                 }
@@ -102,16 +105,21 @@ class KkRarityTileTest {
         return (threads.getThreadAllocatedBytes(id) - start - emptyBytes) / 400
     }
 
+    /** A tile's [salience] and how many pixels step past the bar, by at least [ROUNDING] ([covered]) or within it ([reached]). */
+    private data class Look(val salience: Int, val covered: Int, val reached: Int)
+
     /**
      * How the tile in [argb] stands from the ink each pixel lies on (the tile's face inside, the
      * screen's ink round it) as [vision] sees it: Σ of the lightness step plus the chroma step (lightness
-     * alone when only lightness is seen), and how many pixels step more than [COVERED] from it.
+     * alone when only lightness is seen), and how many pixels step more than [COVERED] from it, give or
+     * take [ROUNDING].
      */
-    private fun look(argb: IntArray, vision: Vision, side: Int): Pair<Int, Int> {
+    private fun look(argb: IntArray, vision: Vision, side: Int): Look {
         val face = lab(Kk.Ink2, vision)
         val ink = lab(Kk.Ink, vision)
         var total = 0.0
         var covered = 0
+        var reached = 0
         val width = side + 8
         for (index in argb.indices) {
             val x = index % width
@@ -120,13 +128,17 @@ class KkRarityTileTest {
             val seen = lab(Color(argb[index]), vision)
             val step = abs(seen.l - under.l) + if (vision == Vision.LUMINANCE) 0.0 else abs(seen.chroma - under.chroma)
             total += step
-            if (step > COVERED) covered++
+            if (step > COVERED + ROUNDING) covered++
+            if (step > COVERED - ROUNDING) reached++
         }
-        return total.toInt() to covered
+        return Look(total.toInt(), covered, reached)
     }
 
     private companion object {
         /** A pixel this many CIELAB units from the ink it lies on is dressed by the frame. */
         const val COVERED = 3.0
+
+        /** How far (CIELAB units) one rasterizer's faint strokes may land from another's: about two 8-bit levels on the ink. */
+        const val ROUNDING = 1.0
     }
 }

@@ -36,6 +36,13 @@ private const val TILE_MAX_SCALE = 0.9f
  */
 private const val TILE_RIM_SHARE = 0.6f
 
+/**
+ * A tile's halo packs a card's light into a quarter of its reach, so each of its strokes shines this much brighter:
+ * its outer edge then stands clear of the ink instead of a faint fringe whose pixels come and go with the
+ * rasterizer's rounding.
+ */
+private const val TILE_HALO_GAIN = 1.6f
+
 /** A tile's glow and sparks reach as far into it as a card's into a card [TILE_GLOW_DP] wide. */
 private const val TILE_GLOW_DP = 200f
 private const val TILE_SPARKS_DP = 150f
@@ -83,7 +90,7 @@ fun DrawScope.drawKkRarityTile(
     if (haloDp > 0f) {
         // Outside the tile only: its inner half would wash over the face the caller painted.
         clipRect(bounds.left, bounds.top, bounds.right, bounds.bottom, ClipOp.Difference) {
-            drawCardHalo(face, bounds, frame, haloDp / KK_CARD_HALO_DP)
+            drawCardHalo(face, bounds, frame, haloDp / KK_CARD_HALO_DP, TILE_HALO_GAIN)
         }
     }
     clipRect(bounds.left, bounds.top, bounds.right, bounds.bottom) {
