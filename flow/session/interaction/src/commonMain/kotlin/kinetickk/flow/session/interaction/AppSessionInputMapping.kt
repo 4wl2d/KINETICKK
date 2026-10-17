@@ -6,6 +6,7 @@ package kinetickk.flow.session.interaction
 import androidx.compose.ui.input.key.Key
 import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.profile.interaction.armory.api.ArmoryOutput
+import kinetickk.ball.profile.interaction.hangar.api.HangarOutput
 import kinetickk.ball.profile.interaction.matrix.api.MatrixOutput
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthOutput
 import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
@@ -21,6 +22,7 @@ internal fun Key.toSessionShortcut(): SessionShortcut? = when (this) {
     Key.A -> SessionShortcut.ARMORY
     Key.B -> SessionShortcut.REBIRTH
     Key.C, Key.I -> SessionShortcut.CODEX
+    Key.H -> SessionShortcut.HANGAR
     Key.M -> SessionShortcut.MUTE
     Key.Escape -> SessionShortcut.BACK
     Key.Enter -> SessionShortcut.ENTER
@@ -28,7 +30,7 @@ internal fun Key.toSessionShortcut(): SessionShortcut? = when (this) {
 }
 
 internal fun HomeOutput.toSessionPulse(): SessionInteractionPulse = when (this) {
-    is HomeOutput.SelectCoreShape -> SessionInteractionPulse.SelectCoreShapeRequested(shape)
+    HomeOutput.OpenHangar -> SessionInteractionPulse.OpenOverlay(AppDestination.Hangar)
     HomeOutput.StartRun -> SessionInteractionPulse.StartRunRequested
     HomeOutput.OpenSettings -> SessionInteractionPulse.OpenOverlay(AppDestination.Settings)
     HomeOutput.OpenLab -> SessionInteractionPulse.OpenOverlay(AppDestination.Lab)
@@ -65,6 +67,10 @@ internal fun RebirthOutput.toSessionPulse(): SessionInteractionPulse = when (thi
     RebirthOutput.ArmRequested,
     RebirthOutput.ConfirmRequested,
     -> SessionInteractionPulse.RebirthRequested
+}
+
+internal fun HangarOutput.toSessionPulse(): SessionInteractionPulse = when (this) {
+    HangarOutput.Back -> SessionInteractionPulse.CloseOverlay
 }
 
 internal fun CodexOutput.toSessionPulse(): SessionInteractionPulse = when (this) {

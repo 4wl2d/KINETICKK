@@ -20,12 +20,11 @@ class RunStatisticsTest {
 
         state.hp = 10f
         state.shield = 5f
-        state.characterRuntime = state.characterRuntime.copy(barrier = 3f)
         state.takeDamage(12f)
-        assertEquals(8.0, state.damageAbsorbed)
-        assertEquals(4.0, state.damageTaken)
+        assertEquals(5.0, state.damageAbsorbed)
+        assertEquals(7.0, state.damageTaken)
         state.takeDamage(100f)
-        assertEquals(4.0, state.damageTaken, "The hurt cooldown must not inflate damage totals")
+        assertEquals(7.0, state.damageTaken, "The hurt cooldown must not inflate damage totals")
         state.hurtCooldown = 0f
         state.takeDamage(100f)
         assertEquals(10.0, state.damageTaken)

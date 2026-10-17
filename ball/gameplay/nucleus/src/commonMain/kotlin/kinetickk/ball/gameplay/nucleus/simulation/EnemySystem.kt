@@ -206,6 +206,7 @@ internal fun MutableGameState.canAct(enemy: Enemy): Boolean =
 internal fun MutableGameState.canAttack(enemy: Enemy): Boolean = canAct(enemy) && elapsed >= enemy.silencedUntil
 
 internal fun MutableGameState.steerEnemy(enemy: Enemy, desiredX: Float, desiredY: Float, agility: Float, delta: Float) {
+    if (isThrownByPolarity(enemy)) return
     val factor = 1f - exp(-agility * delta)
     enemy.vx = lerp(enemy.vx, desiredX * rebirthProfile.enemySpeedMultiplier, factor)
     enemy.vy = lerp(enemy.vy, desiredY * rebirthProfile.enemySpeedMultiplier, factor)

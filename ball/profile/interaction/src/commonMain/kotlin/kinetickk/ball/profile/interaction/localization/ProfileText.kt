@@ -41,6 +41,7 @@ internal enum class ProfileText : TextResource {
     Full,
     ArmoryTitle,
     MatrixTitle,
+    HangarTitle,
     MaximumSynchrony,
     RebirthTitle,
     HostileEscalation,

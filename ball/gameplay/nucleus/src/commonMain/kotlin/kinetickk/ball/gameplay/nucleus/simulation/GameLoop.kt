@@ -95,6 +95,7 @@ internal const val MAX_SIMULATION_ACCUMULATOR_SECONDS: Float = 0.3f
 
 internal fun MutableGameState.simulateStep(delta: Float) {
     interpolationPrimed = true
+    ageCharacterStepFlags()
     previousCameraX = cameraX
     previousCameraY = cameraY
     elapsed += delta
@@ -241,7 +242,7 @@ internal fun MutableGameState.updateHeat(delta: Float) {
 
 /** Furnace Covenant keeps Dash available through overheat; otherwise the usual heat rule applies. */
 internal fun MutableGameState.buildDashReady(): Boolean =
-    if (build.upside(RelicId.FURNACE_COVENANT)) true
+    characterDashReady() ?: if (build.upside(RelicId.FURNACE_COVENANT)) true
     else !overheated && (heat <= MutableGameState.MAX_HEAT - effectiveDashHeatCost() * 0.5f || matrixFreeDashReady())
 
 internal fun MutableGameState.performDash() {
@@ -254,22 +255,30 @@ internal fun MutableGameState.performDash() {
     val distance = length(dx, dy)
     val directionX = if (distance > 24f) dx / distance else lastAimDirectionX
     val directionY = if (distance > 24f) dy / distance else lastAimDirectionY
-    var cost = effectiveDashHeatCost()
-    if (freeDashPrimed) {
+    val onBeat = onCharacterDashDeparture()
+    var cost = effectiveDashHeatCost() * if (onBeat) BEAT_DASH_HEAT else 1f
+    val crescent = coreShape == kinetickk.ball.content.api.CoreShape.CRESCENT
+    // The Crescent's Blink spends a charge instead of heat.
+    if (crescent) cost = 0f
+    if (cost > 0f && freeDashPrimed) {
         freeDashPrimed = false
         freeDashReadyAt = elapsed + build.freeDashCooldown
         cost = 0f
     }
     if (cost > 0f && spendMatrixFreeDash()) cost = 0f
-    if (!relicOnDash(directionX, directionY)) {
+    if (crescent) {
+        relicOnDashDeparture()
+        crescentBlink(directionX, directionY)
+    } else if (!relicOnDash(directionX, directionY)) {
         val forwardVelocity = velocityX * directionX + velocityY * directionY
         if (forwardVelocity < 0f) {
             val reverseAssist = forwardVelocity * 0.72f
             velocityX -= directionX * reverseAssist
             velocityY -= directionY * reverseAssist
         }
-        velocityX += directionX * effectiveDashImpulse()
-        velocityY += directionY * effectiveDashImpulse()
+        val impulse = effectiveDashImpulse() * if (onBeat) BEAT_DASH_IMPULSE else 1f
+        velocityX += directionX * impulse
+        velocityY += directionY * impulse
     }
     val before = heat
     heat += cost
@@ -278,7 +287,7 @@ internal fun MutableGameState.performDash() {
         loseIntegrity((heat - MutableGameState.MAX_HEAT) * 0.5f)
         heat = MutableGameState.MAX_HEAT
     }
-    dashPhaseTime = 0.24f
+    dashPhaseTime = DASH_PHASE_SECONDS
     screenShake = max(screenShake, 5f)
     gainOverdrive(5f)
     shockwave(coreX, coreY, 0.3f, 112f, 0)
@@ -449,6 +458,7 @@ internal fun MutableGameState.updatePolarityStability(delta: Float) {
                     }
                     fireClauses(EffectTrigger.TURN)
                     relicOnTurn()
+                    onCharacterTurn()
                     turnRecoveryCooldown = tuning.turnCooldownSeconds
                     saturationHeadingX = headingX
                     saturationHeadingY = headingY

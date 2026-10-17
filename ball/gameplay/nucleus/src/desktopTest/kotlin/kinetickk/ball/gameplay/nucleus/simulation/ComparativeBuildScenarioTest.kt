@@ -69,7 +69,7 @@ class ComparativeBuildScenarioTest {
     }
 
     @Test
-    fun allSeventyTwoCharacterWeaponPairsExecuteRealInputCombatWithFiniteState() {
+    fun everyCharacterWeaponPairExecutesRealInputCombatWithFiniteState() {
         for (shape in CoreShape.entries) for (weapon in WeaponId.entries) {
             val result = runEncounter(shape, BuildDirection.KINETIC, ProfileCondition.FRESH,
                 Encounter.CROWD, weaponOverride = weapon, secondsOverride = 5)
@@ -80,7 +80,7 @@ class ComparativeBuildScenarioTest {
     }
 
     @Test
-    fun sixFormsHaveThreeMeasuredBuildDirectionsAcrossEncounterAndProfileConditions() {
+    fun everyFormHasThreeMeasuredBuildDirectionsAcrossEncounterAndProfileConditions() {
         val results = mutableListOf<EncounterResult>()
         for (profile in ProfileCondition.entries) for (shape in CoreShape.entries) for (build in BuildDirection.entries) {
             for (encounter in Encounter.entries) {

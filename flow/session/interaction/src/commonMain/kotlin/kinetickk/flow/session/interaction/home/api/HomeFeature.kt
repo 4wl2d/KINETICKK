@@ -24,7 +24,7 @@ data class HomeUiModel(
     val itemCount: Int,
     val weaponCount: Int,
     val unlockedCoreShapes: ImmutableSet<CoreShape>,
-    /** Cumulative achievements that unlock forms (progress behind a locked form's (!)). */
+    /** Cumulative achievements that unlock forms. */
     val characterAchievements: CharacterAchievementProgress = CharacterAchievementProgress(),
     val discoveredRelicCount: Int = 0,
     val relicCount: Int = 0,
@@ -46,7 +46,8 @@ data class HomeUiModel(
 }
 
 sealed interface HomeOutput {
-    data class SelectCoreShape(val shape: CoreShape) : HomeOutput
+    /** The current-character card or the H key: choose a character in the Hangar. */
+    data object OpenHangar : HomeOutput
     data object StartRun : HomeOutput
     data object OpenSettings : HomeOutput
     data object OpenLab : HomeOutput

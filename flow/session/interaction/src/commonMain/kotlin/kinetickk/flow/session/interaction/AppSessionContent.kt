@@ -44,6 +44,7 @@ import androidx.compose.ui.input.key.type
 import kinetickk.ball.gameplay.api.GameplayQuery
 import kinetickk.ball.gameplay.interaction.GameplayPresentation
 import kinetickk.ball.profile.interaction.armory.api.ArmoryFeature
+import kinetickk.ball.profile.interaction.hangar.api.HangarFeature
 import kinetickk.ball.profile.interaction.matrix.api.MatrixFeature
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthFeature
 import kinetickk.ball.profile.interaction.settings.api.SettingsFeature
@@ -77,6 +78,8 @@ fun AppSessionContent(
     initialLanguage: AppLanguage = AppLanguage.English,
     profileReadPort: ProfileReadPort? = null,
     onLanguageChanged: (AppLanguage) -> Unit = {},
+    /** Character selection over Home; without it the Hangar route shows nothing. */
+    hangarFeature: HangarFeature? = null,
 ) {
     val diagnostics = LocalCrashDiagnostics.current
     var languageValue by remember(sessionPort, profileReadPort) {
@@ -203,6 +206,7 @@ fun AppSessionContent(
                 AppDestination.Armory,
                 AppDestination.Rebirth,
                 AppDestination.Codex,
+                AppDestination.Hangar,
                 -> error("Only Home and Gameplay may be base destinations")
             }
 
@@ -238,6 +242,10 @@ fun AppSessionContent(
                 )
                 AppDestination.Codex -> codexFeature.Content(
                     runStacks = currentRunStacks(shellValue, gameplayPresentation),
+                    onOutput = { output -> dispatch(output.toSessionPulse()) },
+                )
+                AppDestination.Hangar -> hangarFeature?.Content(
+                    routeToken = shellValue.routeToken.value,
                     onOutput = { output -> dispatch(output.toSessionPulse()) },
                 )
                 AppDestination.Home,

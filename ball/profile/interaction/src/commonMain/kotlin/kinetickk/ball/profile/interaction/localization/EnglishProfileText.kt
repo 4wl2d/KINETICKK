@@ -40,6 +40,7 @@ internal object EnglishProfileText {
         ProfileText.Full -> "Full"
         ProfileText.ArmoryTitle -> "Armory"
         ProfileText.MatrixTitle -> "Matrix"
+        ProfileText.HangarTitle -> "Hangar"
         ProfileText.MaximumSynchrony -> "Max"
         ProfileText.RebirthTitle -> "Rebirth"
         ProfileText.HostileEscalation -> "Hostile escalation"

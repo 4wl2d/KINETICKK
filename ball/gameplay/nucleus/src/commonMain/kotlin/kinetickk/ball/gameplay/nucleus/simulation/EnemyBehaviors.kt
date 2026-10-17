@@ -101,7 +101,7 @@ internal fun MutableGameState.contactDamage(enemy: Enemy): Float = hostileDamage
  */
 internal fun MutableGameState.hurtByHostileBlast(x: Float, y: Float, damage: Float, kind: IncomingDamage) {
     if (dashPhaseTime > 0f) return
-    if (tryCharacterParry(x, y, coreX - x, coreY - y, coreX, coreY)) return
+    if (tryCharacterParry(x, y, coreX - x, coreY - y, coreX, coreY, damage = damage)) return
     takeDamage(damage, kind = kind)
     screenShake = max(screenShake, 7f)
 }

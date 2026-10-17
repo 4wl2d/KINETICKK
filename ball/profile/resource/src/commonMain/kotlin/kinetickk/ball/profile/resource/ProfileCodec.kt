@@ -549,6 +549,12 @@ private fun CoreShape.wireId(): String = when (this) {
     CoreShape.RING -> "RING"
     CoreShape.DIAMOND -> "DIAMOND"
     CoreShape.TESSERACT -> "TESSERACT"
+    CoreShape.STAR -> "STAR"
+    CoreShape.SPIRAL -> "SPIRAL"
+    CoreShape.DIPOLE -> "DIPOLE"
+    CoreShape.PENTAGON -> "PENTAGON"
+    CoreShape.CRESCENT -> "CRESCENT"
+    CoreShape.HEXAGON -> "HEXAGON"
 }
 
 private fun String.coreShape(): CoreShape = when (this) {
@@ -558,6 +564,12 @@ private fun String.coreShape(): CoreShape = when (this) {
     "RING" -> CoreShape.RING
     "DIAMOND" -> CoreShape.DIAMOND
     "TESSERACT" -> CoreShape.TESSERACT
+    "STAR" -> CoreShape.STAR
+    "SPIRAL" -> CoreShape.SPIRAL
+    "DIPOLE" -> CoreShape.DIPOLE
+    "PENTAGON" -> CoreShape.PENTAGON
+    "CRESCENT" -> CoreShape.CRESCENT
+    "HEXAGON" -> CoreShape.HEXAGON
     else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
 }
 

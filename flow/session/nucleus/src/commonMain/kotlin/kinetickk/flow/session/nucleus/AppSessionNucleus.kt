@@ -151,6 +151,10 @@ object AppSessionNucleus {
         if (!destination.isOverlayDestination()) {
             return rejected(SessionRejection.OverlayUnavailable(destination))
         }
+        // Characters change between runs: the Hangar opens only over the Home base.
+        if (destination == AppDestination.Hangar && state.base != AppDestination.Home) {
+            return rejected(SessionRejection.OverlayUnavailable(destination))
+        }
         val status = state.gameplayStatusIfActive(context)
         if (state.overlay == AppDestination.Settings && destination != AppDestination.Settings) {
             return finishSettings(
@@ -283,6 +287,11 @@ object AppSessionNucleus {
         SessionShortcut.REBIRTH -> openOverlay(state, AppDestination.Rebirth, context)
         SessionShortcut.CODEX -> if (state.overlay == AppDestination.Codex) closeOverlay(state, context)
             else openOverlay(state, AppDestination.Codex, context)
+        SessionShortcut.HANGAR -> when {
+            state.base != AppDestination.Home -> rejected(SessionRejection.ShortcutUnavailable)
+            state.overlay == AppDestination.Hangar -> closeOverlay(state, context)
+            else -> openOverlay(state, AppDestination.Hangar, context)
+        }
         SessionShortcut.MUTE -> toggleMute(state)
         SessionShortcut.BACK -> if (state.overlay != null) {
             closeOverlay(state, context)

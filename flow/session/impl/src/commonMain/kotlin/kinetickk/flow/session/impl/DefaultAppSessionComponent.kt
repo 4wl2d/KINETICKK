@@ -359,6 +359,10 @@ internal class DefaultAppSessionComponent private constructor(
                     SessionShortcut.ARMORY -> requestOpenOverlayContext(AppDestination.Armory)
                     SessionShortcut.REBIRTH -> requestOpenOverlayContext(AppDestination.Rebirth)
                     SessionShortcut.CODEX -> requestOpenOverlayContext(AppDestination.Codex)
+                    SessionShortcut.HANGAR -> if (state.base == AppDestination.Home) {
+                        if (state.overlay == AppDestination.Hangar) requestCloseOverlayContext()
+                        else requestOpenOverlayContext(AppDestination.Hangar)
+                    }
                     SessionShortcut.BACK -> requestCloseOverlayContext()
                     SessionShortcut.ENTER -> if (state.overlay != null) {
                         requestCloseOverlayContext()

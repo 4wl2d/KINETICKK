@@ -40,7 +40,10 @@ class ContentLocalizationTest {
             content.matrixNodes.forEach { addAll(listOf(it.name, it.description)) }
             addAll(MatrixBranch.entries.map { it.displayLabel })
             content.relics.forEach { addAll(listOf(it.name, it.upside, it.liability)) }
-            content.coreShapes.forEach { addAll(listOf(it.displayName, it.mechanicDescription, it.unlockDescription)) }
+            content.coreShapes.forEach {
+                addAll(listOf(it.displayName, it.mechanicDescription, it.unlockDescription, it.mechanicName))
+            }
+            addAll(kinetickk.ball.content.api.CharacterTriggerKind.entries.map { it.displayLabel })
             content.pointsOfInterest.definitions.forEach { addAll(listOf(it.name, it.instruction)) }
             content.rebirth.profiles.forEach { addAll(listOf(it.directive.displayName, it.directive.description)) }
             RebirthMutator.entries.forEach { addAll(listOf(it.displayName, it.description)) }

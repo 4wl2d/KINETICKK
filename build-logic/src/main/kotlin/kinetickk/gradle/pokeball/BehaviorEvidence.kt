@@ -331,7 +331,7 @@ internal val runtimeBehaviorEvidence = listOf(
         ":ball:profile:nucleus", "kinetickk.ball.profile.nucleus.ProfileNucleusTest",
         setOf(
             "achievementCountersSaturateWithoutOverflowAndTheDecisionIsDeterministic",
-            "achievementThresholdsAccumulateAcrossRunsAndUnlockAllSixShapes",
+            "achievementThresholdsAccumulateAcrossRunsAndUnlockAllTwelveShapes",
             "gameplayProgressValidationUsesClosedRejectionReasons",
             "targetOwnedCommandOrdersPersistenceBeforeCorrelatedCompletion",
         ),
@@ -364,7 +364,7 @@ internal val runtimeBehaviorEvidence = listOf(
     BehaviorEvidence(
         ":flow:session:api", "kinetickk.flow.session.api.AppSessionApiContractTest",
         setOf(
-            "shellProjectionRetainsExactlySevenRoutesAndOnlySessionOwnedWorkflowState",
+            "shellProjectionRetainsExactlyEightRoutesAndOnlySessionOwnedWorkflowState",
         ),
     ),
     BehaviorEvidence(

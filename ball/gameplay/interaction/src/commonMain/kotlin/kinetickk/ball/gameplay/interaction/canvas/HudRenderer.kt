@@ -8,6 +8,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.text.font.FontWeight
 import kinetickk.ball.content.api.CoreShape
@@ -880,16 +881,35 @@ internal fun heartbeat(time: Float): Float {
     }
 }
 
-/** Character ability as a small sheared meter without a label; SHARD has no gauge to show. */
+/**
+ * Character ability: the form's glyph ([KkFormGeometry]) and a small sheared meter of the mechanic's
+ * readiness, segmented by what it counts (facets, nodes, charges, drones, streak).
+ */
 private fun DrawScope.drawAbilityMeter(engine: GameplayRenderModel, frame: HudFrame, roles: KkRolePalette, right: Float, bottom: Float) {
-    if (engine.coreShape == CoreShape.SHARD) return
     val ability = engine.characterAbility
     val width = frame.u(if (frame.regular) 64f else 44f)
     val height = frame.u(if (frame.regular) 5f else 4f)
     val armed = ability.charge >= 1f || ability.parryWindow > 0f
     val rect = HudDrawCache.rect(HudRect.ABILITY, right - width, bottom - height, right, bottom)
-    drawKkMeter(rect, ability.charge, if (armed) roles.you else Kk.Bone2, roles,
-        segments = if (engine.coreShape == CoreShape.TESSERACT) 4 else 0)
+    val segments = when (engine.coreShape) {
+        CoreShape.PRISM, CoreShape.TESSERACT, CoreShape.HEXAGON -> 4
+        CoreShape.CRESCENT -> 2
+        CoreShape.PENTAGON -> 5
+        else -> 0
+    }
+    drawKkMeter(rect, ability.charge, if (armed) roles.you else Kk.Bone2, roles, segments = segments)
+    val glyph = height * 1.6f
+    val center = Offset(right - width - glyph - frame.u(4f), bottom - height * 0.5f)
+    val index = engine.coreShape.formIndex()
+    val path = KkFormPaths.of(index, glyph)
+    val color = if (armed) roles.you else Kk.Bone2
+    translate(center.x, center.y) {
+        if (KkFormGeometry.isStroked(index)) {
+            drawPath(path, color, style = kkStroke(max(1f, KkFormGeometry.strokeWidth(index, glyph))))
+        } else {
+            drawPath(path, color)
+        }
+    }
 }
 
 /** Bottom-center: speed number stretched by velocity tier, velocity ladder, overdrive bar. */

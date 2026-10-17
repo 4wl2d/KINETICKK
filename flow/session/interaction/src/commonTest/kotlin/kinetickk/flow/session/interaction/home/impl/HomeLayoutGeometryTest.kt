@@ -106,10 +106,12 @@ class HomeInfoGeometryTest {
             assertEquals(880f - index * 12f, bounds.left, 0.01f)
             assertEquals(161f + index * 74f, bounds.center.y, 0.01f)
         }
-        val tiles = HomeCoreTargets.map(layout::bounds)
-        assertEquals(tiles.sortedBy { it.left }, tiles, "Form tiles keep the game's CoreShape order")
-        tiles.zipWithNext().forEach { (left, right) -> assertTrue(left.right < right.left) }
-        assertTrue(tiles.first().top > menu.last().bottom, "The form row sits under the menu")
+        val card = layout.bounds(HomeLayoutTarget.HANGAR)
+        // The Hangar card spans the form panel where the six form tiles stood.
+        assertEquals(826f, card.left, 0.01f)
+        assertEquals(1_392f, card.right, 0.01f)
+        assertEquals(680f, card.top, 0.01f)
+        assertTrue(card.top > menu.last().bottom, "The Hangar card sits under the menu")
     }
 
     @Test
@@ -155,7 +157,7 @@ class HomeMenuClearanceTest {
     }
 
     @Test
-    fun selectedMenuItemsInLandscapeStayClearOfTheFormTiles() {
+    fun selectedMenuItemsInLandscapeStayClearOfTheHangarCard() {
         val viewports = listOf(Triple(844f, 390f, 1f), Triple(800f, 360f, 1f), Triple(600f, 390f, 1f), Triple(873f, 393f, 1f),
             Triple(914f, 411f, 1f), Triple(2_532f, 1_170f, 3f)) +
             TargetDeviceProfiles.map { Triple(it.heightPx, it.widthPx, it.density) }
@@ -164,16 +166,14 @@ class HomeMenuClearanceTest {
             assertEquals(HomeLayoutMode.COMPACT_LANDSCAPE, layout.mode, "${width}x$height")
             HomeMenuTargets.forEach { target ->
                 val extent = homeSelectedMenuExtent(layout.bounds(target), layout.scene.menuFontSize)
-                HomeCoreTargets.forEach { tile ->
-                    val bounds = layout.bounds(tile)
-                    if (extent.top < bounds.bottom && extent.bottom > bounds.top) {
-                        // Slab, echo and all three speed lines end at least 8 px right of the tile.
-                        assertTrue(extent.left - bounds.right >= 8f * density - 0.01f,
-                            "Selected $target reaches ${extent.left} over $tile ending ${bounds.right} at ${width}x$height")
-                    }
+                val bounds = layout.bounds(HomeLayoutTarget.HANGAR)
+                if (extent.top < bounds.bottom && extent.bottom > bounds.top) {
+                    // Slab, echo and all three speed lines end at least 8 px right of the card.
+                    assertTrue(extent.left - bounds.right >= 8f * density - 0.01f,
+                        "Selected $target reaches ${extent.left} over the Hangar card ending ${bounds.right} at ${width}x$height")
                 }
             }
-            HomeCoreTargets.forEach { tile -> assertTrue(layout.bounds(tile).width / density >= 48f, "$tile at ${width}x$height") }
+            assertTrue(layout.bounds(HomeLayoutTarget.HANGAR).width / density >= 48f, "Hangar card at ${width}x$height")
         }
     }
 
@@ -237,7 +237,7 @@ class HomeMenuClearanceTest {
                     assertFalse(name.overlaps(part), "Selected $target covers the form name $name with $part at ${width}x$height")
                 }
             }
-            HomeCoreTargets.forEach { tile -> assertFalse(name.overlaps(layout.bounds(tile)), "the name runs into $tile at ${width}x$height") }
+            assertFalse(name.overlaps(layout.bounds(HomeLayoutTarget.HANGAR)), "the name runs into the Hangar card at ${width}x$height")
         }
     }
 

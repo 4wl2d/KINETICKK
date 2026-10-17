@@ -3,13 +3,10 @@
 
 package kinetickk.flow.session.interaction.home.impl
 
-import kinetickk.ball.content.api.CharacterUnlockRequirement
-import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.CoreShapeDefinition
 import kinetickk.ball.content.api.MatrixNodeDefinition
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.WeaponDefinition
-import kinetickk.ball.profile.api.CharacterAchievementProgress
 import kinetickk.ball.profile.api.HomeProgressProjection
 import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.flow.session.interaction.audio.SessionAudioCue
@@ -19,7 +16,7 @@ import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 
 internal sealed interface HomeAction {
-    data class SelectCoreShape(val shape: CoreShape) : HomeAction
+    data object OpenHangar : HomeAction
     data object StartRun : HomeAction
     data object OpenLab : HomeAction
     data object OpenArmory : HomeAction
@@ -77,12 +74,7 @@ internal class HomeReducer(
     )
 
     fun reduce(action: HomeAction): HomeReduction = when (action) {
-        is HomeAction.SelectCoreShape -> HomeReduction(
-            effects = listOf(
-                HomeEffect.Emit(HomeOutput.SelectCoreShape(action.shape)),
-                HomeEffect.PlayAudio(SessionAudioCue.UI_CLICK),
-            ),
-        )
+        HomeAction.OpenHangar -> navigate(HomeOutput.OpenHangar)
         HomeAction.StartRun -> navigate(HomeOutput.StartRun)
         HomeAction.OpenLab -> navigate(HomeOutput.OpenLab)
         HomeAction.OpenArmory -> navigate(HomeOutput.OpenArmory)
@@ -98,19 +90,6 @@ internal class HomeReducer(
         ),
     )
 }
-
-/** Cumulative progress toward a form's unlock goal, as counted by the Profile achievements. */
-internal fun coreShapeUnlockProgress(
-    shape: CoreShapeDefinition,
-    achievements: CharacterAchievementProgress,
-): Long = when (shape.unlockRequirement) {
-    CharacterUnlockRequirement.AVAILABLE -> 1L
-    CharacterUnlockRequirement.ELITE_KILLS -> achievements.eliteKills
-    CharacterUnlockRequirement.DASH_HITS -> achievements.dashHits
-    CharacterUnlockRequirement.COMPLETED_ORBITS -> achievements.completedOrbits
-    CharacterUnlockRequirement.ARCHITECT_VICTORIES -> achievements.architectVictories
-    CharacterUnlockRequirement.DISTINCT_CHARACTER_VICTORIES -> achievements.victoriousCharacters.size.toLong()
-}.coerceAtMost(shape.unlockTarget.toLong())
 
 internal data class HomeViewport(
     val width: Float,

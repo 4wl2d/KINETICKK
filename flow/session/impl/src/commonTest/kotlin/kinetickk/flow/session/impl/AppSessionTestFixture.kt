@@ -179,6 +179,7 @@ internal class FakeProfileCapabilities(
     override fun query(query: ProfileQuery.GetHomeProgress): kinetickk.ball.profile.api.HomeProgressProjection = error("unused")
     override fun query(query: ProfileQuery.GetCollection): kinetickk.ball.profile.api.CollectionProjection = error("unused")
     override fun query(query: ProfileQuery.GetMatrixProgress): kinetickk.ball.profile.api.MatrixProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetHangar): kinetickk.ball.profile.api.HangarProjection = error("unused")
     override fun query(query: ProfileQuery.GetLoadout): kinetickk.ball.profile.api.LoadoutProjection = error("unused")
 
     private fun canAdvanceRebirth(): Boolean =

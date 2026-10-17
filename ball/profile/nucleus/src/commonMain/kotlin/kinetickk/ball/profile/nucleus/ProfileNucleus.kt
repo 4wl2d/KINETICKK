@@ -10,6 +10,7 @@ import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
+import kinetickk.ball.profile.api.HangarProjection
 import kinetickk.ball.profile.api.HomeProgressProjection
 import kinetickk.ball.profile.api.MatrixProfileSnapshot
 import kinetickk.ball.profile.api.MatrixProgress
@@ -112,6 +113,7 @@ object ProfileNucleus {
             canAdvanceRebirth = canAdvanceRebirth(state),
             characterAchievements = state.profile.characterAchievements,
             unlockedCoreShapes = unlockedCoreShapes(state.profile, state.policy),
+            characterProgress = hangarShapeProgress(state.profile, state.policy),
         )
 
     fun query(state: ProfileState, query: ProfileQuery.GetMatrixProgress): MatrixProgressProjection =
@@ -143,6 +145,15 @@ object ProfileNucleus {
             canAdvance = canAdvanceRebirth(state),
         )
 
+    fun query(state: ProfileState, query: ProfileQuery.GetHangar): HangarProjection =
+        HangarProjection(
+            instanceId = state.instanceId,
+            revision = state.revision,
+            shapes = hangarShapeProgress(state.profile, state.policy),
+            selected = state.profile.loadout.coreShape,
+            rebirthRank = state.profile.rebirthProgress.rank,
+        )
+
     fun query(state: ProfileState, query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection =
         PersistenceStatusProjection(
             instanceId = state.instanceId,
@@ -160,6 +171,7 @@ object ProfileNucleus {
         ProfilePulse.ResetMatrix -> resetMatrix(state)
         is ProfilePulse.PurchaseOrEquipWeapon -> purchaseOrEquipWeapon(state, pulse.id)
         is ProfilePulse.MarkCollectionEntryViewed -> markCollectionEntryViewed(state, pulse.entry)
+        is ProfilePulse.SelectCoreShape -> selectCoreShape(state, pulse.shape, commandReply = false)
     }
 
     private fun markCollectionEntryViewed(state: ProfileState, entry: CollectionEntry): ProfileDecision {
@@ -312,9 +324,11 @@ object ProfileNucleus {
         )
     }
 
+    /** The Hangar's local pulse and the Session's command share one rule; only the command replies. */
     private fun selectCoreShape(
         state: ProfileState,
         shape: kinetickk.ball.content.api.CoreShape,
+        commandReply: Boolean = true,
     ): ProfileDecision {
         if (!isCoreShapeUnlocked(state.profile, state.policy.coreShape(shape))) {
             return rejected(ProfileRejection.CoreShapeLocked)
@@ -325,7 +339,11 @@ object ProfileNucleus {
             nextProfile = state.profile.copy(
                 loadout = state.profile.loadout.copy(coreShape = shape),
             ),
-            commandOutput = ProfileOutput.CoreShapeSelected(ProfileCoreShapeSelected(state.revision.next(), shape)),
+            commandOutput = if (commandReply) {
+                ProfileOutput.CoreShapeSelected(ProfileCoreShapeSelected(state.revision.next(), shape))
+            } else {
+                null
+            },
         )
     }
 

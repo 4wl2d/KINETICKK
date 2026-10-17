@@ -137,6 +137,82 @@ internal class CopyOnWriteFloatArray private constructor(
     )
 }
 
+/**
+ * A fixed-size float array kept in pages of [pageSize] values that forks share copy-on-write page by
+ * page. A fork shares the whole page table; its first changed write copies the table (one reference
+ * per page) and every changed write copies only its own page once. A ring buffer that a fixed step
+ * writes one record at a time therefore copies one small page per step instead of the whole buffer.
+ */
+internal class CopyOnWritePagedFloatArray private constructor(
+    val size: Int,
+    private val pageSize: Int,
+    private var table: PageTable,
+) : Iterable<Float> {
+    constructor(size: Int, pageSize: Int) : this(size, pageSize, PageTable.allocate(size, pageSize))
+
+    val pageCount: Int
+        get() = table.pages.size
+
+    operator fun get(index: Int): Float {
+        if (index < 0 || index >= size) throw IndexOutOfBoundsException("index $index, size $size")
+        return table.pages[index / pageSize][index % pageSize]
+    }
+
+    operator fun set(index: Int, value: Float) {
+        if (index < 0 || index >= size) throw IndexOutOfBoundsException("index $index, size $size")
+        val page = index / pageSize
+        val offset = index % pageSize
+        var current = table
+        if (current.pages[page][offset].toRawBits() == value.toRawBits()) return
+        if (current.shared) {
+            current = PageTable(current.pages.copyOf(), BooleanArray(current.pages.size))
+            table = current
+        }
+        if (!current.owned[page]) {
+            current.pages[page] = current.pages[page].copyOf()
+            current.owned[page] = true
+        }
+        current.pages[page][offset] = value
+    }
+
+    fun toList(): List<Float> = List(size) { index -> get(index) }
+
+    fun fork(): CopyOnWritePagedFloatArray {
+        table.shared = true
+        return CopyOnWritePagedFloatArray(size, pageSize, table)
+    }
+
+    /** Pages this array and [other] still read from the same storage. */
+    fun sharedPagesWith(other: CopyOnWritePagedFloatArray): Int {
+        val pages = table.pages
+        val otherPages = other.table.pages
+        var shared = 0
+        for (page in pages.indices) if (page < otherPages.size && pages[page] === otherPages[page]) shared++
+        return shared
+    }
+
+    override fun iterator(): FloatIterator = object : FloatIterator() {
+        private var index = 0
+        override fun hasNext(): Boolean = index < size
+        override fun nextFloat(): Float = get(index++)
+    }
+
+    /** Page references, which pages this table may write in place, and whether a fork shares the table. */
+    private class PageTable(
+        val pages: Array<FloatArray>,
+        val owned: BooleanArray,
+        var shared: Boolean = false,
+    ) {
+        companion object {
+            fun allocate(size: Int, pageSize: Int): PageTable {
+                require(size >= 0 && pageSize > 0) { "size $size, page size $pageSize" }
+                val count = (size + pageSize - 1) / pageSize
+                return PageTable(Array(count) { FloatArray(pageSize) }, BooleanArray(count) { true })
+            }
+        }
+    }
+}
+
 /** A mutable-set facade whose reduction forks copy only when membership changes. */
 internal class CopyOnWriteMutableSet<Element> private constructor(
     private var storage: SetStorage<Element>,

@@ -639,6 +639,7 @@ class ProfileNucleusTest {
             ProfileNucleus.query(state, ProfileQuery.GetCollection),
             ProfileNucleus.query(state, ProfileQuery.GetRebirthProgress),
             ProfileNucleus.query(state, ProfileQuery.GetPersistenceStatus),
+            ProfileNucleus.query(state, ProfileQuery.GetHangar),
         )
         projections.forEach { projection ->
             assertEquals(state.instanceId, projection.instanceId)
@@ -658,7 +659,7 @@ class ProfileNucleusTest {
     }
 
     @Test
-    fun achievementThresholdsAccumulateAcrossRunsAndUnlockAllSixShapes() {
+    fun achievementThresholdsAccumulateAcrossRunsAndUnlockAllTwelveShapes() {
         var state = readyState()
         fun record(update: GameplayProgressUpdate) {
             val frame = applyGameplayProgress(state, update).acceptedFrame()
@@ -666,6 +667,12 @@ class ProfileNucleusTest {
             state = constructedProfile(frame.nextState.profile, frame.nextState.revision.value)
         }
         fun unlocked() = ProfileNucleus.query(state, ProfileQuery.GetHomeProgress).unlockedCoreShapes
+        fun rank(highestCleared: Int) {
+            state = constructedProfile(
+                state.profile.copy(rebirthProgress = RebirthProgress(highestCleared, highestCleared)),
+                state.revision.value,
+            )
+        }
 
         assertEquals(setOf(CoreShape.ORB), unlocked())
         record(GameplayProgressUpdate(eliteKills = 2, dashHits = 19))
@@ -678,11 +685,64 @@ class ProfileNucleusTest {
         record(GameplayProgressUpdate(architectDefeatedWith = CoreShape.PRISM))
         assertFalse(CoreShape.TESSERACT in unlocked())
         record(GameplayProgressUpdate(architectDefeatedWith = CoreShape.SHARD))
+        assertTrue(CoreShape.TESSERACT in unlocked())
+        // Cumulative counters: one short, then exactly the target.
+        record(GameplayProgressUpdate(totalKills = 1_499, ricochets = 39))
+        assertFalse(CoreShape.STAR in unlocked())
+        assertFalse(CoreShape.DIPOLE in unlocked())
+        record(GameplayProgressUpdate(totalKills = 1, ricochets = 1))
+        assertTrue(CoreShape.STAR in unlocked())
+        assertTrue(CoreShape.DIPOLE in unlocked())
+        // Reborn rank gates: rank = highest cleared tier + 1.
+        rank(0)
+        assertTrue(CoreShape.SPIRAL in unlocked())
+        assertFalse(CoreShape.PENTAGON in unlocked())
+        rank(1)
+        assertFalse(CoreShape.PENTAGON in unlocked())
+        rank(2)
+        assertTrue(CoreShape.PENTAGON in unlocked())
+        rank(4)
+        assertTrue(CoreShape.CRESCENT in unlocked())
+        assertFalse(CoreShape.HEXAGON in unlocked())
+        rank(6)
         assertEquals(CoreShape.entries.toSet(), unlocked())
         assertEquals(4, state.profile.characterAchievements.architectVictories)
         assertEquals(3, state.profile.characterAchievements.victoriousCharacters.size)
         assertEquals(0L, state.profile.economy.lifetimeMatter)
         repeat(3) { assertEquals(CoreShape.entries.toSet(), unlocked()) }
+    }
+
+    @Test
+    fun hangarQueryReportsProgressAndTheLocalPulseSelectsOnlyUnlockedShapes() {
+        val state = readyState(profile = defaultPlayerProfile(TestProfilePolicy).copy(
+            characterAchievements = kinetickk.ball.profile.api.CharacterAchievementProgress(eliteKills = 5, totalKills = 700),
+            rebirthProgress = RebirthProgress(0, 0),
+        ))
+        val hangar = ProfileNucleus.query(state, ProfileQuery.GetHangar)
+        assertEquals(state.revision, hangar.revision)
+        assertEquals(CoreShape.entries.toList(), hangar.shapes.map { it.shape })
+        assertEquals(CoreShape.ORB, hangar.selected)
+        assertEquals(1, hangar.rebirthRank)
+        val prism = hangar.shapes.first { it.shape == CoreShape.PRISM }
+        assertTrue(prism.unlocked)
+        assertEquals(3L, prism.progress, "progress is capped at the target")
+        val star = hangar.shapes.first { it.shape == CoreShape.STAR }
+        assertEquals(false to (700L to 1_500L), star.unlocked to (star.progress to star.target))
+        assertTrue(hangar.shapes.first { it.shape == CoreShape.SPIRAL }.unlocked)
+        assertFalse(hangar.shapes.first { it.shape == CoreShape.HEXAGON }.unlocked)
+
+        val selected = ProfileNucleus.decide(state, ProfileNucleusPulse.Intent(ProfilePulse.SelectCoreShape(CoreShape.SPIRAL)))
+            .acceptedFrame()
+        assertEquals(CoreShape.SPIRAL, selected.nextState.profile.loadout.coreShape)
+        assertEquals(
+            ProfileRejection.CoreShapeLocked,
+            ProfileNucleus.decide(state, ProfileNucleusPulse.Intent(ProfilePulse.SelectCoreShape(CoreShape.STAR))).rejection(),
+        )
+        assertEquals(
+            ProfileRejection.NoChange,
+            ProfileNucleus.decide(state, ProfileNucleusPulse.Intent(ProfilePulse.SelectCoreShape(CoreShape.ORB))).rejection(),
+        )
+        assertEquals(CoreShape.ORB, state.profile.loadout.coreShape)
     }
 
     @Test

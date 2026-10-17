@@ -34,18 +34,10 @@ private val WeaponIcons: Array<KkIcon> = Array(WeaponId.entries.size) { index ->
     KkIcon.valueOf("WEAPONS_" + WeaponId.entries[index].name)
 }
 
-private val FormIcons: Array<KkIcon> = arrayOf(
-    KkIcon.FORMS_CIRCLE, // ORB
-    KkIcon.FORMS_SQUARE, // PRISM
-    KkIcon.FORMS_TRIANGLE, // SHARD
-    KkIcon.FORMS_RING, // RING
-    KkIcon.FORMS_DIAMOND, // DIAMOND
-    KkIcon.FORMS_TESSERACT, // TESSERACT
-)
-
 internal fun WeaponId.overlayIcon(): KkIcon = WeaponIcons[ordinal]
 
-internal fun CoreShape.overlayIcon(): KkIcon = FormIcons[ordinal.coerceIn(0, FormIcons.size - 1)]
+/** Form icons follow the character order (see [formIndex]). */
+internal fun CoreShape.overlayIcon(): KkIcon = KkIcon.Forms[formIndex()]
 
 internal fun RelicAspect.overlayIcon(): KkIcon = KkIcon.Aspects[ordinal]
 

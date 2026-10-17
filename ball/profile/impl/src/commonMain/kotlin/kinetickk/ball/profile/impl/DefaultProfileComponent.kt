@@ -6,6 +6,7 @@ package kinetickk.ball.profile.impl
 import kinetickk.ball.content.api.ProfilePolicySnapshot
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.profile.api.CollectionProjection
+import kinetickk.ball.profile.api.HangarProjection
 import kinetickk.ball.profile.api.HomeProgressProjection
 import kinetickk.ball.profile.api.MatrixProgressProjection
 import kinetickk.ball.profile.api.LoadoutProjection
@@ -113,6 +114,9 @@ internal class DefaultProfileComponent(
         ProfileNucleus.query(committedState, query)
 
     override fun query(query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection =
+        ProfileNucleus.query(committedState, query)
+
+    override fun query(query: ProfileQuery.GetHangar): HangarProjection =
         ProfileNucleus.query(committedState, query)
 
     internal fun stateSnapshot(): ProfileState = committedState

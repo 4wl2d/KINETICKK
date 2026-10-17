@@ -45,13 +45,18 @@ class GameplayRenderModelMapperTest {
     fun reusedProjectionMatchesIndependentFreshMappingAndRetainedSnapshotsSurviveLaterInputs() {
         val frame = GameplayInteractionPulse.FrameElapsed.fromValidated(1f / 60f)
         val source = fullyPopulatedState().apply {
-            characterRuntime = CharacterRuntime(
-                charge = 0.4f,
-                barrier = 2f,
-                ringRadius = 61f,
-                parryWindow = 0.2f,
-                lattice = listOf(WorldPoint(-1f, 2f), WorldPoint(3f, -4f)),
-            )
+            coreShape = kinetickk.ball.content.api.CoreShape.TESSERACT
+            characterRuntime = CharacterRuntime().apply {
+                charge = 0.4f
+                haloRadius = 61f
+                parryWindow = 0.2f
+                latticeCount = 2
+                latticeNodes[0] = -1f
+                latticeNodes[1] = 2f
+                latticeNodes[2] = 3f
+                latticeNodes[3] = -4f
+                latticeTime = 5f
+            }
             pointsOfInterest = listOf(
                 PointOfInterestState(
                     offerId = 1,
@@ -558,9 +563,7 @@ class GameplayRenderModelMapperTest {
         "choices" to choices.toList(),
         "rewardPreviews" to rewardPreviews.toList(),
         "characterAbility" to listOf(
-            characterAbility.charge.toRawBits(), characterAbility.barrier.toRawBits(),
-            characterAbility.ringRadius.toRawBits(), characterAbility.parryWindow.toRawBits(),
-            characterAbility.lattice.map { listOf(it.x.toRawBits(), it.y.toRawBits()) },
+            characterAbility.toString(),
         ),
         "pointsOfInterest" to pointsOfInterest.map {
             listOf(

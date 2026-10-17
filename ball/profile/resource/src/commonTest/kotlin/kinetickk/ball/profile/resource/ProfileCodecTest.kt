@@ -694,7 +694,7 @@ class ProfileCodecTest {
                 eliteKills = Long.MAX_VALUE,
                 dashHits = 20,
                 completedOrbits = 1,
-                architectVictories = 6,
+                architectVictories = 12,
                 victoriousCharacters = kinetickk.foundation.collections.ImmutableSet.copyOf(CoreShape.entries),
             )
             val snapshot = testSnapshot(PlayerProfile(
@@ -707,6 +707,21 @@ class ProfileCodecTest {
         assertEquals(ProfileSnapshotRejection.INVALID_DECIMAL, decodeRejection(negative))
         val inconsistent = DEFAULT_GOLDEN.replace("\"victoriousCharacterIds\":[]", "\"victoriousCharacterIds\":[\"ORB\"]")
         assertEquals(ProfileSnapshotRejection.INCONSISTENT_PROFILE, decodeRejection(inconsistent))
+    }
+
+    @Test
+    fun theSixNewCharactersHaveStableWireIds() {
+        val wire = mapOf(
+            CoreShape.STAR to "STAR", CoreShape.SPIRAL to "SPIRAL", CoreShape.DIPOLE to "DIPOLE",
+            CoreShape.PENTAGON to "PENTAGON", CoreShape.CRESCENT to "CRESCENT", CoreShape.HEXAGON to "HEXAGON",
+        )
+        wire.forEach { (shape, id) ->
+            val encoded = requireEncoded(testSnapshot(PlayerProfile(loadout = PlayerLoadout(coreShape = shape))))
+            assertTrue("\"coreShapeId\":\"$id\"" in encoded, encoded)
+            assertEquals(shape, decoded(encoded).profile.loadout.coreShape)
+        }
+        val unknown = DEFAULT_GOLDEN.replace("\"coreShapeId\":\"ORB\"", "\"coreShapeId\":\"NONAGON\"")
+        assertEquals(ProfileSnapshotRejection.INVALID_STABLE_ID, decodeRejection(unknown))
     }
 
     @Test

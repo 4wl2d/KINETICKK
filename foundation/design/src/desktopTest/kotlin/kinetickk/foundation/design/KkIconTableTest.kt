@@ -87,7 +87,8 @@ class KkIconTableTest {
         val dashed = render { drawKkIcon(KkIcon.WEAPONS_GRAVITY_MINES, Offset(24f, 24f), 48f, Color.White) }
         val solid = render { drawKkIcon(KkIcon.FORMS_RING, Offset(24f, 24f), 48f, Color.White) }
         assertNotEquals(dashed.toList(), solid.toList())
-        assertEquals(6, KkIcon.Forms.size)
+        assertEquals(12, KkIcon.Forms.size)
+        assertEquals(KkFormGeometry.COUNT, KkIcon.Forms.size)
         assertEquals(KkIcon.WEAPONS_FLUX_WAKE, KkIcon.byKey("weapons.flux_wake"))
     }
 

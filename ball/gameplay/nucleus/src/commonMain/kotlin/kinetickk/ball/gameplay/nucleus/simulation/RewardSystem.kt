@@ -38,6 +38,7 @@ internal fun MutableGameState.onEnemyKilled(enemy: Enemy) {
     if (eliteReward) eliteKills++
     comboTime = effectiveComboWindow()
     onBuildKill(enemy)
+    onCharacterKill(enemy, eliteReward)
     val profile = enemy.type.profile
     val comboMultiplier = 1f + min(combo, 50) * 0.01f + velocityTier * 0.15f
     grantMatter(profile.matterReward * comboMultiplier * content.tempo.matterRewardMultiplier)

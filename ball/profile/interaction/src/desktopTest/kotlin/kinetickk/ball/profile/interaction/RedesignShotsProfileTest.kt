@@ -87,6 +87,25 @@ class RedesignShotsProfileTest {
     private val scales = listOf(1.25f to "", 1.75f to "-text175")
 
     @Test
+    fun hangar() {
+        val model = kinetickk.ball.profile.interaction.hangar.impl.hangarProjection(
+            unlocked = setOf(kinetickk.ball.content.api.CoreShape.ORB, kinetickk.ball.content.api.CoreShape.PRISM,
+                kinetickk.ball.content.api.CoreShape.STAR),
+        ).let { projection ->
+            with(kinetickk.ball.profile.interaction.hangar.impl.HangarShotAccess) { projection.model(1_284L) }
+        }
+        for ((state, shape) in listOf(
+            "selected" to kinetickk.ball.content.api.CoreShape.ORB,
+            "unlocked" to kinetickk.ball.content.api.CoreShape.STAR,
+            "locked" to kinetickk.ball.content.api.CoreShape.HEXAGON,
+        )) for ((scale, suffix) in scales) {
+            shoot("hangar", state + suffix) {
+                kinetickk.ball.profile.interaction.hangar.impl.HangarShotAccess.Content(model, shape, scale)
+            }
+        }
+    }
+
+    @Test
     fun armory() {
         val model = ArmoryRenderModel(
             totalMatter = 1_284L,

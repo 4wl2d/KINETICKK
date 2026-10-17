@@ -247,5 +247,6 @@ internal fun MutableGameState.cooldown(base: Float): Float =
         attackSpeed *
             (1f + currentWeaponMastery.activationSpeedBonus) *
             buildActivationBonus() *
-            if (overdriveTime > 0f) 1.35f else 1f
+            characterActivationMultiplier() *
+            (if (overdriveTime > 0f) 1.35f else 1f)
         ).coerceAtLeast(0.2f)

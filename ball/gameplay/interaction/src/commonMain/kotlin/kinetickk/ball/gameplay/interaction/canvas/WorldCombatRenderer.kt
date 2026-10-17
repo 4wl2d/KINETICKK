@@ -106,6 +106,7 @@ private fun DrawScope.drawWorldLayer(
         drawEnemy(engine, engine.enemies[index], shakeX, shakeY, roles, statusDetail)
     }
     drawElementBursts(engine, visualFx, shakeX, shakeY, roles)
+    drawCharacterActors(engine, shakeX, shakeY, roles)
     drawProjectiles(engine, shakeX, shakeY, roles)
     drawImpactMarks(engine, visualFx, shakeX, shakeY)
     // The tether and the Core/cursor halos are HUD (screen-space) elements drawn by HudRenderer.
@@ -508,7 +509,7 @@ internal fun DrawScope.drawWeaponArcs(
 }
 
 /**
- * The Core: a bone form silhouette per [CoreShape] with a hard ink rim and a soft glow; you-color
+ * The Core: a bone form silhouette ([KkFormGeometry]) with a hard ink rim and a soft glow; you-color
  * in overdrive and heat-tinted while overheated (`HUD.dc.html`). Integrity/heat/shield arcs are
  * the HUD's Core halo.
  */
@@ -532,82 +533,19 @@ internal fun DrawScope.drawCore(engine: GameplayRenderModel, center: Offset, rol
         val compression = (sin(engine.renderElapsed * 15f) + 1f) * 0.5f
         drawCircle(Kk.Bone.copy(alpha = 0.6f), 30f - compression * 5f, center, style = WorldStrokes.dashedMedium)
     }
-    val radius = engine.coreRadius
-    when (engine.coreShape) {
-        CoreShape.ORB -> {
-            drawCircle(Kk.Ink, radius + 3f, center)
-            drawCircle(fill, radius, center)
-        }
-        CoreShape.PRISM -> {
-            val half = radius * 0.88f
-            drawRect(Kk.Ink, Offset(center.x - half - 3f, center.y - half - 3f), Size(half * 2f + 6f, half * 2f + 6f))
-            drawRect(fill, Offset(center.x - half, center.y - half), Size(half * 2f, half * 2f))
-        }
-        CoreShape.SHARD -> {
-            val path = WorldPaths.silhouette(EnemySilhouette.TRIANGLE, radius * 1.15f)
-            translate(center.x, center.y) {
-                drawPath(path, Kk.Ink, style = kkStroke(6f))
-                drawPath(path, fill)
-            }
-        }
-        CoreShape.RING -> {
-            drawCircle(Kk.Ink, radius + 3f, center)
-            drawCircle(fill, radius - 4.5f, center, style = kkStroke(9f))
-        }
-        CoreShape.DIAMOND -> {
-            val half = radius * 0.9f
-            rotate(45f, center) {
-                drawRect(Kk.Ink, Offset(center.x - half - 3f, center.y - half - 3f), Size(half * 2f + 6f, half * 2f + 6f))
-                drawRect(fill, Offset(center.x - half, center.y - half), Size(half * 2f, half * 2f))
-            }
-        }
-        CoreShape.TESSERACT -> drawTesseractCore(center, engine.renderElapsed, fill, radius)
-    }
+    drawCoreForm(engine, center, fill, roles)
     val ability = engine.characterAbility
-    if (ability.charge > 0f && engine.coreShape != CoreShape.RING) {
+    if (ability.charge > 0f && engine.coreShape != CoreShape.RING && engine.coreShape != CoreShape.PRISM) {
         drawArc(roles.you, -90f, 360f * ability.charge.coerceIn(0f, 1f), false,
             Offset(center.x - 25f, center.y - 25f), Size(50f, 50f), style = kkStroke(2f))
     }
-    // Barrier and parry marks stay inside the HUD's Core halo (radius 38).
-    if (ability.barrier > 0f) {
-        rotate(45f, center) {
-            drawRect(roles.shield.copy(alpha = 0.8f), Offset(center.x - 21f, center.y - 21f), Size(42f, 42f), style = kkStroke(2.5f))
-        }
-    }
+    // Parry marks stay inside the HUD's Core halo (radius 38).
     if (ability.parryWindow > 0f) {
         rotate(45f, center) {
             drawRect(Kk.Bone, Offset(center.x - 24f, center.y - 24f), Size(48f, 48f), style = kkStroke(2f))
         }
     }
     if (engine.dashPhaseTime > 0f) drawCircle(roles.you.copy(alpha = 0.8f), 28f + engine.dashPhaseTime * 50f, center, style = kkStroke(2f))
-}
-
-/** Form tricks in the world: Ring's orbit band and Tesseract's lattice nodes in the you color. */
-private fun DrawScope.drawCharacterField(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, roles: KkRolePalette) {
-    val ability = engine.characterAbility
-    val you = roles.you
-    if (engine.coreShape == CoreShape.RING) {
-        val core = world(engine, engine.renderCoreX, engine.renderCoreY, shakeX, shakeY)
-        val active = engine.speed >= 40f
-        val radius = ability.ringRadius
-        drawCircle(you.copy(alpha = if (active) 0.07f else 0.02f), radius, core, style = kkStroke(36f))
-        drawCircle(you.copy(alpha = if (active) 0.45f else 0.18f), radius - 18f, core, style = kkStroke(1f))
-        drawCircle(you.copy(alpha = if (active) 0.6f else 0.2f), radius + 18f, core, style = kkStroke(1.5f))
-    }
-    if (engine.coreShape == CoreShape.TESSERACT) {
-        val lattice = ability.lattice
-        for (index in lattice.indices) {
-            val point = lattice[index]
-            val position = world(engine, point.x, point.y, shakeX, shakeY)
-            if (index > 0) {
-                val previous = lattice[index - 1]
-                drawLine(you.copy(alpha = 0.5f), world(engine, previous.x, previous.y, shakeX, shakeY), position, 1.5f)
-            }
-            rotate(45f, position) {
-                drawRect(you, Offset(position.x - 7f, position.y - 7f), Size(14f, 14f), style = kkStroke(1.5f))
-            }
-        }
-    }
 }
 
 private val TesseractVertices = FloatArray(32)

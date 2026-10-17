@@ -96,9 +96,9 @@ class ReworkContractHelpersTest {
 
         state.onCharacterPrimaryHit(enemy)
 
-        val expected = 48f * state.abilityPower() * enemy.weaponTaken
+        val expected = PUNCTURE_DAMAGE * state.abilityPower() * enemy.weaponTaken
         assertEquals(expected, 10_000f - enemy.hp, 0.01f)
-        assertNotEquals(48f * state.effectiveWeaponPower() * enemy.weaponTaken, 10_000f - enemy.hp)
+        assertNotEquals(PUNCTURE_DAMAGE * state.effectiveWeaponPower() * enemy.weaponTaken, 10_000f - enemy.hp)
     }
 
     @Test

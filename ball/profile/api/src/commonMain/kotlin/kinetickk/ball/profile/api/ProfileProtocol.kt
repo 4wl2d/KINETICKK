@@ -141,6 +141,9 @@ sealed interface ProfilePulse {
     ) : Business
 
     data class MarkCollectionEntryViewed(val entry: CollectionEntry) : Business
+
+    /** Chooses the character for the next run from the Hangar; it must be unlocked. */
+    data class SelectCoreShape(val shape: CoreShape) : Business
 }
 
 sealed interface ProfileGameplayProgressRejection {

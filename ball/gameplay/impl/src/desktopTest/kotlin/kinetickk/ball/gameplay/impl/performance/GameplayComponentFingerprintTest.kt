@@ -11,6 +11,8 @@ import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.gameplay.interaction.fx.BuildNotificationProjection
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.nucleus.render.CharacterAbilityProjection
+import kinetickk.ball.gameplay.nucleus.render.CharacterDroneProjection
+import kinetickk.ball.gameplay.nucleus.render.CharacterScarProjection
 import kinetickk.ball.gameplay.nucleus.render.CharacterLatticePoint
 import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
@@ -90,21 +92,49 @@ class GameplayComponentFingerprintTest {
     }
 
     @Test
-    fun characterAbilityWitnessRetainsChargeDefenseGeometryAndLatticeOrder() {
+    fun characterAbilityWitnessRetainsEveryMechanicFieldAndListOrder() {
         val first = CharacterLatticePoint(12f, 34f)
         val second = CharacterLatticePoint(56f, 78f)
-        val ability = CharacterAbilityProjection(0.5f, 20f, 155f, 0.18f, immutableListOf(first, second))
+        val scar = CharacterScarProjection(1f, 2f, 3f, 4f, 0.5f, 0f)
+        val drone = CharacterDroneProjection(5f, 6f, 7f, 8f, false)
+        val ability = CharacterAbilityProjection(
+            charge = 0.5f, ringRadius = 155f, parryWindow = 0.18f, lattice = immutableListOf(first, second),
+            facets = 3, facetProgress = 0.2f, edge = 2, stellarMass = 7, novaFlash = 0.1f, haloBurstFlash = 0.3f,
+            polarity = 1, polarityFlash = 0.4f, beatPeriod = 0.75f, beatWindow = 0.11f, beatStreak = 2,
+            blinkCharges = 1, blinkRecharge = 0.6f, scars = immutableListOf(scar), drones = immutableListOf(drone),
+            ghostActive = true, ghostX = 9f, ghostY = 10f, previousGhostX = 11f, previousGhostY = 12f,
+        )
         val expected = canonicalCharacterAbilityFingerprint(ability)
         assertEquals(expected, canonicalCharacterAbilityFingerprint(ability.copy(lattice = immutableListOf(first.copy(), second.copy()))))
         listOf(
             ability.copy(charge = 0.6f),
-            ability.copy(barrier = 21f),
             ability.copy(ringRadius = 156f),
             ability.copy(parryWindow = 0.17f),
             ability.copy(lattice = immutableListOf(first)),
             ability.copy(lattice = immutableListOf(second, first)),
             ability.copy(lattice = immutableListOf(first.copy(x = 13f), second)),
             ability.copy(lattice = immutableListOf(first.copy(y = 35f), second)),
+            ability.copy(facets = 4),
+            ability.copy(facetProgress = 0.3f),
+            ability.copy(edge = 3),
+            ability.copy(stellarMass = 8),
+            ability.copy(novaFlash = 0.2f),
+            ability.copy(haloBurstFlash = 0.4f),
+            ability.copy(polarity = 0),
+            ability.copy(polarityFlash = 0.5f),
+            ability.copy(beatPeriod = 0f),
+            ability.copy(beatWindow = 0f),
+            ability.copy(beatStreak = 3),
+            ability.copy(blinkCharges = 2),
+            ability.copy(blinkRecharge = 0.7f),
+            ability.copy(scars = immutableListOf()),
+            ability.copy(scars = immutableListOf(scar.copy(fuse = 0.6f))),
+            ability.copy(scars = immutableListOf(scar.copy(fade = 0.1f))),
+            ability.copy(drones = immutableListOf(drone.copy(darting = true))),
+            ability.copy(drones = immutableListOf(drone.copy(previousX = 1f))),
+            ability.copy(ghostActive = false),
+            ability.copy(ghostX = 1f),
+            ability.copy(previousGhostY = 1f),
         ).forEach { changed -> assertNotEquals(expected, canonicalCharacterAbilityFingerprint(changed)) }
     }
 

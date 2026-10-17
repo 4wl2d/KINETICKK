@@ -50,12 +50,62 @@ data class ChoiceOption(
 )
 
 data class CharacterLatticePoint(val x: Float, val y: Float)
+
+/** A Hive drone at its current and previous fixed-step positions; [darting] while it strikes. */
+data class CharacterDroneProjection(
+    val x: Float,
+    val y: Float,
+    val previousX: Float,
+    val previousY: Float,
+    val darting: Boolean,
+)
+
+/** A Crescent void scar from ([x0], [y0]) to ([x1], [y1]); [fuse] fills 0..1 until it detonates, [fade] after. */
+data class CharacterScarProjection(
+    val x0: Float,
+    val y0: Float,
+    val x1: Float,
+    val y1: Float,
+    val fuse: Float,
+    val fade: Float,
+)
+
+/** What renderers and the HUD need of the active character's mechanic; fields of other mechanics keep defaults. */
 data class CharacterAbilityProjection(
+    /** Mechanic readiness 0..1 (Orbit charge, facets, parry, lattice fill, Stellar Mass, charges, drones, streak). */
     val charge: Float = 0f,
-    val barrier: Float = 0f,
+    /** Halo radius (Ring). */
     val ringRadius: Float = 55f,
     val parryWindow: Float = 0f,
     val lattice: ImmutableList<CharacterLatticePoint> = kinetickk.foundation.collections.immutableListOf(),
+    /** Intact Prism facets and the regeneration progress toward the next (0..1). */
+    val facets: Int = 0,
+    val facetProgress: Float = 0f,
+    /** Diamond Edge stacks. */
+    val edge: Int = 0,
+    /** Star Stellar Mass and the Supernova flash (1 fading to 0). */
+    val stellarMass: Int = 0,
+    val novaFlash: Float = 0f,
+    /** Halo Burst flash (1 fading to 0). */
+    val haloBurstFlash: Float = 0f,
+    /** Dipole polarity: 0 attract, 1 repel, and the flip flash. */
+    val polarity: Int = 0,
+    val polarityFlash: Float = 0f,
+    /** Pentagon beat period in seconds (0 for other characters; beats fall on multiples of it) and the streak. */
+    val beatPeriod: Float = 0f,
+    val beatWindow: Float = 0f,
+    val beatStreak: Int = 0,
+    /** Crescent Blink charges and the recharge of the next one (0..1). */
+    val blinkCharges: Int = 0,
+    val blinkRecharge: Float = 0f,
+    val scars: ImmutableList<CharacterScarProjection> = kinetickk.foundation.collections.immutableListOf(),
+    val drones: ImmutableList<CharacterDroneProjection> = kinetickk.foundation.collections.immutableListOf(),
+    /** Spiral echo ghost: shown while [ghostActive], at its current and previous fixed-step positions. */
+    val ghostActive: Boolean = false,
+    val ghostX: Float = 0f,
+    val ghostY: Float = 0f,
+    val previousGhostX: Float = 0f,
+    val previousGhostY: Float = 0f,
 )
 
 data class PointOfInterestProjection(

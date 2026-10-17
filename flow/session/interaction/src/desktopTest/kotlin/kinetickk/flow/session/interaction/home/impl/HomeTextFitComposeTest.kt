@@ -28,6 +28,8 @@ import kinetickk.foundation.collections.immutableSetOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
+import kinetickk.foundation.design.KkButtonSize
+import kinetickk.foundation.design.kkButtonWidth
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.drawKkMenuItem
@@ -65,21 +67,16 @@ class HomeTextFitComposeTest {
     }
 
     @Test
-    fun formTileLabelsKeepPaddingInsideTheSlantedFace() = forMeasurers { text, language, _ ->
-        val names = defaultCoreShapeDefinitions().map { it.displayName.localizedContent(language) }
-        for ((width, height) in listOf(1_440f to 810f, 1_280f to 720f, 1_000f to 700f, 844f to 390f, 390f to 844f)) {
-            val tile = homeLayoutGeometry(width, height, 1f).bounds(HomeLayoutTarget.CORE_ORB)
-            names.forEach { name ->
-                val size = homeTileLabelSize(name, tile, 1f, text.scale) { value, candidate ->
-                    measureKkText(text, value, text.typography.labelStyle(candidate), uppercase = true).size.width
-                }
-                if (tile.height >= 60f) assertTrue(size * text.scale >= HOME_TILE_LABEL_MIN_PX - 0.01f, "$name has no label at ${width}x$height ${language.code}")
-                if (size > 0f) {
-                    val label = measureKkText(text, name, text.typography.labelStyle(size), uppercase = true).size.width
-                    val face = tile.width - homeTileCut(tile, 1f)
-                    assertTrue(label + 2f * HOME_TILE_LABEL_PADDING_DP <= face, "$name ${language.code} ${width}x$height: $label in $face")
-                }
-            }
+    fun theHangarCardKeepsItsIconAndLabelInsideItsFace() = forMeasurers { text, language, scale ->
+        val label = language.text(kinetickk.flow.session.interaction.localization.SessionText.HANGAR)
+        for ((width, height) in listOf(1_440f to 810f, 1_280f to 720f, 1_000f to 700f, 900f to 560f, 844f to 390f, 800f to 360f,
+            600f to 390f, 390f to 844f, 390f to 600f)) {
+            val card = homeLayoutGeometry(width, height, 1f).bounds(HomeLayoutTarget.HANGAR)
+            val size = if (card.height < 52f) KkButtonSize.SM else KkButtonSize.MD
+            val natural = kkButtonWidth(text, label, size, 1f, icon = kinetickk.foundation.design.KkIcon.FORMS_CIRCLE)
+            assertTrue(natural <= card.width, "Hangar card label needs $natural in ${card.width} at ${width}x$height ${language.code} @$scale")
+            // Phones keep 48 dp targets; desktop Home keeps its 44 dp minimum.
+            assertTrue(card.height >= if (width >= 900f && height >= 560f) 44f else 48f, "Hangar card at ${width}x$height")
         }
     }
 
@@ -165,15 +162,15 @@ class HomeTextFitComposeTest {
     }
 
     @Test
-    fun theFormDescriptionIsShownWholeBetweenTheNameAndTheTiles() = forMeasurers { text, language, scale ->
+    fun theFormDescriptionIsShownWholeBetweenTheNameAndTheHangarCard() = forMeasurers { text, language, scale ->
         val descriptions = defaultCoreShapeDefinitions().map { it.mechanicDescription.localizedContent(language) }
         for ((width, height) in listOf(1_440f to 810f, 1_280f to 720f, 1_000f to 700f, 900f to 560f)) {
             val layout = homeLayoutGeometry(width, height, 1f)
             val rect = requireNotNull(layout.scene.formDescription)
             val (top, bottom) = homeFormDescriptionSpan(layout, 1f)
-            // The name's wide type has a 0.9 em line box; tiles lift 8 px when selected.
+            // The name's wide type has a 0.9 em line box; the description keeps 8 px above the Hangar card.
             assertTrue(top >= layout.scene.formNameCenterY + layout.scene.formNameSize * 0.45f - 0.01f)
-            assertTrue(bottom <= HomeCoreTargets.minOf { layout.bounds(it).top } - 8f + 0.01f)
+            assertTrue(bottom <= layout.bounds(HomeLayoutTarget.HANGAR).top - 8f + 0.01f)
             descriptions.forEach { description ->
                 val where = "${description.take(24)} ${language.code} ${width}x$height @$scale"
                 val laid = homeFormDescriptionLayout(text, description, rect.width, bottom - top)

@@ -206,6 +206,7 @@ internal fun MutableGameState.resetRunStats() {
     comboWindow = 2.8f
     overdriveGain = 1f
     dragCoefficient = BASE_DRAG_COEFFICIENT
+    applyCharacterTraits()
     applyMatrixStats()
     matterGain *= rebirthProfile.matterGainMultiplier
     dashHeatCost *= matrix.dashHeatMultiplier

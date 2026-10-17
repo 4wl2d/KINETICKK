@@ -23,7 +23,10 @@ import kotlin.math.min
  * by shields, and neither uses nor grants the hit i-frames (collisions have their own cooldown).
  * [cancellableByFacets] is false for it: no damage-negating defence (Prism facets) may cancel it.
  */
-internal enum class IncomingDamage(val cancellableByFacets: Boolean = true) {
+internal enum class IncomingDamage(
+    /** Prism facets may negate an incoming hit of this kind; obstacle collisions set false. */
+    val cancellableByFacets: Boolean = true,
+) {
     HIT,
     CONTACT,
     PROJECTILE,
@@ -83,12 +86,9 @@ internal fun MutableGameState.takeDamage(
     } else if (!ignoreReduction) {
         amount *= 1f - effectiveDamageReduction()
     }
-    if (!build.liability(RelicId.GLASS_COMET) && characterRuntime.barrier > 0f) {
-        val absorbed = min(characterRuntime.barrier, amount)
-        characterRuntime = characterRuntime.copy(barrier = characterRuntime.barrier - absorbed)
-        damageAbsorbed += absorbed.toDouble()
-        amount -= absorbed
-    }
+    if (incoming) pauseFacetRegeneration()
+    // A facet negates the whole instance; the hurt window it opens keeps it to one per window.
+    if (incoming && kind.cancellableByFacets && spendFacet(amount)) return
     val shieldBefore = shield
     if (shield > 0f && !build.liability(RelicId.GLASS_COMET)) {
         val absorbed = min(shield, amount)
@@ -99,6 +99,7 @@ internal fun MutableGameState.takeDamage(
         damageTaken += min(amount, hp.coerceAtLeast(0f)).toDouble()
         hp -= amount
     }
+    if (incoming) onCharacterDamaged()
     if (incoming && build.liability(RelicId.STORMHEART_CAPACITOR) && stormCharge >= 0.5f) {
         stormCharge = 0f
         var discharge = maxHp * 0.1f
