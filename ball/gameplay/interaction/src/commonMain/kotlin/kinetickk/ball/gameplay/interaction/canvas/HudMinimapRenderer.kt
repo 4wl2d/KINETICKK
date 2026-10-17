@@ -28,14 +28,14 @@ import kotlin.math.sqrt
 /**
  * Where the minimap sits (px), shared by the renderer and the world keep-out ([WorldHudKeepOut]) so
  * edge markers and world labels stay off it:
- * - desktop: the left column under the level badge, under the trial panel while a trial runs;
- * - landscape phones: the right edge between the loadout and the Dash button;
+ * - desktop and landscape phones: the left column under the level badge (under the trial panel while
+ *   a trial runs), clear of the right edge where markers for targets ahead sit and of the feed;
  * - portrait phones: inside the bottom clusters, between the integrity cluster and the speed gauge,
  *   where the feed, the markers and the playfield never reach.
  * It shrinks to fit and is left out when even the smallest size does not fit.
  */
 internal object HudMinimapGeometry {
-    /** Side of the minimap in reference dp: desktop and landscape phones (where it fits). */
+    /** Side of the minimap in reference dp: desktop and landscape phones (shrunk to fit). */
     const val REGULAR_SIDE_DP: Float = 132f
     const val COMPACT_SIDE_DP: Float = 104f
     /** Portrait phones: the gap between the loadout row and the touch buttons. */
@@ -43,10 +43,10 @@ internal object HudMinimapGeometry {
     private const val MINIMUM_SIDE_DP: Float = 56f
 
     /**
-     * Writes the square into [out] (left, top, right, bottom) for [frame] at the text size [textScale];
-     * [trial] is the laid-out trial panel while one runs. Returns false when it has no room.
+     * Writes the square into [out] (left, top, right, bottom) for [frame]; [trial] is the laid-out trial
+     * panel (at the current text size) while one runs. Returns false when it has no room.
      */
-    fun place(frame: HudFrame, textScale: Float, trial: HudTrialPanelLayout?, out: FloatArray): Boolean {
+    fun place(frame: HudFrame, trial: HudTrialPanelLayout?, out: FloatArray): Boolean {
         val left: Float
         val top: Float
         var side: Float
@@ -59,13 +59,10 @@ internal object HudMinimapGeometry {
                 left = frame.margin
             }
             GameplayLayoutMode.COMPACT_LANDSCAPE -> {
-                val gap = frame.u(8f)
-                // Under the relic row and weapon slot (the keep-out's loadout reserve), above the Dash button.
-                val loadoutBottom = frame.u(62f + 34f + 4f) + 9f * frame.density * hudUiScale(textScale)
-                top = loadoutBottom + gap
-                val dashTop = frame.height - frame.u(18f + 150f)
-                side = min(frame.u(COMPACT_SIDE_DP), dashTop - gap - top)
-                left = frame.width - frame.margin - side
+                val gap = frame.u(6f)
+                top = if (trial != null) trial.bottom + gap else frame.u(48f)
+                side = min(frame.u(COMPACT_SIDE_DP), frame.bottomClustersTop - gap - top)
+                left = frame.margin
             }
             GameplayLayoutMode.COMPACT_PORTRAIT -> {
                 side = frame.u(PORTRAIT_SIDE_DP)
@@ -104,7 +101,7 @@ internal fun DrawScope.drawMinimap(engine: GameplayRenderModel, measurer: TextMe
     for (index in points.indices) if (points[index].active) trialActive = true
     val trial = if (trialActive) MinimapScratch.trial.update(size.width, size.height, density, measurer.scale) else null
     val rect = MinimapScratch.rect
-    if (!HudMinimapGeometry.place(frame, measurer.scale, trial, rect)) return
+    if (!HudMinimapGeometry.place(frame, trial, rect)) return
     val left = rect[0]
     val top = rect[1]
     val side = rect[2] - left
