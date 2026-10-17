@@ -37,11 +37,7 @@ internal enum class SpawnDirectorPhase(val rate: Float, val minimumSeconds: Floa
 
 internal enum class SpawnEventKind { SINGLE, PACK, FLANK, SWARM, WALL, ENCIRCLE, AMBUSH }
 
-/**
- * Core speed at which obstacle collisions start to hurt. Obstacles calibrate the real value; ambushes
- * read this constant until then.
- */
-internal const val OBSTACLE_DAMAGE_START_SPEED: Float = 900f
+/** An ambush waits for the Core to hold this share of the obstacle damage-start speed. */
 internal const val AMBUSH_SPEED_FRACTION: Float = 0.75f
 internal const val AMBUSH_HOLD_SECONDS: Float = 1.5f
 internal const val AMBUSH_COOLDOWN_SECONDS: Float = 20f
@@ -114,7 +110,7 @@ internal fun MutableGameState.spawnWave(delta: Float) {
         if (!architectEngaged(boss)) return
     }
     advanceDirectorPhase()
-    if (speed > OBSTACLE_DAMAGE_START_SPEED * AMBUSH_SPEED_FRACTION) ambushSpeedSeconds += delta else ambushSpeedSeconds = 0f
+    if (speed > obstacleDamageStartSpeedAhead() * AMBUSH_SPEED_FRACTION) ambushSpeedSeconds += delta else ambushSpeedSeconds = 0f
     val phase = SpawnDirectorPhase.entries[directorPhase]
     // The Rebirth interval keeps the published minimum spawn interval as the fastest one-enemy cadence.
     var rate = phase.rate * DIRECTOR_RATE_SCALE / rebirthProfile.spawnInterval(content.tempo.spawnIntervalSeconds(elapsed))

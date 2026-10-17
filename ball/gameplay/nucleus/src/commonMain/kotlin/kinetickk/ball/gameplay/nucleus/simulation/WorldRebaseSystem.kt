@@ -75,4 +75,8 @@ internal fun MutableGameState.rebaseWorldIfNeeded() {
     weaponBeamStartY -= shiftY
     weaponBeamEndX -= shiftX
     weaponBeamEndY -= shiftY
+    // Absolute positions (obstacle chunks) stay put: the origin takes the shift the world gave up.
+    worldOriginX += shiftX.toDouble()
+    worldOriginY += shiftY.toDouble()
+    obstacleField = obstacleField.shifted(shiftX, shiftY)
 }

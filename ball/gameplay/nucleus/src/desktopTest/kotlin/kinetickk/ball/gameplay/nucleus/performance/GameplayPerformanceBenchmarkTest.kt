@@ -14,6 +14,11 @@ import kinetickk.ball.gameplay.nucleus.model.ActiveBuff
 import kinetickk.ball.gameplay.nucleus.model.CombatField
 import kinetickk.ball.gameplay.nucleus.model.CombatFieldKind
 import kinetickk.ball.gameplay.nucleus.model.EchoHit
+import kinetickk.ball.gameplay.nucleus.model.Obstacle
+import kinetickk.ball.gameplay.nucleus.model.ObstacleField
+import kinetickk.ball.gameplay.nucleus.model.Pickup
+import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
+import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.model.SeveredRelic
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
 import kinetickk.ball.gameplay.nucleus.simulation.MutableGameState
@@ -112,6 +117,17 @@ class GameplayPerformanceBenchmarkTest {
             { previousMorningstarX = 5f },
             { viewportDensity = 2f },
             { interpolationPrimed = !interpolationPrimed },
+            // 0.4.0 world obstacles and pickups.
+            { worldOriginX = 1_200.0 },
+            { obstacleField = ObstacleField.of(0, 0, 1, listOf(listOf(
+                Obstacle(id = 1L, kind = ObstacleKind.ASTEROID, x = 3_000f, y = 0f, radius = 60f, shapeSeed = 4),
+            ))) },
+            { destroyedObstacleIds = listOf(9L) },
+            { obstacleHitReadyAt = 1f },
+            { nearMissReadyAt = 1f },
+            { pickups += Pickup(PickupType.DATA, 5f, 5f, attracted = true) },
+            { enemies.first().thrownUntil = 1f },
+            { enemies.first().slamReadyAt = 1f },
         )
         changes.forEachIndexed { index, change ->
             val changed = source.copyForReduction().apply(change)

@@ -165,7 +165,9 @@ class SpawnDirectorTest {
         val state = directorState(seed = 19)
         state.elapsed = 100f
         state.ambushReadyAt = 0f
-        state.setVelocityForTesting(800f, 0f)
+        // Ambushes wait for 75 % of the obstacle damage-start speed along the heading.
+        val ambushSpeed = state.obstacleDamageStartSpeed(0f) * AMBUSH_SPEED_FRACTION
+        state.setVelocityForTesting(ambushSpeed + 40f, 0f)
         state.spawnBudget = 0f
         repeat(((AMBUSH_HOLD_SECONDS + 0.5f) / STEP).toInt()) {
             state.elapsed += STEP

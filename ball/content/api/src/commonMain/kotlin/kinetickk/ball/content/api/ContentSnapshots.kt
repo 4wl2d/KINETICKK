@@ -74,6 +74,10 @@ data class GameplayContentSnapshot(
     val enemies: ImmutableList<EnemyDefinition> = defaultEnemyDefinitions(),
     /** Core Matrix nodes in [MatrixNodeId] order; a run applies their effects from the profile ranks. */
     val matrixNodes: ImmutableList<MatrixNodeDefinition> = defaultMatrixNodes(),
+    /** World obstacle generation, collisions and the minimap range. */
+    val obstacles: ObstacleTuning = ObstacleTuning(),
+    /** Data pickup magnet, vacuum and collection. */
+    val pickups: PickupTuning = PickupTuning(),
 ) {
     init {
         require(enemies.size == EnemyType.entries.size && enemies.withIndex().all { (index, enemy) -> enemy.type.ordinal == index }) {

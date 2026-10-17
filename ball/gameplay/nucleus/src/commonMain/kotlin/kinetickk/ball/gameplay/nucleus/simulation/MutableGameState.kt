@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.GameplayContentSnapshot
@@ -56,6 +57,8 @@ internal class MutableGameState(
         const val DASH_INPUT_BUFFER_SECONDS = 0.16f
         const val MAX_PROJECTILES = 650
         const val MAX_PICKUPS = 420
+        const val MAX_OBSTACLES = ContentBounds.MAX_OBSTACLES
+        const val MAX_DESTROYED_OBSTACLES = ContentBounds.MAX_DESTROYED_OBSTACLES
         const val MAX_TRAIL_POINTS = 110
         const val MAX_ECHO_HITS = 256
         const val MAX_BUFFS = 16
@@ -286,6 +289,19 @@ internal class MutableGameState(
     internal var lastSpawnEventKind: Int = reductionSource?.lastSpawnEventKind ?: -1
     internal var lastSpawnEventPlanned: Int = reductionSource?.lastSpawnEventPlanned ?: 0
     internal var lastSpawnEventSpawned: Int = reductionSource?.lastSpawnEventSpawned ?: 0
+    /** Seed of this run; obstacle chunks hash it with their absolute chunk. */
+    internal val runSeed: Int = reductionSource?.runSeed ?: seed
+    /** Accumulated rebase shift: an absolute world position is the run-local position plus this origin. */
+    internal var worldOriginX: Double = reductionSource?.worldOriginX ?: 0.0
+    internal var worldOriginY: Double = reductionSource?.worldOriginY ?: 0.0
+    /** Generated obstacle window around the Core; an immutable value replaced on change. */
+    internal var obstacleField: ObstacleField = reductionSource?.obstacleField ?: ObstacleField.EMPTY
+    /** Destroyed unstable asteroids, oldest first, at most [ContentBounds.MAX_DESTROYED_OBSTACLES]. */
+    internal var destroyedObstacleIds: List<Long> = reductionSource?.destroyedObstacleIds ?: emptyList()
+    /** Run time before which an asteroid collision deals no further damage and fires no ricochet. */
+    internal var obstacleHitReadyAt: Float = reductionSource?.obstacleHitReadyAt ?: 0f
+    /** Run time before which Near Miss grants no further Overdrive. */
+    internal var nearMissReadyAt: Float = reductionSource?.nearMissReadyAt ?: 0f
     internal var dashBufferTime: Float = reductionSource?.dashBufferTime ?: 0f
     internal var bossSpawned: Boolean = reductionSource?.bossSpawned ?: false
     internal var keyboardBrakeActive: Boolean = reductionSource?.keyboardBrakeActive ?: false
@@ -482,7 +498,7 @@ internal class MutableGameState(
         internal set
     var critMultiplier: Float = reductionSource?.critMultiplier ?: 1.5f
         internal set
-    var pickupRadius: Float = reductionSource?.pickupRadius ?: 150f
+    var pickupRadius: Float = reductionSource?.pickupRadius ?: content.pickups.magnetRadius
         internal set
     var luck: Float = reductionSource?.luck ?: 0f
         internal set

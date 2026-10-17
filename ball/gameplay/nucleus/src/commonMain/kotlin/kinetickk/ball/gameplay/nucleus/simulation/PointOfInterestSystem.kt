@@ -41,9 +41,11 @@ internal fun MutableGameState.updatePointsOfInterest(delta: Float) {
             val heading = if (speed >= 80f) atan2(velocityY, velocityX) else atan2(lastAimDirectionY, lastAimDirectionX)
             pointsOfInterest = List(2) { side ->
                 val angle = heading + if (side == 0) -1.0f else 1.0f
+                // Anomalies move out from under obstacles, so their ring and beacons stay reachable.
+                val (pointX, pointY) = clearPointOfInterestSite(coreX + cos(angle) * 560f, coreY + sin(angle) * 560f)
                 PointOfInterestState(
                     offerId, PointOfInterestKind.entries[(offerId + side) % PointOfInterestKind.entries.size],
-                    coreX + cos(angle) * 560f, coreY + sin(angle) * 560f,
+                    pointX, pointY,
                     scheduledAt + policy.offerLifetime,
                 )
             }

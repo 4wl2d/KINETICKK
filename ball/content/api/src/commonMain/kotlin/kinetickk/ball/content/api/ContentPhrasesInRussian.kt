@@ -294,6 +294,7 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "ARCHITECT DISMANTLED" to "АРХИТЕКТОР РАЗОБРАН",
     "CATALOG COMPLETE // MATTER SALVAGED" to "КАТАЛОГ ЗАВЕРШЁН // МАТЕРИЯ ИЗВЛЕЧЕНА",
     "CORE FRACTURED" to "ЯДРО РАЗРУШЕНО",
+    "OBSTACLE COLLISION" to "СТОЛКНОВЕНИЕ С ПРЕПЯТСТВИЕМ",
     "ELITE KEY ACQUIRED" to "ПОЛУЧЕН ЭЛИТНЫЙ КЛЮЧ",
     "RELIC RESONANCE" to "РЕЗОНАНС РЕЛИКВИИ",
     "TOTEM DETECTED" to "ОБНАРУЖЕН ТОТЕМ",

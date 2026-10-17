@@ -210,7 +210,7 @@ private val Drafts: List<ItemDraft> = listOf(
 
     // FORTUNE: Data, Matter, luck and choice.
     ItemDraft("Magnet Lens", "Pulls loose Data from farther away.", COMMON, listOf(FORTUNE),
-        stats = listOf(stat(ItemEffect.PICKUP_RADIUS, 45f), stat(ItemEffect.DATA_GAIN, 0.05f))),
+        stats = listOf(stat(ItemEffect.PICKUP_RADIUS, 90f), stat(ItemEffect.DATA_GAIN, 0.05f))),
     ItemDraft("Lucky Coin", "Flip it once more.", UNCOMMON, listOf(FORTUNE),
         stats = listOf(stat(ItemEffect.LUCK, 0.3f)),
         rules = listOf(ItemRule.BonusRerolls(1)), unlock = 3),

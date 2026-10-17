@@ -153,7 +153,7 @@ internal fun defaultRelics(): ImmutableList<RelicDefinition> = listOf(
         listOf(RelicKey.GRAVITY), listOf(BuildTag.ANCHOR, BuildTag.RAM),
         "Enemies within 280 u are dragged toward you. Impacts against enemies carrying Gravitic deal {0} % more, and " +
             "your Collapses implode toward you.",
-        "Contact damage taken ×1.5 and pickup radius halved.",
+        "Contact damage taken ×1.5. Data no longer latches onto you, and level-ups no longer pull it in.",
         RelicValue(40f, 20f),
     ),
     relic(

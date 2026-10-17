@@ -17,8 +17,19 @@ import kotlin.math.min
 /**
  * Where damage came from: relics treat contact and bullets differently, and [SELF] (recoil, liabilities)
  * neither uses nor grants hit i-frames, HURT clauses or shield-break rewards.
+ *
+ * [OBSTACLE] is an asteroid collision or blast: it scales with `1 + damagePerTier × tier` instead of the
+ * Rebirth incoming-damage multiplier, ignores damage reduction and damage-taken modifiers, is absorbed
+ * by shields, and neither uses nor grants the hit i-frames (collisions have their own cooldown).
+ * [cancellableByFacets] is false for it: no damage-negating defence (Prism facets) may cancel it.
  */
-internal enum class IncomingDamage { HIT, CONTACT, PROJECTILE, SELF }
+internal enum class IncomingDamage(val cancellableByFacets: Boolean = true) {
+    HIT,
+    CONTACT,
+    PROJECTILE,
+    SELF,
+    OBSTACLE(cancellableByFacets = false),
+}
 
 /**
  * Damage of a hostile attack from [enemy] (null for sourceless hazards), evaluated when the attack is
@@ -44,6 +55,10 @@ internal fun MutableGameState.takeDamage(
     ignoreReduction: Boolean = false,
     kind: IncomingDamage = IncomingDamage.HIT,
 ) {
+    if (kind == IncomingDamage.OBSTACLE) {
+        takeObstacleDamage(rawAmount)
+        return
+    }
     // Self-inflicted damage neither uses nor grants the hit i-frames, so real hits are never dropped behind it.
     val incoming = kind != IncomingDamage.SELF
     if ((incoming && hurtCooldown > 0f) || invulnerableUntil > elapsed) return
@@ -109,6 +124,50 @@ internal fun MutableGameState.takeDamage(
     }
     if (incoming) fireClauses(EffectTrigger.HURT, null, rawAmount)
     if (hp <= 0f) resolveLethal()
+}
+
+/** Run end message of a collision that leaves the Core at zero integrity. */
+internal const val OBSTACLE_COLLISION_REASON: String = "OBSTACLE COLLISION"
+
+/** See [IncomingDamage.OBSTACLE]. */
+private fun MutableGameState.takeObstacleDamage(rawAmount: Float) {
+    if (rawAmount <= 0f || invulnerableUntil > elapsed) return
+    var amount = rawAmount * (1f + content.obstacles.damagePerTier * rebirthLevel)
+    val shieldBefore = shield
+    if (shield > 0f) {
+        val absorbed = min(shield, amount)
+        absorbShield(absorbed, incoming = true)
+        amount -= absorbed
+    }
+    if (amount > 0f) {
+        damageTaken += min(amount, hp.coerceAtLeast(0f)).toDouble()
+        hp -= amount
+    }
+    noteObstacleHurt()
+    if (shieldBefore > 0f && shield <= 0f) onShieldBroken()
+    fireClauses(EffectTrigger.HURT, null, rawAmount)
+    if (hp <= 0f) resolveLethal(OBSTACLE_COLLISION_REASON)
+}
+
+/**
+ * A collision at or above the lethal speed: integrity drops to zero past shields, then Second Wind or
+ * the Ouroboros Seal may still answer it. Invulnerability (Second Wind, Ouroboros) still protects.
+ */
+internal fun MutableGameState.takeLethalObstacleHit() {
+    if (invulnerableUntil > elapsed) return
+    damageTaken += hp.coerceAtLeast(0f).toDouble()
+    hp = 0f
+    noteObstacleHurt()
+    resolveLethal(OBSTACLE_COLLISION_REASON)
+}
+
+private fun MutableGameState.noteObstacleHurt() {
+    timeSinceDamage = 0f
+    shieldRechargeDelay = (if (tagTier(BuildTag.BULWARK) >= 2) 2.2f else 4f) * matrix.shieldRegenDelayMultiplier
+    damageFlash = 1f
+    shockwave(coreX, coreY, 0.3f, 90f, 4)
+    burst(coreX, coreY, 8, 4)
+    emitSound(GameplayAudioCue.HURT)
 }
 
 /** Takes [absorbed] from the shield; only incoming hits under Aegis Inversion feed its nova. */

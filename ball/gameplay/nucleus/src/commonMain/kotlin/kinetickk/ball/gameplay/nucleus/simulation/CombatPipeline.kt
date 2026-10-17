@@ -83,8 +83,8 @@ internal fun MutableGameState.effectiveDashHeatCost(): Float {
     return cost
 }
 
-internal fun MutableGameState.effectivePickupRadius(): Float =
-    pickupRadius * if (build.liability(RelicId.EVENT_HORIZON)) 0.5f else 1f
+/** Magnet radius; Event Horizon's liability removes the latch instead of shrinking it. */
+internal fun MutableGameState.effectivePickupRadius(): Float = pickupRadius
 
 /** Activation multiplier from items, resonance, buffs and relics (mastery and Overdrive apply separately). */
 internal fun MutableGameState.buildActivationBonus(): Float {
@@ -703,6 +703,7 @@ internal fun MutableGameState.pushEnemies(x: Float, y: Float, radius: Float, str
         val sign = if (inward) -1f else 1f
         target.vx += dx / distance * strength * falloff * sign * knockback
         target.vy += dy / distance * strength * falloff * sign * knockback
+        markThrown(target)
     }
 }
 

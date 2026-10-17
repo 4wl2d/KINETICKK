@@ -34,6 +34,10 @@ object ContentBounds {
     const val MAX_REBIRTH_LEVEL: Int = 10
     /** Roster size bound; the shipped roster has one definition per [EnemyType]. */
     const val MAX_ENEMY_TYPES: Int = 24
+    /** World obstacles held at once (the generated window around the Core). */
+    const val MAX_OBSTACLES: Int = 128
+    /** Destroyed unstable asteroids remembered so their chunks never regenerate them. */
+    const val MAX_DESTROYED_OBSTACLES: Int = 256
 
     /** Discoveries persisted before this catalog generation belong to the retired 400-item catalog. */
     const val COLLECTION_GENERATION: Int = 2

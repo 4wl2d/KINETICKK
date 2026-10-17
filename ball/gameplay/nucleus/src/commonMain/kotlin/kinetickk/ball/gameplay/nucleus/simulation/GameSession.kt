@@ -170,9 +170,16 @@ internal fun MutableGameState.startRun() {
     weapon = startingWeapon
     resetWeaponRuntime()
     resetPointsOfInterest()
+    resetObstacles()
     emitSound(GameplayAudioCue.UI_CLICK)
     spawnOpeningPacks()
 }
+
+/** Base pull per unit of distance to the singularity, before items and the Matrix. */
+internal const val BASE_MAGNET_STRENGTH: Float = 4.65f
+
+/** Base exponential drag on the Core's velocity per second. */
+internal const val BASE_DRAG_COEFFICIENT: Float = 0.29f
 
 /** Character base stats, then the owned Core Matrix effects from content, then Rebirth. */
 internal fun MutableGameState.resetRunStats() {
@@ -180,14 +187,14 @@ internal fun MutableGameState.resetRunStats() {
     damageMultiplier = 1f
     weaponPower = 1f
     coolingRate = 19f
-    magnetStrength = 4.65f
+    magnetStrength = BASE_MAGNET_STRENGTH
     dashImpulse = 590f
     dashHeatCost = 36f
     maxHp = 100f + rebirthProfile.playerIntegrityBonus
     regenPerSecond = 0f
     critChance = 0.05f
     critMultiplier = 1.5f
-    pickupRadius = 150f
+    pickupRadius = content.pickups.magnetRadius
     coreRadius = MutableGameState.CORE_RADIUS
     luck = 0f
     dataGain = 1f
@@ -198,7 +205,7 @@ internal fun MutableGameState.resetRunStats() {
     damageReduction = 0f
     comboWindow = 2.8f
     overdriveGain = 1f
-    dragCoefficient = 0.29f
+    dragCoefficient = BASE_DRAG_COEFFICIENT
     applyMatrixStats()
     matterGain *= rebirthProfile.matterGainMultiplier
     dashHeatCost *= matrix.dashHeatMultiplier
@@ -384,6 +391,7 @@ internal fun MutableGameState.finishChoice(sound: GameplayAudioCue) {
     phase = GamePhase.RUNNING
     interpolationPrimed = false
     runGrace = max(runGrace, 0.5f)
+    vacuumOnScreenData()
     emitSound(sound)
     openNextPendingChoice()
 }

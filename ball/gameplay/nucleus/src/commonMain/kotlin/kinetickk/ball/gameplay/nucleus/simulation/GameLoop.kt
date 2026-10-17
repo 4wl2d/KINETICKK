@@ -122,6 +122,9 @@ internal fun MutableGameState.simulateStep(delta: Float) {
     updateHeat(delta)
     updateCore(delta)
     if (phase != GamePhase.RUNNING) return
+    // Obstacles bend the Core's path before anything meets it at its new position.
+    updateObstacles()
+    if (phase != GamePhase.RUNNING) return
     emitVisualFx(
         VisualFxCue.MotionSample(
             deltaSeconds = delta,
@@ -347,7 +350,7 @@ internal fun MutableGameState.updateCore(delta: Float) {
     val directionX = dx / distance
     val directionY = dy / distance
     val overdriveMultiplier = if (overdriveTime > 0f) 1.3f else 1f
-    val pull = (92f + distance * effectiveMagnetism()) * overdriveMultiplier
+    val pull = (CORE_BASE_PULL + distance * effectiveMagnetism()) * overdriveMultiplier
     val brakeFactor = if (braking) 1.12f else 1f
     val currentSpeed = speed
     val forwardX = if (currentSpeed > 1f) velocityX / currentSpeed else directionX
@@ -464,8 +467,14 @@ internal fun MutableGameState.updatePolarityStability(delta: Float) {
     }
 }
 
+/** Thrust toward the singularity that does not depend on its distance. */
+internal const val CORE_BASE_PULL: Float = 92f
+
+/** The camera closes this share of its gap to the Core per second (exponentially). */
+internal const val CAMERA_FOLLOW_RATE: Float = 7.5f
+
 internal fun MutableGameState.updateCamera(delta: Float) {
-    val factor = 1f - exp(-7.5f * delta)
+    val factor = 1f - exp(-CAMERA_FOLLOW_RATE * delta)
     cameraX = lerp(cameraX, coreX, factor)
     cameraY = lerp(cameraY, coreY, factor)
 }

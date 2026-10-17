@@ -127,14 +127,15 @@ class ReworkContractHelpersTest {
     }
 
     @Test
-    fun obstacleQueriesReportAnEmptyWorldAndSlamsDoNothing() {
+    fun obstacleQueriesReportAnEmptyWorldAndSlamsNeedTheSlamSpeed() {
         val state = buildTestState()
-        val enemy = state.addEnemyForTesting(x = 200f, y = 0f, hp = 50f)
+        val enemy = state.addEnemyForTesting(x = 200f, y = 0f, hp = 500f)
 
         assertFalse(state.isSpawnPointBlocked(200f, 0f, 30f))
         assertFalse(state.obstacleBlocksSegment(0f, 0f, 1_000f, 0f, 20f))
-        state.applySlamDamage(enemy, normalSpeed = 2_000f)
-        assertEquals(50f, enemy.hp)
-        assertTrue(enemy.alive)
+        assertFalse(state.applySlamDamage(enemy, normalSpeed = 259f))
+        assertEquals(500f, enemy.hp)
+        assertTrue(state.applySlamDamage(enemy, normalSpeed = 700f))
+        assertEquals(500f - (700f - 200f) * 0.12f * state.runScale(), enemy.hp, 0.01f)
     }
 }

@@ -744,6 +744,17 @@ internal fun canonicalStateFingerprint(state: MutableGameState): Long {
     // 0.4.0 Null Covenant: the maximum integrity its liability withholds.
     signature = mix(signature, state.integrityLiabilityCut.toRawBits())
     signature = mix(signature, state.rewardRandom.snapshot().hashCode())
+    // 0.4.0 world obstacles: the run seed, the rebase origin, the generated window and collision cooldowns.
+    signature = mix(signature, state.runSeed)
+    signature = mixLong(signature, state.worldOriginX.toRawBits())
+    signature = mixLong(signature, state.worldOriginY.toRawBits())
+    signature = mix(signature, state.obstacleField.centerChunkX)
+    signature = mix(signature, state.obstacleField.centerChunkY)
+    signature = mix(signature, state.obstacleField.obstacles.hashCode())
+    signature = mix(signature, state.destroyedObstacleIds.hashCode())
+    signature = mix(signature, state.obstacleHitReadyAt.toRawBits())
+    signature = mix(signature, state.nearMissReadyAt.toRawBits())
+    state.pickups.forEach { signature = mix(signature, if (it.attracted) 1 else 0) }
     state.enemies.forEach {
         signature = mix(signature, it.characterMarkTime.toRawBits())
         signature = mix(signature, it.lastCharacterDash)
@@ -763,6 +774,8 @@ internal fun canonicalStateFingerprint(state: MutableGameState): Long {
         signature = mix(signature, it.linkedUntil.toRawBits())
         signature = mix(signature, it.shieldUntil.toRawBits())
         signature = mix(signature, it.abilityAt.toRawBits())
+        signature = mix(signature, it.thrownUntil.toRawBits())
+        signature = mix(signature, it.slamReadyAt.toRawBits())
         it.status.forEach { cell -> signature = mix(signature, cell.toRawBits()) }
     }
     return mixLong(signature, fixtureFingerprint(state))
@@ -826,6 +839,8 @@ private fun canonicalRenderFingerprint(state: MutableGameState): Long {
     signature = mix(signature, render.previousMorningstarX.toRawBits())
     signature = mix(signature, render.previousMorningstarY.toRawBits())
     signature = mix(signature, render.viewportDensity.toRawBits())
+    signature = mix(signature, render.obstacles.hashCode())
+    signature = mix(signature, render.minimapRange.toRawBits())
     render.itemStacksSnapshot.forEach { stack -> signature = mix(signature, stack) }
     return mixLong(signature, fixtureFingerprint(state))
 }

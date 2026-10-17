@@ -1,0 +1,140 @@
+// SPDX-FileCopyrightText: 2026 Vladislav Tomilov
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package kinetickk.ball.content.api
+
+/**
+ * World obstacle field: generation, Core collisions, enemy slams and the minimap. Distances are dp
+ * world units and speeds dp per second.
+ *
+ * The collision bands are expressed as cursor reach, the same normalized center-to-edge measure as
+ * [FatigueTuning.edgeStrainStart]: a Core speed is compared with the steady speed that holding the
+ * cursor at that reach sustains in the direction of travel. Steady speed grows with the viewport, so
+ * fixed speeds would make a wide window lethal at a gentle reach and a phone safe at the edge.
+ */
+data class ObstacleTuning(
+    /** Side of one generation chunk. */
+    val chunkSize: Float = 1_200f,
+    /** Chunks per side of the generated window around the Core's chunk (odd). */
+    val windowChunks: Int = 5,
+    /** Mean obstacles per chunk before Rebirth density; a chunk holds at most [maximumPerChunk]. */
+    val meanPerChunk: Float = 2.2f,
+    val maximumPerChunk: Int = 5,
+    /** Fractured Space multiplies the mean by this. */
+    val fracturedDensityMultiplier: Float = 1.4f,
+    val asteroidMinimumRadius: Float = 46f,
+    val asteroidMaximumRadius: Float = 150f,
+    val bumperRadius: Float = 34f,
+    /** Share of obstacles that are bumpers; Fractured Space uses [fracturedBumperShare]. */
+    val bumperShare: Float = 0.18f,
+    val fracturedBumperShare: Float = 0.08f,
+    /** Share of asteroids that are unstable, only under Fractured Space. */
+    val fracturedUnstableShare: Float = 0.15f,
+    /** No obstacle reaches inside this distance of the run origin. */
+    val safeRadius: Float = 900f,
+    /** Least clear space between two obstacles. */
+    val minimumGap: Float = 90f,
+    /** Cursor reach whose steady speed starts collision damage (tier 3 and above). */
+    val damageStartReach: Float = 0.45f,
+    /** Cursor reach whose steady speed makes a collision lethal. */
+    val lethalReach: Float = 0.72f,
+    /** At tier 0 collisions start hurting this much faster, shrinking linearly to 0 at [forgivingTiers]. */
+    val forgivingStartBonus: Float = 80f,
+    /** At tier 0 collision damage is multiplied by this, rising linearly to 1 at [forgivingTiers]. */
+    val forgivingDamageScale: Float = 0.7f,
+    val forgivingTiers: Int = 3,
+    /** Collision damage at the lethal speed as a share of maximum integrity. */
+    val damageShare: Float = 0.5f,
+    val damageExponent: Float = 1.3f,
+    /** Collision damage grows by this per Rebirth tier (it replaces the Rebirth incoming-damage multiplier). */
+    val damagePerTier: Float = 0.04f,
+    val restitution: Float = 0.6f,
+    /** A Core bounce below this normal speed slides along the surface instead of bouncing. */
+    val slideSpeed: Float = 120f,
+    /** Collision damage and ricochets land at most once per this many seconds. */
+    val hitCooldownSeconds: Float = 0.25f,
+    val bumperMinimumExitSpeed: Float = 700f,
+    val bumperMaximumExitSpeed: Float = 1_400f,
+    val bumperGain: Float = 1.05f,
+    val bumperRicochetCooldownSeconds: Float = 1.5f,
+    val unstableBlastRadius: Float = 150f,
+    val unstableBlastDamage: Float = 10f,
+    /** Enemy contact normal speed that slams it, and the speed its slam damage counts from. */
+    val slamSpeed: Float = 260f,
+    val slamDamageOffset: Float = 200f,
+    val slamDamagePerSpeed: Float = 0.12f,
+    /** Enemies start sliding around an obstacle within this multiple of the combined radii. */
+    val avoidanceRange: Float = 1.6f,
+    /** Enemy-enemy slams resolved per fixed step. */
+    val maximumEnemySlamsPerStep: Int = 6,
+    /** Seconds an enemy stays "thrown" after the player knocks it back (enemy-enemy slams). */
+    val thrownSeconds: Float = 0.6f,
+    /** Seconds between two slams of the same enemy. */
+    val slamCooldownSeconds: Float = 0.3f,
+    /** Smallest minimap range; it widens to [minimapViewportFactor] viewport half-diagonals. */
+    val minimapRange: Float = 2_200f,
+    val minimapViewportFactor: Float = 1.4f,
+    /** Blackout multiplies the minimap range by this. */
+    val blackoutMinimapScale: Float = 0.5f,
+) {
+    init {
+        require(chunkSize.isFinite() && chunkSize >= 400f) { "Obstacle chunks must be at least 400 u" }
+        require(windowChunks in 1..9 && windowChunks % 2 == 1) { "The obstacle window must be an odd chunk count" }
+        require(maximumPerChunk in 0..8)
+        require(windowChunks * windowChunks * maximumPerChunk <= ContentBounds.MAX_OBSTACLES) {
+            "The obstacle window must fit ${ContentBounds.MAX_OBSTACLES} obstacles"
+        }
+        require(meanPerChunk.isFinite() && meanPerChunk in 0f..maximumPerChunk.toFloat())
+        require(fracturedDensityMultiplier.isFinite() && fracturedDensityMultiplier >= 1f)
+        require(asteroidMinimumRadius.isFinite() && asteroidMinimumRadius > 0f)
+        require(asteroidMaximumRadius.isFinite() && asteroidMaximumRadius >= asteroidMinimumRadius)
+        require(bumperRadius.isFinite() && bumperRadius > 0f)
+        require(asteroidMaximumRadius * 2f + minimumGap * 2f < chunkSize) { "An asteroid must fit inside a chunk" }
+        require(bumperShare in 0f..1f && fracturedBumperShare in 0f..1f && fracturedUnstableShare in 0f..1f)
+        require(safeRadius.isFinite() && safeRadius >= 0f)
+        require(minimumGap.isFinite() && minimumGap >= 0f)
+        require(damageStartReach > 0f && lethalReach > damageStartReach && lethalReach < 1f) {
+            "Collision reaches must satisfy 0 < damage start < lethal < 1"
+        }
+        require(forgivingStartBonus.isFinite() && forgivingStartBonus >= 0f)
+        require(forgivingDamageScale in 0f..1f && forgivingTiers >= 1)
+        require(damageShare.isFinite() && damageShare > 0f && damageExponent.isFinite() && damageExponent > 0f)
+        require(damagePerTier.isFinite() && damagePerTier >= 0f)
+        require(restitution in 0f..1f) { "Restitution must stay within 0..1" }
+        require(slideSpeed.isFinite() && slideSpeed >= 0f)
+        require(hitCooldownSeconds.isFinite() && hitCooldownSeconds >= 0f)
+        require(bumperMinimumExitSpeed > 0f && bumperMaximumExitSpeed >= bumperMinimumExitSpeed && bumperGain >= 1f)
+        require(bumperRicochetCooldownSeconds.isFinite() && bumperRicochetCooldownSeconds >= 0f)
+        require(unstableBlastRadius.isFinite() && unstableBlastRadius > 0f && unstableBlastDamage.isFinite() && unstableBlastDamage >= 0f)
+        require(slamSpeed > slamDamageOffset && slamDamageOffset >= 0f && slamDamagePerSpeed > 0f)
+        require(avoidanceRange.isFinite() && avoidanceRange >= 1f)
+        require(maximumEnemySlamsPerStep in 0..32)
+        require(thrownSeconds.isFinite() && thrownSeconds >= 0f && slamCooldownSeconds.isFinite() && slamCooldownSeconds >= 0f)
+        require(minimapRange.isFinite() && minimapRange > 0f && minimapViewportFactor.isFinite() && minimapViewportFactor > 0f)
+        require(blackoutMinimapScale.isFinite() && blackoutMinimapScale > 0f && blackoutMinimapScale <= 1f)
+    }
+}
+
+/**
+ * Data XP pickups. A pickup entering [magnetRadius] latches onto the Core and homes at
+ * `max(vacuumSpeed, coreSpeed × vacuumCoreSpeedFactor)` until collected within [collectionRadius].
+ */
+data class PickupTuning(
+    /** Base magnet radius before items and the Matrix. */
+    val magnetRadius: Float = 320f,
+    val collectionRadius: Float = 56f,
+    val vacuumSpeed: Float = 950f,
+    val vacuumCoreSpeedFactor: Float = 1.3f,
+    /** Floor of the pickup radius after item and Matrix stat changes. */
+    val minimumMagnetRadius: Float = 120f,
+) {
+    init {
+        require(magnetRadius.isFinite() && magnetRadius > 0f)
+        require(collectionRadius.isFinite() && collectionRadius > 0f && collectionRadius < magnetRadius)
+        require(vacuumSpeed.isFinite() && vacuumSpeed > 0f)
+        require(vacuumCoreSpeedFactor.isFinite() && vacuumCoreSpeedFactor >= 1f) {
+            "A latched pickup must outrun the Core"
+        }
+        require(minimumMagnetRadius.isFinite() && minimumMagnetRadius in collectionRadius..magnetRadius)
+    }
+}
