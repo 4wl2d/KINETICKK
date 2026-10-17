@@ -70,7 +70,17 @@ data class GameplayContentSnapshot(
     val tempo: RunTempoProfile = RunTempoProfile(),
     val build: BuildCatalog = defaultBuildCatalog(),
     val coreShapes: ImmutableList<CoreShapeDefinition> = defaultCoreShapeDefinitions(),
+    /** Enemy roster in [EnemyType] order; the spawn director reads gates and weights from it. */
+    val enemies: ImmutableList<EnemyDefinition> = defaultEnemyDefinitions(),
 ) {
+    init {
+        require(enemies.size == EnemyType.entries.size && enemies.withIndex().all { (index, enemy) -> enemy.type.ordinal == index }) {
+            "Enemy definitions must follow the EnemyType order"
+        }
+    }
+
+    fun enemy(type: EnemyType): EnemyDefinition = enemies[type.ordinal]
+
     /** Global clause index of each item's first clause; derived once per immutable snapshot. */
     val clauseOffsets: ImmutableList<Int> = items.runningFold(0) { offset, item -> offset + item.clauses.size }
         .dropLast(1).toImmutableList()
@@ -114,8 +124,12 @@ data class UiCatalogSnapshot(
     val pointsOfInterest: PointOfInterestPolicy = PointOfInterestPolicy(),
     val tempo: RunTempoProfile = RunTempoProfile(),
     val build: BuildCatalog = defaultBuildCatalog(),
+    /** Enemy roster in [EnemyType] order, for the Codex. */
+    val enemies: ImmutableList<EnemyDefinition> = defaultEnemyDefinitions(),
 ) {
     fun item(id: Int): ItemDefinition? = items.getOrNull(id)?.takeIf { item -> item.id == id }
+
+    fun enemy(type: EnemyType): EnemyDefinition = enemies.first { definition -> definition.type == type }
 
     fun weapon(id: WeaponId): WeaponDefinition =
         weapons.first { definition -> definition.id == id }

@@ -29,6 +29,8 @@ object ContentBounds {
     const val MAX_RELIC_VALUES: Int = 4
     const val MIN_REBIRTH_LEVEL: Int = 0
     const val MAX_REBIRTH_LEVEL: Int = 10
+    /** Roster size bound; the shipped roster has one definition per [EnemyType]. */
+    const val MAX_ENEMY_TYPES: Int = 24
 
     /** Discoveries persisted before this catalog generation belong to the retired 400-item catalog. */
     const val COLLECTION_GENERATION: Int = 2

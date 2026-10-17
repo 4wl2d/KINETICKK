@@ -14,6 +14,43 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Splitter" to "Делитель",
     "Elite" to "Элитный враг",
     "Architect" to "Архитектор",
+    "Swarmling" to "Роевик",
+    "Bomber" to "Бомбардир",
+    "Lancer" to "Копейщик",
+    "Sniper" to "Снайпер",
+    "Aegis" to "Эгида",
+    "Minelayer" to "Минёр",
+    "Phantom" to "Фантом",
+    "Broodmother" to "Матка роя",
+    "Reflector" to "Отражатель",
+    "Herald" to "Глашатай",
+    "Drifts straight at the Core. Weak alone, dangerous in numbers." to "Дрейфует прямо к ядру. Слаб в одиночку, опасен толпой.",
+    "Holds its distance and fires aimed bolts." to "Держит дистанцию и стреляет прицельными зарядами.",
+    "Creeps closer, winds up and dashes through the Core." to "Подкрадывается, замахивается и проносится сквозь ядро.",
+    "Leads your movement and boosts to cut you off." to "Упреждает ваше движение и ускоряется, чтобы перехватить вас.",
+    "Weaves from side to side and fires walls of bolts." to "Петляет из стороны в сторону и выпускает стены зарядов.",
+    "Keeps its range, pulls the Core into its well and fires radial bursts." to
+        "Держит дистанцию, затягивает ядро в свой колодец и стреляет кольцевыми залпами.",
+    "Sways forward and breaks into two fragments when destroyed." to "Раскачиваясь, идёт вперёд и при уничтожении распадается на два осколка.",
+    "Carries an elemental aspect, fires radial volleys and drops a Key and a Relic." to
+        "Несёт стихийный аспект, стреляет кольцевыми залпами и оставляет ключ и реликвию.",
+    "The final boss. It shifts between phases and hardens against your build." to
+        "Финальный босс. Переходит между фазами и закаляется против вашей сборки.",
+    "Arrives in packs of six to ten and flocks around the Core." to "Прилетает стаями от шести до десяти и кружит вокруг ядра.",
+    "Accelerates at the Core, primes and explodes. A fast impact destroys it before it primes." to
+        "Разгоняется к ядру, взводится и взрывается. Быстрое столкновение уничтожает его до взвода.",
+    "Stops, marks a line and lances along it. Lancing into an obstacle stuns it." to
+        "Останавливается, отмечает линию и пронзает её броском. Удар о препятствие оглушает его.",
+    "Keeps far away, shows its sight line and fires one heavy shot." to "Держится далеко, показывает линию прицела и делает один тяжёлый выстрел.",
+    "Tethers up to three allies, who take far less damage, and flees the Core." to
+        "Связывает до трёх союзников, которые получают намного меньше урона, и убегает от ядра.",
+    "Circles at mid range and drops mines that arm and explode." to "Кружит на средней дистанции и сбрасывает мины, которые взводятся и взрываются.",
+    "Phases out of reach, reappears near the Core and strikes." to "Уходит в фазу вне досягаемости, появляется рядом с ядром и бьёт.",
+    "Slow and massive, it births Swarmlings every few seconds." to "Медленная и массивная, она каждые несколько секунд порождает роевиков.",
+    "A front shield blunts impacts and returns shots. Strike it from behind." to
+        "Передний щит смягчает столкновения и отражает выстрелы. Бейте его сзади.",
+    "A mini-boss with spiral volleys, aspect escorts and a shield only impacts can break." to
+        "Мини-босс со спиральными залпами, эскортом своего аспекта и щитом, который пробивают только столкновения.",
     "Overdrive" to "Перегрузка",
     "Transcendent" to "Запредельная скорость",
     "Impact damage" to "Урон от столкновений",
@@ -201,6 +238,7 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "RELIC RESONANCE" to "РЕЗОНАНС РЕЛИКВИИ",
     "TOTEM DETECTED" to "ОБНАРУЖЕН ТОТЕМ",
     "ELITE SIGNAL" to "ЭЛИТНЫЙ СИГНАЛ",
+    "HERALD APPROACHES" to "ПРИБЛИЖАЕТСЯ ГЛАШАТАЙ",
     "TWO ANOMALIES DETECTED // CHOOSE A COURSE" to "ОБНАРУЖЕНЫ ДВЕ АНОМАЛИИ // ВЫБЕРИТЕ ПУТЬ",
     "ANOMALY LOST" to "АНОМАЛИЯ УТРАЧЕНА",
     "ANOMALY RESOLVED" to "АНОМАЛИЯ ЗАВЕРШЕНА",
