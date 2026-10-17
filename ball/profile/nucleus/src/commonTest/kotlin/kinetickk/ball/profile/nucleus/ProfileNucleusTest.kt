@@ -283,6 +283,30 @@ class ProfileNucleusTest {
     }
 
     @Test
+    fun droppingToTierZeroAfterRankFiveKeepsRankFiveWeaponsCharactersAndMatrixNodes() {
+        val rich = PlayerEconomy(matter = 100_000L, lifetimeMatter = 100_000L)
+        val ranked = readyState(defaultPlayerProfile(TestProfilePolicy).copy(economy = rich,
+            rebirthProgress = RebirthProgress(level = 5, highestCleared = 4)))
+        val dropped = ProfileNucleus.decide(ranked, ProfileNucleusPulse.SelectRebirthTier(0)).acceptedFrame().nextState
+            .let { readyState(it.profile) }
+        assertEquals(RebirthProgress(level = 0, highestCleared = 4), dropped.profile.rebirthProgress)
+        // Rank 5 content stays open at tier 0: the Solar Sweep (Reborn 5) sells, the Crescent (Reborn 5) and the
+        // Pentagon (Reborn 3) are unlocked, and a Reborn 5 Matrix node can be bought.
+        val solar = TestProfilePolicy.weapon(WeaponId.SOLAR_SWEEP)
+        assertEquals(5, solar.minimumRebirth)
+        val bought = ProfileNucleus.decide(dropped, ProfileNucleusPulse.Intent(ProfilePulse.PurchaseOrEquipWeapon(solar.id)))
+            .acceptedFrame().nextState.profile
+        assertTrue(solar.id in bought.loadout.unlockedWeapons)
+        val unlocked = ProfileNucleus.query(dropped, ProfileQuery.GetHomeProgress).unlockedCoreShapes
+        assertTrue(CoreShape.CRESCENT in unlocked && CoreShape.PENTAGON in unlocked, "$unlocked")
+        assertFalse(CoreShape.HEXAGON in unlocked, "the Hexagon needs rank 7")
+        val crescent = ProfileNucleus.decide(dropped, ProfileNucleusPulse.SelectCoreShape(CoreShape.CRESCENT)).acceptedFrame()
+        assertEquals(CoreShape.CRESCENT, crescent.nextState.profile.loadout.coreShape)
+        assertEquals(5, ProfileNucleus.query(dropped, ProfileQuery.GetMatrixProgress).snapshot.rebirthRank)
+        assertEquals(5, ProfileNucleus.query(dropped, ProfileQuery.GetLoadout).snapshot.rebirthRank)
+    }
+
+    @Test
     fun aWeaponRebirthGateOpensAtExactlyItsRankBeforeMatterIsChecked() {
         val gated = TestProfilePolicy.weapon(WeaponId.TETHER_ARC)
         assertEquals(2, gated.minimumRebirth)
