@@ -20,6 +20,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
@@ -30,6 +31,8 @@ import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.gameplay.interaction.GameplayPresentation
 import kinetickk.ball.profile.interaction.armory.api.ArmoryFeature
 import kinetickk.ball.profile.interaction.armory.api.ArmoryOutput
+import kinetickk.ball.profile.interaction.hangar.api.HangarFeature
+import kinetickk.ball.profile.interaction.hangar.api.HangarOutput
 import kinetickk.ball.profile.interaction.matrix.api.MatrixFeature
 import kinetickk.ball.profile.interaction.matrix.api.MatrixOutput
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthFeature
@@ -58,7 +61,7 @@ class AppSessionKeyboardTest {
     fun codexFocusedControlsReceiveEveryHotLetterAndEscapeWithoutSessionShortcuts() = runComposeUiTest {
         val port = KeyboardSessionPort()
         val received = mutableListOf<Key>()
-        val keys = listOf(Key.S, Key.L, Key.A, Key.B, Key.C, Key.I, Key.M, Key.Enter, Key.Escape)
+        val keys = listOf(Key.S, Key.L, Key.A, Key.B, Key.C, Key.I, Key.H, Key.M, Key.Enter, Key.Escape)
         setContent {
             Box(Modifier.size(1000.dp, 700.dp)) {
                 KeyboardShell(port, object : CodexFeature {
@@ -81,6 +84,31 @@ class AppSessionKeyboardTest {
             assertTrue(port.pulses.isEmpty(), "Codex keys must not dispatch global Session shortcuts")
         }
     }
+
+    @Test
+    fun hOverTheHomeBaseOpensTheHangarFeatureAndHAgainClosesIt() = runComposeUiTest {
+        val port = KeyboardSessionPort().apply { overlay = null }
+        val noCodex = object : CodexFeature {
+            @Composable override fun Content(runStacks: CodexRunStacks, onOutput: (CodexOutput) -> Unit) = Unit
+        }
+        val hangar = object : HangarFeature {
+            @Composable override fun Content(routeToken: Long, onOutput: (HangarOutput) -> Unit) {
+                Box(Modifier.size(48.dp).testTag("keyboard-hangar"))
+            }
+        }
+        setContent {
+            Box(Modifier.size(1000.dp, 700.dp)) { KeyboardShell(port, noCodex, hangar) }
+        }
+        onRoot().performKeyInput { pressKey(Key.H) }
+        runOnIdle {
+            assertEquals(SessionInteractionPulse.ShortcutObserved(SessionShortcut.HANGAR), port.pulses.last())
+            assertEquals(AppDestination.Hangar, port.overlay)
+        }
+        onNodeWithTag("keyboard-hangar").assertExists()
+        onRoot().performKeyInput { pressKey(Key.H) }
+        runOnIdle { assertEquals(null, port.overlay) }
+        onNodeWithTag("keyboard-hangar").assertDoesNotExist()
+    }
 }
 
 internal class KeyboardSessionPort : AppSessionPort {
@@ -90,6 +118,10 @@ internal class KeyboardSessionPort : AppSessionPort {
     override fun accept(pulse: SessionInteractionPulse): SessionAcceptance {
         pulses += pulse
         if (pulse == SessionInteractionPulse.CloseOverlay) overlay = null
+        // The Hangar shortcut toggles its overlay over the Home base.
+        if (pulse == SessionInteractionPulse.ShortcutObserved(SessionShortcut.HANGAR)) {
+            overlay = if (overlay == AppDestination.Hangar) null else AppDestination.Hangar
+        }
         return SessionAcceptance.Accepted(instanceId, SessionRevision(pulses.size.toLong()))
     }
     override fun query(query: AppSessionQuery.GetShell) = AppShellProjection(
@@ -99,7 +131,7 @@ internal class KeyboardSessionPort : AppSessionPort {
 }
 
 @Composable
-internal fun KeyboardShell(port: AppSessionPort, codex: CodexFeature) {
+internal fun KeyboardShell(port: AppSessionPort, codex: CodexFeature, hangar: HangarFeature? = null) {
     AppSessionContent(
         sessionPort = port,
         audioExecutor = remember { SessionAudioExecutor(KeyboardSilentAudio) },
@@ -127,6 +159,7 @@ internal fun KeyboardShell(port: AppSessionPort, codex: CodexFeature) {
         profileUnavailableFeature = object : ProfileUnavailableFeature {
             @Composable override fun Content() = Unit
         },
+        hangarFeature = hangar,
     )
 }
 
