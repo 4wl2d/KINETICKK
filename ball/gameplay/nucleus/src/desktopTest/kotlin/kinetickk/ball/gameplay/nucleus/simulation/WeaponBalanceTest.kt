@@ -28,7 +28,9 @@ import kotlin.test.assertTrue
  * so no kill ends a measurement. Checkpoint (a) is a fresh level-1 weapon; checkpoint (b) is an Ascended
  * level-10 weapon with the reference stat block (shield 60, combo 30, mass 1.6, luck 0.6, attack speed
  * 1.25, heat 50, cruise 1 100 u/s, Weapon Calibration 3) and neither signature nor harmony. Overdrive is
- * held off. Each weapon's primary arena sits within 0.65..1.35 of that arena's median, the other at 0.5 or more.
+ * held off. Each weapon's primary arena sits within 0.65..1.35 of that arena's median and the other within
+ * 0.5..1.75 of its median: the ceiling on the other arena keeps a crowd weapon from also out-dueling the
+ * single-target weapons (and the reverse), so no weapon dominates both fights.
  */
 class WeaponBalanceTest {
     @Test
@@ -47,7 +49,7 @@ class WeaponBalanceTest {
                 val primary = primaryArena(weapon)
                 println("WEAPON-BALANCE $checkpoint $weapon primary=$primary single=${"%.2f".format(single)} crowd=${"%.2f".format(crowd)}")
                 val (main, other) = if (primary == Arena.SINGLE) single to crowd else crowd to single
-                if (main !in 0.65..1.35 || other < 0.5) outside += "$checkpoint $weapon single=$single crowd=$crowd"
+                if (main !in PRIMARY_BAND || other !in OTHER_BAND) outside += "$checkpoint $weapon single=$single crowd=$crowd"
             }
         }
         assertTrue(outside.isEmpty(), "weapons outside their band: $outside")
@@ -165,6 +167,12 @@ class WeaponBalanceTest {
         const val FPS = 60f
         const val SECONDS = 30f
         const val ATTACK_SPEED_SECONDS = 60f
+
+        /** A weapon's family arena, as a share of that arena's median. */
+        val PRIMARY_BAND = 0.65..1.35
+
+        /** The other arena, as a share of its median: a floor and a ceiling. */
+        val OTHER_BAND = 0.5..1.75
 
         /** Seconds between a weapon's qualifying activations by design (0.25 s for persistent sources). */
         val BaseCooldowns: Map<WeaponId, Float> = mapOf(

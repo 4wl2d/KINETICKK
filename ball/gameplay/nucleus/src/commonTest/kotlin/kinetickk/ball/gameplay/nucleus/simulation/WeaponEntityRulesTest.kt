@@ -82,6 +82,48 @@ class WeaponEntityRulesTest {
     }
 
     @Test
+    fun aSentryShotSplashesTheEnemiesCrowdedAroundItsTarget() {
+        val state = buildTestState(weapon = WeaponId.SENTRY_GRID, shape = CoreShape.HEXAGON)
+        state.critChance = 0f
+        // Low enough integrity that each hit reads exactly in Float.
+        val struck = state.dummy(x = state.coreX + 300f, y = state.coreY, hp = TARGET_HP)
+        // Beside the shot's path (out of its reach), inside the splash; then just outside the splash.
+        val neighbor = state.dummy(x = struck.x, y = struck.y + 36f, hp = TARGET_HP)
+        val outside = state.dummy(x = struck.x, y = struck.y - (SENTRY_SPLASH_RADIUS + 17f + 2f), hp = TARGET_HP)
+        state.firePlayerProjectile(struck.x - 60f, struck.y, 0f, SENTRY_SHOT_SPEED, 20f, 0, 4f, 1)
+        val shot = state.projectiles.single()
+        shot.x = struck.x + 10f
+        state.resolveProjectileHits()
+
+        val direct = TARGET_HP - struck.hp
+        assertTrue(direct > 0f, "the shot strikes its target")
+        assertEquals(SENTRY_SPLASH_SHARE, (TARGET_HP - neighbor.hp) / direct, 1e-4f, "the neighbor takes the splash share")
+        assertEquals(TARGET_HP, outside.hp, "the splash stops at its radius")
+        assertTrue(state.projectiles.isEmpty(), "the shot is spent on its target")
+    }
+
+    @Test
+    fun anAegisShardPiercesOnToTwoMoreEnemiesKeepingMostOfItsDamage() {
+        val state = buildTestState(weapon = WeaponId.AEGIS_SHARDS, shape = CoreShape.HEXAGON)
+        state.critChance = 0f
+        val column = List(4) { index -> state.spawn(EnemyType.DRIFTER, 80f + index * 70f, 0f).apply { hp = TARGET_HP } }
+        val shard = WeaponEntity(WeaponEntityKind.SHARD, state.coreX, state.coreY, AEGIS_SHARD_RADIUS, AEGIS_SHARD_LIFE, AEGIS_SHARD_LIFE,
+            vx = AEGIS_SPEED, damage = 10f, phase = AEGIS_PIERCE, targetId = column.first().id)
+        state.weaponRuntime.entities.clear()
+        state.weaponRuntime.entities += shard
+        while (shard.life > 0f) {
+            state.advanceWeaponEntities(STEP)
+            state.resolveWeaponEntityHits(STEP)
+        }
+
+        val taken = column.map { TARGET_HP - it.hp }
+        assertTrue(taken[0] > 0f, "the shard strikes the first enemy")
+        assertEquals(AEGIS_PIERCE_SHARE, taken[1] / taken[0], 1e-4f, "taken $taken")
+        assertEquals(AEGIS_PIERCE_SHARE * AEGIS_PIERCE_SHARE, taken[2] / taken[0], 1e-4f, "taken $taken")
+        assertEquals(0f, taken[3], "the shard ends on its third enemy: taken $taken")
+    }
+
+    @Test
     fun theConcussionShockwaveTakesTheRebirthPowerOnce() {
         fun wave(tier: Int): Float {
             val state = buildTestState(rebirth = tier, weapon = WeaponId.CONCUSSION_ENGINE, shape = CoreShape.HEXAGON)
@@ -218,5 +260,6 @@ class WeaponEntityRulesTest {
         const val STEP = MutableGameState.FIXED_STEP
         const val IMPACT_SPEED = 600f
         const val DUMMY_HP = 100_000f
+        const val TARGET_HP = 1_000f
     }
 }
