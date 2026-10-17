@@ -4,4 +4,5 @@
 package kinetickk.ball.content.api
 
 /** Persistent core identity; the current Profile snapshot stores stable IDs instead of enum ordinals. */
-enum class CoreShape { ORB, PRISM, SHARD, RING, DIAMOND, TESSERACT }
+/** Append only: the twelve characters in stable order. */
+enum class CoreShape { ORB, PRISM, SHARD, RING, DIAMOND, TESSERACT, STAR, SPIRAL, DIPOLE, PENTAGON, CRESCENT, HEXAGON }

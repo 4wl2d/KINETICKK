@@ -5,6 +5,9 @@ package kinetickk.ball.content.impl
 
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ContentBounds
+import kinetickk.ball.content.api.CharacterTraits
+import kinetickk.ball.content.api.CharacterTriggerKind
+import kinetickk.ball.content.api.CharacterUnlockRequirement
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.ItemDefinition
@@ -325,7 +328,34 @@ class ContentCatalogTest {
         assertEquals(0, profile.coreShape(CoreShape.ORB).unlockTarget)
         assertEquals(3, profile.coreShape(CoreShape.PRISM).unlockTarget)
         assertEquals(20, profile.coreShape(CoreShape.SHARD).unlockTarget)
+        assertEquals(1, profile.coreShape(CoreShape.RING).unlockTarget)
+        assertEquals(1, profile.coreShape(CoreShape.DIAMOND).unlockTarget)
+        assertEquals(3, profile.coreShape(CoreShape.TESSERACT).unlockTarget)
         assertEquals(profile.coreShapes, gameplay.coreShapes)
+    }
+
+    @Test
+    fun twelveCharactersCarryTheirMechanicTriggerTraitsAndUnlocks() {
+        assertEquals(12, CoreShape.entries.size)
+        val shapes = profile.coreShapes
+        assertEquals(CoreShape.entries.size, shapes.map { it.mechanicName }.toSet().size, "every mechanic is unique")
+        assertEquals(CoreShape.entries.size, shapes.map { it.displayName }.toSet().size)
+        // At most four characters use Dash as their main trigger; only the Diamond uses Brake.
+        assertTrue(shapes.count { it.triggerKind == CharacterTriggerKind.DASH } <= 4)
+        assertEquals(listOf(CoreShape.DIAMOND), shapes.filter { it.triggerKind == CharacterTriggerKind.BRAKE }.map { it.id })
+        assertTrue(shapes.all { it.difficulty in 1..3 })
+        val unlocks = shapes.associate { it.id to (it.unlockRequirement to it.unlockTarget) }
+        assertEquals(CharacterUnlockRequirement.TOTAL_KILLS to 1_500, unlocks[CoreShape.STAR])
+        assertEquals(CharacterUnlockRequirement.REBIRTH_RANK to 1, unlocks[CoreShape.SPIRAL])
+        assertEquals(CharacterUnlockRequirement.RICOCHETS to 40, unlocks[CoreShape.DIPOLE])
+        assertEquals(CharacterUnlockRequirement.REBIRTH_RANK to 3, unlocks[CoreShape.PENTAGON])
+        assertEquals(CharacterUnlockRequirement.REBIRTH_RANK to 5, unlocks[CoreShape.CRESCENT])
+        assertEquals(CharacterUnlockRequirement.REBIRTH_RANK to 7, unlocks[CoreShape.HEXAGON])
+        val prism = profile.coreShape(CoreShape.PRISM).traits
+        assertEquals(1.25f, prism.massMultiplier)
+        assertEquals(20, prism.integrityBonus)
+        assertEquals(CharacterTraits(), profile.coreShape(CoreShape.ORB).traits)
+        assertEquals(60f, profile.coreShape(CoreShape.HEXAGON).traits.pickupRadiusBonus)
     }
 
     /** Everything that changes how an item plays, ignoring its name, flavor and id. */
