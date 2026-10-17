@@ -132,8 +132,8 @@ class PauseTextFitTest {
 
     /**
      * Four bound relics and a replaced one whose cost lingers: every cost shows (the lingering one on
-     * the desktop board), all at one size, in entries as tall as their text, and a larger text size
-     * never leaves the costs smaller than the default did.
+     * the desktop board), all at one size, in entries as tall as their text, a larger text size
+     * never leaves the costs smaller than the default did, and the weapon's synergies keep a row.
      */
     @Test
     fun costsShareOneSizeThatNeverShrinksWhenTheTextSizeGrows() {
@@ -147,10 +147,18 @@ class PauseTextFitTest {
                 val regular = pauseLayoutGeometry(width.toFloat(), height.toFloat(), 1f).mode == GameplayLayoutMode.REGULAR
                 val costs = records.filter { it.kind == PauseTextKind.COST }
                 assertEquals(if (regular) 5 else 4, costs.size, "$scene: every cost shows")
-                assertTrue(records.none { it.kind == PauseTextKind.MORE && it.rect.top in costs.first().rect.top..costs.last().rect.bottom + 40f },
-                    "$scene: no cost is counted away")
+                // A cost list that counts entries away ends with a MORE line in its own column (the tag rows' count sits
+                // further right, under the resonance label).
+                assertTrue(records.none {
+                    it.kind == PauseTextKind.MORE && it.rect.top in costs.first().rect.top..costs.last().rect.bottom + 40f &&
+                        kotlin.math.abs(it.rect.left - costs.first().rect.left) <= 1f
+                }, "$scene: no cost is counted away")
                 val fonts = costs.map { it.layout.layoutInput.style.fontSize.value }.distinct()
                 assertEquals(1, fonts.size, "$scene: costs share one size: $fonts")
+                // A full Relic loadout still leaves the weapon's synergies a row, up to the default text size.
+                if (textScale <= 1.25f) {
+                    assertTrue(records.any { it.kind == PauseTextKind.SYNERGY }, "$scene draws the weapon synergies beside four costs")
+                }
                 // Entries follow one another at their own height (no fixed pitch leaving holes).
                 costs.zipWithNext().forEach { (a, b) ->
                     val gap = b.rect.top - a.layout.size.height - a.rect.top
