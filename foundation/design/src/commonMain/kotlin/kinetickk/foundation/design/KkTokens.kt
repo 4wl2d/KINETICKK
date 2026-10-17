@@ -64,41 +64,47 @@ object Kk {
     val EIon = Color(0xFF4F7DFF)
     val EGravitic = Color(0xFFD24CFF)
     val EEntropy = Color(0xFF46D96A)
+    /** Sonic: a deep teal, clear of Entropy's green and Cryo's ice. */
+    val ESonic = Color(0xFF009C84)
+    /** Void: a pale lilac, clear of Gravitic's magenta and Cryo's ice. */
+    val EVoid = Color(0xFFCCC0FC)
 
     /** Gold means Rebirth: Sovereign relics, legendary items, Reborn cards, the Rebirth menu. */
     val Gold = Color(0xFFFFC93C)
 
-    // relic aspects mirror the elements (kinetic, thermal, cryo, ion, gravitic, entropy, sovereign)
+    // relic aspects mirror the elements (kinetic, thermal, cryo, ion, gravitic, entropy, sonic, void, sovereign)
     val AKinetic = EKinetic
     val AThermal = EThermal
     val ACryo = ECryo
     val AIon = EIon
     val AGravitic = EGravitic
     val AEntropy = EEntropy
+    val ASonic = ESonic
+    val AVoid = EVoid
     val ASovereign = Gold
 
     /** Rarity colors in rank order 1..5: common, uncommon, rare, epic, legendary. */
     val Rarities: List<Color> = listOf(RCommon, RUncommon, RRare, REpic, RLegend)
 
-    /** Status element colors in element order: thermal, cryo, ion, gravitic, entropy. */
-    val Elements: List<Color> = listOf(EThermal, ECryo, EIon, EGravitic, EEntropy)
+    /** Status element colors in element order: thermal, cryo, ion, gravitic, entropy, sonic, void. */
+    val Elements: List<Color> = listOf(EThermal, ECryo, EIon, EGravitic, EEntropy, ESonic, EVoid)
 
     /**
-     * Aspect colors in order kinetic, thermal, cryo, ion, gravitic, entropy, sovereign (the same order
-     * as the game's relic aspects; screens map by ordinal).
+     * Aspect colors in order kinetic, thermal, cryo, ion, gravitic, entropy, sonic, void, sovereign (the
+     * same order as the game's relic aspects; screens map by ordinal).
      */
-    val Aspects: List<Color> = listOf(AKinetic, AThermal, ACryo, AIon, AGravitic, AEntropy, ASovereign)
+    val Aspects: List<Color> = listOf(AKinetic, AThermal, ACryo, AIon, AGravitic, AEntropy, ASonic, AVoid, ASovereign)
 
     /** Rarity color by rank 1 (common) .. 5 (legendary); out-of-range ranks are clamped. */
     fun rarity(rank: Int): Color = Rarities[rank.coerceIn(1, 5) - 1]
 
-    /** Aspect color by index 0 (kinetic) .. 6 (sovereign); out-of-range indices are clamped. */
-    fun aspect(index: Int): Color = Aspects[index.coerceIn(0, 6)]
+    /** Aspect color by index 0 (kinetic) .. 8 (sovereign); out-of-range indices are clamped. */
+    fun aspect(index: Int): Color = Aspects[index.coerceIn(0, Aspects.lastIndex)]
 
-    /** Status element color by index 0 (thermal) .. 4 (entropy); out-of-range indices are clamped. */
-    fun element(index: Int): Color = Elements[index.coerceIn(0, 4)]
+    /** Status element color by index 0 (thermal) .. 6 (void); out-of-range indices are clamped. */
+    fun element(index: Int): Color = Elements[index.coerceIn(0, Elements.lastIndex)]
 
-    /** Damage tone (Default palette): 0 is kinetic (volt), 1..5 the status elements. */
+    /** Damage tone (Default palette): 0 is kinetic (volt), 1..7 the status elements. */
     fun tone(index: Int): Color = if (index <= 0) EKinetic else element(index - 1)
 }
 

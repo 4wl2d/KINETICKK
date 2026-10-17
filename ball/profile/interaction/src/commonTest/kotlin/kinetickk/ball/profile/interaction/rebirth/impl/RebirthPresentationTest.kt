@@ -193,7 +193,7 @@ class RebirthPresentationTest {
         // `InventoryIconParityTest` table), framed by its aspect's sides.
         assertEquals(RunRelicRunes, RelicId.entries.associateWith { it.toCanvasRuneStyle() })
         assertEquals(RelicId.entries.size, RelicId.entries.map { it.toCanvasRuneStyle() }.toSet().size)
-        assertEquals(listOf(3, 6, 8, 4, 5, 7, 10), RelicAspect.entries.map { it.runeFrameSides() })
+        assertEquals(listOf(3, 6, 8, 4, 5, 7, 9, 12, 10), RelicAspect.entries.map { it.runeFrameSides() })
         // Item marks use the run's glyphs: the element over the first tag, a sunburst without either.
         val fork = TestItems[0].copy(tags = immutableListOf(), elements = immutableListOf())
         assertEquals(CanvasGlyphStyle.SUNBURST, fork.primaryGlyphStyle())
@@ -242,6 +242,8 @@ class RebirthPresentationTest {
             RelicId.AGONY_SCEPTER to CanvasRuneStyle.RADIATING_STAFF,
             RelicId.HOLLOW_CROWN to CanvasRuneStyle.OPEN_DIAL,
             RelicId.OUROBOROS_SEAL to CanvasRuneStyle.RETURN_ARROW,
+            RelicId.THUNDER_CHOIR to CanvasRuneStyle.SPLIT_ARCS,
+            RelicId.NULL_COVENANT to CanvasRuneStyle.OPEN_ELLIPSE_DOT,
         )
     }
 

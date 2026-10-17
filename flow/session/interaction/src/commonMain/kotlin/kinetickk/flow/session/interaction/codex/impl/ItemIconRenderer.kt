@@ -54,6 +54,8 @@ internal fun StatusElement.toCanvasGlyphStyle(): CanvasGlyphStyle = when (this) 
     StatusElement.ION -> CanvasGlyphStyle.BOLT
     StatusElement.GRAVITIC -> CanvasGlyphStyle.CONCENTRIC_ORB
     StatusElement.ENTROPY -> CanvasGlyphStyle.LEAF
+    StatusElement.SONIC -> CanvasGlyphStyle.SOUND_WAVES
+    StatusElement.VOID -> CanvasGlyphStyle.HOLLOW_RING
 }
 
 internal fun BuildTag.toCanvasGlyphStyle(): CanvasGlyphStyle = when (this) {

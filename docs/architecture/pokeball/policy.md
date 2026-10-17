@@ -128,12 +128,12 @@ remain independently enforced.
 | Desktop synthesis samples / PCM bytes per tone | 22050 / 44100 | validated one-second maximum buffer shape |
 | Android audio workers / queued tasks | 1 / 24 | fixed executor and discard-oldest queue policy |
 | Android synthesis samples / PCM bytes per tone | 22050 / 44100 | validated one-second maximum PCM16 buffer shape |
-| items / weapons / upgrades / Relics / named pairings / reactions | 96 / 12 / 8 / 24 / 32 / 10 (current catalog 80 / 12 / 8 / 20 / 20 / 10) | Content bootstrap validation, including key-consistent pairings, declared elements and Break floors |
+| items / weapons / upgrades / Relics / named pairings / reactions | 96 / 12 / 8 / 24 / 32 / 21 (current catalog 90 / 12 / 8 / 22 / 20 / 21) | Content bootstrap validation, including key-consistent pairings, declared elements and Break floors; reactions are exactly one per pair of the 7 status elements |
 | Rebirth level | `0..10` | Content typed policy plus Profile/Gameplay validation |
 | equipped Relic slots / rank | 4 / `1..3` (generic Meld reaches 2) | captured Content Relic policy plus Gameplay retention/saturation |
 | Profile retained Lab rank slots / each rank | captured upgrade count (at most 8) / `0..captured maxRanks` | Profile bootstrap compatibility plus policy-free Resource schema validation |
 | Profile character achievement totals / distinct winners | non-negative saturating `Long` / six stable character IDs | Profile validates deltas, persists cumulative progress and owns unlock evaluation |
-| Profile retained discoveries | items: captured `itemCount` (at most 96); Relics 24; reactions 10; pairings 32; heirloom Relics 4 | Profile bootstrap compatibility plus policy-free Resource schema validation; legacy (pre-epoch) lists up to 400 items / 40 Relics are discarded at decode |
+| Profile retained discoveries | items: captured `itemCount` (at most 96); Relics 24; reactions 21; pairings 32; heirloom Relics 4 | Profile bootstrap compatibility plus policy-free Resource schema validation; legacy (pre-epoch) lists up to 400 items / 40 Relics are discarded at decode |
 | Profile master volume / text scale | `0..1` / `1..1.75` | Profile and Gameplay normalized compatibility plus Resource ingress validation |
 | Profile simulation speed / damage-tier threshold | exact declared option sets | API declarations consumed by Profile Nucleus, Gameplay Nucleus, and Resource validation |
 | Profile Gameplay discoveries per Pulse | captured `itemCount` (at most 96) | Profile validates count and every stable item ID before acceptance |
@@ -160,7 +160,7 @@ copying modes or source-body expectations is a policy requirement.
 | `gameplay.item-indexed-state` | item arrays, Reborn flags, status accumulators and discoveries <=96; clause timers/counters <= 96 x 2 | validated contiguous Item IDs; pending is a subset; cardinality-stable COW |
 | `gameplay.weapon-indexed-state` | unlocked weapons/mutation counters <=12 | closed WeaponId bootstrap; invariant-preserving COW |
 | `gameplay.meta-indexed-state` | rank slots <=8 | validated closed MetaUpgradeId catalog sizes the array |
-| `gameplay.relic-indexed-state` | state arrays <=24; enemy status cells <=120 x 47 | validated RelicId catalog; fixed per-enemy status layout times the enemy cap |
+| `gameplay.relic-indexed-state` | state arrays <=24; enemy status cells <=120 x 71 | validated RelicId catalog; per-enemy status layout driven by the element count (four 7-wide element blocks, 21 reaction-pair slots, Void memory, Unmake and Blackfire cells) times the enemy cap |
 | `gameplay.collision-live-enemy-ids` | <=120 | lazy compact sorted array from bounded live enemies |
 | `gameplay.reducer-copy-collections` | equal to bounded committed source cardinality | isolated candidate storage; immutable sharing or owned copies; bounded pending outputs |
 | `gameplay.render-projection-collections` | equal to bounded source cardinality | verified predecessor provenance; identity/storage reuse or exact ordered fallback |

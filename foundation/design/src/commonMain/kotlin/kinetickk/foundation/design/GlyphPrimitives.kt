@@ -40,6 +40,10 @@ enum class CanvasGlyphStyle {
     BRICK_LINES,
     INTERLOCKING_RINGS,
     THREE_BLADE,
+    /** A dot between two pairs of facing arcs (sound spreading both ways). */
+    SOUND_WAVES,
+    /** A heavy ring around an offset hollow (an eclipse with nothing inside). */
+    HOLLOW_RING,
 }
 
 /** Draws one geometry-only glyph selected by an Interaction-supplied style. */
@@ -327,6 +331,25 @@ fun DrawScope.drawCanvasGlyph(
             }
             drawCircle(GlyphCutout, radius * 0.17f, center)
             drawCircle(color, radius * 0.12f, center)
+        }
+
+        CanvasGlyphStyle.SOUND_WAVES -> {
+            drawCircle(color, radius * 0.17f, center)
+            for (ring in 1..2) {
+                val arc = radius * (0.2f + 0.34f * ring)
+                val topLeft = Offset(center.x - arc, center.y - arc)
+                val size = Size(arc * 2f, arc * 2f)
+                drawArc(color, -48f, 96f, false, topLeft, size, style = Stroke(thinStroke, cap = StrokeCap.Round))
+                drawArc(color, 132f, 96f, false, topLeft, size, style = Stroke(thinStroke, cap = StrokeCap.Round))
+            }
+        }
+
+        CanvasGlyphStyle.HOLLOW_RING -> {
+            drawCircle(color.copy(alpha = color.alpha * 0.2f), radius * 0.86f, center)
+            drawCircle(color, radius * 0.8f, center, style = Stroke(stroke))
+            val hollow = Offset(center.x + radius * 0.16f, center.y - radius * 0.12f)
+            drawCircle(GlyphCutout, radius * 0.46f, hollow)
+            drawCircle(color, radius * 0.46f, hollow, style = Stroke(thinStroke))
         }
     }
 }

@@ -216,8 +216,9 @@ class WorldStatusRenderingTest {
     @Test
     fun statusesDrawNoNumbersOrText() {
         val statuses = listOf(
-            enemy(5 or (2 shl 4) or (1 shl 23)),
-            enemy((3 shl 8) or (1 shl 20) or (1 shl 21) or (1 shl 22), id = 2, x = 120f),
+            enemy(5 or (2 shl 4) or EnemyStatusBits.PRIMED),
+            enemy((3 shl 8) or EnemyStatusBits.FROZEN or EnemyStatusBits.BRITTLE or EnemyStatusBits.EMBRITTLED, id = 2, x = 120f),
+            enemy((4 shl 20) or (3 shl 24), id = 3, x = 240f),
         )
         render(statuses) // warm every cache
         val measured = KkTextStats.layoutsMeasured

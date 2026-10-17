@@ -24,7 +24,7 @@ import kotlin.test.assertTrue
  * through the Machado 2009 simulation at full severity, Mono as luminance alone, Default as is.
  * Colors are compared in CIEDE2000 (ΔE) and against ink by WCAG contrast.
  *
- * - The six damage tones (Kinetic, the preset's volt, and the five elements) stay 12 ΔE apart.
+ * - The eight damage tones (Kinetic, the preset's volt, and the seven elements) stay 12 ΔE apart.
  *   Fill patterns can tell status fills apart, but damage numbers and thin rims carry hue alone.
  * - Every element stays 15 ΔE from the preset's threat color.
  * - Every tone reaches 4.5:1 on ink, because card effect numbers use it at body size.
@@ -113,7 +113,7 @@ class KkHueGrammarTest {
         const val MIN_TONE_DELTA_E = 12.0
         const val MIN_THREAT_DELTA_E = 15.0
         const val MIN_INK_CONTRAST = 4.5
-        val ToneNames = listOf("kinetic", "thermal", "cryo", "ion", "gravitic", "entropy")
+        val ToneNames = listOf("kinetic", "thermal", "cryo", "ion", "gravitic", "entropy", "sonic", "void")
 
         /**
          * Breaks the current KkRolePalette still has, each awaiting a palette change by its owner.
@@ -126,7 +126,11 @@ class KkHueGrammarTest {
          * - Mono pure greys cannot hold six tones 12 ΔE apart above 4.5:1, so these pairs stay
          *   listed until Mono damage numbers get a non-hue cue and this rule exempts them. Seen as
          *   luminance alone, Mono's gold is one more grey among them (the legendary card is told by its
-         *   material's foil, rays and burst there, the type by its pattern).
+         *   material's foil, rays and burst there, the type by its pattern). Sonic and Void add their own
+         *   pairs for the same reason.
+         * - Deutan has no hue left for Void that keeps 12 ΔE from all seven other tones, the threat, the
+         *   gold and the card frames together; its lilac sits 9.8 ΔE from Gravitic's violet, and the two
+         *   are told apart by their fill patterns and glyphs.
          */
         val PendingPaletteFixes = setOf(
             "TRITAN threat thermal",
@@ -136,6 +140,9 @@ class KkHueGrammarTest {
             "MONO threat cryo", "MONO threat ion", "MONO contrast entropy",
             "MONO grey cryo", "MONO grey ion", "MONO grey gravitic", "MONO grey entropy",
             "MONO gold kinetic", "MONO gold thermal", "MONO gold cryo", "MONO gold ion", "MONO gold entropy",
+            "DEUTAN tones gravitic/void",
+            "MONO tones thermal/sonic", "MONO tones ion/sonic", "MONO tones gravitic/sonic", "MONO tones gravitic/void",
+            "MONO tones entropy/void", "MONO gold sonic", "MONO gold void",
         )
 
         fun tenths(value: Double): String = (round(value * 10.0) / 10.0).toString()

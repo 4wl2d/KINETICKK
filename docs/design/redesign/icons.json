@@ -483,6 +483,32 @@
     }
    ]
   },
+  "aspect.sonic": {
+   "label": "Sonic",
+   "layers": [
+    {
+     "d": "M7.5 8.5a5 5 0 0 0 0 7M16.5 8.5a5 5 0 0 1 0 7M4.5 5.5a9 9 0 0 0 0 13M19.5 5.5a9 9 0 0 1 0 13",
+     "style": "stroke"
+    },
+    {
+     "d": "M10.5 12a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0Z",
+     "style": "fill"
+    }
+   ]
+  },
+  "aspect.void": {
+   "label": "Void",
+   "layers": [
+    {
+     "d": "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0Z",
+     "style": "stroke-dashed"
+    },
+    {
+     "d": "M9 11a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0Z",
+     "style": "stroke"
+    }
+   ]
+  },
   "aspect.sovereign": {
    "label": "Sovereign",
    "layers": [

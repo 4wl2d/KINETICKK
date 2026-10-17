@@ -39,10 +39,13 @@ internal fun damageNumberScale(tier: DamageNumberTier): Float = when (tier) {
     DamageNumberTier.DEVASTATING -> 1.8f
 }
 
-/** Status elements in StatusElement order (thermal, cryo, ion, gravitic, entropy). */
-internal const val STATUS_ELEMENT_COUNT = 5
+/** Status elements in StatusElement order (thermal, cryo, ion, gravitic, entropy, sonic, void). */
+internal const val STATUS_ELEMENT_COUNT = 7
 
-private val ElementFills = arrayOf(KkFillKind.SHIMMER, KkFillKind.LATTICE, KkFillKind.ZIGZAG, KkFillKind.RINGS, KkFillKind.PITTING)
+private val ElementFills = arrayOf(
+    KkFillKind.SHIMMER, KkFillKind.LATTICE, KkFillKind.ZIGZAG, KkFillKind.RINGS, KkFillKind.PITTING, KkFillKind.BARS,
+    KkFillKind.CROSSES,
+)
 
 /** The pattern that carries an element's identity without its hue (color vision presets). */
 internal fun elementFill(element: Int): KkFillKind = ElementFills[element.coerceIn(0, STATUS_ELEMENT_COUNT - 1)]
@@ -51,20 +54,22 @@ internal fun elementFill(element: Int): KkFillKind = ElementFills[element.coerce
 internal fun elementIcon(element: Int): KkIcon = KkIcon.Elements[element.coerceIn(0, STATUS_ELEMENT_COUNT - 1)]
 
 /**
- * Reader of [kinetickk.ball.gameplay.nucleus.render.EnemyProjection.statusBits]: five 4-bit stack
- * counts in element order, then the Frozen, Brittle, Embrittled and primed flags. Pure bit work,
- * no allocation.
+ * Reader of [kinetickk.ball.gameplay.nucleus.render.EnemyProjection.statusBits]: seven 4-bit stack
+ * counts in element order (bits 0..27), then the Frozen, Brittle, Embrittled and primed flags in bits
+ * 28..31. Pure bit work, no allocation.
  */
 internal object EnemyStatusBits {
-    const val FROZEN = 1 shl 20
-    const val BRITTLE = 1 shl 21
-    const val EMBRITTLED = 1 shl 22
+    private const val FLAGS_SHIFT = 4 * STATUS_ELEMENT_COUNT
 
-    /** The five stack counts. */
-    const val STACK_BITS = (1 shl 20) - 1
+    const val FROZEN = 1 shl FLAGS_SHIFT
+    const val BRITTLE = 1 shl (FLAGS_SHIFT + 1)
+    const val EMBRITTLED = 1 shl (FLAGS_SHIFT + 2)
 
-    /** Some element sits one stack short of its Break. */
-    const val PRIMED = 1 shl 23
+    /** The seven stack counts. */
+    const val STACK_BITS = (1 shl FLAGS_SHIFT) - 1
+
+    /** Some element sits one stack short of its Break (the sign bit). */
+    const val PRIMED = 1 shl (FLAGS_SHIFT + 3)
 
     fun stacks(bits: Int, element: Int): Int = (bits ushr (element * 4)) and 0xF
 

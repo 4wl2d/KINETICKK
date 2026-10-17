@@ -49,11 +49,13 @@ internal fun runAffinity(
 internal fun bossAffinity(type: EnemyType): Int =
     runAffinity(type, architectAspect = StatusElement.THERMAL, architectPhase = 1, shifting = true)
 
-/** Thermal and Cryo counter each other; Ion, Entropy and Gravitic form a cycle. */
+/** Thermal and Cryo counter each other, Sonic and Void counter each other; Ion, Entropy and Gravitic form a cycle. */
 internal fun counterOf(element: StatusElement): StatusElement = when (element) {
     StatusElement.THERMAL -> StatusElement.CRYO
     StatusElement.CRYO -> StatusElement.THERMAL
     StatusElement.ION -> StatusElement.ENTROPY
     StatusElement.ENTROPY -> StatusElement.GRAVITIC
     StatusElement.GRAVITIC -> StatusElement.ION
+    StatusElement.SONIC -> StatusElement.VOID
+    StatusElement.VOID -> StatusElement.SONIC
 }

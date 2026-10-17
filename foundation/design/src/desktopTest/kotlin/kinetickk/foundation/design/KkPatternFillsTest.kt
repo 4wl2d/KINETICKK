@@ -20,12 +20,15 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * The five pattern fills that let hues be told apart without color: each covers a readable share
+ * The seven pattern fills that let hues be told apart without color: each covers a readable share
  * of its area, repeats seamlessly, differs from the others and from the hazard hatch, and draws
  * without allocating once its tile exists.
  */
 class KkPatternFillsTest {
-    private val patterns = listOf(KkFillKind.SHIMMER, KkFillKind.LATTICE, KkFillKind.ZIGZAG, KkFillKind.RINGS, KkFillKind.PITTING)
+    private val patterns = listOf(
+        KkFillKind.SHIMMER, KkFillKind.LATTICE, KkFillKind.ZIGZAG, KkFillKind.RINGS, KkFillKind.PITTING, KkFillKind.BARS,
+        KkFillKind.CROSSES,
+    )
     private val area = Rect(0f, 0f, 216f, 144f)
 
     private fun render(kind: KkFillKind, density: Float = 1f): ImageBitmap =
@@ -98,7 +101,7 @@ class KkPatternFillsTest {
             lineTo(70f, 120f)
             close()
         }
-        val colors = listOf(Kk.EThermal, Kk.ECryo, Kk.EIon, Kk.EGravitic, Kk.EEntropy)
+        val colors = listOf(Kk.EThermal, Kk.ECryo, Kk.EIon, Kk.EGravitic, Kk.EEntropy, Kk.ESonic, Kk.EVoid)
         fun frame(index: Int) = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, Size(216f, 144f)) {
             for (kind in patterns.indices) {
                 rotate(index * 0.7f + kind * 30f, Offset(70f, 60f)) {

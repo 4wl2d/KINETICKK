@@ -14,7 +14,7 @@ import kotlin.test.assertEquals
 class RelicIconMappingTest {
     @Test
     fun everyCatalogRelicHasItsOwnSharedGeometry() {
-        assertEquals(20, RelicId.entries.size)
+        assertEquals(22, RelicId.entries.size)
         val styles = RelicId.entries.map { it.toCanvasRuneStyle() }
         assertEquals(RelicId.entries.size, styles.toSet().size, "No two relics share a rune: $styles")
     }
@@ -28,6 +28,8 @@ class RelicIconMappingTest {
             RelicAspect.ION to Color(0xFF4F7DFF),
             RelicAspect.GRAVITIC to Color(0xFFD24CFF),
             RelicAspect.ENTROPY to Color(0xFF46D96A),
+            RelicAspect.SONIC to Color(0xFF009C84),
+            RelicAspect.VOID to Color(0xFFCCC0FC),
             RelicAspect.SOVEREIGN to Color(0xFFFFC93C),
         )
         RelicAspect.entries.forEach { aspect -> assertEquals(expected[aspect], relicAspectColor(aspect)) }

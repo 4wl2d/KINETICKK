@@ -32,7 +32,7 @@ data class KkRolePalette(
     val pol: Color,
     val hatchThreats: Boolean = false,
     /**
-     * Status element colors (thermal, cryo, ion, gravitic, entropy) for this vision mode. Color-vision
+     * Status element colors (thermal, cryo, ion, gravitic, entropy, sonic, void) for this vision mode. Color-vision
      * presets keep Thermal on their heat hue and keep the others near their own hue but distinct as
      * that deficiency sees them; Mono uses a lightness ramp. Element glyphs and fill patterns carry
      * identity redundantly.
@@ -56,10 +56,10 @@ data class KkRolePalette(
      */
     val spectrum: KkSpectrum = KkSpectrum.Full,
 ) {
-    /** Element color by index 0 (thermal) .. 4 (entropy). */
+    /** Element color by index 0 (thermal) .. 6 (void). */
     fun element(index: Int): Color = elements[index.coerceIn(0, elements.lastIndex)]
 
-    /** Damage tone: 0 is [kinetic] (the preset's volt), 1..5 the status elements. */
+    /** Damage tone: 0 is [kinetic] (the preset's volt), 1..7 the status elements. */
     fun tone(index: Int): Color = if (index <= 0) kinetic else element(index - 1)
 
     companion object {
@@ -76,7 +76,7 @@ data class KkRolePalette(
             heat = Color(0xFFFFB000),
             shield = Color(0xFF9AD0FF),
             pol = Color(0xFFE0E0E0),
-            elements = visionElements(0xFFFFB000, 0xFFBDEBFF, 0xFF728AA1, 0xFFE82CAF, 0xFF63E9AF),
+            elements = visionElements(0xFFFFB000, 0xFFBDEBFF, 0xFF728AA1, 0xFFE82CAF, 0xFF63E9AF, 0xFF5AB478, 0xFFD2BAFC),
             gold = KkGold.Deep,
             spectrum = KkSpectrum.Protan,
         )
@@ -86,7 +86,7 @@ data class KkRolePalette(
             heat = Color(0xFFFF9E1A),
             shield = Color(0xFFA6D8FF),
             pol = Color(0xFFD6D6D6),
-            elements = visionElements(0xFFFF9E1A, 0xFFBDEBFF, 0xFF627F93, 0xFFCC80FF, 0xFF2CE88A),
+            elements = visionElements(0xFFFF9E1A, 0xFFBDEBFF, 0xFF627F93, 0xFFCC80FF, 0xFF2CE88A, 0xFF428A4E, 0xFFF08AE4),
             gold = KkGold.Deep,
             spectrum = KkSpectrum.Deutan,
         )
@@ -96,7 +96,7 @@ data class KkRolePalette(
             heat = Color(0xFFFF7A9A),
             shield = Color(0xFFE4E4E4),
             pol = Color(0xFFFF9ED8),
-            elements = visionElements(0xFFFF7A9A, 0xFFCAEBFC, 0xFF427BFF, 0xFFBF55EC, 0xFF55BD51),
+            elements = visionElements(0xFFFF7A9A, 0xFFCAEBFC, 0xFF427BFF, 0xFFBF55EC, 0xFF55BD51, 0xFF3C8A42, 0xFF9654FC),
             spectrum = KkSpectrum.Tritan,
         )
         val Mono = KkRolePalette(
@@ -114,17 +114,20 @@ data class KkRolePalette(
          * Thermal keeps the preset's heat hue; the other elements stay as close to their own hue as the
          * deficiency allows while remaining distinct from each other, from the Kinetic volt (`you`) and
          * from threat: Protan Entropy leans mint and Tritan Cryo paler, Tritan Entropy deeper, so each
-         * keeps 12 ΔE from the preset's volt as that deficiency sees it.
+         * keeps 12 ΔE from the preset's volt as that deficiency sees it. Sonic and Void take the hues each
+         * deficiency still tells apart from the other six tones, the threat, the gold and the card frames.
          */
         private fun visionElements(vararg argb: Long): List<Color> = argb.map { Color(it) }
 
-        /** Mono: Thermal keeps the heat grey; the other four elements become a lightness ramp. */
+        /** Mono: Thermal keeps the heat grey; the other six elements become a lightness ramp. */
         private fun visionRamp(thermal: Color): List<Color> = listOf(
             thermal,
             Color(0xFFF4F8FF),
             Color(0xFFC2CAD2),
             Color(0xFF8E979F),
             Color(0xFF646C72),
+            Color(0xFFA6A6A6),
+            Color(0xFF7A7A7A),
         )
     }
 }

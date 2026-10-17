@@ -75,7 +75,7 @@ and counter-thrust remain available at exhaustion. Gameplay owns six character
 abilities, optional world-fixed trials and bounded relic synergies. Codex reads
 one coherent immutable build summary and preserves pause/reward selection.
 
-The catalog has 80 hand-authored items, 12 weapons, 8 meta upgrades, 20 Relics,
+The catalog has 90 hand-authored items, 12 weapons, 8 meta upgrades, 22 Relics,
 six characters, and Rebirth levels `0..10` (see the build-system intentional
 delta below). Existing stable declaration order is captured as
 explicit stable IDs during the migration; consumers receive immutable versioned
@@ -118,6 +118,19 @@ variable Core radius (default `16`) and the obstacle queries exist, but no
 gameplay reads or fires them yet. The seeded baseline trace is unchanged. The
 no-POI probe now runs its fixed ten seeds and requires at least five wins;
 six win, and seed `23770` no longer does.
+
+Two status elements join the five: Sonic (Resonance: more knockback and impact
+damage taken; Shatter: a radial throwing shockwave) and Void (Hollow: the
+enemy's damage output falls and it remembers a share of damage taken; Unmake:
+the remembered damage strikes again ×1.6 after `0.35s`, capped at 40 % of
+maximum integrity, a weighted share for bosses). Eleven reactions cover the new
+pairs, so every one of the 21 element pairs reacts; Seismic and Stasis stun or
+stop ordinary enemies, Silence stops attacks, Oblivion executes weakened
+non-boss enemies. Thunder Choir (Sonic) and Null Covenant (Void) join the
+Relics, items `80..89` are appended, Elites rotate through seven aspects and
+the enemy status layout grows to 71 cells. Seeded runs therefore differ; the
+no-POI probe counts only victories that skip every POI (eight of ten seeds win,
+six of them without a POI).
 
 The compact exit workflow removes the old causal-depth assertion that failed
 when a busy Profile refused progress before acceptance. An injected

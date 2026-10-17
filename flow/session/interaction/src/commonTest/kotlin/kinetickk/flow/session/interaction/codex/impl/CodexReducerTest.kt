@@ -169,9 +169,10 @@ class CodexReducerTest {
         assertEquals(CodexEmptyState.NO_PAIRINGS, codexEmptyState(CodexTab.PAIRINGS, false, "", 0))
     }
 
-    @Test fun reactionMatrixHoldsTheFiveBreaksOnItsDiagonalAndEveryReactionOnce() {
+    @Test fun reactionMatrixHoldsTheSevenBreaksOnItsDiagonalAndEveryReactionOnce() {
         val cells = CodexMatrix.flatten()
-        assertEquals(15, cells.size)
+        assertEquals(28, cells.size)
+        assertEquals(StatusElement.entries.size, CodexMatrix.size, "a 7 x 7 lower triangle")
         assertEquals(StatusElement.entries, cells.filter { it.isBreak }.map { it.row })
         assertEquals(ReactionId.entries.toSet(), cells.mapNotNull { it.reaction }.toSet())
         assertEquals(ReactionId.entries.size, cells.mapNotNull { it.reaction }.size)
@@ -183,9 +184,11 @@ class CodexReducerTest {
     }
 
     @Test fun aResidueFeedsEveryReactionThatTakesItsElement() {
-        assertEquals(setOf(ReactionId.THERMAL_SHOCK, ReactionId.PLASMA_BURST, ReactionId.FUSION, ReactionId.WILDFIRE),
-            codexResidueFeeds(StatusElement.THERMAL))
-        StatusElement.entries.forEach { element -> assertEquals(4, codexResidueFeeds(element).size, "$element") }
+        assertEquals(setOf(ReactionId.THERMAL_SHOCK, ReactionId.PLASMA_BURST, ReactionId.FUSION, ReactionId.WILDFIRE,
+            ReactionId.THUNDERCLAP, ReactionId.BLACKFIRE), codexResidueFeeds(StatusElement.THERMAL))
+        assertEquals(setOf(ReactionId.THUNDERCLAP, ReactionId.SHATTERPOINT, ReactionId.RESONANT_ARC, ReactionId.SEISMIC,
+            ReactionId.FRACTURE, ReactionId.SILENCE), codexResidueFeeds(StatusElement.SONIC))
+        StatusElement.entries.forEach { element -> assertEquals(6, codexResidueFeeds(element).size, "$element") }
     }
 
     @Test fun opposedKeysFormChainsAndNoKeyRepeats() {

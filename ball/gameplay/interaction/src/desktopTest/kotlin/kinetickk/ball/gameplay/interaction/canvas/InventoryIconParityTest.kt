@@ -108,8 +108,8 @@ class InventoryIconParityTest {
         val Center = Offset(48f, 48f)
         /** Relic aspect accents are the element tokens (`tokens.json`), in aspect order. */
         val Accents = listOf(Color(0xFFD8FF3E), Color(0xFFFF8A1F), Color(0xFFBDEBFF), Color(0xFF4F7DFF),
-            Color(0xFFD24CFF), Color(0xFF46D96A), Color(0xFFFFC93C))
-        val FrameSides = listOf(3, 6, 8, 4, 5, 7, 10)
+            Color(0xFFD24CFF), Color(0xFF46D96A), Color(0xFF009C84), Color(0xFFCCC0FC), Color(0xFFFFC93C))
+        val FrameSides = listOf(3, 6, 8, 4, 5, 7, 9, 12, 10)
 
         /** The rune of each relic; the Codex copy of the renderer keeps the same table. */
         val RelicRunes = mapOf(
@@ -133,6 +133,8 @@ class InventoryIconParityTest {
             RelicId.AGONY_SCEPTER to CanvasRuneStyle.RADIATING_STAFF,
             RelicId.HOLLOW_CROWN to CanvasRuneStyle.OPEN_DIAL,
             RelicId.OUROBOROS_SEAL to CanvasRuneStyle.RETURN_ARROW,
+            RelicId.THUNDER_CHOIR to CanvasRuneStyle.SPLIT_ARCS,
+            RelicId.NULL_COVENANT to CanvasRuneStyle.OPEN_ELLIPSE_DOT,
         )
 
         /** Item glyphs: the element when the item has one, its archetype tag otherwise. */
@@ -142,6 +144,8 @@ class InventoryIconParityTest {
             StatusElement.ION to CanvasGlyphStyle.BOLT,
             StatusElement.GRAVITIC to CanvasGlyphStyle.CONCENTRIC_ORB,
             StatusElement.ENTROPY to CanvasGlyphStyle.LEAF,
+            StatusElement.SONIC to CanvasGlyphStyle.SOUND_WAVES,
+            StatusElement.VOID to CanvasGlyphStyle.HOLLOW_RING,
         )
         val TagGlyphs = mapOf(
             BuildTag.RAM to CanvasGlyphStyle.TRIPLE_ARROW,

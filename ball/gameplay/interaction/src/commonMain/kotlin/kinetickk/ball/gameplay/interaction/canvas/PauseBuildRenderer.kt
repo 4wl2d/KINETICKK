@@ -469,8 +469,10 @@ private fun DrawScope.drawCompactBuild(
         top = maxOf(relicsBottom, chipsTop + 50f * unit) + gap
         val statRow = 22f * unit * grow
         val elementRow = 12f * unit * grow
+        // The seven element meters sit in two columns, so they stand no taller than the three tag rows.
+        val elementRows = (STATUS_ELEMENT_COUNT + COMPACT_ELEMENT_COLUMNS - 1) / COMPACT_ELEMENT_COLUMNS
         val resonanceHeight = pauseLabelHeight(overview.resonanceLabel, ui, 11f * k, 236f * unit) + 4f * unit +
-            maxOf(3f * tagRow, STATUS_ELEMENT_COUNT * elementRow)
+            maxOf(3f * tagRow, elementRows * elementRow)
         // Costs come before the derived stats: at a large text size the stats give way to keep two
         // readable lines per cost.
         val costNeed = bound * (2f * 9.5f * k * ui.scale * density * COST_LINE_HEIGHT + 4f * unit)
@@ -480,7 +482,7 @@ private fun DrawScope.drawCompactBuild(
         val rowsTop = drawPauseLabel(overview.resonanceLabel, ui, 11f * k, x(0f), top, 236f * unit) + 4f * unit
         drawPauseTags(overview, ui, x(0f), rowsTop, 236f * unit, tagRow, 2, 10.5f * k, k, maxRows = 3)
         val meterTop = drawPauseLabel(overview.elementsLabel, ui, 11f * k, x(248f), top, (width - 248f) * unit) + 4f * unit
-        drawPauseElementRows(overview, ui.roles, x(248f), meterTop, (width - 248f) * unit, elementRow, k)
+        drawPauseElementRows(overview, ui.roles, x(248f), meterTop, (width - 248f) * unit, elementRow, k, columns = COMPACT_ELEMENT_COLUMNS)
         if (showStats) {
             drawStatRows(overview.stats, ui, display, area, unit, 0f, (statsTop - area.top) / unit, statRow / unit, 2, (width - 20f) / 2f, 8f,
                 15f * k, 12f * k)
@@ -859,18 +861,27 @@ private fun DrawScope.drawPauseElementRows(
     width: Float,
     row: Float,
     k: Float,
+    columns: Int = 1,
 ) {
     val glyph = row * 0.72f
+    val rows = (overview.elements.size + columns - 1) / columns
+    val columnGap = if (columns > 1) 8f * k * density else 0f
+    val columnWidth = (width - columnGap * (columns - 1)) / columns
     for (index in overview.elements.indices) {
         val element = overview.elements[index]
         val color = roles.element(element.element)
-        val middle = top + index * row + row * 0.5f
-        val center = Offset(left + glyph * 0.6f, middle)
+        // Column-major, so element order reads down the first column, then the next.
+        val columnLeft = left + (index / rows) * (columnWidth + columnGap)
+        val middle = top + (index % rows) * row + row * 0.5f
+        val center = Offset(columnLeft + glyph * 0.6f, middle)
         drawKkIcon(elementIcon(element.element), center, glyph, if (element.affinity > 0) color else Kk.Ink4)
         if (element.dominant) drawCircle(color, glyph * DOMINANT_RING, center, style = kkStroke(1.2f * k * density))
-        drawElementMeter(overview, element, color, left + glyph * 1.6f, middle - 2.5f * k * density, width - glyph * 1.6f, k)
+        drawElementMeter(overview, element, color, columnLeft + glyph * 1.6f, middle - 2.5f * k * density, columnWidth - glyph * 1.6f, k)
     }
 }
+
+/** Columns of the landscape compact pause's element meters. */
+private const val COMPACT_ELEMENT_COLUMNS = 2
 
 /** One pip per affinity point (eight shown), notched at each affinity tier; reached notches in the element's hue. */
 private fun DrawScope.drawElementMeter(overview: PauseBuildOverview, element: PauseElementEntry, color: Color, left: Float, top: Float, width: Float, k: Float) {

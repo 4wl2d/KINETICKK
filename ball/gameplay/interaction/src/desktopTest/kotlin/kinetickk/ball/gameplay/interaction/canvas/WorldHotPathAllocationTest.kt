@@ -302,14 +302,15 @@ class WorldHotPathAllocationTest {
     private companion object {
         /**
          * Statuses of the busy frame's enemies: a reaction ready (Thermal with Cryo), a primed Ion arc,
-         * Frozen and Brittle, Embrittled, a full Entropy fill, none.
+         * Frozen and Brittle, Embrittled, a full Entropy fill, Sonic with Void, none.
          */
         val BusyStatuses = intArrayOf(
             5 or (3 shl 4),
-            (6 shl 8) or (1 shl 23),
-            (4 shl 4) or (1 shl 20) or (1 shl 21),
-            (2 shl 12) or (1 shl 22),
+            (6 shl 8) or EnemyStatusBits.PRIMED,
+            (4 shl 4) or EnemyStatusBits.FROZEN or EnemyStatusBits.BRITTLE,
+            (2 shl 12) or EnemyStatusBits.EMBRITTLED,
             9 shl 16,
+            (5 shl 20) or (3 shl 24),
             0,
         )
         const val MEASURED_FRAMES = 300

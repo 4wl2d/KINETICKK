@@ -257,9 +257,9 @@ class RedesignShotsBuildTest {
     }
 
     private companion object {
-        const val STATUS_FROZEN = 1 shl 20
-        const val STATUS_BRITTLE = 1 shl 21
-        const val STATUS_EMBRITTLED = 1 shl 22
-        const val STATUS_PRIMED = 1 shl 23
+        const val STATUS_FROZEN = EnemyStatusBits.FROZEN
+        const val STATUS_BRITTLE = EnemyStatusBits.BRITTLE
+        const val STATUS_EMBRITTLED = EnemyStatusBits.EMBRITTLED
+        const val STATUS_PRIMED = EnemyStatusBits.PRIMED
     }
 }

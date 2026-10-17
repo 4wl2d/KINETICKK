@@ -44,39 +44,42 @@ class KkTokensTest {
 
     @Test
     fun elementColorsAndDamageTonesShareOneHuePerElement() {
-        // thermal, cryo, ion, gravitic, entropy
-        val expected = listOf(0xFFFF8A1F, 0xFFBDEBFF, 0xFF4F7DFF, 0xFFD24CFF, 0xFF46D96A).map(::Color)
+        // thermal, cryo, ion, gravitic, entropy, sonic, void
+        val expected = listOf(0xFFFF8A1F, 0xFFBDEBFF, 0xFF4F7DFF, 0xFFD24CFF, 0xFF46D96A, 0xFF009C84, 0xFFCCC0FC).map(::Color)
         assertEquals(expected, Kk.Elements)
-        assertEquals(listOf(Kk.EThermal, Kk.ECryo, Kk.EIon, Kk.EGravitic, Kk.EEntropy), Kk.Elements)
-        assertEquals(5, Kk.Elements.toSet().size, "five distinct element hues")
+        assertEquals(listOf(Kk.EThermal, Kk.ECryo, Kk.EIon, Kk.EGravitic, Kk.EEntropy, Kk.ESonic, Kk.EVoid), Kk.Elements)
+        assertEquals(7, Kk.Elements.toSet().size, "seven distinct element hues")
         expected.forEachIndexed { index, color -> assertEquals(color, Kk.element(index), "element $index") }
         assertEquals(Kk.EThermal, Kk.element(-1), "clamps low")
-        assertEquals(Kk.EEntropy, Kk.element(9), "clamps high")
+        assertEquals(Kk.EVoid, Kk.element(9), "clamps high")
         // Thermal is the heat hue: your heat and their burning are one idea.
         assertEquals(Kk.Heat, Kk.EThermal)
-        // Damage tones: 0 kinetic (volt, the player color: movement is your weapon), 1..5 the elements,
+        // Damage tones: 0 kinetic (volt, the player color: movement is your weapon), 1..7 the elements,
         // clamped on both ends. Bone stays the neutral text color, never a damage tone.
         assertEquals(Color(0xFFD8FF3E), Kk.EKinetic)
         assertEquals(Kk.Volt, Kk.tone(0))
         assertNotEquals(Kk.Bone, Kk.tone(0), "bone is text, not Kinetic")
         assertEquals(Kk.EKinetic, Kk.tone(-3))
-        (1..5).forEach { assertEquals(Kk.element(it - 1), Kk.tone(it), "tone $it") }
-        assertEquals(Kk.EEntropy, Kk.tone(6))
+        (1..7).forEach { assertEquals(Kk.element(it - 1), Kk.tone(it), "tone $it") }
+        assertEquals(Kk.EVoid, Kk.tone(8))
         assertFalse(Kk.EKinetic in Kk.Elements, "kinetic is not a status element")
     }
 
     @Test
     fun aspectColorsMirrorTheElementsInRelicAspectOrder() {
-        // kinetic, thermal, cryo, ion, gravitic, entropy, sovereign
-        val expected = listOf(0xFFD8FF3E, 0xFFFF8A1F, 0xFFBDEBFF, 0xFF4F7DFF, 0xFFD24CFF, 0xFF46D96A, 0xFFFFC93C)
-        assertEquals(7, Kk.Aspects.size)
+        // kinetic, thermal, cryo, ion, gravitic, entropy, sonic, void, sovereign
+        val expected = listOf(0xFFD8FF3E, 0xFFFF8A1F, 0xFFBDEBFF, 0xFF4F7DFF, 0xFFD24CFF, 0xFF46D96A, 0xFF009C84, 0xFFCCC0FC, 0xFFFFC93C)
+        assertEquals(9, Kk.Aspects.size)
         expected.forEachIndexed { index, argb ->
             assertEquals(Color(argb), Kk.aspect(index), "aspect $index")
             assertEquals(Color(argb), Kk.Aspects[index])
         }
-        assertEquals(listOf(Kk.AKinetic, Kk.AThermal, Kk.ACryo, Kk.AIon, Kk.AGravitic, Kk.AEntropy, Kk.ASovereign), Kk.Aspects)
-        assertEquals(Kk.Elements, Kk.Aspects.subList(1, 6), "elemental aspects are the element hues")
-        (0..5).forEach { assertEquals(Kk.tone(it), Kk.aspect(it), "aspect $it is damage tone $it") }
+        assertEquals(
+            listOf(Kk.AKinetic, Kk.AThermal, Kk.ACryo, Kk.AIon, Kk.AGravitic, Kk.AEntropy, Kk.ASonic, Kk.AVoid, Kk.ASovereign),
+            Kk.Aspects,
+        )
+        assertEquals(Kk.Elements, Kk.Aspects.subList(1, 8), "elemental aspects are the element hues")
+        (0..7).forEach { assertEquals(Kk.tone(it), Kk.aspect(it), "aspect $it is damage tone $it") }
         assertEquals(Kk.Gold, Kk.ASovereign)
         assertEquals(Kk.AKinetic, Kk.aspect(-1))
         assertEquals(Kk.ASovereign, Kk.aspect(12))
@@ -104,25 +107,25 @@ class KkTokensTest {
     }
 
     @Test
-    fun everyColorVisionPaletteDefinesFiveDistinctElementColors() {
+    fun everyColorVisionPaletteDefinesSevenDistinctElementColors() {
         assertEquals(Kk.Elements, KkRolePalette.Default.elements)
         KkVisionMode.entries.forEach { mode ->
             val palette = mode.palette
-            assertEquals(5, palette.elements.size, "$mode element count")
-            assertEquals(5, palette.elements.toSet().size, "$mode element colors are distinct")
+            assertEquals(7, palette.elements.size, "$mode element count")
+            assertEquals(7, palette.elements.toSet().size, "$mode element colors are distinct")
             // Thermal stays on the preset's heat hue in every mode.
             assertEquals(palette.heat, palette.element(0), "$mode thermal is heat")
             palette.elements.forEachIndexed { index, color -> assertEquals(color, palette.element(index), "$mode element $index") }
             assertEquals(palette.elements.first(), palette.element(-2), "$mode clamps low")
-            assertEquals(palette.elements.last(), palette.element(7), "$mode clamps high")
+            assertEquals(palette.elements.last(), palette.element(9), "$mode clamps high")
             // Kinetic is the preset's own volt, and a screen that re-tints `you` keeps the player's Kinetic.
             assertEquals(palette.you, palette.kinetic, "$mode kinetic is its volt")
             assertEquals(palette.you, palette.tone(0), "$mode kinetic tone")
             assertEquals(palette.you, palette.tone(-1), "$mode clamps to kinetic")
             assertEquals(palette.you, palette.copy(you = Kk.Gold).tone(0), "$mode re-tinted you keeps Kinetic")
-            (1..5).forEach { assertEquals(palette.element(it - 1), palette.tone(it), "$mode tone $it") }
+            (1..7).forEach { assertEquals(palette.element(it - 1), palette.tone(it), "$mode tone $it") }
             // Damage numbers carry hue alone, so kinetic joins the set; KkHueGrammarTest checks the distances.
-            assertEquals(6, (0..5).map(palette::tone).toSet().size, "$mode damage tones are distinct")
+            assertEquals(8, (0..7).map(palette::tone).toSet().size, "$mode damage tones are distinct")
         }
         // Presets replace the hue wheel; only Default uses the full-saturation element hues.
         KkVisionMode.entries.filter { it != KkVisionMode.DEFAULT }.forEach { mode ->
