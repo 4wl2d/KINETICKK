@@ -79,6 +79,8 @@ class HudHotPathAllocationTest {
                 ),
                 "totem" to TotemProjection(-1_400f, 800f, 1f),
                 "minimapRange" to 2_200f,
+                // Tier 10: the Rebirth strip with all ten mutator sigils and the four-part Architect bar.
+                "rebirthLevel" to 10,
             )
             val fx = VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(
                 BuildNotificationProjection("Neon Ram", immutableListOf("Impact damage +0.05", "Weapon power +0.04", "+ Ram II"), 4f),

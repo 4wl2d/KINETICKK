@@ -96,6 +96,7 @@ private fun DrawScope.drawWorldLayer(
     drawTrail(engine, shakeX, shakeY, roles)
     drawWeaponNodes(engine, shakeX, shakeY, roles)
     drawPickups(engine, shakeX, shakeY, roles)
+    drawVolatileBursts(engine, shakeX, shakeY, roles)
     drawWeapon(engine, core, shakeX, shakeY, roles)
     drawWeaponArcs(engine, visualFx, shakeX, shakeY, roles)
     drawParticles(engine, visualFx, shakeX, shakeY, roles)

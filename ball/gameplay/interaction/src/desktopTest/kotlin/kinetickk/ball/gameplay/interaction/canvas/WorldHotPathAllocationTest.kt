@@ -310,6 +310,8 @@ class WorldHotPathAllocationTest {
                 facing = index * 0.4f,
                 linkedTo = if (type == EnemyType.DRIFTER) EnemyType.AEGIS.ordinal + 1 else -1,
                 shielded = type == EnemyType.HERALD,
+                // Rebirth R8: an Armored Vanguard plate on every third ordinary enemy.
+                armored = index % 3 == 0 && type != EnemyType.ARCHITECT,
             )
         }
         return GameplayRenderModel(
@@ -357,6 +359,11 @@ class WorldHotPathAllocationTest {
             ),
             obstacles = BusyObstacles,
             characterAbility = busyAbility(drift),
+            // Rebirth R4: Volatile Remains telegraphs filling toward detonation.
+            volatileBursts = immutableListOf(
+                kinetickk.ball.gameplay.nucleus.render.VolatileBurstProjection(CORE + 90f, CORE + 70f, 70f, 2.8f, 3.15f),
+                kinetickk.ball.gameplay.nucleus.render.VolatileBurstProjection(CORE - 120f, CORE + 30f, 70f, 2.9f, 3.25f),
+            ),
         )
     }
 
