@@ -13,6 +13,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import kinetickk.ball.content.api.CoreShapeDefinition
+import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
@@ -25,13 +27,21 @@ import kinetickk.ball.profile.interaction.armory.api.ArmoryOutput
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.audio.ProfileAudioExecutor
 import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.immutableListOf
 import kinetickk.resource.audio.api.AudioService
 
+/**
+ * The Armory: the Profile loadout feeds the weapon grid and its purchase or equip pulse. [coreShapes]
+ * name each weapon's signature character and [relics] the heirloom candidates that carry its key,
+ * for the detail panel's synergy (presentation only; Gameplay applies the bonuses).
+ */
 class DefaultArmoryFeature(
     private val profilePort: ProfilePort,
     private val weapons: ImmutableList<WeaponDefinition>,
     private val weaponMasteries: ImmutableList<WeaponMastery>,
     audioService: AudioService,
+    private val coreShapes: ImmutableList<CoreShapeDefinition> = immutableListOf(),
+    private val relics: ImmutableList<RelicDefinition> = immutableListOf(),
 ) : ArmoryFeature {
     private val reducer = ArmoryReducer(weapons)
     private val audioExecutor = ProfileAudioExecutor(audioService)
@@ -41,13 +51,17 @@ class DefaultArmoryFeature(
         var loadoutProjectionValue by remember(profilePort) {
             mutableStateOf(profilePort.query(ProfileQuery.GetLoadout))
         }
-        val model = reducer.renderModel(loadoutProjectionValue.snapshot, activeRunWeapon)
+        // Heirloom candidates only change with a run's end, never while the Armory is open.
+        val heirlooms = remember(profilePort) { profilePort.query(ProfileQuery.GetCollection).collection.heirloomRelicIds }
+        val model = reducer.renderModel(loadoutProjectionValue.snapshot, activeRunWeapon, heirlooms)
         // The inspected weapon is screen-local presentation state; it opens on the starter.
         var inspectedValue by rememberSaveable { mutableStateOf(model.selectedWeapon.name) }
+        var noticeValue by remember { mutableStateOf<ArmoryNotice?>(null) }
         val state = ArmoryViewState(
             WeaponId.entries.firstOrNull { it.name == inspectedValue && weapons.any { weapon -> weapon.id == it } }
                 ?: weapons.firstOrNull { it.id == model.selectedWeapon }?.id
                 ?: weapons.first().id,
+            noticeValue,
         )
         val textScale = profilePort.query(ProfileQuery.GetPreferences).preferences.textScale
         val gridScroll = rememberScrollState()
@@ -57,6 +71,7 @@ class DefaultArmoryFeature(
         fun dispatch(action: ArmoryAction) {
             val reduction = reducer.reduce(state, model, action)
             inspectedValue = reduction.state.inspected.name
+            noticeValue = reduction.state.notice
             reduction.effects.forEach { effect ->
                 when (effect) {
                     is ArmoryEffect.PurchaseOrEquipWeapon -> {
@@ -64,9 +79,10 @@ class DefaultArmoryFeature(
                             ProfilePulse.PurchaseOrEquipWeapon(effect.id),
                         )
                         loadoutProjectionValue = profilePort.query(ProfileQuery.GetLoadout)
-                        if (acceptance is ProfileAcceptance.Accepted) {
-                            audioExecutor.play(ProfileAudioCue.PURCHASE)
-                        }
+                        // A refusal (a screen older than the Profile) is named beside the action, never silent.
+                        val rejection = (acceptance as? ProfileAcceptance.Rejected)?.reason
+                        noticeValue = reducer.answered(reduction.state, effect.id, rejection).notice
+                        audioExecutor.play(if (rejection == null) ProfileAudioCue.PURCHASE else ProfileAudioCue.REFUSED)
                     }
                     is ArmoryEffect.PlayAudio -> audioExecutor.play(effect.cue)
                     is ArmoryEffect.Emit -> onOutput(effect.output)
@@ -80,7 +96,7 @@ class DefaultArmoryFeature(
             }
         }
 
-        ArmoryContent(model, weapons, weaponMasteries, state, textScale, gridScroll, holder, ::dispatch)
+        ArmoryContent(model, weapons, weaponMasteries, state, textScale, gridScroll, holder, coreShapes, relics, onAction = ::dispatch)
     }
 }
 

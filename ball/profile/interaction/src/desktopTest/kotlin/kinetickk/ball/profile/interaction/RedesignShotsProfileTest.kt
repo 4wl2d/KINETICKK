@@ -31,6 +31,8 @@ import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.interaction.armory.api.ArmoryRenderModel
 import kinetickk.ball.profile.interaction.armory.impl.ArmoryContent
 import kinetickk.ball.profile.interaction.armory.impl.ArmoryLayoutHolder
+import kinetickk.ball.profile.interaction.armory.impl.ArmoryNotice
+import kinetickk.ball.profile.interaction.armory.impl.ArmoryRefusal
 import kinetickk.ball.profile.interaction.armory.impl.ArmoryViewState
 import kinetickk.ball.profile.interaction.matrix.impl.MatrixContent
 import kinetickk.ball.profile.interaction.matrix.impl.MatrixPurchaseFlash
@@ -125,11 +127,28 @@ class RedesignShotsProfileTest {
                     remember { ScrollState(0) }, remember { ArmoryLayoutHolder() }) {}
             }
         }
-        val active = ArmoryRenderModel(1_284L, WeaponId.FLUX_WAKE, Weapons.take(7).map { it.id }.toImmutableSet(), WeaponId.ION_SWARM, rebirthRank = 0)
+        // Ion Swarm in the run, the Hexagon (its signature character) selected, an heirloom carrying its Charge key.
+        val active = ArmoryRenderModel(1_284L, WeaponId.FLUX_WAKE, Weapons.take(7).map { it.id }.toImmutableSet(), WeaponId.ION_SWARM,
+            rebirthRank = 0, character = kinetickk.ball.content.api.CoreShape.HEXAGON,
+            heirloomRelics = kinetickk.foundation.collections.ImmutableList.copyOf(CatalogHeirlooms))
         for ((scale, suffix) in scales) {
             shoot("armory", "active$suffix") {
                 ArmoryContent(active, Weapons, WeaponMastery.entries, ArmoryViewState(WeaponId.ION_SWARM), scale,
-                    remember { ScrollState(0) }, remember { ArmoryLayoutHolder() }) {}
+                    remember { ScrollState(0) }, remember { ArmoryLayoutHolder() },
+                    kinetickk.ball.content.api.defaultCoreShapeDefinitions(), CatalogRebirthRelics) {}
+            }
+            // The details scrolled to the weapon sheet (synergy and facts).
+            shoot("armory", "sheet$suffix") {
+                ArmoryContent(active, Weapons, WeaponMastery.entries, ArmoryViewState(WeaponId.ION_SWARM), scale,
+                    remember { ScrollState(0) }, remember { ArmoryLayoutHolder() },
+                    kinetickk.ball.content.api.defaultCoreShapeDefinitions(), CatalogRebirthRelics, detailScrollStart = 10_000) {}
+            }
+            // A Rebirth-gated weapon, refused once: the tile names the rank and the panel the reason.
+            shoot("armory", "reborn$suffix") {
+                ArmoryContent(active, Weapons, WeaponMastery.entries,
+                    ArmoryViewState(WeaponId.GLACIER_BELL, ArmoryNotice(WeaponId.GLACIER_BELL, ArmoryRefusal.REBIRTH_LOCKED)), scale,
+                    remember { ScrollState(0) }, remember { ArmoryLayoutHolder() },
+                    kinetickk.ball.content.api.defaultCoreShapeDefinitions(), CatalogRebirthRelics) {}
             }
         }
         // Between the default and the largest size (the phone ladder stacks here).

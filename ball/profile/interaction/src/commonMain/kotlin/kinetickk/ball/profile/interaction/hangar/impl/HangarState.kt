@@ -5,11 +5,16 @@ package kinetickk.ball.profile.interaction.hangar.impl
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.CoreShapeDefinition
+import kinetickk.ball.content.api.RelicDefinition
+import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.profile.api.HangarProjection
+import kinetickk.ball.profile.api.LoadoutProfileSnapshot
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.hangar.api.HangarOutput
 import kinetickk.ball.profile.interaction.hangar.api.HangarRenderModel
 import kinetickk.ball.profile.interaction.hangar.api.HangarShapeRenderModel
+import kinetickk.ball.profile.interaction.hangar.api.HangarWeaponRenderModel
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.toImmutableList
 
@@ -87,6 +92,7 @@ internal const val HANGAR_BAR_FLOOR = 0.25f
 internal fun HangarProjection.toRenderModel(
     definitions: ImmutableList<CoreShapeDefinition>,
     matter: Long,
+    weapons: List<HangarWeaponRenderModel> = emptyList(),
 ): HangarRenderModel {
     val mass = definitions.map { it.traits.massMultiplier }
     val integrity = definitions.map { 100f + it.traits.integrityBonus }
@@ -113,5 +119,30 @@ internal fun HangarProjection.toRenderModel(
         }.toImmutableList(),
         selected = selected,
         matter = matter,
+        weapons = weapons.toImmutableList(),
     )
+}
+
+/**
+ * The signature rows' weapons from the Profile [loadout] (owned, starter, the rank the Rebirth
+ * gates compare against) and its [heirlooms]: a heirloom candidate carrying a weapon's Relic key
+ * would harmonize with it.
+ */
+internal fun hangarWeapons(
+    weapons: List<WeaponDefinition>,
+    loadout: LoadoutProfileSnapshot,
+    heirlooms: List<RelicId>,
+    relics: List<RelicDefinition>,
+): List<HangarWeaponRenderModel> {
+    val candidates = heirlooms.distinct().mapNotNull { id -> relics.firstOrNull { it.id == id } }
+    return weapons.map { weapon ->
+        val owned = weapon.id in loadout.loadout.unlockedWeapons
+        HangarWeaponRenderModel(
+            definition = weapon,
+            owned = owned,
+            starter = weapon.id == loadout.loadout.selectedWeapon,
+            rebirthLocked = !owned && loadout.rebirthRank < weapon.minimumRebirth,
+            harmonizing = candidates.filter { weapon.key in it.keys }.toImmutableList(),
+        )
+    }
 }

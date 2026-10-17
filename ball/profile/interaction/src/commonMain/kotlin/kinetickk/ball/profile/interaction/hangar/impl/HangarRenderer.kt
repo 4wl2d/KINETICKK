@@ -63,6 +63,8 @@ import kinetickk.ball.profile.interaction.drawProfileText
 import kinetickk.ball.profile.interaction.fitKkText
 import kinetickk.ball.profile.interaction.hangar.api.HangarRenderModel
 import kinetickk.ball.profile.interaction.hangar.api.HangarShapeRenderModel
+import kinetickk.ball.profile.interaction.hangar.api.HangarWeaponRenderModel
+import kinetickk.ball.profile.interaction.formatMatter
 import kinetickk.ball.profile.interaction.localization.ProfileScreensRedesignText
 import kinetickk.ball.profile.interaction.localization.ProfileText
 import kinetickk.ball.profile.interaction.profileHeaderBackWidth
@@ -122,7 +124,8 @@ internal fun HangarContent(
             val type = hangarType(frame.mode)
             val backWidth = profileHeaderBackWidth(measurer, frame, language.text(ProfileScreensRedesignText.Back))
             val inspected = state.inspectedShape
-            val layout = hangarLayout(frame, scale, backWidth) { width ->
+            val signature = inspected?.let { model.signatureWeapons(it.shape) }.orEmpty()
+            val layout = hangarLayout(frame, scale, backWidth, signatureHarmony = signature.map { it.harmonizing.isNotEmpty() }) { width ->
                 if (inspected == null) 0f else hangarDescriptionLayout(measurer, frame, type, inspected, language, width).kkBoxHeight
             }
             SideEffect { holder.layout = layout }
@@ -151,8 +154,23 @@ internal fun HangarContent(
                             .semantics {
                                 contentDescription = hangarDetailDescription(inspected, model, language)
                             }
-                            .drawBehind { drawHangarDetail(measurer, frame, type, layout, inspected, model, time, language) },
-                    )
+                            .drawBehind { drawHangarDetail(measurer, frame, type, layout, inspected, model, signature, time, language) },
+                    ) {
+                        // Each signature weapon reads as its own node: its name, state and harmony.
+                        signature.forEachIndexed { index, weapon ->
+                            val row = layout.signatureRows.getOrNull(index) ?: return@forEachIndexed
+                            Box(
+                                Modifier.offset { IntOffset(row.left.roundToInt(), row.top.roundToInt()) }
+                                    .size(frame.dp(row.width), frame.dp(row.height))
+                                    .testTag("profile-hangar-signature-${weapon.definition.id}")
+                                    .semantics {
+                                        contentDescription = weapon.definition.name.localizedContent(language)
+                                        stateDescription = listOfNotNull(hangarWeaponStatus(weapon, language), hangarHarmonyText(weapon, language))
+                                            .joinToString(", ")
+                                    },
+                            )
+                        }
+                    }
                 }
                 val select = layout.select
                 val selected = inspected.shape == model.selected
@@ -262,7 +280,24 @@ internal fun hangarDetailDescription(shape: HangarShapeRenderModel, model: Hanga
     ).filter { it.isNotBlank() }.joinToString(". ")
 }
 
-private fun DrawScope.drawHangarForm(index: Int, center: Offset, radius: Float, fill: Color, rim: Color, spin: Float) {
+/** A signature weapon's state: the starter, owned, its Rebirth gate, or its Matter price. */
+internal fun hangarWeaponStatus(weapon: HangarWeaponRenderModel, language: AppLanguage): String = when {
+    weapon.starter -> language.text(ProfileScreensRedesignText.HangarWeaponStarter)
+    weapon.owned -> language.text(ProfileScreensRedesignText.HangarWeaponOwned)
+    weapon.rebirthLocked -> language.text(ProfileScreensRedesignText.RebornLock, weapon.definition.minimumRebirth)
+    else -> language.text(ProfileScreensRedesignText.CostMatter, formatMatter(weapon.definition.permanentUnlockCost.toLong(), language))
+}
+
+/** The heirloom candidates that would harmonize with [weapon], or null when none carries its key. */
+internal fun hangarHarmonyText(weapon: HangarWeaponRenderModel, language: AppLanguage): String? =
+    weapon.harmonizing.takeIf { it.isNotEmpty() }?.let { relics ->
+        language.text(ProfileScreensRedesignText.HangarHarmony, relics.joinToString(", ") { it.name.localizedContent(language) })
+    }
+
+/** The weapon icon of the signature row ([KkIcon] key `weapons.<id>`). */
+private fun hangarWeaponIcon(weapon: HangarWeaponRenderModel): KkIcon? = KkIcon.byKey("weapons." + weapon.definition.id.name.lowercase())
+
+internal fun DrawScope.drawHangarForm(index: Int, center: Offset, radius: Float, fill: Color, rim: Color, spin: Float) {
     val path = KkFormPaths.of(index, radius)
     rotate(spin, center) {
         translate(center.x, center.y) {
@@ -350,6 +385,7 @@ private fun DrawScope.drawHangarDetail(
     layout: HangarLayout,
     shape: HangarShapeRenderModel,
     model: HangarRenderModel,
+    signatureWeapons: List<HangarWeaponRenderModel>,
     time: Float,
     language: AppLanguage,
 ) {
@@ -400,15 +436,19 @@ private fun DrawScope.drawHangarDetail(
     val pip = difficulty.height * 0.5f
     drawKkPips(Offset(difficulty.left + labelWidth, difficulty.center.y - pip * 0.5f), 3, definition.difficulty, roles.threat,
         sizeDp = pip / density, widthDp = pip * 1.6f / density, emptyOutlined = true)
-    // Signature weapons arrive with the weapon rework; the row keeps their place.
+    // The signature weapons: the two weapons whose signature character this is, each with its
+    // icon, name and state (owned, starter, Rebirth gate or price) and the heirlooms it harmonizes with.
     val signature = layout.signature
+    val firstRow = layout.signatureRows.firstOrNull() ?: signature
     val signatureLabel = fitKkText(measurer, language.text(ProfileScreensRedesignText.HangarSignature), type.mono * k,
         labelWidth - frame.d(8f), minFactor = 0.5f) { measurer.typography.monoStyle(it) }
-    drawProfileText(signatureLabel, signature.left, signature.center.y, Kk.Mute, "hangar.detail.signature", valign = KkVAlign.CENTER)
-    val pending = fitKkText(measurer, language.text(ProfileScreensRedesignText.HangarSignaturePending), type.mono * k,
-        signature.width - labelWidth, minFactor = 0.5f) { measurer.typography.monoStyle(it) }
-    drawProfileText(pending, signature.left + labelWidth, signature.center.y, Kk.Mute2, "hangar.detail.signature.value",
+    drawProfileText(signatureLabel, signature.left, firstRow.top + layout.signatureLine * 0.5f, Kk.Mute, "hangar.detail.signature",
         valign = KkVAlign.CENTER)
+    signatureWeapons.forEachIndexed { index, weapon ->
+        val row = layout.signatureRows.getOrNull(index) ?: return@forEachIndexed
+        drawHangarSignatureWeapon(measurer, frame, type, Rect(row.left + labelWidth, row.top, row.right, row.bottom), layout.signatureLine,
+            weapon, language)
+    }
     val unlock = fitKkText(measurer, hangarUnlockText(shape, language), type.mono * k, layout.unlock.width, maxLines = 2,
         minFactor = 0.5f) { measurer.typography.monoStyle(it) }
     drawProfileText(unlock, layout.unlock.left, layout.unlock.top, if (shape.unlocked) Kk.Bone2 else roles.threat, "hangar.detail.unlock")
@@ -430,5 +470,49 @@ private fun DrawScope.drawHangarBackground(frame: ProfileFrame, layout: HangarLa
             drawRect(Kk.Ink1, Offset(0f, top), Size(size.width, size.height - top))
             drawLine(Kk.Line, Offset(0f, top), Offset(size.width, top), density)
         }
+    }
+}
+
+/**
+ * One signature weapon in [row]: its icon (muted while not owned) and name, its state at the right
+ * edge (gold for a Rebirth gate) and, when heirloom candidates carry its key, the harmony line under them.
+ */
+private fun DrawScope.drawHangarSignatureWeapon(
+    measurer: CanvasTextMeasurer,
+    frame: ProfileFrame,
+    type: HangarType,
+    row: Rect,
+    lineHeight: Float,
+    weapon: HangarWeaponRenderModel,
+    language: AppLanguage,
+) {
+    val k = frame.k
+    val roles = measurer.roles
+    val harmonyLayout = hangarHarmonyText(weapon, language)?.let {
+        fitKkText(measurer, it, type.mono * k, row.width, minFactor = 0.5f, uppercase = false) { size -> measurer.typography.monoStyle(size) }
+    }
+    val centerY = row.top + lineHeight * 0.5f
+    val owned = weapon.owned || weapon.starter
+    val icon = lineHeight * 0.72f
+    hangarWeaponIcon(weapon)?.let { drawKkIcon(it, Offset(row.left + icon * 0.5f, centerY), icon, if (owned) roles.you else Kk.Mute) }
+    val status = fitKkText(measurer, hangarWeaponStatus(weapon, language), type.mono * k, row.width * 0.4f, minFactor = 0.5f) {
+        measurer.typography.monoStyle(it)
+    }
+    val statusColor = when {
+        weapon.rebirthLocked -> roles.gold.base
+        owned -> roles.you
+        else -> Kk.Mute
+    }
+    drawProfileText(status, row.right, centerY, statusColor, "hangar.detail.signature.state", weapon.definition.id, align = KkAlign.END,
+        valign = KkVAlign.CENTER)
+    val nameLeft = row.left + icon + frame.d(8f)
+    val name = fitKkText(measurer, weapon.definition.name.localizedContent(language), type.mono * 1.45f * k,
+        (row.right - status.size.width - frame.d(10f) - nameLeft).coerceAtLeast(frame.d(30f)), minFactor = 0.5f) {
+        measurer.typography.condStyle(it, lineHeightEm = 1f)
+    }
+    drawProfileText(name, nameLeft, centerY, if (owned) Kk.Bone else Kk.Bone2, "hangar.detail.signature.value", weapon.definition.id,
+        valign = KkVAlign.CENTER)
+    if (harmonyLayout != null) {
+        drawProfileText(harmonyLayout, row.left, row.top + lineHeight, roles.you, "hangar.detail.signature.harmony", weapon.definition.id)
     }
 }

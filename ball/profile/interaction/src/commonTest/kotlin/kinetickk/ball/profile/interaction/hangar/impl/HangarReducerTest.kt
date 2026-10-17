@@ -4,7 +4,19 @@
 package kinetickk.ball.profile.interaction.hangar.impl
 
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.RelicAspect
+import kinetickk.ball.content.api.RelicDefinition
+import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RelicKey
+import kinetickk.ball.content.api.WeaponDefinition
+import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.defaultCoreShapeDefinitions
+import kinetickk.ball.profile.api.LoadoutProfileSnapshot
+import kinetickk.ball.profile.api.PlayerEconomy
+import kinetickk.ball.profile.api.PlayerLoadout
+import kinetickk.ball.profile.interaction.TestWeapons
+import kinetickk.foundation.collections.immutableListOf
+import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.ball.profile.api.HangarProjection
 import kinetickk.ball.profile.api.HangarShapeProgress
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
@@ -122,4 +134,65 @@ class HangarReducerTest {
         }
         assertEquals(ProfileLayoutMode.entries.toSet(), modes, "regular, landscape and portrait are all covered")
     }
+
+    @Test
+    fun eachCharacterShowsItsTwoSignatureWeaponsWithTheirLoadoutStateAndHarmony() {
+        val weapons = TestWeapons.map { weapon ->
+            when (weapon.id) {
+                WeaponId.ARC_COIL -> weapon.withGate(signature = CoreShape.PENTAGON, minimumRebirth = 0, key = RelicKey.CHARGE)
+                WeaponId.RESONANCE_DRUM -> weapon.withGate(signature = CoreShape.PENTAGON, minimumRebirth = 9, key = RelicKey.ECHO)
+                else -> weapon.withGate(signature = CoreShape.ORB, minimumRebirth = 0, key = RelicKey.MOTION)
+            }
+        }
+        val relics = listOf(
+            RelicDefinition(RelicId.STORMHEART_CAPACITOR, "Stormheart Capacitor", RelicAspect.ION, immutableListOf(RelicKey.CHARGE),
+                immutableListOf(), "Upside", "Liability"),
+            RelicDefinition(RelicId.AGONY_SCEPTER, "Agony Scepter", RelicAspect.SOVEREIGN, immutableListOf(RelicKey.ECHO),
+                immutableListOf(), "Upside", "Liability"),
+        )
+        val loadout = LoadoutProfileSnapshot(PlayerEconomy(500L), PlayerLoadout(CoreShape.PENTAGON, WeaponId.FLUX_WAKE,
+            setOf(WeaponId.FLUX_WAKE, WeaponId.ARC_COIL)), rebirthRank = 3)
+        val model = hangarProjection().toRenderModel(definitions, 500L,
+            hangarWeapons(weapons, loadout, listOf(RelicId.STORMHEART_CAPACITOR), relics))
+
+        val pentagon = model.signatureWeapons(CoreShape.PENTAGON)
+        assertEquals(listOf(WeaponId.ARC_COIL, WeaponId.RESONANCE_DRUM), pentagon.map { it.definition.id })
+        val (coil, drum) = pentagon
+        assertTrue(coil.owned && !coil.starter && !coil.rebirthLocked)
+        // The Stormheart Capacitor heirloom carries the Charge key; nothing carries Echo.
+        assertEquals(listOf(RelicId.STORMHEART_CAPACITOR), coil.harmonizing.map { it.id })
+        assertFalse(drum.owned)
+        assertTrue(drum.rebirthLocked, "Reborn 9 is above rank 3")
+        assertTrue(drum.harmonizing.isEmpty())
+        assertTrue(model.signatureWeapons(CoreShape.ORB).first { it.definition.id == WeaponId.FLUX_WAKE }.starter)
+        assertTrue(model.signatureWeapons(CoreShape.STAR).isEmpty())
+        // The texts the row and its accessible state read.
+        assertEquals("Owned", hangarWeaponStatus(coil, AppLanguage.English))
+        assertEquals("Reborn 9", hangarWeaponStatus(drum, AppLanguage.English))
+        assertEquals("Harmonizes with Stormheart Capacitor", hangarHarmonyText(coil, AppLanguage.English))
+        assertEquals(null, hangarHarmonyText(drum, AppLanguage.English))
+        // At its rank an unowned weapon shows its price instead of the gate.
+        val reborn = hangarWeapons(weapons, loadout.copy(rebirthRank = 9), emptyList(), relics).first { it.definition.id == WeaponId.RESONANCE_DRUM }
+        assertFalse(reborn.rebirthLocked)
+        assertTrue(hangarWeaponStatus(reborn, AppLanguage.English).endsWith("Matter"))
+    }
+
+    @Test
+    fun signatureRowsGrowForAHarmonyLine() {
+        val frame = profileFrame(1440f, 810f, 1f)
+        val plain = hangarLayout(frame, 1f, 90f, signatureHarmony = listOf(false, false))
+        val harmony = hangarLayout(frame, 1f, 90f, signatureHarmony = listOf(true, false))
+        assertEquals(2, plain.signatureRows.size)
+        assertEquals(plain.signatureLine, plain.signatureRows[0].height, 0.01f)
+        assertTrue(harmony.signatureRows[0].height > plain.signatureRows[0].height)
+        assertTrue(harmony.signatureRows[1].top >= harmony.signatureRows[0].bottom)
+        assertTrue(harmony.unlock.top >= harmony.signature.bottom)
+        assertTrue(harmony.detailContentHeight > plain.detailContentHeight)
+    }
 }
+
+private fun WeaponDefinition.withGate(signature: CoreShape, minimumRebirth: Int, key: RelicKey): WeaponDefinition = WeaponDefinition(
+    id = id, name = name, description = description, family = family, element = element, tags = tags, key = key,
+    signature = signature, scaling = scaling, cadence = cadence, permanentUnlockCost = permanentUnlockCost,
+    minimumRebirth = minimumRebirth, masteryForms = masteryForms, signatureText = signatureText,
+)
