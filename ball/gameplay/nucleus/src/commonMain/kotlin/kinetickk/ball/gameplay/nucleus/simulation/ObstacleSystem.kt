@@ -152,6 +152,20 @@ internal fun sweepEntry(x0: Float, y0: Float, x1: Float, y1: Float, cx: Float, c
     return if (t in 0.0..1.0) t.toFloat() else -1f
 }
 
+/**
+ * Fraction (0..1) of a shot's or weapon entity's step ([x0], [y0]) → ([x1], [y1]) at which a circle of [radius]
+ * runs into an obstacle of [obstacleRadius] at ([cx], [cy]), or −1. A circle that starts overlapping it is stopped
+ * only when it moves inward: a disc or shot wider than the Core, launched from a Core resting on a rock, flies free
+ * when thrown away from it.
+ */
+internal fun obstacleStepEntry(x0: Float, y0: Float, x1: Float, y1: Float, cx: Float, cy: Float, obstacleRadius: Float, radius: Float): Float {
+    val reach = obstacleRadius + radius
+    val fx = x0 - cx
+    val fy = y0 - cy
+    if (fx * fx + fy * fy <= reach * reach) return if (fx * (x1 - x0) + fy * (y1 - y0) < 0f) 0f else -1f
+    return sweepEntry(x0, y0, x1, y1, cx, cy, reach)
+}
+
 private fun square(value: Float): Float = value * value
 
 // ---------------------------------------------------------------------------------------------
@@ -770,7 +784,7 @@ internal fun MutableGameState.blockProjectilesAtObstacles() {
         val reach = length(x1 - x0, y1 - y0) * 0.5f + projectile.radius
         forEachObstacleNear((x0 + x1) * 0.5f, (y0 + y1) * 0.5f, reach) { _, obstacle ->
             if (obstacle.kind == ObstacleKind.BUMPER) return@forEachObstacleNear
-            val t = sweepEntry(x0, y0, x1, y1, obstacle.x, obstacle.y, obstacle.radius + projectile.radius)
+            val t = obstacleStepEntry(x0, y0, x1, y1, obstacle.x, obstacle.y, obstacle.radius, projectile.radius)
             if (t >= 0f) {
                 projectile.life = 0f
                 burst(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, 3, if (projectile.hostile) 4 else projectile.colorIndex)

@@ -13,6 +13,7 @@ import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.MatrixEffect
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.Polarity
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.distanceSquared
@@ -20,8 +21,10 @@ import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
+import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.immutableListOf
+import kotlin.math.max
 import kotlin.math.pow
 import kotlin.math.sqrt
 import kotlin.test.Test
@@ -880,6 +883,42 @@ class ObstacleSystemTest {
         assertTrue(pastBumper in state.projectiles)
         assertTrue(clear in state.projectiles)
         assertEquals(state.maxHp, state.hp, "the stopped bolt never reached the Core")
+    }
+
+    @Test
+    fun aDiscWiderThanTheCoreThrownAwayFromTheRockTheCoreRestsOnFliesItsFullReach() {
+        val state = buildTestState(weapon = WeaponId.GYRE_DISC)
+        // The first form widens the disc past the Orb's radius.
+        state.weaponLevel = 3
+        state.placeObstaclesForTesting(testObstacle(state.coreX - 80f - state.coreRadius - 0.05f, state.coreY))
+        state.lastAimDirectionX = 1f
+        state.lastAimDirectionY = 0f
+        state.weaponClock = 0f
+        state.updateWeapons(MutableGameState.FIXED_STEP)
+        val disc = state.weaponRuntime.entities.single { it.kind == WeaponEntityKind.DISC }
+        assertTrue(disc.radius > state.coreRadius)
+        var reach = 0f
+        while (disc.phase == 0 && disc.life > 0f) {
+            reach = max(reach, disc.x - state.coreX)
+            state.weaponClock = Float.MAX_VALUE
+            state.updateWeapons(MutableGameState.FIXED_STEP)
+        }
+        assertTrue(reach >= GYRE_REACH * 0.95f, "The disc turned back after $reach")
+    }
+
+    @Test
+    fun aShotWiderThanTheCoreLeavesTheRockTheCoreRestsOnButNotIntoIt() {
+        val state = buildTestState(shape = CoreShape.SHARD)
+        val rockX = state.coreX - 80f - state.coreRadius - 0.05f
+        state.placeObstaclesForTesting(testObstacle(rockX, state.coreY))
+        fun shot(vx: Float) = Projectile(x = state.coreX + vx * MutableGameState.FIXED_STEP, y = state.coreY, vx = vx, vy = 0f,
+            radius = state.coreRadius + 1f, life = 2f, hostile = false, previousX = state.coreX, previousY = state.coreY)
+        val away = shot(690f)
+        val into = shot(-690f)
+        state.projectiles += listOf(away, into)
+        state.blockProjectilesAtObstacles()
+        assertFalse(away.spent, "A shot fired away from the rock flies on")
+        assertTrue(into.spent, "A shot fired into the rock stops")
     }
 
     // -----------------------------------------------------------------------------------------
