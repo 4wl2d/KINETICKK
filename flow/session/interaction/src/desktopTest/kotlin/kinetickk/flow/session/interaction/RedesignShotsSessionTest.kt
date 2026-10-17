@@ -232,6 +232,12 @@ class RedesignShotsSessionTest {
                 codexState(state)
             }
             shotCodex("build-stats", w, h, language, run = true) { codexState("build-stats") }
+            // The characters (an unlocked one, a locked one with its progress) and the enemy roster (an unlocked enemy, the
+            // Rebirth-locked Reflector), at the default text size and the largest.
+            for (state in listOf("forms", "forms-locked", "enemies", "enemies-locked")) {
+                shotCodex(state, w, h, language, run = true) { codexState(state) }
+                shotCodex("$state-text175", w, h, language, run = true, scale = 1.75f) { codexState(state) }
+            }
         }
         // Text size 100 % and a shorter desktop window (the nav scrolls there, with its cue).
         for (language in AppLanguage.entries) {
@@ -319,6 +325,22 @@ class RedesignShotsSessionTest {
                 onNodeWithTag("codex-grid").performScrollToKey("item/10")
                 mainClock.advanceTimeBy(100)
                 onNodeWithTag("codex-slot-item/10").performSemanticsAction(SemanticsActions.OnClick)
+            }
+            "forms", "forms-locked", "enemies", "enemies-locked" -> {
+                val forms = state.startsWith("forms")
+                val key = when (state) {
+                    "forms" -> "shape/PRISM"
+                    "forms-locked" -> "shape/SPIRAL"
+                    "enemies" -> "enemy/HERALD"
+                    else -> "enemy/REFLECTOR"
+                }
+                onNodeWithTag("codex-tab-1").performSemanticsAction(SemanticsActions.OnClick)
+                mainClock.advanceTimeBy(100)
+                onNodeWithTag(if (forms) "codex-category-3" else "codex-category-4").performSemanticsAction(SemanticsActions.OnClick)
+                mainClock.advanceTimeBy(100)
+                onNodeWithTag("codex-grid").performScrollToKey(key)
+                mainClock.advanceTimeBy(100)
+                onNodeWithTag("codex-slot-$key").performSemanticsAction(SemanticsActions.OnClick)
             }
         }
     }

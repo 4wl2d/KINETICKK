@@ -103,6 +103,20 @@ class RedesignShotsProfileTest {
                 kinetickk.ball.profile.interaction.hangar.impl.HangarShotAccess.Content(model, shape, scale)
             }
         }
+        // Ascendant: the header reads Ascendant and the characters that cleared tier 10 wear the crown (the selected
+        // tile and its detail preview among them).
+        val ascendant = kinetickk.ball.profile.interaction.hangar.impl.hangarProjection(
+            unlocked = setOf(kinetickk.ball.content.api.CoreShape.ORB, kinetickk.ball.content.api.CoreShape.PRISM,
+                kinetickk.ball.content.api.CoreShape.STAR),
+        ).copy(ascendant = true, ascendedCharacters = kinetickk.foundation.collections.immutableSetOf(kinetickk.ball.content.api.CoreShape.ORB,
+            kinetickk.ball.content.api.CoreShape.STAR)).let { projection ->
+            with(kinetickk.ball.profile.interaction.hangar.impl.HangarShotAccess) { projection.model(1_284L) }
+        }
+        for ((scale, suffix) in scales) {
+            shoot("hangar", "ascendant$suffix") {
+                kinetickk.ball.profile.interaction.hangar.impl.HangarShotAccess.Content(ascendant, kinetickk.ball.content.api.CoreShape.ORB, scale)
+            }
+        }
     }
 
     @Test

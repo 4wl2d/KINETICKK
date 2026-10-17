@@ -27,7 +27,6 @@ import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
 import kinetickk.ball.content.api.PointOfInterestKind
 import kinetickk.ball.content.api.RebirthPolicySnapshot
-import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
@@ -122,6 +121,8 @@ class RedesignShotsHudTest {
         CRUISE, DASH, OVERHEAT, POLARITY, OVERDRIVE, CRITICAL, ELITE, ARCHITECT, TRIAL, TRIAL_INFO, FEED, FEED_ANOMALY,
         // Review states: interleaved synergies, off-screen markers with a boss alive, an orbit trial near the boss row.
         SYNERGY, ELITE_MARKERS, ARCHITECT_TRIAL,
+        // The Rebirth strip: the tier plate with five and with every mutator sigil.
+        REBIRTH_5, REBIRTH_10,
     }
 
     private data class Values(
@@ -206,6 +207,11 @@ class RedesignShotsHudTest {
             },
             "messageTime" to if (shot == Shot.FEED || shot == Shot.FEED_ANOMALY) 1.5f else 0f,
             "screenShake" to 0f,
+            "rebirthLevel" to when (shot) {
+                Shot.REBIRTH_5 -> 5
+                Shot.REBIRTH_10 -> 10
+                else -> 0
+            },
         )
         val time = 3.37f
         val memory = HudPresentationMemory()
@@ -309,12 +315,10 @@ private fun shotContent() = GameplayContentSnapshot(
     weapons = WeaponId.entries.map { fixtureWeapon(it) }.toImmutableList(),
     weaponMasteries = WeaponMastery.entries.toImmutableList(),
     relics = rewardFixtureRelics.toImmutableList(),
+    // Every tier's profile, so the Rebirth strip states show the catalog's mutators.
     rebirth = RebirthPolicySnapshot(
-        minimumLevel = 0, maximumLevel = 0,
-        profiles = immutableListOf(RebirthProfile(
-            0, "Baseline", 5, 1f, 1f, 1f, 1f, 1f, 1f, 0f, 1f, 0f, 1f, 0,
-            120, 0.09f, 24f,
-        )),
+        minimumLevel = 0, maximumLevel = 10,
+        profiles = (0..10).map { kinetickk.ball.content.api.defaultRebirthProfile(it) }.toImmutableList(),
         maxActiveEnemies = 120, minSpawnIntervalSeconds = 0.09f, minEliteIntervalSeconds = 24f,
     ),
     relicPolicy = RelicPolicy(4, 5),
