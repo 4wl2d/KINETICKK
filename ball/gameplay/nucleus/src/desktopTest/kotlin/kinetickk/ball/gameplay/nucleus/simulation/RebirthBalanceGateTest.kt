@@ -44,20 +44,23 @@ import kotlin.test.assertTrue
  * rate (1.45, probed up to 4.5) did not move the outcomes and stays.
  *
  * Measured with the shipped tuning (seed:outcome@seconds; a "fight" is the Architect's arrival at
- * 720 s to the Victory; a run still fighting at 900 s counts as a loss):
- * - A, tier 0 fresh: 47527 win@779, 55446 win@800, 63365 win@800, 71284 win@786, 79203 loss@304 (4/5).
- * - B, tier 3 full Matrix + Pentagon/Arc Coil: all five win (fights 64, 45, 47, 75, 78 s).
+ * 720 s to the Victory; a run still fighting at 900 s counts as a loss), re-measured after the final
+ * weapon balance cut Ion Swarm (second in the bot's weapon order) to 6 per shot and Prism Relay's
+ * third-form bursts to 8 % within 50; no gate flipped and no difficulty knob moved:
+ * - A, tier 0 fresh: 47527 win@762, 55446 win@800, 63365 win@800, 71284 win@786, 79203 win@760 (5/5;
+ *   79203 lost at 304 s before the cut).
+ * - B, tier 3 full Matrix + Pentagon/Arc Coil: all five win (fights 71, 49, 47, 70, 78 s).
  * - C, tier 6 fresh: all five lose within 18 s (the bot rams the larger opening at low speed).
- * - D, tier 10 strong build: 47527 win@850, 55446 loss@469, 63365 loss@887 (in the fight), 71284
- *   loss@83, 79203 still fighting at 900 (1/5 wins, median 850 s).
- * - E, half Matrix (Orb, starter weapon): tier 2 wins 5/5 (fights 35-86 s); tier 8 wins only 55446
- *   (fight 105 s), the others lose at 13, 23, 83 and 567 s. The same profile wins 5/5 at tiers 2-3,
- *   3/5 at 4, 4/5 at 5-6, 3/5 at 7 and none at 9.
- * - F, strong build fights: tier 3 median 74 s (74, 75, 52, 74, 69); tier 10 median never (one clear
+ * - D, tier 10 strong build: 47527 win@850, 55446 loss@469, 63365 loss@887 (an obstacle collision in the
+ *   fight), 71284 loss@83, 79203 still fighting at 900 (1/5 wins, median 850 s).
+ * - E, half Matrix (Orb, starter weapon): tier 2 wins 5/5 (fights 40-86 s); tier 8 wins only 55446
+ *   (fight 105 s), the others lose at 13, 23, 167 and 83 s. The same profile wins 5/5 at tiers 2-3,
+ *   3/5 at 4, 5/5 at 5, 3/5 at 6 and 7 and none at 9.
+ * - F, strong build fights: tier 3 median 74 s (74, 75, 52, 74, 62); tier 10 median never (one clear
  *   in 130 s, four losses).
- * - G, tier 10 full Matrix + Pentagon/Arc Coil: 55446 wins (fight 157 s); 47527 and 63365 are still
- *   fighting at 900 s, 71284 loses at 351 s and 79203 at 598 s (1/5).
- * Fresh profiles win 5/5 at tier 1 and none from tier 2. Before the retune (reworked weapons, old
+ * - G, tier 10 full Matrix + Pentagon/Arc Coil: 55446 wins (fight 143 s); 47527, 63365 and 79203 are
+ *   still fighting at 900 s and 71284 loses at 351 s (1/5).
+ * Fresh profiles win 4/5 at tier 1 and none from tier 2. Before the retune (reworked weapons, old
  * tuning) the strong build won tier 10 3/5 (losses at 83 and 85 s), the full-Matrix Pentagon 4/5 and
  * the half Matrix tier 8 2/5.
  */

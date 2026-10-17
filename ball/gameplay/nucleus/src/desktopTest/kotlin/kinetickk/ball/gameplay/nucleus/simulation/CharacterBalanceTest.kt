@@ -25,9 +25,14 @@ import kotlin.test.assertTrue
  * only part of the time; at most twelve enemies stay. Every 3.75 s a Sniper bolt with the content's
  * damage arrives head-on and a short brake answers it; Drifters that touch a slow Core deal their
  * content contact damage. The jittered variant moves every Dash and every brake by 0.05 to 0.15 s.
- * Each variant averages 24 seeded fights. Only the mechanic's own output is measured; the Prism and the
- * Diamond, which prevent damage instead, must keep off a large share of what the Orb loses in the same
- * fights (their prevented totals at content damage stay far below the offensive median: see the report).
+ * Each variant averages 24 seeded fights. Only the mechanic's own output is measured.
+ *
+ * Accepted rule for the defensive characters: the Prism and the Diamond prevent damage instead of dealing
+ * it, so SPEC 8.2's ±40 % ability-output band covers only the ten offensive characters. Content damage caps
+ * what a defensive mechanic can prevent (their prevented totals stay near a fifth of the offensive median:
+ * see the report), so the two are judged by the defensive criterion instead: in the same fights the Prism
+ * loses at most 60 % and the Diamond at most 75 % of the integrity the Orb loses
+ * ([prismAndDiamondKeepOffMuchOfTheContentDamageTheOrbTakesInTheSameFight]).
  */
 class CharacterBalanceTest {
     private class Outcome(val dealt: Double, val prevented: Double, val hpLost: Float, val kills: Int, val dashes: Int,
@@ -39,7 +44,7 @@ class CharacterBalanceTest {
         for ((jittered, outcomes) in balanceRuns) {
             val outputs = OFFENSIVE.associateWith { shape -> outcomes.getValue(shape).dealt }
             val median = median(outputs.values)
-            // The Prism and the Diamond prevent damage instead (reported here, judged by the defense test).
+            // The Prism and the Diamond prevent damage instead: reported here, accepted by the defense test.
             val defensive = DEFENSIVE.joinToString { shape ->
                 val prevented = outcomes.getValue(shape).prevented
                 "$shape prevented=${"%.1f".format(prevented)} (${"%.2f".format(prevented / median)})"
@@ -54,6 +59,7 @@ class CharacterBalanceTest {
         assertTrue(outside.isEmpty(), "ability output outside ±40 % of the median: $outside")
     }
 
+    /** The defensive characters' acceptance: each keeps off its share of the integrity the Orb loses. */
     @Test
     fun prismAndDiamondKeepOffMuchOfTheContentDamageTheOrbTakesInTheSameFight() {
         for ((jittered, outcomes) in balanceRuns) {
@@ -147,6 +153,7 @@ class CharacterBalanceTest {
 
     private companion object {
         val content = canonicalGameplayContent.copy(tempo = canonicalGameplayContent.tempo.copy(bossAtSeconds = 1_000_000f))
+        /** The defensive characters: outside the ability-output band, accepted by their loss share of the Orb's. */
         val DEFENSIVE = listOf(CoreShape.PRISM, CoreShape.DIAMOND)
         val OFFENSIVE = CoreShape.entries - DEFENSIVE.toSet()
 
@@ -173,6 +180,7 @@ class CharacterBalanceTest {
         const val PACK_BEARING_SPREAD = 1f
         const val PACK_NEAR = 140f
         const val PACK_FAR = 280f
+        /** The most of the Orb's integrity loss the Prism and the Diamond may lose in the same fights. */
         const val PRISM_LOSS_SHARE = 0.6f
         const val DIAMOND_LOSS_SHARE = 0.75f
 
