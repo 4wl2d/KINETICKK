@@ -31,7 +31,7 @@ class GameplayComponentFingerprintTest {
     fun preferencesUsePortableValueWitnessAndRetainEveryEnumSelection() {
         // This fixture witnesses portable hashing; the fresh-profile 1x default has its own test.
         val preferences = PlayerPreferences(simulationSpeed = 1.15f)
-        val expected = -3_124_477_553_521_026_709L
+        val expected = 167_376_744_718_396_850L
         // Fixed witnesses also fail if a future refactor reintroduces JVM identity hash codes.
         assertEquals(expected, canonicalPreferencesFingerprint(preferences))
         assertEquals(expected, canonicalPreferencesFingerprint(preferences.copy()))
@@ -41,6 +41,7 @@ class GameplayComponentFingerprintTest {
             preferences.copy(damageNumberFormat = DamageNumberFormat.FULL),
             preferences.copy(masterVolume = -0f),
             preferences.copy(simulationSpeed = 1f),
+            preferences.copy(minimapEnabled = false),
         ).forEach { changed ->
             assertNotEquals(expected, canonicalPreferencesFingerprint(changed))
         }

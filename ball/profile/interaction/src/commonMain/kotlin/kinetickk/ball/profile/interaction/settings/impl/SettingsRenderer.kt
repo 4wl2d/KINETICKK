@@ -380,6 +380,7 @@ internal fun SettingsRow.label(language: AppLanguage): String = when (this) {
     SettingsRow.DAMAGE_COLOR_THRESHOLDS -> language.text(ProfileText.DamageColorTiers)
     SettingsRow.RUN_STATISTICS_SIDE -> language.text(ProfileText.RunStatisticsSide)
     SettingsRow.COLOR_VISION -> language.text(SettingsRedesignText.ColorVision)
+    SettingsRow.MINIMAP -> language.text(SettingsRedesignText.Minimap)
 }
 
 /** The row's (!) explanation. */
@@ -398,6 +399,7 @@ internal fun SettingsRow.about(language: AppLanguage): String = language.text(wh
     SettingsRow.DAMAGE_COLOR_THRESHOLDS -> SettingsRedesignText.AboutDamageColorTiers
     SettingsRow.RUN_STATISTICS_SIDE -> SettingsRedesignText.AboutRunStatisticsSide
     SettingsRow.COLOR_VISION -> SettingsRedesignText.AboutColorVision
+    SettingsRow.MINIMAP -> SettingsRedesignText.AboutMinimap
 })
 
 internal fun SettingsRow.isOn(preferences: PlayerPreferences): Boolean = when (this) {
@@ -405,6 +407,7 @@ internal fun SettingsRow.isOn(preferences: PlayerPreferences): Boolean = when (t
     SettingsRow.MUSIC -> preferences.musicEnabled
     SettingsRow.SCREEN_SHAKE -> preferences.screenShake
     SettingsRow.DAMAGE_NUMBERS -> preferences.damageNumbers
+    SettingsRow.MINIMAP -> preferences.minimapEnabled
     else -> false
 }
 
@@ -461,6 +464,7 @@ internal fun settingValue(
     SettingsRow.PARTICLES, SettingsRow.DAMAGE_NUMBER_SIZE, SettingsRow.DAMAGE_NUMBER_FORMAT, SettingsRow.COLOR_VISION ->
         row.optionLabel(row.selectedOption(preferences), language)
     SettingsRow.DAMAGE_NUMBERS -> if (preferences.damageNumbers) language.text(ProfileText.On) else language.text(ProfileText.Off)
+    SettingsRow.MINIMAP -> if (preferences.minimapEnabled) language.text(ProfileText.On) else language.text(ProfileText.Off)
     SettingsRow.DAMAGE_COLOR_THRESHOLDS -> {
         val first = preferences.damageNumberTierThreshold.toLong()
         val second = first * DAMAGE_NUMBER_POWERFUL_MULTIPLIER

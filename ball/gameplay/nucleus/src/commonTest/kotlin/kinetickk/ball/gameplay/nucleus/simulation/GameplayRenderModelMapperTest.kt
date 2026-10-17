@@ -497,6 +497,7 @@ class GameplayRenderModelMapperTest {
             settings.simulationSpeed.toRawBits(), settings.textScale.toRawBits(), settings.screenShake,
             settings.particleDensity, settings.damageNumbers, settings.damageNumberSize,
             settings.damageNumberFormat, settings.damageNumberTierThreshold, settings.language, settings.runStatisticsOnLeft,
+            settings.minimapEnabled,
         ),
         "scalars" to listOf(
             rebirthLevel, screenWidth.toRawBits(), screenHeight.toRawBits(), uiScale.toRawBits(),
@@ -576,6 +577,8 @@ class GameplayRenderModelMapperTest {
         "discoveredPairingMask" to discoveredPairingMask,
         "coreRadius" to coreRadius.toRawBits(),
         "abilityPower" to abilityPower.toRawBits(),
+        "obstacles" to obstacles.toList(),
+        "minimapRange" to minimapRange.toRawBits(),
     )
 
     private class ReadGuardList<Element>(

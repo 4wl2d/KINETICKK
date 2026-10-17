@@ -37,6 +37,7 @@ internal enum class SettingsRow {
     DAMAGE_COLOR_THRESHOLDS,
     RUN_STATISTICS_SIDE,
     COLOR_VISION,
+    MINIMAP,
 }
 
 /** The three row controls of the design: segmented choice, toggle and slider with −/+ steppers. */
@@ -56,6 +57,7 @@ internal val SettingsRow.control: SettingsControl
         SettingsRow.MUSIC,
         SettingsRow.SCREEN_SHAKE,
         SettingsRow.DAMAGE_NUMBERS,
+        SettingsRow.MINIMAP,
         -> SettingsControl.TOGGLE
         SettingsRow.MASTER_VOLUME,
         SettingsRow.TEXT_SIZE,
@@ -74,7 +76,7 @@ internal enum class SettingsGroup(val label: ProfileText, val rows: List<Setting
         SettingsRow.COLOR_VISION, SettingsRow.SCREEN_SHAKE, SettingsRow.PARTICLES, SettingsRow.DAMAGE_NUMBERS,
         SettingsRow.DAMAGE_NUMBER_SIZE, SettingsRow.DAMAGE_NUMBER_FORMAT, SettingsRow.DAMAGE_COLOR_THRESHOLDS,
     )),
-    INTERFACE(ProfileText.SettingsInterface, listOf(SettingsRow.TEXT_SIZE, SettingsRow.RUN_STATISTICS_SIDE)),
+    INTERFACE(ProfileText.SettingsInterface, listOf(SettingsRow.TEXT_SIZE, SettingsRow.RUN_STATISTICS_SIDE, SettingsRow.MINIMAP)),
 }
 
 internal sealed interface SettingsAction {
@@ -300,5 +302,6 @@ private fun SettingsRow.toAdjustment(direction: Int): ProfilePreferenceAdjustmen
         SettingsRow.DAMAGE_NUMBER_FORMAT -> ProfilePreferenceAdjustment.StepDamageNumberFormat(adjustmentDirection)
         SettingsRow.DAMAGE_COLOR_THRESHOLDS ->
             ProfilePreferenceAdjustment.StepDamageNumberTierThreshold(adjustmentDirection)
+        SettingsRow.MINIMAP -> ProfilePreferenceAdjustment.ToggleMinimap
     }
 }

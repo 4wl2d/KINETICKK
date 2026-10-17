@@ -1290,6 +1290,7 @@ class GameplayReductionIsolationTest {
             value("settings.damageNumberTierThreshold", settings.damageNumberTierThreshold)
             value("settings.language", settings.language)
             value("settings.runStatisticsOnLeft", settings.runStatisticsOnLeft)
+            value("settings.minimapEnabled", settings.minimapEnabled)
             value("rebirthLevel", rebirthLevel)
             float("screenWidth", screenWidth)
             float("screenHeight", screenHeight)

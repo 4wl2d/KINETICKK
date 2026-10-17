@@ -581,6 +581,15 @@ class ObstacleSystemTest {
     }
 
     @Test
+    fun theMinimapPreferenceIsAValidProjectionThatReachesTheRenderModel() {
+        val hidden = kinetickk.ball.profile.api.PlayerPreferences(minimapEnabled = false)
+        assertTrue(kinetickk.ball.gameplay.nucleus.GameplayNucleus.isValidPreferencesProjection(hidden))
+        val state = buildTestState()
+        state.applyPreferences(hidden)
+        assertFalse(state.toRenderModel().settings.minimapEnabled)
+    }
+
+    @Test
     fun spawnsAndLeashedEnemiesLandClearOfObstacles() {
         val state = buildTestState(seed = 33)
         state.coreX = 5_000f

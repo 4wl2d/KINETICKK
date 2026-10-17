@@ -51,6 +51,7 @@ sealed interface ProfilePreferenceAdjustment {
     data class SetDamageNumberFormat(val format: DamageNumberFormat) : ProfilePreferenceAdjustment
     data class StepDamageNumberTierThreshold(val direction: PreferenceAdjustmentDirection) : ProfilePreferenceAdjustment
     data class SetColorVision(val colorVision: ColorVision) : ProfilePreferenceAdjustment
+    data object ToggleMinimap : ProfilePreferenceAdjustment
 }
 
 data class GameplayProgressUpdate(
