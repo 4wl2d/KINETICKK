@@ -403,9 +403,13 @@ class RewardContentTest {
                 }
             }
         }
-        listOf(900f to 600f, 1440f to 810f, 360f to 720f, 780f to 360f).forEach { (width, height) ->
-            listOf(2, 3, 4).forEach { count ->
-                listOf(1f, 1.25f, 1.75f).forEach { scale ->
+        // By default each size and card count is dealt at one text scale, rotating so every size and every count meets all
+        // three (the card rectangles do not depend on the scale); KK_FULL_SWEEPS=1 deals every combination.
+        val fullSweep = System.getenv("KK_FULL_SWEEPS") == "1"
+        listOf(900f to 600f, 1440f to 810f, 360f to 720f, 780f to 360f).forEachIndexed { sizeIndex, (width, height) ->
+            listOf(2, 3, 4).forEachIndexed { countIndex, count ->
+                listOf(1f, 1.25f, 1.75f).forEachIndexed { scaleIndex, scale ->
+                    if (!fullSweep && scaleIndex != (sizeIndex + countIndex) % 3) return@forEachIndexed
                     compose.runOnIdle { scenario.value = Scenario(width, height, count, scale) }
                     // Every card plus Reroll, Take and Build.
                     compose.onAllNodes(hasClickAction()).assertCountEquals(count + 3)
