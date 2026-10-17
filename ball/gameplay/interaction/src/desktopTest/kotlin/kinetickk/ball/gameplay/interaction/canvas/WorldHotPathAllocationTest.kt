@@ -43,6 +43,8 @@ import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.fx.WeaponArcProjection
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
+import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
+import kinetickk.ball.gameplay.nucleus.render.ObstacleProjection
 import kinetickk.ball.gameplay.nucleus.render.ProjectileKind
 import kinetickk.ball.gameplay.nucleus.render.EnemyBehavior
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
@@ -312,6 +314,14 @@ class WorldHotPathAllocationTest {
                     immutableListOf(), 0f, 0f),
                 PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed", CORE + 900f + drift, CORE - 300f, false, 20f, 1, 0f,
                     immutableListOf(), 0f, 0f),
+            ),
+            // Every obstacle kind on screen (and one off it), with outlines of several corner counts.
+            obstacles = immutableListOf(
+                ObstacleProjection(1L, ObstacleKind.ASTEROID, CORE + 300f, CORE + 160f, 120f, 11),
+                ObstacleProjection(2L, ObstacleKind.ASTEROID, CORE - 360f, CORE - 200f, 60f, 4),
+                ObstacleProjection(3L, ObstacleKind.UNSTABLE, CORE + 330f, CORE - 230f, 80f, 27),
+                ObstacleProjection(4L, ObstacleKind.BUMPER, CORE - 120f, CORE + 220f, 34f, 0),
+                ObstacleProjection(5L, ObstacleKind.ASTEROID, CORE + 2_400f, CORE, 140f, 9),
             ),
         )
     }
