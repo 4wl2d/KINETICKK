@@ -213,6 +213,12 @@ internal class HudFrame {
             },
         )
 
+    /** Portrait phones: the bottom of the integrity cluster and the speed gauge, above the touch buttons. */
+    val portraitClustersBottom: Float get() = height - u(36f + 80f + 18f)
+
+    /** Portrait phones: the top of the loadout row (weapon slot, level and relics) over the clusters. */
+    val portraitLoadoutTop: Float get() = height - u(238f)
+
     /** Top of the chain counter on the right edge (REGULAR). */
     val chainTop: Float get() = max(u(76f), min(u(160f), height * 0.2f))
 
@@ -817,8 +823,8 @@ private fun DrawScope.drawCoreStatus(
             gapRow = frame.u(7f)
         }
         GameplayLayoutMode.COMPACT_PORTRAIT -> {
-            width = frame.u(170f) * frame.factor
-            bottom = frame.height - frame.u(36f + 80f + 18f)
+            width = frame.u(PORTRAIT_INTEGRITY_WIDTH_DP) * frame.factor
+            bottom = frame.portraitClustersBottom
             numberSize = 28f
             barHeight = frame.u(9f)
             pipWidth = 12f
@@ -986,7 +992,7 @@ private fun DrawScope.drawKineticGauge(
             val ladder = HudDrawCache.rect(HudRect.LADDER, left, ladderBottom - frame.u(16f), left + width, ladderBottom)
             drawKkTickLadder(ladder, roles, ticks, lit, hotFrom, maxFrom)
             drawSpeedNumber(measurer, value, measurer.typography.wideStyle(frame.t(56f), tabular = true, trackingEm = colorTracking(speedRole)), frame.width * 0.5f,
-                ladder.top - frame.u(10f), KkAlign.CENTER, stretch, speedColor, od.bottom)
+                ladder.top - frame.u(10f), KkAlign.CENTER, stretch, speedColor, od)
         }
         GameplayLayoutMode.COMPACT_LANDSCAPE -> {
             val width = frame.u(230f) * frame.factor
@@ -999,17 +1005,21 @@ private fun DrawScope.drawKineticGauge(
             val ladder = HudDrawCache.rect(HudRect.LADDER, left, ladderBottom - frame.u(12f), left + width, ladderBottom)
             drawKkTickLadder(ladder, roles, ticks, lit, hotFrom, maxFrom)
             drawSpeedNumber(measurer, value, measurer.typography.wideStyle(30f, tabular = true, trackingEm = colorTracking(speedRole)), left, ladder.top - frame.u(5f),
-                KkAlign.START, stretch, speedColor, od.bottom)
+                KkAlign.START, stretch, speedColor, od)
         }
         GameplayLayoutMode.COMPACT_PORTRAIT -> {
-            val width = frame.u(160f) * frame.factor
             val right = frame.width - frame.margin
-            val bottom = frame.height - frame.u(36f + 80f + 18f)
-            val od = HudDrawCache.rect(HudRect.OVERDRIVE, right - width, bottom - frame.u(4f), right, bottom)
+            val bottom = frame.portraitClustersBottom
+            // Right of the minimap when it shows: the meter starts after it and the number fits the room beside it.
+            val minimapRight = HudMinimapGeometry.portraitRight(engine, frame)
+            val gap = frame.u(8f)
+            var left = right - frame.u(160f) * frame.factor
+            if (!minimapRight.isNaN()) left = max(left, minimapRight + gap)
+            val od = HudDrawCache.rect(HudRect.OVERDRIVE, left, bottom - frame.u(4f), right, bottom)
             drawKkMeter(od, overdrive, roles.you, roles, stripes = stripes, time = renderTime)
             drawBurnout(engine, od, roles)
             drawSpeedNumber(measurer, value, measurer.typography.wideStyle(30f, tabular = true, trackingEm = colorTracking(speedRole)), right, od.top - frame.u(7f),
-                KkAlign.END, stretch, speedColor, od.bottom)
+                KkAlign.END, stretch, speedColor, od, maxWidth = if (minimapRight.isNaN()) Float.POSITIVE_INFINITY else right - minimapRight - gap)
         }
     }
 }
@@ -1036,30 +1046,39 @@ private fun DrawScope.drawSpeedNumber(
     x: Float,
     bottom: Float,
     align: KkAlign,
-    stretch: Float,
+    tierStretch: Float,
     color: Color,
-    gaugeBottom: Float,
+    gauge: androidx.compose.ui.geometry.Rect,
+    maxWidth: Float = Float.POSITIVE_INFINITY,
 ) {
     val top = bottom - digitBoxHeight(measurer, style)
+    // Within [maxWidth] with its lean, the number gives up stretch (the tier cue) before it would run past it.
+    val natural = kkTabularNumberWidth(measurer, value, style)
+    val stretch = min(tierStretch, (maxWidth - (bottom - top) * SPEED_LEAN) / natural)
     withTransform({
         scale(stretch, 1f, Offset(x, bottom))
         kkShear(bottom, -8f)
     }) {
         drawKkTabularNumber(measurer, value, style, x, top, color, align)
     }
-    // The stretched number with its lean (the top leans right by tan 8° of its height), over the gauge.
-    val width = kkTabularNumberWidth(measurer, value, style) * stretch
+    // The stretched number with its lean (the top leans right by tan 8° of its height) and the gauge under it (the
+    // ladder and the overdrive meter).
+    val width = natural * stretch
     val lean = (bottom - top) * SPEED_LEAN
     val left = when (align) {
         KkAlign.START -> x
         KkAlign.CENTER -> x - width * 0.5f
         KkAlign.END -> x - width
     }
-    HudLayoutProbe.record(HudBlock.SPEED, left - lean, top, left + width + lean, gaugeBottom)
+    HudLayoutProbe.record(HudBlock.SPEED, min(left - lean, gauge.left), top, max(left + width + lean, gauge.right), gauge.bottom)
 }
 
 /** tan(8°): the speed number's lean. */
 private const val SPEED_LEAN = 0.1405f
+
+/** Portrait phones: the integrity cluster's width (dp, before the narrow-phone factor) and the loadout slot's side. */
+internal const val PORTRAIT_INTEGRITY_WIDTH_DP = 170f
+internal const val PORTRAIT_LOADOUT_SLOT_DP = 34f
 
 /** Bottom-right (desktop) or top-right (landscape) relic diamonds and the active weapon slot. */
 private fun DrawScope.drawLoadout(engine: GameplayRenderModel, hostMeasurer: TextMeasurer, frame: HudFrame) {
@@ -1113,8 +1132,8 @@ private fun DrawScope.drawLoadout(engine: GameplayRenderModel, hostMeasurer: Tex
             HudLayoutProbe.extend(HudBlock.LOADOUT, HudBlock.SEVERED)
         }
         GameplayLayoutMode.COMPACT_PORTRAIT -> {
-            val top = frame.height - frame.u(238f)
-            val slotSize = frame.u(34f)
+            val top = frame.portraitLoadoutTop
+            val slotSize = frame.u(PORTRAIT_LOADOUT_SLOT_DP)
             val slot = HudDrawCache.rect(HudRect.WEAPON, frame.margin, top, frame.margin + slotSize, top + slotSize)
             drawKkWeaponSlot(measurer, slot, icon, maxLevel = maxLevel, iconSizeDp = 20f)
             val relicSize = frame.u(22f)

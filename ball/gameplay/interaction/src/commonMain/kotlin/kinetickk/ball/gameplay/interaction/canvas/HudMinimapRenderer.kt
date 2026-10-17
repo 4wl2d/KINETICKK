@@ -30,17 +30,25 @@ import kotlin.math.sqrt
  * edge markers and world labels stay off it:
  * - desktop and landscape phones: the left column under the level badge (under the trial panel while
  *   a trial runs), clear of the right edge where markers for targets ahead sit and of the feed;
- * - portrait phones: inside the bottom clusters, between the integrity cluster and the speed gauge,
- *   where the feed, the markers and the playfield never reach.
+ * - portrait phones: inside the bottom clusters, right of the integrity cluster between the loadout
+ *   row and the clusters' bottom, where the feed, the markers and the playfield never reach. The
+ *   overdrive meter starts right of it and the speed number fits the room beside it
+ *   ([portraitRight]), so neither runs under it.
  * It shrinks to fit and is left out when even the smallest size does not fit.
  */
 internal object HudMinimapGeometry {
     /** Side of the minimap in reference dp: desktop and landscape phones (shrunk to fit). */
     const val REGULAR_SIDE_DP: Float = 132f
     const val COMPACT_SIDE_DP: Float = 104f
-    /** Portrait phones: the gap between the loadout row and the touch buttons. */
+    /** Portrait phones: the gap between the loadout row and the bottom of the clusters. */
     const val PORTRAIT_SIDE_DP: Float = 72f
     private const val MINIMUM_SIDE_DP: Float = 56f
+
+    /**
+     * Portrait phones: room (dp) the minimap leaves right of it for a four-digit speed number at its natural
+     * width with its lean, and the gap to it. A smaller minimap keeps it (down to [MINIMUM_SIDE_DP]).
+     */
+    private const val PORTRAIT_SPEED_ROOM_DP: Float = 112f
 
     /**
      * Writes the square into [out] (left, top, right, bottom) for [frame]; [trial] is the laid-out trial
@@ -65,11 +73,11 @@ internal object HudMinimapGeometry {
                 left = frame.margin
             }
             GameplayLayoutMode.COMPACT_PORTRAIT -> {
-                side = frame.u(PORTRAIT_SIDE_DP)
-                top = frame.bottomClustersTop + frame.u(56f)
-                // Centred between the integrity cluster (170 wide) and the speed gauge (44 from the edge).
-                val center = (frame.margin + frame.u(170f) + frame.width - frame.margin - frame.u(44f)) * 0.5f
-                left = center - side * 0.5f
+                left = frame.margin + frame.u(PORTRAIT_INTEGRITY_WIDTH_DP) * frame.factor + frame.u(8f)
+                top = frame.portraitLoadoutTop + frame.u(PORTRAIT_LOADOUT_SLOT_DP) + frame.u(6f)
+                side = min(frame.u(PORTRAIT_SIDE_DP), frame.portraitClustersBottom - top)
+                val beside = frame.width - frame.margin - left - frame.u(PORTRAIT_SPEED_ROOM_DP)
+                side = max(min(side, beside), min(side, frame.u(MINIMUM_SIDE_DP)))
             }
         }
         if (side < frame.u(MINIMUM_SIDE_DP)) return false
@@ -79,6 +87,15 @@ internal object HudMinimapGeometry {
         out[3] = top + side
         return true
     }
+
+    /** Portrait phones: the minimap's right edge while [engine] shows it, else NaN (the speed gauge then keeps its full width). */
+    fun portraitRight(engine: GameplayRenderModel, frame: HudFrame): Float {
+        if (!frame.portrait || !engine.settings.minimapEnabled) return Float.NaN
+        val rect = PortraitScratch
+        return if (place(frame, null, rect)) rect[2] else Float.NaN
+    }
+
+    private val PortraitScratch = FloatArray(4)
 }
 
 /** Draw-thread scratch of the minimap (rewritten every frame, no allocation). */

@@ -44,7 +44,7 @@ import kotlin.test.assertTrue
  * keep-out, gone when the setting is off, north-up around the Core at the published range.
  */
 class HudMinimapTest {
-    private val viewports = listOf(1_440f to 810f, 1_280f to 800f, 844f to 390f, 390f to 844f, 412f to 915f)
+    private val viewports = listOf(1_440f to 810f, 1_280f to 800f, 844f to 390f, 390f to 844f, 412f to 915f, 360f to 640f)
     private val others = listOf(
         HudBlock.CLOCK, HudBlock.MATTER_CHIP, HudBlock.KEY_CHIP, HudBlock.CHAIN, HudBlock.BOSS, HudBlock.BADGE,
         HudBlock.INTEGRITY, HudBlock.SPEED, HudBlock.LOADOUT, HudBlock.TRIAL_PANEL, HudBlock.POLARITY_LABEL,
@@ -60,7 +60,8 @@ class HudMinimapTest {
         val orbit = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
             immutableListOf(), 0f, 0f)
         for ((dpWidth, dpHeight) in viewports) for (density in listOf(1f, 2.625f)) for (textScale in listOf(1f, 1.25f, 1.75f)) {
-            for (boss in listOf(null, EnemyType.ELITE, EnemyType.ARCHITECT)) for (trial in listOf(false, true)) {
+            // A slow Core, a high-tier three-digit speed and a top-tier four-digit one (the widest, most stretched number).
+            for (boss in listOf(null, EnemyType.ELITE, EnemyType.ARCHITECT)) for (trial in listOf(false, true)) for (speed in listOf(0f, 980f, 2_400f)) {
                 val width = dpWidth * density
                 val height = dpHeight * density
                 val model = hudTestModel(dpWidth, dpHeight).with(
@@ -71,9 +72,10 @@ class HudMinimapTest {
                     "enemies" to (if (boss == null) emptyList() else listOf(EnemyProjection(4, boss, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f,
                         0f, 0f, 0f, 0f, 0f, 0f, false, affinityBits = bossAffinity(boss)))).toImmutableList(),
                     "pointsOfInterest" to (if (trial) listOf(orbit) else emptyList()).toImmutableList(),
+                    "velocityX" to speed, "velocityY" to 0f,
                 )
                 drawHud(model, width, height, density, textScale)
-                val where = "${dpWidth}x$dpHeight @$density x$textScale $boss trial=$trial"
+                val where = "${dpWidth}x$dpHeight @$density x$textScale $boss trial=$trial speed=$speed"
                 val minimap = assertNotNull(HudLayoutProbe.rect(HudBlock.MINIMAP), "$where: no minimap")
                 assertTrue(minimap.left >= 0f && minimap.right <= width && minimap.top >= 0f && minimap.bottom <= height, "$where: $minimap")
                 for (block in others) {
