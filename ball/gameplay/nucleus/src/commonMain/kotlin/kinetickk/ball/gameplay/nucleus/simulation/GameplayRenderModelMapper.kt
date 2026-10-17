@@ -450,18 +450,25 @@ private fun MutableGameState.facetProgress(runtime: CharacterRuntime): Float =
         0f
     }
 
-private fun MutableGameState.scarProjection(runtime: CharacterRuntime, index: Int): CharacterScarProjection {
-    val age = runtime.scarValue(index, CharacterRuntime.SCAR_AGE)
-    val detonateAt = runtime.scarValue(index, CharacterRuntime.SCAR_DETONATE_AT)
-    return CharacterScarProjection(
+private fun MutableGameState.scarProjection(runtime: CharacterRuntime, index: Int): CharacterScarProjection =
+    CharacterScarProjection(
         x0 = runtime.scarValue(index, CharacterRuntime.SCAR_X0),
         y0 = runtime.scarValue(index, CharacterRuntime.SCAR_Y0),
         x1 = runtime.scarValue(index, CharacterRuntime.SCAR_X1),
         y1 = runtime.scarValue(index, CharacterRuntime.SCAR_Y1),
-        fuse = if (age >= 0f) 1f else (1f - (detonateAt - elapsed) / SCAR_FUSE_SECONDS).coerceIn(0f, 1f),
-        fade = if (age >= 0f) age else 0f,
+        fuse = scarFuse(runtime, index),
+        fade = scarFade(runtime, index),
     )
+
+/** Fuse progress of scar [index]: 0 when laid, 1 from its detonation on. */
+private fun MutableGameState.scarFuse(runtime: CharacterRuntime, index: Int): Float {
+    if (runtime.scarValue(index, CharacterRuntime.SCAR_AGE) >= 0f) return 1f
+    return (1f - (runtime.scarValue(index, CharacterRuntime.SCAR_DETONATE_AT) - elapsed) / SCAR_FUSE_SECONDS).coerceIn(0f, 1f)
 }
+
+/** Seconds since scar [index] detonated (0 before). */
+private fun scarFade(runtime: CharacterRuntime, index: Int): Float =
+    runtime.scarValue(index, CharacterRuntime.SCAR_AGE).coerceAtLeast(0f)
 
 /** Compares every projected field bit for bit against what [characterAbilityProjection] would build now. */
 private fun CharacterAbilityProjection.matches(state: MutableGameState, runtime: CharacterRuntime): Boolean {
@@ -499,10 +506,12 @@ private fun CharacterAbilityProjection.matches(state: MutableGameState, runtime:
     if (scars.size != scarCount) return false
     for (index in scars.indices) {
         val scar = scars[index]
-        val expected = state.scarProjection(runtime, index)
-        if (!scar.x0.sameBitsAs(expected.x0) || !scar.y0.sameBitsAs(expected.y0) ||
-            !scar.x1.sameBitsAs(expected.x1) || !scar.y1.sameBitsAs(expected.y1) ||
-            !scar.fuse.sameBitsAs(expected.fuse) || !scar.fade.sameBitsAs(expected.fade)
+        // Field by field from the runtime: the check builds no projection.
+        if (!scar.x0.sameBitsAs(runtime.scarValue(index, CharacterRuntime.SCAR_X0)) ||
+            !scar.y0.sameBitsAs(runtime.scarValue(index, CharacterRuntime.SCAR_Y0)) ||
+            !scar.x1.sameBitsAs(runtime.scarValue(index, CharacterRuntime.SCAR_X1)) ||
+            !scar.y1.sameBitsAs(runtime.scarValue(index, CharacterRuntime.SCAR_Y1)) ||
+            !scar.fuse.sameBitsAs(state.scarFuse(runtime, index)) || !scar.fade.sameBitsAs(scarFade(runtime, index))
         ) {
             return false
         }

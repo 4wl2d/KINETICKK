@@ -56,11 +56,13 @@ class CharacterAbilityTest {
         repeat(10) { source.moveAt(400f, 0f) }
         val committedPath = source.characterRuntime.ghostPath.toList()
         val fork = source.copyForReduction()
+        val pages = source.characterRuntime.ghostPath.pageCount
         assertNotSame(source.characterRuntime, fork.characterRuntime)
-        assertTrue(fork.characterRuntime.ghostPath.sharesStorageWith(source.characterRuntime.ghostPath))
+        assertEquals(pages, fork.characterRuntime.ghostPath.sharedPagesWith(source.characterRuntime.ghostPath))
         assertTrue(fork.characterRuntime.drones.sharesStorageWith(source.characterRuntime.drones))
         repeat(5) { fork.moveAt(400f, 0f) }
-        assertFalse(fork.characterRuntime.ghostPath.sharesStorageWith(source.characterRuntime.ghostPath))
+        // Samples 10..14 share one page: only that page is copied.
+        assertEquals(pages - 1, fork.characterRuntime.ghostPath.sharedPagesWith(source.characterRuntime.ghostPath))
         assertEquals(committedPath, source.characterRuntime.ghostPath.toList())
         assertEquals(10, source.characterRuntime.ghostSamples)
         assertEquals(15, fork.characterRuntime.ghostSamples)
@@ -68,15 +70,49 @@ class CharacterAbilityTest {
         assertSame(source.characterRuntime, source.copyForScalarInputReduction().characterRuntime)
     }
 
-    @Test fun theEchoBufferIsWrittenInPlaceOnceAStepOwnsIt() {
-        val game = game(CoreShape.SPIRAL)
-        game.moveAt(300f, 0f)
-        val owned = game.characterRuntime.ghostPath
+    @Test fun eachOneStepReductionCopiesOnlyThePageItsEchoSampleLandsOn() {
+        var state = game(CoreShape.SPIRAL)
+        repeat(CharacterRuntime.GHOST_SAMPLES) { state.moveAt(300f, 0f) }
+        val pages = state.characterRuntime.ghostPath.pageCount
+        // Three full turns of pages, one fixed step per reduction, wrapping around the ring.
+        repeat(3 * CharacterRuntime.GHOST_SAMPLES) {
+            val committed = state.characterRuntime.toString()
+            val fork = state.copyForReduction()
+            fork.moveAt(300f, 0f)
+            assertEquals(pages - 1, fork.characterRuntime.ghostPath.sharedPagesWith(state.characterRuntime.ghostPath))
+            assertEquals(committed, state.characterRuntime.toString(), "the committed ring is untouched")
+            state = fork
+        }
+        // An owned ring is written in place: the candidate keeps its storage and a probe keeps the old samples.
+        val owned = state.characterRuntime.ghostPath
         val probe = owned.fork()
-        repeat(300) { game.moveAt(300f, 0f) }
-        // The candidate keeps writing its own storage; the probe still sees the old samples.
-        assertSame(owned, game.characterRuntime.ghostPath)
-        assertFalse(probe.sharesStorageWith(owned))
+        val probed = probe.toList()
+        repeat(300) { state.moveAt(300f, 0f) }
+        assertSame(owned, state.characterRuntime.ghostPath)
+        assertEquals(0, probe.sharedPagesWith(owned))
+        assertEquals(probed, probe.toList())
+    }
+
+    @Test fun theEchoGhostJumpsABlinkDriveTeleportWithoutStrikingAlongIt() {
+        val game = buildTestState(RelicId.BLINK_DRIVE, shape = CoreShape.SPIRAL)
+        repeat(CharacterRuntime.GHOST_SAMPLES) { game.moveAt(400f, 0f) }
+        val fromX = game.coreX
+        val alongPath = (1..3).map { game.addEnemyForTesting(fromX + it * 55f, game.coreY, hp = 5_000f) }
+        game.cameraX = game.coreX; game.cameraY = game.coreY
+        game.pointerX = game.screenWidth * 0.5f + 600f; game.pointerY = game.screenHeight * 0.5f
+        assertTrue(game.relicOnDash(1f, 0f), "Blink Drive teleports along the aim")
+        val toX = game.coreX
+        assertTrue(toX - fromX > 3 * 55f, "the Blink crosses every enemy")
+        game.step()
+        // The Blink's own strike is the relic's; the ghost must not repeat it along the gap a second later.
+        val afterBlink = alongPath.map { it.hp }
+        repeat(CharacterRuntime.GHOST_DELAY_STEPS - 1) { game.moveAt(0f, -400f) }
+        assertEquals(fromX, game.ghostX, 0.5f, "the ghost stands where the Blink began")
+        game.moveAt(0f, -400f)
+        assertEquals(toX, game.ghostX, 0.5f, "the ghost jumps the gap")
+        assertEquals(0f, game.ghostSpeed, "a replayed teleport is not ghost speed")
+        assertEquals(afterBlink, alongPath.map { it.hp }, "the ghost never travelled the gap")
+        assertEquals(0.0, game.characterRuntime.abilityDamage)
     }
 
     @Test fun traitsApplyWhenTheRunStarts() {
@@ -277,6 +313,32 @@ class CharacterAbilityTest {
         assertEquals(0, game.characterRuntime.edge)
     }
 
+    @Test fun onlyAContactThatWouldHurtSpendsTheParryWindow() {
+        fun contact(coreSpeed: Float): MutableGameState {
+            val game = game(CoreShape.DIAMOND)
+            game.characterRuntime.parryWindow = PARRY_WINDOW_SECONDS
+            game.velocityX = coreSpeed; game.velocityY = 0f
+            game.previousCoreX = game.coreX - coreSpeed * MutableGameState.FIXED_STEP
+            game.previousCoreY = game.coreY
+            val enemy = game.addEnemyForTesting(game.coreX + game.coreRadius + 10f, game.coreY)
+            enemy.vx = -120f
+            enemy.previousX = enemy.x + 2f
+            game.resolveEnemyCoreCollisions()
+            assertTrue(enemy.hp < enemy.maxHp, "the contact happened")
+            return game
+        }
+        // A fast ram outside a Dash hurts nothing: the window stays open and grants no Edge.
+        val ram = contact(400f)
+        assertEquals(0, ram.characterRuntime.edge)
+        assertTrue(ram.characterRuntime.parryWindow > 0f)
+        assertFalse(ram.parriedThisStep)
+        // A slow contact would hurt: the window negates it and grants Edge.
+        val slow = contact(60f)
+        assertEquals(1, slow.characterRuntime.edge)
+        assertEquals(0f, slow.characterRuntime.parryWindow)
+        assertEquals(slow.maxHp, slow.hp)
+    }
+
     @Test fun latticeNeedsSeparatedDashesBrakeNoLongerCollapsesAndTheFourthNodeHitsInsideHarder() {
         val game = game(CoreShape.TESSERACT)
         val corners = listOf(0f to 0f, 400f to 0f, 400f to 400f, 0f to 400f)
@@ -372,11 +434,11 @@ class CharacterAbilityTest {
         val pulled = game.addEnemyForTesting(game.coreX + 200f, game.coreY)
         game.step()
         assertTrue(pulled.vx < 0f, "attract pulls toward the Core")
-        // What the field moves flies on its momentum: steering leaves it alone while it is thrown.
-        assertTrue(game.isThrownByPolarity(pulled))
+        // ATTRACT never throws: the pulled enemy keeps steering.
+        assertFalse(game.isThrownByPolarity(pulled))
         val pulledVelocity = pulled.vx
         game.steerEnemy(pulled, 78f, 0f, 2.1f, MutableGameState.FIXED_STEP)
-        assertEquals(pulledVelocity, pulled.vx)
+        assertTrue(pulled.vx > pulledVelocity, "the pulled enemy still steers")
         // A mini-boss feels the pull but is never thrown: it keeps steering.
         val herald = game.addEnemyForTesting(game.coreX - 200f, game.coreY, type = EnemyType.HERALD)
         game.step()
@@ -400,7 +462,9 @@ class CharacterAbilityTest {
         val thrown = game.addEnemyForTesting(game.coreX + 100f, game.coreY)
         val struck = game.addEnemyForTesting(game.coreX + 120f, game.coreY)
         game.step()
-        assertTrue(thrown.characterMarkTime > 0f)
+        assertFalse(game.isThrownByPolarity(thrown), "the push alone does not throw a resting enemy")
+        assertEquals(thrown.maxHp, thrown.hp)
+        // Flying outward through the field, it is thrown, and what it strikes is a slam.
         thrown.vx = 500f; struck.vx = 0f
         game.step()
         val slam = (SLAM_BASE_DAMAGE + SLAM_DAMAGE_PER_SPEED * 500f) * game.abilityPower()
@@ -415,6 +479,36 @@ class CharacterAbilityTest {
         game.onCharacterImpact(rammed, DamageResult(10f, false), impactSpeed = 600f, multiplier = 1f)
         assertEquals(600f * game.knockbackTaken(rammed), rammed.vx, 0.01f)
         assertTrue(game.isThrownByPolarity(rammed))
+    }
+
+    @Test fun attractPullsOnTopOfSteeringAndNeverStopsAnEnemysAi() {
+        val game = game(CoreShape.DIPOLE)
+        assertEquals(Polarity.ATTRACT, game.polarity)
+        val drifter = game.addEnemyForTesting(game.coreX + 260f, game.coreY)
+        val chase = 78f * game.rebirthProfile.enemySpeedMultiplier
+        var fastest = 0f
+        // Three seconds held inside the field: the enemy keeps its AI and its speed stays bounded.
+        repeat((3f / MutableGameState.FIXED_STEP).toInt()) {
+            game.step()
+            game.updateEnemies(MutableGameState.FIXED_STEP)
+            assertFalse(game.isThrownByPolarity(drifter))
+            fastest = max(fastest, hypot(drifter.vx, drifter.vy))
+            if (drifter.x - game.coreX < 120f) {
+                drifter.x = game.coreX + 260f
+                drifter.previousX = drifter.x
+            }
+        }
+        // Steering damps the pull: the speed settles near the chase speed plus pull / agility.
+        assertTrue(fastest < chase + 260f / 2.1f + 40f, "pulled speed $fastest grew without drag")
+        // Out of the field, the enemy chases at its own speed again within two seconds.
+        game.coreX -= 600f
+        repeat((2f / MutableGameState.FIXED_STEP).toInt()) {
+            game.step()
+            game.updateEnemies(MutableGameState.FIXED_STEP)
+        }
+        assertTrue(length(drifter.x - game.coreX, drifter.y - game.coreY) > ATTRACT_RADIUS + drifter.radius)
+        assertEquals(-chase, drifter.vx, 5f)
+        assertEquals(0f, drifter.vy, 5f)
     }
 
     @Test fun pentagonRewardsOnBeatDashesImpactsAndActivations() {

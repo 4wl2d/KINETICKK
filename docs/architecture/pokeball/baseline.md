@@ -206,8 +206,11 @@ together.
   that keeps every character's ability-only output (damage prevented for the Prism
   and the Diamond) within 40 % of the roster median. Character state is
   copy-on-write: a reduction forks scalars and shares the echo ghost path, lattice,
-  drones and scars until its first write, so a buffer is copied at most once per
-  reduction however many fixed steps it runs, and steps write in place. New unlocks count total kills, ricochets, Data pickups and the Reborn
+  drones and scars until its first write. The echo path is paged, so a fixed step
+  copies at most the small page its sample lands on (and the page table once per
+  reduction); the small lattice, drone and scar arrays are copied at most once per
+  reduction. A replayed teleport moves the ghost without striking along the gap.
+  New unlocks count total kills, ricochets, Data pickups and the Reborn
   rank; no existing unlock target rose. The six Home form tiles became one Hangar card,
   and the Hangar overlay (H, from Home only) lists every character with its unlock
   progress and selects through the Profile.

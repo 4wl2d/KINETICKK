@@ -9,14 +9,18 @@ internal enum class Polarity { ATTRACT, REPEL }
 /**
  * Owned character state; all ability charge derives from accepted physical movement and combat.
  *
- * A reduction fork copies the scalars (a few dozen fields) and forks the bounded buffers: the echo
- * ghost's path, the lattice nodes, the drones and the void scars are copy-on-write arrays allocated
- * once per run, shared with the committed state until the candidate first writes them: a reduction
- * copies a buffer at most once however many fixed steps it runs, and the steps write it in place.
+ * A reduction fork copies the scalars (a few dozen fields) and forks the bounded buffers, allocated
+ * once per run and shared with the committed state until the candidate first writes them. The echo
+ * ghost's path is paged: a fixed step writes one sample and copies at most that sample's small page
+ * (plus, once per reduction, the page table), never the whole ring. The lattice nodes, the drones and
+ * the void scars are small arrays copied at most once per reduction; later steps write them in place.
  */
 internal class CharacterRuntime private constructor(
-    /** Ring buffer of Core positions, one (x, y) pair per fixed step; the ghost replays it [GHOST_DELAY_STEPS] behind. */
-    val ghostPath: CopyOnWriteFloatArray,
+    /**
+     * Ring buffer of Core positions, one [GHOST_STRIDE] record (x, y, teleport flag) per fixed step;
+     * the ghost replays it [GHOST_DELAY_STEPS] behind.
+     */
+    val ghostPath: CopyOnWritePagedFloatArray,
     /** Up to [MAX_LATTICE_NODES] (x, y) pairs; [latticeCount] are live. */
     val latticeNodes: CopyOnWriteFloatArray,
     /** Up to [MAX_DRONES] records of [DRONE_STRIDE] floats; [droneCount] are live. */
@@ -25,7 +29,7 @@ internal class CharacterRuntime private constructor(
     val scars: CopyOnWriteFloatArray,
 ) {
     constructor() : this(
-        ghostPath = CopyOnWriteFloatArray(FloatArray(GHOST_SAMPLES * 2)),
+        ghostPath = CopyOnWritePagedFloatArray(GHOST_SAMPLES * GHOST_STRIDE, GHOST_PAGE_SAMPLES * GHOST_STRIDE),
         latticeNodes = CopyOnWriteFloatArray(FloatArray(MAX_LATTICE_NODES * 2)),
         drones = CopyOnWriteFloatArray(FloatArray(MAX_DRONES * DRONE_STRIDE)),
         scars = CopyOnWriteFloatArray(FloatArray(MAX_SCARS * SCAR_STRIDE)),
@@ -208,8 +212,23 @@ internal class CharacterRuntime private constructor(
     fun scarValue(index: Int, field: Int): Float = scars[index * SCAR_STRIDE + field]
 
     /** Core position [stepsAgo] fixed steps ago, or the oldest recorded sample when the path is shorter. */
-    fun ghostSampleX(stepsAgo: Int): Float = ghostPath[ghostSlot(stepsAgo) * 2]
-    fun ghostSampleY(stepsAgo: Int): Float = ghostPath[ghostSlot(stepsAgo) * 2 + 1]
+    fun ghostSampleX(stepsAgo: Int): Float = ghostPath[ghostSlot(stepsAgo) * GHOST_STRIDE + GHOST_X]
+    fun ghostSampleY(stepsAgo: Int): Float = ghostPath[ghostSlot(stepsAgo) * GHOST_STRIDE + GHOST_Y]
+
+    /** True when the Core reached the sample [stepsAgo] by a teleport rather than by moving. */
+    fun ghostSampleTeleported(stepsAgo: Int): Boolean =
+        ghostPath[ghostSlot(stepsAgo) * GHOST_STRIDE + GHOST_TELEPORT].toRawBits() != 0
+
+    /** Appends the newest sample, overwriting the oldest once the ring is full. */
+    fun recordGhostSample(x: Float, y: Float, teleported: Boolean) {
+        val head = (ghostHead + 1) % GHOST_SAMPLES
+        ghostHead = head
+        val base = head * GHOST_STRIDE
+        ghostPath[base + GHOST_X] = x
+        ghostPath[base + GHOST_Y] = y
+        ghostPath[base + GHOST_TELEPORT] = if (teleported) 1f else 0f
+        if (ghostSamples < GHOST_SAMPLES) ghostSamples++
+    }
 
     private fun ghostSlot(stepsAgo: Int): Int {
         val back = stepsAgo.coerceIn(0, (ghostSamples - 1).coerceAtLeast(0))
@@ -229,6 +248,14 @@ internal class CharacterRuntime private constructor(
         /** The ghost runs one second (120 fixed steps) behind; one more sample gives its previous position. */
         const val GHOST_DELAY_STEPS: Int = 120
         const val GHOST_SAMPLES: Int = GHOST_DELAY_STEPS + 2
+
+        /** Ghost record: position and a teleport flag (1 when the Core arrived there by a teleport). */
+        const val GHOST_X: Int = 0
+        const val GHOST_Y: Int = 1
+        const val GHOST_TELEPORT: Int = 2
+        const val GHOST_STRIDE: Int = 3
+        /** Samples per copy-on-write page of the ghost ring: a step copies at most 24 floats. */
+        const val GHOST_PAGE_SAMPLES: Int = 8
 
         /** Drone record: position, previous position, remaining life, next dart time, dart time left, dart target. */
         const val DRONE_X: Int = 0

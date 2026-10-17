@@ -443,10 +443,20 @@ internal val MutableGameState.ghostActive: Boolean
     get() = coreShape == CoreShape.SPIRAL && characterRuntime.ghostSamples >= CharacterRuntime.GHOST_SAMPLES
 internal val MutableGameState.ghostX: Float get() = characterRuntime.ghostSampleX(CharacterRuntime.GHOST_DELAY_STEPS)
 internal val MutableGameState.ghostY: Float get() = characterRuntime.ghostSampleY(CharacterRuntime.GHOST_DELAY_STEPS)
-internal val MutableGameState.previousGhostX: Float get() = characterRuntime.ghostSampleX(CharacterRuntime.GHOST_DELAY_STEPS + 1)
-internal val MutableGameState.previousGhostY: Float get() = characterRuntime.ghostSampleY(CharacterRuntime.GHOST_DELAY_STEPS + 1)
 
-/** Ghost speed over its last fixed step (0 until it is active). */
+/**
+ * The ghost's position one step earlier. A replayed teleport follows the teleport rule: the previous
+ * position is the arrival point, so the ghost jumps the gap without travelling (or striking) along it.
+ */
+internal val MutableGameState.previousGhostX: Float get() = characterRuntime.ghostSampleX(previousGhostStepsAgo())
+internal val MutableGameState.previousGhostY: Float get() = characterRuntime.ghostSampleY(previousGhostStepsAgo())
+
+private fun MutableGameState.previousGhostStepsAgo(): Int {
+    val delay = CharacterRuntime.GHOST_DELAY_STEPS
+    return if (characterRuntime.ghostSampleTeleported(delay)) delay else delay + 1
+}
+
+/** Ghost speed over its last fixed step (0 until it is active, and on a replayed teleport). */
 internal val MutableGameState.ghostSpeed: Float
     get() = if (!ghostActive) 0f else length(ghostX - previousGhostX, ghostY - previousGhostY) / MutableGameState.FIXED_STEP
 
@@ -458,7 +468,7 @@ internal fun MutableGameState.latticeNodeY(index: Int): Float = characterRuntime
 /** Dipole polarity. */
 internal val MutableGameState.polarity: Polarity get() = characterRuntime.polarity
 
-/** True while the polarity field throws [enemy]: it flies on its momentum instead of steering (never a boss). */
+/** True while a REPEL throw carries [enemy]: it flies on its momentum instead of steering (never a boss). */
 internal fun MutableGameState.isThrownByPolarity(enemy: Enemy): Boolean =
     coreShape == CoreShape.DIPOLE && enemy.characterMarkTime > 0f && !enemy.isBossClass
 
@@ -648,11 +658,11 @@ private fun MutableGameState.supernova() {
 }
 
 private fun MutableGameState.updateEcho(ability: CharacterRuntime, delta: Float) {
-    val head = (ability.ghostHead + 1) % CharacterRuntime.GHOST_SAMPLES
-    ability.ghostHead = head
-    ability.ghostPath[head * 2] = coreX
-    ability.ghostPath[head * 2 + 1] = coreY
-    if (ability.ghostSamples < CharacterRuntime.GHOST_SAMPLES) ability.ghostSamples++
+    // A teleport (Blink Drive or any other) sets the previous position to the arrival point on its
+    // step: a gap from the last sample that this step did not travel is flagged, never replayed as motion.
+    val teleported = ability.ghostSamples > 0 && previousCoreX == coreX && previousCoreY == coreY &&
+        (ability.ghostSampleX(0) != coreX || ability.ghostSampleY(0) != coreY)
+    ability.recordGhostSample(coreX, coreY, teleported)
     if (ability.ghostSamples < CharacterRuntime.GHOST_SAMPLES) {
         ability.charge = ability.ghostSamples / CharacterRuntime.GHOST_SAMPLES.toFloat()
         return
@@ -709,9 +719,14 @@ private fun MutableGameState.updatePolarity(ability: CharacterRuntime, delta: Fl
         if (knockback <= 0f) continue
         enemy.vx += dx / distance * acceleration * knockback
         enemy.vy += dy / distance * acceleration * knockback
-        // The field throws what it moves: the enemy flies on its momentum for a moment, and what it
-        // strikes meanwhile is a slam. Bosses and mini-bosses feel the pull but keep steering.
-        if (!enemy.isBossClass) enemy.characterMarkTime = THROW_SECONDS
+        // ATTRACT only adds its pull to the enemy's own steering. REPEL throws: once its push leaves an
+        // enemy flying outward at THROW_MIN_SPEED or faster, the enemy flies on its momentum for a
+        // moment, and what it strikes meanwhile is a slam. Bosses and mini-bosses are never thrown.
+        if (!attract && !enemy.isBossClass && enemy.characterMarkTime <= 0f &&
+            (enemy.vx * dx + enemy.vy * dy) / distance >= THROW_MIN_SPEED
+        ) {
+            enemy.characterMarkTime = THROW_SECONDS
+        }
     }
     ability.charge = if (elapsed >= ability.polarityFlipReadyAt) 1f else
         1f - ((ability.polarityFlipReadyAt - elapsed) / POLARITY_FLIP_INTERVAL).coerceIn(0f, 1f)
@@ -970,9 +985,11 @@ internal fun MutableGameState.rebaseCharacterRuntime(shiftX: Float, shiftY: Floa
         ability.latticeNodes[index * 2 + 1] = ability.latticeNodes[index * 2 + 1] - shiftY
     }
     if (ability.ghostSamples > 0) {
+        val path = ability.ghostPath
         for (index in 0 until CharacterRuntime.GHOST_SAMPLES) {
-            ability.ghostPath[index * 2] = ability.ghostPath[index * 2] - shiftX
-            ability.ghostPath[index * 2 + 1] = ability.ghostPath[index * 2 + 1] - shiftY
+            val base = index * CharacterRuntime.GHOST_STRIDE
+            path[base + CharacterRuntime.GHOST_X] = path[base + CharacterRuntime.GHOST_X] - shiftX
+            path[base + CharacterRuntime.GHOST_Y] = path[base + CharacterRuntime.GHOST_Y] - shiftY
         }
     }
     val drones = ability.drones
@@ -1080,6 +1097,8 @@ private const val ATTRACT_ACCELERATION: Float = 260f
 internal const val REPEL_RADIUS: Float = 220f
 private const val REPEL_ACCELERATION: Float = 420f
 private const val THROW_SECONDS: Float = 0.6f
+/** Outward speed at which the REPEL push throws an enemy (a Drifter steering against it alone never reaches it). */
+internal const val THROW_MIN_SPEED: Float = 160f
 private const val REPEL_THROW_SHARE: Float = 1f
 internal const val SLAM_MIN_SPEED: Float = 100f
 internal const val SLAM_BASE_DAMAGE: Float = 30f

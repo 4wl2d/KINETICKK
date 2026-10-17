@@ -106,10 +106,11 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
             // Read before the hit: a strike or lance in progress hurts whatever the Core's speed.
             val strike = strikeDamage(enemy)
             val wouldHurt = dashPhaseTime <= 0f && (strike > 0f || coreImpactSpeed < 190f)
-            val parried = tryCharacterParry(
+            // Only a contact that would hurt spends the parry window and grants Edge.
+            val parried = wouldHurt && tryCharacterParry(
                 enemy.previousX, enemy.previousY, enemy.vx, enemy.vy,
                 previousCoreX, previousCoreY,
-                damage = if (wouldHurt) (if (strike > 0f) strike else contactDamage(enemy)) else 0f,
+                damage = if (strike > 0f) strike else contactDamage(enemy),
             )
             val newDashContact = dashPhaseTime > 0f && enemy.lastCharacterDash != characterRuntime.dashSequence
             onCharacterDashContact(enemy)
