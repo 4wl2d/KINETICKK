@@ -291,6 +291,22 @@ fun GameplayContent(
         }
     }
 
+    // The Nucleus receives the viewport in dp, so a density change at an unchanged pixel size (a
+    // display scale change) resends it; onSizeChanged covers every pixel size change.
+    val viewport = remember(component) { GameplayViewportPixels() }
+    LaunchedEffect(component, density) {
+        if (viewport.width > 0 && viewport.height > 0 && viewport.density != density) {
+            viewport.density = density
+            dispatchValidated(
+                interactionValidator.viewportChanged(
+                    rawWidthPx = viewport.width.toFloat(),
+                    rawHeightPx = viewport.height.toFloat(),
+                    rawDensity = density,
+                ),
+            )
+        }
+    }
+
     val textScale = facts.textScale
     val typography = kinetickk.foundation.design.rememberInterfaceTypography()
     val roles = LocalKkRolePalette.current
@@ -373,6 +389,9 @@ fun GameplayContent(
             .focusRequester(focusRequester)
             .focusable()
             .onSizeChanged { size ->
+                viewport.width = size.width
+                viewport.height = size.height
+                viewport.density = density
                 dispatchValidated(
                     interactionValidator.viewportChanged(
                         rawWidthPx = size.width.toFloat(),
@@ -947,6 +966,13 @@ private fun GameplayRenderModel.compositionFacts() = GameplayCompositionFacts(
     overheated = overheated,
     dashReady = dashReady,
 )
+
+/** The last laid-out gameplay size in device pixels and the density it was sent with. */
+private class GameplayViewportPixels {
+    var width: Int = 0
+    var height: Int = 0
+    var density: Float = 0f
+}
 
 private class GameplayLayoutDimensions(
     val width: Float,

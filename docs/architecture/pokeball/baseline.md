@@ -125,8 +125,9 @@ density, so world units, speeds and spawn distances are dp on every display,
 and the world layer is drawn magnified by the density (the HUD keeps device
 pixels and `uiScale`). Tests run at density 1 and are unchanged. The render
 model publishes an interpolation alpha (accumulator over the fixed step, `1`
-outside a running phase) and previous positions, and renderers draw moving
-things between the last two simulated states. A running frame whose admitted
+outside a running phase and until the first step after a run starts or
+resumes) and previous positions, and renderers draw moving things between the
+last two simulated states. A running frame whose admitted
 time stays below one step only advances the accumulator on a scalar copy and
 reuses every projection. Step admission tolerates two Float ulps, so an input on
 a nominal step boundary lands on the same step at 30, 60, 144 and 240 Hz; at

@@ -16,6 +16,7 @@ import kotlin.math.max
 
 internal fun MutableGameState.startRun() {
     phase = GamePhase.RUNNING
+    interpolationPrimed = false
     characterRuntime = CharacterRuntime()
     enemies.clear()
     projectiles.clear()
@@ -218,6 +219,7 @@ internal fun MutableGameState.togglePause() {
     updateBraking()
     accumulator = 0f
     lastTransitionSteps = 0
+    interpolationPrimed = false
 }
 
 internal fun MutableGameState.pauseForOverlay() {
@@ -375,6 +377,7 @@ internal fun MutableGameState.finishChoice(sound: GameplayAudioCue) {
     selectedRewardFocus = null
     choices = emptyList()
     phase = GamePhase.RUNNING
+    interpolationPrimed = false
     runGrace = max(runGrace, 0.5f)
     emitSound(sound)
     openNextPendingChoice()

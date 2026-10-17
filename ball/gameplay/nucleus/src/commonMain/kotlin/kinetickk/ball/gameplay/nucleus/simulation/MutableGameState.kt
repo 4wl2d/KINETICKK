@@ -253,6 +253,11 @@ internal class MutableGameState(
     /** Morningstar position at the start of the last fixed step (render interpolation only). */
     internal var previousMorningstarX: Float = reductionSource?.previousMorningstarX ?: 0f
     internal var previousMorningstarY: Float = reductionSource?.previousMorningstarY ?: 0f
+    /**
+     * Whether a fixed step has run since the simulation last entered RUNNING, so every previous
+     * position is that step's start. Until then renderers present the exact state (render only).
+     */
+    internal var interpolationPrimed: Boolean = reductionSource?.interpolationPrimed ?: false
     internal var trailLastX: Float = reductionSource?.trailLastX ?: 0f
     internal var trailLastY: Float = reductionSource?.trailLastY ?: 0f
     internal var trailDistanceCarry: Float = reductionSource?.trailDistanceCarry ?: 0f

@@ -40,6 +40,7 @@ class FramePacingTest {
                 ),
             )
             trail += TrailPoint(-10f, 0f)
+            interpolationPrimed = true
         }
         val committedModel = committed.toRenderModel()
 
@@ -64,7 +65,7 @@ class FramePacingTest {
 
     @Test
     fun alphaFollowsTheAccumulatorWhileRunningAndIsOneOtherwise() {
-        val state = runningState()
+        val state = runningState().apply { interpolationPrimed = true }
         state.accumulator = MutableGameState.FIXED_STEP * 0.25f
         assertEquals(0.25f, state.toRenderModel().interpolationAlpha, 1e-5f)
         // A deferred backlog beyond one step presents the newest state.
@@ -75,6 +76,32 @@ class FramePacingTest {
         assertEquals(1f, state.toRenderModel().interpolationAlpha)
         state.phase = GamePhase.CHOICE
         assertEquals(1f, state.toRenderModel().interpolationAlpha)
+    }
+
+    @Test
+    fun aResumedRunPresentsItsExactStateUntilItsFirstStep() {
+        val moving = runningState().apply { setVelocityForTesting(1_200f, 0f) }
+        val stepped = reduceFrame(moving, MutableGameState.FIXED_STEP * 1.5f)
+        assertEquals(0.5f, stepped.toRenderModel().interpolationAlpha, 1e-4f)
+
+        // Pausing and resuming clears the accumulator; the previous positions are a step old.
+        val paused = reduce(stepped, GameplayInteractionPulse.PauseToggled)
+        assertEquals(1f, paused.toRenderModel().interpolationAlpha)
+        val resumed = reduce(paused, GameplayInteractionPulse.PauseToggled)
+        assertEquals(GamePhase.RUNNING, resumed.phase)
+        val firstFrame = reduceFrame(resumed, MutableGameState.FIXED_STEP * 0.5f)
+        assertEquals(0, firstFrame.lastTransitionSteps)
+        // Drawing between the stale previous positions would step back; the exact state is shown.
+        val held = firstFrame.toRenderModel()
+        assertEquals(1f, held.interpolationAlpha)
+        assertTrue(held.previousCoreX != held.coreX)
+
+        // The first step makes the previous positions the resumed state, and alpha follows again.
+        val next = reduceFrame(firstFrame, MutableGameState.FIXED_STEP * 0.75f)
+        assertEquals(1, next.lastTransitionSteps)
+        val model = next.toRenderModel()
+        assertEquals(0.25f, model.interpolationAlpha, 1e-4f)
+        assertEquals(held.coreX, model.previousCoreX)
     }
 
     @Test
@@ -170,6 +197,12 @@ class FramePacingTest {
         takeSoundCues()
         takeVisualFxCues()
     }
+
+    private fun reduce(state: MutableGameState, pulse: GameplayInteractionPulse): MutableGameState =
+        assertIs<GameReductionResult.Accepted>(reducer.reduce(EngineState(state), pulse)).state.model.apply {
+            takeSoundCues()
+            takeVisualFxCues()
+        }
 
     private fun reduceFrame(state: MutableGameState, seconds: Float): MutableGameState {
         val accepted = assertIs<GameReductionResult.Accepted>(

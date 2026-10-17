@@ -339,8 +339,9 @@ private fun DrawScope.drawPolarityEdge(engine: GameplayRenderModel, roles: KkRol
     val w = size.width
     val h = size.height
     if (w <= 0f || h <= 0f) return
-    val reachX = engine.pointerX / w * 2f - 1f
-    val reachY = engine.pointerY / h * 2f - 1f
+    // The pointer is dp; this band is drawn in device pixels.
+    val reachX = engine.pointerX * engine.worldScale / w * 2f - 1f
+    val reachY = engine.pointerY * engine.worldScale / h * 2f - 1f
     val band = d(60f)
     val alpha = 0.35f + 0.65f * (1f - kkPulse(renderTime, 0.9f, KkEase.Out))
     val threat = roles.threat.copy(alpha = 0.42f)

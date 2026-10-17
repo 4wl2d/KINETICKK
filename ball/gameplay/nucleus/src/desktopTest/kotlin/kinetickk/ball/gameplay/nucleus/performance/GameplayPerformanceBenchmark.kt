@@ -705,6 +705,7 @@ internal fun canonicalStateFingerprint(state: MutableGameState): Long {
     signature = mix(signature, state.previousMorningstarX.toRawBits())
     signature = mix(signature, state.previousMorningstarY.toRawBits())
     signature = mix(signature, state.viewportDensity.toRawBits())
+    signature = mix(signature, if (state.interpolationPrimed) 1 else 0)
     signature = mix(signature, state.stasisBank)
     signature = mix(signature, state.overdriveBurnoutUntil.toRawBits())
     signature = mix(signature, state.invulnerableUntil.toRawBits())

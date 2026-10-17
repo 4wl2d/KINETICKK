@@ -258,7 +258,8 @@ class GameplayRenderModel(
     /**
      * Accumulated real time past the last simulated state as a fraction of [FIXED_STEP] (0..1).
      * Renderers draw moving things at `previous + (current - previous) * alpha`; it is 1 whenever
-     * the run is not running, so paused and terminal frames show the exact state.
+     * the run is not running, so paused and terminal frames show the exact state, and until the
+     * first step after a run starts or resumes (its previous positions are older than one step).
      */
     val interpolationAlpha: Float = 1f,
     /** Core position at the start of the last fixed step. */

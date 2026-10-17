@@ -102,6 +102,31 @@ class DensityUnitsRenderTest {
     }
 
     @Test
+    fun thePolarityEdgeGlowsOnTheSideTheDpPointerStrainsTowardAtDensityTwo() {
+        // Pointer near the right edge of the dp viewport, vertically centered.
+        val base = modelAt(DP_WIDTH * 2f, DP_HEIGHT * 2f, density = 2f)
+            .with("pointerX" to DP_WIDTH * 0.95f, "pointerY" to DP_HEIGHT * 0.5f)
+        val memory = HudPresentationMemory()
+        val boss = BossTarget()
+        val steady = base.with("polarityStability" to 0.5f)
+        val drained = base.with("polarityStability" to 0.4f)
+        memory.observe(steady, 0f, boss.select(steady))
+        memory.observe(drained, 0.05f, boss.select(drained))
+        val width = (DP_WIDTH * 2f).toInt()
+        val height = (DP_HEIGHT * 2f).toInt()
+        val bitmap = ImageBitmap(width, height)
+        CanvasDrawScope().draw(Density(2f), LayoutDirection.Ltr, Canvas(bitmap), Size(width.toFloat(), height.toFloat())) {
+            drawRect(Kk.Ink)
+            drawHudScreenStates(drained, KkRolePalette.Default, renderTime = 0.05f, memory = memory, critical = false)
+        }
+        val pixels = bitmap.toPixelMap()
+        val ink = Kk.Ink.toArgb()
+        assertTrue(pixels[width - 2, height / 2].toArgb() != ink, "the right edge glows")
+        assertEquals(ink, pixels[1, height / 2].toArgb(), "the left edge stays dark")
+        assertEquals(ink, pixels[width / 2, 1].toArgb(), "the top edge stays dark")
+    }
+
+    @Test
     fun framesBetweenStepsDrawTheInterpolatedCameraAndCore() {
         val base = modelAt(DP_WIDTH, DP_HEIGHT, density = 1f)
         val between = base.with(

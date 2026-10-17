@@ -336,10 +336,15 @@ internal fun MutableGameState.toRenderModel(
 
 /**
  * How far the accumulated real time has advanced past the last simulated state, in fixed steps.
- * Only a running simulation accumulates time; every other phase presents its exact state.
+ * Only a running simulation accumulates time; every other phase presents its exact state, and so
+ * does a run (re)entering RUNNING until its first step makes the previous positions current.
  */
 internal fun MutableGameState.renderInterpolationAlpha(): Float =
-    if (phase == GamePhase.RUNNING) (accumulator / MutableGameState.FIXED_STEP).coerceIn(0f, 1f) else 1f
+    if (phase == GamePhase.RUNNING && interpolationPrimed) {
+        (accumulator / MutableGameState.FIXED_STEP).coerceIn(0f, 1f)
+    } else {
+        1f
+    }
 
 /** Run totals change rarely; an unchanged set keeps the previous immutable projection. */
 private fun MutableGameState.runStatisticsProjection(reusable: RunStatistics?): RunStatistics {

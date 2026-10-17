@@ -1247,6 +1247,7 @@ class GameplayReductionIsolationTest {
             float("morningstarY", morningstarY)
             float("previousMorningstarX", previousMorningstarX)
             float("previousMorningstarY", previousMorningstarY)
+            value("interpolationPrimed", interpolationPrimed)
             float("weaponBeamTime", weaponBeamTime)
             float("weaponBeamStartX", weaponBeamStartX)
             float("weaponBeamStartY", weaponBeamStartY)

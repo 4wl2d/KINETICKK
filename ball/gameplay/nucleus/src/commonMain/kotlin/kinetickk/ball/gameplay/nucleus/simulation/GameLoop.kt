@@ -91,6 +91,7 @@ internal const val MAX_SIMULATION_RAW_DELTA_SECONDS: Float = 0.1f
 internal const val MAX_SIMULATION_ACCUMULATOR_SECONDS: Float = 0.3f
 
 internal fun MutableGameState.simulateStep(delta: Float) {
+    interpolationPrimed = true
     previousCameraX = cameraX
     previousCameraY = cameraY
     elapsed += delta
