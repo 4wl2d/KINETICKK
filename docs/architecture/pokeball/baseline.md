@@ -334,6 +334,34 @@ none, offers Amplify alone. The no-POI runs own the original
 twelve weapons, so their recalibration offers match the earlier ones; the seeded
 trace and the probe results are unchanged.
 
+The Rebirth rework replaces advancing with tier selection. The Rebirth rank is one
+above the highest cleared tier (at most 10), and a player may select any tier from 0
+up to that rank, so `highestCleared` may exceed `level`: Profile construction, the
+codec and gameplay start validation enforce one invariant (`highestCleared` in
+`-1..10`, `level` in `0..rank`), and a run's clear is checked against the rank rather
+than the live selection (`ClearedLevelAboveRank`). `ProfileRebirth.selectRebirthTier`
+replaces `advanceRebirth` (`RebirthTierLocked` above the rank; reselecting the current
+tier is accepted and confirms it); Session sends `SelectRebirthTier(tier)` and keeps the
+two-press confirmation only for a tier above the highest clear. Unlock gates (items,
+Relics, point of interest items, Heirloom cards and the build summary, plus weapon,
+character and Matrix purchases) read the rank, while tier scaling, Reborn odds, the
+Warden cap, the opening and the roster read the selected tier, so dropping to tier 0
+keeps every rank unlock. Tiers follow new formulas (enemy integrity
+`1 + 0.32t + 0.035t²`, incoming damage `1 + 0.14t + 0.008t²`, speed `1 + 0.035t`, spawn
+rate `1 + 0.09t`, cap `1 + 0.1t`, Elite rate `1 + 0.07t`, threat `12t` s, Matter
+`1 + 0.2t`, power `1 + 0.03t`, no integrity bonus, `t / 4` rerolls, `5 + t` openers) and
+short names instead of directives. Mutators added here: Volatile Remains (ordinary
+enemies burst 0.35 s after death, 6 damage in r70, escaped at 400 u/s or in a Dash;
+at most 48 pending), Entropy Tide (healing −40 %, shield regeneration −30 %),
+Armored Vanguard (one ordinary spawn in five plated, weapon damage −40 % until an
+impact cracks it), Blackout (Data the magnet has not caught fades after 10 s) and
+Singularity (a fourth, enraged Architect phase at quarter gates and a Herald escort).
+A tier-10 clear records the character as Ascendant (optional sorted
+`ascendedCharacterIds`, written only when non-empty). The Rebirth screen is a tier
+ladder; Victory names the rank it earns, Home shows the rank badge and the HUD the
+active mutator sigils. Four desktop gates play the no-POI bot through tiers 0, 3, 6
+and 10 and record their measured outcomes.
+
 The compact exit workflow removes the old causal-depth assertion that failed
 when a busy Profile refused progress before acceptance. An injected
 persistence callback reproduced that failure on the original source snapshot;

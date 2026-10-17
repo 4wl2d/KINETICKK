@@ -137,7 +137,8 @@ remain independently enforced.
 | Android synthesis samples / PCM bytes per tone | 22050 / 44100 | validated one-second maximum PCM16 buffer shape |
 | items / weapons / Matrix nodes / Relics / named pairings / reactions | 192 / 24 / 40 / 24 / 32 / 21 (current catalog 173 / 24 / 32 / 22 / 20 / 21) | Content bootstrap validation, including key-consistent pairings, every weapon key carried by two Relics (one not Sovereign), declared elements, Break floors and Matrix prerequisites within their branch, each node one row below its deepest prerequisite; reactions are exactly one per pair of the 7 status elements |
 | Matrix node ranks / rows / effects per node | 5 / 8 / 4 | Content definition construction; every node lists one price per rank |
-| Rebirth level | `0..10` | Content typed policy plus Profile/Gameplay validation |
+| Rebirth level / highest cleared / Ascendant characters | selected tier `0..rank` with rank = highest cleared + 1 (at most 10) / `-1..10` / twelve stable character IDs, only once tier 10 is cleared and only victorious characters | Content typed policy plus one invariant shared by Profile construction, Resource validation and Gameplay start validation; a run's clear is validated against the rank |
+| Rebirth Volatile Remains bursts | 48 pending | Gameplay drops further bursts while 48 wait; each detonates 0.35 s after its death |
 | equipped Relic slots / rank | 4 / `1..3` (generic Meld reaches 2) | captured Content Relic policy plus Gameplay retention/saturation |
 | Profile retained Matrix node ranks / each rank | one slot per stable MatrixNodeId (at most 40) / `0..5` on the wire, clamped to the captured `maxRanks` on load with the excess refunded | Profile bootstrap compatibility plus policy-free Resource schema validation; prerequisites and Rebirth gates apply only at purchase |
 | Profile character achievement totals (including total kills, ricochets and Data pickups) / distinct winners | non-negative saturating `Long` / twelve stable character IDs | Profile validates deltas, persists cumulative progress and owns unlock evaluation |
@@ -266,7 +267,9 @@ payload holding both fields is inconsistent. The cumulative `totalKills`,
 `ricochets` and `dataPickups` achievement counters are written only when
 non-zero. Discovered reactions, discovered
 pairings and heirloom Relics are optional sorted stable-ID lists (heirlooms keep
-slot order) written only when non-empty. Unknown stable IDs in a current-epoch
+slot order) written only when non-empty. Rebirth progress carries an optional
+sorted `ascendedCharacterIds` list, written only when non-empty, that requires the
+final tier cleared and an Architect victory with each listed character. Unknown stable IDs in a current-epoch
 payload still fail closed.
 
 The current payload is the canonical encoding of `ProfileSnapshot(revision,
