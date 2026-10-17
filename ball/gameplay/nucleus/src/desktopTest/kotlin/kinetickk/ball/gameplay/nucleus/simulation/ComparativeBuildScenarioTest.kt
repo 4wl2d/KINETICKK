@@ -131,12 +131,13 @@ class ComparativeBuildScenarioTest {
                 results.filter { it.profile == profile && it.shape == shape && it.build == build }
                     .all { it.percent >= 99.9f && it.integrity > 0f }
             }
-            // 0.4.0 hostile damage grows with the run (1 + 0.5p), so the Architect's contact hits for 1.5x at
-            // the boss. The fixture keeps the Ring hugging the Architect at 145 to hold it inside its ring,
-            // and the larger hits break through the shared shield stacks; the Ring keeps one boss-proof
-            // direction until its Halo rework re-measures it. Every other form keeps three.
-            val required = if (shape == CoreShape.RING) 1 else 3
-            assertTrue(viable >= required, "$profile/$shape has $viable viable combat directions; need at least $required")
+            val trackedGap = TRACKED_COVERAGE_GAPS[profile to shape]
+            if (trackedGap == null) {
+                assertTrue(viable >= 3, "$profile/$shape has $viable viable combat directions; need at least three")
+            } else {
+                assertTrue(viable >= trackedGap, "$profile/$shape fell below its tracked $trackedGap viable directions: $viable")
+                assertTrue(viable < 3, "$profile/$shape is viable in $viable directions again; remove its TRACKED_COVERAGE_GAPS entry")
+            }
         }
         // Repeated equal inputs must yield the same measured combat result.
         assertEquals(runEncounter(CoreShape.ORB, BuildDirection.KINETIC, ProfileCondition.FRESH, Encounter.CROWD),
@@ -144,6 +145,19 @@ class ComparativeBuildScenarioTest {
         assertEquals(CoreShape.entries.size * BuildDirection.entries.size * ProfileCondition.entries.size * Encounter.entries.size, results.size)
     }
 }
+
+/**
+ * Known shortfalls below the three-direction bar, each pinned at its measured floor. Every entry fails both
+ * when the form regresses further and once it reaches three again, so it is removed rather than kept.
+ *
+ * TODO(B3, Ring Halo rework): 0.4.0 hostile damage grows with the run (x1.5 at the boss), so the Architect's
+ * contact breaks the shared shield stacks while the fixture holds the Ring at 145 inside its annulus. The
+ * Halo rework must restore three directions and delete both entries.
+ */
+private val TRACKED_COVERAGE_GAPS: Map<Pair<ProfileCondition, CoreShape>, Int> = mapOf(
+    (ProfileCondition.LAB to CoreShape.RING) to 2,
+    (ProfileCondition.REBIRTH to CoreShape.RING) to 1,
+)
 
 private enum class ProfileCondition(val labRank: Int, val rebirth: Int) { FRESH(0, 0), LAB(6, 0), REBIRTH(6, 3) }
 /** Each direction commits its relics and twelve elemental or archetype items; no named relic pairing. */

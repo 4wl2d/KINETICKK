@@ -132,13 +132,17 @@ strike, blast and mine now deals damage through the hostile-damage helper, so
 enemy damage grows with the run; strikes, lances, blasts and mines hurt at any
 Core speed. Each run takes its seed from the application's seed source (the
 default source keeps the fixed seed). The seeded baseline trace keeps its Core
-path and only its opening Drifters move. To keep tier 0 at the previous
-difficulty the director banks 0.95 of the tempo rate and keeps spawns clear of
-offered anomalies: over 40 seeds the no-POI bot wins 25 times (the previous
-build: 24), and the reference seed and the fixed probe win. The comparative
-fixture pins the Elite aspect it was measured against; the Ring keeps one
-boss-proof build direction while the Architect's grown contact damage breaks
-its shields, until the Ring's rework re-measures it.
+path and only its opening Drifters move. Multi-member events hold the Warden
+cap for every member, only Swarms bring Swarmlings, a Herald's repeat escorts
+fill only free ordinary room, and the Architect and Herald ignore stun. To keep
+tier 0 at the previous difficulty the director banks one enemy per tempo
+interval at phase rate 1 and keeps spawns clear of offered anomalies: over 40
+seeds the no-POI bot wins 25 times (the previous build: 24), and the reference
+seed and the fixed probe win. The comparative fixture pins the Elite aspect it
+was measured against. With Lab upgrades the Ring has two boss-proof build
+directions and at Rebirth one, because the Architect's grown contact damage
+breaks its shields; the comparative test tracks both gaps at their measured
+floors until the Ring's rework restores three.
 
 The compact exit workflow removes the old causal-depth assertion that failed
 when a busy Profile refused progress before acceptance. An injected
