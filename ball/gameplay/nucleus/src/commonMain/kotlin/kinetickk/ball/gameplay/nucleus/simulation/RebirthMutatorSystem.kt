@@ -130,10 +130,11 @@ internal fun MutableGameState.architectFinalPhase(): Int =
 internal fun MutableGameState.architectEnraged(enemy: Enemy): Boolean =
     enemy.isBoss && enemy.phase > ARCHITECT_FINAL_PHASE
 
-/** R10: the Singularity Architect arrives with a Herald escort. */
+/** R10: the Singularity Architect arrives with a Herald escort, the run's third and last Herald. */
 internal fun MutableGameState.spawnSingularityEscort() {
     if (!rebirthProfile.has(RebirthMutator.SINGULARITY)) return
     if (content.enemy(EnemyType.HERALD).minimumRebirth > rebirthLevel) return
+    heraldsSpawned++
     if (enemies.size >= content.rebirth.maxActiveEnemies) evictOldestOrdinaryEnemy()
     spawnScheduled(EnemyType.HERALD)
 }

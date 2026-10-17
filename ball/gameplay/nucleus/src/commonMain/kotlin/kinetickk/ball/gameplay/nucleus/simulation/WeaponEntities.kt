@@ -210,7 +210,9 @@ private fun MutableGameState.collapseLens(lens: WeaponEntity) {
     for (index in enemies.indices) {
         val enemy = enemies[index]
         if (enemy.alive && distanceSquared(lens.x, lens.y, enemy.x, enemy.y) <= square(radius + enemy.radius)) {
-            val landed = dealWeaponDamage(enemy, LENS_COLLAPSE_DAMAGE * lens.damage, canCrit = true, procKey = lens.procKey).amount > 0f
+            val landed = hitFrom(enemy, lens.x, lens.y) {
+                dealWeaponDamage(enemy, LENS_COLLAPSE_DAMAGE * lens.damage, canCrit = true, procKey = lens.procKey)
+            }.amount > 0f
             if (landed) weaponElementTick(enemy, StatusElement.GRAVITIC, LENS_MASS_INTERVAL)
         }
     }
@@ -279,7 +281,12 @@ private fun MutableGameState.advanceRift(rift: WeaponEntity, delta: Float) {
 
 private fun MutableGameState.advanceShard(shard: WeaponEntity, delta: Float) {
     shard.life -= delta
-    val target = enemyById(shard.targetId)
+    var target = enemyById(shard.targetId)
+    if (target != null && target.alive && isShifting(target)) {
+        // A phased target takes nothing: the shard turns to the nearest enemy it can hit, as a missile does.
+        target = nearestEnemy(shard.x, shard.y, AEGIS_RANGE)
+        shard.targetId = target?.id ?: -1
+    }
     if (target != null && target.alive) steer(shard, target.x, target.y, AEGIS_SPEED, AEGIS_TURN_RATE, delta)
     val nextX = shard.x + shard.vx * delta
     val nextY = shard.y + shard.vy * delta
@@ -364,6 +371,21 @@ private fun MutableGameState.sweptContact(entity: WeaponEntity, enemy: Enemy): B
         entity.radius + enemy.radius,
     )
 
+/**
+ * A Reflector's front shield meets an entity's hit by where the hit comes from ([fromX], [fromY]), as it meets
+ * a shot, not by where the Core is; its Core-facing shield holds again after the hit.
+ */
+private inline fun <T> hitFrom(enemy: Enemy, fromX: Float, fromY: Float, hit: () -> T): T {
+    if (enemy.type != EnemyType.REFLECTOR) return hit()
+    val shieldBefore = enemy.guarded
+    enemy.guarded = reflectorShieldFaces(enemy, fromX, fromY)
+    try {
+        return hit()
+    } finally {
+        enemy.guarded = shieldBefore
+    }
+}
+
 private fun MutableGameState.discHits(disc: WeaponEntity) {
     // Orb signature: a disc thrown or flying while Orbit is charged hits harder; the third form's return pass too.
     val scale = (if (signatureActive() && orbitCharged) GYRE_ORBIT_BONUS else 1f) *
@@ -372,7 +394,7 @@ private fun MutableGameState.discHits(disc: WeaponEntity) {
         val enemy = enemies[index]
         if (!enemy.alive || isShifting(enemy) || disc.hasHit(enemy.id) || !sweptContact(disc, enemy)) continue
         disc.recordHit(enemy.id)
-        dealWeaponDamage(enemy, disc.damage * scale, canCrit = true, procKey = disc.procKey)
+        hitFrom(enemy, disc.previousX, disc.previousY) { dealWeaponDamage(enemy, disc.damage * scale, canCrit = true, procKey = disc.procKey) }
         burst(enemy.x, enemy.y, 4, 0)
     }
 }
@@ -410,7 +432,7 @@ private fun MutableGameState.shardHits(shard: WeaponEntity) {
         val enemy = enemies[index]
         if (!enemy.alive || isShifting(enemy) || shard.hasHit(enemy.id) || !sweptContact(shard, enemy)) continue
         shard.recordHit(enemy.id)
-        dealWeaponDamage(enemy, shard.damage, canCrit = true, procKey = shard.procKey)
+        hitFrom(enemy, shard.previousX, shard.previousY) { dealWeaponDamage(enemy, shard.damage, canCrit = true, procKey = shard.procKey) }
         burst(enemy.x, enemy.y, 4, 0)
         if (shard.phase > 0) {
             // Second form: the shard pierces on to the next nearest enemy, at half strength.
@@ -430,7 +452,9 @@ private fun MutableGameState.missileHits(missile: WeaponEntity) {
     for (index in enemies.indices) {
         val enemy = enemies[index]
         if (!enemy.alive || isShifting(enemy) || !sweptContact(missile, enemy)) continue
-        val landed = dealWeaponDamage(enemy, missile.damage, canCrit = true, procKey = missile.procKey).amount > 0f
+        val landed = hitFrom(enemy, missile.previousX, missile.previousY) {
+            dealWeaponDamage(enemy, missile.damage, canCrit = true, procKey = missile.procKey)
+        }.amount > 0f
         if (landed) {
             val runtime = weaponRuntime
             runtime.elementHits = (runtime.elementHits + 1) % HUNTER_DECAY_EVERY

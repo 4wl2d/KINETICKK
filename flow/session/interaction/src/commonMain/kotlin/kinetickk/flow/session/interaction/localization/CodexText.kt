@@ -183,12 +183,12 @@ internal enum class CodexText(
     WEAPON_SIGNATURE("Signature", "Фирменное"),
     WEAPON_SIGNATURE_OF("Signature of {0}", "Фирменное оружие формы «{0}»"),
     WEAPON_SIGNATURE_ACTIVE(
-        "Active with your character: +20% weapon power, and runs start at weapon level 2.",
-        "Действует с вашим персонажем: +20% мощности оружия, забег начинается с уровня оружия 2.",
+        "Active with your character: +20% weapon power, and runs start one weapon level higher.",
+        "Действует с вашим персонажем: +20% мощности оружия, забег начинается на уровень оружия выше.",
     ),
     WEAPON_SIGNATURE_INACTIVE(
-        "With {0}: +20% weapon power, and runs start at weapon level 2.",
-        "С формой «{0}»: +20% мощности оружия, забег начинается с уровня оружия 2.",
+        "With {0}: +20% weapon power, and runs start one weapon level higher.",
+        "С формой «{0}»: +20% мощности оружия, забег начинается на уровень оружия выше.",
     ),
     WEAPON_TWIST("Signature twist", "Фирменный эффект"),
     WEAPON_FORMS("Mastery forms", "Формы мастерства"),

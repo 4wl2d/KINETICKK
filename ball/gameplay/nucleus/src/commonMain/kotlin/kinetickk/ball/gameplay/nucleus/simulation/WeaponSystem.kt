@@ -639,8 +639,11 @@ private fun MutableGameState.updateTethers(delta: Float, agonyRank: Int) {
     val runtime = weaponRuntime
     val range = TETHER_RANGE + if (hasMasteryForm(1)) 80f else 0f
     val ramp = TETHER_RAMP_MAX + if (hasMasteryForm(3)) TETHER_RAMP_FORM else 0f
-    // The primary tether holds its target while it lives in range; a kill passes most of the ramp on.
-    val held = enemyById(runtime.tetherTargetId)?.takeIf { it.alive && distanceSquared(coreX, coreY, it.x, it.y) <= square(range + it.radius) }
+    // The primary tether holds its target while it lives in range and can be hit (a phased Phantom or shifting
+    // Architect takes nothing); a kill passes most of the ramp on.
+    val held = enemyById(runtime.tetherTargetId)?.takeIf {
+        it.alive && !isShifting(it) && distanceSquared(coreX, coreY, it.x, it.y) <= square(range + it.radius)
+    }
     val rampRate = (ramp - 1f) / TETHER_RAMP_SECONDS * delta
     if (held == null) {
         // A new target (after a kill, or when the old one left the range) keeps 60 % of the ramp; idle, it fades.
@@ -652,7 +655,7 @@ private fun MutableGameState.updateTethers(delta: Float, agonyRank: Int) {
     }
     val second = if (hasMasteryForm(2) || agonyRank > 0) {
         enemyById(runtime.secondTetherId)?.takeIf {
-            it.alive && it.id != runtime.tetherTargetId && distanceSquared(coreX, coreY, it.x, it.y) <= square(range + it.radius)
+            it.alive && !isShifting(it) && it.id != runtime.tetherTargetId && distanceSquared(coreX, coreY, it.x, it.y) <= square(range + it.radius)
         } ?: nearestOtherEnemy(coreX, coreY, runtime.tetherTargetId, range)
     } else null
     if (second == null || second.id != runtime.secondTetherId) runtime.secondTetherRamp = 1f
@@ -759,8 +762,10 @@ internal fun MutableGameState.onWeaponImpact(impactSpeed: Float, impactDamage: F
     runtime.readyAt = elapsed + CONCUSSION_COOLDOWN
     val agonyRank = agonyPower()
     val radius = concussionRadius(impactSpeed, agonyRank)
-    // Impacts are no cooldown: attack speed raises the shockwave's damage instead.
-    val damage = (CONCUSSION_DAMAGE + CONCUSSION_IMPACT_SHARE * impactDamage / impactRunGrowth()) * effectiveWeaponPower() *
+    // Impacts are no cooldown: attack speed raises the shockwave's damage instead. The impact's run growth and
+    // Rebirth power come out of its share, since the weapon power brings both back.
+    val impactBase = impactDamage / (impactRunGrowth() * rebirthProfile.playerPowerMultiplier)
+    val damage = (CONCUSSION_DAMAGE + CONCUSSION_IMPACT_SHARE * impactBase) * effectiveWeaponPower() *
         (1f + 0.1f * agonyRank) * continuousWeaponRate()
     concussionWave(coreX, coreY, radius, damage, beginWeaponActivation())
 }

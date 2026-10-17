@@ -226,11 +226,13 @@ class RebirthMutatorTest {
         arrival.elapsed = canonicalGameplayContent.tempo.bossAtSeconds
         arrival.simulateStep(MutableGameState.FIXED_STEP)
         assertTrue(arrival.enemies.any { it.type == EnemyType.ARCHITECT })
-        assertTrue(arrival.enemies.any { it.type == EnemyType.HERALD })
+        assertEquals(1, arrival.enemies.count { it.type == EnemyType.HERALD })
+        assertEquals(3, arrival.heraldsSpawned, "The escort is the run's third and last Herald")
         val ordinary = buildTestState(rebirth = 9).apply { heraldsSpawned = 2 }
         ordinary.elapsed = canonicalGameplayContent.tempo.bossAtSeconds
         ordinary.simulateStep(MutableGameState.FIXED_STEP)
         assertTrue(ordinary.enemies.none { it.type == EnemyType.HERALD })
+        assertEquals(2, ordinary.heraldsSpawned)
     }
 
     private fun rankedState(level: Int, highestCleared: Int): MutableGameState = MutableGameState(
