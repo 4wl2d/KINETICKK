@@ -98,9 +98,93 @@ internal fun CodexDetailBody(
         is CodexDetail.Affinity -> CodexTierDetail(entry.description.substringBefore("\n\n"), detail.tiers, detail.thresholds, detail.affinity,
             LocalKkRolePalette.current.of(detail.element), detail.element.glyph(), ui, panel, dominant = detail.dominant)
         is CodexDetail.Key -> CodexKeyDetail(detail, catalog, ui)
+        is CodexDetail.Weapon -> CodexWeaponDetail(detail, ui, panel)
         null -> CodexPlainDetail(entry, ui, panel)
     }
 }
+
+/**
+ * A weapon's sheet: its element, tags and Relic key as chips (the run's tags lit), its description,
+ * the three mastery forms by level, the signature character and twist (lit when active), the Relics
+ * that carry its key and its tag resonance.
+ */
+@Composable
+private fun CodexWeaponDetail(detail: CodexDetail.Weapon, ui: Float, panel: Color) {
+    val language = LocalAppLanguage.current
+    val roles = LocalKkRolePalette.current
+    val typography = codexMeasurer().typography
+    val weapon = detail.weapon
+    val body = typography.bodyStyle(15f * ui, lineHeightEm = 1.35f, color = Kk.Bone)
+    FlowRow(Modifier.testTag("codex-weapon-chips"), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        val element = weapon.element
+        if (element != null) {
+            CodexGlyphChip(element.glyph(), element.displayLabel.localizedContent(language), ui, glyphColor = roles.of(element), rim = roles.of(element))
+        } else {
+            CodexGlyphChip(null, codexWeaponElementLabel(weapon, language), ui, rim = roles.kinetic)
+        }
+        weapon.tags.forEach { tag ->
+            CodexGlyphChip(tag.glyph(), tag.displayLabel.localizedContent(language), ui,
+                underline = if ((detail.tagPoints ?: 0) > 0) roles.you else Color.Unspecified)
+        }
+        CodexGlyphChip(null, weapon.key.displayLabel.localizedContent(language), ui, rim = Kk.Bone2)
+        if (detail.rebirthLocked) {
+            CodexGlyphChip(null, language.text(CodexText.REBORN_GATE, weapon.minimumRebirth), ui, rim = Kk.Gold, foreground = Kk.Gold)
+        }
+    }
+    BasicText(weapon.description.localizedContent(language), style = typography.bodyStyle(15f * ui, lineHeightEm = 1.35f, color = Kk.Mute))
+    Column(Modifier.fillMaxWidth().testTag("codex-weapon-forms").background(panel).padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        CodexChipLabel(language.text(CodexText.WEAPON_FORMS), ui)
+        weapon.masteryForms.forEachIndexed { index, form ->
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                val level = detail.formLevels.getOrNull(index)
+                BasicText(language.text(SessionText.LEVEL_SHORT, level ?: 0).uppercase(),
+                    style = typography.monoStyle(11f * ui, color = if (index == weapon.masteryForms.lastIndex) Kk.RLegend else roles.you),
+                    softWrap = false, maxLines = 1)
+                BasicText(form.localizedContent(language), Modifier.weight(1f), style = body)
+            }
+        }
+    }
+    Column(Modifier.fillMaxWidth().testTag("codex-weapon-signature"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Canvas(Modifier.size((18f * ui).dp)) {
+                drawCodexForm(weapon.signature, center, size.minDimension * 0.5f, if (detail.signatureActive) roles.you else Kk.Bone2)
+            }
+            BasicText(language.text(CodexText.WEAPON_SIGNATURE_OF, detail.signature).uppercase(), Modifier.weight(1f),
+                style = typography.labelStyle(13f * ui, trackingEm = 0.08f, color = if (detail.signatureActive) roles.you else Kk.Bone))
+        }
+        BasicText(
+            if (detail.signatureActive) language.text(CodexText.WEAPON_SIGNATURE_ACTIVE)
+            else language.text(CodexText.WEAPON_SIGNATURE_INACTIVE, detail.signature),
+            style = typography.bodyStyle(14f * ui, lineHeightEm = 1.35f, color = if (detail.signatureActive) roles.you else Kk.Mute),
+        )
+        CodexChipLabel(language.text(CodexText.WEAPON_TWIST), ui)
+        BasicText(weapon.signatureText.localizedContent(language), style = body)
+    }
+    val key = weapon.key.displayLabel.localizedContent(language)
+    Column(Modifier.fillMaxWidth().testTag("codex-weapon-harmony"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        val lit = detail.bound.isNotEmpty() || detail.heirlooms.isNotEmpty()
+        CodexChipLabel(language.text(CodexText.HARMONY), ui, color = if (lit) roles.you else Kk.Mute)
+        BasicText(when {
+            detail.bound.isNotEmpty() -> language.text(CodexText.WEAPON_HARMONY_BOUND, key, detail.bound.joinToString(", ") { it.name.localizedContent(language) })
+            detail.heirlooms.isNotEmpty() -> language.text(CodexText.WEAPON_HARMONY_HEIRLOOM, key,
+                detail.heirlooms.joinToString(", ") { it.name.localizedContent(language) })
+            else -> language.text(CodexText.WEAPON_HARMONY_NONE, key)
+        }, style = body)
+    }
+    Column(Modifier.fillMaxWidth().testTag("codex-weapon-resonance"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        CodexChipLabel(language.text(CodexText.SECTION_RESONANCE), ui)
+        val tags = weapon.tags.map { it.displayLabel.localizedContent(language) }
+        BasicText(language.text(CodexText.WEAPON_RESONANCE, tags.getOrElse(0) { "" }, tags.getOrElse(1) { "" }), style = body)
+        detail.tagPoints?.let { points ->
+            BasicText(language.text(CodexText.WEAPON_RESONANCE_NOW, points, codexResonancePercent(points)),
+                style = typography.monoStyle(11f * ui, color = if (points > 0) roles.you else Kk.Mute))
+        }
+    }
+}
+
+/** Weapon power (percent) the run's [points] in a weapon's two tags add: 5 % each, at most 50 %. */
+internal fun codexResonancePercent(points: Int): Int = (points.coerceAtLeast(0) * 5).coerceAtMost(50)
 
 /** Weapons, forms, empty slots, locked and unknown entries: their paragraphs, or a hatched "?". */
 @Composable

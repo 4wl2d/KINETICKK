@@ -180,7 +180,7 @@ internal fun DrawScope.drawCodexRelicTile(icon: CodexIcon.Relic, policy: RelicPo
 private const val CODEX_FORM_SCALE = 0.46f
 
 /** A character's silhouette from [KkFormGeometry]: filled, or stroked for the line figures. */
-private fun DrawScope.drawCodexForm(shape: CoreShape, center: Offset, radius: Float, color: Color) {
+internal fun DrawScope.drawCodexForm(shape: CoreShape, center: Offset, radius: Float, color: Color) {
     val index = shape.formIndex()
     val path = KkFormPaths.of(index, radius)
     translate(center.x, center.y) {
@@ -203,9 +203,14 @@ internal fun DrawScope.drawCodexCell(entry: CodexEntry, catalog: UiCatalogSnapsh
         is CodexIcon.Item -> drawCodexItemTile(icon, roles, band || hovered, center, radius, markBand)
         is CodexIcon.Relic -> drawCodexRelicTile(icon, catalog.relicPolicy, roles, band || hovered, center, radius)
         is CodexIcon.Weapon -> {
+            // An owned weapon in its element's hue (Kinetic in the preset's volt); an unowned one muted, hatched and padlocked.
             drawRect(if (hovered) Kk.Ink3 else Kk.Ink2)
+            if (!entry.discovered) drawKkHatch(rect)
             drawRect(if (entry.active) roles.you else Kk.Line2, style = kkStroke(if (entry.active) 2.dp.toPx() else 1.dp.toPx()))
-            drawKkIcon(codexWeaponIcon(icon.id), center, radius * 1.1f, if (entry.discovered) Kk.Bone else Kk.Mute)
+            val element = (entry.detail as? CodexDetail.Weapon)?.weapon?.element
+            val hue = element?.let(roles::of) ?: roles.kinetic
+            drawKkIcon(codexWeaponIcon(icon.id), center, radius * 1.1f, if (entry.discovered) hue else Kk.Mute)
+            if (!entry.discovered) drawKkIcon(KkIcon.SYSTEM_LOCKED, Offset(size.width - 11.dp.toPx(), 11.dp.toPx()), 11.dp.toPx(), Kk.Mute)
         }
         is CodexIcon.Shape -> {
             drawRect(if (hovered) Kk.Ink3 else Kk.Ink2)

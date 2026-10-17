@@ -23,6 +23,7 @@ import kinetickk.ball.content.api.RuleLine
 import kinetickk.ball.content.api.RuleTextContext
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.UiCatalogSnapshot
+import kinetickk.ball.content.api.WeaponCadence
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.lifetimeMatterOfferLevel
@@ -129,6 +130,22 @@ internal sealed interface CodexDetail {
         val dominant: Boolean,
     ) : CodexDetail
     data class Key(val key: RelicKey, val opposed: List<RelicKey>, val relics: List<RelicDefinition>, val hidden: Int) : CodexDetail
+
+    /**
+     * A weapon's typed sheet: its mastery forms at [formLevels], its [signature] character (active
+     * with the run's character, or the next run's outside a run) and twist, the Relics that carry
+     * its key ([bound] this run, else the [heirlooms] candidates) and the run's points in its tags.
+     */
+    data class Weapon(
+        val weapon: WeaponDefinition,
+        val signature: String,
+        val signatureActive: Boolean,
+        val formLevels: List<Int>,
+        val bound: List<RelicDefinition>,
+        val heirlooms: List<RelicDefinition>,
+        val tagPoints: Int?,
+        val rebirthLocked: Boolean,
+    ) : CodexDetail
 }
 
 /** A reaction a residue can feed next; [name] is null until that reaction is discovered. */
@@ -260,32 +277,77 @@ internal fun codexLockedEntry(key: String, rebirth: Int, language: AppLanguage):
     discovered = false, help = language.text(CodexText.REBIRTH_GATE_HELP),
 )
 
-internal fun codexWeaponEntry(weapon: WeaponDefinition, model: CodexRenderModel, progress: HomeProgressProjection, language: AppLanguage = AppLanguage.English, allowCurrentRun: Boolean = true): CodexEntry {
+/**
+ * A weapon, always named with its typed facts (family, element, Relic key, scaling input, cadence,
+ * signature character) and, while not owned, its unlock cost and Rebirth rank; an unowned weapon
+ * keeps the locked look. The detail reads its live synergy from the run (its character, bound
+ * Relics and tag points) or, outside a run, from the Profile (the next run's character and the
+ * heirloom candidates).
+ */
+internal fun codexWeaponEntry(
+    weapon: WeaponDefinition,
+    model: CodexRenderModel,
+    progress: HomeProgressProjection,
+    catalog: UiCatalogSnapshot,
+    language: AppLanguage = AppLanguage.English,
+    allowCurrentRun: Boolean = true,
+): CodexEntry {
     val build = model.runStacks.build
     val equipped = build?.weapon == weapon.id
     val unlocked = weapon.id in progress.loadout.unlockedWeapons
-    val costFact = CodexFact(language.text(SessionText.UNLOCK_COST), weapon.permanentUnlockCost.toString())
-    if (!unlocked && !(allowCurrentRun && equipped)) return unknownEntry("weapon/${weapon.id}", language).copy(
-        facts = listOf(codexStatus(language, language.text(SessionText.LOCKED)), costFact),
-        help = language.text(SessionText.WEAPON_LOCKED_HELP),
-    )
+    val owned = unlocked || (allowCurrentRun && equipped)
+    val rebirthLocked = !unlocked && weapon.minimumRebirth > progress.rebirthProgress.rank
+    val signature = catalog.coreShapes.firstOrNull { it.id == weapon.signature }?.displayName?.localizedContent(language)
+        ?: weapon.signature.name
     val facts = buildList {
         add(codexStatus(language, language.text(when {
             !unlocked -> SessionText.LOCKED
             weapon.id == progress.loadout.selectedWeapon -> SessionText.START_WEAPON_SELECTED
             else -> SessionText.START_WEAPON_UNLOCKED
         })))
-        if (!unlocked) add(costFact)
-        if (equipped) {
+        if (!unlocked) add(CodexFact(language.text(SessionText.UNLOCK_COST), weapon.permanentUnlockCost.toString()))
+        if (!unlocked && weapon.minimumRebirth > 0) {
+            add(CodexFact(language.text(CodexText.UNLOCKS_AT), language.text(CodexText.REBORN_GATE, weapon.minimumRebirth)))
+        }
+        if (equipped && build != null) {
             add(CodexFact(language.text(SessionText.WEAPON_LEVEL), language.text(SessionText.LEVEL_SHORT, build.weaponLevel)))
             add(CodexFact(language.text(SessionText.MASTERY), build.mastery.localizedContent(language)))
         }
+        add(CodexFact(language.text(CodexText.WEAPON_FAMILY), weapon.family.displayLabel.localizedContent(language)))
+        add(CodexFact(language.text(CodexText.WEAPON_ELEMENT), codexWeaponElementLabel(weapon, language)))
+        add(CodexFact(language.text(CodexText.WEAPON_KEY), weapon.key.displayLabel.localizedContent(language)))
+        add(CodexFact(language.text(CodexText.WEAPON_SCALING), weapon.scaling.displayLabel.localizedContent(language)))
+        add(CodexFact(language.text(CodexText.WEAPON_CADENCE), codexCadenceLabel(weapon.cadence, language)))
+        add(CodexFact(language.text(CodexText.WEAPON_SIGNATURE), signature))
     }
+    // The run's character and bound Relics while one runs; the next run's character and the heirloom candidates otherwise.
+    val character = build?.character ?: progress.loadout.coreShape
+    val bound = build?.relics.orEmpty().mapNotNull { slot -> catalog.relics.firstOrNull { it.id == slot.id } }
+        .filter { weapon.key in it.keys }
+    val heirlooms = progress.collection.heirloomRelicIds.distinct().mapNotNull { id -> catalog.relics.firstOrNull { it.id == id } }
+        .filter { weapon.key in it.keys }
+    val tagPoints = build?.let { summary -> summary.tags.filter { it.tag in weapon.tags }.sumOf { it.points } }
+    val formLevels = catalog.weaponMasteries.map { it.minimumLevel }.filter { it > 1 }.sorted().take(weapon.masteryForms.size)
+        .takeIf { it.size == weapon.masteryForms.size } ?: listOf(3, 6, 10).take(weapon.masteryForms.size)
     return CodexEntry("weapon/${weapon.id}", weapon.name.localizedContent(language), weapon.description.localizedContent(language),
-        language.text(SessionText.WEAPON), if (equipped) language.text(SessionText.LEVEL_SHORT, build.weaponLevel) else CODEX_NONE, facts,
-        CodexIcon.Weapon(weapon.id), Kk.Bone, unlocked || equipped,
-        help = language.text(SessionText.WEAPON_HELP), active = equipped)
+        language.text(SessionText.WEAPON), if (equipped && build != null) language.text(SessionText.LEVEL_SHORT, build.weaponLevel) else CODEX_NONE,
+        facts, CodexIcon.Weapon(weapon.id), Kk.Bone, owned,
+        help = language.text(if (owned) SessionText.WEAPON_HELP else SessionText.WEAPON_LOCKED_HELP), active = equipped,
+        detail = CodexDetail.Weapon(weapon, signature, character == weapon.signature, formLevels, bound, heirlooms, tagPoints, rebirthLocked))
 }
+
+/** A weapon's element as the Codex names it: its element, or Kinetic. */
+internal fun codexWeaponElementLabel(weapon: WeaponDefinition, language: AppLanguage): String =
+    (weapon.element?.displayLabel ?: CODEX_KINETIC).localizedContent(language)
+
+private const val CODEX_KINETIC = "Kinetic"
+
+/** Display label of a weapon cadence. */
+internal fun codexCadenceLabel(cadence: WeaponCadence, language: AppLanguage): String = language.text(when (cadence) {
+    WeaponCadence.CONTINUOUS -> CodexText.CADENCE_CONTINUOUS
+    WeaponCadence.CONTACT -> CodexText.CADENCE_CONTACT
+    WeaponCadence.DISCRETE -> CodexText.CADENCE_DISCRETE
+})
 
 internal fun codexRelicEntry(
     relic: RelicDefinition,
@@ -401,7 +463,9 @@ internal fun codexCatalogEntries(
     val showLocks = search.isBlank() && filter == CodexItemFilter.ALL
     return when (category) {
         0 -> codexItemRows(sort, search, filter, model, catalog, progress, language).entries
-        1 -> catalog.weapons.map { codexWeaponEntry(it, model, progress, language, allowCurrentRun = false) }.filter { search.isBlank() || it.discovered && it.title.contains(search, ignoreCase = true) }
+        // Weapons are always named (an unowned one keeps the locked look), so search reaches every one.
+        1 -> catalog.weapons.map { codexWeaponEntry(it, model, progress, catalog, language, allowCurrentRun = false) }
+            .filter { search.isBlank() || it.title.contains(search, ignoreCase = true) }
         2 -> catalog.relics.mapNotNull { relic ->
             when {
                 model.isRelicDiscovered(relic.id) -> codexRelicEntry(relic, model, catalog, language)
@@ -428,7 +492,7 @@ internal fun codexBuildEntries(model: CodexRenderModel, catalog: UiCatalogSnapsh
     val build = model.runStacks.build ?: return emptyList()
     return buildList {
         build.character?.let { add(codexShapeEntry(catalog.coreShape(it), model, progress, language)) }
-        build.weapon?.let { add(codexWeaponEntry(catalog.weapon(it), model, progress, language)) }
+        build.weapon?.let { add(codexWeaponEntry(catalog.weapon(it), model, progress, catalog, language)) }
         repeat(catalog.relicPolicy.maxSlots) { index ->
             val relic = build.relics.getOrNull(index)
             add(if (relic != null) codexRelicEntry(catalog.relic(relic.id), model, catalog, language) else CodexEntry(
