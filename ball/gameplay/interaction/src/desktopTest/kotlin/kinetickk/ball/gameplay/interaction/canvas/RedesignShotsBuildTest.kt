@@ -64,7 +64,7 @@ import kotlin.test.Test
  * crowded level of detail, the HUD relic row with gauges, the boss status rail and discovery toasts, the
  * pause build view and the report recap. With `KK_SHOTS=1` every surface draws at every size and in both
  * languages (plus Protan and the largest pause text size) and is written to `KK_SHOTS_OUT` (default
- * `build/redesign-shots/build`). Otherwise the run is a smoke: each surface draws once (1440 × 810, English,
+ * `build/redesign-shots/build`). Otherwise the run is a smoke: each surface draws once (1440 × 810, Russian,
  * Default palette, text size 125 %) and nothing is written, so a surface that fails to draw still fails.
  */
 @OptIn(ExperimentalTestApi::class)
@@ -73,6 +73,7 @@ class RedesignShotsBuildTest {
 
     /** The whole list with `KK_SHOTS=1`, else its first entry. */
     private fun <T> List<T>.matrix(): List<T> = if (fullShots) this else take(1)
+
     private val root = generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "settings.gradle.kts").isFile }
     private val output = File(System.getenv("KK_SHOTS_OUT") ?: File(root, "ball/gameplay/interaction/build/redesign-shots/build").path)
     private val sizes = listOf(1440 to 810, 844 to 390, 390 to 844)

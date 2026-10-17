@@ -74,7 +74,7 @@ import kotlin.test.Test
 /**
  * Local visual QA harness for the in-run feed (SPEC §12). With `KK_SHOTS=1` every state draws at every size, in both
  * languages and at the default and the largest text size into build/redesign-shots/feed. Otherwise the run is a
- * smoke: each state draws once (the first size, English, text size 125 %) and nothing is written, so a state that
+ * smoke: each state draws once (the first size, Russian, text size 125 %) and nothing is written, so a state that
  * fails to draw still fails.
  */
 class RedesignShotsFeedTest {
@@ -82,6 +82,7 @@ class RedesignShotsFeedTest {
 
     /** The whole list with `KK_SHOTS=1`, else its first entry. */
     private fun <T> List<T>.matrix(): List<T> = if (fullShots) this else take(1)
+
     private val root = generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "settings.gradle.kts").isFile }
     private val output = File(root, "ball/gameplay/interaction/build/redesign-shots/feed")
 

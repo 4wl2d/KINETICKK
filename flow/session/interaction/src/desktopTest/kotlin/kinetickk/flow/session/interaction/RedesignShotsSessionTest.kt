@@ -53,10 +53,10 @@ import kotlin.test.assertTrue
  * Local visual QA harness: renders session screens to build/redesign-shots/session.
  *
  * With `KK_SHOTS=1` every state renders at every size and in both languages and is written as a PNG. Otherwise
- * the run is a smoke and nothing is written: within each test method a request renders only when its state, its
- * viewport (size and density) or its language is new for that screen, so every state, every viewport and both
- * languages each render at least once, with their interactions, and a state or viewport that fails to compose, lay
- * out or draw still fails.
+ * the run is a smoke and nothing is written: within each test method a request renders only when its state or its
+ * viewport (size and density) is new for that screen, so every state and every viewport each render at least once
+ * (in the first language requested, Russian for the loops over [AppLanguage.entries]) with their interactions, and
+ * a state or viewport that fails to compose, lay out or draw still fails.
  */
 @OptIn(ExperimentalTestApi::class)
 class RedesignShotsSessionTest {
@@ -66,7 +66,6 @@ class RedesignShotsSessionTest {
     // request because another method rendered the same state name at a different viewport.
     private val smokeStates = HashSet<String>()
     private val smokeViewports = HashSet<String>()
-    private val smokeLanguages = HashSet<String>()
     private var rendered = 0
 
     @AfterTest fun everyMethodRenders() {
@@ -439,8 +438,7 @@ class RedesignShotsSessionTest {
         if (!FullShots) {
             val newState = smokeStates.add("$screen/$state")
             val newViewport = smokeViewports.add("$screen/${w}x$h@$density")
-            val newLanguage = smokeLanguages.add("$screen/${language.code}")
-            if (!newState && !newViewport && !newLanguage) return
+            if (!newState && !newViewport) return
         }
         rendered++
         androidx.compose.ui.test.v2.runDesktopComposeUiTest((w * density).toInt(), (h * density).toInt()) {

@@ -73,7 +73,7 @@ import kotlin.test.Test
 /**
  * Local visual QA harness for the in-run HUD (SPEC §12). With `KK_SHOTS=1` every state draws at every size, language,
  * text size and colour-vision palette into build/redesign-shots/hud. Otherwise the run is a smoke: each state draws
- * once (1440 × 810, English, text size 125 %, Default palette) and nothing is written, so a state that fails to draw
+ * once (1440 × 810, Russian, text size 125 %, Default palette) and nothing is written, so a state that fails to draw
  * still fails.
  */
 class RedesignShotsHudTest {
@@ -81,6 +81,7 @@ class RedesignShotsHudTest {
 
     /** The whole list with `KK_SHOTS=1`, else its first entry. */
     private fun <T> List<T>.matrix(): List<T> = if (fullShots) this else take(1)
+
     private val root = generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "settings.gradle.kts").isFile }
     private val output = File(root, "ball/gameplay/interaction/build/redesign-shots/hud")
 
