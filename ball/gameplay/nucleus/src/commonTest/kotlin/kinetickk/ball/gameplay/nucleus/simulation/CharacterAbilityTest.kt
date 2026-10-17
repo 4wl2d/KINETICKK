@@ -377,6 +377,15 @@ class CharacterAbilityTest {
         val pulledVelocity = pulled.vx
         game.steerEnemy(pulled, 78f, 0f, 2.1f, MutableGameState.FIXED_STEP)
         assertEquals(pulledVelocity, pulled.vx)
+        // A mini-boss feels the pull but is never thrown: it keeps steering.
+        val herald = game.addEnemyForTesting(game.coreX - 200f, game.coreY, type = EnemyType.HERALD)
+        game.step()
+        assertTrue(herald.vx > 0f, "attract pulls the mini-boss toward the Core too")
+        assertFalse(game.isThrownByPolarity(herald))
+        val heraldVelocity = herald.vx
+        game.steerEnemy(herald, -78f, 0f, 2.1f, MutableGameState.FIXED_STEP)
+        assertTrue(herald.vx < heraldVelocity, "the mini-boss still steers")
+        game.enemies.remove(herald)
         game.onCharacterTurn()
         assertEquals(Polarity.REPEL, game.polarity)
         game.onCharacterTurn()

@@ -11,8 +11,8 @@ internal enum class Polarity { ATTRACT, REPEL }
  *
  * A reduction fork copies the scalars (a few dozen fields) and forks the bounded buffers: the echo
  * ghost's path, the lattice nodes, the drones and the void scars are copy-on-write arrays allocated
- * once per run, shared with the committed state until the candidate first writes them, so no fixed
- * step allocates or copies them. Steps mutate the candidate's runtime in place.
+ * once per run, shared with the committed state until the candidate first writes them: a reduction
+ * copies a buffer at most once however many fixed steps it runs, and the steps write it in place.
  */
 internal class CharacterRuntime private constructor(
     /** Ring buffer of Core positions, one (x, y) pair per fixed step; the ghost replays it [GHOST_DELAY_STEPS] behind. */

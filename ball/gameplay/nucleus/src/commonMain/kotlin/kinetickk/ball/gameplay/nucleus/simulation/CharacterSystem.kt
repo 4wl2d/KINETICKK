@@ -225,7 +225,7 @@ internal fun MutableGameState.onCharacterImpact(enemy: Enemy, result: DamageResu
                 val throwSpeed = impactSpeed * REPEL_THROW_SHARE * knockback
                 enemy.vx += dx / distance * throwSpeed
                 enemy.vy += dy / distance * throwSpeed
-                enemy.characterMarkTime = THROW_SECONDS
+                if (!enemy.isBossClass) enemy.characterMarkTime = THROW_SECONDS
             }
         }
         CoreShape.PENTAGON -> {
@@ -458,9 +458,9 @@ internal fun MutableGameState.latticeNodeY(index: Int): Float = characterRuntime
 /** Dipole polarity. */
 internal val MutableGameState.polarity: Polarity get() = characterRuntime.polarity
 
-/** True while the polarity field throws [enemy]: it flies on its momentum instead of steering. */
+/** True while the polarity field throws [enemy]: it flies on its momentum instead of steering (never a boss). */
 internal fun MutableGameState.isThrownByPolarity(enemy: Enemy): Boolean =
-    coreShape == CoreShape.DIPOLE && enemy.characterMarkTime > 0f
+    coreShape == CoreShape.DIPOLE && enemy.characterMarkTime > 0f && !enemy.isBossClass
 
 /** True when Orbit is fully charged and the next impact or weapon hit releases it. */
 internal val MutableGameState.orbitCharged: Boolean get() = coreShape == CoreShape.ORB && characterRuntime.charge >= 1f
@@ -710,8 +710,8 @@ private fun MutableGameState.updatePolarity(ability: CharacterRuntime, delta: Fl
         enemy.vx += dx / distance * acceleration * knockback
         enemy.vy += dy / distance * acceleration * knockback
         // The field throws what it moves: the enemy flies on its momentum for a moment, and what it
-        // strikes meanwhile is a slam.
-        enemy.characterMarkTime = THROW_SECONDS
+        // strikes meanwhile is a slam. Bosses and mini-bosses feel the pull but keep steering.
+        if (!enemy.isBossClass) enemy.characterMarkTime = THROW_SECONDS
     }
     ability.charge = if (elapsed >= ability.polarityFlipReadyAt) 1f else
         1f - ((ability.polarityFlipReadyAt - elapsed) / POLARITY_FLIP_INTERVAL).coerceIn(0f, 1f)
@@ -975,10 +975,15 @@ internal fun MutableGameState.rebaseCharacterRuntime(shiftX: Float, shiftY: Floa
             ability.ghostPath[index * 2 + 1] = ability.ghostPath[index * 2 + 1] - shiftY
         }
     }
+    val drones = ability.drones
     for (index in 0 until ability.droneCount) {
         val base = index * DRONE_STRIDE
-        for (field in intArrayOf(DRONE_X, DRONE_PREVIOUS_X, DRONE_TARGET_X)) ability.drones[base + field] = ability.drones[base + field] - shiftX
-        for (field in intArrayOf(DRONE_Y, DRONE_PREVIOUS_Y, DRONE_TARGET_Y)) ability.drones[base + field] = ability.drones[base + field] - shiftY
+        drones[base + DRONE_X] = drones[base + DRONE_X] - shiftX
+        drones[base + DRONE_Y] = drones[base + DRONE_Y] - shiftY
+        drones[base + DRONE_PREVIOUS_X] = drones[base + DRONE_PREVIOUS_X] - shiftX
+        drones[base + DRONE_PREVIOUS_Y] = drones[base + DRONE_PREVIOUS_Y] - shiftY
+        drones[base + DRONE_TARGET_X] = drones[base + DRONE_TARGET_X] - shiftX
+        drones[base + DRONE_TARGET_Y] = drones[base + DRONE_TARGET_Y] - shiftY
     }
     for (index in 0 until ability.scarCount) {
         val base = index * SCAR_STRIDE

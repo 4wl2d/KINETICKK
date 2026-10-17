@@ -75,15 +75,15 @@ internal object HangarReducer {
     fun selected(state: HangarState, model: HangarRenderModel): HangarState = state.copy(model = model)
 }
 
+/** The shortest trait bar: the roster's smallest value still draws a quarter bar. */
+internal const val HANGAR_BAR_FLOOR = 0.25f
+
 /**
  * Maps the Profile's Hangar projection onto the content roster. Trait bars are normalized over the
  * roster: mass by its multiplier, integrity as 100 plus the bonus, handling as the inverse drag and
  * heat as the inverse Dash heat multiplier, each placed between the roster's smallest value (a
  * quarter bar, so every bar stays visible) and its largest (a full bar).
  */
-/** The shortest trait bar: the roster's smallest value still draws a quarter bar. */
-internal const val HANGAR_BAR_FLOOR = 0.25f
-
 internal fun HangarProjection.toRenderModel(
     definitions: ImmutableList<CoreShapeDefinition>,
     matter: Long,

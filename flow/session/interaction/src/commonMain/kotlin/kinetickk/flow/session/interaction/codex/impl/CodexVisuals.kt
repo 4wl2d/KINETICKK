@@ -22,19 +22,22 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.RelicKey
 import kinetickk.ball.content.api.RelicPolicy
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.ball.gameplay.interaction.canvas.EnemySilhouette
 import kinetickk.ball.gameplay.interaction.canvas.enemySilhouette
-import kinetickk.flow.session.interaction.home.impl.formIcon
+import kinetickk.flow.session.interaction.home.impl.formIndex
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkAlign
 import kinetickk.foundation.design.KkCardFrame
 import kinetickk.foundation.design.KkCardMaterial
 import kinetickk.foundation.design.KkFillKind
+import kinetickk.foundation.design.KkFormGeometry
+import kinetickk.foundation.design.KkFormPaths
 import kinetickk.foundation.design.KkIcon
 import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.KkVAlign
@@ -173,6 +176,22 @@ internal fun DrawScope.drawCodexRelicTile(icon: CodexIcon.Relic, policy: RelicPo
     drawRelicIcon(icon.definition, policy, center, radius, rank = null, time = 0f, roles = roles)
 }
 
+/** A Codex form glyph is this share of the cell glyph radius (the size the form icon used to take). */
+private const val CODEX_FORM_SCALE = 0.46f
+
+/** A character's silhouette from [KkFormGeometry]: filled, or stroked for the line figures. */
+private fun DrawScope.drawCodexForm(shape: CoreShape, center: Offset, radius: Float, color: Color) {
+    val index = shape.formIndex()
+    val path = KkFormPaths.of(index, radius)
+    translate(center.x, center.y) {
+        if (KkFormGeometry.isStroked(index)) {
+            drawPath(path, color, style = kkStroke(max(1f, KkFormGeometry.strokeWidth(index, radius))))
+        } else {
+            drawPath(path, color)
+        }
+    }
+}
+
 /** Cell face: item and relic tiles in their rarity material, hatch when locked or unknown. */
 internal fun DrawScope.drawCodexCell(entry: CodexEntry, catalog: UiCatalogSnapshot, measurer: CanvasTextMeasurer, band: Boolean, hovered: Boolean,
     markBand: Float) {
@@ -192,7 +211,7 @@ internal fun DrawScope.drawCodexCell(entry: CodexEntry, catalog: UiCatalogSnapsh
             drawRect(if (hovered) Kk.Ink3 else Kk.Ink2)
             if (!entry.discovered) drawKkHatch(rect)
             drawRect(if (entry.active) roles.you else Kk.Line2, style = kkStroke(if (entry.active) 2.dp.toPx() else 1.dp.toPx()))
-            drawKkIcon(icon.id.formIcon(), center, radius * 1.1f, if (entry.discovered) Kk.Bone else Kk.Mute)
+            drawCodexForm(icon.id, center, radius * CODEX_FORM_SCALE, if (entry.discovered) Kk.Bone else Kk.Mute)
             if (!entry.discovered) drawKkIcon(KkIcon.SYSTEM_LOCKED, Offset(size.width - 11.dp.toPx(), 11.dp.toPx()), 11.dp.toPx(), Kk.Mute)
         }
         is CodexIcon.Enemy -> {

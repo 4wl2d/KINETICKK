@@ -202,9 +202,12 @@ together.
   facets each negate one hurt window, regenerate on a paused six-second timer and never
   cancel damage kinds marked non-cancellable (obstacle collisions). Orbit, Puncture,
   Halo, Parry (with Edge) and Lattice are reworked (Brake no longer collapses the
-  lattice). Character state is copy-on-write: a reduction forks scalars and shares
-  the echo ghost path, lattice, drones and scars until its first write, and no fixed
-  step allocates. New unlocks count total kills, ricochets, Data pickups and the Reborn
+  lattice). Ability magnitudes are calibrated by a scripted 90-second balance run
+  that keeps every character's ability-only output (damage prevented for the Prism
+  and the Diamond) within 40 % of the roster median. Character state is
+  copy-on-write: a reduction forks scalars and shares the echo ghost path, lattice,
+  drones and scars until its first write, so a buffer is copied at most once per
+  reduction however many fixed steps it runs, and steps write in place. New unlocks count total kills, ricochets, Data pickups and the Reborn
   rank; no existing unlock target rose. The six Home form tiles became one Hangar card,
   and the Hangar overlay (H, from Home only) lists every character with its unlock
   progress and selects through the Profile.
