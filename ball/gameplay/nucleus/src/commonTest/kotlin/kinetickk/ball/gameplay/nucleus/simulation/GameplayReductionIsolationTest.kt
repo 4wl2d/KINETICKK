@@ -761,6 +761,7 @@ class GameplayReductionIsolationTest {
         stasisBank = 3
         overdriveBurnoutUntil = 12f
         glassCharge = 6f
+        integrityLiabilityCut = 9f
         critMissStreak = 2
         offerPity = 4
         // Every forked build scalar holds a distinct non-default value, so a fork that drops one copy
@@ -977,6 +978,7 @@ class GameplayReductionIsolationTest {
             float("freeDashReadyAt", freeDashReadyAt)
             value("comboKillCounter", comboKillCounter)
             float("glassCharge", glassCharge)
+            float("integrityLiabilityCut", integrityLiabilityCut)
             float("cinderRecoilReadyAt", cinderRecoilReadyAt)
             value("offerPity", offerPity)
             value("dashHitThisDash", dashHitThisDash)

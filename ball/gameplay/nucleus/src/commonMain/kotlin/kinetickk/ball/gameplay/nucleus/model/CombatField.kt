@@ -5,11 +5,12 @@ package kinetickk.ball.gameplay.nucleus.model
 
 import kinetickk.ball.content.api.StatusElement
 
-internal enum class CombatFieldKind { FUSION, ROT_WELL, DARK_STAR, ECHO_RING }
+internal enum class CombatFieldKind { FUSION, ROT_WELL, DARK_STAR, ECHO_RING, NULL_WELL }
 
 /**
  * Immutable lingering area effect. Fields pull their occupants and pulse damage (and optionally a status)
- * every [TICK_SECONDS]; the list is bounded by the build policy.
+ * every [TICK_SECONDS]; the list is bounded by the build policy. A [CombatFieldKind.NULL_WELL]'s
+ * [damagePerSecond] is a share of each occupant's weighted maximum integrity.
  */
 internal data class CombatField(
     val kind: CombatFieldKind,

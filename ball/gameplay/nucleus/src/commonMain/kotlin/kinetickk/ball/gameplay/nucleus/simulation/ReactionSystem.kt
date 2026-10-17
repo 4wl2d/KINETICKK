@@ -135,7 +135,7 @@ private fun MutableGameState.resolveReaction(
                 val dy = y - target.y
                 val distance = max(1f, length(dx, dy))
                 if (distance > definition.radius + target.radius) continue
-                val knockback = target.knockback
+                val knockback = knockbackTaken(target)
                 target.vx += dx / distance * 640f * knockback
                 target.vy += dy / distance * 640f * knockback
                 dealStatusDamage(target, magnitude, StatusElement.GRAVITIC, ignoresAffinity = true)
@@ -159,6 +159,98 @@ private fun MutableGameState.resolveReaction(
             damagePerSecond = magnitude, element = StatusElement.ENTROPY, stacksPerTick = 1,
             generation = residueGeneration, pull = 180f,
         ))
+        ReactionId.THUNDERCLAP -> for (index in enemies.indices) {
+            val target = enemies[index]
+            if (!target.alive || distanceSquared(x, y, target.x, target.y) > square(definition.radius + target.radius)) continue
+            dealStatusDamage(target, magnitude, StatusElement.THERMAL, ignoresAffinity = true)
+            hurl(x, y, target, THUNDERCLAP_THROW_SPEED)
+        }
+        ReactionId.SHATTERPOINT -> {
+            repeat(SHATTERPOINT_SHARDS) { shard ->
+                val angle = shard * TAU / SHATTERPOINT_SHARDS + enemy.id * 0.53f + 0.3f
+                val endX = x + cos(angle) * SHATTERPOINT_REACH
+                val endY = y + sin(angle) * SHATTERPOINT_REACH
+                addRelicArc(x, y, endX, endY)
+                for (index in enemies.indices) {
+                    val target = enemies[index]
+                    if (target.id == enemy.id || !target.alive) continue
+                    if (segmentCircleIntersects(x, y, endX, endY, target.x, target.y, target.radius + 6f)) {
+                        dealStatusDamage(target, magnitude, StatusElement.CRYO, ignoresAffinity = true)
+                        if (residueGeneration < 2 && target.alive) applyStatus(target, StatusElement.CRYO, definition.residueStacks, residueGeneration)
+                    }
+                }
+            }
+            dealStatusDamage(enemy, magnitude, StatusElement.SONIC, ignoresAffinity = true)
+        }
+        ReactionId.RESONANT_ARC -> {
+            val resonance = if (older == StatusElement.SONIC) a else b
+            val range = definition.radius + RESONANT_ARC_RANGE_PER_STACK * resonance
+            dealStatusDamage(enemy, magnitude, StatusElement.ION, ignoresAffinity = true)
+            chain(x, y, enemy.id, RESONANT_ARC_LINKS, range) { target ->
+                dealStatusDamage(target, magnitude, StatusElement.ION, ignoresAffinity = true)
+            }
+        }
+        ReactionId.SEISMIC -> for (index in enemies.indices) {
+            val target = enemies[index]
+            if (!target.alive || distanceSquared(x, y, target.x, target.y) > square(definition.radius + target.radius)) continue
+            dealStatusDamage(target, magnitude, StatusElement.GRAVITIC, ignoresAffinity = true)
+            if (target.alive && isOrdinary(target)) target.disabledUntil = max(target.disabledUntil, elapsed + SEISMIC_STUN_SECONDS)
+        }
+        ReactionId.FRACTURE -> for (index in enemies.indices) {
+            val target = enemies[index]
+            if (!target.alive || distanceSquared(x, y, target.x, target.y) > square(definition.radius + target.radius)) continue
+            dealStatusDamage(target, magnitude, StatusElement.ENTROPY, ignoresAffinity = true)
+            if (residueGeneration < 2 && target.alive) applyStatus(target, StatusElement.ENTROPY, definition.residueStacks, residueGeneration)
+        }
+        ReactionId.SILENCE -> for (index in enemies.indices) {
+            val target = enemies[index]
+            if (!target.alive || distanceSquared(x, y, target.x, target.y) > square(definition.radius + target.radius)) continue
+            dealStatusDamage(target, magnitude, StatusElement.VOID, ignoresAffinity = true)
+            val seconds = if (target.isBossClass) SILENCE_BOSS_SECONDS else SILENCE_SECONDS
+            if (target.alive) target.silencedUntil = max(target.silencedUntil, elapsed + seconds)
+        }
+        ReactionId.BLACKFIRE -> {
+            enemy.status[StatusCell.BLACKFIRE_UNTIL] = elapsed + BLACKFIRE_SECONDS
+            enemy.status[StatusCell.BLACKFIRE_DPS] = max(enemy.status[StatusCell.BLACKFIRE_DPS], magnitude)
+        }
+        ReactionId.STASIS -> {
+            for (index in enemies.indices) {
+                val target = enemies[index]
+                if (!target.alive || distanceSquared(x, y, target.x, target.y) > square(definition.radius + target.radius)) continue
+                dealStatusDamage(target, magnitude, StatusElement.CRYO, ignoresAffinity = true)
+                if (target.alive && isOrdinary(target)) {
+                    target.disabledUntil = max(target.disabledUntil, elapsed + STASIS_STOP_SECONDS)
+                    target.vx = 0f
+                    target.vy = 0f
+                }
+            }
+            val reach = square(definition.radius)
+            projectiles.removeMatchingStable { it.hostile && distanceSquared(x, y, it.x, it.y) <= reach }
+        }
+        ReactionId.ANNIHILATE -> {
+            dealStatusDamage(enemy, magnitude, StatusElement.VOID, ignoresAffinity = true)
+            toughestOtherEnemy(enemy, definition.radius)?.let { target ->
+                addRelicArc(x, y, target.x, target.y)
+                dealStatusDamage(target, magnitude, StatusElement.VOID, ignoresAffinity = true)
+            }
+        }
+        ReactionId.NULL_WELL -> addField(CombatField(
+            kind = CombatFieldKind.NULL_WELL, remaining = NULL_WELL_SECONDS, x = x, y = y, radius = definition.radius,
+            damagePerSecond = definition.power * potency * build.reactionPower, element = StatusElement.VOID,
+            stacksPerTick = 0, generation = residueGeneration, pull = NULL_WELL_PULL,
+        ))
+        ReactionId.OBLIVION -> {
+            val line = when {
+                enemy.isBossClass -> 0f
+                enemy.isElite -> OBLIVION_ELITE_LINE
+                else -> OBLIVION_LINE
+            }
+            if (enemy.hp < enemy.maxHp * line) {
+                damageEnemy(enemy, enemy.hp, killEligible = true, tone = StatusElement.VOID.ordinal + 1, source = HitSource.STATUS)
+            } else {
+                dealStatusDamage(enemy, magnitude, StatusElement.ENTROPY, ignoresAffinity = true)
+            }
+        }
     }
     if (build.reactionResidue > 0 && enemy.alive && residueGeneration < 2) {
         applyStatus(enemy, incoming, build.reactionResidue, residueGeneration)
@@ -177,6 +269,53 @@ private fun MutableGameState.resolveReaction(
     onReaction(enemy, reaction)
 }
 
+internal const val THUNDERCLAP_THROW_SPEED: Float = 760f
+internal const val SHATTERPOINT_SHARDS: Int = 5
+internal const val SHATTERPOINT_REACH: Float = 240f
+internal const val RESONANT_ARC_LINKS: Int = 4
+internal const val RESONANT_ARC_RANGE_PER_STACK: Float = 25f
+internal const val SEISMIC_STUN_SECONDS: Float = 0.6f
+internal const val SILENCE_SECONDS: Float = 2f
+/** Bosses fall silent briefly, so chained Silences cannot keep the Architect from ever attacking. */
+internal const val SILENCE_BOSS_SECONDS: Float = 0.75f
+internal const val BLACKFIRE_SECONDS: Float = 3f
+internal const val STASIS_STOP_SECONDS: Float = 1f
+internal const val NULL_WELL_SECONDS: Float = 1.6f
+internal const val NULL_WELL_PULL: Float = 240f
+internal const val OBLIVION_LINE: Float = 0.12f
+internal const val OBLIVION_ELITE_LINE: Float = 0.06f
+
+/** Ordinary enemies take stuns and stops; Elites and bosses shrug them off. */
+private fun isOrdinary(enemy: Enemy): Boolean = !enemy.isEliteClass
+
+/** Pushes [target] away from ([x], [y]) at [speed], scaled by the knockback it takes. */
+private fun MutableGameState.hurl(x: Float, y: Float, target: Enemy, speed: Float) {
+    val knockback = knockbackTaken(target)
+    if (knockback <= 0f) return
+    var dx = target.x - x
+    var dy = target.y - y
+    if (length(dx, dy) < 1f) {
+        dx = target.x - coreX
+        dy = target.y - coreY
+    }
+    val distance = max(1f, length(dx, dy))
+    target.vx += dx / distance * speed * knockback
+    target.vy += dy / distance * speed * knockback
+}
+
+/** The other living enemy with the most integrity within [range] of [origin] (ties by id), or null. */
+private fun MutableGameState.toughestOtherEnemy(origin: Enemy, range: Float): Enemy? {
+    var best: Enemy? = null
+    val rangeSquared = range * range
+    for (index in enemies.indices) {
+        val candidate = enemies[index]
+        if (candidate.id == origin.id || !candidate.alive || isShifting(candidate)) continue
+        if (distanceSquared(origin.x, origin.y, candidate.x, candidate.y) > rangeSquared) continue
+        if (best == null || candidate.hp > best.hp) best = candidate
+    }
+    return best
+}
+
 internal fun MutableGameState.addField(field: CombatField) {
     if (combatFields.size >= content.build.policy.maximumFields) return
     combatFields = combatFields + field
@@ -191,7 +330,7 @@ internal fun MutableGameState.updateCombatFields(delta: Float) {
         var clock = field.tickClock + delta
         for (index in enemies.indices) {
             val target = enemies[index]
-            val knockback = target.knockback
+            val knockback = knockbackTaken(target)
             if (!target.alive || knockback <= 0f) continue
             val dx = field.x - target.x
             val dy = field.y - target.y
@@ -206,9 +345,16 @@ internal fun MutableGameState.updateCombatFields(delta: Float) {
                 val target = enemies[index]
                 if (!target.alive) continue
                 if (distanceSquared(field.x, field.y, target.x, target.y) > square(field.radius + target.radius)) continue
-                // Reaction fields ignore affinity like every reaction; item wells meet the target's aspect.
-                dealStatusDamage(target, field.damagePerSecond * CombatField.TICK_SECONDS, field.element, showNumber = false,
-                    ignoresAffinity = field.kind == CombatFieldKind.FUSION || field.kind == CombatFieldKind.ROT_WELL)
+                // Reaction fields ignore affinity like every reaction; item wells meet the target's aspect. A Null
+                // Well's rate is a share of the occupant's weighted maximum integrity per second.
+                val perSecond = if (field.kind == CombatFieldKind.NULL_WELL) {
+                    target.maxHp * victimFactor(target) * field.damagePerSecond
+                } else {
+                    field.damagePerSecond
+                }
+                dealStatusDamage(target, perSecond * CombatField.TICK_SECONDS, field.element, showNumber = false,
+                    ignoresAffinity = field.kind == CombatFieldKind.FUSION || field.kind == CombatFieldKind.ROT_WELL ||
+                        field.kind == CombatFieldKind.NULL_WELL)
                 val element = field.element
                 if (element != null && field.stacksPerTick > 0 && field.generation < 2 && target.alive) {
                     applyStatus(target, element, field.stacksPerTick, field.generation)

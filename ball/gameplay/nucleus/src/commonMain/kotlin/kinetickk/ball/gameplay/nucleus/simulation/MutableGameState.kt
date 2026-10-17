@@ -192,6 +192,8 @@ internal class MutableGameState(
     internal var freeDashReadyAt: Float = reductionSource?.freeDashReadyAt ?: 0f
     internal var comboKillCounter: Int = reductionSource?.comboKillCounter ?: 0
     internal var glassCharge: Float = reductionSource?.glassCharge ?: 0f
+    /** Maximum integrity Null Covenant's liability currently withholds (0 when none). */
+    internal var integrityLiabilityCut: Float = reductionSource?.integrityLiabilityCut ?: 0f
     internal var cinderRecoilReadyAt: Float = reductionSource?.cinderRecoilReadyAt ?: 0f
     internal var offerPity: Int = reductionSource?.offerPity ?: 0
     internal var dashHitThisDash: Boolean = reductionSource?.dashHitThisDash ?: false

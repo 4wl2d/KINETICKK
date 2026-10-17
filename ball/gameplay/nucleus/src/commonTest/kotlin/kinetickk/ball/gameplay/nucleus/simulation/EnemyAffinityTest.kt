@@ -488,11 +488,11 @@ class EnemyAffinityTest {
             state.enemies.last()
         }
         val order = listOf(StatusElement.THERMAL, StatusElement.CRYO, StatusElement.ION, StatusElement.GRAVITIC,
-            StatusElement.ENTROPY, StatusElement.THERMAL)
+            StatusElement.ENTROPY, StatusElement.SONIC)
         assertEquals(order.map { it.ordinal }, elites.map { EnemyAffinity.aspect(state.affinityBits(it)) })
         assertTrue(elites.all { EnemyAffinity.immune(state.affinityBits(it)) })
         val weaknesses = listOf(StatusElement.CRYO, StatusElement.THERMAL, StatusElement.ENTROPY, StatusElement.ION,
-            StatusElement.GRAVITIC, StatusElement.CRYO)
+            StatusElement.GRAVITIC, StatusElement.VOID)
         assertEquals(weaknesses.map { it.ordinal }, elites.map { EnemyAffinity.weakness(state.affinityBits(it)) })
         assertEquals(6, state.elitesSpawned)
 

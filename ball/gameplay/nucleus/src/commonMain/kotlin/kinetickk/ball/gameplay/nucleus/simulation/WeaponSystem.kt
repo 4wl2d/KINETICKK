@@ -233,7 +233,7 @@ internal fun MutableGameState.explodeMine(node: WeaponNode) {
         val distance = length(enemy.x - node.x, enemy.y - node.y)
         if (distance <= node.radius + enemy.radius) {
             dealWeaponDamage(enemy, 62f * power * (1f - distance / (node.radius * 1.7f)).coerceAtLeast(0.35f), canCrit = true)
-            val pull = (1f - distance / max(1f, node.radius)).coerceAtLeast(0f) * 170f * enemy.knockback
+            val pull = (1f - distance / max(1f, node.radius)).coerceAtLeast(0f) * 170f * knockbackTaken(enemy)
             enemy.vx += (node.x - enemy.x) / max(1f, distance) * pull
             enemy.vy += (node.y - enemy.y) / max(1f, distance) * pull
         }

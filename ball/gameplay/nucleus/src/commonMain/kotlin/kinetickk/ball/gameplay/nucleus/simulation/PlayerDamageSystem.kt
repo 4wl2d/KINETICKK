@@ -31,11 +31,10 @@ internal fun MutableGameState.hostileDamage(enemy: Enemy?, base: Float): Float =
     base * (1f + HOSTILE_RUN_GROWTH * runProgress) * hostileOutputFactor(enemy)
 
 /**
- * Hook for effects on the attacking enemy that scale its damage output. It is 1 until the Hollow
- * status lands, which multiplies `1 - 0.03 * hollowStacks` in here.
+ * Effects on the attacking enemy that scale its damage output: Hollow (Void) multiplies
+ * `1 - 0.03 * hollowStacks` (scaled by Void potency, floored at [HOLLOW_OUTPUT_FLOOR]).
  */
-@Suppress("UNUSED_PARAMETER")
-internal fun MutableGameState.hostileOutputFactor(enemy: Enemy?): Float = 1f
+internal fun MutableGameState.hostileOutputFactor(enemy: Enemy?): Float = hollowOutputFactor(enemy)
 
 /** Hostile damage grows by this fraction of run progress; see [hostileDamage]. */
 internal const val HOSTILE_RUN_GROWTH: Float = 0.5f

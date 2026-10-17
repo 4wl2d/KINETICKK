@@ -171,16 +171,20 @@ class ReactionSystemTest {
 
     private fun placeNeighbor(state: MutableGameState, reaction: ReactionId, target: Enemy, neighbor: Enemy) {
         val distance = when (reaction) {
-            ReactionId.THERMAL_SHOCK, ReactionId.EMBRITTLE -> 2_000f
-            ReactionId.PLASMA_BURST -> 60f
-            ReactionId.FUSION, ReactionId.ROT_WELL -> 80f
-            ReactionId.WILDFIRE -> 100f
-            ReactionId.SUPERCONDUCT, ReactionId.FEEDBACK -> 200f
-            ReactionId.GLACIER_CRUSH -> 100f
+            ReactionId.THERMAL_SHOCK, ReactionId.EMBRITTLE, ReactionId.BLACKFIRE, ReactionId.OBLIVION -> 2_000f
+            ReactionId.PLASMA_BURST, ReactionId.FRACTURE -> 60f
+            ReactionId.FUSION, ReactionId.ROT_WELL, ReactionId.NULL_WELL -> 80f
+            ReactionId.WILDFIRE, ReactionId.THUNDERCLAP, ReactionId.SEISMIC, ReactionId.SILENCE, ReactionId.STASIS -> 100f
+            ReactionId.SUPERCONDUCT, ReactionId.FEEDBACK, ReactionId.RESONANT_ARC, ReactionId.ANNIHILATE -> 200f
+            ReactionId.GLACIER_CRUSH, ReactionId.SHATTERPOINT -> 100f
             ReactionId.MAGNETIZE -> 150f
         }
-        // Glacier Crush fires its first shard along a direction derived from the target id.
-        val angle = if (reaction == ReactionId.GLACIER_CRUSH) target.id * 0.37f else 0f
+        // Glacier Crush and Shatterpoint fire their first shard along a direction derived from the target id.
+        val angle = when (reaction) {
+            ReactionId.GLACIER_CRUSH -> target.id * 0.37f
+            ReactionId.SHATTERPOINT -> target.id * 0.53f + 0.3f
+            else -> 0f
+        }
         neighbor.x = target.x + cos(angle) * distance
         neighbor.y = target.y + sin(angle) * distance
         state.enemies.forEach { it.previousX = it.x; it.previousY = it.y }
@@ -198,8 +202,48 @@ class ReactionSystemTest {
                 assertEquals(4, state.breakThreshold(StatusElement.CRYO, target))
                 assertEquals(0, target.stacksOf(StatusElement.CRYO))
             }
-            ReactionId.FUSION, ReactionId.ROT_WELL -> {
+            ReactionId.THUNDERCLAP -> {
+                assertTrue(neighbor.hp < neighbor.maxHp, "Thunderclap reaches its neighbor")
+                assertTrue(neighbor.vx > 0f, "Thunderclap hurls the neighbor away from the target")
+            }
+            ReactionId.RESONANT_ARC, ReactionId.ANNIHILATE -> {
+                assertTrue(target.hp < target.maxHp, "$reaction strikes its target")
+                assertTrue(neighbor.hp < neighbor.maxHp, "$reaction reaches its neighbor")
+            }
+            ReactionId.SEISMIC -> {
+                assertTrue(neighbor.hp < neighbor.maxHp)
+                assertEquals(state.elapsed + SEISMIC_STUN_SECONDS, neighbor.disabledUntil, 0.0001f)
+                assertTrue(!state.canAct(neighbor), "Seismic stuns an ordinary neighbor")
+            }
+            ReactionId.SILENCE -> {
+                assertTrue(neighbor.hp < neighbor.maxHp)
+                assertEquals(state.elapsed + SILENCE_SECONDS, neighbor.silencedUntil, 0.0001f)
+                assertTrue(state.canAct(neighbor) && !state.canAttack(neighbor), "Silence leaves movement but not attacks")
+            }
+            ReactionId.STASIS -> {
+                assertTrue(neighbor.hp < neighbor.maxHp)
+                assertEquals(state.elapsed + STASIS_STOP_SECONDS, neighbor.disabledUntil, 0.0001f)
+                assertEquals(0f, neighbor.vx)
+                assertEquals(0f, neighbor.vy)
+            }
+            ReactionId.BLACKFIRE -> {
+                assertEquals(state.elapsed + BLACKFIRE_SECONDS, target.status[StatusCell.BLACKFIRE_UNTIL], 0.0001f)
+                assertTrue(target.status[StatusCell.BLACKFIRE_DPS] > 0f)
+                assertEquals(neighbor.maxHp, neighbor.hp, "Blackfire burns one target")
+            }
+            ReactionId.OBLIVION -> {
+                assertTrue(target.hp < target.maxHp, "A healthy target takes the burst")
+                assertTrue(target.alive)
+            }
+            ReactionId.FUSION, ReactionId.ROT_WELL, ReactionId.NULL_WELL -> {
                 val field = state.combatFields.single()
+                if (reaction == ReactionId.NULL_WELL) {
+                    assertEquals(CombatFieldKind.NULL_WELL, field.kind)
+                    state.updateCombatFields(0.4f)
+                    assertTrue(neighbor.hp < neighbor.maxHp, "Null Well strips its occupants")
+                    assertTrue(neighbor.vx < 0f, "Null Well pulls toward its center")
+                    return
+                }
                 assertEquals(if (reaction == ReactionId.FUSION) CombatFieldKind.FUSION else CombatFieldKind.ROT_WELL, field.kind)
                 state.updateCombatFields(0.4f)
                 val residue = state.content.build.reaction(reaction).residue ?: fail("$reaction has a residue")

@@ -25,6 +25,26 @@ internal const val MAX_STATUS_CUES_PER_STEP: Int = 6
 internal const val BLIGHT_GARDEN_HEAL: Float = 4f
 internal const val BLIGHT_GARDEN_HEAL_COOLDOWN: Float = 0.5f
 
+/** Resonance (Sonic): each stack adds this fraction of impact and dash damage taken. */
+internal const val RESONANCE_IMPACT_PER_STACK: Float = 0.03f
+/** Hollow (Void): each stack remembers this fraction of the damage the enemy takes. */
+internal const val HOLLOW_MEMORY_PER_STACK: Float = 0.02f
+/** Hollow never cuts an enemy's damage output below this factor. */
+internal const val HOLLOW_OUTPUT_FLOOR: Float = 0.5f
+/** Delay between an Unmake and the strike that releases the remembered damage. */
+internal const val UNMAKE_DELAY_SECONDS: Float = 0.35f
+/** An Unmake takes at most this share of the victim's maximum integrity (weighted for bosses). */
+internal const val UNMAKE_INTEGRITY_CAP: Float = 0.4f
+/** Velocity a Shatter gives the enemies it throws, before their knockback factor. */
+internal const val SHATTER_THROW_SPEED: Float = 680f
+/** Thunder Choir: radius in which a Shatter looks for Resonant enemies. */
+internal const val THUNDER_CHOIR_RADIUS: Float = 260f
+/** Thunder Choir: bonus to the knockback you deal, and the extra recoil you take. */
+internal const val THUNDER_CHOIR_KNOCKBACK: Float = 0.2f
+internal const val THUNDER_CHOIR_RECOIL: Float = 0.15f
+/** Null Covenant: share of maximum integrity the liability removes. */
+internal const val NULL_COVENANT_INTEGRITY_CUT: Float = 0.1f
+
 // ---------------------------------------------------------------------------------------------
 // Reads.
 
@@ -32,8 +52,31 @@ internal fun stacks(enemy: Enemy, element: StatusElement): Int = enemy.status[St
 
 internal fun totalStacks(enemy: Enemy): Int {
     var total = 0
-    for (index in 0 until 5) total += enemy.status[StatusCell.STACKS + index].toInt()
+    for (index in 0 until StatusCell.ELEMENTS) total += enemy.status[StatusCell.STACKS + index].toInt()
     return total
+}
+
+/**
+ * The Architect (and, once it exists, the mini-boss): immune to executes, stops and stuns, and Unmake
+ * meets its weighted integrity. Every element rule asks this one question.
+ */
+internal val Enemy.isBossClass: Boolean get() = isBoss
+
+/** Elites and the bosses; Null Covenant keeps Hollow on them. */
+internal val Enemy.isEliteClass: Boolean get() = isElite || isBossClass
+
+/**
+ * Displacement [enemy] takes from anything the player causes: its frame's knockback, raised by each
+ * Resonance stack and by Thunder Choir. Frames that never move (knockback 0) stay immovable.
+ */
+internal fun MutableGameState.knockbackTaken(enemy: Enemy): Float {
+    val frame = enemy.knockback
+    if (frame <= 0f) return 0f
+    var scale = 1f
+    val resonance = stacks(enemy, StatusElement.SONIC)
+    if (resonance > 0) scale += resonance * content.build.element(StatusElement.SONIC).perStack * build.potency(StatusElement.SONIC)
+    if (build.upside(RelicId.THUNDER_CHOIR)) scale *= 1f + THUNDER_CHOIR_KNOCKBACK * build.relicUpside(RelicId.THUNDER_CHOIR)
+    return frame * scale
 }
 
 internal fun MutableGameState.isFrozen(enemy: Enemy): Boolean = enemy.status[StatusCell.FROZEN_UNTIL] > elapsed
@@ -59,7 +102,8 @@ internal fun MutableGameState.statusNearBreak(enemy: Enemy, fraction: Float): Bo
 
 /** Movement scale applied to the enemy's integration and attack cadence. */
 internal fun MutableGameState.enemySpeedScale(enemy: Enemy): Float {
-    if (isFrozen(enemy)) return 0f
+    // A stunned or stopped enemy neither moves by itself nor counts down an attack.
+    if (isFrozen(enemy) || !canAct(enemy)) return 0f
     var scale = 1f
     val chill = stacks(enemy, StatusElement.CRYO)
     if (chill > 0) {
@@ -284,7 +328,7 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
                 if (target.id == enemy.id || !target.alive) continue
                 if (distanceSquared(enemy.x, enemy.y, target.x, target.y) <= square(definition.breakRadius + target.radius)) {
                     pulled++
-                    val knockback = target.knockback
+                    val knockback = knockbackTaken(target)
                     if (knockback > 0f) {
                         val dx = centerX - target.x
                         val dy = centerY - target.y
@@ -317,10 +361,117 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
             }
             shockwave(enemy.x, enemy.y, 0.3f, enemy.radius * 2.2f, 4)
         }
+        StatusElement.SONIC -> {
+            val damage = power * count * potency * scale
+            val radius = definition.breakRadius
+            for (targetIndex in enemies.indices) {
+                val target = enemies[targetIndex]
+                if (!target.alive || distanceSquared(enemy.x, enemy.y, target.x, target.y) > square(radius + target.radius)) continue
+                dealStatusDamage(target, damage, element)
+                throwFrom(enemy, target)
+            }
+            if (build.upside(RelicId.THUNDER_CHOIR)) thunderChoir(enemy, damage)
+            shockwave(enemy.x, enemy.y, 0.34f, radius, 5)
+        }
+        StatusElement.VOID -> {
+            var remembered = enemy.status[StatusCell.HOLLOW_MEMORY]
+            enemy.status[StatusCell.HOLLOW_MEMORY] = 0f
+            remembered *= power
+            val cap = enemy.maxHp * UNMAKE_INTEGRITY_CAP * if (enemy.isBossClass) victimFactor(enemy) else 1f
+            val damage = min(remembered, cap)
+            if (damage > 0f) {
+                if (build.upside(RelicId.NULL_COVENANT)) {
+                    strikeUnmake(enemy, damage)
+                } else {
+                    enemy.status[StatusCell.UNMAKE_AT] = elapsed + UNMAKE_DELAY_SECONDS
+                    enemy.status[StatusCell.UNMAKE_DAMAGE] = enemy.status[StatusCell.UNMAKE_DAMAGE] + damage
+                }
+            }
+            shockwave(enemy.x, enemy.y, 0.3f, enemy.radius * 2.6f, 6)
+        }
     }
     if (affinityTier(element) >= 3) applyStatusAround(enemy.x, enemy.y, 130f, element, 2f, outputGeneration, enemy.id)
     recordStatusCue(VisualFxCue.StatusBroken(enemy.x, enemy.y, element.ordinal))
     if (generation == 0 || listens(EffectTrigger.BREAK)) onBreak(enemy, element)
+}
+
+/** Shatter's throw: away from the Shatter's center, or away from the Core for the shattered enemy. */
+private fun MutableGameState.throwFrom(center: Enemy, target: Enemy) {
+    val knockback = knockbackTaken(target)
+    if (knockback <= 0f) return
+    var dx = target.x - center.x
+    var dy = target.y - center.y
+    if (target.id == center.id || length(dx, dy) < 1f) {
+        dx = target.x - coreX
+        dy = target.y - coreY
+    }
+    val distance = max(1f, length(dx, dy))
+    target.vx += dx / distance * SHATTER_THROW_SPEED * knockback
+    target.vy += dy / distance * SHATTER_THROW_SPEED * knockback
+}
+
+/**
+ * Thunder Choir: the Shatter jumps to the nearest Resonant enemies within [THUNDER_CHOIR_RADIUS] of the
+ * shattered one, nearest first, without scratch storage (each pick is the next one by distance, then id).
+ */
+private fun MutableGameState.thunderChoir(origin: Enemy, shatterDamage: Float) {
+    val links = relicValue(RelicId.THUNDER_CHOIR, 0).toInt().coerceIn(0, MAX_CHAIN_TARGETS)
+    val share = relicValue(RelicId.THUNDER_CHOIR, 1) / 100f
+    val rangeSquared = square(THUNDER_CHOIR_RADIUS)
+    var lastDistance = -1f
+    var lastId = Int.MIN_VALUE
+    repeat(links) {
+        var picked: Enemy? = null
+        var pickedDistance = Float.MAX_VALUE
+        for (index in enemies.indices) {
+            val candidate = enemies[index]
+            if (candidate.id == origin.id || !candidate.alive || isShifting(candidate)) continue
+            if (stacks(candidate, StatusElement.SONIC) <= 0) continue
+            val distance = distanceSquared(origin.x, origin.y, candidate.x, candidate.y)
+            if (distance > rangeSquared) continue
+            val after = distance > lastDistance || (distance == lastDistance && candidate.id > lastId)
+            if (!after) continue
+            if (distance < pickedDistance || (distance == pickedDistance && candidate.id < (picked?.id ?: Int.MAX_VALUE))) {
+                picked = candidate
+                pickedDistance = distance
+            }
+        }
+        val target = picked ?: return
+        lastDistance = pickedDistance
+        lastId = target.id
+        addRelicArc(origin.x, origin.y, target.x, target.y)
+        dealStatusDamage(target, shatterDamage * share, StatusElement.SONIC)
+    }
+}
+
+/** Releases an Unmake: the remembered damage strikes as Void status damage. */
+private fun MutableGameState.strikeUnmake(enemy: Enemy, damage: Float) {
+    dealStatusDamage(enemy, damage, StatusElement.VOID)
+    burst(enemy.x, enemy.y, 6, 4)
+}
+
+/**
+ * Hollow (Void) memory: while the enemy carries Hollow it remembers a share of every damage it takes,
+ * bounded by its maximum integrity. Called by the single enemy-integrity writer.
+ */
+internal fun MutableGameState.rememberHollowDamage(enemy: Enemy, applied: Float) {
+    val hollow = stacks(enemy, StatusElement.VOID)
+    if (hollow <= 0 || applied <= 0f) return
+    var share = hollow * HOLLOW_MEMORY_PER_STACK * build.potency(StatusElement.VOID)
+    if (build.upside(RelicId.NULL_COVENANT)) share *= 1f + relicValue(RelicId.NULL_COVENANT, 0) / 100f
+    enemy.status[StatusCell.HOLLOW_MEMORY] = min(enemy.maxHp, enemy.status[StatusCell.HOLLOW_MEMORY] + applied * share)
+}
+
+/**
+ * Hollow (Void) on the attacking enemy: each stack cuts its damage output, never below
+ * [HOLLOW_OUTPUT_FLOOR]. 1 for sourceless hazards and enemies without Hollow.
+ */
+internal fun MutableGameState.hollowOutputFactor(enemy: Enemy?): Float {
+    if (enemy == null) return 1f
+    val hollow = stacks(enemy, StatusElement.VOID)
+    if (hollow <= 0) return 1f
+    val cut = hollow * content.build.element(StatusElement.VOID).perStack * build.potency(StatusElement.VOID)
+    return (1f - cut).coerceIn(HOLLOW_OUTPUT_FLOOR, 1f)
 }
 
 internal fun maxHpProcCooldown(enemy: Enemy): Float = when {
@@ -388,16 +539,32 @@ internal fun MutableGameState.updateStatuses(delta: Float) {
         if (enemy.hitQualificationCooldown.toRawBits() != 0) {
             enemy.hitQualificationCooldown = max(0f, enemy.hitQualificationCooldown - delta)
         }
-        if (totalStacks(enemy) == 0) continue
+        val unmakeAt = enemy.status[StatusCell.UNMAKE_AT]
+        if (unmakeAt > 0f && unmakeAt <= elapsed) {
+            val damage = enemy.status[StatusCell.UNMAKE_DAMAGE]
+            enemy.status[StatusCell.UNMAKE_AT] = 0f
+            enemy.status[StatusCell.UNMAKE_DAMAGE] = 0f
+            strikeUnmake(enemy, damage)
+            if (!enemy.alive) continue
+        }
+        if (enemy.status[StatusCell.BLACKFIRE_UNTIL] > 0f) burnBlackfire(enemy, delta)
+        if (!enemy.alive || totalStacks(enemy) == 0) continue
         for (element in StatusElement.entries) {
             val cell = StatusCell.STACKS + element.ordinal
             var count = enemy.status[cell].toInt()
             if (count <= 0) continue
             val decayCell = StatusCell.DECAY_AT + element.ordinal
             if (enemy.status[decayCell] <= elapsed) {
+                if (element == StatusElement.VOID && enemy.isEliteClass && build.upside(RelicId.NULL_COVENANT)) {
+                    // Null Covenant: Hollow never fades on Elites; the timer only rolls forward.
+                    enemy.status[decayCell] = elapsed + decaySeconds(element)
+                    continue
+                }
                 count--
                 enemy.status[cell] = count.toFloat()
                 enemy.status[decayCell] = elapsed + decaySeconds(element)
+                // Memory belongs to Hollow: once the last stack fades, nothing is remembered.
+                if (count <= 0 && element == StatusElement.VOID) enemy.status[StatusCell.HOLLOW_MEMORY] = 0f
                 if (count <= 0) continue
             }
         }
@@ -425,7 +592,7 @@ internal fun MutableGameState.updateStatuses(delta: Float) {
             }
         }
         val gravitic = stacks(enemy, StatusElement.GRAVITIC)
-        val knockback = enemy.knockback
+        val knockback = knockbackTaken(enemy)
         if (gravitic > 0 && centroidWeight > gravitic && knockback > 0f && !isFrozen(enemy)) {
             val dx = centroidX - enemy.x
             val dy = centroidY - enemy.y
@@ -436,6 +603,25 @@ internal fun MutableGameState.updateStatuses(delta: Float) {
                 enemy.y += dy / distance * min(drift, distance)
             }
         }
+    }
+}
+
+/**
+ * Blackfire: burns at its per-second rate in the 4 Hz damage pulses until it ends, ignoring the
+ * target's aspect (resistance and immunity alike).
+ */
+private fun MutableGameState.burnBlackfire(enemy: Enemy, delta: Float) {
+    if (enemy.status[StatusCell.BLACKFIRE_UNTIL] <= elapsed) {
+        enemy.status[StatusCell.BLACKFIRE_UNTIL] = 0f
+        enemy.status[StatusCell.BLACKFIRE_DPS] = 0f
+        return
+    }
+    val phase = (enemy.id % 30) / 30f
+    val pulse = floor((elapsed + phase / DOT_PULSES_PER_SECOND) * DOT_PULSES_PER_SECOND) >
+        floor((elapsed - delta + phase / DOT_PULSES_PER_SECOND) * DOT_PULSES_PER_SECOND)
+    if (pulse) {
+        dealStatusDamage(enemy, enemy.status[StatusCell.BLACKFIRE_DPS] / DOT_PULSES_PER_SECOND, StatusElement.THERMAL,
+            showNumber = false, ignoresAffinity = true)
     }
 }
 
@@ -513,7 +699,10 @@ private fun MutableGameState.nearestOtherEnemyExcluding(origin: Enemy, alsoExclu
     return nearest
 }
 
-/** Packed per-enemy status for presentation: five 4-bit stack counts, then state flags. */
+/**
+ * Packed per-enemy status for presentation: [StatusCell.ELEMENTS] 4-bit stack counts in element order
+ * (bits 0..27), then the Frozen, Brittle, Embrittled and primed flags in bits 28..31.
+ */
 internal fun MutableGameState.statusBits(enemy: Enemy): Int {
     var bits = 0
     for (element in StatusElement.entries) {
@@ -548,9 +737,10 @@ internal fun MutableGameState.affinityBits(enemy: Enemy): Int {
     )
 }
 
-internal const val STATUS_FROZEN_BIT: Int = 1 shl 20
-internal const val STATUS_BRITTLE_BIT: Int = 1 shl 21
-internal const val STATUS_EMBRITTLED_BIT: Int = 1 shl 22
-internal const val STATUS_PRIMED_BIT: Int = 1 shl 23
+internal const val STATUS_STACK_BITS: Int = 4 * StatusCell.ELEMENTS
+internal const val STATUS_FROZEN_BIT: Int = 1 shl STATUS_STACK_BITS
+internal const val STATUS_BRITTLE_BIT: Int = 1 shl (STATUS_STACK_BITS + 1)
+internal const val STATUS_EMBRITTLED_BIT: Int = 1 shl (STATUS_STACK_BITS + 2)
+internal const val STATUS_PRIMED_BIT: Int = 1 shl (STATUS_STACK_BITS + 3)
 
 internal val MutableGameState.anchorBreaksOnRelease: Boolean get() = tagTier(BuildTag.ANCHOR) >= 3

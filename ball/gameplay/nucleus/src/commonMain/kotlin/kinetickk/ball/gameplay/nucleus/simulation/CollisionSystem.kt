@@ -111,7 +111,7 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
             screenShake = min(15f, 3f + softVelocity(impactSpeed) * 0.018f)
             val keepsMomentum = tagTier(BuildTag.RAM) >= 3 && speed >= 1_200f
             if (!keepsMomentum) {
-                val recoil = min(220f, softVelocity(impactSpeed) * 0.28f) / max(1f, effectiveMass() / mass)
+                val recoil = min(220f, softVelocity(impactSpeed) * 0.28f) / max(1f, effectiveMass() / mass) * impactRecoilScale()
                 velocityX += dx / distance * recoil
                 velocityY += dy / distance * recoil
             }

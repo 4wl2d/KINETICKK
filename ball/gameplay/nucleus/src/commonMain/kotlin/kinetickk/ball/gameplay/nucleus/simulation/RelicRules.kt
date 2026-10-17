@@ -85,7 +85,7 @@ internal fun MutableGameState.updateRelicRuntime(delta: Float) {
         val radius = EVENT_HORIZON_RADIUS * if (build.pairing(RelicPairingId.BLACK_STAR)) 1.4f else 1f
         for (index in enemies.indices) {
             val enemy = enemies[index]
-            val knockback = enemy.knockback
+            val knockback = knockbackTaken(enemy)
             if (!enemy.alive || knockback <= 0f) continue
             val dx = coreX - enemy.x
             val dy = coreY - enemy.y
@@ -187,6 +187,28 @@ private fun MutableGameState.updateEchoHits(delta: Float) {
         if (result.amount > 0f) burst(target.x, target.y, 4, 2)
     }
     while (echoHits.size > retained) echoHits.removeAt(echoHits.lastIndex)
+}
+
+/** Thunder Choir's liability: the Core's recoil from its own collisions grows while it is bound or lingering. */
+internal fun MutableGameState.impactRecoilScale(): Float =
+    if (build.liability(RelicId.THUNDER_CHOIR)) 1f + THUNDER_CHOIR_RECOIL else 1f
+
+/**
+ * Null Covenant's liability: maximum integrity −10 % while it is bound or lingering. The cut is taken
+ * once from the ceiling at that moment and returned in full when the liability ends; integrity above
+ * the lowered ceiling is lost, and returning the ceiling heals nothing.
+ */
+internal fun MutableGameState.reconcileIntegrityLiability() {
+    val active = build.liability(RelicId.NULL_COVENANT)
+    if (active && integrityLiabilityCut == 0f) {
+        val cut = maxHp * NULL_COVENANT_INTEGRITY_CUT
+        integrityLiabilityCut = cut
+        maxHp -= cut
+        hp = min(hp, maxHp)
+    } else if (!active && integrityLiabilityCut != 0f) {
+        maxHp += integrityLiabilityCut
+        integrityLiabilityCut = 0f
+    }
 }
 
 /** Integrity loss that is not an incoming hit (no shields, no triggers). */
