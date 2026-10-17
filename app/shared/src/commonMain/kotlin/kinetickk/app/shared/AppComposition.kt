@@ -88,6 +88,7 @@ internal class AppCompositionOwner(
             profileProgress = this.profileComponent,
             audioService = this.audioService,
             diagnostics = diagnostics,
+            seedSource = ::varyingGameplaySeed,
         )
     private val homeFeature: HomeFeature = homeFeature ?: DefaultHomeFeature(
         profilePort = this.profilePort,
@@ -169,3 +170,10 @@ internal expect fun createPlatformProfilePersistenceCapability(diagnostics: Cras
 
 /** Platform authority is acquired only by app composition actuals. */
 internal expect fun createPlatformTonePlaybackCapability(): TonePlaybackCapability
+
+/**
+ * Composition's source of run seeds: each run gets a fresh platform-random seed mixed with its id, so
+ * spawns, wave shapes and Elite aspects differ between runs. Gameplay logs the seed it received.
+ */
+internal fun varyingGameplaySeed(runId: kinetickk.ball.gameplay.api.RunId): Int =
+    kotlin.random.Random.nextInt() xor (runId.value * 0x9E37_79B9L).toInt()
