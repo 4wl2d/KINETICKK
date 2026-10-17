@@ -76,6 +76,38 @@ enum class KkIcon(val key: String, val label: String, vararg layerData: KkIconLa
         KkIconLayer("M9 9h12v12h-12Z", KkIconStyle.STROKE),
         KkIconLayer("M3 3 9 9M15 3l6 6M3 15l6 6M15 15l6 6", KkIconStyle.STROKE),
     ),
+    FORMS_STAR(
+        "forms.star",
+        "Star",
+        KkIconLayer("M12 2.5 14.2 9.8 21.5 12 14.2 14.2 12 21.5 9.8 14.2 2.5 12 9.8 9.8Z", KkIconStyle.STROKE),
+    ),
+    FORMS_SPIRAL(
+        "forms.spiral",
+        "Spiral",
+        KkIconLayer("M12 12a1.5 1.5 0 0 1 3 0a3 3 0 0 1 -6 0a4.5 4.5 0 0 1 9 0a6 6 0 0 1 -12 0a7.5 7.5 0 0 1 15 0", KkIconStyle.STROKE),
+    ),
+    FORMS_DIPOLE(
+        "forms.dipole",
+        "Dipole",
+        KkIconLayer("M2.5 12a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0Z", KkIconStyle.FILL),
+        KkIconLayer("M14.5 12a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0Z", KkIconStyle.STROKE),
+        KkIconLayer("M9.5 12h5", KkIconStyle.STROKE),
+    ),
+    FORMS_PENTAGON(
+        "forms.pentagon",
+        "Pentagon",
+        KkIconLayer("M12 3.5 20.6 9.7 17.3 19.8h-10.6L3.4 9.7Z", KkIconStyle.STROKE),
+    ),
+    FORMS_CRESCENT(
+        "forms.crescent",
+        "Crescent",
+        KkIconLayer("M16 4a9 9 0 1 0 0 16a8.5 8.5 0 0 1 0 -16Z", KkIconStyle.STROKE),
+    ),
+    FORMS_HEXAGON(
+        "forms.hexagon",
+        "Hexagon",
+        KkIconLayer("M12 3 19.8 7.5v9L12 21 4.2 16.5v-9Z", KkIconStyle.STROKE),
+    ),
     WEAPONS_FLUX_WAKE(
         "weapons.flux_wake",
         "Flux Wake",
@@ -352,7 +384,10 @@ enum class KkIcon(val key: String, val label: String, vararg layerData: KkIconLa
         /** Icon for an `icons.json` key such as `"weapons.flux_wake"`, or null. */
         fun byKey(key: String): KkIcon? = entries.firstOrNull { it.key == key }
 
-        /** Form icons in `icons.json` order: circle, square, triangle, ring, diamond, tesseract. */
+        /**
+         * Form icons in `icons.json` order: circle, square, triangle, ring, diamond, tesseract, star, spiral,
+         * dipole, pentagon, crescent, hexagon (the [KkFormGeometry] index order).
+         */
         val Forms: List<KkIcon> = entries.filter { it.key.startsWith("forms.") }
 
         /** Weapon icons in `icons.json` order. */
