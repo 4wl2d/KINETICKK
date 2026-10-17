@@ -239,11 +239,11 @@ class ContentBalanceCharacterizationTest {
         assertEquals(24f, rebirth.minEliteIntervalSeconds)
         assertEquals((0..10).toList(), profiles.map(RebirthProfile::tier))
         assertEquals(
-            "1bc30ab35636dce9",
+            "8e279ebb2dd8e526",
             goldenFingerprint {
                 profiles.forEach { profile ->
                     add(profile.tier)
-                    add(profile.directive.name)
+                    add(profile.displayName)
                     add(profile.openingEnemyCount)
                     add(profile.enemyCapMultiplier)
                     add(profile.spawnRateMultiplier)

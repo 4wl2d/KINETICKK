@@ -21,7 +21,6 @@ import androidx.compose.ui.test.v2.runSkikoComposeUiTest
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.MatrixNodeId
-import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
@@ -227,25 +226,4 @@ class RedesignShotsProfileTest {
 private val Weapons = CatalogWeapons
 
 /** Mirrors the game's default Rebirth data (content impl) for realistic captures. */
-private fun rebirthProfile(tier: Int): RebirthProfile {
-    val swarmRanks = (tier + 2) / 3
-    val fortifiedRanks = (tier + 1) / 3
-    val overclockedRanks = tier / 3
-    val directive = when {
-        tier == 0 -> RebirthDirective.BASELINE
-        (tier - 1) % 3 == 0 -> RebirthDirective.SWARM
-        (tier - 1) % 3 == 1 -> RebirthDirective.FORTIFIED
-        else -> RebirthDirective.OVERCLOCKED
-    }
-    return RebirthProfile(
-        tier = tier, directive = directive, openingEnemyCount = 5 + (tier + 1) / 2,
-        enemyCapMultiplier = 1f + tier * 0.08f + swarmRanks * 0.01f,
-        spawnRateMultiplier = 1f + tier * 0.06f + swarmRanks * 0.01f,
-        enemyHealthMultiplier = 1f + tier * 0.18f + tier * tier * 0.012f + fortifiedRanks * 0.02f,
-        enemySpeedMultiplier = 1f + tier * 0.025f + overclockedRanks * 0.005f,
-        incomingDamageMultiplier = 1f + tier * 0.08f + overclockedRanks * 0.005f,
-        eliteRateMultiplier = 1f, threatTimeOffsetSeconds = tier * 8f, playerPowerMultiplier = 1f + tier * 0.05f,
-        playerIntegrityBonus = tier * 3f, matterGainMultiplier = 1f + tier * 0.12f + fortifiedRanks * 0.01f,
-        bonusRerolls = tier / 5, maximumActiveEnemies = 120, minimumSpawnIntervalSeconds = 0.09f, minimumEliteIntervalSeconds = 24f,
-    )
-}
+private fun rebirthProfile(tier: Int): RebirthProfile = kinetickk.ball.content.api.defaultRebirthProfile(tier)

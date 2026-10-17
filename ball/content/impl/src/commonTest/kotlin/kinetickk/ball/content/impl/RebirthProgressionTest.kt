@@ -3,7 +3,6 @@
 
 package kinetickk.ball.content.impl
 
-import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.RebirthMutator
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.foundation.collections.immutableListOf
@@ -21,7 +20,7 @@ class RebirthProgressionTest {
         val profile = rebirth.profile(0)
 
         assertEquals(0, profile.tier)
-        assertEquals(RebirthDirective.BASELINE, profile.directive)
+        assertEquals("Baseline", profile.displayName)
         assertEquals(5, profile.openingEnemyCount)
         assertEquals(1f, profile.enemyCapMultiplier)
         assertEquals(1f, profile.spawnRateMultiplier)
@@ -79,6 +78,33 @@ class RebirthProgressionTest {
     }
 
     @Test
+    fun everyTierFollowsTheShippedDifficultyFormulas() {
+        rebirth.profiles.forEach { profile ->
+            val t = profile.tier.toFloat()
+            val where = "tier ${profile.tier}"
+            assertEquals(1f + 0.32f * t + 0.035f * t * t, profile.enemyHealthMultiplier, 0.0001f, where)
+            assertEquals(1f + 0.14f * t + 0.008f * t * t, profile.incomingDamageMultiplier, 0.0001f, where)
+            assertEquals(1f + 0.035f * t, profile.enemySpeedMultiplier, 0.0001f, where)
+            assertEquals(1f + 0.09f * t, profile.spawnRateMultiplier, 0.0001f, where)
+            assertEquals(1f + 0.10f * t, profile.enemyCapMultiplier, 0.0001f, where)
+            assertEquals(1f + 0.07f * t, profile.eliteRateMultiplier, 0.0001f, where)
+            assertEquals(12f * t, profile.threatTimeOffsetSeconds, 0.0001f, where)
+            assertEquals(1f + 0.2f * t, profile.matterGainMultiplier, 0.0001f, where)
+            assertEquals(1f + 0.03f * t, profile.playerPowerMultiplier, 0.0001f, where)
+            assertEquals(0f, profile.playerIntegrityBonus, where)
+            assertEquals(profile.tier / 4, profile.bonusRerolls, where)
+            assertEquals(5 + profile.tier, profile.openingEnemyCount, where)
+            assertEquals(1f + 0.05f * t, profile.obstacleDensityMultiplier, 0.0001f, where)
+            assertEquals(profile.newestMutator?.displayName ?: "Baseline", profile.displayName, where)
+        }
+        // Tier 10 doubles the ordinary cap but the hard cap still holds it at 120.
+        assertEquals(120, rebirth.profile(10).enemyCap(90))
+        assertEquals(RebirthMutator.SINGULARITY, rebirth.profile(10).newestMutator)
+        assertEquals(null, rebirth.profile(0).newestMutator)
+        assertEquals(rebirth.profiles.size, rebirth.profiles.map { it.displayName }.toSet().size)
+    }
+
+    @Test
     fun eachTierActivatesTheNextMutatorCumulatively() {
         rebirth.profiles.forEach { profile ->
             val tier = profile.tier
@@ -101,6 +127,7 @@ class RebirthProgressionTest {
         listOf(0f, -1f, Float.NaN, Float.POSITIVE_INFINITY).forEach { density ->
             assertFailsWith<IllegalArgumentException>("density $density") { base.copy(obstacleDensityMultiplier = density) }
         }
+        assertFailsWith<IllegalArgumentException> { base.copy(displayName = " ") }
         val accepted: RebirthProfile = base.copy(packSizeBonus = 0, obstacleDensityMultiplier = Float.MIN_VALUE)
         assertEquals(Float.MIN_VALUE, accepted.obstacleDensityMultiplier)
     }

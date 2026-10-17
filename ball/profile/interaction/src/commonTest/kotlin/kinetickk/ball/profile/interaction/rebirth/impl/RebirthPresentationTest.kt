@@ -5,7 +5,6 @@ package kinetickk.ball.profile.interaction.rebirth.impl
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.BuildPolicy
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.BuildTag
@@ -249,7 +248,7 @@ class RebirthPresentationTest {
 
     private fun profile(tier: Int, speed: Float, rerolls: Int) = RebirthProfile(
         tier = tier,
-        directive = RebirthDirective.SWARM,
+        displayName = "Pack Hunters",
         openingEnemyCount = 14,
         enemyCapMultiplier = 1.1f,
         spawnRateMultiplier = 1.1f,

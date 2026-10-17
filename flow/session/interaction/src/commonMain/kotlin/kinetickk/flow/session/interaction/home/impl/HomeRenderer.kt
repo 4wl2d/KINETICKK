@@ -478,7 +478,7 @@ internal fun homeFacts(model: HomeUiModel, target: HomeLayoutTarget, language: A
         else language.text(HomeMenuLabels[HomeMenuTargets.indexOf(target).coerceAtLeast(0)])
     val matter = homeNumber(model.totalMatter, language)
     val weapon = model.startingWeaponName?.localizedContent(language)
-    val directive = model.rebirthProfile.directive
+    val tierProfile = model.rebirthProfile
     return when (target) {
         HomeLayoutTarget.LAB -> HomeFacts(
             label,
@@ -508,7 +508,7 @@ internal fun homeFacts(model: HomeUiModel, target: HomeLayoutTarget, language: A
             label,
             model.rebirthLevel.toString(),
             listOf(
-                language.text(SessionRedesignText.DIRECTIVE) to directive.displayName.localizedContent(language),
+                language.text(SessionRedesignText.DIRECTIVE) to tierProfile.displayName.localizedContent(language),
                 language.text(SessionRedesignText.STATUS) to
                     language.text(if (model.canRebirth) SessionRedesignText.READY else SessionText.LOCKED_STATE),
             ),
@@ -555,17 +555,23 @@ internal fun homeFacts(model: HomeUiModel, target: HomeLayoutTarget, language: A
         )
         else -> HomeFacts(
             label,
-            directive.displayName.localizedContent(language),
+            tierProfile.displayName.localizedContent(language),
             buildList {
                 add(language.text(SessionText.REBIRTH) to model.rebirthLevel.toString())
                 add(language.text(SessionRedesignText.FORM) to model.coreShape(model.coreShape).displayName.localizedContent(language))
             },
-            directive.description.localizedContent(language),
+            rebirthTierDescription(tierProfile).localizedContent(language),
             language.text(SessionText.REBIRTH_LEVEL, model.rebirthLevel),
             null,
         )
     }
 }
+
+/** What the selected tier adds: its newest mutator's rule, or the baseline cycle's line at tier 0. */
+internal fun rebirthTierDescription(profile: kinetickk.ball.content.api.RebirthProfile): String =
+    profile.newestMutator?.description ?: BASELINE_TIER_DESCRIPTION
+
+private const val BASELINE_TIER_DESCRIPTION = "The original Architect cycle."
 
 /** Grouped integer (1,284 / 1 284) for chips and facts. */
 internal fun homeNumber(value: Long, language: AppLanguage): String {

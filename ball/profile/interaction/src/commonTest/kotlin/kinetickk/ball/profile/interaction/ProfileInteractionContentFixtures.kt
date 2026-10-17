@@ -8,7 +8,6 @@ import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.MatrixNodeDefinition
-import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicAspect
@@ -63,7 +62,7 @@ internal fun testRebirthPolicy(maximumLevel: Int = 10): RebirthPolicySnapshot = 
 
 private fun testRebirthProfile(tier: Int): RebirthProfile = RebirthProfile(
     tier = tier,
-    directive = if (tier == 0) RebirthDirective.BASELINE else RebirthDirective.SWARM,
+    displayName = if (tier == 0) "Baseline" else "Pack Hunters",
     openingEnemyCount = 5 + tier,
     enemyCapMultiplier = 1f,
     spawnRateMultiplier = 1f,

@@ -286,7 +286,7 @@ class ProfileTextFitTest {
                 assertEquals(listOf(ProfileText.HostileEscalation, ProfileText.CycleCompensation).map { language.text(it).uppercase() },
                     frame.of("rebirth.section").map { assertNotNull(it.layout).layoutInput.text.text }.distinct(), context)
                 val target = model(scene.item).let { if (it.isMaximumTier) it.current else it.next }
-                assertEquals(listOf(target.directive.displayName.localizedContent(language).uppercase()),
+                assertEquals(listOf(target.displayName.localizedContent(language).uppercase()),
                     frame.of("rebirth.directive").map { assertNotNull(it.layout).layoutInput.text.text }.distinct(), context)
                 val layout = assertNotNull(holders[scene]?.layout, context)
                 assertRebirthBuildTexts(frame, layout, model(scene.item), language, context)

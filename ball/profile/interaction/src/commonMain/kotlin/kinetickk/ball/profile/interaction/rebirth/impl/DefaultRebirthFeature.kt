@@ -70,7 +70,7 @@ class DefaultRebirthFeature(
                 .coerceIn(rebirthPolicy.minimumLevel, rebirthPolicy.maximumLevel)
         }
         val theme = remember(tier, roles) { RebirthTheme(tier, roles) }
-        val direction = rebirthPolicy.profile(tier).directive.displayName.localizedContent(language)
+        val direction = rebirthPolicy.profile(tier).displayName.localizedContent(language)
         RebirthAdvanceOverlay(progress.value, theme, kkIntString(tier), direction)
     }
 

@@ -202,7 +202,7 @@ internal fun RebirthContent(
         }
         if (advanceProgress > 0f && advanceProgress < 1f) {
             val tier = kkIntString(model.targetTier)
-            val direction = (if (model.isMaximumTier) model.current else model.next).directive.displayName.localizedContent(language)
+            val direction = (if (model.isMaximumTier) model.current else model.next).displayName.localizedContent(language)
             RebirthAdvanceOverlay(advanceProgress, theme, tier, direction)
         }
       }
@@ -328,7 +328,7 @@ private fun DrawScope.drawRebirthSection(
                 Size(fromLayout.size.width + barHeight * 2f, barHeight))
         }
         val fromNameLeft = from.left + fromLayout.size.width + frame.d(14f)
-        val fromName = fitKkText(measurer, model.current.directive.displayName.localizedContent(language), type.fromName * k,
+        val fromName = fitKkText(measurer, model.current.displayName.localizedContent(language), type.fromName * k,
             from.right - fromNameLeft, minFactor = 0.5f) { measurer.typography.condStyle(it) }
         drawProfileText(fromName, fromNameLeft, from.top + fromLayout.kkBoxHeight * 0.5f, Kk.Mute, "rebirth.from.name",
             valign = KkVAlign.CENTER)
@@ -357,7 +357,7 @@ private fun DrawScope.drawRebirthSection(
     val target = if (model.isMaximumTier) model.current else model.next
     // The direction name clears the measured numeral (board: 250 px for one digit, 400 for two).
     val nameLeft = maxOf(layout.name.left, left + width + dx + frame.d(8f))
-    val nameLayout = rebirthDirectiveLayout(measurer, frame, type, target.directive.displayName.localizedContent(language),
+    val nameLayout = rebirthDirectiveLayout(measurer, frame, type, target.displayName.localizedContent(language),
         (layout.name.right - nameLeft).coerceAtLeast(frame.d(40f)))
     drawProfileText(nameLayout, nameLeft, layout.name.top, Kk.Bone, "rebirth.directive")
     val tierTag = drawKkTag(measurer, language.text(ProfileScreensRedesignText.TierTag, model.targetTier),

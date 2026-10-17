@@ -18,7 +18,7 @@ private fun syntheticGameplayContent(): GameplayContentSnapshot {
         maximumLevel = 10,
         profiles = (0..10).map { tier ->
             RebirthProfile(
-                tier, RebirthDirective.BASELINE, 5, 1f, 1f, 1f, 1f, 1f, 1f, 0f, 1f, 0f, 1f, 0,
+                tier, "Baseline", 5, 1f, 1f, 1f, 1f, 1f, 1f, 0f, 1f, 0f, 1f, 0,
                 120, 0.09f, 24f,
             )
         }.toImmutableList(),

@@ -5,19 +5,10 @@ package kinetickk.ball.content.api
 
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
+import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
-
-enum class RebirthDirective(
-    val displayName: String,
-    val description: String,
-) {
-    BASELINE("Baseline", "The original Architect cycle."),
-    SWARM("Swarm", "This cycle adds another rank of hostile density."),
-    FORTIFIED("Fortified", "This cycle adds another rank of enemy integrity."),
-    OVERCLOCKED("Overclocked", "This cycle adds another rank of hostile speed and damage."),
-}
 
 /**
  * A named rule a Rebirth tier adds to the run. Tier n activates entry n - 1 and every entry before
@@ -42,7 +33,8 @@ enum class RebirthMutator(
 /** Immutable, render-ready tuning for one Rebirth cycle. */
 data class RebirthProfile(
     val tier: Int,
-    val directive: RebirthDirective,
+    /** The tier's player-facing name (English content key; localized by the content tables). */
+    val displayName: String,
     val openingEnemyCount: Int,
     val enemyCapMultiplier: Float,
     val spawnRateMultiplier: Float,
@@ -67,6 +59,7 @@ data class RebirthProfile(
 ) {
     init {
         require(tier >= 0) { "Rebirth tier must be non-negative" }
+        require(displayName.isNotBlank()) { "Rebirth tier needs a display name" }
         require(maximumActiveEnemies > 0) { "Rebirth enemy cap must be positive" }
         require(minimumSpawnIntervalSeconds.isFinite() && minimumSpawnIntervalSeconds > 0f) {
             "Minimum spawn interval must be finite and positive"
@@ -83,6 +76,9 @@ data class RebirthProfile(
 
     private val mutatorMask: Int = mutators.fold(0) { mask, mutator -> mask or (1 shl mutator.ordinal) }
 
+    /** The mutator this tier adds on top of the previous one (null at tier 0). */
+    val newestMutator: RebirthMutator? get() = mutators.lastOrNull()
+
     /** True when this cycle activates [mutator]; allocation-free for per-step reads. */
     fun has(mutator: RebirthMutator): Boolean = mutatorMask and (1 shl mutator.ordinal) != 0
 
@@ -98,4 +94,48 @@ data class RebirthProfile(
         max(minimumEliteIntervalSeconds, baseSeconds / eliteRateMultiplier)
 
     fun enemyHealth(base: Float): Float = base * enemyHealthMultiplier
+}
+
+/** Name of the tier without mutators; every later tier is named after the mutator it adds. */
+const val BASELINE_REBIRTH_NAME: String = "Baseline"
+
+/**
+ * The shipped tuning of Rebirth tier [tier] (selected tier t). Hostile scaling grows faster than the
+ * player's compensation, so each tier is a real step up: enemy integrity `1 + 0.32t + 0.035t²`,
+ * incoming damage `1 + 0.14t + 0.008t²`, enemy speed `1 + 0.035t`, spawn rate `1 + 0.09t`, enemy cap
+ * `1 + 0.10t`, Elite rate `1 + 0.07t`, threat `12t` s ahead, Matter `1 + 0.2t`, player power
+ * `1 + 0.03t`, `t / 4` bonus rerolls, `5 + t` opening enemies and obstacle density `1 + 0.05t`. Tier
+ * n also activates the first n [RebirthMutator]s and is named after the newest one. Lives in the
+ * API (like the Matrix and enemy rosters) so fixtures can mirror the catalog exactly.
+ */
+fun defaultRebirthProfile(
+    tier: Int,
+    maximumActiveEnemies: Int = 120,
+    minimumSpawnIntervalSeconds: Float = 0.09f,
+    minimumEliteIntervalSeconds: Float = 24f,
+): RebirthProfile {
+    val t = tier.toFloat()
+    val mutators = RebirthMutator.entries.take(tier).toImmutableList()
+    return RebirthProfile(
+        tier = tier,
+        displayName = mutators.lastOrNull()?.displayName ?: BASELINE_REBIRTH_NAME,
+        openingEnemyCount = 5 + tier,
+        enemyCapMultiplier = 1f + t * 0.10f,
+        spawnRateMultiplier = 1f + t * 0.09f,
+        enemyHealthMultiplier = 1f + t * 0.32f + t * t * 0.035f,
+        enemySpeedMultiplier = 1f + t * 0.035f,
+        incomingDamageMultiplier = 1f + t * 0.14f + t * t * 0.008f,
+        eliteRateMultiplier = 1f + t * 0.07f,
+        threatTimeOffsetSeconds = t * 12f,
+        playerPowerMultiplier = 1f + t * 0.03f,
+        playerIntegrityBonus = 0f,
+        matterGainMultiplier = 1f + t * 0.2f,
+        bonusRerolls = tier / 4,
+        maximumActiveEnemies = maximumActiveEnemies,
+        minimumSpawnIntervalSeconds = minimumSpawnIntervalSeconds,
+        minimumEliteIntervalSeconds = minimumEliteIntervalSeconds,
+        mutators = mutators,
+        packSizeBonus = if (RebirthMutator.PACK_HUNTERS in mutators) 1 else 0,
+        obstacleDensityMultiplier = 1f + t * 0.05f,
+    )
 }
