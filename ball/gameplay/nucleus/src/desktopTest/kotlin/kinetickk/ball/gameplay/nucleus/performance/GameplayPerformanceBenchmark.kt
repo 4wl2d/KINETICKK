@@ -741,6 +741,8 @@ internal fun canonicalStateFingerprint(state: MutableGameState): Long {
     signature = mix(signature, state.invulnerableUntil.toRawBits())
     signature = mix(signature, if (state.ouroborosSpent) 1 else 0)
     signature = mix(signature, state.offerPity)
+    // 0.4.0 Null Covenant: the maximum integrity its liability withholds.
+    signature = mix(signature, state.integrityLiabilityCut.toRawBits())
     signature = mix(signature, state.rewardRandom.snapshot().hashCode())
     state.enemies.forEach {
         signature = mix(signature, it.characterMarkTime.toRawBits())

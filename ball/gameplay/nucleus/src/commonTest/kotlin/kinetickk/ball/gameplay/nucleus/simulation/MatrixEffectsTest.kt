@@ -13,8 +13,12 @@ import kinetickk.ball.content.api.MatrixEffect
 import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.gameplay.nucleus.model.Enemy
 import kinetickk.ball.gameplay.nucleus.model.Pickup
+import kinetickk.ball.gameplay.nucleus.model.StatusCell
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
+import kinetickk.ball.gameplay.nucleus.render.EnemyBehavior
+import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
@@ -410,6 +414,127 @@ class MatrixEffectsTest {
         assertEquals(75f, integrity.contributions.first { it.source == kinetickk.ball.gameplay.api.BuildStatSource.LAB }.amount)
     }
 
+    @Test
+    fun enemyIntegrityReachesEverySpawnPath() {
+        /** Maximum integrity of every enemy the director, a Herald, its escorts, a Broodmother and a Splitter add. */
+        fun spawned(withMatrix: Boolean): List<Pair<EnemyType, Float>> =
+            isolated(MatrixEffect.EnemyIntegrity(1.5f), withMatrix, rebirth = 3).run {
+                enemies.clear()
+                // Births first, while the ordinary cap has room for the brood.
+                val brood = spawnedEnemy(EnemyType.BROODMOTHER, coreX + 500f, coreY).apply { actionTimer = 0f }
+                enemies += brood
+                updateBroodmother(brood, coreX - brood.x, coreY - brood.y, 500f, STEP, STEP)
+                spawnOpeningPacks()
+                check(spawnScheduled(EnemyType.HERALD))
+                spawnPendingEscorts()
+                val splitter = spawnedEnemy(EnemyType.SPLITTER, coreX + 600f, coreY)
+                enemies += splitter
+                val beforeFragments = enemies.size
+                onEnemyKilled(splitter)
+                check(enemies.size > beforeFragments) { "the Splitter leaves fragments" }
+                enemies.filter { it !== splitter }.map { it.type to it.maxHp }
+            }
+        val plain = spawned(false)
+        val tougher = spawned(true)
+        assertEquals(plain.map { it.first }, tougher.map { it.first }, "the same enemies spawn")
+        for (type in listOf(EnemyType.HERALD, EnemyType.SWARMLING, EnemyType.BROODMOTHER)) {
+            assertTrue(plain.any { it.first == type }, "a $type spawned: $plain")
+        }
+        assertTrue(plain.size > 8, "a brood, packs, the Herald with its escorts and fragments: $plain")
+        plain.zip(tougher).forEach { (base, boosted) ->
+            assertEquals(base.second * 1.5f, boosted.second, base.second * 1e-4f, "${base.first} integrity")
+        }
+    }
+
+    @Test
+    fun eliteBountyAndTheKillCounterCountEveryKillPathOnce() {
+        /** New pending item offers and counted kills after [kill] and the next collision pass. */
+        fun after(withMatrix: Boolean, type: EnemyType, kill: MutableGameState.(Enemy) -> Unit): Pair<Int, Int> =
+            isolated(MatrixEffect.EliteBounty, withMatrix, rebirth = 2).run {
+                val target = spawnedEnemy(type, coreX + 300f, coreY)
+                enemies += target
+                val choices = pendingLevelChoices
+                val kills = pendingTotalKills
+                kill(target)
+                // The kill sweep resolves every death once, however it was dealt.
+                resolveCollisions(STEP)
+                assertTrue(target.dead, "the $type died")
+                (pendingLevelChoices - choices) to (pendingTotalKills - kills)
+            }
+        val paths = listOf<MutableGameState.(Enemy) -> Unit>(
+            { damageEnemy(it, it.hp + 1f, killEligible = true, source = HitSource.WEAPON) },
+            { executeEnemy(it, HitSource.STATUS) },
+            { onEnemyKilled(it) },
+        )
+        paths.forEachIndexed { index, kill ->
+            assertEquals(0 to 1, after(false, EnemyType.ELITE, kill), "kill path $index without the bounty")
+            assertEquals(1 to 1, after(true, EnemyType.ELITE, kill), "kill path $index with the bounty")
+        }
+        // The Herald pays out like an Elite, the bounty included; an ordinary kill never does.
+        assertEquals(1 to 1, after(true, EnemyType.HERALD, paths[0]))
+        assertEquals(0 to 1, after(true, EnemyType.DRIFTER, paths[1]))
+    }
+
+    @Test
+    fun secondWindAnswersHostileBlastsAndStrikes() {
+        fun integrityAfter(hurt: MutableGameState.() -> Unit): Float = isolated(MatrixEffect.SecondWind(0.3f, 2f), true).run {
+            hp = 1f
+            hurt()
+            assertEquals(GamePhase.RUNNING, phase)
+            hp
+        }
+        val blast = integrityAfter {
+            detonateBomber(spawnedEnemy(EnemyType.BOMBER, coreX + 20f, coreY).also { enemies += it })
+        }
+        assertEquals(maxHpOfFreshRun() * 0.3f, blast, 1e-3f, "a Bomber blast leaves 30 %")
+        val lance = integrityAfter {
+            takeDamage(strikeDamage(strikingLancer()), kind = IncomingDamage.CONTACT)
+        }
+        assertEquals(maxHpOfFreshRun() * 0.3f, lance, 1e-3f, "a lance leaves 30 %")
+    }
+
+    @Test
+    fun contactDamageMultiplierSoftensStrikesAndHollowSoftensThem() {
+        fun lost(withMatrix: Boolean, hollow: Int): Float = isolated(MatrixEffect.ContactDamage(0.7f), withMatrix).run {
+            val lancer = strikingLancer()
+            lancer.status[StatusCell.STACKS + StatusElement.VOID.ordinal] = hollow.toFloat()
+            val before = hp
+            takeDamage(strikeDamage(lancer), kind = IncomingDamage.CONTACT)
+            before - hp
+        }
+        assertTrue(lost(false, 0) > 0f)
+        assertEquals(lost(false, 0) * 0.7f, lost(true, 0), 1e-3f, "Juggernaut softens a lance like any contact")
+        assertTrue(lost(false, 4) < lost(false, 0), "Hollow cuts a lance")
+    }
+
+    @Test
+    fun hollowRemembersDamageWithoutTheMatrixMultiplierSoUnmakeTakesItOnce() {
+        /** The remembered damage after one proc, and the Unmake it then queues. */
+        fun unmake(withMatrix: Boolean): Pair<Float, Float> = isolated(MatrixEffect.DamageMultiplier(0.35f), withMatrix).run {
+            val enemy = addEnemyForTesting(coreX + 300f, coreY, hp = 100_000f)
+            applyStatus(enemy, StatusElement.VOID, 3, generation = 0)
+            dealProcDamage(enemy, 1_000f)
+            val remembered = enemy.status[StatusCell.HOLLOW_MEMORY]
+            applyStatus(enemy, StatusElement.VOID, 5, generation = 0)
+            remembered to enemy.status[StatusCell.UNMAKE_DAMAGE]
+        }
+        val (plainMemory, plainUnmake) = unmake(false)
+        val (boostedMemory, boostedUnmake) = unmake(true)
+        assertTrue(plainMemory > 0f && plainUnmake > 0f)
+        assertEquals(plainMemory, boostedMemory, plainMemory * 1e-4f, "the memory is measured without the Matrix")
+        assertEquals(plainUnmake, boostedUnmake, plainUnmake * 1e-4f, "the strike applies the multiplier once, itself")
+    }
+
+    private fun maxHpOfFreshRun(): Float = isolated(null, false).maxHp
+
+    /** A Lancer on the Core in the middle of its lance. */
+    private fun MutableGameState.strikingLancer(): Enemy =
+        spawnedEnemy(EnemyType.LANCER, coreX, coreY).also { lancer ->
+            lancer.mode = EnemyBehavior.STRIKE
+            lancer.modeUntil = elapsed + 0.5f
+            enemies += lancer
+        }
+
     private fun matrixOf(vararg ranks: Pair<MatrixNodeId, Int>): MatrixProgress =
         MatrixProgress(MatrixNodeId.entries.map { id -> ranks.firstOrNull { it.first == id }?.second ?: 0 })
 
@@ -442,4 +567,8 @@ class MatrixEffectsTest {
         copy(matrixNodes = matrixNodes.map { definition ->
             if (definition.id == node) definition.copy(effects = immutableListOf(effect)) else definition
         }.toImmutableList())
+
+    private companion object {
+        const val STEP = MutableGameState.FIXED_STEP
+    }
 }

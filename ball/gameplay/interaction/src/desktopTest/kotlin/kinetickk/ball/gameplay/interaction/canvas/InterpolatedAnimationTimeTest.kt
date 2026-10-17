@@ -12,6 +12,8 @@ import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
+import kinetickk.ball.gameplay.nucleus.render.EnemyAffinity
+import kinetickk.ball.gameplay.nucleus.render.EnemyBehavior
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
@@ -58,16 +60,27 @@ class InterpolatedAnimationTimeTest {
         // The totem's dashed ring (24 s per turn).
         val totem = 360f / 24f * half
         assertTrue(turns.any { abs(it - totem) < TOLERANCE }, "the totem ring turns by $totem between the steps: $turns")
+        // A phased Phantom's faint outline (2 s per turn).
+        val phantom = 360f / 2f * half
+        assertTrue(turns.any { abs(it - phantom) < TOLERANCE }, "the phased Phantom ring turns by $phantom between the steps: $turns")
     }
 
-    /** A running frame with an Architect and the weapon totem on screen, nothing moving between steps. */
+    /**
+     * A running frame with an Architect, a phased Phantom and the weapon totem on screen, nothing moving
+     * between steps.
+     */
     private fun scene(): GameplayRenderModel {
         val base = hudTestModel(WIDTH.toFloat(), HEIGHT.toFloat())
         val architectX = base.cameraX + 280f
         val architect = EnemyProjection(ARCHITECT_ID, EnemyType.ARCHITECT, architectX, base.cameraY, 0f, 0f, 900f, 1_000f, 74f,
             0f, 0f, 0f, 0f, architectX, base.cameraY, false)
+        val phantomY = base.cameraY - 220f
+        val phantom = EnemyProjection(PHANTOM_ID, EnemyType.PHANTOM, base.cameraX, phantomY, 0f, 0f, 70f, 70f, 20f,
+            0f, 0f, 0f, 0f, base.cameraX, phantomY, false,
+            affinityBits = EnemyAffinity.encode(EnemyAffinity.NONE, false, EnemyAffinity.NONE, false, false, shifting = true, phase = 0),
+            behavior = EnemyBehavior.PHASED)
         return base.with(
-            "enemies" to immutableListOf(architect),
+            "enemies" to immutableListOf(architect, phantom),
             "totem" to TotemProjection(base.cameraX - 280f, base.cameraY, 0f),
             "elapsed" to ELAPSED,
             "previousCoreX" to base.coreX, "previousCoreY" to base.coreY,
@@ -105,6 +118,7 @@ class InterpolatedAnimationTimeTest {
         const val HEIGHT = 810
         const val ELAPSED = 12f
         const val ARCHITECT_ID = 4_101
+        const val PHANTOM_ID = 4_102
         const val TOLERANCE = 1e-3f
     }
 }

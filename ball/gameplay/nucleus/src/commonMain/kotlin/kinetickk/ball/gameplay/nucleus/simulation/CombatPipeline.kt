@@ -527,8 +527,8 @@ internal fun MutableGameState.damageEnemy(
  * Destroys [enemy] outright with its remaining integrity: an Aegis tether cannot soften an execute, while
  * the Architect's gate and a phased Phantom's untargetability still apply. Callers keep bosses out.
  */
-internal fun MutableGameState.executeEnemy(enemy: Enemy, source: HitSource): DamageResult =
-    damageEnemy(enemy, enemy.hp, killEligible = true, source = source, execute = true)
+internal fun MutableGameState.executeEnemy(enemy: Enemy, source: HitSource, tone: Int = 0): DamageResult =
+    damageEnemy(enemy, enemy.hp, killEligible = true, tone = tone, source = source, execute = true)
 
 // ---------------------------------------------------------------------------------------------
 // Healing and shields: one path, so conversions and blocks apply everywhere.

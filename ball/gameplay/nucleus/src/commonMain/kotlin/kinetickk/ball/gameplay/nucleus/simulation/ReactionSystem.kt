@@ -258,7 +258,8 @@ private fun MutableGameState.resolveReaction(
                 else -> OBLIVION_LINE
             }
             if (enemy.hp < enemy.maxHp * line) {
-                damageEnemy(enemy, enemy.hp, killEligible = true, tone = StatusElement.VOID.ordinal + 1, source = HitSource.STATUS)
+                // An execute: an Aegis tether cannot soften it (bosses never reach here, their line is 0).
+                executeEnemy(enemy, HitSource.STATUS, tone = StatusElement.VOID.ordinal + 1)
             } else {
                 dealStatusDamage(enemy, magnitude, StatusElement.ENTROPY, ignoresAffinity = true)
             }

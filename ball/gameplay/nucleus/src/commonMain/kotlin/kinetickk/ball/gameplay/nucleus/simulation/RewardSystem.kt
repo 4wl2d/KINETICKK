@@ -30,8 +30,9 @@ internal fun MutableGameState.onEnemyKilled(enemy: Enemy) {
     enemy.dead = true
     kills++
     pendingTotalKills++
-    // Elite Bounty queues one more item offer; it opens with the next pending choice.
-    if (enemy.type == EnemyType.ELITE && matrix.eliteBounty) pendingLevelChoices++
+    // Elite Bounty queues one more item offer for every Elite reward (the Herald included); it opens
+    // with the next pending choice.
+    if (eliteReward && matrix.eliteBounty) pendingLevelChoices++
     combo++
     bestCombo = maxOf(bestCombo, combo)
     if (eliteReward) eliteKills++

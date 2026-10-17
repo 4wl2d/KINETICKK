@@ -57,10 +57,10 @@ internal fun totalStacks(enemy: Enemy): Int {
 }
 
 /**
- * The Architect (and, once it exists, the mini-boss): immune to executes, stops and stuns, and Unmake
- * meets its weighted integrity. Every element rule asks this one question.
+ * The Architect and the Herald mini-boss: immune to executes, stops and stuns, only briefly silenced, and
+ * Unmake meets their weighted integrity. Every element rule and [canAct] ask this one question.
  */
-internal val Enemy.isBossClass: Boolean get() = isBoss
+internal val Enemy.isBossClass: Boolean get() = isBoss || isMiniBoss
 
 /** Elites and the bosses; Null Covenant keeps Hollow on them. */
 internal val Enemy.isEliteClass: Boolean get() = isElite || isBossClass
@@ -473,11 +473,14 @@ internal fun forgetHollowWhenEmpty(enemy: Enemy) {
 
 /**
  * Hollow (Void) memory: while the enemy carries Hollow it remembers a share of every damage it takes,
- * bounded by its maximum integrity. Called by the single enemy-integrity writer.
+ * bounded by its maximum integrity. Called by the single enemy-integrity writer. Like every base derived
+ * from a hit, the memory is measured without the Core Matrix damage multiplier, which the Unmake strike
+ * applies once as a damage instance of its own.
  */
-internal fun MutableGameState.rememberHollowDamage(enemy: Enemy, applied: Float) {
+internal fun MutableGameState.rememberHollowDamage(enemy: Enemy, dealt: Float) {
     val hollow = stacks(enemy, StatusElement.VOID)
-    if (hollow <= 0 || applied <= 0f) return
+    if (hollow <= 0 || dealt <= 0f) return
+    val applied = dealt / matrix.damageMultiplier
     var share = hollow * HOLLOW_MEMORY_PER_STACK * build.potency(StatusElement.VOID)
     if (build.upside(RelicId.NULL_COVENANT)) share *= 1f + relicValue(RelicId.NULL_COVENANT, 0) / 100f
     enemy.status[StatusCell.HOLLOW_MEMORY] = min(enemy.maxHp, enemy.status[StatusCell.HOLLOW_MEMORY] + applied * share)

@@ -200,7 +200,7 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
  * Architect and the Herald are immune to stop and stun, so a disable written on them never holds.
  */
 internal fun MutableGameState.canAct(enemy: Enemy): Boolean =
-    enemy.isBoss || enemy.isMiniBoss || elapsed >= enemy.disabledUntil
+    enemy.isBossClass || elapsed >= enemy.disabledUntil
 
 /** False while [enemy] cannot act or is silenced; every hostile attack branch checks it before firing. */
 internal fun MutableGameState.canAttack(enemy: Enemy): Boolean = canAct(enemy) && elapsed >= enemy.silencedUntil

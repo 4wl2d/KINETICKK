@@ -90,6 +90,28 @@ class GameplayPerformanceBenchmarkTest {
             { coreRadius = 20f },
             { enemies.first().disabledUntil = 2f },
             { enemies.first().silencedUntil = 2f },
+            // 0.4.0 wave A: the spawn director, the new enemy behaviors, Null Covenant and frame pacing.
+            { spawnRandom.nextInt() },
+            { heraldsSpawned = 1 },
+            { directorPhase = 2 },
+            { spawnBudget = 3f },
+            { pendingEventKind = 1 },
+            { recentEventTypes = 4 },
+            { ambushReadyAt = 5f },
+            { capOverflowReadyAt = 5f },
+            { spawnEventCount = 3 },
+            { lastSpawnEventKind = 2 },
+            { enemies.first().mode = 2 },
+            { enemies.first().facing = 1f },
+            { enemies.first().linkedBy = 7 },
+            { enemies.first().shieldUntil = 3f },
+            { enemies.first().abilityAt = 3f },
+            { integrityLiabilityCut = 9f },
+            { accumulator = 0.004f },
+            { previousCameraX = 5f },
+            { previousMorningstarX = 5f },
+            { viewportDensity = 2f },
+            { interpolationPrimed = !interpolationPrimed },
         )
         changes.forEachIndexed { index, change ->
             val changed = source.copyForReduction().apply(change)

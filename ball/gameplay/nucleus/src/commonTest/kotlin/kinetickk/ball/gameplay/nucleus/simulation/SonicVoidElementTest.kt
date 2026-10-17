@@ -659,6 +659,54 @@ class SonicVoidElementTest {
 
     private data class ItemCase(val item: String, val trigger: EffectTrigger, val element: StatusElement, val stacks: Int, val every: Int)
 
+    @Test
+    fun theHeraldIsABossForSilenceStopsExecutesAndUnmake() {
+        // Silence: a brief lockout, then the Herald ignores Silence like the Architect.
+        val silenced = buildTestState()
+        val reactor = silenced.dummy(x = 400f)
+        val herald = silenced.dummy(x = 450f, hp = 100_000f, type = EnemyType.HERALD)
+        silenced.applyStatus(reactor, StatusElement.SONIC, 3, generation = 0)
+        silenced.applyStatus(reactor, StatusElement.VOID, 1, generation = 0)
+        assertEquals(silenced.elapsed + SILENCE_BOSS_SECONDS, herald.silencedUntil, 0.0001f)
+
+        // Stasis neither stops nor stuns it.
+        val stopped = buildTestState()
+        val target = stopped.dummy(x = 400f)
+        val moving = stopped.dummy(x = 460f, hp = 100_000f, type = EnemyType.HERALD).apply { vx = 50f }
+        stopped.applyStatus(target, StatusElement.CRYO, 3, generation = 0)
+        stopped.applyStatus(target, StatusElement.VOID, 1, generation = 0)
+        assertEquals(50f, moving.vx, "Stasis leaves the Herald's momentum")
+        assertTrue(stopped.canAct(moving))
+
+        // Oblivion never executes it; it takes the burst instead.
+        val executed = buildTestState()
+        val weakened = executed.dummy(x = 400f, hp = 10_000f, type = EnemyType.HERALD).apply { hp = 300f }
+        executed.applyStatus(weakened, StatusElement.ENTROPY, 3, generation = 0)
+        executed.applyStatus(weakened, StatusElement.VOID, 1, generation = 0)
+        assertTrue(weakened.alive, "The Herald is never executed")
+        assertTrue(weakened.hp < 300f)
+
+        // Unmake meets its weighted integrity.
+        val unmade = buildTestState()
+        val boss = unmade.dummy(x = 400f, hp = 100_000f, type = EnemyType.HERALD)
+        boss.status[StatusCell.HOLLOW_MEMORY] = 50_000f
+        unmade.applyStatus(boss, StatusElement.VOID, 8, generation = 0)
+        assertEquals(100_000f * UNMAKE_INTEGRITY_CAP * victimFactor(boss), boss.status[StatusCell.UNMAKE_DAMAGE], 0.01f)
+    }
+
+    @Test
+    fun oblivionExecutesThroughAnAegisTether() {
+        val state = buildTestState()
+        val aegis = state.dummy(x = 900f, type = EnemyType.AEGIS)
+        val target = state.dummy(x = 400f, hp = 10_000f).apply { hp = 1_000f }
+        target.linkedBy = aegis.id
+        target.linkedUntil = state.elapsed + 1f
+        assertTrue(state.isLinked(target))
+        state.applyStatus(target, StatusElement.ENTROPY, 3, generation = 0)
+        state.applyStatus(target, StatusElement.VOID, 1, generation = 0)
+        assertFalse(target.alive, "A tether cannot soften Oblivion")
+    }
+
     private fun Enemy.resonant(): Enemy = apply { status[StatusCell.STACKS + StatusElement.SONIC.ordinal] = 1f }
 
     // Hostile shots carry the damage their source computed when it fired.
