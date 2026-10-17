@@ -78,7 +78,7 @@ data class HomeProgressProjection(
     val loadout: PlayerLoadout,
     val collection: PlayerCollection,
     val rebirthProgress: RebirthProgress,
-    /** True when an earned Rebirth tier above the selected one is waiting (rank above `level`). */
+    /** True when a new Rebirth tier waits: the rank is uncleared and above the selected `level`. */
     val canAdvanceRebirth: Boolean,
     val characterAchievements: CharacterAchievementProgress = CharacterAchievementProgress(),
     val unlockedCoreShapes: ImmutableSet<CoreShape> = immutableSetOf(CoreShape.ORB),
@@ -108,7 +108,7 @@ data class RebirthProgressProjection(
     override val instanceId: ProfileInstanceId,
     override val revision: ProfileRevision,
     val snapshot: RebirthProfileSnapshot,
-    /** True when an earned Rebirth tier above the selected one is waiting (rank above `level`). */
+    /** True when a new Rebirth tier waits: the rank is uncleared and above the selected `level`. */
     val canAdvance: Boolean,
 ) : ProfileProjection
 

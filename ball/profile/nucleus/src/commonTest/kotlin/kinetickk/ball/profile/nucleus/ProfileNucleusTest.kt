@@ -559,6 +559,22 @@ class ProfileNucleusTest {
     }
 
     @Test
+    fun aNewTierWaitsOnlyWhileTheRankIsUnclearedAndNotSelected() {
+        fun waiting(progress: RebirthProgress): Pair<Boolean, Boolean> {
+            val state = readyState(defaultPlayerProfile(TestProfilePolicy).copy(rebirthProgress = progress))
+            return ProfileNucleus.query(state, ProfileQuery.GetHomeProgress).canAdvanceRebirth to
+                ProfileNucleus.query(state, ProfileQuery.GetRebirthProgress).canAdvance
+        }
+        assertEquals(true to true, waiting(RebirthProgress(level = 0, highestCleared = 4)))
+        assertEquals(true to true, waiting(RebirthProgress(level = 4, highestCleared = 4)))
+        assertEquals(false to false, waiting(RebirthProgress(level = 5, highestCleared = 4)))
+        assertEquals(false to false, waiting(RebirthProgress()))
+        // Every tier is cleared: replaying a lower one leaves no new tier waiting.
+        assertEquals(false to false, waiting(RebirthProgress(level = 3, highestCleared = 10)))
+        assertEquals(false to false, waiting(RebirthProgress(level = 10, highestCleared = 10)))
+    }
+
+    @Test
     fun bootstrapTreatsMissingRejectedAndIncompatibleSnapshotsAsFreshDefaults() {
         val default = defaultPlayerProfile(TestProfilePolicy)
         val missing = ProfileState.initial(

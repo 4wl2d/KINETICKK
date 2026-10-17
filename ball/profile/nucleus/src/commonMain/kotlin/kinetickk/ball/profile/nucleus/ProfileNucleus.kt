@@ -573,11 +573,15 @@ object ProfileNucleus {
         return null
     }
 
-    /** True when an earned tier above the selected one is waiting (the rank is higher than `level`). */
-    private fun canAdvanceRebirth(state: ProfileState): Boolean =
-        state.bootstrap == ProfileBootstrapStatus.Ready &&
-            state.profile.rebirthProgress.level <
-            state.profile.rebirthProgress.rankWithin(state.policy.rebirth.minimumLevel, state.policy.rebirth.maximumLevel)
+    /**
+     * True when a new tier waits: the rank is not cleared yet and lies above the selected `level`. An
+     * Ascendant profile (every tier cleared) has none, whichever tier it replays.
+     */
+    private fun canAdvanceRebirth(state: ProfileState): Boolean {
+        val progress = state.profile.rebirthProgress
+        val rank = progress.rankWithin(state.policy.rebirth.minimumLevel, state.policy.rebirth.maximumLevel)
+        return state.bootstrap == ProfileBootstrapStatus.Ready && rank > progress.level && rank > progress.highestCleared
+    }
 
     private fun ProfileWriteResult.toPersistenceStatus(
         pending: ProfilePersistenceStatus.Pending,
