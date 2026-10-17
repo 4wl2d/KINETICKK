@@ -95,7 +95,7 @@ class RebirthProgressionTest {
             assertEquals(profile.tier / 4, profile.bonusRerolls, where)
             assertEquals(5 + profile.tier, profile.openingEnemyCount, where)
             assertEquals(1f + 0.05f * t, profile.obstacleDensityMultiplier, 0.0001f, where)
-            assertEquals(profile.newestMutator?.displayName ?: "Baseline", profile.displayName, where)
+            assertEquals(kinetickk.ball.content.api.RebirthTierNames[profile.tier], profile.displayName, where)
         }
         // Tier 10 doubles the ordinary cap but the hard cap still holds it at 120.
         assertEquals(120, rebirth.profile(10).enemyCap(90))

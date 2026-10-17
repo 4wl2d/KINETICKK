@@ -96,8 +96,13 @@ data class RebirthProfile(
     fun enemyHealth(base: Float): Float = base * enemyHealthMultiplier
 }
 
-/** Name of the tier without mutators; every later tier is named after the mutator it adds. */
+/** Name of the tier without mutators. */
 const val BASELINE_REBIRTH_NAME: String = "Baseline"
+
+/** Short names of tiers 0..10; each later tier is named for the mutator it adds. */
+val RebirthTierNames: List<String> = listOf(
+    BASELINE_REBIRTH_NAME, "Pack", "Hardened", "Hunt", "Fuse", "Rift", "Overclocked", "Tide", "Armor", "Blackout", "Singularity",
+)
 
 /**
  * The shipped tuning of Rebirth tier [tier] (selected tier t). Hostile scaling grows faster than the
@@ -105,7 +110,7 @@ const val BASELINE_REBIRTH_NAME: String = "Baseline"
  * incoming damage `1 + 0.14t + 0.008t²`, enemy speed `1 + 0.035t`, spawn rate `1 + 0.09t`, enemy cap
  * `1 + 0.10t`, Elite rate `1 + 0.07t`, threat `12t` s ahead, Matter `1 + 0.2t`, player power
  * `1 + 0.03t`, `t / 4` bonus rerolls, `5 + t` opening enemies and obstacle density `1 + 0.05t`. Tier
- * n also activates the first n [RebirthMutator]s and is named after the newest one. Lives in the
+ * n also activates the first n [RebirthMutator]s and carries its short name ([RebirthTierNames]). Lives in the
  * API (like the Matrix and enemy rosters) so fixtures can mirror the catalog exactly.
  */
 fun defaultRebirthProfile(
@@ -118,7 +123,7 @@ fun defaultRebirthProfile(
     val mutators = RebirthMutator.entries.take(tier).toImmutableList()
     return RebirthProfile(
         tier = tier,
-        displayName = mutators.lastOrNull()?.displayName ?: BASELINE_REBIRTH_NAME,
+        displayName = RebirthTierNames.getOrElse(tier) { mutators.lastOrNull()?.displayName ?: BASELINE_REBIRTH_NAME },
         openingEnemyCount = 5 + tier,
         enemyCapMultiplier = 1f + t * 0.10f,
         spawnRateMultiplier = 1f + t * 0.09f,

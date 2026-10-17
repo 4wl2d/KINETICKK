@@ -37,6 +37,8 @@ import kinetickk.foundation.design.KkFormGeometry
 import kinetickk.foundation.design.KkFormPaths
 import kinetickk.foundation.design.KkHomePalette
 import kinetickk.foundation.design.KkIcon
+import kinetickk.foundation.design.KkMutatorSigil
+import kinetickk.foundation.design.KkMutatorSigilPaths
 import kinetickk.foundation.design.KkTime
 import kinetickk.foundation.design.KkTooltipPlacement
 import kinetickk.foundation.design.KkVAlign
@@ -508,9 +510,11 @@ internal fun homeFacts(model: HomeUiModel, target: HomeLayoutTarget, language: A
             label,
             model.rebirthLevel.toString(),
             listOf(
-                language.text(SessionRedesignText.DIRECTIVE) to tierProfile.displayName.localizedContent(language),
+                language.text(SessionRedesignText.TIER) to tierProfile.displayName.localizedContent(language),
+                language.text(SessionRedesignText.RANK) to
+                    if (model.ascendant) language.text(SessionRedesignText.ASCENDANT) else model.rebirthRank.toString(),
                 language.text(SessionRedesignText.STATUS) to
-                    language.text(if (model.canRebirth) SessionRedesignText.READY else SessionText.LOCKED_STATE),
+                    language.text(if (model.canRebirth) SessionRedesignText.NEW_TIER else SessionRedesignText.SELECTED),
             ),
             language.text(SessionRedesignText.REBIRTH_INFO),
             null,
@@ -555,9 +559,9 @@ internal fun homeFacts(model: HomeUiModel, target: HomeLayoutTarget, language: A
         )
         else -> HomeFacts(
             label,
-            tierProfile.displayName.localizedContent(language),
+            model.rebirthLevel.toString(),
             buildList {
-                add(language.text(SessionText.REBIRTH) to model.rebirthLevel.toString())
+                add(language.text(SessionRedesignText.TIER) to tierProfile.displayName.localizedContent(language))
                 add(language.text(SessionRedesignText.FORM) to model.coreShape(model.coreShape).displayName.localizedContent(language))
             },
             rebirthTierDescription(tierProfile).localizedContent(language),
@@ -997,11 +1001,17 @@ private fun DrawScope.drawHeader(model: HomeUiModel, text: CanvasTextMeasurer, s
     }
 }
 
-private class HomeChip(val gem: Boolean, val value: String, val label: String?, val labelFirst: Boolean)
+/** A header chip; [crown] draws the gold Ascendant crown before the label. */
+private class HomeChip(val gem: Boolean, val value: String, val label: String?, val labelFirst: Boolean, val crown: Boolean = false)
 
+/**
+ * The header chips. The gold Rebirth chip is the rank badge: "Rank 5" (the selected tier is in the
+ * Rebirth facts), or "Ascendant 10" under the gold crown once every tier is cleared.
+ */
 private fun homeChip(model: HomeUiModel, language: AppLanguage, compact: Boolean, index: Int): HomeChip = when (index) {
     0 -> HomeChip(true, homeNumber(model.totalMatter, language), if (compact) null else language.text(SessionRedesignText.MATTER), false)
-    1 -> HomeChip(false, model.rebirthLevel.toString(), language.text(SessionText.REBIRTH), true)
+    1 -> HomeChip(false, model.rebirthRank.toString(),
+        language.text(if (model.ascendant) SessionRedesignText.ASCENDANT else SessionRedesignText.RANK), true, crown = model.ascendant)
     2 -> HomeChip(false, "${model.discoveredItemCount}/${model.itemCount}", language.text(SessionText.CODEX), false)
     else -> HomeChip(false, "${model.unlockedWeaponCount}/${model.weaponCount}", language.text(SessionText.WEAPONS_TITLE), false)
 }
@@ -1022,8 +1032,8 @@ private fun DrawScope.chipWidth(text: CanvasTextMeasurer, scene: HomeScene, chip
     val label = chip.label?.let { measureKkText(text, it, chipLabelStyle(text), uppercase = true) }
     val gap = 8f * density
     val gemSize = if (scene.chipCount < 4) 10f else 14f
-    return 10f * density + (if (chip.gem) gemSize * density + gap else 0f) + value.size.width +
-        (if (label != null) gap + label.size.width else 0f) + 14f * density
+    return 10f * density + (if (chip.gem) gemSize * density + gap else 0f) + (if (chip.crown) gemSize * density + gap else 0f) +
+        value.size.width + (if (label != null) gap + label.size.width else 0f) + 14f * density
 }
 
 /** Header chip (`.chip`) right-aligned at [right]; returns its width. */
@@ -1049,6 +1059,11 @@ private fun DrawScope.drawChip(text: CanvasTextMeasurer, right: Float, scene: Ho
     val cy = (top + bottom) * 0.5f
     if (chip.gem) {
         drawKkGem(Offset(x + gemSize * density * 0.5f, cy), accent, gemSize)
+        x += gemSize * density + gap
+    }
+    if (chip.crown) {
+        val radius = gemSize * density * 0.5f
+        translate(x + radius, cy) { drawPath(KkMutatorSigilPaths.of(KkMutatorSigil.ASCENDANT, radius), accent) }
         x += gemSize * density + gap
     }
     if (chip.labelFirst && labelLayout != null) {

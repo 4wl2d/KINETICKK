@@ -68,6 +68,26 @@ class HomeReducerTest {
     }
 
     @Test
+    fun theRebirthBadgeShowsTheRankTheSelectedTierAndTheAscendantTitle() {
+        val lowered = homeReducer().uiModel(homeProjection(rebirth = RebirthProgress(level = 2, highestCleared = 4), canAdvanceRebirth = true))
+        assertEquals(2, lowered.rebirthLevel)
+        assertEquals(5, lowered.rebirthRank)
+        assertFalse(lowered.ascendant)
+        val facts = homeFacts(lowered, HomeLayoutTarget.REBIRTH, kinetickk.foundation.common.localization.AppLanguage.English, 1f)
+        assertEquals("2", facts.big)
+        assertEquals(listOf("Tier", "Rank", "Status"), facts.facts.map { it.first })
+        assertEquals("5", facts.facts[1].second)
+        assertEquals("New tier", facts.facts[2].second)
+
+        val ascendant = homeReducer().uiModel(homeProjection(rebirth = RebirthProgress(level = 7, highestCleared = 10)))
+        assertTrue(ascendant.ascendant)
+        assertEquals(10, ascendant.rebirthRank)
+        val crowned = homeFacts(ascendant, HomeLayoutTarget.REBIRTH, kinetickk.foundation.common.localization.AppLanguage.Russian, 1f)
+        assertEquals("Вознесённый", crowned.facts[1].second)
+        assertEquals("Выбрана", crowned.facts[2].second)
+    }
+
+    @Test
     fun theArmoryIsUnlockableOnlyForAWeaponTheRebirthRankAllows() {
         // Every ungated weapon owned; only Glacier Bell (Reborn 1) is left to buy.
         val weapons = listOf(

@@ -158,6 +158,7 @@ object ProfileNucleus {
             shapes = hangarShapeProgress(state.profile, state.policy),
             selected = state.profile.loadout.coreShape,
             rebirthRank = state.profile.rebirthProgress.rank,
+            ascendedCharacters = state.profile.rebirthProgress.ascendedCharacters,
         )
 
     fun query(state: ProfileState, query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection =

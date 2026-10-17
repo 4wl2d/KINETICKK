@@ -128,6 +128,8 @@ data class HangarProjection(
     val selected: CoreShape,
     /** Rebirth rank the Reborn-rank unlocks compare against. */
     val rebirthRank: Int = 0,
+    /** Characters that cleared the final Rebirth tier: the Hangar crowns them Ascendant. */
+    val ascendedCharacters: ImmutableSet<CoreShape> = immutableSetOf(),
 ) : ProfileProjection
 
 data class PersistenceStatusProjection(

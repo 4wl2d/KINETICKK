@@ -46,7 +46,7 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalTestApi::class)
 class HomeTextFitComposeTest {
     /** Every shipped tier name (Baseline and the ten mutator names). */
-    private val TierNames = listOf("Baseline") + kinetickk.ball.content.api.RebirthMutator.entries.map { it.displayName }
+    private val TierNames = kinetickk.ball.content.api.RebirthTierNames
 
     @Test
     fun factsCardShowsEveryLabelAndValueWholeForRealNamesInBothLanguages() = forMeasurers { text, language, scale ->

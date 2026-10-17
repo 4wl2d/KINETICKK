@@ -109,6 +109,7 @@ internal fun HangarProjection.toRenderModel(
                 integrityBar = bar(integrity, index),
                 handlingBar = bar(handling, index),
                 heatBar = bar(heat, index),
+                ascendant = definition.id in ascendedCharacters,
             )
         }.toImmutableList(),
         selected = selected,

@@ -239,7 +239,7 @@ class ContentBalanceCharacterizationTest {
         assertEquals(24f, rebirth.minEliteIntervalSeconds)
         assertEquals((0..10).toList(), profiles.map(RebirthProfile::tier))
         assertEquals(
-            "8e279ebb2dd8e526",
+            "33e58f3da123c96f",
             goldenFingerprint {
                 profiles.forEach { profile ->
                     add(profile.tier)

@@ -9,6 +9,7 @@ import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.profile.api.HomeProgressProjection
 import kinetickk.ball.profile.api.MatrixProgress
+import kinetickk.ball.profile.api.isAscendant
 import kinetickk.ball.profile.api.rank
 import kinetickk.flow.session.interaction.audio.SessionAudioCue
 import kinetickk.flow.session.interaction.home.api.HomeOutput
@@ -74,6 +75,8 @@ internal class HomeReducer(
         matrixMaxRanks = if (matrix == null) 0 else matrixNodes.sumOf { it.maxRanks },
         matrixOwnedNodes = matrix?.let { progress -> matrixNodes.count { node -> progress.rank(node.id) > 0 } } ?: 0,
         matrixNodeCount = if (matrix == null) 0 else matrixNodes.size,
+        rebirthRank = projection.rebirthProgress.rank,
+        ascendant = projection.rebirthProgress.isAscendant,
     )
 
     fun reduce(action: HomeAction): HomeReduction = when (action) {
