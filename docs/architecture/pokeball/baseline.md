@@ -195,32 +195,6 @@ together.
   kills, ricochets and Data pickups join the cumulative Profile achievements;
   Gameplay publishes them with any other progress or when the run banks.
 
-- **Characters and the Hangar.** Twelve characters (Star, Spiral, Dipole, Pentagon,
-  Crescent and Hexagon appended in stable order) each own a distinct mechanic,
-  trigger, base traits and difficulty from content; at most four use Dash as their main
-  trigger and only the Diamond uses Brake. The Prism's brake barrier is gone: four
-  facets each negate one hurt window, regenerate on a paused six-second timer and never
-  cancel damage kinds marked non-cancellable (obstacle collisions). Orbit, Puncture,
-  Halo, Parry (with Edge) and Lattice are reworked (Brake no longer collapses the
-  lattice). Dipole's ATTRACT only adds a pull to enemy steering; REPEL throws what it
-  pushes (and what the Core strikes) for 0.6 s after the push ends. Ability
-  magnitudes are calibrated by seeded 90-second balance fights (Drifter packs at
-  random bearings, content bolt and contact damage, exact and 0.05-0.15 s jittered
-  Dash and brake timing) that keep every offensive character's averaged ability
-  output within 40 % of their median; the Prism and the Diamond must keep off a large
-  share of the damage the Orb takes. At content damage their prevented totals stay
-  near a fifth of the offensive median, so SPEC 8.2's damage-prevented band is not
-  met and is left to a spec decision. Character state is
-  copy-on-write: a reduction forks scalars and shares the echo ghost path, lattice,
-  drones and scars until its first write. The echo path is paged, so a fixed step
-  copies at most the small page its sample lands on (and the page table once per
-  reduction); the small lattice, drone and scar arrays are copied at most once per
-  reduction. A replayed teleport moves the ghost without striking along the gap.
-  New unlocks count total kills, ricochets, Data pickups and the Reborn
-  rank; no existing unlock target rose. The six Home form tiles became one Hangar card,
-  and the Hangar overlay (H, from Home only) lists every character with its unlock
-  progress and selects through the Profile.
-
 Seeded runs differ from the previous baseline: the seeded baseline trace keeps
 its Core path and only its opening Drifters move. To keep tier 0 at the
 previous difficulty the director banks one enemy per tempo interval at phase
@@ -228,7 +202,8 @@ rate 1 and keeps spawns clear of offered anomalies. The no-POI probe counts
 only victories that skip every POI; the reference seed and at least five of
 the fixed probe seeds win.
 
-The second wave adds world obstacles, a minimap, a wider Data magnet and 83 items.
+The second wave adds world obstacles, a minimap, a wider Data magnet, six more
+characters with the Hangar, and 83 items.
 
 - **Obstacles.** Each run generates asteroids, bumpers and, under Fractured
   Space, unstable asteroids in a five-by-five window of 1200-unit chunks around
@@ -266,6 +241,31 @@ The second wave adds world obstacles, a minimap, a wider Data magnet and 83 item
   choice latch every on-screen Data. Keys and Relic resonances never expire,
   and at the cap they evict the oldest Data. Event Horizon's liability now removes the latch and the level-up
   vacuum instead of halving the radius; Magnet Lens gives +90.
+- **Characters and the Hangar.** Twelve characters (Star, Spiral, Dipole, Pentagon,
+  Crescent and Hexagon appended in stable order) each own a distinct mechanic,
+  trigger, base traits and difficulty from content; at most four use Dash as their main
+  trigger and only the Diamond uses Brake. The Prism's brake barrier is gone: four
+  facets each negate one hurt window, regenerate on a paused six-second timer and never
+  cancel damage kinds marked non-cancellable (obstacle collisions). Orbit, Puncture,
+  Halo, Parry (with Edge) and Lattice are reworked (Brake no longer collapses the
+  lattice). Dipole's ATTRACT only adds a pull to enemy steering; REPEL throws what it
+  pushes (and what the Core strikes) for 0.6 s after the push ends. Ability
+  magnitudes are calibrated by seeded 90-second balance fights (Drifter packs at
+  random bearings, content bolt and contact damage, exact and 0.05-0.15 s jittered
+  Dash and brake timing) that keep every offensive character's averaged ability
+  output within 40 % of their median; the Prism and the Diamond must keep off a large
+  share of the damage the Orb takes. At content damage their prevented totals stay
+  near a fifth of the offensive median, so SPEC 8.2's damage-prevented band is not
+  met and is left to a spec decision. Character state is
+  copy-on-write: a reduction forks scalars and shares the echo ghost path, lattice,
+  drones and scars until its first write. The echo path is paged, so a fixed step
+  copies at most the small page its sample lands on (and the page table once per
+  reduction); the small lattice, drone and scar arrays are copied at most once per
+  reduction. A replayed teleport moves the ghost without striking along the gap.
+  New unlocks count total kills, ricochets, Data pickups and the Reborn
+  rank; no existing unlock target rose. The six Home form tiles became one Hangar card,
+  and the Hangar overlay (H, from Home only) lists every character with its unlock
+  progress and selects through the Profile.
 - **Items.** The item catalog grows to 173 (bound 192). Items `90..172` are
   appended: six Sonic and six Void items, ten that answer ricochets and slams
   (five each, every clause rate-limited), twelve weapon-support items (the first
@@ -289,9 +289,24 @@ The second wave adds world obstacles, a minimap, a wider Data magnet and 83 item
   items it caught were retuned (Rime Rounds, Cold Snap, Null Rounds, Graviton
   Seed, Permafrost, Flashpoint, Killstreak Engine, Deadeye Reticle, Weakpoint
   Scanner, Detonator Spur, Quiet Engine, Hollow Point and Resonance Fork).
-  Expansion Epics and legendaries borrow a family scene for their card. The no-
-  POI bot skips ricochet and slam items, passes on the Furnace Covenant and
-  keeps wider of skipped POIs; the reference seed and eight probe seeds win.
+  Expansion Epics and legendaries borrow a family scene for their card.
+
+Together these rules meet in a few places. A slam is one rule: an enemy the
+Dipole's REPEL threw (or the one it strikes) takes the Dipole slam, any other
+throw the obstacle slam, and both share one per-enemy cooldown, so each contact
+deals one slam and fires SLAM once; thrown enemies meet obstacles only in the
+obstacle pass, at their normal speed. REPEL-thrown enemies no longer slide
+around rocks, and a landed obstacle slam ends the throw. A collision pauses
+facet regeneration and costs Stellar Mass like any other hit, while no facet
+ever cancels it. A Crescent Blink stops before an obstacle on its line, and
+every spawn point is nudged clear of obstacles. In the combined game the
+Orb's baseline damage in the impact encounters rose and two crit-damage items
+fell under the 5 % floor, so Weakpoint Scanner (`+120 %` against any status)
+and Harmonic Lens (`+125 %` against Sonic) gained crit damage; the impact
+encounters never come within 60 of an obstacle. The balance fights still hold every offensive character within 40 %
+of the median. The no-POI bot steers around obstacles, skips ricochet and slam
+items (it rarely bounces), passes on the Furnace Covenant and keeps wider of
+skipped POIs; the reference seed and seven of the ten probe seeds win.
 
 The compact exit workflow removes the old causal-depth assertion that failed
 when a busy Profile refused progress before acceptance. An injected
