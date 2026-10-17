@@ -40,9 +40,15 @@ once you pass near them and every level-up pulls in the Data on screen.
 
 Twelve characters, chosen in the Hangar, each play a mechanic of their own
 (facets, an echo ghost, polarity, a beat, Blink and more), share permanent
-upgrades and can use all twenty-four weapons. Each weapon resonates with two
-build tags, harmonizes with Relics carrying its key, scales with one stat, opens
-three mastery forms and twists for its signature character.
+upgrades and can use all twenty-four weapons: trails, orbitals, auras,
+projectiles, traps, chains, beams and pulses, sixteen open to Matter from the
+start and eight that also need a Reborn rank. Weapons link to the build: each
+point in the weapon's two tags adds 5 % power (up to 50 %); its signature
+character (every character is the signature of two weapons) adds 20 %, starts
+the run a weapon level up and brings a twist; a bound Relic carrying the
+weapon's key (the heirloom included) adds 20 % once and grows 10 % stronger
+itself; one stat scales it, and three mastery forms open at weapon levels 3, 6
+and 10.
 Builds combine 173 items, twenty-two Relics and optional anomaly trials. Items are
 rules, not stat sticks: triggers, conditions and effects over nine archetype
 tags and seven elements (Thermal, Cryo, Ion, Gravitic, Entropy, Sonic, Void)
@@ -51,16 +57,18 @@ elements has its own reaction, 21 in all. Every Relic rewrites a rule and
 carries a cost; Relic keys predict harmony and dissonance, and the Codex records
 discovered reactions, pairings and known incompatibilities.
 Nineteen enemy kinds, from Swarmling packs and Bombers to the Herald mini-boss,
-arrive through a spawn director that shapes every run's waves differently;
-later Rebirth tiers bring the toughest ones. Spend Kinetic Matter on the 32
-nodes of the Core Matrix and in the Armory between runs. Defeat The Architect
-to earn the next Rebirth tier and a Reborn rank while keeping permanent
-progression. Each rank opens weapons, characters, Matrix nodes and four more
-items; each tier is much harder and adds a mutator (packs, hardened Elites,
-volatile remains, armored vanguards, a blackout and an enraged Architect among
-them), and you can pick any earned tier for the next run from the Rebirth
-ladder, so a hard tier never locks you out. Clearing tier 10 makes you
-Ascendant.
+arrive through a spawn director that shapes every run's waves differently; later
+Rebirth tiers bring the toughest ones. Spend Kinetic Matter on the 32 nodes of
+the Core Matrix and in the Armory between runs. Defeat The Architect to earn the
+next Rebirth tier and a Reborn rank while keeping permanent progression. The
+Rebirth ladder shows tiers 0 to 10 and what each rank opens: at least four more
+items every rank, a weapon at ranks 1 to 7 and 9 (Glacier Bell first, Resonance
+Drum last), the Spiral, Pentagon, Crescent and Hexagon at ranks 1, 3, 5 and 7,
+Matrix nodes and the enemy kinds that join at that tier. Each tier is much
+harder and adds a mutator (packs, hardened Elites, volatile remains, armored
+vanguards, a blackout and an enraged Architect among them), and you can pick any
+earned tier for the next run, so a hard tier never locks you out. Clearing tier
+10 makes you Ascendant.
 
 ## Build and run
 

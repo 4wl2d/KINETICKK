@@ -334,130 +334,148 @@ none, offers Amplify alone. The no-POI runs own the original
 twelve weapons, so their recalibration offers match the earlier ones; the seeded
 trace and the probe results are unchanged.
 
-The weapons wave gives all 24 weapons their behavior and the weapon synergy
-rules. Effective weapon power multiplies tag resonance (+5 % per point in the
-weapon's two tags, at most +50 %), the signature character (×1.2; the run starts
-one weapon level up and the automatic ceiling rises by one), Relic key harmony
-(×1.2 while a bound Relic, the heirloom included, carries the weapon's key; that
-Relic's upside counts ×1.1), the scaling stat clamped to `[1, 1.6]` (CRIT adds
-15 % crit chance to the weapon's own hits, STATUS deals ×1.4 against statused
-targets, an Overdrive-scaling weapon takes ×1.5 in Overdrive instead of the
-generic ×1.45), weapon run growth `1 + 1.6p` and the mastery bonus, now 0, +10,
-+20 and +35 % with concrete forms at levels 3, 6 and 10. Continuous and contact
-weapons, and activations a trigger drives (Dash cones, impact shockwaves, brake
-tolls, Dash rifts, Blink spears), scale damage and rotation with three quarters
-of the attack-speed, mastery and build activation gain; discrete weapons keep
-`cooldown()`. Kinetic weapons adopt the dominant element at affinity tier 2 on
-every third qualifying hit. Proc rule: an activation qualifies only its first
-landed hit and a persistent source (trail, aura, contact, tether, beam, sentry)
-at most once per 0.25 s; only qualifying hits fire `WEAPON_HIT` clauses, Echo
-Chamber, the ARSENAL counter and Relic on-hit effects, and a weapon's own element
-lands only with damage. Character hooks take every contact hit and continuous
-hits once per enemy per 0.22 s. Weapon offers deal owned weapons weighted toward
-signature and tag fit. Weapon state lives in one `WeaponRuntime` (bounded entity
-list, proc gates, counters) forked and rebased with the run; the render model
-gains trailing `weaponEntities` and `weaponSynergy` projections, and trail
-points carry their life and strength. The pause board lists the active
-synergies (on phones in portrait while they fit).
+The third wave gives every weapon its behavior and synergies, shows them on the
+weapon screens, and turns Rebirth into tier selection.
 
-The weapon numbers are calibrated in `WeaponBalanceTest`: each weapon stays
-within ±35 % of the median on its family's primary metric and at half the median
-or more on the other, at a fresh level-1 checkpoint and at an Ascended level-10
-reference block; +25 % attack speed adds at least 12 % to every weapon; one
-`WEAPON_HIT` item procs at most 1.5 times per base cooldown among forty enemies.
-They depart from the design sketch: Flux Wake 22/s with Scorch every 2 s,
-Morningstar `13.8 + 0.036·speed`, Phase Lattice 55/s over a wider band, Null
-Lance 68, Gravity Mines 68 with a proximity trigger, Ion Swarm 8.8 (fire rate
-×1.25 at its third form), Rift Blades `18 + 0.018·speed`, Arc Coil 16 falling
-off ×0.9 per hop, Quasar Cannon 87, Entropy Field 11/s, Singularity Spear 100,
-Prism Relay 18 with 2, 3, 3 and 4 bounces, Gyre Disc 45, Scatter Bloom 10 per
-pellet with a passive volley of seven, Tether Arc 5.5/s ramping ×3 (×8 at its
-third form), Sentry Grid 12, Hunter Salvo 9, Concussion Engine 24, Glacier Bell
-37, Event Lens 15/s and 32 on collapse, Solar Sweep 44/s, Aegis Shards 34,
-Hollow Rift 54 and Resonance Drum 30. Forms and secondary numbers follow the
-same calibration, and the mastery form texts state them: Flux Wake's trail
-doubles its width and lasts 4 s, Gravity Mines gain 30 % radius, Ion Swarm shots
-pierce one enemy from the start and one more at the second form, Quasar shots
-grow 10 %, Scatter Bloom pellets pierce two (three at the second form) and keep
-their pierce point-blank, Tether Arc's second tether deals 75 % and charges every
-0.8 s, Hunter missiles burst for 75 % within 110 (×1.2 at the second form) with
-Decay on every second hit, Glacier Bell's passive pulse reaches 170 at 60 %,
-Event Lens's second lens carries 25 % and its well implodes for 10, Solar Sweep
-gains 120 length and scorches every 1.5 s, Entropy Field decays every 1.6 s and
-the Drum knocks back 240. Orbital counts no longer grow with the
-level (the level is in the power): two, one more at Ion Swarm's and Rift
-Blades' first form, more with Agony. Mines and lenses space their Gravitic Mass
-per enemy (1.5 s and 2.5 s) and wells add none, so Collapse cannot cascade.
-Null Lance, Quasar Cannon and Singularity Spear aim at an enemy within 0.5 rad
-and 700 of the heading. Weapon cooldown refunds (Hair Trigger, Autoloader) also
-advance a weapon's own timers (Scatter Bloom's volley, Glacier Bell's toll and
-pulse, Hollow Rift's passive rift, Concussion Engine's shockwave); contact
-weapons surge like continuous ones. The Spiral's ghost shockwaves keep the
-Core's 0.35 s cadence as a second source, orbitals accumulate their phase (a
-speed change never jumps them), and a returning Gyre disc with the third form
-glances around a rock. The perceptible-impact arenas that carry a weapon fly
-both Ion Swarm (a volley) and Sentry Grid (a persistent source) and keep the
-better result, so `WEAPON_HIT` items are measured under the proc rule; the
-comparative scenario keeps three viable directions for every form.
+- **Weapons.** All 24 weapons get their behavior and the weapon synergy rules.
+  Effective weapon power multiplies tag resonance (+5 % per point in the weapon's
+  two tags, at most +50 %), the signature character (×1.2; the run starts one weapon
+  level up and the automatic ceiling rises by one), Relic key harmony (×1.2 while a
+  bound Relic, the heirloom included, carries the weapon's key; that Relic's upside
+  counts ×1.1), the scaling stat clamped to `[1, 1.6]` (CRIT adds 15 % crit chance
+  to the weapon's own hits, STATUS deals ×1.4 against statused targets, an
+  Overdrive-scaling weapon takes ×1.5 in Overdrive instead of the generic ×1.45),
+  weapon run growth `1 + 1.6p` and the mastery bonus, now 0, +10, +20 and +35 % with
+  concrete forms at levels 3, 6 and 10. Continuous and contact weapons, and
+  activations a trigger drives (Dash cones, impact shockwaves, brake tolls, Dash
+  rifts, Blink spears), scale damage and rotation with three quarters of the
+  attack-speed, mastery and build activation gain; discrete weapons keep
+  `cooldown()`. Kinetic weapons adopt the dominant element at affinity tier 2 on
+  every third qualifying hit. Proc rule: an activation qualifies only its first
+  landed hit and a persistent source (trail, aura, contact, tether, beam, sentry) at
+  most once per 0.25 s; only qualifying hits fire `WEAPON_HIT` clauses, Echo
+  Chamber, the ARSENAL counter and Relic on-hit effects, and a weapon's own element
+  lands only with damage. Character hooks take every contact hit and continuous hits
+  once per enemy per 0.22 s. Weapon offers deal owned weapons weighted toward
+  signature and tag fit. Weapon state lives in one `WeaponRuntime` (bounded entity
+  list, proc gates, counters) forked and rebased with the run; the render model
+  gains trailing `weaponEntities` and `weaponSynergy` projections, and trail points
+  carry their life and strength. The pause board lists the active synergies (on
+  phones while they fit).
+- **Weapon numbers.** Calibrated in `WeaponBalanceTest`: each weapon stays within
+  ±35 % of the median on its family's primary metric and at half the median or more
+  on the other, at a fresh level-1 checkpoint and at an Ascended level-10 reference
+  block; +25 % attack speed adds at least 12 % to every weapon; one `WEAPON_HIT`
+  item procs at most 1.5 times per base cooldown among forty enemies. They depart
+  from the design sketch: Flux Wake 22/s with Scorch every 2 s, Morningstar `13.8 +
+  0.036·speed`, Phase Lattice 55/s over a wider band, Null Lance 68, Gravity Mines
+  68 with a proximity trigger, Ion Swarm 8.8 (fire rate ×1.25 at its third form),
+  Rift Blades `18 + 0.018·speed`, Arc Coil 16 falling off ×0.9 per hop, Quasar
+  Cannon 87, Entropy Field 11/s, Singularity Spear 100, Prism Relay 18 with 2, 3, 3
+  and 4 bounces, Gyre Disc 45, Scatter Bloom 10 per pellet with a passive volley of
+  seven, Tether Arc 5.5/s ramping ×3 (×8 at its third form), Sentry Grid 12, Hunter
+  Salvo 9, Concussion Engine 24, Glacier Bell 37, Event Lens 15/s and 32 on
+  collapse, Solar Sweep 44/s, Aegis Shards 34, Hollow Rift 54 and Resonance Drum 30.
+  Forms and secondary numbers follow the same calibration, and the mastery form
+  texts state them: Flux Wake's trail doubles its width and lasts 4 s, Gravity Mines
+  gain 30 % radius, Ion Swarm shots pierce one enemy from the start and one more at
+  the second form, Quasar shots grow 10 %, Scatter Bloom pellets pierce two (three
+  at the second form) and keep their pierce point-blank, Tether Arc's second tether
+  deals 75 % and charges every 0.8 s, Hunter missiles burst for 75 % within 110
+  (×1.2 at the second form) with Decay on every second hit, Glacier Bell's passive
+  pulse reaches 170 at 60 %, Event Lens's second lens carries 25 % and its well
+  implodes for 10, Solar Sweep gains 120 length and scorches every 1.5 s, Entropy
+  Field decays every 1.6 s and the Drum knocks back 240. Orbital counts no longer
+  grow with the level (the level is in the power): two, one more at Ion Swarm's and
+  Rift Blades' first form, more with Agony. Mines and lenses space their Gravitic
+  Mass per enemy (1.5 s and 2.5 s) and wells add none, so Collapse cannot cascade.
+  Null Lance, Quasar Cannon and Singularity Spear aim at an enemy within 0.5 rad and
+  700 of the heading. Weapon cooldown refunds (Hair Trigger, Autoloader) also
+  advance a weapon's own timers (Scatter Bloom's volley, Glacier Bell's toll and
+  pulse, Hollow Rift's passive rift, Concussion Engine's shockwave); contact weapons
+  surge like continuous ones. The Spiral's ghost shockwaves keep the Core's 0.35 s
+  cadence as a second source, orbitals accumulate their phase (a speed change never
+  jumps them), and a returning Gyre disc with the third form glances around a rock.
+  The perceptible-impact arenas that carry a weapon fly both Ion Swarm (a volley)
+  and Sentry Grid (a persistent source) and keep the better result, so `WEAPON_HIT`
+  items are measured under the proc rule; the comparative scenario keeps three
+  viable directions for every form.
+- **Weapon screens.** The Armory lays all 24 weapons on a scrolling grid that brings
+  the inspected weapon into view when it opens and whenever the selection moves,
+  keeps rows at least 84 px tall on narrow phones, tints each icon with its element,
+  names a Rebirth-gated weapon's rank on its tile and marks the selected character's
+  two signature weapons with its form. Its detail panel adds the three mastery forms
+  by level, a synergy block read from content and the Profile alone (the signature
+  character and its twist, the heirloom candidates whose keys harmonize, the tag
+  resonance) and the typed facts (family, element, Relic key, scaling, cadence); the
+  board frame pins the action under the scrolling sheet. A locked unlock stays
+  pressable and names why (Matter short or Rebirth rank) in a polite live region, as
+  does a purchase the Profile refuses; neither reaches the Profile unless the screen
+  believes it can succeed. The Hangar's signature row lists the shown character's
+  two weapons with their owned, starter, Rebirth or price state and any heirloom
+  harmony. Codex weapons are always named, an unowned one keeping the locked look,
+  with their facts, cost and Rebirth rank; during a run the detail reads the run's
+  character, bound Relics and per-tag points as active only for the equipped weapon,
+  and outside a run the next character and the heirloom candidates. Weapon offer
+  cards and Totem weapon rows name the family, element and tags and mark the run
+  character's signature weapon. The synergy figures these screens quote (+20 % once
+  for the signature and once for harmony, +10 % for each harmonized Relic, +5 % per
+  tag point up to +50 %) are presentation copy; Gameplay owns the arithmetic. The
+  policy row for the Armory now names that grid (one tile per catalog weapon, at
+  most 24) in place of the old three-tile page slice.
+- **Rebirth.** The Rebirth rework replaces advancing with tier selection. The
+  Rebirth rank is one above the highest cleared tier (at most 10), and a player may
+  select any tier from 0 up to that rank, so `highestCleared` may exceed `level`:
+  Profile construction, the codec and gameplay start validation enforce one
+  invariant (`highestCleared` in `-1..10`, `level` in `0..rank`), and a run's clear
+  is checked against the rank rather than the live selection
+  (`ClearedLevelAboveRank`). `ProfileRebirth.selectRebirthTier` replaces
+  `advanceRebirth` (`RebirthTierLocked` above the rank; reselecting the current tier
+  is accepted and confirms it); Session sends `SelectRebirthTier(tier)` and keeps
+  the two-press confirmation only for a tier above the highest clear. Unlock gates
+  (items, Relics, point of interest items, Heirloom cards and the build summary,
+  plus weapon, character and Matrix purchases) read the rank, while tier scaling,
+  Reborn odds, the Warden cap, the opening and the roster read the selected tier, so
+  dropping to tier 0 keeps every rank unlock. Tiers follow new formulas (enemy
+  integrity `1 + 0.32t + 0.05t²`, incoming damage `1 + 0.14t + 0.008t²`, speed `1 +
+  0.035t`, spawn rate `1 + 0.09t`, cap `1 + 0.1t`, Elite rate `1 + 0.07t`, threat
+  `12t` s, Matter `1 + 0.2t`, power `1 + 0.03t`, no integrity bonus, `t / 4`
+  rerolls, `5 + t` openers) and short names instead of directives. Mutators added
+  here: Volatile Remains (ordinary enemies burst 0.35 s after death, 6 damage in
+  r70, escaped at 400 u/s or in a Dash; at most 48 pending), Entropy Tide (healing
+  −40 %, shield regeneration −30 %), Armored Vanguard (one ordinary spawn in five
+  plated, rolled from a stateless hash of the run seed and enemy ID so the spawn
+  stream is untouched; weapon damage −40 % until an impact cracks it), Blackout
+  (Data the magnet has not caught fades after 10 s) and Singularity (a fourth,
+  enraged Architect phase at quarter gates and a Herald escort). The Architect's
+  per-hit cap is 1.5 % of its tier-0 integrity (its integrity divided by the tier's
+  integrity multiplier), less 2 % of that share per tier (tier 10 keeps 80 %), so a
+  build that hits the cap also needs more hits on a harder tier. A tier-10 clear
+  records the character as Ascendant (optional sorted `ascendedCharacterIds`,
+  written only when non-empty). The Rebirth screen is a tier ladder; Victory names
+  the rank it earns, Home shows the rank badge and the HUD the active mutator
+  sigils.
 
-The weapon screens read that contract. The Armory lays all 24 weapons on a
-scrolling grid that brings the inspected weapon into view when it opens and
-whenever the selection moves, keeps rows at least 84 px tall on narrow phones,
-tints each icon with its element, names a Rebirth-gated weapon's rank on its
-tile and marks the selected character's two signature weapons with its form.
-Its detail panel adds the three mastery forms by level, a synergy block read
-from content and the Profile alone (the signature character and its twist, the
-heirloom candidates whose keys harmonize, the tag resonance) and the typed facts
-(family, element, Relic key, scaling, cadence); the board frame pins the action
-under the scrolling sheet. A locked unlock stays pressable and names why (Matter
-short or Rebirth rank) in a polite live region, as does a purchase the Profile
-refuses; neither reaches the Profile unless the screen believes it can succeed.
-The Hangar's signature row lists the shown character's two weapons with their
-owned, starter, Rebirth or price state and any heirloom harmony. Codex weapons
-are always named, an unowned one keeping the locked look, with their facts, cost
-and Rebirth rank; during a run the detail reads the run's character, bound
-Relics and per-tag points as active only for the equipped weapon, and outside a
-run the next character and the heirloom candidates. Weapon
-offer cards and Totem weapon rows name the family, element and tags and mark the
-run character's signature weapon. The synergy figures these screens quote
-(+20 % once for the signature and once for harmony, +10 % for each harmonized
-Relic, +5 % per tag point up to +50 %) are
-presentation copy; Gameplay owns the arithmetic. The policy row for the Armory
-now names that grid (one tile per catalog weapon, at most 24) in place of the
-old three-tile page slice.
-
-The Rebirth rework replaces advancing with tier selection. The Rebirth rank is one
-above the highest cleared tier (at most 10), and a player may select any tier from 0
-up to that rank, so `highestCleared` may exceed `level`: Profile construction, the
-codec and gameplay start validation enforce one invariant (`highestCleared` in
-`-1..10`, `level` in `0..rank`), and a run's clear is checked against the rank rather
-than the live selection (`ClearedLevelAboveRank`). `ProfileRebirth.selectRebirthTier`
-replaces `advanceRebirth` (`RebirthTierLocked` above the rank; reselecting the current
-tier is accepted and confirms it); Session sends `SelectRebirthTier(tier)` and keeps the
-two-press confirmation only for a tier above the highest clear. Unlock gates (items,
-Relics, point of interest items, Heirloom cards and the build summary, plus weapon,
-character and Matrix purchases) read the rank, while tier scaling, Reborn odds, the
-Warden cap, the opening and the roster read the selected tier, so dropping to tier 0
-keeps every rank unlock. Tiers follow new formulas (enemy integrity
-`1 + 0.32t + 0.035t²`, incoming damage `1 + 0.14t + 0.008t²`, speed `1 + 0.035t`, spawn
-rate `1 + 0.09t`, cap `1 + 0.1t`, Elite rate `1 + 0.07t`, threat `12t` s, Matter
-`1 + 0.2t`, power `1 + 0.03t`, no integrity bonus, `t / 4` rerolls, `5 + t` openers) and
-short names instead of directives. Mutators added here: Volatile Remains (ordinary
-enemies burst 0.35 s after death, 6 damage in r70, escaped at 400 u/s or in a Dash;
-at most 48 pending), Entropy Tide (healing −40 %, shield regeneration −30 %),
-Armored Vanguard (one ordinary spawn in five plated, rolled from a stateless hash of
-the run seed and enemy ID so the spawn stream is untouched; weapon damage −40 % until
-an impact cracks it), Blackout (Data the magnet has not caught fades after 10 s) and
-Singularity (a fourth, enraged Architect phase at quarter gates and a Herald escort).
-The Architect's per-hit cap is 1.5 % of its tier-0 integrity (its integrity divided
-by the tier's integrity multiplier), so a build that hits the cap also needs more hits
-on a harder tier.
-A tier-10 clear records the character as Ascendant (optional sorted
-`ascendedCharacterIds`, written only when non-empty). The Rebirth screen is a tier
-ladder; Victory names the rank it earns, Home shows the rank badge and the HUD the
-active mutator sigils. Six desktop gates play the no-POI bot through tiers 0, 2, 3,
-6, 8 and 10, including a half-Matrix profile and the strong build's Architect fight
-growing with the tier, and record their measured outcomes.
+In the merged game Armored Vanguard plates blunt every weapon: a twin flight of each
+of the 24 weapons against plated and bare targets measures exactly 60 % of the
+weapon damage until one impact cracks the plates, then the full amount (element
+damage and character abilities are not weapon damage and pass unchanged). A chosen
+heirloom harmonizes like any bound Relic under the rank's heirloom count and the
+Heirloom Vault. The Rebirth ladder lists exactly the weapons, characters, Relics,
+items, Matrix nodes and enemies each rank opens (Glacier Bell at rank 1 through
+Resonance Drum at 9; Spiral, Pentagon, Crescent and Hexagon at 1, 3, 5 and 7). The
+Profile screens' weapon fixture states the calibrated mastery forms, and the
+Gameplay state witness covers the weapon runtime. The reworked weapons left the
+half-Matrix profile winning tier 8 in two of five seeds and the strong build
+clearing tier 10 in three, so enemy integrity's quadratic tier term rose from 0.035
+to 0.05 and the Architect's cap shrinks with the tier (above); the R10 enrage was
+probed and stays. Eight desktop gates play the no-POI bot on five fixed seeds and
+record their measured outcomes: tier 0 fresh wins 4/5, tier 3 with a full Matrix and
+the Pentagon's signature Arc Coil 5/5, tier 6 fresh 0/5, the half Matrix 5/5 at tier
+2 and 1/5 at tier 8, the strong build (full Matrix, signature, Charge harmony, four
+Relics, both bonuses read from the synergy projection) clears tier 10 once while
+surviving a median 850 s, its tier-10 fights never beat the tier-3 median by less
+than 1.3×, and a full Matrix with the Pentagon and Arc Coil clears tier 10 once.
 
 The compact exit workflow removes the old causal-depth assertion that failed
 when a busy Profile refused progress before acceptance. An injected
