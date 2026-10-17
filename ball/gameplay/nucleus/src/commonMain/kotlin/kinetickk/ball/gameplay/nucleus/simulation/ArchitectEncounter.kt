@@ -12,7 +12,7 @@ import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
 
-/** Largest share of the Architect's integrity one damage instance may remove. */
+/** Largest share of the Architect's tier-0 integrity one damage instance may remove (see [architectHitCap]). */
 internal const val ARCHITECT_HIT_CAP: Float = 0.015f
 /** Last phase of the ordinary Architect; Singularity (Rebirth R10) adds an enraged one after it. */
 internal const val ARCHITECT_FINAL_PHASE: Int = 2
@@ -46,12 +46,20 @@ private fun MutableGameState.architectGate(enemy: Enemy): Float {
 }
 
 /**
+ * Largest amount one damage instance may remove: [ARCHITECT_HIT_CAP] of the integrity the Architect
+ * would have without the tier's integrity multiplier. A build that hits the cap therefore needs more
+ * hits on a harder tier, as a build below the cap does; the cap never exceeds the tier-0 share.
+ */
+internal fun MutableGameState.architectHitCap(enemy: Enemy): Float =
+    ARCHITECT_HIT_CAP * enemy.maxHp / rebirthProfile.enemyHealthMultiplier.coerceAtLeast(1f)
+
+/**
  * Applies the Architect's gating to a requested amount: nothing while shifting, at most
- * [ARCHITECT_HIT_CAP] of its integrity, and never past the current phase's gate. Never raises integrity.
+ * [architectHitCap], and never past the current phase's gate. Never raises integrity.
  */
 internal fun MutableGameState.gateArchitectDamage(enemy: Enemy, amount: Float): Float {
     if (isShifting(enemy)) return 0f
-    var gated = min(amount, ARCHITECT_HIT_CAP * enemy.maxHp)
+    var gated = min(amount, architectHitCap(enemy))
     if (enemy.phase < architectFinalPhase()) {
         val gate = architectGate(enemy)
         if (enemy.hp > gate) gated = min(gated, enemy.hp - gate)

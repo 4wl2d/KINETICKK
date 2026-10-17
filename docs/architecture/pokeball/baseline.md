@@ -353,14 +353,19 @@ rate `1 + 0.09t`, cap `1 + 0.1t`, Elite rate `1 + 0.07t`, threat `12t` s, Matter
 short names instead of directives. Mutators added here: Volatile Remains (ordinary
 enemies burst 0.35 s after death, 6 damage in r70, escaped at 400 u/s or in a Dash;
 at most 48 pending), Entropy Tide (healing −40 %, shield regeneration −30 %),
-Armored Vanguard (one ordinary spawn in five plated, weapon damage −40 % until an
-impact cracks it), Blackout (Data the magnet has not caught fades after 10 s) and
+Armored Vanguard (one ordinary spawn in five plated, rolled from a stateless hash of
+the run seed and enemy ID so the spawn stream is untouched; weapon damage −40 % until
+an impact cracks it), Blackout (Data the magnet has not caught fades after 10 s) and
 Singularity (a fourth, enraged Architect phase at quarter gates and a Herald escort).
+The Architect's per-hit cap is 1.5 % of its tier-0 integrity (its integrity divided
+by the tier's integrity multiplier), so a build that hits the cap also needs more hits
+on a harder tier.
 A tier-10 clear records the character as Ascendant (optional sorted
 `ascendedCharacterIds`, written only when non-empty). The Rebirth screen is a tier
 ladder; Victory names the rank it earns, Home shows the rank badge and the HUD the
-active mutator sigils. Four desktop gates play the no-POI bot through tiers 0, 3, 6
-and 10 and record their measured outcomes.
+active mutator sigils. Six desktop gates play the no-POI bot through tiers 0, 2, 3,
+6, 8 and 10, including a half-Matrix profile and the strong build's Architect fight
+growing with the tier, and record their measured outcomes.
 
 The compact exit workflow removes the old causal-depth assertion that failed
 when a busy Profile refused progress before acceptance. An injected

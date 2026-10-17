@@ -192,18 +192,19 @@ class RebirthMutatorTest {
         assertEquals(ARCHITECT_FINAL_PHASE + 1, state.architectFinalPhase())
         state.bossSpawned = true
         val boss = state.addEnemyForTesting(400f, 0f, hp = 4_000f, radius = 74f, type = EnemyType.ARCHITECT)
-        // Quarters: gates at 3,000, 2,000 and 1,000.
-        boss.hp = 3_030f
+        // Quarters: gates at 3,000, 2,000 and 1,000; each hit lands within the tier-10 cap.
+        val near = state.architectHitCap(boss) * 0.5f
+        boss.hp = 3_000f + near
         state.damageEnemy(boss, 80f)
         assertEquals(3_000f, boss.hp, 0.01f)
         assertEquals(1, boss.phase)
         state.elapsed = boss.shiftUntil
-        boss.hp = 2_030f
+        boss.hp = 2_000f + near
         state.damageEnemy(boss, 80f)
         assertEquals(2, boss.phase)
         assertFalse(state.architectEnraged(boss))
         state.elapsed = boss.shiftUntil
-        boss.hp = 1_030f
+        boss.hp = 1_000f + near
         state.damageEnemy(boss, 80f)
         assertEquals(1_000f, boss.hp, 0.01f)
         assertEquals(3, boss.phase)
@@ -213,7 +214,7 @@ class RebirthMutatorTest {
         assertEquals(3, kinetickk.ball.gameplay.nucleus.render.EnemyAffinity.phase(
             state.toRenderModel().enemies.single { it.id == boss.id }.affinityBits))
         state.elapsed = boss.shiftUntil
-        boss.hp = 40f
+        boss.hp = near
         state.damageEnemy(boss, 80f)
         assertTrue(boss.hp <= 0f)
 

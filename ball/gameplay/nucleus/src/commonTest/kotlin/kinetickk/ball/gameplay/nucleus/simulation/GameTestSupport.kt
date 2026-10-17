@@ -53,8 +53,8 @@ internal fun MutableGameState.finalPhaseArchitectForTesting(
     maxHp: Float = 5_400f,
     hp: Float = 40f,
 ): Enemy {
-    require(hp > 0f && hp < ARCHITECT_HIT_CAP * maxHp) { "The Architect must sit below one capped hit" }
     return addEnemyForTesting(x, y, hp = maxHp, type = EnemyType.ARCHITECT).also { architect ->
+        require(hp > 0f && hp < architectHitCap(architect)) { "The Architect must sit below one capped hit" }
         architect.phase = ARCHITECT_FINAL_PHASE
         architect.shiftUntil = 0f
         architect.hp = hp
