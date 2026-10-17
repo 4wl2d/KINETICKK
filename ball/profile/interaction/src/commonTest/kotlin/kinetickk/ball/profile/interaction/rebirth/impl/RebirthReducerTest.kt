@@ -97,7 +97,7 @@ class RebirthReducerTest {
         val tierTwo = content.unlocks.filter { it.tier == 2 }
         assertEquals(gatedWeapons[3].id, assertIs<RebirthUnlock.Weapon>(tierTwo.first()).definition.id)
         assertEquals(listOf("Weapon", "Item", "Item", "MatrixNode", "MatrixNode", "Enemy", "Enemy"),
-            tierTwo.map { it::class.simpleName })
+            tierTwo.map(::unlockKindName))
         val characters = content.unlocks.filterIsInstance<RebirthUnlock.Character>()
         assertEquals(listOf(CoreShape.SPIRAL, CoreShape.PENTAGON, CoreShape.CRESCENT, CoreShape.HEXAGON), characters.map { it.definition.id })
         assertEquals(listOf(1, 3, 5, 7), characters.map { it.tier })
@@ -207,6 +207,15 @@ class RebirthReducerTest {
             audio.requests,
         )
     }
+}
+
+private fun unlockKindName(unlock: RebirthUnlock): String = when (unlock) {
+    is RebirthUnlock.Weapon -> "Weapon"
+    is RebirthUnlock.Character -> "Character"
+    is RebirthUnlock.Relic -> "Relic"
+    is RebirthUnlock.Item -> "Item"
+    is RebirthUnlock.MatrixNode -> "MatrixNode"
+    is RebirthUnlock.Enemy -> "Enemy"
 }
 
 private fun rebirthProjection(
