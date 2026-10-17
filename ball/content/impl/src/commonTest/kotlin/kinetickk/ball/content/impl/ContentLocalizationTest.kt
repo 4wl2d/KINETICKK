@@ -215,6 +215,7 @@ class ContentLocalizationTest {
             "CATALOG COMPLETE // MATTER SALVAGED", "CORE FRACTURED", "ELITE KEY ACQUIRED",
             "RELIC RESONANCE", "TOTEM DETECTED", "ELITE SIGNAL",
             "TWO ANOMALIES DETECTED // CHOOSE A COURSE", "ANOMALY LOST", "ANOMALY RESOLVED",
+            "SECOND WIND",
         ).forEach(::assertFullyLocalized)
     }
 

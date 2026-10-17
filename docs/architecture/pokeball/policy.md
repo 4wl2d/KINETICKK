@@ -128,7 +128,7 @@ remain independently enforced.
 | Desktop synthesis samples / PCM bytes per tone | 22050 / 44100 | validated one-second maximum buffer shape |
 | Android audio workers / queued tasks | 1 / 24 | fixed executor and discard-oldest queue policy |
 | Android synthesis samples / PCM bytes per tone | 22050 / 44100 | validated one-second maximum PCM16 buffer shape |
-| items / weapons / Matrix nodes / Relics / named pairings / reactions | 96 / 12 / 40 / 24 / 32 / 10 (current catalog 80 / 12 / 32 / 20 / 20 / 10) | Content bootstrap validation, including key-consistent pairings, declared elements, Break floors and Matrix prerequisites within their branch one row above the node |
+| items / weapons / Matrix nodes / Relics / named pairings / reactions | 96 / 12 / 40 / 24 / 32 / 10 (current catalog 80 / 12 / 32 / 20 / 20 / 10) | Content bootstrap validation, including key-consistent pairings, declared elements, Break floors and Matrix prerequisites within their branch, each node one row below its deepest prerequisite |
 | Matrix node ranks / rows / effects per node | 5 / 8 / 4 | Content definition construction; every node lists one price per rank |
 | Rebirth level | `0..10` | Content typed policy plus Profile/Gameplay validation |
 | equipped Relic slots / rank | 4 / `1..3` (generic Meld reaches 2) | captured Content Relic policy plus Gameplay retention/saturation |
