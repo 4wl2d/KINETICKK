@@ -71,12 +71,14 @@ class ReworkContractHelpersTest {
     @Test
     fun abilityPowerSharesWeaponFactorsButGrowsOnTheAbilityCurve() {
         val state = buildTestState(rebirth = 2)
-        assertEquals(state.effectiveWeaponPower(), state.abilityPower(), 0.0001f, "both curves start at 1")
+        // The weapon's synergies (tags, signature, harmony, scaling) belong to its own hits only.
+        assertEquals(state.effectiveWeaponPower() / state.weaponSynergyPower(), state.abilityPower(), 0.0001f, "both curves start at 1")
 
         state.elapsed = state.content.tempo.bossAtSeconds
         val weaponRatio = state.content.tempo.weaponRunGrowth(state.elapsed)
+        assertEquals(2.6f, weaponRatio, 0.0001f)
         assertEquals(2f, state.content.tempo.abilityRunGrowth(state.elapsed), 0.0001f)
-        assertEquals(state.effectiveWeaponPower() / weaponRatio * 2f, state.abilityPower(), 0.0001f)
+        assertEquals(state.effectiveWeaponPower() / state.weaponSynergyPower() / weaponRatio * 2f, state.abilityPower(), 0.0001f)
 
         val calm = state.abilityPower()
         state.overdriveTime = 1f

@@ -9,6 +9,7 @@ import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.Enemy
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
@@ -24,6 +25,8 @@ internal fun buildTestState(
     rebirth: Int = 0,
     shape: CoreShape = CoreShape.ORB,
     content: GameplayContentSnapshot = canonicalGameplayContent,
+    /** The run's weapon; its Relic key harmonizes with bound Relics carrying it. */
+    weapon: WeaponId = WeaponId.FLUX_WAKE,
 ): MutableGameState = MutableGameState(
     content,
     seed = seed,
@@ -31,6 +34,8 @@ internal fun buildTestState(
     initialRebirthLevel = rebirth,
 ).apply {
     coreShape = shape
+    unlockWeaponsForTesting(listOf(weapon))
+    startingWeapon = weapon
     resize(1_280f, 720f)
     startRun()
     enemies.clear()

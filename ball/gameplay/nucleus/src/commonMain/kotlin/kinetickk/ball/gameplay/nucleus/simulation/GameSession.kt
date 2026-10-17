@@ -164,10 +164,11 @@ internal fun MutableGameState.startRun() {
     rerollsRemaining = 1 + matrix.rerolls + rebirthProfile.bonusRerolls
     overdriveCharge = matrix.startingOverdrive
     overdriveTime = 0f
-    weaponLevel = 1 + matrix.startingWeaponLevels
+    weapon = startingWeapon
+    // The signature character starts its weapon one level up.
+    weaponLevel = 1 + matrix.startingWeaponLevels + signatureLevelBonus()
     resetRunStats()
     recompileBuild()
-    weapon = startingWeapon
     resetWeaponRuntime()
     resetPointsOfInterest()
     resetObstacles()

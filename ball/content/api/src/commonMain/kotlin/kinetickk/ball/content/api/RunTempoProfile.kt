@@ -73,7 +73,8 @@ data class RunTempoProfile(
     /** Run scale of flat, status, reaction and proc damage; gameplay and reward cards both read it. */
     fun runScaleGrowth(elapsedSeconds: Float): Float = 1f + 1.6f * progress(elapsedSeconds)
     fun impactRunGrowth(elapsedSeconds: Float): Float = 1f + 1.2f * progress(elapsedSeconds)
-    fun weaponRunGrowth(elapsedSeconds: Float): Float = 1f + 0.3f * progress(elapsedSeconds)
+    /** Growth of the equipped weapon's own hits: 1 + 1.6p, the same pace as flat and proc damage. */
+    fun weaponRunGrowth(elapsedSeconds: Float): Float = 1f + 1.6f * progress(elapsedSeconds)
     /** Growth of character abilities and weapon-based item effects: 1 + 1.0p. */
     fun abilityRunGrowth(elapsedSeconds: Float): Float = 1f + 1.0f * progress(elapsedSeconds)
     /** Damage the build deals to its own Core (reaction recoil) keeps linear growth. */

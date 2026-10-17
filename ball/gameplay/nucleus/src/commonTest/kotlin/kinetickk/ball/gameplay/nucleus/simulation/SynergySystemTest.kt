@@ -137,18 +137,18 @@ class SynergySystemTest {
     @Test
     fun harmonyAndDissonanceScaleUpsidesWhileHollowCrownWeakensTheRest() {
         val harmony = engine(RelicId.GYRE_ENGINE, RelicId.STORMHEART_CAPACITOR, RelicId.BLINK_DRIVE)
-        // Gyre shares Motion with both partners.
-        assertEquals(1.21f, harmony.build.relicUpside(RelicId.GYRE_ENGINE), 0.0001f)
+        // Gyre shares Motion with both partners, and with the run's Flux Wake (weapon key harmony).
+        assertEquals(1.21f * HARMONY_MAGNITUDE, harmony.build.relicUpside(RelicId.GYRE_ENGINE), 0.0001f)
         assertTrue(harmony.build.links.all { it.kind == RelicLinkKind.HARMONY })
 
         val dissonance = engine(RelicId.GYRE_ENGINE, RelicId.STASIS_ANCHOR)
-        assertEquals(0.85f, dissonance.build.relicUpside(RelicId.GYRE_ENGINE), 0.0001f)
+        assertEquals(0.85f * HARMONY_MAGNITUDE, dissonance.build.relicUpside(RelicId.GYRE_ENGINE), 0.0001f)
         assertEquals(0.85f, dissonance.build.relicUpside(RelicId.STASIS_ANCHOR), 0.0001f)
         assertEquals(RelicLinkKind.DISSONANCE, dissonance.build.links.single().kind)
 
         // A named pairing replaces the generic key rule for its pair.
         val named = engine(RelicId.PERPETUAL_VECTOR, RelicId.GYRE_ENGINE)
-        assertEquals(1f, named.build.relicUpside(RelicId.GYRE_ENGINE), 0.0001f)
+        assertEquals(HARMONY_MAGNITUDE, named.build.relicUpside(RelicId.GYRE_ENGINE), 0.0001f)
         assertEquals(RelicLinkKind.CONCORD, named.build.links.single().kind)
         assertEquals(RelicPairingId.ENDLESS_GYRE, named.build.links.single().pairing)
 

@@ -6,6 +6,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponId
 
 import kinetickk.ball.gameplay.api.*
@@ -123,6 +124,7 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
             val impact = dealHit(enemy, damage, HitSource.IMPACT, canCrit = true, forceCrit = edgeCritical)
             if (edgeCritical) spendEdgeCritical()
             onCharacterImpact(enemy, impact, coreImpactSpeed, characterMultiplier)
+            onWeaponImpact(coreImpactSpeed, damage)
             // A fast impact destroys an unprimed Bomber outright, before it can prime, even through a tether.
             if (defusable && enemy.alive && coreImpactSpeed >= BOMBER_DEFUSE_SPEED) {
                 executeEnemy(enemy, HitSource.IMPACT)
@@ -156,94 +158,211 @@ internal fun MutableGameState.resolveWeaponDamage(delta: Float) {
     val power = effectiveWeaponPower()
     val agonyRank = agonyPower()
     when (weapon) {
-        WeaponId.FLUX_WAKE -> for (enemyIndex in enemies.indices) {
-            val enemy = enemies[enemyIndex]
-            var touching = false
-            for (trailIndex in trail.indices) {
-                val point = trail[trailIndex]
-                if (
-                    point.age < 1.8f + agonyRank * 0.18f &&
-                    distanceSquared(point.x, point.y, enemy.x, enemy.y) <
-                    square(enemy.radius + 20f + agonyRank * 4f)
-                ) {
-                    touching = true
-                    break
-                }
-            }
-            if (touching) {
-                dealWeaponDamage(
-                    enemy,
-                    (12f + softVelocity(speed) * 0.012f) * delta * power * (1f + agonyRank * 0.10f),
-                    cadence = WeaponHitCadence.CONTINUOUS,
-                )
-            }
-        }
-        WeaponId.MORNINGSTAR -> for (enemyIndex in enemies.indices) {
-            val enemy = enemies[enemyIndex]
-            val hitRadius = enemy.radius + 24f
-            val primaryHit = distanceSquared(morningstarX, morningstarY, enemy.x, enemy.y) < hitRadius * hitRadius
-            val mirrorX = coreX * 2f - morningstarX
-            val mirrorY = coreY * 2f - morningstarY
-            val forbiddenHit = agonyRank > 0 && distanceSquared(mirrorX, mirrorY, enemy.x, enemy.y) < hitRadius * hitRadius
-            if (enemy.weaponCooldown <= 0f && (primaryHit || forbiddenHit)) {
-                val forbiddenScale = if (!primaryHit && forbiddenHit) 0.55f + 0.08f * agonyRank else 1f
-                dealWeaponDamage(
-                    enemy,
-                    (38f + softVelocity(speed) * 0.1f) * effectiveMass() * power * forbiddenScale,
-                    canCrit = true,
-                    cadence = WeaponHitCadence.CONTACT,
-                )
-                enemy.weaponCooldown = 0.2f
-                screenShake = max(screenShake, 5f)
+        WeaponId.FLUX_WAKE -> resolveFluxWake(delta, power, agonyRank)
+        WeaponId.MORNINGSTAR -> resolveMorningstar(power, agonyRank)
+        WeaponId.PHASE_LATTICE -> resolvePhaseLattice(delta, power, agonyRank)
+        WeaponId.RIFT_BLADES -> resolveRiftBlades(power)
+        WeaponId.ENTROPY_FIELD -> resolveEntropyField(delta, power, agonyRank)
+        WeaponId.NULL_LANCE, WeaponId.GRAVITY_MINES, WeaponId.ION_SWARM, WeaponId.ARC_COIL, WeaponId.QUASAR_CANNON,
+        WeaponId.SINGULARITY_SPEAR, WeaponId.PRISM_RELAY, WeaponId.GYRE_DISC, WeaponId.SCATTER_BLOOM, WeaponId.TETHER_ARC,
+        WeaponId.SENTRY_GRID, WeaponId.HUNTER_SALVO, WeaponId.CONCUSSION_ENGINE, WeaponId.GLACIER_BELL, WeaponId.EVENT_LENS,
+        WeaponId.SOLAR_SWEEP, WeaponId.AEGIS_SHARDS, WeaponId.HOLLOW_RIFT, WeaponId.RESONANCE_DRUM -> Unit
+    }
+    resolveWeaponEntityHits(delta)
+}
+
+/** Flux Wake: 16/s per enemy touching a live trail point (no speed term: it scales with speed), Scorch every 0.5 s. */
+private fun MutableGameState.resolveFluxWake(delta: Float, power: Float, agonyRank: Int) {
+    val width = FLUX_WIDTH * (if (hasMasteryForm(1)) 1.4f else 1f) + agonyRank * 4f
+    val earlyIgnite = hasMasteryForm(3)
+    for (enemyIndex in enemies.indices) {
+        val enemy = enemies[enemyIndex]
+        if (!enemy.alive) continue
+        var scale = 0f
+        for (trailIndex in trail.indices) {
+            val point = trail[trailIndex]
+            if (point.age < point.life && point.scale > scale &&
+                distanceSquared(point.x, point.y, enemy.x, enemy.y) < square(enemy.radius + width)
+            ) {
+                scale = point.scale
             }
         }
-        WeaponId.PHASE_LATTICE -> for (enemyIndex in enemies.indices) {
-            val enemy = enemies[enemyIndex]
-            val ring = distanceSquared(coreX, coreY, enemy.x, enemy.y)
-            if (ring in square(82f)..square(138f)) dealWeaponDamage(enemy, 19f * delta * power, cadence = WeaponHitCadence.CONTINUOUS)
-            if (agonyRank > 0 && ring in square(158f)..square(192f + agonyRank * 4f)) {
-                dealWeaponDamage(enemy, (8f + 3f * agonyRank) * delta * power, cadence = WeaponHitCadence.CONTINUOUS)
-            }
+        if (scale > 0f) {
+            val landed = dealWeaponDamage(enemy, FLUX_DPS * delta * power * scale * (1f + agonyRank * 0.10f), cadence = WeaponHitCadence.CONTINUOUS).amount > 0f
+            if (landed) weaponElementTick(enemy, StatusElement.THERMAL, FLUX_SCORCH_INTERVAL, extraBeforeBreak = earlyIgnite)
         }
-        WeaponId.RIFT_BLADES -> for (enemyIndex in enemies.indices) {
-            val enemy = enemies[enemyIndex]
-            var orbitalHit = false
-            if (enemy.weaponCooldown <= 0f) {
-                for (orbitalIndex in weaponOrbitals.indices) {
-                    val orbital = weaponOrbitals[orbitalIndex]
-                    if (
-                        distanceSquared(orbital.x, orbital.y, enemy.x, enemy.y) <=
-                        square(orbital.radius + enemy.radius)
-                    ) {
-                        orbitalHit = true
-                        break
-                    }
-                }
-            }
-            if (orbitalHit) {
-                dealWeaponDamage(enemy, (31f + softVelocity(speed) * 0.025f) * power, canCrit = true, cadence = WeaponHitCadence.CONTACT)
-                enemy.weaponCooldown = 0.17f
-            }
-        }
-        WeaponId.ENTROPY_FIELD -> for (enemyIndex in enemies.indices) {
-            val enemy = enemies[enemyIndex]
-            val radius = 170f + weaponLevel * 5f + agonyRank * 18f
-            if (distanceSquared(coreX, coreY, enemy.x, enemy.y) <= square(radius + enemy.radius)) {
-                // Agony's collapse executes outright, past every multiplier and tether; bosses only take the field.
-                val collapse = agonyRank > 0 && !enemy.isBoss && !enemy.isMiniBoss && enemy.hp <= enemy.maxHp * (0.06f + agonyRank * 0.015f)
-                if (collapse) {
-                    executeEnemy(enemy, HitSource.WEAPON)
-                } else {
-                    dealWeaponDamage(enemy, 24f * delta * power * (1f + agonyRank * 0.08f), cadence = WeaponHitCadence.CONTINUOUS)
-                }
-                val drag = exp(-0.5f * delta * enemy.knockback)
-                enemy.vx *= drag
-                enemy.vy *= drag
-            }
-        }
-        else -> Unit
     }
 }
+
+/** Morningstar: (38 + 0.1 v) per contact (mass is its scaling, so no mass term); the forms add reach, a star and throws. */
+private fun MutableGameState.resolveMorningstar(power: Float, agonyRank: Int) {
+    val sizeScale = morningstarScale()
+    val hitReach = MORNINGSTAR_REACH * sizeScale
+    val damage = (MORNINGSTAR_DAMAGE + softVelocity(speed) * 0.1f) * power * sizeScale
+    val secondStar = hasMasteryForm(2)
+    val secondX = coreX - (morningstarX - coreX) * MORNINGSTAR_SECOND_ORBIT
+    val secondY = coreY - (morningstarY - coreY) * MORNINGSTAR_SECOND_ORBIT
+    val mirrorX = coreX * 2f - morningstarX
+    val mirrorY = coreY * 2f - morningstarY
+    val knockback = MORNINGSTAR_KNOCKBACK * if (hasMasteryForm(3)) 2f else 1f
+    for (enemyIndex in enemies.indices) {
+        val enemy = enemies[enemyIndex]
+        if (!enemy.alive || enemy.weaponCooldown > 0f) continue
+        val reach = enemy.radius + hitReach
+        val primaryHit = distanceSquared(morningstarX, morningstarY, enemy.x, enemy.y) < reach * reach
+        val secondReach = enemy.radius + hitReach * MORNINGSTAR_SECOND_SIZE
+        val secondHit = secondStar && distanceSquared(secondX, secondY, enemy.x, enemy.y) < secondReach * secondReach
+        val forbiddenHit = agonyRank > 0 && distanceSquared(mirrorX, mirrorY, enemy.x, enemy.y) < reach * reach
+        if (!primaryHit && !secondHit && !forbiddenHit) continue
+        val scale = when {
+            primaryHit -> 1f
+            secondHit -> MORNINGSTAR_SECOND_SIZE
+            else -> 0.55f + 0.08f * agonyRank
+        }
+        val sourceX = if (primaryHit) morningstarX else if (secondHit) secondX else mirrorX
+        val sourceY = if (primaryHit) morningstarY else if (secondHit) secondY else mirrorY
+        dealWeaponDamage(enemy, damage * scale, canCrit = true, cadence = WeaponHitCadence.CONTACT,
+            procKey = WeaponRuntime.sourceKey(if (primaryHit) 0 else 1))
+        pushEnemy(enemy, sourceX, sourceY, knockback * scale)
+        enemy.weaponCooldown = 0.2f
+        screenShake = max(screenShake, 5f)
+    }
+}
+
+/** Phase Lattice: a ring 26/s with Chill every 0.6 s; the Ring signature centres it on the Halo. */
+private fun MutableGameState.resolvePhaseLattice(delta: Float, power: Float, agonyRank: Int) {
+    val center = phaseLatticeCenter()
+    val half = PHASE_LATTICE_HALF_WIDTH * if (hasMasteryForm(1)) 1.35f else 1f
+    val inner = square(max(0f, center - half))
+    val outer = square(center + half)
+    val earlyFreeze = hasMasteryForm(3)
+    val outerRing = hasMasteryForm(2)
+    for (enemyIndex in enemies.indices) {
+        val enemy = enemies[enemyIndex]
+        if (!enemy.alive) continue
+        val ring = distanceSquared(coreX, coreY, enemy.x, enemy.y)
+        if (ring in inner..outer) {
+            val landed = dealWeaponDamage(enemy, PHASE_LATTICE_DPS * delta * power, cadence = WeaponHitCadence.CONTINUOUS).amount > 0f
+            if (landed) weaponElementTick(enemy, StatusElement.CRYO, PHASE_LATTICE_CHILL_INTERVAL, extraBeforeBreak = earlyFreeze)
+        } else if (outerRing && ring in square(center + PHASE_OUTER_OFFSET - 16f)..square(center + PHASE_OUTER_OFFSET + 16f)) {
+            dealWeaponDamage(enemy, PHASE_OUTER_DPS * delta * power, cadence = WeaponHitCadence.CONTINUOUS, procKey = WeaponRuntime.sourceKey(1))
+        }
+        if (agonyRank > 0 && ring in square(158f)..square(192f + agonyRank * 4f)) {
+            dealWeaponDamage(enemy, (8f + 3f * agonyRank) * delta * power, cadence = WeaponHitCadence.CONTINUOUS, procKey = WeaponRuntime.sourceKey(1))
+        }
+    }
+}
+
+/** Centre radius of Phase Lattice's ring: the Halo radius for the Ring, else 110. */
+internal fun MutableGameState.phaseLatticeCenter(): Float =
+    if (signatureActive() && haloRadius > 0f) haloRadius else PHASE_LATTICE_CENTER
+
+/** Rift Blades: (31 + 0.025 v) per contact, Hollow on every third hit; at the third form crits slash on. */
+private fun MutableGameState.resolveRiftBlades(power: Float) {
+    val runtime = weaponRuntime
+    for (enemyIndex in enemies.indices) {
+        val enemy = enemies[enemyIndex]
+        if (!enemy.alive || enemy.weaponCooldown > 0f) continue
+        var orbitalHit = false
+        for (orbitalIndex in weaponOrbitals.indices) {
+            val orbital = weaponOrbitals[orbitalIndex]
+            if (distanceSquared(orbital.x, orbital.y, enemy.x, enemy.y) <= square(orbital.radius + enemy.radius)) {
+                orbitalHit = true
+                break
+            }
+        }
+        if (!orbitalHit) continue
+        val damage = (RIFT_BLADE_DAMAGE + softVelocity(speed) * 0.025f) * power
+        val result = dealWeaponDamage(enemy, damage, canCrit = true, cadence = WeaponHitCadence.CONTACT)
+        enemy.weaponCooldown = 0.17f
+        if (result.amount > 0f) {
+            runtime.elementHits = (runtime.elementHits + 1) % RIFT_BLADE_HOLLOW_EVERY
+            if (runtime.elementHits == 0) applyWeaponStatus(enemy, StatusElement.VOID, 1)
+        }
+        if (result.critical && hasMasteryForm(3)) riftSlash(enemy, damage * RIFT_SLASH_SHARE)
+    }
+}
+
+/** A rift slash: a cut from the struck enemy outward from the Core. */
+private fun MutableGameState.riftSlash(origin: Enemy, damage: Float) {
+    val dx = origin.x - coreX
+    val dy = origin.y - coreY
+    val distance = max(1f, length(dx, dy))
+    val endX = origin.x + dx / distance * RIFT_SLASH_LENGTH
+    val endY = origin.y + dy / distance * RIFT_SLASH_LENGTH
+    for (index in enemies.indices) {
+        val enemy = enemies[index]
+        if (enemy === origin || !enemy.alive) continue
+        if (segmentCircleIntersects(origin.x, origin.y, endX, endY, enemy.x, enemy.y, enemy.radius + 10f)) {
+            dealWeaponDamage(enemy, damage, procKey = WeaponRuntime.PROC_NEVER)
+        }
+    }
+    addWeaponArc(origin.x, origin.y, endX, endY, 0.16f)
+}
+
+/** Entropy Field: 28/s with drag and Decay every 0.8 s; the forms widen it, execute and spread Ruptures. */
+private fun MutableGameState.resolveEntropyField(delta: Float, power: Float, agonyRank: Int) {
+    val radius = entropyFieldRadius()
+    val executeLine = max(if (hasMasteryForm(2)) ENTROPY_EXECUTE else 0f, if (agonyRank > 0) 0.06f + agonyRank * 0.015f else 0f)
+    entropyField(coreX, coreY, radius, power * (1f + agonyRank * 0.08f), executeLine, delta, WeaponRuntime.sourceKey(0))
+    // Spiral signature: the echo ghost carries a half-strength field.
+    if (signatureActive() && ghostActive) {
+        entropyField(ghostX, ghostY, radius * ENTROPY_GHOST_RADIUS, power * 0.5f, 0f, delta, WeaponRuntime.sourceKey(1))
+    }
+}
+
+private fun MutableGameState.entropyField(x: Float, y: Float, radius: Float, power: Float, executeLine: Float, delta: Float, procKey: Int) {
+    for (enemyIndex in enemies.indices) {
+        val enemy = enemies[enemyIndex]
+        if (!enemy.alive || distanceSquared(x, y, enemy.x, enemy.y) > square(radius + enemy.radius)) continue
+        // The collapse executes outright, past every multiplier and tether; bosses only take the field.
+        if (executeLine > 0f && !enemy.isBossClass && enemy.hp <= enemy.maxHp * executeLine) {
+            executeEnemy(enemy, HitSource.WEAPON)
+        } else {
+            val landed = dealWeaponDamage(enemy, ENTROPY_DPS * delta * power, cadence = WeaponHitCadence.CONTINUOUS, procKey = procKey).amount > 0f
+            if (landed) weaponElementTick(enemy, StatusElement.ENTROPY, ENTROPY_DECAY_INTERVAL)
+        }
+        val drag = exp(-0.5f * delta * enemy.knockback)
+        enemy.vx *= drag
+        enemy.vy *= drag
+    }
+}
+
+/** Entropy Field radius: 170 + 5 per level, +20 % at the first form, +18 per Agony power. */
+internal fun MutableGameState.entropyFieldRadius(): Float =
+    (170f + weaponLevel * 5f) * (if (hasMasteryForm(1)) 1.2f else 1f) + agonyPower() * 18f
+
+/** Entropy Field's third form: a Rupture inside the field spreads Decay around it. */
+internal fun MutableGameState.onWeaponBreak(enemy: Enemy, element: StatusElement) {
+    if (weapon != WeaponId.ENTROPY_FIELD || element != StatusElement.ENTROPY || !hasMasteryForm(3)) return
+    val radius = entropyFieldRadius()
+    if (distanceSquared(coreX, coreY, enemy.x, enemy.y) > square(radius + enemy.radius)) return
+    applyStatusAround(enemy.x, enemy.y, ENTROPY_SPREAD_RADIUS, StatusElement.ENTROPY, 2f, generation = 1, excludedId = enemy.id)
+}
+
+internal const val FLUX_DPS: Float = 16f
+internal const val FLUX_WIDTH: Float = 20f
+internal const val FLUX_SCORCH_INTERVAL: Float = 0.5f
+internal const val MORNINGSTAR_DAMAGE: Float = 38f
+internal const val MORNINGSTAR_REACH: Float = 24f
+internal const val MORNINGSTAR_KNOCKBACK: Float = 160f
+internal const val MORNINGSTAR_SECOND_ORBIT: Float = 0.72f
+internal const val MORNINGSTAR_SECOND_SIZE: Float = 0.65f
+internal const val PHASE_LATTICE_CENTER: Float = 110f
+internal const val PHASE_LATTICE_HALF_WIDTH: Float = 28f
+internal const val PHASE_LATTICE_DPS: Float = 26f
+internal const val PHASE_LATTICE_CHILL_INTERVAL: Float = 0.6f
+internal const val PHASE_OUTER_OFFSET: Float = 100f
+internal const val PHASE_OUTER_DPS: Float = 14f
+internal const val RIFT_BLADE_DAMAGE: Float = 31f
+internal const val RIFT_BLADE_HOLLOW_EVERY: Int = 3
+internal const val RIFT_SLASH_SHARE: Float = 0.5f
+internal const val RIFT_SLASH_LENGTH: Float = 160f
+internal const val ENTROPY_DPS: Float = 28f
+internal const val ENTROPY_DECAY_INTERVAL: Float = 0.8f
+internal const val ENTROPY_EXECUTE: Float = 0.06f
+internal const val ENTROPY_GHOST_RADIUS: Float = 0.7f
+internal const val ENTROPY_SPREAD_RADIUS: Float = 140f
 
 internal fun MutableGameState.resolveProjectileHits() {
     var needsLiveEnemyIds = false
@@ -360,7 +479,7 @@ internal fun MutableGameState.resolveProjectileHits() {
                 if (enemy.type == EnemyType.REFLECTOR) enemy.guarded = shieldFaces
                 val sourceWeapon = projectile.sourceWeapon
                 if (sourceWeapon != null) {
-                    dealWeaponDamage(enemy, projectile.damage, canCrit = true, sourceWeapon = sourceWeapon)
+                    weaponShotHit(projectile, sourceWeapon, enemy)
                 } else {
                     // Relic shots deal element-less damage; a status element is a rider applied after it.
                     dealProcDamage(enemy, projectile.damage)
@@ -388,6 +507,7 @@ internal fun MutableGameState.resolveProjectileHits() {
             }
         }
         if (consumed) {
+            if (projectile.sourceWeapon == WeaponId.QUASAR_CANNON) quasarShotEnded(projectile)
             projectiles.removeAt(friendlyIndex)
         } else {
             friendlyIndex++
@@ -396,6 +516,7 @@ internal fun MutableGameState.resolveProjectileHits() {
 }
 
 internal fun MutableGameState.redirectPrismRelay(projectile: Projectile) {
+    prismRelayBounced(projectile)
     val maximumDistanceSquared = square(720f)
     var target: Enemy? = null
     var targetDistanceSquared = maximumDistanceSquared
@@ -479,7 +600,7 @@ internal fun MutableGameState.gainData(rawAmount: Float) {
         onLevelUp()
         nextLevelData = content.tempo.dataRequiredForLevel(level)
         if (content.tempo.grantsWeaponAmplification(level) &&
-            weaponLevel < content.tempo.maximumAutomaticWeaponLevel + matrix.startingWeaponLevels
+            weaponLevel < content.tempo.maximumAutomaticWeaponLevel + matrix.startingWeaponLevels + signatureLevelBonus()
         ) {
             val before = captureBuildChange()
             amplifyCurrentWeapon()

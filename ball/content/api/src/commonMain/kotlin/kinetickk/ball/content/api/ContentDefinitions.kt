@@ -165,6 +165,10 @@ enum class WeaponScaling(val displayLabel: String) {
  */
 enum class WeaponCadence { CONTINUOUS, CONTACT, DISCRETE }
 
+/**
+ * Weapon level milestones. [damageBonus] is the generic mastery power (0/+10/+20/+35 %); each milestone
+ * after the first also opens the weapon's next concrete form ([WeaponDefinition.masteryForms]).
+ */
 enum class WeaponMastery(
     val displayLabel: String,
     val minimumLevel: Int,
@@ -172,9 +176,9 @@ enum class WeaponMastery(
     val activationSpeedBonus: Float,
 ) {
     CALIBRATED("Calibrated", 1, 0f, 0f),
-    AMPLIFIED("Amplified", 3, 0.12f, 0.08f),
-    RESONANT("Resonant", 6, 0.25f, 0.16f),
-    ASCENDED("Ascended", 10, 0.45f, 0.25f),
+    AMPLIFIED("Amplified", 3, 0.10f, 0.08f),
+    RESONANT("Resonant", 6, 0.20f, 0.16f),
+    ASCENDED("Ascended", 10, 0.35f, 0.25f),
 }
 
 /**

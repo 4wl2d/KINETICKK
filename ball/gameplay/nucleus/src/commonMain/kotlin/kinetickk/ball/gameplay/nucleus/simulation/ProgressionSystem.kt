@@ -95,10 +95,37 @@ internal fun MutableGameState.openWeaponChoice() {
 internal fun MutableGameState.weaponOfferCandidates(): List<WeaponDefinition> =
     content.weapons.filter { it.id != weapon && it.id in unlockedWeapons }
 
+/**
+ * Offer weight of an owned weapon: the run's signature character triples it, each point in its two tags
+ * adds a quarter (at most two) and a bound Relic carrying its key adds a half.
+ */
+internal fun MutableGameState.weaponOfferWeight(definition: WeaponDefinition): Float =
+    1f + (if (signatureActive(definition)) 2f else 0f) + min(2f, 0.25f * weaponTagPoints(definition)) +
+        if (harmonizingRelic(definition) != null) 0.5f else 0f
+
+/** Up to [count] distinct weapons of [pool], drawn by [weaponOfferWeight] from the reward stream. */
+internal fun MutableGameState.weightedWeaponPicks(pool: List<WeaponDefinition>, count: Int): List<WeaponDefinition> {
+    val remaining = pool.toMutableList()
+    val picks = ArrayList<WeaponDefinition>(min(count, pool.size))
+    while (picks.size < count && remaining.isNotEmpty()) {
+        var total = 0f
+        for (definition in remaining) total += weaponOfferWeight(definition)
+        var roll = rewardRandom.nextFloat() * total
+        var chosen = remaining.lastIndex
+        for (index in remaining.indices) {
+            roll -= weaponOfferWeight(remaining[index])
+            if (roll < 0f) {
+                chosen = index
+                break
+            }
+        }
+        picks += remaining.removeAt(chosen)
+    }
+    return picks
+}
+
 internal fun MutableGameState.buildWeaponChoices() {
-    val pool = weaponOfferCandidates()
-        .shuffled(rewardRandom)
-        .take(WEAPON_OFFER_CHOICES)
+    val pool = weightedWeaponPicks(weaponOfferCandidates(), WEAPON_OFFER_CHOICES)
     choices = pool.map {
         ChoiceOption(
             type = ChoiceType.WEAPON,
@@ -396,11 +423,14 @@ internal fun MutableGameState.isItemDiscovered(itemId: Int): Boolean = itemId in
 internal fun MutableGameState.equipRunWeapon(id: WeaponId) {
     weapon = id
     resetWeaponRuntime()
+    // Relic key harmony follows the equipped weapon.
+    recompileBuild()
     message = content.weapon(id).name.uppercase() + " SYNCHRONIZED"
     messageTime = 1.8f
 }
 
 internal fun MutableGameState.resetWeaponRuntime() {
+    weaponRuntime.reset()
     trail.clear()
     weaponNodes.clear()
     weaponOrbitals.clear()

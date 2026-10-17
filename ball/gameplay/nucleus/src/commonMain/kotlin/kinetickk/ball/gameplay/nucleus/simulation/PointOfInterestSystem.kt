@@ -221,7 +221,7 @@ internal fun MutableGameState.selectRewardFocus(focus: RewardFocus) {
         }
         DirectedReward.WEAPON -> {
             choices = directedWeaponChoices(
-                weaponOfferCandidates().filter { weaponRewardFocus(it) == focus }.shuffled(rewardRandom).take(2),
+                weightedWeaponPicks(weaponOfferCandidates().filter { weaponRewardFocus(it) == focus }, 2),
             )
         }
     }

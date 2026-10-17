@@ -165,6 +165,8 @@ class GameSystemsTest {
     fun totemAmplificationAdvancesThroughVisibleMasteryMilestones() {
         val engine = runningEngine(seed = 33)
         engine.equipWeaponForTesting(WeaponId.PRISM_RELAY)
+        // From the first milestone (the Orb's signature Flux Wake started the run a level up).
+        engine.weaponLevel = 1
 
         assertEquals(WeaponMastery.CALIBRATED, engine.currentWeaponMastery)
         assertEquals(WeaponMastery.AMPLIFIED, engine.nextWeaponMastery)
@@ -474,11 +476,71 @@ class GameSystemsTest {
                 engine.update(GameScenario.FIXED_STEP)
                 assertTrue(engine.projectiles.any { !it.hostile && it.sourceWeapon == id && it.pierce == 2 })
             }
-            WeaponId.GYRE_DISC, WeaponId.SCATTER_BLOOM, WeaponId.TETHER_ARC, WeaponId.SENTRY_GRID,
-            WeaponId.HUNTER_SALVO, WeaponId.CONCUSSION_ENGINE, WeaponId.GLACIER_BELL, WeaponId.EVENT_LENS,
-            WeaponId.SOLAR_SWEEP, WeaponId.AEGIS_SHARDS, WeaponId.HOLLOW_RIFT, WeaponId.RESONANCE_DRUM -> {
-                observedEnemy = engine.addEnemyForTesting(250f, 0f)
+            WeaponId.GYRE_DISC -> {
+                observedEnemy = engine.addEnemyForTesting(40f, 0f)
+                repeat(6) { engine.update(GameScenario.FIXED_STEP) }
+                assertTrue(engine.weaponRuntime.entities.any { it.kind == WeaponEntityKind.DISC })
+                assertTrue(observedEnemy.hp < observedEnemy.maxHp)
+            }
+            WeaponId.SCATTER_BLOOM -> {
+                observedEnemy = engine.addEnemyForTesting(150f, 0f)
                 engine.update(GameScenario.FIXED_STEP)
+                assertEquals(3, engine.projectiles.count { !it.hostile && it.sourceWeapon == id })
+            }
+            WeaponId.TETHER_ARC -> {
+                observedEnemy = engine.addEnemyForTesting(200f, 0f)
+                repeat(3) { engine.update(GameScenario.FIXED_STEP) }
+                assertTrue(engine.weaponRuntime.entities.any { it.kind == WeaponEntityKind.TETHER })
+                assertTrue(observedEnemy.hp < observedEnemy.maxHp)
+            }
+            WeaponId.SENTRY_GRID -> {
+                engine.update(GameScenario.FIXED_STEP)
+                observedEnemy = engine.addEnemyForTesting(200f, 120f)
+                engine.update(GameScenario.FIXED_STEP)
+                assertEquals(1, engine.weaponRuntime.entities.count { it.kind == WeaponEntityKind.SENTRY })
+                assertTrue(engine.projectiles.any { !it.hostile && it.sourceWeapon == id })
+            }
+            WeaponId.HUNTER_SALVO -> {
+                observedEnemy = engine.addEnemyForTesting(300f, 0f)
+                engine.update(GameScenario.FIXED_STEP)
+                assertEquals(3, engine.weaponRuntime.entities.count { it.kind == WeaponEntityKind.MISSILE })
+            }
+            WeaponId.CONCUSSION_ENGINE -> {
+                observedEnemy = engine.addEnemyForTesting(25f, 0f)
+                engine.update(GameScenario.FIXED_STEP)
+                assertTrue(engine.weaponRuntime.entities.any { it.kind == WeaponEntityKind.RING && it.phase == 2 })
+            }
+            WeaponId.GLACIER_BELL -> {
+                observedEnemy = engine.addEnemyForTesting(100f, 0f)
+                engine.update(GameScenario.FIXED_STEP)
+                assertTrue(observedEnemy.hp < observedEnemy.maxHp)
+                assertTrue(engine.weaponRuntime.entities.any { it.kind == WeaponEntityKind.RING && it.phase == 3 })
+            }
+            WeaponId.EVENT_LENS -> {
+                engine.update(GameScenario.FIXED_STEP)
+                assertEquals(1, engine.weaponRuntime.entities.count { it.kind == WeaponEntityKind.LENS })
+            }
+            WeaponId.SOLAR_SWEEP -> {
+                observedEnemy = engine.addEnemyForTesting(150f, 0f)
+                engine.update(GameScenario.FIXED_STEP)
+                assertEquals(2, engine.weaponRuntime.entities.count { it.kind == WeaponEntityKind.BEAM })
+                assertTrue(observedEnemy.hp < observedEnemy.maxHp)
+            }
+            WeaponId.AEGIS_SHARDS -> {
+                observedEnemy = engine.addEnemyForTesting(150f, 0f)
+                engine.update(GameScenario.FIXED_STEP)
+                assertEquals(2, engine.weaponOrbitals.size)
+                assertEquals(2, engine.weaponRuntime.entities.count { it.kind == WeaponEntityKind.SHARD })
+            }
+            WeaponId.HOLLOW_RIFT -> {
+                engine.update(GameScenario.FIXED_STEP)
+                assertEquals(1, engine.weaponRuntime.entities.count { it.kind == WeaponEntityKind.RIFT })
+            }
+            WeaponId.RESONANCE_DRUM -> {
+                observedEnemy = engine.addEnemyForTesting(150f, 0f)
+                engine.update(GameScenario.FIXED_STEP)
+                assertTrue(observedEnemy.hp < observedEnemy.maxHp)
+                assertTrue(engine.weaponRuntime.entities.any { it.kind == WeaponEntityKind.RING && it.phase == 1 })
             }
         }
 
@@ -501,6 +563,8 @@ class GameSystemsTest {
             beamActive = engine.weaponBeamTime > 0f,
             morningstarMoved = engine.morningstarAngle > 0f,
             enemyDamageMilli = observedEnemy?.let { ((it.maxHp - it.hp) * 1_000f).toInt() } ?: 0,
+            entityCount = engine.weaponRuntime.entities.size,
+            entityKindOrdinal = engine.weaponRuntime.entities.firstOrNull()?.kind?.ordinal ?: -1,
         )
     }
 
@@ -522,6 +586,8 @@ class GameSystemsTest {
         val beamActive: Boolean,
         val morningstarMoved: Boolean,
         val enemyDamageMilli: Int,
+        val entityCount: Int = 0,
+        val entityKindOrdinal: Int = -1,
     )
 }
 

@@ -348,8 +348,64 @@ internal fun MutableGameState.toRenderModel(
         viewportDensity = viewportDensity,
         obstacles = obstacleProjection(reusableCollections?.obstacles, identitySource?.obstacleField),
         minimapRange = minimapRange(),
+        weaponEntities = weaponEntityProjection(reusableCollections?.weaponEntities, identitySource?.weaponRuntime),
+        // A scalar-input sibling shares the weapon runtime and changes no synergy input.
+        weaponSynergy = reusableCollections?.weaponSynergy?.takeIf { identitySource != null && weaponRuntime === identitySource.weaponRuntime }
+            ?: weaponSynergyProjection(reusableCollections?.weaponSynergy),
     )
 }
+
+/** The same runtime (a scalar-input sibling) or equal entities keep the previous projection. */
+private fun MutableGameState.weaponEntityProjection(
+    reusable: ImmutableList<WeaponEntityProjection>?,
+    identityRuntime: WeaponRuntime?,
+): ImmutableList<WeaponEntityProjection> {
+    val entities = weaponRuntime.entities
+    if (reusable != null) {
+        if (weaponRuntime === identityRuntime) return reusable
+        if (entities.isEmpty() && reusable.isEmpty()) return reusable
+        if (entities.reuseProjectionIfContentEqual(reusable) { value, previous -> previous.matches(value) } != null) return reusable
+    }
+    if (entities.isEmpty()) return immutableListOf()
+    return entities.mapToImmutableList { value ->
+        WeaponEntityProjection(
+            kind = value.kind,
+            x = value.x,
+            y = value.y,
+            previousX = value.previousX,
+            previousY = value.previousY,
+            endX = value.endX,
+            endY = value.endY,
+            previousEndX = value.previousEndX,
+            previousEndY = value.previousEndY,
+            angle = value.angle,
+            previousAngle = value.previousAngle,
+            radius = value.radius,
+            extent = value.extent,
+            life = value.life,
+            maxLife = value.maxLife,
+            phase = value.phase,
+        )
+    }
+}
+
+private fun WeaponEntityProjection.matches(entity: WeaponEntity): Boolean =
+    kind == entity.kind &&
+        x.sameBitsAs(entity.x) &&
+        y.sameBitsAs(entity.y) &&
+        previousX.sameBitsAs(entity.previousX) &&
+        previousY.sameBitsAs(entity.previousY) &&
+        endX.sameBitsAs(entity.endX) &&
+        endY.sameBitsAs(entity.endY) &&
+        previousEndX.sameBitsAs(entity.previousEndX) &&
+        previousEndY.sameBitsAs(entity.previousEndY) &&
+        angle.sameBitsAs(entity.angle) &&
+        previousAngle.sameBitsAs(entity.previousAngle) &&
+        radius.sameBitsAs(entity.radius) &&
+        extent.sameBitsAs(entity.extent) &&
+        life.sameBitsAs(entity.life) &&
+        maxLife.sameBitsAs(entity.maxLife) &&
+        phase == entity.phase
 
 /** The window changes only when the Core changes chunk (or a rock shatters); otherwise it is reused. */
 private fun MutableGameState.obstacleProjection(

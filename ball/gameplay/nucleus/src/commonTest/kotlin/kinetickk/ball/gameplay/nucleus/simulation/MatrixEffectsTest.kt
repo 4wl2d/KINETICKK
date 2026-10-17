@@ -164,16 +164,17 @@ class MatrixEffectsTest {
     @Test
     fun startingWeaponLevelStartsHigherAndRaisesTheAutomaticCap() {
         val armed = isolated(MatrixEffect.StartingWeaponLevel(1), true, rank = 2)
-        assertEquals(3, armed.weaponLevel)
+        // A signature character (the Orb with Flux Wake) adds its own start level on top.
+        assertEquals(3 + armed.signatureLevelBonus(), armed.weaponLevel)
 
         fun automaticCap(withMatrix: Boolean): Int = isolated(MatrixEffect.StartingWeaponLevel(1), withMatrix, rank = 2).run {
-            weaponLevel = content.tempo.maximumAutomaticWeaponLevel
+            weaponLevel = content.tempo.maximumAutomaticWeaponLevel + signatureLevelBonus()
             // Find the next level that grants an automatic amplification and reach it.
             while (!content.tempo.grantsWeaponAmplification(level + 1)) level++
             data = 0
             nextLevelData = content.tempo.dataRequiredForLevel(level)
             gainData(nextLevelData.toFloat() + 0.5f)
-            weaponLevel
+            weaponLevel - signatureLevelBonus()
         }
         val cap = canonicalGameplayContent.tempo.maximumAutomaticWeaponLevel
         assertEquals(cap, automaticCap(false))

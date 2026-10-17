@@ -249,6 +249,11 @@ private fun MutableGameState.tryBreak(enemy: Enemy, element: StatusElement, forc
     resolveBreak(enemy, element, count, generation)
 }
 
+/** Forces [element]'s Break on [enemy] now if it holds any stacks (a weapon form's Freeze, Overload or Shatter). */
+internal fun MutableGameState.forceElementBreak(enemy: Enemy, element: StatusElement) {
+    tryBreak(enemy, element, forced = true)
+}
+
 /** Forces every status on [enemy] that is at least [fraction] of its threshold to Break (ANCHOR III). */
 internal fun MutableGameState.forceBreaks(enemy: Enemy, fraction: Float) {
     for (element in StatusElement.entries) {

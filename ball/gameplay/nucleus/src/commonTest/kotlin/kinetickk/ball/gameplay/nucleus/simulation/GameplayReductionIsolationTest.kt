@@ -31,6 +31,7 @@ import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.Totem
 import kinetickk.ball.gameplay.nucleus.model.TrailPoint
 import kinetickk.ball.gameplay.nucleus.model.WeaponNode
+import kinetickk.ball.gameplay.nucleus.model.WeaponEntity
 import kinetickk.ball.gameplay.nucleus.model.WeaponOrbital
 import kinetickk.ball.gameplay.nucleus.model.WorldPoint
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
@@ -41,6 +42,7 @@ import kinetickk.ball.gameplay.nucleus.reducer.GameReductionResult
 import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
+import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.immutableListOf
@@ -228,6 +230,9 @@ class GameplayReductionIsolationTest {
                 radius = 3f,
             )
             weaponOrbitals += WeaponOrbital(index = 0, x = 15f, y = 25f, radius = 4f)
+            weaponRuntime.entities += WeaponEntity(WeaponEntityKind.DISC, x = 17f, y = 27f, radius = 5f, life = 1f, maxLife = 1f)
+                .also { it.recordHit(enemy.id) }
+            weaponRuntime.tetherRamp = 1.5f
             totem = Totem(16f, 26f, 0.25f)
         }
         val expectedNextRandom = source.gameplayRandom.copy().nextInt()
@@ -271,6 +276,8 @@ class GameplayReductionIsolationTest {
         assertNotSame(pointerBranch.model.enemies, isolated.enemies)
         assertNotSame(pointerBranch.model.projectiles, isolated.projectiles)
         assertNotSame(pointerBranch.model.totem, isolated.totem)
+        assertSame(source.weaponRuntime, pointerBranch.model.weaponRuntime)
+        assertNotSame(pointerBranch.model.weaponRuntime, isolated.weaponRuntime)
 
         // Mutate every mutable storage family that the scalar COW path is allowed to share.
         isolated.gameplayRandom.nextInt()
@@ -303,6 +310,11 @@ class GameplayReductionIsolationTest {
         isolated.weaponNodes.single().x = 107f
         isolated.weaponOrbitals.single().x = 108f
         isolated.totem!!.x = 109f
+        isolated.weaponRuntime.entities.single().apply {
+            x = 110f
+            recordHit(10_001)
+        }
+        isolated.weaponRuntime.tetherRamp = 2.5f
 
         listOf(source, siblingBranch.model).forEach { retained ->
             assertEquals(expectedNextRandom, retained.gameplayRandom.copy().nextInt())
@@ -337,6 +349,11 @@ class GameplayReductionIsolationTest {
             assertEquals(14f, retained.weaponNodes.single().x)
             assertEquals(15f, retained.weaponOrbitals.single().x)
             assertEquals(16f, retained.totem!!.x)
+            retained.weaponRuntime.entities.single().let { entity ->
+                assertEquals(17f, entity.x)
+                assertFalse(entity.hasHit(10_001))
+            }
+            assertEquals(1.5f, retained.weaponRuntime.tetherRamp)
         }
     }
 
@@ -641,7 +658,8 @@ class GameplayReductionIsolationTest {
 
         siblings.forEach { branch ->
             val enemy = branch.enemies.single()
-            assertEquals(1f, enemy.status[StatusCell.STACKS + thermal])
+            // Flux Wake's own Scorch and Furnace Covenant's Thermal.
+            assertEquals(2f, enemy.status[StatusCell.STACKS + thermal])
             assertEquals((HitSource.WEAPON.ordinal + 1).toFloat(), enemy.status[StatusCell.LAST_SOURCE])
             assertTrue(enemy.hp < enemy.maxHp)
             assertFalse(enemy.status.sharesStorageWith(source.enemies.single().status))
@@ -1164,6 +1182,7 @@ class GameplayReductionIsolationTest {
             value("pendingDataPickups", pendingDataPickups)
             value("achievementFlushDue", achievementFlushDue)
             value("characterRuntime", characterRuntime.toString())
+            value("weaponRuntime", weaponRuntime.toString())
             value("pointsOfInterest.size", pointsOfInterest.size)
             pointsOfInterest.forEachIndexed { index, point ->
                 val prefix = "pointsOfInterest[$index]"
@@ -1456,6 +1475,7 @@ class GameplayReductionIsolationTest {
                 float("$prefix.previousY", projectile.previousY)
                 value("$prefix.statusElement", projectile.statusElement)
                 value("$prefix.kind", projectile.kind)
+                value("$prefix.procKey", projectile.procKey)
                 value("$prefix.hasRecordedEnemyHits", projectile.hasRecordedEnemyHits)
                 for (enemyId in 1 until nextEntityId) {
                     value("$prefix.recordedEnemy[$enemyId]", projectile.hasRecordedEnemyHit(enemyId))
@@ -1481,6 +1501,8 @@ class GameplayReductionIsolationTest {
                 float("trail[$index].x", point.x)
                 float("trail[$index].y", point.y)
                 float("trail[$index].age", point.age)
+                float("trail[$index].life", point.life)
+                float("trail[$index].scale", point.scale)
             }
 
             value("weaponNodes.size", weaponNodes.size)
@@ -1492,6 +1514,8 @@ class GameplayReductionIsolationTest {
                 float("$prefix.life", node.life)
                 float("$prefix.maxLife", node.maxLife)
                 float("$prefix.radius", node.radius)
+                value("$prefix.procKey", node.procKey)
+                float("$prefix.scale", node.scale)
             }
 
             value("weaponOrbitals.size", weaponOrbitals.size)

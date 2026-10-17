@@ -61,6 +61,7 @@ internal fun MutableGameState.rebaseWorldIfNeeded() {
         orbital.previousY -= shiftY
     }
     rebaseCharacterRuntime(shiftX, shiftY)
+    weaponRuntime.rebase(shiftX, shiftY)
     pointsOfInterest = pointsOfInterest.map { it.copy(x = it.x - shiftX, y = it.y - shiftY) }
     rebaseCombatFields(shiftX, shiftY)
     totem?.let { it.x -= shiftX; it.y -= shiftY }

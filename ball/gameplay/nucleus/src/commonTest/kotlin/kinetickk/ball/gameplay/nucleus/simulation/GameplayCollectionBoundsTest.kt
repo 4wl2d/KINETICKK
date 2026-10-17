@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
@@ -23,6 +24,7 @@ import kinetickk.ball.gameplay.nucleus.reducer.GameReducer
 import kinetickk.ball.gameplay.nucleus.reducer.GameReductionResult
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
+import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
@@ -192,15 +194,24 @@ class GameplayCollectionBoundsTest {
     @Test
     fun weaponNodesAcceptEightAndRejectNinth() {
         val state = newState(seed = 902)
-        repeat(MutableGameState.MAX_WEAPON_NODES) { index ->
+        assertTrue(state.weaponLevel < 6)
+        repeat(BASE_MINE_LIMIT) { index ->
             assertTrue(state.tryAddWeaponNode(weaponNode(index)))
         }
 
-        assertFalse(state.tryAddWeaponNode(weaponNode(MutableGameState.MAX_WEAPON_NODES)))
+        assertFalse(state.tryAddWeaponNode(weaponNode(BASE_MINE_LIMIT)))
 
-        assertEquals(MutableGameState.MAX_WEAPON_NODES, state.weaponNodes.size)
+        assertEquals(BASE_MINE_LIMIT, state.weaponNodes.size)
         assertEquals(0f, state.weaponNodes.first().x)
-        assertEquals((MutableGameState.MAX_WEAPON_NODES - 1).toFloat(), state.weaponNodes.last().x)
+        assertEquals((BASE_MINE_LIMIT - 1).toFloat(), state.weaponNodes.last().x)
+
+        // Gravity Mines' second form (level 6) holds twelve, never a thirteenth.
+        state.weaponLevel = 6
+        repeat(MutableGameState.MAX_WEAPON_NODES - BASE_MINE_LIMIT) { index ->
+            assertTrue(state.tryAddWeaponNode(weaponNode(BASE_MINE_LIMIT + index)))
+        }
+        assertFalse(state.tryAddWeaponNode(weaponNode(MutableGameState.MAX_WEAPON_NODES)))
+        assertEquals(MutableGameState.MAX_WEAPON_NODES, state.weaponNodes.size)
     }
 
     @Test
@@ -454,22 +465,28 @@ class GameplayCollectionBoundsTest {
     }
 
     @Test
-    fun arcCoilTargetsSixNearestAndLeavesSeventhUntouched() {
+    fun arcCoilChainsAtMostFourTargetsAndLeavesFifthUntouched() {
+        // Level 18 opens all three forms: four targets and the wider hop.
         val state = newState(seed = 909).apply {
             weaponLevel = 18
         }
+        state.equipWeaponForTesting(WeaponId.ARC_COIL)
+        // Ion-immune Elites take the coil's (elementless) damage but no Charge, so no Overload chains on.
         val candidates = List(7) { index ->
-            state.addEnemyForTesting(x = (index + 1) * 50f, y = 0f)
+            state.addEnemyForTesting(x = (index + 1) * 50f, y = 0f, type = EnemyType.ELITE)
+                .also { assignAspect(it, StatusElement.ION.ordinal, immune = true) }
         }
+        state.takeVisualFxCues()
 
         state.fireArcCoil(baseDamage = 25f)
 
-        candidates.take(6).forEach { enemy ->
+        assertEquals(4, state.arcCoilTargetCount())
+        candidates.take(4).forEach { enemy ->
             assertTrue(enemy.hp < enemy.maxHp)
         }
-        assertEquals(candidates.last().maxHp, candidates.last().hp)
+        candidates.drop(4).forEach { enemy -> assertEquals(enemy.maxHp, enemy.hp) }
         assertEquals(
-            6,
+            4,
             state.takeVisualFxCues().count { cue -> cue is VisualFxCue.WeaponArcAdded },
         )
     }

@@ -24,7 +24,10 @@ internal fun MutableGameState.rewardPreviews(): ImmutableList<RewardPreview> {
             ChoiceType.ITEM -> option.itemId?.let { candidate.acquireItem(it, option.reborn) }
             ChoiceType.TOTEM -> if (option.totemAction == TotemAction.AMPLIFY_CURRENT) candidate.amplifyCurrentWeapon()
             // Weapon level and global bonuses are preserved when switching systems.
-            ChoiceType.WEAPON -> option.weaponId?.let { candidate.weapon = it }
+            ChoiceType.WEAPON -> option.weaponId?.let {
+                candidate.weapon = it
+                candidate.recompileBuild()
+            }
             ChoiceType.RELIC -> if (option.relicAction == RelicChoiceAction.ACQUIRE) {
                 val id = option.relicId ?: return@map RewardPreview()
                 if (relicRank(id) == 0 && equippedRelics.size >= content.relicPolicy.maxSlots) {
@@ -116,10 +119,26 @@ private fun MutableGameState.relicForecasts(id: kinetickk.ball.content.api.Relic
     }.toImmutableList()
 }
 
+/** Counts a weapon offer or amplification changes; the reward card lists each one that moves. */
 private fun MutableGameState.rewardWeaponCounts(): Map<String, Int> = when (weapon) {
-    WeaponId.ION_SWARM -> mapOf("Drones" to weaponOrbitalCount())
-    WeaponId.RIFT_BLADES -> mapOf("Blades" to weaponOrbitalCount())
+    WeaponId.ION_SWARM -> mapOf("Drones" to ionOrbitalCount())
+    WeaponId.RIFT_BLADES -> mapOf("Blades" to riftBladeCount())
     WeaponId.ARC_COIL -> mapOf("Chain targets" to arcCoilTargetCount())
     WeaponId.PRISM_RELAY -> mapOf("Projectiles" to prismRelayCount(), "Ricochets" to prismRelayBounces())
-    else -> emptyMap()
+    WeaponId.NULL_LANCE -> mapOf("Pierce" to NULL_LANCE_PIERCE + if (hasMasteryForm(1)) 3 else 0)
+    WeaponId.GRAVITY_MINES -> mapOf("Mines" to if (hasMasteryForm(2)) MutableGameState.MAX_WEAPON_NODES else BASE_MINE_LIMIT)
+    WeaponId.MORNINGSTAR -> mapOf("Stars" to if (hasMasteryForm(2)) 2 else 1)
+    WeaponId.GYRE_DISC -> mapOf("Discs" to 1 + (if (hasMasteryForm(2)) 1 else 0) + if (agonyPower() > 0) 1 else 0)
+    WeaponId.SCATTER_BLOOM -> mapOf("Pellets" to SCATTER_PELLETS + (if (hasMasteryForm(1)) 2 else 0) + if (agonyPower() > 0) 2 else 0)
+    WeaponId.TETHER_ARC -> mapOf("Tethers" to if (hasMasteryForm(2) || agonyPower() > 0) 2 else 1)
+    WeaponId.SENTRY_GRID -> mapOf("Sentries" to SENTRY_LIMIT + (if (hasMasteryForm(1)) 1 else 0) + if (agonyPower() > 0) 1 else 0)
+    WeaponId.HUNTER_SALVO -> mapOf("Missiles" to HUNTER_MISSILES + (if (hasMasteryForm(1)) 1 else 0) + if (agonyPower() > 0) 1 else 0)
+    WeaponId.EVENT_LENS -> mapOf("Lenses" to 1 + (if (hasMasteryForm(2)) 1 else 0) + if (agonyPower() > 0) 1 else 0)
+    WeaponId.SOLAR_SWEEP -> mapOf("Beams" to 2 + (if (hasMasteryForm(2)) 1 else 0) + if (agonyPower() > 0) 1 else 0)
+    WeaponId.AEGIS_SHARDS -> mapOf("Shards" to aegisShardCount())
+    WeaponId.HOLLOW_RIFT -> mapOf("Detonations" to if (hasMasteryForm(2)) 2 else 1)
+    WeaponId.RESONANCE_DRUM -> mapOf("Beats" to if (hasMasteryForm(2)) 2 else 1)
+    WeaponId.GLACIER_BELL -> mapOf("Tolls" to if (hasMasteryForm(3)) 2 else 1)
+    WeaponId.FLUX_WAKE, WeaponId.PHASE_LATTICE, WeaponId.QUASAR_CANNON, WeaponId.ENTROPY_FIELD,
+    WeaponId.SINGULARITY_SPEAR, WeaponId.CONCUSSION_ENGINE -> emptyMap()
 }

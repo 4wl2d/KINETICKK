@@ -105,7 +105,8 @@ class RewardPreviewTest {
     fun weaponCountPreviewsMatchSpawnedDronesAndPrismProjectilesAtUpgradeThresholds() {
         val drones = engine().apply {
             weapon = WeaponId.ION_SWARM
-            weaponLevel = 3
+            // Amplifying to level 3 opens Ion Swarm's first form: one more orbital.
+            weaponLevel = 2
             offer(ChoiceOption(ChoiceType.TOTEM, "Amplify", "", "", weaponId = weapon, totemAction = TotemAction.AMPLIFY_CURRENT))
         }
         val droneCount = drones.rewardPreviews().single().changes.single { it.name == "Drones" }

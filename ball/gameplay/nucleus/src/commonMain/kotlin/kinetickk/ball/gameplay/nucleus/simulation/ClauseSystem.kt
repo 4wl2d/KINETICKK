@@ -339,11 +339,8 @@ internal const val ARSENAL_INFUSION_EVERY: Int = 4
 /** ARSENAL III: every Break deals this share more damage. */
 internal const val ARSENAL_BREAK_BONUS: Float = 0.25f
 
-/**
- * The element ARSENAL III adds: the weapon's own element when it has one, else the dominant element.
- * The shipped weapons deal elementless Kinetic damage, so today this is the dominant element.
- */
-internal fun MutableGameState.arsenalInfusion(): StatusElement? = build.dominant
+/** The element ARSENAL III adds: the weapon's own element when it has one, else the dominant element. */
+internal fun MutableGameState.arsenalInfusion(): StatusElement? = currentWeaponDefinition.element ?: build.dominant
 
 /** Damage scale of every Break: ARSENAL III raises it, nothing else does. */
 internal fun MutableGameState.breakDamageScale(): Float =
@@ -372,6 +369,7 @@ internal fun MutableGameState.onBuildKill(enemy: Enemy) {
 
 internal fun MutableGameState.onBreak(enemy: Enemy, element: StatusElement) {
     fireClauses(EffectTrigger.BREAK, enemy, 0f, HitSource.STATUS, element)
+    onWeaponBreak(enemy, element)
 }
 
 internal fun MutableGameState.onReaction(enemy: Enemy, reaction: ReactionId) {

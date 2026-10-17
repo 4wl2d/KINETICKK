@@ -131,14 +131,18 @@ internal fun MutableGameState.buildStats(includeTemporary: Boolean = true): Immu
     val globalPower = rebirthProfile.playerPowerMultiplier
     // Run growth reports with mastery: both are progression the run grants, not items.
     val masteryPower = (1f + (weaponLevel - 1) * 0.08f) * (1f + currentWeaponMastery.damageBonus) * weaponRunGrowth()
-    val permanentPower = weaponPower * globalPower * masteryPower
-    val effectivePower = permanentPower * if (includeTemporary && overdriveTime > 0f) 1.45f else 1f
+    // Weapon synergies: tag resonance, signature and Relic key harmony last; the scaling stat and Overdrive are live.
+    val synergyPower = permanentWeaponSynergy()
+    val progressionPower = weaponPower * globalPower * masteryPower
+    val permanentPower = progressionPower * synergyPower
+    val effectivePower = if (includeTemporary) effectiveWeaponPower() else permanentPower
     val matrixWeaponPower = matrixShare(ItemEffect.WEAPON_POWER, 1f)
     rows += BuildStatSummary("Weapon power", effectivePower, "×", listOf(
         BuildStatContribution(BuildStatSource.CHARACTER, 1f),
         BuildStatContribution(BuildStatSource.LAB, matrixWeaponPower + weaponPower * (globalPower - 1f)),
         BuildStatContribution(BuildStatSource.ITEMS, weaponPower - 1f - matrixWeaponPower),
         BuildStatContribution(BuildStatSource.MASTERY, weaponPower * globalPower * (masteryPower - 1f)),
+        BuildStatContribution(BuildStatSource.SYNERGIES, progressionPower * (synergyPower - 1f)),
         BuildStatContribution(BuildStatSource.TEMPORARY, effectivePower - permanentPower),
     ).filter { it.amount != 0f }.toImmutableList())
     val masterySpeed = attackSpeed * (1f + currentWeaponMastery.activationSpeedBonus)

@@ -220,6 +220,10 @@ internal fun MutableGameState.updateProjectiles(delta: Float) {
         projectile.x += projectile.vx * delta
         projectile.y += projectile.vy * delta
         projectile.life -= delta
+        // A Quasar shot running out of life ends with its form's burst before it leaves the list.
+        if (projectile.life <= 0f && projectile.sourceWeapon == kinetickk.ball.content.api.WeaponId.QUASAR_CANNON &&
+            projectile.life > -delta
+        ) quasarShotEnded(projectile)
     }
     projectiles.removeMatchingStable { projectile ->
         projectile.life <= 0f ||
