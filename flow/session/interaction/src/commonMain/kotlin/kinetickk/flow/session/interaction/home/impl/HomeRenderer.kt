@@ -1322,7 +1322,6 @@ private fun DrawScope.drawFormPanel(
         variant = KkButtonVariant.GHOST,
         size = if (card.height < 52f * density) KkButtonSize.SM else KkButtonSize.MD,
         hover = max(motion.hangarSelection(), if (hovered) 1f else 0f),
-        focused = state.focusedTarget == HomeLayoutTarget.HANGAR,
         icon = model.coreShape.formIcon(),
     )
 }
