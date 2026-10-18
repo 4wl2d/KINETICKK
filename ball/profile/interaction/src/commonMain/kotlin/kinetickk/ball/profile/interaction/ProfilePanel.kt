@@ -609,19 +609,25 @@ private fun fitKkTextAt(
     var factor = 1f
     while (true) {
         val layout = measureKkText(measurer, text, style(size * factor), uppercase, maxWidth.coerceAtLeast(1f), maxLines)
+        val cut = layout.isCut()
         val broken = layout.breaksWord()
         when {
-            !layout.hasVisualOverflow && !broken -> return layout
+            !cut && !broken -> return layout
             // A word never splits across lines: keep shrinking past [minFactor] for that.
             broken && factor > PROFILE_WORD_FLOOR -> factor = max(PROFILE_WORD_FLOOR, factor - 0.06f)
-            layout.hasVisualOverflow && factor > minFactor -> factor = max(minFactor, factor - 0.08f)
+            cut && factor > minFactor -> factor = max(minFactor, factor - 0.08f)
             else -> return layout
         }
     }
 }
 
 /** True when the whole text is shown: nothing clipped or ellipsized and no word split across lines. */
-internal fun TextLayoutResult.fitsWhole(): Boolean = !hasVisualOverflow && !breaksWord()
+internal fun TextLayoutResult.fitsWhole(): Boolean = !isCut() && !breaksWord()
+
+// Skia can ellipsize a single line without reporting visual overflow or isLineEllipsized.
+// Match its natural width against the actual integer-pixel box, allowing subpixel rounding.
+private fun TextLayoutResult.isCut(): Boolean =
+    hasVisualOverflow || (lineCount == 1 && multiParagraph.intrinsics.maxIntrinsicWidth > size.width + 0.5f)
 
 /**
  * Line height for text that may wrap: the boards' tight 0.86–0.9 line boxes let Cyrillic
