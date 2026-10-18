@@ -32,6 +32,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -41,6 +42,8 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -94,7 +97,6 @@ class DefaultHomeFeature(
         var renderTimeSecondsValue by remember { mutableFloatStateOf(0f) }
         var activeTargetValue by remember { mutableStateOf(HomeLayoutTarget.START) }
         var focusedTargetValue by remember { mutableStateOf<HomeLayoutTarget?>(null) }
-        var hoveredTargetValue by remember { mutableStateOf<HomeLayoutTarget?>(null) }
         var openInfoValue by remember { mutableStateOf<HomeInfoTarget?>(null) }
         var activeInfoValue by remember { mutableStateOf<HomeInfoTarget?>(null) }
         val menuMotion = remember { HomeMenuMotion() }
@@ -198,7 +200,6 @@ class DefaultHomeFeature(
                     HomeDrawState(
                         activeTarget = activeTargetValue,
                         focusedTarget = focusedTargetValue,
-                        hoveredTarget = hoveredTargetValue,
                         openInfo = openInfoValue,
                         activeInfo = activeInfoValue,
                         textScale = textScale,
@@ -214,15 +215,14 @@ class DefaultHomeFeature(
                             density = localDensity,
                             characterName = uiModel.coreShape(uiModel.coreShape).displayName.localizedContent(language),
                             focusRequester = actionFocus.getValue(action.target),
-                            onPreview = { focused, hovered ->
+                            onFocus = { focused ->
                                 if (focused) focusedTargetValue = action.target
                                 else if (focusedTargetValue == action.target) focusedTargetValue = null
-                                if (hovered) hoveredTargetValue = action.target
-                                else if (hoveredTargetValue == action.target) hoveredTargetValue = null
-                                if (focused || hovered) {
-                                    actionFocus.getValue(action.target).requestFocus()
-                                    activeTargetValue = action.target
-                                }
+                                if (focused) activeTargetValue = action.target
+                            },
+                            onHover = {
+                                actionFocus.getValue(action.target).requestFocus()
+                                activeTargetValue = action.target
                             },
                             onClick = { dispatch(action.target.toHomeAction()) },
                         )
@@ -256,20 +256,28 @@ private fun HomeSemanticAction(
     density: Density,
     characterName: String,
     focusRequester: FocusRequester,
-    onPreview: (focused: Boolean, hovered: Boolean) -> Unit,
+    onFocus: (Boolean) -> Unit,
+    onHover: () -> Unit,
     onClick: () -> Unit,
 ) {
     val language = LocalAppLanguage.current
     val description = action.target.homeContentDescription(language, characterName)
-    val interactions = remember { MutableInteractionSource() }
-    val focused by interactions.collectIsFocusedAsState()
-    val hovered by interactions.collectIsHoveredAsState()
-    LaunchedEffect(focused, hovered) { onPreview(focused, hovered) }
+    val onHoverValue by rememberUpdatedState(onHover)
     Box(
         Modifier
             .placeInHomeBounds(action.bounds, density)
             .focusRequester(focusRequester)
-            .hoverable(interactions)
+            .onFocusChanged { onFocus(it.isFocused) }
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        if (event.type == PointerEventType.Enter && event.changes.any { it.type != PointerType.Touch }) {
+                            onHoverValue()
+                        }
+                    }
+                }
+            }
             .testTag(action.target.homeTestTag())
             .onKeyEvent { event -> activateHomeSemanticButtonFromKey(event.key, event.type, onClick) }
             .semantics {
@@ -280,7 +288,7 @@ private fun HomeSemanticAction(
                     true
                 }
             }
-            .focusable(interactionSource = interactions),
+            .focusable(),
     )
 }
 

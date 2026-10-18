@@ -107,7 +107,7 @@ internal fun DrawScope.drawKkComponentsSheet(m: CanvasTextMeasurer, time: Float)
     }
     val notes = listOf(
         "Idle" to "Bone type on ink. No box, no numbering: the type is the target.",
-        "Selected, hover, focus" to "Same state for mouse, keys and pad. Slab grows from the edge in 240 ms with overshoot.",
+        "Selected, hover, focus" to "The selected slab follows mouse, keys and pad immediately.",
         "Event" to "A stamp rides the label when something changed: unlockable, new, ready.",
         "Locked, secondary" to "Mute type and a lock glyph; still focusable, the reason sits behind its (!) button.",
     )

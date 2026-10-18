@@ -3,14 +3,11 @@
 
 package kinetickk.ball.gameplay.interaction.rewards
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -797,10 +794,8 @@ private fun RelicSlotButton(
     val language = LocalAppLanguage.current
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
-    val focused by source.collectIsFocusedAsState()
     val interactive = cardIndex >= 0 && state.enabled
-    LaunchedEffect(hovered, focused) { if (interactive && (hovered || focused)) state.onSelected(cardIndex) }
-    val grow by animateFloatAsState(if (selected) 1.1f else 1f, tween(200, easing = KkEase.Pull), label = "slotGrow")
+    val grow = if (selected) 1.1f else 1f
     val paths = remember { KkPathCache(1) }
     val card = state.presentation.cards.getOrNull(cardIndex)
     val base = modifier.graphicsLayer {
@@ -810,6 +805,7 @@ private fun RelicSlotButton(
     }
     val clickable = if (cardIndex >= 0) {
         base.testTag("kinetickk.gameplay.choice.${cardIndex + 1}")
+            .rewardPreviewInput(interactive) { state.onSelected(cardIndex) }
             .semantics { stateDescription = listOf(name, meta).filter(String::isNotEmpty).joinToString(", ") }
             .clickable(
                 interactionSource = source, indication = null, enabled = interactive, role = Role.Button,

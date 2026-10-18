@@ -65,6 +65,69 @@ class RewardContentTest {
     val compose = createComposeRule()
 
     @Test
+    fun rewardDealSelectionAndLiftFollowThePointerOnTheNextFrame() {
+        val selections = mutableListOf<Int>()
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                Box(Modifier.requiredSize(1000.dp, 700.dp)) {
+                    RewardContent(
+                        RewardPresentation("Upgrade", "", conciseCards(), Color.White, Color.Magenta, 2),
+                        choiceLayoutGeometry(1000f, 700f, 1f, 3, true), 1000f, 1f, 1f, 0f, true,
+                        onSelect = { selections += it }, onReroll = {},
+                    )
+                }
+            }
+        }
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(RewardEntranceMs.toLong() + 64)
+        compose.mainClock.autoAdvance = false
+        fun pixels(): IntArray {
+            val image = compose.onNodeWithTag("kinetickk.gameplay.rewards").captureToImage()
+            val map = image.toPixelMap()
+            return IntArray(image.width * image.height) { map[it % image.width, it / image.width].toArgb() }
+        }
+        for (index in listOf(1, 3, 2, 3, 1)) {
+            compose.onNodeWithTag("kinetickk.gameplay.choice.$index").performMouseInput { moveTo(center) }
+            compose.mainClock.advanceTimeByFrame()
+            val entered = pixels()
+            compose.mainClock.advanceTimeBy(260)
+            val settled = pixels()
+            assertEquals(0, entered.indices.count { entered[it] != settled[it] }, "card $index must finish selecting and lifting on the next frame")
+        }
+        assertTrue(selections.isEmpty(), "Hover must not accept a reward")
+        compose.onNodeWithTag("kinetickk.gameplay.take").performClick()
+        assertEquals(listOf(0), selections)
+    }
+
+    @Test
+    fun cardHoverHighlightIsCompleteOnTheNextFrame() {
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                RewardCard(card(), 0, 1f, 0f, true, Modifier.requiredSize(240.dp, 360.dp), onSelect = {})
+            }
+        }
+        val node = compose.onNodeWithTag("kinetickk.gameplay.choice.1")
+        fun pixels(): IntArray {
+            val image = node.captureToImage()
+            val map = image.toPixelMap()
+            return IntArray(image.width * image.height) { map[it % image.width, it / image.width].toArgb() }
+        }
+        val idle = pixels()
+        compose.mainClock.autoAdvance = false
+        node.performMouseInput { moveTo(center) }
+        compose.mainClock.advanceTimeByFrame()
+        val entered = pixels()
+        compose.mainClock.advanceTimeBy(260)
+        val settled = pixels()
+        assertTrue(idle.indices.any { idle[it] != settled[it] }, "hover must visibly highlight the card")
+        assertEquals(0, entered.indices.count { entered[it] != settled[it] }, "the first hover frame must show the complete highlight")
+        node.performMouseInput { exit(Offset(-10f, -10f)) }
+        compose.mainClock.advanceTimeByFrame()
+        val exited = pixels()
+        assertEquals(0, idle.indices.count { idle[it] != exited[it] }, "leaving must clear the highlight on the next frame")
+    }
+
+    @Test
     fun firstDiscoveryBadgeIsVisibleAndDoesNotCreateASecondSelectionTarget() {
         val fresh = mutableStateOf(true)
         var selections = 0
@@ -447,7 +510,7 @@ class RewardContentTest {
         showModel(model, 1000f, 700f) { selections += it }
         compose.onNodeWithTag("kinetickk.gameplay.take").assertIsNotEnabled()
         compose.onNodeWithTag("kinetickk.gameplay.rewards.incoming").assertIsDisplayed()
-        compose.onNodeWithTag("kinetickk.gameplay.choice.3").performMouseInput { moveTo(center) }
+        assertRewardPreviewIsImmediate(3)
         compose.onNodeWithTag("kinetickk.gameplay.take").assertIsEnabled()
         compose.runOnIdle { assertTrue(selections.isEmpty()) }
         compose.onNodeWithTag("kinetickk.gameplay.take").performClick()
@@ -477,7 +540,8 @@ class RewardContentTest {
         compose.onNodeWithTag("kinetickk.gameplay.choice.2").performClick()
         compose.runOnIdle { assertEquals(listOf(1), selections) }
         // Hovering a row lifts it; Take then accepts that row through the same choice path.
-        compose.onNodeWithTag("kinetickk.gameplay.choice.1").performMouseInput { moveTo(center) }
+        assertRewardPreviewIsImmediate(2)
+        assertRewardPreviewIsImmediate(1)
         compose.onNodeWithTag("kinetickk.gameplay.take").performClick()
         compose.runOnIdle { assertEquals(listOf(1, 0), selections) }
         compose.assertNoForbiddenGlyphs()
@@ -524,6 +588,23 @@ class RewardContentTest {
                 }
             }
         }
+    }
+
+    private fun assertRewardPreviewIsImmediate(index: Int) {
+        compose.mainClock.advanceTimeBy(RewardEntranceMs.toLong() + 64)
+        compose.mainClock.autoAdvance = false
+        fun pixels(): IntArray {
+            val image = compose.onNodeWithTag("kinetickk.gameplay.rewards").captureToImage()
+            val map = image.toPixelMap()
+            return IntArray(image.width * image.height) { map[it % image.width, it / image.width].toArgb() }
+        }
+        compose.onNodeWithTag("kinetickk.gameplay.choice.$index").performMouseInput { moveTo(center) }
+        compose.mainClock.advanceTimeByFrame()
+        val entered = pixels()
+        compose.mainClock.advanceTimeBy(260)
+        val settled = pixels()
+        assertEquals(0, entered.indices.count { entered[it] != settled[it] }, "choice $index must show its selected state on the next frame")
+        compose.mainClock.autoAdvance = true
     }
 
     private fun revealInCard(text: String, bodyTag: String) {

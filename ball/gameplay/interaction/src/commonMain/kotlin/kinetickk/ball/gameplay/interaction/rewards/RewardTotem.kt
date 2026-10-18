@@ -3,8 +3,6 @@
 
 package kinetickk.ball.gameplay.interaction.rewards
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -368,9 +366,7 @@ private fun TotemRow(
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
     val focused by source.collectIsFocusedAsState()
-    val highlighted = enabled && (hovered || focused)
-    LaunchedEffect(highlighted) { if (highlighted) onPreview() }
-    val on by animateFloatAsState(if (selected) 1f else 0f, tween(200, easing = KkEase.Pull), label = "totemRow")
+    val on = if (selected) 1f else 0f
     val fg = if (selected) Kk.Ink else Kk.Bone
     val paths = remember { KkPathCache(2) }
     Box(
@@ -379,6 +375,7 @@ private fun TotemRow(
             .height(frame.dp(heightBoard))
             .graphicsLayer { translationX = -10f * density * on }
             .testTag("kinetickk.gameplay.choice.${index + 1}")
+            .rewardPreviewInput(enabled, onPreview)
             .semantics { stateDescription = listOfNotNull(row.kind, row.badge, row.meta, row.level?.let { language.text(OverlayRedesignText.LevelLabel) + " " + it }, row.mastery).joinToString(", ") }
             .clickable(
                 interactionSource = source, indication = null, enabled = enabled, role = Role.Button,

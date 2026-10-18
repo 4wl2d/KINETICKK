@@ -3,8 +3,6 @@
 
 package kinetickk.ball.profile.interaction.armory.impl
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -370,7 +368,7 @@ private fun ArmoryTile(
     val hovered by source.collectIsHoveredAsState()
     val focused by source.collectIsFocusedAsState()
     var pointerPress by remember { mutableStateOf(false) }
-    val selection by animateFloatAsState(if (inspected) 1f else 0f, tween(KkTime.Pull, easing = KkEase.Pull), label = "armoryTile")
+    val selection = if (inspected) 1f else 0f
     // The selected character's signature weapons carry its form in the tile's corner.
     val signature = model.character == definition.signature
     val measurer = rememberKkCanvasMeasurer(textScale)

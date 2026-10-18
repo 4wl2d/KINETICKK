@@ -3,11 +3,8 @@
 
 package kinetickk.ball.gameplay.interaction.rewards
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
@@ -18,14 +15,21 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -48,7 +52,6 @@ import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkButtonSize
 import kinetickk.foundation.design.KkButtonVariant
-import kinetickk.foundation.design.KkEase
 import kinetickk.foundation.design.KkIcon
 import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.KkStampVariant
@@ -399,7 +402,7 @@ internal fun OverlayStamp(
 
 /**
  * Slab button (`.btn`) filling its modifier bounds, with an optional leading [icon] and a
- * trailing bone count tag ([count], e.g. rerolls left). Hover/focus slide the echo (Pull),
+ * trailing bone count tag ([count], e.g. rerolls left). Hover/focus immediately extend the echo,
  * pressing flashes bone; role Button, focusable, Enter/Space activate.
  */
 @Composable
@@ -419,9 +422,12 @@ internal fun OverlayButton(
 ) {
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
-    val focused by source.collectIsFocusedAsState()
+    var focusedValue by remember { mutableStateOf(false) }
     val pressed by source.collectIsPressedAsState()
-    val emphasis by animateFloatAsState(if ((hovered || focused) && enabled) 1f else 0f, tween(200, easing = KkEase.Pull), label = "overlayButton")
+    // A click keeps keyboard routing without pinning the pointer highlight after it leaves.
+    var pointerFocusValue by remember { mutableStateOf(false) }
+    val keyboardFocused = focusedValue && !pointerFocusValue
+    val emphasis = if ((hovered || keyboardFocused) && enabled) 1f else 0f
     val measurer = rememberKkCanvasMeasurer(textScale)
     Box(
         modifier
@@ -429,10 +435,27 @@ internal fun OverlayButton(
                 this.contentDescription = contentDescription ?: label
                 if (stateDescription != null) this.stateDescription = stateDescription
             }
+            .onFocusChanged {
+                focusedValue = it.isFocused
+                if (!it.isFocused) pointerFocusValue = false
+            }
+            .onPreviewKeyEvent { pointerFocusValue = false; false }
+            .pointerInput(enabled) {
+                if (!enabled) return@pointerInput
+                awaitPointerEventScope {
+                    while (true) {
+                        if (awaitPointerEvent(PointerEventPass.Initial).type == PointerEventType.Press) {
+                            pointerFocusValue = true
+                            awaitPointerEvent(PointerEventPass.Final)
+                            if (!focusedValue) pointerFocusValue = false
+                        }
+                    }
+                }
+            }
             .clickable(interactionSource = source, indication = null, enabled = enabled, role = Role.Button, onClick = onClick)
             .drawBehind {
                 val bounds = Rect(Offset.Zero, this.size)
-                drawKkButton(measurer, bounds, "", variant, size, emphasis, focused && enabled, pressed && enabled, enabled, icon = null)
+                drawKkButton(measurer, bounds, "", variant, size, emphasis, keyboardFocused && enabled, pressed && enabled, enabled, icon = null)
                 drawOverlayButtonContent(measurer, bounds, label, variant, size, fontSize, emphasis, pressed && enabled, enabled, icon, count)
             },
     )

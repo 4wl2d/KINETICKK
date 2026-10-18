@@ -5,7 +5,6 @@ package kinetickk.foundation.design
 
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -33,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -72,8 +72,8 @@ fun rememberKkCanvasMeasurer(textScale: Float = 1f): CanvasTextMeasurer {
 
 /**
  * Slab button (`.btn`) with full semantics: role Button, [contentDescription] (defaults to
- * [label]), focusable, hover, pointer click and Enter/Space activation. Hover/focus slide the
- * echo out ([KkEase.Pull]); pressing flashes the bone face. [locked] keeps the button focusable
+ * [label]), focusable, hover, pointer click and Enter/Space activation. Hover/focus immediately
+ * extend the echo; pressing flashes the bone face. [locked] keeps the button focusable
  * but inert (hatch + lock icon; put the reason behind a [KkInfoButton]); [enabled] false removes
  * it from interaction. [armed] is presentation only: the caller owns the two-press logic.
  * Sizes to its label unless [modifier] sets a size; the touch target is expanded by Compose to
@@ -98,14 +98,13 @@ fun KkButton(
 ) {
     val source = interactionSource ?: remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
-    val focused by source.collectIsFocusedAsState()
+    var focusedValue by remember { mutableStateOf(false) }
     val pressed by source.collectIsPressedAsState()
+    // A click keeps keyboard routing without pinning the pointer highlight after it leaves.
+    var pointerFocusValue by remember { mutableStateOf(false) }
+    val keyboardFocused = focusedValue && !pointerFocusValue
     val interactive = enabled && !locked
-    val emphasis by animateFloatAsState(
-        if ((hovered || focused) && interactive) 1f else 0f,
-        tween(200, easing = KkEase.Pull),
-        label = "kkButtonEmphasis",
-    )
+    val emphasis = if ((hovered || keyboardFocused) && interactive) 1f else 0f
     val time = if (armed) kkAnimatedTime(0.9f) else 0f
     val measurer = rememberKkCanvasMeasurer(textScale)
     val density = LocalDensity.current.density
@@ -116,12 +115,29 @@ fun KkButton(
                 this.contentDescription = contentDescription ?: label
                 if (stateDescription != null) this.stateDescription = stateDescription
             }
+            .onFocusChanged {
+                focusedValue = it.isFocused
+                if (!it.isFocused) pointerFocusValue = false
+            }
+            .onPreviewKeyEvent { pointerFocusValue = false; false }
+            .pointerInput(interactive) {
+                if (!interactive) return@pointerInput
+                awaitPointerEventScope {
+                    while (true) {
+                        if (awaitPointerEvent(PointerEventPass.Initial).type == PointerEventType.Press) {
+                            pointerFocusValue = true
+                            awaitPointerEvent(PointerEventPass.Final)
+                            if (!focusedValue) pointerFocusValue = false
+                        }
+                    }
+                }
+            }
             .clickable(interactionSource = source, indication = null, enabled = interactive, role = Role.Button, onClick = onClick)
             .then(if (locked && enabled) Modifier.focusable(interactionSource = source) else Modifier)
             .defaultMinSize(minWidth = width.dp, minHeight = size.heightDp.dp)
             .drawBehind {
                 drawKkButton(
-                    measurer, Rect(Offset.Zero, this.size), label, variant, size, emphasis, focused && enabled,
+                    measurer, Rect(Offset.Zero, this.size), label, variant, size, emphasis, keyboardFocused && enabled,
                     pressed && interactive, enabled, locked, armed, icon, holdProgress, time,
                 )
             },

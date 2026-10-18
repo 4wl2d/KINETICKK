@@ -5,7 +5,6 @@ package kinetickk.ball.profile.interaction.matrix.impl
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
@@ -255,7 +254,7 @@ private fun MatrixTile(
     val hovered by source.collectIsHoveredAsState()
     val focused by source.collectIsFocusedAsState()
     var pointerPress by remember { mutableStateOf(false) }
-    val selection by animateFloatAsState(if (selected) 1f else 0f, tween(200, easing = KkEase.Pull), label = "matrixTile")
+    val selection = if (selected) 1f else 0f
     val flashProgress = remember { Animatable(1f) }
     LaunchedEffect(flash) {
         if (flash != null) {

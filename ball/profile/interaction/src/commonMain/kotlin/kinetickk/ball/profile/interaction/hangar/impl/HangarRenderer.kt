@@ -3,8 +3,6 @@
 
 package kinetickk.ball.profile.interaction.hangar.impl
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -218,7 +216,7 @@ private fun HangarTile(
     val hovered by source.collectIsHoveredAsState()
     val focused by source.collectIsFocusedAsState()
     var pointerPress by remember { mutableStateOf(false) }
-    val selection by animateFloatAsState(if (inspected) 1f else 0f, tween(200, easing = KkEase.Pull), label = "hangarTile")
+    val selection = if (inspected) 1f else 0f
     // Hover only highlights: the inspected character (which Select acts on) changes on a press, a tap or keyboard
     // focus, so crossing other tiles on the way to the detail panel leaves it alone.
     val measurer = rememberKkCanvasMeasurer(textScale)

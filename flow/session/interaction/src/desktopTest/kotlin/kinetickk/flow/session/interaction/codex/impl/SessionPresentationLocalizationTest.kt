@@ -28,6 +28,7 @@ import kinetickk.foundation.collections.immutableSetOf
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.LocalAppLanguage
+import kinetickk.foundation.design.Kk
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
 import kinetickk.resource.audio.api.ToneRequest
@@ -41,6 +42,41 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalTestApi::class)
 class SessionPresentationLocalizationTest {
+    @Test
+    fun homeHighlightFollowsEveryPointerMoveOnTheNextFrame() = runComposeUiTest {
+        mainClock.autoAdvance = false
+        val outputs = mutableListOf<HomeOutput>()
+        val feature = DefaultHomeFeature(LocalizationProfilePort(), codexTestCatalog(), LocalizationSilentAudio)
+        setContent {
+            Box(Modifier.requiredSize(1000.dp, 700.dp)) {
+                feature.Content(inputEnabled = true, onOutput = outputs::add)
+            }
+        }
+        mainClock.advanceTimeBy(300)
+        val targets = listOf("start", "lab", "armory", "rebirth", "codex", "settings")
+        for (target in targets.drop(1) + targets.reversed()) {
+            val node = onNodeWithTag("kinetickk.home.$target")
+            node.performMouseInput { moveTo(center) }
+            mainClock.advanceTimeByFrame()
+            node.assertIsFocused()
+            val root = onNodeWithTag("kinetickk.home")
+            val top = root.fetchSemanticsNode().boundsInRoot.top
+            val image = root.captureToImage()
+            val pixels = image.toPixelMap()
+            for (row in targets) {
+                val y = (onNodeWithTag("kinetickk.home.$row").fetchSemanticsNode().boundsInRoot.center.y - top).toInt()
+                val highlighted = pixels[image.width - 30, y].toArgb() == Kk.Bone.toArgb()
+                assertEquals(row == target, highlighted, "$row after pointer moved to $target")
+            }
+        }
+        assertTrue(outputs.isEmpty(), "Preview must not activate a route")
+        onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+        mainClock.advanceTimeByFrame()
+        onNodeWithTag("kinetickk.home.lab").assertIsFocused()
+        onRoot().performKeyInput { pressKey(Key.Enter) }
+        assertIs<HomeOutput.OpenLab>(outputs.single())
+    }
+
     @Test
     fun homeWaitsForBothViewportDimensionsBeforeRestoringKeyboardFocus() = runComposeUiTest {
         mainClock.autoAdvance = false

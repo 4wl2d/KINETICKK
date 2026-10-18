@@ -6,7 +6,6 @@ package kinetickk.ball.gameplay.interaction.rewards
 import kinetickk.ball.gameplay.interaction.input.hudWidth
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ScrollState
@@ -51,6 +50,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
@@ -71,6 +71,7 @@ import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -166,6 +167,27 @@ import kotlin.math.min
 
 /** Milliseconds of the reward entrance choreography (rings, badge slam, deal, footer). */
 internal const val RewardEntranceMs = 1_600f
+
+/** Update the preview during input so the selected row/slot and its details draw in one frame. */
+@Composable
+internal fun Modifier.rewardPreviewInput(enabled: Boolean, onPreview: () -> Unit): Modifier {
+    val onPreviewValue by rememberUpdatedState(onPreview)
+    var touchPressedValue by remember(enabled) { mutableStateOf(false) }
+    // Touch can focus a clickable on down; lifting it before native tap recognition moves the target.
+    return onFocusChanged { if (enabled && it.isFocused && !touchPressedValue) onPreview() }
+        .pointerInput(enabled) {
+            if (!enabled) return@pointerInput
+            awaitPointerEventScope {
+                while (true) {
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    touchPressedValue = event.changes.any { it.type == PointerType.Touch && it.pressed }
+                    if (event.type == PointerEventType.Enter && event.changes.any { it.type != PointerType.Touch }) {
+                        onPreviewValue()
+                    }
+                }
+            }
+        }
+}
 
 @Composable
 internal fun RewardContent(
@@ -312,7 +334,7 @@ private fun RewardCardDeal(state: RewardOverlayState) {
         val bounds = layout.cards.getOrNull(index)
         if (bounds != null) key(index, card.choice) {
             val selected = state.selected == index
-            val lift by animateFloatAsState(if (selected) 1f else 0f, tween(220, easing = KkEase.Pull), label = "cardLift")
+            val lift = if (selected) 1f else 0f
             val rest = rewardCardRestRotation(index, count)
             RewardCard(
                 presentation = card,
@@ -337,7 +359,7 @@ private fun RewardCardDeal(state: RewardOverlayState) {
                 bodyFit = bodyFit,
                 onBodyFit = { fit -> if (bodyFits[index] != fit) bodyFits[index] = fit },
                 phoneDeal = layout.compactCardContent,
-                onPreview = { active -> if (active) state.onSelected(index) },
+                onPreview = { state.onSelected(index) },
                 onSelect = { state.onSelect(index) },
             )
         }
@@ -504,7 +526,7 @@ internal fun RewardCard(
     renderTime: Float,
     enabled: Boolean,
     modifier: Modifier = Modifier,
-    onPreview: (Boolean) -> Unit = {},
+    onPreview: () -> Unit = {},
     selected: Boolean = false,
     time: State<Float>? = null,
     burst: () -> Float = { -1f },
@@ -523,9 +545,10 @@ internal fun RewardCard(
     val focusedValue by interactionSource.collectIsFocusedAsState()
     val pressedValue by interactionSource.collectIsPressedAsState()
     val highlighted = enabled && (hoveredValue || focusedValue || pressedValue)
-    LaunchedEffect(highlighted) { onPreview(highlighted) }
+    // Keep touch previews behind clickable's press/drag arbitration; moving on raw down can cancel a tap.
+    LaunchedEffect(pressedValue) { if (enabled && pressedValue) onPreview() }
     val clock = time ?: rememberUpdatedState(renderTime)
-    val selection by animateFloatAsState(if (selected || highlighted) 1f else 0f, tween(220, easing = KkEase.Pull), label = "cardSelection")
+    val selection = if (selected || highlighted) 1f else 0f
     val accent = presentation.accentColor(roles)
     val iconColor = presentation.iconColor(roles)
     val typography = rememberInterfaceTypography()
@@ -538,6 +561,7 @@ internal fun RewardCard(
             // The body consumes its own scroll first. Header drags and wheel input reach this
             // parent, moving the same text viewport once.
             .scrollable(scrollState, Orientation.Vertical, enabled = enabled, reverseDirection = true)
+            .rewardPreviewInput(enabled, onPreview)
             // A single activation surface. The nested scrollable cancels this click on drag;
             // wheel events never synthesize activation.
             .clickable(
@@ -568,7 +592,7 @@ internal fun RewardCard(
         val bandMeasurer = rememberKkCanvasMeasurer(min(textScale, 1f))
         val facePaths = remember { KkPathCache(4) }
         Canvas(Modifier.fillMaxSize().onPlaced { plates?.card = it }) {
-            // The face color follows the selection in the draw phase: hovering never recomposes the body.
+            // The face and its plates use the current selection together.
             val face = if (selection > 0.5f) Kk.Ink3 else Kk.Ink2
             // The plates are measured first: the art lays itself out in the room the text leaves.
             plates?.prepare(this, face, scrollState.value.toFloat())

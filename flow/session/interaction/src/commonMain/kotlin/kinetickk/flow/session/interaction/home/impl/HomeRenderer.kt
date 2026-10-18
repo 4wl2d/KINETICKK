@@ -85,12 +85,10 @@ private val EnemyAngles = floatArrayOf(60f, 150f, 250f, 320f)
 
 /**
  * Draw-only Home motion and caches; semantic selection stays with HomeReducer and the feature.
- * Palette recolor (350 ms Out), menu selection slabs and the Hangar card's lift (240 ms Pull) are
- * interpolated here from the frame clock.
+ * Palette recolor (350 ms Out) and decorative motion follow the frame clock. Selection is drawn
+ * directly from the current target so a departing pointer leaves no stale highlight behind.
  */
 internal class HomeMenuMotion {
-    private val menu = FloatArray(HomeMenuTargets.size).also { it[0] = 1f }
-    private var hangar = 0f
     private var activeIndex = 0
     private var accentFrom = KkHomePalette.START.accent
     private var accentTarget = HomeLayoutTarget.START
@@ -116,11 +114,6 @@ internal class HomeMenuMotion {
         val index = HomeMenuTargets.indexOf(target)
         selectedSeconds = if (index == activeIndex) selectedSeconds + delta else 0f
         activeIndex = index
-        val step = delta * 1000f / KkTime.MenuSelect
-        for (index in menu.indices) {
-            menu[index] = if (index == activeIndex) min(1f, menu[index] + step) else max(0f, menu[index] - step)
-        }
-        hangar = if (target == HomeLayoutTarget.HANGAR) min(1f, hangar + step) else max(0f, hangar - step)
         sweepSeconds = (sweepSeconds + delta) % HOME_CODEX_SWEEP_SECONDS
         val sweep = homeCodexSweepStep(sweepSeconds)
         if (hues !== sweepHues) {
@@ -147,13 +140,6 @@ internal class HomeMenuMotion {
 
     /** Speed-line clock of the selected item: the lines draw in once, then hold (never loop). */
     val trailTime: Float get() = homeTrailTime(selectedSeconds)
-
-    /** Selection slab progress of menu item [index] (Pull overshoot while growing). */
-    fun menuSelection(index: Int): Float =
-        if (index == activeIndex) KkEase.Pull.transform(menu[index]) else KkEase.Out.transform(menu[index])
-
-    /** Lift of the Hangar card while it is the active Home target (Pull overshoot while growing). */
-    fun hangarSelection(): Float = KkEase.Pull.transform(hangar)
 
     // Caches (draw thread only): the accent-tinted measurer, strokes, paths and the trail brush.
     private var tintedBase: CanvasTextMeasurer? = null
@@ -602,7 +588,6 @@ internal fun CoreShape.formIcon(): KkIcon = KkIcon.Forms[ordinal]
 internal class HomeDrawState(
     val activeTarget: HomeLayoutTarget,
     val focusedTarget: HomeLayoutTarget?,
-    val hoveredTarget: HomeLayoutTarget?,
     val openInfo: HomeInfoTarget?,
     val activeInfo: HomeInfoTarget?,
     /** The player's text size setting (the measurer carries the UI factor, [homeUiScale]). */
@@ -713,7 +698,7 @@ internal fun DrawScope.drawHome(
     drawBackgroundWord(text, facts.label, scene, accent)
     drawHero(model, text, time, scene, state, motion)
     drawHeader(model, text, scene, accent)
-    drawMenu(model, tinted, layout, motion, state.textScale)
+    drawMenu(model, tinted, layout, motion, state.activeTarget, state.textScale)
     scene.facts?.let { drawFactsCard(tinted, it, facts, layout, state, motion, accent) }
     drawFormPanel(model, tinted, layout, state, motion)
     drawLegal(text, layout)
@@ -1085,6 +1070,7 @@ private fun DrawScope.drawMenu(
     tinted: CanvasTextMeasurer,
     layout: HomeLayoutGeometry,
     motion: HomeMenuMotion,
+    activeTarget: HomeLayoutTarget,
     textScale: Float,
 ) {
     val scene = layout.scene
@@ -1096,7 +1082,8 @@ private fun DrawScope.drawMenu(
         // One column: the item stays inside its row (see homeMenuPlacement).
         val left = if (scene.menuColumns == 1) motion.menuPlacement(menu, layout, index, label, facts, density) else layout.bounds(target).left
         val showSub = scene.menuColumns == 1 && motion.menuShowsSub(index)
-        drawHomeMenuItem(menu, layout, index, label, facts, left, showSub, motion.menuStampSize, motion.menuSelection(index), motion.trailTime)
+        val selection = if (target == activeTarget) 1f else 0f
+        drawHomeMenuItem(menu, layout, index, label, facts, left, showSub, motion.menuStampSize, selection, motion.trailTime)
     }
 }
 
@@ -1316,12 +1303,11 @@ private fun DrawScope.drawFormPanel(
     drawHomeFormDescription(text, scene, definition.mechanicDescription.localizedContent(language),
         motion.formDescriptionTop, motion.formDescriptionBottom)
     val card = layout.bounds(HomeLayoutTarget.HANGAR)
-    val hovered = state.hoveredTarget == HomeLayoutTarget.HANGAR
     drawKkButton(
         text, card, language.text(SessionText.HANGAR),
         variant = KkButtonVariant.GHOST,
         size = if (card.height < 52f * density) KkButtonSize.SM else KkButtonSize.MD,
-        hover = max(motion.hangarSelection(), if (hovered) 1f else 0f),
+        hover = if (state.activeTarget == HomeLayoutTarget.HANGAR) 1f else 0f,
         icon = model.coreShape.formIcon(),
     )
 }

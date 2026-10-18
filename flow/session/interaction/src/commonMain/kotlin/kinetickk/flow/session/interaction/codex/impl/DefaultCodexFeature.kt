@@ -9,8 +9,6 @@ import kinetickk.flow.session.interaction.localization.SessionText
 import kinetickk.flow.session.interaction.localization.CodexText
 import kinetickk.foundation.common.localization.TextResource
 import kinetickk.ball.content.api.localizedContent
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -1330,7 +1328,7 @@ private fun CodexNavRow(text: String, count: String, titleSize: Float, selected:
     val interactions = remember { MutableInteractionSource() }
     val hovered by interactions.collectIsHoveredAsState()
     val focused by interactions.collectIsFocusedAsState()
-    val selection by animateFloatAsState(if (selected) 1f else 0f, tween(KkTime.Pull, easing = KkEase.Pull), label = "codexNavRow")
+    val selection = if (selected) 1f else 0f
     Box(Modifier.testTag(tag).semantics { this.selected = selected; this.text = AnnotatedString(text) }
         .hoverable(interactions, enabled = inputEnabled)
         .clickable(enabled = inputEnabled, role = Role.Tab, interactionSource = interactions, indication = null, onClick = onClick)
